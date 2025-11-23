@@ -1,0 +1,4 @@
+.zig-cache
+test_io
+test_write
+zig-out
