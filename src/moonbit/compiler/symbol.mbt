@@ -20,6 +20,7 @@ pub type SymbolTable = Map[String, Symbol]
 
 ///|
 /// Kind of symbol
+#valtype
 pub enum SymbolKind {
   Variable
   Function
@@ -221,6 +222,7 @@ pub struct Diagnostic {
 } derive(Show)
 
 ///|
+#valtype
 pub enum DiagnosticCategory {
   Error
   Warning

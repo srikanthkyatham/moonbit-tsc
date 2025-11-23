@@ -158,6 +158,7 @@ pub struct HeritageClause {
 } derive(Show)
 
 ///|
+#valtype
 pub enum HeritageKind {
   Extends
   Implements
@@ -410,6 +411,7 @@ pub struct BinaryExpression {
 } derive(Show)
 
 ///|
+#valtype
 pub enum BinaryOperator {
   // Arithmetic
   Add // +
@@ -469,6 +471,7 @@ pub struct UnaryExpression {
 } derive(Show)
 
 ///|
+#valtype
 pub enum UnaryOperator {
   Plus // +
   Minus // -
@@ -717,6 +720,7 @@ pub struct KeywordType {
 } derive(Show)
 
 ///|
+#valtype
 pub enum TypeKeyword {
   Any
   Unknown
@@ -815,6 +819,7 @@ pub struct SetAccessor {
 
 ///|
 /// Modifiers
+#valtype
 pub enum Modifier {
   Public
   Private

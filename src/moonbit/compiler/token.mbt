@@ -174,6 +174,7 @@ pub struct SourceLocation {
 
 ///|
 /// Position in source file
+#valtype
 pub struct Position {
   line : Int
   column : Int
