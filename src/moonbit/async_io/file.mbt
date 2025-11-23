@@ -3,8 +3,8 @@
 
 /// File content result
 pub struct FileContent {
-  pub path : String
-  pub content : String
+  path : String
+  content : String
 } derive(Show)
 
 /// Read a file asynchronously
@@ -93,11 +93,11 @@ pub async fn find_files(
 
 /// Get file metadata
 pub struct FileMetadata {
-  pub path : String
-  pub size : Int
-  pub is_file : Bool
-  pub is_directory : Bool
-  pub modified_time : Int  // Unix timestamp
+  path : String
+  size : Int
+  is_file : Bool
+  is_directory : Bool
+  modified_time : Int  // Unix timestamp
 } derive(Show)
 
 pub async fn get_metadata(path : String) -> Result[FileMetadata, String] {

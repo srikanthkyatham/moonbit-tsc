@@ -102,14 +102,63 @@ fn parse_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
     // Control flow
     KeywordIf(_) => parse_if_statement(parser)
     KeywordSwitch(_) => parse_switch_statement(parser)
-    KeywordFor(_) => parse_for_statement(parser)
-    KeywordWhile(_) => parse_while_statement(parser)
-    KeywordDo(_) => parse_do_while_statement(parser)
-    KeywordBreak(_) => parse_break_statement(parser)
-    KeywordContinue(_) => parse_continue_statement(parser)
+    KeywordFor(_) =>
+      Err(
+        add_error(
+          parser,
+          "For statements not yet implemented",
+          current_token(parser).location(),
+        ),
+      )
+    KeywordWhile(_) =>
+      Err(
+        add_error(
+          parser,
+          "While statements not yet implemented",
+          current_token(parser).location(),
+        ),
+      )
+    KeywordDo(_) =>
+      Err(
+        add_error(
+          parser,
+          "Do-while statements not yet implemented",
+          current_token(parser).location(),
+        ),
+      )
+    KeywordBreak(_) =>
+      Err(
+        add_error(
+          parser,
+          "Break statements not yet implemented",
+          current_token(parser).location(),
+        ),
+      )
+    KeywordContinue(_) =>
+      Err(
+        add_error(
+          parser,
+          "Continue statements not yet implemented",
+          current_token(parser).location(),
+        ),
+      )
     KeywordReturn(_) => parse_return_statement(parser)
-    KeywordThrow(_) => parse_throw_statement(parser)
-    KeywordTry(_) => parse_try_statement(parser)
+    KeywordThrow(_) =>
+      Err(
+        add_error(
+          parser,
+          "Throw statements not yet implemented",
+          current_token(parser).location(),
+        ),
+      )
+    KeywordTry(_) =>
+      Err(
+        add_error(
+          parser,
+          "Try statements not yet implemented",
+          current_token(parser).location(),
+        ),
+      )
 
     // Block statement
     OpenBrace(_) => parse_block_statement(parser)
@@ -795,7 +844,10 @@ fn parse_primary_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
     // Identifier
     Identifier(name, loc) =>
       Ok(
-        (Node::Identifier(Identifier::{ name, location: loc }), advance_parser(parser)),
+        (
+          Node::Identifier(Identifier::{ name, location: loc }),
+          advance_parser(parser),
+        ),
       )
 
     // Numeric literal
@@ -829,7 +881,12 @@ fn parse_primary_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
 
     // null
     KeywordNull(loc) =>
-      Ok((Node::NullLiteral(NullLiteral::{ location: loc }), advance_parser(parser)))
+      Ok(
+        (
+          Node::NullLiteral(NullLiteral::{ location: loc }),
+          advance_parser(parser),
+        ),
+      )
 
     // this
     KeywordThis(loc) =>
@@ -1232,77 +1289,596 @@ fn parse_switch_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
 
 ///|
 fn parse_for_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
-  Err(
-    add_error(
+  // for ([init]; [condition]; [incrementor]) statement
+  // for (variable in object) statement
+  // for (variable of iterable) statement
+  let start_loc = current_token(parser).location()
+  let parser = advance_parser(parser) // consume 'for'
+
+  // Expect '('
+  let parser = match current_token(parser) {
+    OpenParen(_) => advance_parser(parser)
+    _ =>
+      return Err(
+        add_error(
+          parser,
+          "Expected '(' after 'for'",
+          current_token(parser).location(),
+        ),
+      )
+  }
+
+  // Parse initializer (or for-in/for-of variable)
+  let (initializer, parser) = match current_token(parser) {
+    Semicolon(_) => (None, parser)
+    KeywordLet(_) | KeywordConst(_) | KeywordVar(_) =>
+      match parse_variable_statement(parser) {
+        Ok((stmt, p)) => (Some(stmt), p)
+        Err(p) => (None, p)
+      }
+    _ =>
+      match parse_expression(parser) {
+        Ok((expr, p)) => (Some(expr), p)
+        Err(p) => (None, p)
+      }
+  }
+
+  // Check for for-in or for-of
+  match current_token(parser) {
+    KeywordIn(_) => {
+      // for-in loop
+      let parser = advance_parser(parser)
+      let (expression, parser) = match parse_expression(parser) {
+        Ok((expr, p)) => (expr, p)
+        Err(p) =>
+          return Err(
+            add_error(
+              p,
+              "Expected expression in for-in",
+              current_token(p).location(),
+            ),
+          )
+      }
+      let parser = match current_token(parser) {
+        CloseParen(_) => advance_parser(parser)
+        _ =>
+          return Err(
+            add_error(
+              parser,
+              "Expected ')' in for-in",
+              current_token(parser).location(),
+            ),
+          )
+      }
+      let (statement, parser) = match parse_statement(parser) {
+        Ok((stmt, p)) => (stmt, p)
+        Err(p) => return Err(p)
+      }
+      let end_loc = get_location(statement)
+      return Ok(
+        (
+          Node::ForInStatement(ForInStatement::{
+            initializer: initializer.unwrap_or(
+              Node::EmptyStatement(EmptyStatement::{ location: start_loc }),
+            ),
+            expression,
+            statement,
+            location: SourceLocation::new(
+              start_loc.file_path,
+              start_loc.start,
+              end_loc.end,
+            ),
+          }),
+          parser,
+        ),
+      )
+    }
+    KeywordOf(_) => {
+      // for-of loop
+      let parser = advance_parser(parser)
+      let (expression, parser) = match parse_expression(parser) {
+        Ok((expr, p)) => (expr, p)
+        Err(p) =>
+          return Err(
+            add_error(
+              p,
+              "Expected expression in for-of",
+              current_token(p).location(),
+            ),
+          )
+      }
+      let parser = match current_token(parser) {
+        CloseParen(_) => advance_parser(parser)
+        _ =>
+          return Err(
+            add_error(
+              parser,
+              "Expected ')' in for-of",
+              current_token(parser).location(),
+            ),
+          )
+      }
+      let (statement, parser) = match parse_statement(parser) {
+        Ok((stmt, p)) => (stmt, p)
+        Err(p) => return Err(p)
+      }
+      let end_loc = get_location(statement)
+      return Ok(
+        (
+          Node::ForOfStatement(ForOfStatement::{
+            initializer: initializer.unwrap_or(
+              Node::EmptyStatement(EmptyStatement::{ location: start_loc }),
+            ),
+            expression,
+            statement,
+            await_modifier: false,
+            location: SourceLocation::new(
+              start_loc.file_path,
+              start_loc.start,
+              end_loc.end,
+            ),
+          }),
+          parser,
+        ),
+      )
+    }
+    _ => ()
+  }
+
+  // Regular for loop: for (init; condition; incrementor) statement
+  // Expect semicolon after initializer
+  let parser = match current_token(parser) {
+    Semicolon(_) => advance_parser(parser)
+    _ =>
+      return Err(
+        add_error(
+          parser,
+          "Expected ';' after for loop initializer",
+          current_token(parser).location(),
+        ),
+      )
+  }
+
+  // Parse condition
+  let (condition, parser) = match current_token(parser) {
+    Semicolon(_) => (None, parser)
+    _ =>
+      match parse_expression(parser) {
+        Ok((expr, p)) => (Some(expr), p)
+        Err(p) => (None, p)
+      }
+  }
+
+  // Expect semicolon after condition
+  let parser = match current_token(parser) {
+    Semicolon(_) => advance_parser(parser)
+    _ =>
+      return Err(
+        add_error(
+          parser,
+          "Expected ';' after for loop condition",
+          current_token(parser).location(),
+        ),
+      )
+  }
+
+  // Parse incrementor
+  let (incrementor, parser) = match current_token(parser) {
+    CloseParen(_) => (None, parser)
+    _ =>
+      match parse_expression(parser) {
+        Ok((expr, p)) => (Some(expr), p)
+        Err(p) => (None, p)
+      }
+  }
+
+  // Expect ')'
+  let parser = match current_token(parser) {
+    CloseParen(_) => advance_parser(parser)
+    _ =>
+      return Err(
+        add_error(
+          parser,
+          "Expected ')' after for loop header",
+          current_token(parser).location(),
+        ),
+      )
+  }
+
+  // Parse statement
+  let (statement, parser) = match parse_statement(parser) {
+    Ok((stmt, p)) => (stmt, p)
+    Err(p) => return Err(p)
+  }
+  let end_loc = get_location(statement)
+  Ok(
+    (
+      Node::ForStatement(ForStatement::{
+        initializer,
+        condition,
+        incrementor,
+        statement,
+        location: SourceLocation::new(
+          start_loc.file_path,
+          start_loc.start,
+          end_loc.end,
+        ),
+      }),
       parser,
-      "For statement not yet implemented",
-      current_token(parser).location(),
     ),
   )
 }
 
 ///|
 fn parse_while_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
-  Err(
-    add_error(
+  // while (condition) statement
+  let start_loc = current_token(parser).location()
+  let parser = advance_parser(parser) // consume 'while'
+
+  // Expect '('
+  let parser = match current_token(parser) {
+    OpenParen(_) => advance_parser(parser)
+    _ =>
+      return Err(
+        add_error(
+          parser,
+          "Expected '(' after 'while'",
+          current_token(parser).location(),
+        ),
+      )
+  }
+
+  // Parse condition
+  let (condition, parser) = match parse_expression(parser) {
+    Ok((expr, p)) => (expr, p)
+    Err(p) => return Err(p)
+  }
+
+  // Expect ')'
+  let parser = match current_token(parser) {
+    CloseParen(_) => advance_parser(parser)
+    _ =>
+      return Err(
+        add_error(
+          parser,
+          "Expected ')' after while condition",
+          current_token(parser).location(),
+        ),
+      )
+  }
+
+  // Parse statement
+  let (statement, parser) = match parse_statement(parser) {
+    Ok((stmt, p)) => (stmt, p)
+    Err(p) => return Err(p)
+  }
+  let end_loc = get_location(statement)
+  Ok(
+    (
+      Node::WhileStatement(WhileStatement::{
+        condition,
+        statement,
+        location: SourceLocation::new(
+          start_loc.file_path,
+          start_loc.start,
+          end_loc.end,
+        ),
+      }),
       parser,
-      "While statement not yet implemented",
-      current_token(parser).location(),
     ),
   )
 }
 
 ///|
 fn parse_do_while_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
-  Err(
-    add_error(
+  // do statement while (condition);
+  let start_loc = current_token(parser).location()
+  let parser = advance_parser(parser) // consume 'do'
+
+  // Parse statement
+  let (statement, parser) = match parse_statement(parser) {
+    Ok((stmt, p)) => (stmt, p)
+    Err(p) => return Err(p)
+  }
+
+  // Expect 'while'
+  let parser = match current_token(parser) {
+    KeywordWhile(_) => advance_parser(parser)
+    _ =>
+      return Err(
+        add_error(
+          parser,
+          "Expected 'while' after do statement",
+          current_token(parser).location(),
+        ),
+      )
+  }
+
+  // Expect '('
+  let parser = match current_token(parser) {
+    OpenParen(_) => advance_parser(parser)
+    _ =>
+      return Err(
+        add_error(
+          parser,
+          "Expected '(' after 'while'",
+          current_token(parser).location(),
+        ),
+      )
+  }
+
+  // Parse condition
+  let (condition, parser) = match parse_expression(parser) {
+    Ok((expr, p)) => (expr, p)
+    Err(p) => return Err(p)
+  }
+
+  // Expect ')'
+  let parser = match current_token(parser) {
+    CloseParen(_) => advance_parser(parser)
+    _ =>
+      return Err(
+        add_error(
+          parser,
+          "Expected ')' after while condition",
+          current_token(parser).location(),
+        ),
+      )
+  }
+
+  // Expect ';'
+  let end_loc = current_token(parser).location()
+  let parser = match current_token(parser) {
+    Semicolon(_) => advance_parser(parser)
+    _ => parser // Semicolon is optional in some contexts
+  }
+  Ok(
+    (
+      Node::DoWhileStatement(DoWhileStatement::{
+        statement,
+        condition,
+        location: SourceLocation::new(
+          start_loc.file_path,
+          start_loc.start,
+          end_loc.end,
+        ),
+      }),
       parser,
-      "Do-while statement not yet implemented",
-      current_token(parser).location(),
     ),
   )
 }
 
 ///|
 fn parse_break_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
-  Err(
-    add_error(
+  // break [label];
+  let start_loc = current_token(parser).location()
+  let parser = advance_parser(parser) // consume 'break'
+
+  // Optional label
+  let (label, parser) = match current_token(parser) {
+    Identifier(name, _loc) => (Some(name), advance_parser(parser))
+    _ => (None, parser)
+  }
+
+  // Expect semicolon (optional due to ASI)
+  let end_loc = current_token(parser).location()
+  let parser = match current_token(parser) {
+    Semicolon(_) => advance_parser(parser)
+    _ => parser
+  }
+  Ok(
+    (
+      Node::BreakStatement(BreakStatement::{
+        label,
+        location: SourceLocation::new(
+          start_loc.file_path,
+          start_loc.start,
+          end_loc.end,
+        ),
+      }),
       parser,
-      "Break statement not yet implemented",
-      current_token(parser).location(),
     ),
   )
 }
 
 ///|
 fn parse_continue_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
-  Err(
-    add_error(
+  // continue [label];
+  let start_loc = current_token(parser).location()
+  let parser = advance_parser(parser) // consume 'continue'
+
+  // Optional label
+  let (label, parser) = match current_token(parser) {
+    Identifier(name, _loc) => (Some(name), advance_parser(parser))
+    _ => (None, parser)
+  }
+
+  // Expect semicolon (optional due to ASI)
+  let end_loc = current_token(parser).location()
+  let parser = match current_token(parser) {
+    Semicolon(_) => advance_parser(parser)
+    _ => parser
+  }
+  Ok(
+    (
+      Node::ContinueStatement(ContinueStatement::{
+        label,
+        location: SourceLocation::new(
+          start_loc.file_path,
+          start_loc.start,
+          end_loc.end,
+        ),
+      }),
       parser,
-      "Continue statement not yet implemented",
-      current_token(parser).location(),
     ),
   )
 }
 
 ///|
 fn parse_throw_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
-  Err(
-    add_error(
+  // throw expression;
+  let start_loc = current_token(parser).location()
+  let parser = advance_parser(parser) // consume 'throw'
+
+  // Parse expression
+  let (expression, parser) = match parse_expression(parser) {
+    Ok((expr, p)) => (expr, p)
+    Err(p) =>
+      return Err(
+        add_error(
+          p,
+          "Expected expression after 'throw'",
+          current_token(p).location(),
+        ),
+      )
+  }
+
+  // Expect semicolon (optional due to ASI)
+  let end_loc = get_location(expression)
+  let parser = match current_token(parser) {
+    Semicolon(_) => advance_parser(parser)
+    _ => parser
+  }
+  Ok(
+    (
+      Node::ThrowStatement(ThrowStatement::{
+        expression,
+        location: SourceLocation::new(
+          start_loc.file_path,
+          start_loc.start,
+          end_loc.end,
+        ),
+      }),
       parser,
-      "Throw statement not yet implemented",
-      current_token(parser).location(),
     ),
   )
 }
 
 ///|
 fn parse_try_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
-  Err(
-    add_error(
+  // try block catch (variable) block finally block
+  let start_loc = current_token(parser).location()
+  let parser = advance_parser(parser) // consume 'try'
+
+  // Parse try block
+  let (try_block, parser) = match parse_block_statement(parser) {
+    Ok((block, p)) => (block, p)
+    Err(p) =>
+      return Err(
+        add_error(p, "Expected block after 'try'", current_token(p).location()),
+      )
+  }
+
+  // Parse optional catch clause
+  let (catch_clause, parser) = match current_token(parser) {
+    KeywordCatch(_) => {
+      let catch_start = current_token(parser).location()
+      let parser = advance_parser(parser) // consume 'catch'
+
+      // Optional parameter
+      let (parameter, parser) = match current_token(parser) {
+        OpenParen(_) => {
+          let parser = advance_parser(parser)
+          let (param, parser) = match parse_identifier(parser) {
+            Ok((id, p)) => (Some(id), p)
+            Err(p) => (None, p)
+          }
+          let parser = match current_token(parser) {
+            CloseParen(_) => advance_parser(parser)
+            _ =>
+              return Err(
+                add_error(
+                  parser,
+                  "Expected ')' after catch parameter",
+                  current_token(parser).location(),
+                ),
+              )
+          }
+          (param, parser)
+        }
+        _ => (None, parser)
+      }
+
+      // Parse catch block
+      let (catch_block, parser) = match parse_block_statement(parser) {
+        Ok((block, p)) => (block, p)
+        Err(p) =>
+          return Err(
+            add_error(
+              p,
+              "Expected block in catch clause",
+              current_token(p).location(),
+            ),
+          )
+      }
+      let catch_end = get_location(catch_block)
+      let clause = CatchClause::{
+        variable_declaration: match parameter {
+          Some(id) => Some(Node::Identifier(id))
+          None => None
+        },
+        block: catch_block,
+        location: SourceLocation::new(
+          catch_start.file_path,
+          catch_start.start,
+          catch_end.end,
+        ),
+      }
+      (Some(clause), parser)
+    }
+    _ => (None, parser)
+  }
+
+  // Parse optional finally clause
+  let (finally_block, parser) = match current_token(parser) {
+    KeywordFinally(_) => {
+      let parser = advance_parser(parser) // consume 'finally'
+      match parse_block_statement(parser) {
+        Ok((block, p)) => (Some(block), p)
+        Err(p) =>
+          return Err(
+            add_error(
+              p,
+              "Expected block after 'finally'",
+              current_token(p).location(),
+            ),
+          )
+      }
+    }
+    _ => (None, parser)
+  }
+
+  // Must have either catch or finally
+  if catch_clause is None && finally_block is None {
+    return Err(
+      add_error(
+        parser,
+        "Missing catch or finally clause",
+        current_token(parser).location(),
+      ),
+    )
+  }
+  let end_loc = match finally_block {
+    Some(block) => get_location(block)
+    None =>
+      match catch_clause {
+        Some(clause) => clause.location
+        None => get_location(try_block)
+      }
+  }
+  Ok(
+    (
+      Node::TryStatement(TryStatement::{
+        try_block,
+        catch_clause,
+        finally_block,
+        location: SourceLocation::new(
+          start_loc.file_path,
+          start_loc.start,
+          end_loc.end,
+        ),
+      }),
       parser,
-      "Try statement not yet implemented",
-      current_token(parser).location(),
     ),
   )
 }

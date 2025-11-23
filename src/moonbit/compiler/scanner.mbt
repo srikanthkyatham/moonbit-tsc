@@ -1,6 +1,7 @@
 // Scanner (Lexical Analyzer) for TypeScript
 // Converts source text into a stream of tokens
 
+///|
 /// Scanner state
 pub struct Scanner {
   source : String
@@ -11,6 +12,7 @@ pub struct Scanner {
   length : Int
 } derive(Show)
 
+///|
 /// Create a new scanner
 pub fn Scanner::new(source : String, file_path : String) -> Scanner {
   {
@@ -23,55 +25,54 @@ pub fn Scanner::new(source : String, file_path : String) -> Scanner {
   }
 }
 
+///|
 /// Scan all tokens from source
 pub fn scan_all(scanner : Scanner) -> Array[Token] {
   let tokens : Array[Token] = []
   let mut current_scanner = scanner
   let mut should_continue = true
-
   while should_continue {
     let (token, next_scanner) = scan_token(current_scanner)
     tokens.push(token)
-
     match token {
-      EOF(_) => {
-        should_continue = false
-      }
-      _ => {
-        current_scanner = next_scanner
-      }
+      EOF(_) => should_continue = false
+      _ => current_scanner = next_scanner
     }
   }
-
   tokens
 }
 
+///|
 /// Scan a single token
 pub fn scan_token(scanner : Scanner) -> (Token, Scanner) {
   // Skip whitespace and comments
   let scanner = skip_trivia(scanner)
-
   if scanner.position >= scanner.length {
     return (EOF(current_location(scanner)), scanner)
   }
-
   let ch = peek_char(scanner)
   let start_pos = scanner.position
   let start_line = scanner.line
   let start_col = scanner.column
 
   // Helper to create location
-  fn make_location(scanner : Scanner, start_pos : Int, start_line : Int, start_col : Int) -> SourceLocation {
+  fn make_location(
+    scanner : Scanner,
+    start_pos : Int,
+    start_line : Int,
+    start_col : Int,
+  ) -> SourceLocation {
     SourceLocation::new(
       scanner.file_path,
       Position::new(start_line, start_col, start_pos),
-      Position::new(scanner.line, scanner.column, scanner.position)
+      Position::new(scanner.line, scanner.column, scanner.position),
     )
   }
 
   match ch {
     // Identifiers and keywords
-    'a'..='z' | 'A'..='Z' | '_' | '$' => scan_identifier_or_keyword(scanner, start_pos, start_line, start_col)
+    'a'..='z' | 'A'..='Z' | '_' | '$' =>
+      scan_identifier_or_keyword(scanner, start_pos, start_line, start_col)
 
     // Numbers
     '0'..='9' => scan_number(scanner, start_pos, start_line, start_col)
@@ -88,91 +89,159 @@ pub fn scan_token(scanner : Scanner) -> (Token, Scanner) {
       match peek_char(scanner) {
         '+' => {
           let scanner = advance(scanner)
-          (PlusPlus(make_location(scanner, start_pos, start_line, start_col)), scanner)
+          (
+            PlusPlus(make_location(scanner, start_pos, start_line, start_col)),
+            scanner,
+          )
         }
         '=' => {
           let scanner = advance(scanner)
-          (PlusEquals(make_location(scanner, start_pos, start_line, start_col)), scanner)
+          (
+            PlusEquals(make_location(scanner, start_pos, start_line, start_col)),
+            scanner,
+          )
         }
-        _ => (Plus(make_location(scanner, start_pos, start_line, start_col)), scanner)
+        _ =>
+          (
+            Plus(make_location(scanner, start_pos, start_line, start_col)),
+            scanner,
+          )
       }
     }
-
     '-' => {
       let scanner = advance(scanner)
       match peek_char(scanner) {
         '-' => {
           let scanner = advance(scanner)
-          (MinusMinus(make_location(scanner, start_pos, start_line, start_col)), scanner)
+          (
+            MinusMinus(make_location(scanner, start_pos, start_line, start_col)),
+            scanner,
+          )
         }
         '=' => {
           let scanner = advance(scanner)
-          (MinusEquals(make_location(scanner, start_pos, start_line, start_col)), scanner)
+          (
+            MinusEquals(
+              make_location(scanner, start_pos, start_line, start_col),
+            ),
+            scanner,
+          )
         }
-        _ => (Minus(make_location(scanner, start_pos, start_line, start_col)), scanner)
+        _ =>
+          (
+            Minus(make_location(scanner, start_pos, start_line, start_col)),
+            scanner,
+          )
       }
     }
-
     '*' => {
       let scanner = advance(scanner)
       match peek_char(scanner) {
         '*' => {
           let scanner = advance(scanner)
-          (StarStar(make_location(scanner, start_pos, start_line, start_col)), scanner)
+          (
+            StarStar(make_location(scanner, start_pos, start_line, start_col)),
+            scanner,
+          )
         }
         '=' => {
           let scanner = advance(scanner)
-          (StarEquals(make_location(scanner, start_pos, start_line, start_col)), scanner)
+          (
+            StarEquals(make_location(scanner, start_pos, start_line, start_col)),
+            scanner,
+          )
         }
-        _ => (Star(make_location(scanner, start_pos, start_line, start_col)), scanner)
+        _ =>
+          (
+            Star(make_location(scanner, start_pos, start_line, start_col)),
+            scanner,
+          )
       }
     }
-
     '/' => {
       let scanner = advance(scanner)
       match peek_char(scanner) {
         '=' => {
           let scanner = advance(scanner)
-          (SlashEquals(make_location(scanner, start_pos, start_line, start_col)), scanner)
+          (
+            SlashEquals(
+              make_location(scanner, start_pos, start_line, start_col),
+            ),
+            scanner,
+          )
         }
         '>' => {
           let scanner = advance(scanner)
-          (SlashGreaterThan(make_location(scanner, start_pos, start_line, start_col)), scanner)
+          (
+            SlashGreaterThan(
+              make_location(scanner, start_pos, start_line, start_col),
+            ),
+            scanner,
+          )
         }
-        _ => (Slash(make_location(scanner, start_pos, start_line, start_col)), scanner)
+        _ =>
+          (
+            Slash(make_location(scanner, start_pos, start_line, start_col)),
+            scanner,
+          )
       }
     }
-
     '%' => {
       let scanner = advance(scanner)
       match peek_char(scanner) {
         '=' => {
           let scanner = advance(scanner)
-          (PercentEquals(make_location(scanner, start_pos, start_line, start_col)), scanner)
+          (
+            PercentEquals(
+              make_location(scanner, start_pos, start_line, start_col),
+            ),
+            scanner,
+          )
         }
-        _ => (Percent(make_location(scanner, start_pos, start_line, start_col)), scanner)
+        _ =>
+          (
+            Percent(make_location(scanner, start_pos, start_line, start_col)),
+            scanner,
+          )
       }
     }
-
     '<' => {
       let scanner = advance(scanner)
       match peek_char(scanner) {
         '<' => {
           let scanner = advance(scanner)
-          (LessThanLessThan(make_location(scanner, start_pos, start_line, start_col)), scanner)
+          (
+            LessThanLessThan(
+              make_location(scanner, start_pos, start_line, start_col),
+            ),
+            scanner,
+          )
         }
         '=' => {
           let scanner = advance(scanner)
-          (LessThanEquals(make_location(scanner, start_pos, start_line, start_col)), scanner)
+          (
+            LessThanEquals(
+              make_location(scanner, start_pos, start_line, start_col),
+            ),
+            scanner,
+          )
         }
         '/' => {
           let scanner = advance(scanner)
-          (LessThanSlash(make_location(scanner, start_pos, start_line, start_col)), scanner)
+          (
+            LessThanSlash(
+              make_location(scanner, start_pos, start_line, start_col),
+            ),
+            scanner,
+          )
         }
-        _ => (LessThan(make_location(scanner, start_pos, start_line, start_col)), scanner)
+        _ =>
+          (
+            LessThan(make_location(scanner, start_pos, start_line, start_col)),
+            scanner,
+          )
       }
     }
-
     '>' => {
       let scanner = advance(scanner)
       match peek_char(scanner) {
@@ -181,19 +250,40 @@ pub fn scan_token(scanner : Scanner) -> (Token, Scanner) {
           match peek_char(scanner) {
             '>' => {
               let scanner = advance(scanner)
-              (GreaterThanGreaterThanGreaterThan(make_location(scanner, start_pos, start_line, start_col)), scanner)
+              (
+                GreaterThanGreaterThanGreaterThan(
+                  make_location(scanner, start_pos, start_line, start_col),
+                ),
+                scanner,
+              )
             }
-            _ => (GreaterThanGreaterThan(make_location(scanner, start_pos, start_line, start_col)), scanner)
+            _ =>
+              (
+                GreaterThanGreaterThan(
+                  make_location(scanner, start_pos, start_line, start_col),
+                ),
+                scanner,
+              )
           }
         }
         '=' => {
           let scanner = advance(scanner)
-          (GreaterThanEquals(make_location(scanner, start_pos, start_line, start_col)), scanner)
+          (
+            GreaterThanEquals(
+              make_location(scanner, start_pos, start_line, start_col),
+            ),
+            scanner,
+          )
         }
-        _ => (GreaterThan(make_location(scanner, start_pos, start_line, start_col)), scanner)
+        _ =>
+          (
+            GreaterThan(
+              make_location(scanner, start_pos, start_line, start_col),
+            ),
+            scanner,
+          )
       }
     }
-
     '=' => {
       let scanner = advance(scanner)
       match peek_char(scanner) {
@@ -202,19 +292,36 @@ pub fn scan_token(scanner : Scanner) -> (Token, Scanner) {
           match peek_char(scanner) {
             '=' => {
               let scanner = advance(scanner)
-              (EqualsEqualsEquals(make_location(scanner, start_pos, start_line, start_col)), scanner)
+              (
+                EqualsEqualsEquals(
+                  make_location(scanner, start_pos, start_line, start_col),
+                ),
+                scanner,
+              )
             }
-            _ => (EqualsEquals(make_location(scanner, start_pos, start_line, start_col)), scanner)
+            _ =>
+              (
+                EqualsEquals(
+                  make_location(scanner, start_pos, start_line, start_col),
+                ),
+                scanner,
+              )
           }
         }
         '>' => {
           let scanner = advance(scanner)
-          (Arrow(make_location(scanner, start_pos, start_line, start_col)), scanner)
+          (
+            Arrow(make_location(scanner, start_pos, start_line, start_col)),
+            scanner,
+          )
         }
-        _ => (Equals(make_location(scanner, start_pos, start_line, start_col)), scanner)
+        _ =>
+          (
+            Equals(make_location(scanner, start_pos, start_line, start_col)),
+            scanner,
+          )
       }
     }
-
     '!' => {
       let scanner = advance(scanner)
       match peek_char(scanner) {
@@ -223,81 +330,138 @@ pub fn scan_token(scanner : Scanner) -> (Token, Scanner) {
           match peek_char(scanner) {
             '=' => {
               let scanner = advance(scanner)
-              (ExclamationEqualsEquals(make_location(scanner, start_pos, start_line, start_col)), scanner)
+              (
+                ExclamationEqualsEquals(
+                  make_location(scanner, start_pos, start_line, start_col),
+                ),
+                scanner,
+              )
             }
-            _ => (ExclamationEquals(make_location(scanner, start_pos, start_line, start_col)), scanner)
+            _ =>
+              (
+                ExclamationEquals(
+                  make_location(scanner, start_pos, start_line, start_col),
+                ),
+                scanner,
+              )
           }
         }
-        _ => (Exclamation(make_location(scanner, start_pos, start_line, start_col)), scanner)
+        _ =>
+          (
+            Exclamation(
+              make_location(scanner, start_pos, start_line, start_col),
+            ),
+            scanner,
+          )
       }
     }
-
     '&' => {
       let scanner = advance(scanner)
       match peek_char(scanner) {
         '&' => {
           let scanner = advance(scanner)
-          (AmpersandAmpersand(make_location(scanner, start_pos, start_line, start_col)), scanner)
+          (
+            AmpersandAmpersand(
+              make_location(scanner, start_pos, start_line, start_col),
+            ),
+            scanner,
+          )
         }
         '=' => {
           let scanner = advance(scanner)
-          (AmpersandEquals(make_location(scanner, start_pos, start_line, start_col)), scanner)
+          (
+            AmpersandEquals(
+              make_location(scanner, start_pos, start_line, start_col),
+            ),
+            scanner,
+          )
         }
-        _ => (Ampersand(make_location(scanner, start_pos, start_line, start_col)), scanner)
+        _ =>
+          (
+            Ampersand(make_location(scanner, start_pos, start_line, start_col)),
+            scanner,
+          )
       }
     }
-
     '|' => {
       let scanner = advance(scanner)
       match peek_char(scanner) {
         '|' => {
           let scanner = advance(scanner)
-          (BarBar(make_location(scanner, start_pos, start_line, start_col)), scanner)
+          (
+            BarBar(make_location(scanner, start_pos, start_line, start_col)),
+            scanner,
+          )
         }
         '=' => {
           let scanner = advance(scanner)
-          (BarEquals(make_location(scanner, start_pos, start_line, start_col)), scanner)
+          (
+            BarEquals(make_location(scanner, start_pos, start_line, start_col)),
+            scanner,
+          )
         }
-        _ => (Bar(make_location(scanner, start_pos, start_line, start_col)), scanner)
+        _ =>
+          (
+            Bar(make_location(scanner, start_pos, start_line, start_col)),
+            scanner,
+          )
       }
     }
-
     '^' => {
       let scanner = advance(scanner)
       match peek_char(scanner) {
         '=' => {
           let scanner = advance(scanner)
-          (CaretEquals(make_location(scanner, start_pos, start_line, start_col)), scanner)
+          (
+            CaretEquals(
+              make_location(scanner, start_pos, start_line, start_col),
+            ),
+            scanner,
+          )
         }
-        _ => (Caret(make_location(scanner, start_pos, start_line, start_col)), scanner)
+        _ =>
+          (
+            Caret(make_location(scanner, start_pos, start_line, start_col)),
+            scanner,
+          )
       }
     }
-
     '~' => {
       let scanner = advance(scanner)
       (Tilde(make_location(scanner, start_pos, start_line, start_col)), scanner)
     }
-
     '?' => {
       let scanner = advance(scanner)
       match peek_char(scanner) {
         '?' => {
           let scanner = advance(scanner)
-          (QuestionQuestion(make_location(scanner, start_pos, start_line, start_col)), scanner)
+          (
+            QuestionQuestion(
+              make_location(scanner, start_pos, start_line, start_col),
+            ),
+            scanner,
+          )
         }
         '.' => {
           let scanner = advance(scanner)
-          (QuestionDot(make_location(scanner, start_pos, start_line, start_col)), scanner)
+          (
+            QuestionDot(
+              make_location(scanner, start_pos, start_line, start_col),
+            ),
+            scanner,
+          )
         }
-        _ => (Question(make_location(scanner, start_pos, start_line, start_col)), scanner)
+        _ =>
+          (
+            Question(make_location(scanner, start_pos, start_line, start_col)),
+            scanner,
+          )
       }
     }
-
     ':' => {
       let scanner = advance(scanner)
       (Colon(make_location(scanner, start_pos, start_line, start_col)), scanner)
     }
-
     '.' => {
       let scanner = advance(scanner)
       match peek_char(scanner) {
@@ -306,72 +470,99 @@ pub fn scan_token(scanner : Scanner) -> (Token, Scanner) {
           match peek_char(scanner) {
             '.' => {
               let scanner = advance(scanner)
-              (DotDotDot(make_location(scanner, start_pos, start_line, start_col)), scanner)
+              (
+                DotDotDot(
+                  make_location(scanner, start_pos, start_line, start_col),
+                ),
+                scanner,
+              )
             }
-            _ => {
+            _ =>
               // Two dots is an error, but we'll emit a single dot
-              (Dot(make_location(scanner, start_pos, start_line, start_col)), scanner)
-            }
+              (
+                Dot(make_location(scanner, start_pos, start_line, start_col)),
+                scanner,
+              )
           }
         }
-        _ => (Dot(make_location(scanner, start_pos, start_line, start_col)), scanner)
+        _ =>
+          (
+            Dot(make_location(scanner, start_pos, start_line, start_col)),
+            scanner,
+          )
       }
     }
-
     '(' => {
       let scanner = advance(scanner)
-      (OpenParen(make_location(scanner, start_pos, start_line, start_col)), scanner)
+      (
+        OpenParen(make_location(scanner, start_pos, start_line, start_col)),
+        scanner,
+      )
     }
-
     ')' => {
       let scanner = advance(scanner)
-      (CloseParen(make_location(scanner, start_pos, start_line, start_col)), scanner)
+      (
+        CloseParen(make_location(scanner, start_pos, start_line, start_col)),
+        scanner,
+      )
     }
-
     '{' => {
       let scanner = advance(scanner)
-      (OpenBrace(make_location(scanner, start_pos, start_line, start_col)), scanner)
+      (
+        OpenBrace(make_location(scanner, start_pos, start_line, start_col)),
+        scanner,
+      )
     }
-
     '}' => {
       let scanner = advance(scanner)
-      (CloseBrace(make_location(scanner, start_pos, start_line, start_col)), scanner)
+      (
+        CloseBrace(make_location(scanner, start_pos, start_line, start_col)),
+        scanner,
+      )
     }
-
     '[' => {
       let scanner = advance(scanner)
-      (OpenBracket(make_location(scanner, start_pos, start_line, start_col)), scanner)
+      (
+        OpenBracket(make_location(scanner, start_pos, start_line, start_col)),
+        scanner,
+      )
     }
-
     ']' => {
       let scanner = advance(scanner)
-      (CloseBracket(make_location(scanner, start_pos, start_line, start_col)), scanner)
+      (
+        CloseBracket(make_location(scanner, start_pos, start_line, start_col)),
+        scanner,
+      )
     }
-
     ';' => {
       let scanner = advance(scanner)
-      (Semicolon(make_location(scanner, start_pos, start_line, start_col)), scanner)
+      (
+        Semicolon(make_location(scanner, start_pos, start_line, start_col)),
+        scanner,
+      )
     }
-
     ',' => {
       let scanner = advance(scanner)
       (Comma(make_location(scanner, start_pos, start_line, start_col)), scanner)
     }
-
     _ => {
       let scanner = advance(scanner)
       let text = scanner.source.substring(start=start_pos, end=scanner.position)
-      (Unknown(text, make_location(scanner, start_pos, start_line, start_col)), scanner)
+      (
+        Unknown(text, make_location(scanner, start_pos, start_line, start_col)),
+        scanner,
+      )
     }
   }
 }
 
+///|
 /// Scan an identifier or keyword
 fn scan_identifier_or_keyword(
   scanner : Scanner,
   start_pos : Int,
   start_line : Int,
-  start_col : Int
+  start_col : Int,
 ) -> (Token, Scanner) {
   let mut scanner = scanner
 
@@ -379,18 +570,16 @@ fn scan_identifier_or_keyword(
   while scanner.position < scanner.length {
     let ch = peek_char(scanner)
     match ch {
-      'a'..='z' | 'A'..='Z' | '0'..='9' | '_' | '$' => {
+      'a'..='z' | 'A'..='Z' | '0'..='9' | '_' | '$' =>
         scanner = advance(scanner)
-      }
       _ => break
     }
   }
-
   let text = scanner.source.substring(start=start_pos, end=scanner.position)
   let loc = SourceLocation::new(
     scanner.file_path,
     Position::new(start_line, start_col, start_pos),
-    Position::new(scanner.line, scanner.column, scanner.position)
+    Position::new(scanner.line, scanner.column, scanner.position),
   )
 
   // Check if it's a keyword
@@ -455,16 +644,16 @@ fn scan_identifier_or_keyword(
     "delete" => KeywordDelete(loc)
     _ => Identifier(text, loc)
   }
-
   (token, scanner)
 }
 
+///|
 /// Scan a number literal
 fn scan_number(
   scanner : Scanner,
   start_pos : Int,
   start_line : Int,
-  start_col : Int
+  start_col : Int,
 ) -> (Token, Scanner) {
   let mut scanner = scanner
 
@@ -472,43 +661,36 @@ fn scan_number(
   while scanner.position < scanner.length {
     let ch = peek_char(scanner)
     match ch {
-      '0'..='9' | '.' | 'e' | 'E' | '+' | '-' => {
-        scanner = advance(scanner)
-      }
+      '0'..='9' | '.' | 'e' | 'E' | '+' | '-' => scanner = advance(scanner)
       _ => break
     }
   }
-
   let text = scanner.source.substring(start=start_pos, end=scanner.position)
   let loc = SourceLocation::new(
     scanner.file_path,
     Position::new(start_line, start_col, start_pos),
-    Position::new(scanner.line, scanner.column, scanner.position)
+    Position::new(scanner.line, scanner.column, scanner.position),
   )
-
   (NumericLiteral(text, loc), scanner)
 }
 
+///|
 /// Scan a string literal
 fn scan_string(
   scanner : Scanner,
   start_pos : Int,
   start_line : Int,
-  start_col : Int
+  start_col : Int,
 ) -> (Token, Scanner) {
   let quote = peek_char(scanner)
-  let mut scanner = advance(scanner)  // Skip opening quote
-
+  let mut scanner = advance(scanner) // Skip opening quote
   let mut text = ""
-
   while scanner.position < scanner.length {
     let ch = peek_char(scanner)
-
     if ch == quote {
-      scanner = advance(scanner)  // Skip closing quote
+      scanner = advance(scanner) // Skip closing quote
       break
     }
-
     if ch == '\\' {
       scanner = advance(scanner)
       if scanner.position < scanner.length {
@@ -521,87 +703,73 @@ fn scan_string(
       scanner = advance(scanner)
     }
   }
-
   let loc = SourceLocation::new(
     scanner.file_path,
     Position::new(start_line, start_col, start_pos),
-    Position::new(scanner.line, scanner.column, scanner.position)
+    Position::new(scanner.line, scanner.column, scanner.position),
   )
-
   (StringLiteral(text, loc), scanner)
 }
 
+///|
 /// Scan a template literal (basic implementation)
 fn scan_template(
   scanner : Scanner,
   start_pos : Int,
   start_line : Int,
-  start_col : Int
+  start_col : Int,
 ) -> (Token, Scanner) {
-  let mut scanner = advance(scanner)  // Skip opening backtick
+  let mut scanner = advance(scanner) // Skip opening backtick
   let mut text = ""
-
   while scanner.position < scanner.length {
     let ch = peek_char(scanner)
-
     if ch == '`' {
       scanner = advance(scanner)
       break
     }
-
     text = text + Char::to_string(ch)
     scanner = advance(scanner)
   }
-
   let loc = SourceLocation::new(
     scanner.file_path,
     Position::new(start_line, start_col, start_pos),
-    Position::new(scanner.line, scanner.column, scanner.position)
+    Position::new(scanner.line, scanner.column, scanner.position),
   )
-
   (TemplateLiteral(text, loc), scanner)
 }
 
+///|
 /// Skip whitespace and comments
 fn skip_trivia(scanner : Scanner) -> Scanner {
   let mut scanner = scanner
-
   while scanner.position < scanner.length {
     let ch = peek_char(scanner)
-
     match ch {
-      ' ' | '\t' | '\r' => {
-        scanner = advance(scanner)
-      }
-      '\n' => {
-        scanner = advance_line(scanner)
-      }
-      '/' => {
+      ' ' | '\t' | '\r' => scanner = advance(scanner)
+      '\n' => scanner = advance_line(scanner)
+      '/' =>
         // Check for comments
         if scanner.position + 1 < scanner.length {
           let next = scanner.source.get(scanner.position + 1)
           match next {
-            Some('/') => {
+            Some('/') =>
               // Single-line comment
               scanner = skip_single_line_comment(scanner)
-            }
-            Some('*') => {
+            Some('*') =>
               // Multi-line comment
               scanner = skip_multi_line_comment(scanner)
-            }
             _ => break
           }
         } else {
           break
         }
-      }
       _ => break
     }
   }
-
   scanner
 }
 
+///|
 /// Skip single-line comment
 fn skip_single_line_comment(scanner : Scanner) -> Scanner {
   let mut scanner = scanner
@@ -609,7 +777,6 @@ fn skip_single_line_comment(scanner : Scanner) -> Scanner {
   // Skip "//"
   scanner = advance(scanner)
   scanner = advance(scanner)
-
   while scanner.position < scanner.length {
     let ch = peek_char(scanner)
     if ch == '\n' {
@@ -618,10 +785,10 @@ fn skip_single_line_comment(scanner : Scanner) -> Scanner {
     }
     scanner = advance(scanner)
   }
-
   scanner
 }
 
+///|
 /// Skip multi-line comment
 fn skip_multi_line_comment(scanner : Scanner) -> Scanner {
   let mut scanner = scanner
@@ -629,29 +796,26 @@ fn skip_multi_line_comment(scanner : Scanner) -> Scanner {
   // Skip "/*"
   scanner = advance(scanner)
   scanner = advance(scanner)
-
   while scanner.position < scanner.length {
     let ch = peek_char(scanner)
-
     if ch == '*' && scanner.position + 1 < scanner.length {
       let next = scanner.source.get(scanner.position + 1)
       if next == Some('/') {
-        scanner = advance(scanner)  // Skip '*'
-        scanner = advance(scanner)  // Skip '/'
+        scanner = advance(scanner) // Skip '*'
+        scanner = advance(scanner) // Skip '/'
         break
       }
     }
-
     if ch == '\n' {
       scanner = advance_line(scanner)
     } else {
       scanner = advance(scanner)
     }
   }
-
   scanner
 }
 
+///|
 /// Peek at current character
 fn peek_char(scanner : Scanner) -> Char {
   if scanner.position < scanner.length {
@@ -664,6 +828,7 @@ fn peek_char(scanner : Scanner) -> Char {
   }
 }
 
+///|
 /// Advance scanner by one character
 fn advance(scanner : Scanner) -> Scanner {
   if scanner.position < scanner.length {
@@ -673,11 +838,18 @@ fn advance(scanner : Scanner) -> Scanner {
   }
 }
 
+///|
 /// Advance scanner to next line
 fn advance_line(scanner : Scanner) -> Scanner {
-  { ..scanner, position: scanner.position + 1, line: scanner.line + 1, column: 1 }
+  {
+    ..scanner,
+    position: scanner.position + 1,
+    line: scanner.line + 1,
+    column: 1,
+  }
 }
 
+///|
 /// Get current location
 fn current_location(scanner : Scanner) -> SourceLocation {
   let pos = Position::new(scanner.line, scanner.column, scanner.position)
