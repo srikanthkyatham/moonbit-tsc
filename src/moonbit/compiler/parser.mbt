@@ -585,10 +585,74 @@ fn parse_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
 }
 
 ///|
+/// Check if we have an arrow function ahead by looking for =>
+fn is_arrow_function_ahead(parser : Parser) -> Bool {
+  match current_token(parser) {
+    // Case 1: (a, b) => expr
+    OpenParen(_) => {
+      // Scan ahead to find matching closing paren
+      let mut depth = 1
+      let mut index = parser.position + 1
+      while index < parser.tokens.length() && depth > 0 {
+        match parser.tokens[index] {
+          OpenParen(_) => depth = depth + 1
+          CloseParen(_) => depth = depth - 1
+          _ => ()
+        }
+        index = index + 1
+      }
+      // Check if token after closing paren is Arrow
+      if index < parser.tokens.length() {
+        match parser.tokens[index] {
+          Arrow(_) => true
+          _ => false
+        }
+      } else {
+        false
+      }
+    }
+    // Case 2: a => expr
+    Identifier(_) => {
+      if parser.position + 1 < parser.tokens.length() {
+        match parser.tokens[parser.position + 1] {
+          Arrow(_) => true
+          _ => false
+        }
+      } else {
+        false
+      }
+    }
+    _ => false
+  }
+}
+
+///|
 /// Parse assignment expression
 fn parse_assignment_expression(
   parser : Parser,
 ) -> Result[(Node, Parser), Parser] {
+  // Check if this is an arrow function
+  if is_arrow_function_ahead(parser) {
+    match current_token(parser) {
+      OpenParen(_) => {
+        // Try multi-parameter arrow function
+        match try_parse_arrow_function(parser) {
+          Ok((arrow_fn, p)) => return Ok((arrow_fn, p))
+          Err(_) => ()
+        }
+      }
+      Identifier(_) => {
+        // Try single-parameter arrow function
+        match try_parse_single_param_arrow_function(parser) {
+          Ok((arrow_fn, p)) => return Ok((arrow_fn, p))
+          Err(_) => ()
+        }
+      }
+      _ => ()
+    }
+  }
+
+  // Otherwise, parse as conditional expression
   parse_conditional_expression(parser)
 }
 
@@ -635,6 +699,171 @@ fn parse_conditional_expression(
     }
     _ => Ok((left, parser))
   }
+}
+
+///|
+/// Try to parse arrow function with parenthesized parameters: (a, b) => expr
+fn try_parse_arrow_function(
+  parser : Parser,
+) -> Result[(Node, Parser), Parser] {
+  let start_loc = current_token(parser).location()
+  let original_parser = parser  // Save original state
+
+  // Consume opening paren
+  let parser = match current_token(parser) {
+    OpenParen(_) => advance_parser(parser)
+    _ => return Err(original_parser)
+  }
+
+  // Parse parameters
+  let params = []
+  let mut parser = parser
+  let mut first = true
+  let mut should_continue = true
+
+  while should_continue {
+    should_continue = match current_token(parser) {
+      CloseParen(_) => false
+      _ => true
+    }
+    if !should_continue {
+      break
+    }
+
+    if !first {
+      match current_token(parser) {
+        Comma(_) => parser = advance_parser(parser)
+        _ => return Err(original_parser)
+      }
+    }
+    first = false
+
+    // Parse parameter (just identifier for now, full parameter support later)
+    match parse_identifier(parser) {
+      Ok((id, p)) => {
+        params.push(
+          Node::Parameter(Parameter::{
+            name: Node::Identifier(id),
+            type_annotation: None,
+            initializer: None,
+            is_optional: false,
+            is_rest: false,
+            location: id.location,
+          }),
+        )
+        parser = p
+      }
+      Err(_) => return Err(original_parser)
+    }
+  }
+
+  // Consume closing paren
+  parser = match current_token(parser) {
+    CloseParen(_) => advance_parser(parser)
+    _ => return Err(original_parser)
+  }
+
+  // Expect arrow =>
+  parser = match current_token(parser) {
+    Arrow(_) => advance_parser(parser)
+    _ => return Err(original_parser)
+  }
+
+  // Parse body (expression or block)
+  let (body, parser) = match current_token(parser) {
+    OpenBrace(_) => {
+      // Block body
+      match parse_block_statement(parser) {
+        Ok((block, p)) => (block, p)
+        Err(p) => return Err(p)
+      }
+    }
+    _ => {
+      // Expression body
+      match parse_assignment_expression(parser) {
+        Ok((expr, p)) => (expr, p)
+        Err(p) => return Err(p)
+      }
+    }
+  }
+
+  Ok(
+    (
+      Node::ArrowFunction(ArrowFunction::{
+        type_parameters: [],
+        parameters: params,
+        return_type: None,
+        body,
+        is_async: false,
+        location: start_loc,
+      }),
+      parser,
+    ),
+  )
+}
+
+///|
+/// Try to parse single parameter arrow function: a => expr
+fn try_parse_single_param_arrow_function(
+  parser : Parser,
+) -> Result[(Node, Parser), Parser] {
+  let start_loc = current_token(parser).location()
+  let original_parser = parser  // Save original state
+
+  // Parse single parameter (identifier only)
+  let (id, parser) = match parse_identifier(parser) {
+    Ok((i, p)) => (i, p)
+    Err(_) => return Err(original_parser)
+  }
+
+  // Expect arrow =>
+  let parser = match current_token(parser) {
+    Arrow(_) => advance_parser(parser)
+    _ => return Err(original_parser)
+  }
+
+  // Parse body (expression or block)
+  let (body, parser) = match current_token(parser) {
+    OpenBrace(_) => {
+      // Block body
+      match parse_block_statement(parser) {
+        Ok((block, p)) => (block, p)
+        Err(p) => return Err(p)
+      }
+    }
+    _ => {
+      // Expression body
+      match parse_assignment_expression(parser) {
+        Ok((expr, p)) => (expr, p)
+        Err(p) => return Err(p)
+      }
+    }
+  }
+
+  let params = [
+    Node::Parameter(Parameter::{
+      name: Node::Identifier(id),
+      type_annotation: None,
+      initializer: None,
+      is_optional: false,
+      is_rest: false,
+      location: id.location,
+    }),
+  ]
+
+  Ok(
+    (
+      Node::ArrowFunction(ArrowFunction::{
+        type_parameters: [],
+        parameters: params,
+        return_type: None,
+        body,
+        is_async: false,
+        location: start_loc,
+      }),
+      parser,
+    ),
+  )
 }
 
 ///|
@@ -911,6 +1140,19 @@ fn parse_primary_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
         ),
       )
 
+    // Template literal (simple - treat as string for now)
+    TemplateLiteral(value, loc) =>
+      Ok(
+        (
+          Node::TemplateExpression(TemplateExpression::{
+            head: value,
+            template_spans: [],
+            location: loc,
+          }),
+          advance_parser(parser),
+        ),
+      )
+
     // null
     KeywordNull(loc) =>
       Ok((Node::NullLiteral(NullLiteral::{ location: loc }), advance_parser(parser)))
@@ -990,7 +1232,26 @@ fn parse_array_literal(parser : Parser) -> Result[(Node, Parser), Parser] {
       }
       _ => ignore(())
     }
-    match parse_assignment_expression(parser) {
+
+    // Check for spread operator
+    let expr_result = match current_token(parser) {
+      DotDotDot(loc) => {
+        parser = advance_parser(parser) // consume ...
+        match parse_assignment_expression(parser) {
+          Ok((expr, p)) => {
+            let spread_expr = Node::SpreadExpression(SpreadExpression::{
+              expression: expr,
+              location: loc,
+            })
+            Ok((spread_expr, p))
+          }
+          Err(p) => Err(p)
+        }
+      }
+      _ => parse_assignment_expression(parser)
+    }
+
+    match expr_result {
       Ok((expr, next_parser)) => {
         elements.push(Some(expr))
         parser = next_parser
@@ -1061,32 +1322,46 @@ fn parse_object_property(
 ) -> Result[(ObjectProperty, Parser), Parser] {
   let start_loc = current_token(parser).location()
 
-  // Parse property name
-  match parse_identifier(parser) {
-    Ok((id, next_parser)) => {
-      let parser = next_parser
-
-      // Check for shorthand or full property
-      match current_token(parser) {
-        Colon(_) => {
-          let parser = advance_parser(parser)
-          match parse_assignment_expression(parser) {
-            Ok((value, parser)) =>
-              Ok(
-                (
-                  ObjectProperty::PropertyAssignment(id.name, value, start_loc),
-                  parser,
-                ),
-              )
-            Err(parser) => Err(parser)
-          }
+  // Check for spread property
+  match current_token(parser) {
+    DotDotDot(_) => {
+      let parser = advance_parser(parser) // consume ...
+      match parse_assignment_expression(parser) {
+        Ok((expr, parser)) => {
+          Ok((ObjectProperty::SpreadAssignment(expr, start_loc), parser))
         }
-        _ =>
-          // Shorthand property
-          Ok((ObjectProperty::ShorthandProperty(id.name, start_loc), parser))
+        Err(parser) => Err(parser)
       }
     }
-    Err(parser) => Err(parser)
+    _ => {
+      // Parse property name
+      match parse_identifier(parser) {
+        Ok((id, next_parser)) => {
+          let parser = next_parser
+
+          // Check for shorthand or full property
+          match current_token(parser) {
+            Colon(_) => {
+              let parser = advance_parser(parser)
+              match parse_assignment_expression(parser) {
+                Ok((value, parser)) =>
+                  Ok(
+                    (
+                      ObjectProperty::PropertyAssignment(id.name, value, start_loc),
+                      parser,
+                    ),
+                  )
+                Err(parser) => Err(parser)
+              }
+            }
+            _ =>
+              // Shorthand property
+              Ok((ObjectProperty::ShorthandProperty(id.name, start_loc), parser))
+          }
+        }
+        Err(parser) => Err(parser)
+      }
+    }
   }
 }
 
@@ -1150,9 +1425,22 @@ fn parse_arrow_function_single_param(
 }
 
 ///|
-/// Parse type (placeholder)
+/// Parse type (enhanced with union support)
 fn parse_type(parser : Parser) -> Result[(Node, Parser), Parser] {
-  // TODO: Implement full type parsing
+  // Parse primary type
+  let result = parse_primary_type(parser)
+  match result {
+    Ok((type_node, parser)) => {
+      // Check for union type (|)
+      parse_union_or_intersection_type(parser, type_node)
+    }
+    Err(p) => Err(p)
+  }
+}
+
+///|
+/// Parse primary type
+fn parse_primary_type(parser : Parser) -> Result[(Node, Parser), Parser] {
   let token = current_token(parser)
   let loc = token.location()
   match token {
@@ -1186,11 +1474,41 @@ fn parse_type(parser : Parser) -> Result[(Node, Parser), Parser] {
           advance_parser(parser),
         ),
       )
+    KeywordVoid(_) =>
+      Ok(
+        (
+          Node::KeywordType(KeywordType::{
+            kind: TypeKeyword::Void,
+            location: loc,
+          }),
+          advance_parser(parser),
+        ),
+      )
+    KeywordUndefined(_) =>
+      Ok(
+        (
+          Node::KeywordType(KeywordType::{
+            kind: TypeKeyword::Undefined,
+            location: loc,
+          }),
+          advance_parser(parser),
+        ),
+      )
     KeywordAny(_) =>
       Ok(
         (
           Node::KeywordType(KeywordType::{
             kind: TypeKeyword::Any,
+            location: loc,
+          }),
+          advance_parser(parser),
+        ),
+      )
+    KeywordNull(_) =>
+      Ok(
+        (
+          Node::KeywordType(KeywordType::{
+            kind: TypeKeyword::Null,
             location: loc,
           }),
           advance_parser(parser),
@@ -1208,6 +1526,48 @@ fn parse_type(parser : Parser) -> Result[(Node, Parser), Parser] {
         ),
       )
     _ => Err(add_error(parser, "Expected type", loc))
+  }
+}
+
+///|
+/// Parse union or intersection type
+fn parse_union_or_intersection_type(
+  parser : Parser,
+  first_type : Node
+) -> Result[(Node, Parser), Parser] {
+  let token = current_token(parser)
+  match token {
+    Bar(_) => {
+      // Union type: type1 | type2 | type3
+      let types = [first_type]
+      let mut parser = parser
+      while true {
+        match current_token(parser) {
+          Bar(_) => {
+            parser = advance_parser(parser) // consume |
+            match parse_primary_type(parser) {
+              Ok((type_node, p)) => {
+                types.push(type_node)
+                parser = p
+              }
+              Err(p) => return Err(p)
+            }
+          }
+          _ => break
+        }
+      }
+      let loc = match first_type {
+        Node::KeywordType(kt) => kt.location
+        Node::TypeReference(tr) => tr.location
+        _ => {
+          start: { line: 0, column: 0, offset: 0 },
+          end: { line: 0, column: 0, offset: 0 },
+          file_path: "",
+        }
+      }
+      Ok((Node::UnionType(UnionType::{ types, location: loc }), parser))
+    }
+    _ => Ok((first_type, parser)) // Not a union, return original type
   }
 }
 
@@ -1512,13 +1872,19 @@ fn parse_type_alias_declaration(
     _ => return Err(add_error(parser, "Expected type name", current_token(parser).location()))
   }
 
+  // Optional type parameters
+  let (type_parameters, parser) = match current_token(parser) {
+    LessThan(_) => parse_type_parameters(parser)
+    _ => ([], parser)
+  }
+
   // Expect '='
   let parser = match current_token(parser) {
     Equals(_) => advance_parser(parser)
     _ => return Err(add_error(parser, "Expected '=' in type alias", current_token(parser).location()))
   }
 
-  // Parse type (for now, just use a placeholder)
+  // Parse type
   let (type_node, parser) = match parse_type(parser) {
     Ok((t, p)) => (t, p)
     Err(p) => return Err(p)
@@ -1535,7 +1901,7 @@ fn parse_type_alias_declaration(
   Ok((
     Node::TypeAliasDeclaration(TypeAliasDeclaration::{
       name,
-      type_parameters: [],
+      type_parameters,
       type_node,
       location: SourceLocation::new(start_loc.file_path, start_loc.start, end_loc.end)
     }),
@@ -2490,8 +2856,84 @@ fn parse_try_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
 
 ///|
 fn parse_type_parameters(parser : Parser) -> (Array[TypeParameter], Parser) {
-  // TODO: Implement
-  ([], parser)
+  // Expect <
+  let parser = match current_token(parser) {
+    LessThan(_) => advance_parser(parser)
+    _ => return ([], parser)
+  }
+
+  let type_params = []
+  let mut parser = parser
+
+  // Parse type parameter list
+  while true {
+    match current_token(parser) {
+      GreaterThan(_) => {
+        parser = advance_parser(parser)
+        break
+      }
+      Identifier(name, loc) => {
+        // Parse type parameter name
+        parser = advance_parser(parser)
+
+        // Optional constraint (extends)
+        let constraint = match current_token(parser) {
+          KeywordExtends(_) => {
+            parser = advance_parser(parser)
+            match parse_type(parser) {
+              Ok((ty, p)) => {
+                parser = p
+                Some(ty)
+              }
+              Err(p) => {
+                parser = p
+                None
+              }
+            }
+          }
+          _ => None
+        }
+
+        // Optional default
+        let default_type = match current_token(parser) {
+          Equals(_) => {
+            parser = advance_parser(parser)
+            match parse_type(parser) {
+              Ok((ty, p)) => {
+                parser = p
+                Some(ty)
+              }
+              Err(p) => {
+                parser = p
+                None
+              }
+            }
+          }
+          _ => None
+        }
+
+        type_params.push(TypeParameter::{
+          name,
+          constraint,
+          default: default_type,
+          location: loc,
+        })
+
+        // Check for comma
+        match current_token(parser) {
+          Comma(_) => {
+            parser = advance_parser(parser)
+            continue
+          }
+          GreaterThan(_) => continue
+          _ => break
+        }
+      }
+      _ => break
+    }
+  }
+
+  (type_params, parser)
 }
 
 // ============================================================================
@@ -2633,6 +3075,9 @@ fn get_binary_operator(token : Token) -> BinaryOperator? {
     Ampersand(_) => Some(BinaryOperator::BitwiseAnd)
     Bar(_) => Some(BinaryOperator::BitwiseOr)
     Caret(_) => Some(BinaryOperator::BitwiseXor)
+    LessThanLessThan(_) => Some(BinaryOperator::LeftShift)
+    GreaterThanGreaterThan(_) => Some(BinaryOperator::RightShift)
+    GreaterThanGreaterThanGreaterThan(_) => Some(BinaryOperator::UnsignedRightShift)
     KeywordIn(_) => Some(BinaryOperator::In)
     KeywordInstanceOf(_) => Some(BinaryOperator::InstanceOf)
     _ => None

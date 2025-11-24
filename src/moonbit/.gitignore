@@ -6,3 +6,6 @@ target
 # backup files
 *.*.bak*
 *.sh
+*.*.original
+*.*.before_stub
+*.*.backup
