@@ -488,6 +488,21 @@ pub enum SourceMapMode {
   ExternalMap // Separate .map file with reference comment
 } derive(Eq)
 
+/// Create a SourceMapMode with no source map
+pub fn SourceMapMode::no_map() -> SourceMapMode {
+  NoMap
+}
+
+/// Create a SourceMapMode with inline source map
+pub fn SourceMapMode::inline_map() -> SourceMapMode {
+  InlineMap
+}
+
+/// Create a SourceMapMode with external source map
+pub fn SourceMapMode::external_map() -> SourceMapMode {
+  ExternalMap
+}
+
 /// Source map output configuration
 pub struct SourceMapOutput {
   mode : SourceMapMode

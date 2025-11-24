@@ -1,0 +1,485 @@
+// Tests for TypeScript Declaration File Emitter
+
+///|
+/// Test: Basic function declaration
+test "emit function declaration" {
+  let source = "function add(a: number, b: number): number { return a + b; }"
+  let scanner = Scanner::new(source, "test.ts")
+  let tokens = scan_all(scanner)
+
+  match parse_source_file(tokens, "test.ts") {
+    Ok(source_file) => {
+      let ctx = DeclarationEmitterContext::default()
+      let output = emit_declaration_file(source_file, ctx)
+
+      // Should contain declare function
+      assert_true(output.contains("declare function add"))
+      assert_true(output.contains("a: number, b: number"))
+      assert_true(output.contains(": number;"))
+
+      println("Function declaration output:")
+      println(output)
+    }
+    Err(diagnostics) => {
+      println("Parse error:")
+      for i = 0; i < diagnostics.length(); i = i + 1 {
+        println("  " + diagnostics[i].message)
+      }
+      assert_true(false)
+    }
+  }
+}
+
+///|
+/// Test: Interface declaration
+test "emit interface declaration" {
+  let source = "interface Point { x: number; y: number; }"
+  let scanner = Scanner::new(source, "test.ts")
+  let tokens = scan_all(scanner)
+
+  match parse_source_file(tokens, "test.ts") {
+    Ok(source_file) => {
+      let ctx = DeclarationEmitterContext::default()
+      let output = emit_declaration_file(source_file, ctx)
+
+      // Should contain interface
+      assert_true(output.contains("interface Point"))
+      assert_true(output.contains("x: number"))
+      assert_true(output.contains("y: number"))
+
+      println("\nInterface declaration output:")
+      println(output)
+    }
+    Err(diagnostics) => {
+      println("Parse error:")
+      for i = 0; i < diagnostics.length(); i = i + 1 {
+        println("  " + diagnostics[i].message)
+      }
+      assert_true(false)
+    }
+  }
+}
+
+///|
+/// Test: Type alias declaration
+test "emit type alias" {
+  let source = "type Status = \"active\" | \"inactive\" | \"pending\";"
+  let scanner = Scanner::new(source, "test.ts")
+  let tokens = scan_all(scanner)
+
+  match parse_source_file(tokens, "test.ts") {
+    Ok(source_file) => {
+      let ctx = DeclarationEmitterContext::default()
+      let output = emit_declaration_file(source_file, ctx)
+
+      // Should contain type alias
+      assert_true(output.contains("type Status"))
+      assert_true(output.contains("|"))
+
+      println("\nType alias output:")
+      println(output)
+    }
+    Err(diagnostics) => {
+      println("Parse error:")
+      for i = 0; i < diagnostics.length(); i = i + 1 {
+        println("  " + diagnostics[i].message)
+      }
+      assert_true(false)
+    }
+  }
+}
+
+///|
+/// Test: Enum declaration
+test "emit enum declaration" {
+  let source = "enum Color { Red, Green, Blue }"
+  let scanner = Scanner::new(source, "test.ts")
+  let tokens = scan_all(scanner)
+
+  match parse_source_file(tokens, "test.ts") {
+    Ok(source_file) => {
+      let ctx = DeclarationEmitterContext::default()
+      let output = emit_declaration_file(source_file, ctx)
+
+      // Should contain enum
+      assert_true(output.contains("enum Color"))
+      assert_true(output.contains("Red"))
+      assert_true(output.contains("Green"))
+      assert_true(output.contains("Blue"))
+
+      println("\nEnum declaration output:")
+      println(output)
+    }
+    Err(diagnostics) => {
+      println("Parse error:")
+      for i = 0; i < diagnostics.length(); i = i + 1 {
+        println("  " + diagnostics[i].message)
+      }
+      assert_true(false)
+    }
+  }
+}
+
+///|
+/// Test: Class declaration
+test "emit class declaration" {
+  let source = "class Person { name: string; age: number; constructor(name: string, age: number) {} greet(): string { return ''; } }"
+  let scanner = Scanner::new(source, "test.ts")
+  let tokens = scan_all(scanner)
+
+  match parse_source_file(tokens, "test.ts") {
+    Ok(source_file) => {
+      let ctx = DeclarationEmitterContext::default()
+      let output = emit_declaration_file(source_file, ctx)
+
+      // Should contain class declaration
+      assert_true(output.contains("declare class Person"))
+      assert_true(output.contains("name: "))
+      assert_true(output.contains("age: "))
+      assert_true(output.contains("constructor"))
+      assert_true(output.contains("greet"))
+
+      println("\nClass declaration output:")
+      println(output)
+    }
+    Err(diagnostics) => {
+      println("Parse error:")
+      for i = 0; i < diagnostics.length(); i = i + 1 {
+        println("  " + diagnostics[i].message)
+      }
+      assert_true(false)
+    }
+  }
+}
+
+///|
+/// Test: Variable declaration
+test "emit variable declaration" {
+  let source = "const message: string = 'hello';"
+  let scanner = Scanner::new(source, "test.ts")
+  let tokens = scan_all(scanner)
+
+  match parse_source_file(tokens, "test.ts") {
+    Ok(source_file) => {
+      let ctx = DeclarationEmitterContext::default()
+      let output = emit_declaration_file(source_file, ctx)
+
+      // Should contain declare const
+      assert_true(output.contains("declare const message"))
+      assert_true(output.contains(": string"))
+
+      println("\nVariable declaration output:")
+      println(output)
+    }
+    Err(diagnostics) => {
+      println("Parse error:")
+      for i = 0; i < diagnostics.length(); i = i + 1 {
+        println("  " + diagnostics[i].message)
+      }
+      assert_true(false)
+    }
+  }
+}
+
+///|
+/// Test: Generic function
+test "emit generic function" {
+  let source = "function identity<T>(value: T): T { return value; }"
+  let scanner = Scanner::new(source, "test.ts")
+  let tokens = scan_all(scanner)
+
+  match parse_source_file(tokens, "test.ts") {
+    Ok(source_file) => {
+      let ctx = DeclarationEmitterContext::default()
+      let output = emit_declaration_file(source_file, ctx)
+
+      // Should contain generic function
+      assert_true(output.contains("function identity"))
+      assert_true(output.contains("<T>"))
+      assert_true(output.contains("value: T"))
+      assert_true(output.contains(": T;"))
+
+      println("\nGeneric function output:")
+      println(output)
+    }
+    Err(diagnostics) => {
+      println("Parse error:")
+      for i = 0; i < diagnostics.length(); i = i + 1 {
+        println("  " + diagnostics[i].message)
+      }
+      assert_true(false)
+    }
+  }
+}
+
+///|
+/// Test: Generic interface
+test "emit generic interface" {
+  let source = "interface Result<T, E> { value: T; error: E; }"
+  let scanner = Scanner::new(source, "test.ts")
+  let tokens = scan_all(scanner)
+
+  match parse_source_file(tokens, "test.ts") {
+    Ok(source_file) => {
+      let ctx = DeclarationEmitterContext::default()
+      let output = emit_declaration_file(source_file, ctx)
+
+      // Should contain generic interface
+      assert_true(output.contains("interface Result"))
+      assert_true(output.contains("<T, E>"))
+      assert_true(output.contains("value: T"))
+      assert_true(output.contains("error: E"))
+
+      println("\nGeneric interface output:")
+      println(output)
+    }
+    Err(diagnostics) => {
+      println("Parse error:")
+      for i = 0; i < diagnostics.length(); i = i + 1 {
+        println("  " + diagnostics[i].message)
+      }
+      assert_true(false)
+    }
+  }
+}
+
+///|
+/// Test: Multiple declarations
+test "emit multiple declarations" {
+  let source = "interface User { id: number; name: string; }\nfunction getUser(id: number): User { return null; }\ntype UserID = number;"
+  let scanner = Scanner::new(source, "test.ts")
+  let tokens = scan_all(scanner)
+
+  match parse_source_file(tokens, "test.ts") {
+    Ok(source_file) => {
+      let ctx = DeclarationEmitterContext::default()
+      let output = emit_declaration_file(source_file, ctx)
+
+      // Should contain all declarations
+      assert_true(output.contains("interface User"))
+      assert_true(output.contains("declare function getUser"))
+      assert_true(output.contains("type UserID"))
+
+      println("\nMultiple declarations output:")
+      println(output)
+    }
+    Err(diagnostics) => {
+      println("Parse error:")
+      for i = 0; i < diagnostics.length(); i = i + 1 {
+        println("  " + diagnostics[i].message)
+      }
+      assert_true(false)
+    }
+  }
+}
+
+///|
+/// Test: Optional parameters
+test "emit optional parameters" {
+  let source = "function greet(name: string, greeting?: string): string { return ''; }"
+  let scanner = Scanner::new(source, "test.ts")
+  let tokens = scan_all(scanner)
+
+  match parse_source_file(tokens, "test.ts") {
+    Ok(source_file) => {
+      let ctx = DeclarationEmitterContext::default()
+      let output = emit_declaration_file(source_file, ctx)
+
+      // Should contain optional parameter marker
+      assert_true(output.contains("greeting?"))
+      assert_true(output.contains("name: string"))
+
+      println("\nOptional parameters output:")
+      println(output)
+    }
+    Err(diagnostics) => {
+      println("Parse error:")
+      for i = 0; i < diagnostics.length(); i = i + 1 {
+        println("  " + diagnostics[i].message)
+      }
+      assert_true(false)
+    }
+  }
+}
+
+///|
+/// Test: Arrow function type
+test "emit arrow function type" {
+  let source = "type Handler = (event: string) => void;"
+  let scanner = Scanner::new(source, "test.ts")
+  let tokens = scan_all(scanner)
+
+  match parse_source_file(tokens, "test.ts") {
+    Ok(source_file) => {
+      let ctx = DeclarationEmitterContext::default()
+      let output = emit_declaration_file(source_file, ctx)
+
+      // Should contain arrow function type
+      assert_true(output.contains("type Handler"))
+      assert_true(output.contains("=>"))
+      assert_true(output.contains("void"))
+
+      println("\nArrow function type output:")
+      println(output)
+    }
+    Err(diagnostics) => {
+      println("Parse error:")
+      for i = 0; i < diagnostics.length(); i = i + 1 {
+        println("  " + diagnostics[i].message)
+      }
+      assert_true(false)
+    }
+  }
+}
+
+///|
+/// Test: Array types
+test "emit array types" {
+  let source = "function process(items: string[]): number[] { return []; }"
+  let scanner = Scanner::new(source, "test.ts")
+  let tokens = scan_all(scanner)
+
+  match parse_source_file(tokens, "test.ts") {
+    Ok(source_file) => {
+      let ctx = DeclarationEmitterContext::default()
+      let output = emit_declaration_file(source_file, ctx)
+
+      // Should contain array types
+      assert_true(output.contains("string[]"))
+      assert_true(output.contains("number[]"))
+
+      println("\nArray types output:")
+      println(output)
+    }
+    Err(diagnostics) => {
+      println("Parse error:")
+      for i = 0; i < diagnostics.length(); i = i + 1 {
+        println("  " + diagnostics[i].message)
+      }
+      assert_true(false)
+    }
+  }
+}
+
+///|
+/// Test: Comprehensive declaration file
+test "emit comprehensive declaration file" {
+  let source = "interface Config { host: string; port: number; }\nclass Server { config: Config; start(): void {} stop(): void {} }\nenum Status { Running, Stopped }\nfunction createServer(config: Config): Server { return null; }"
+  let scanner = Scanner::new(source, "test.ts")
+  let tokens = scan_all(scanner)
+
+  match parse_source_file(tokens, "test.ts") {
+    Ok(source_file) => {
+      let ctx = DeclarationEmitterContext::default()
+      let output = emit_declaration_file(source_file, ctx)
+
+      // Check header
+      assert_true(output.contains("// Type definitions for"))
+      assert_true(output.contains("// Generated by MoonBit TypeScript Compiler"))
+
+      // Check all declarations are present
+      assert_true(output.contains("interface Config"))
+      assert_true(output.contains("declare class Server"))
+      assert_true(output.contains("enum Status"))
+      assert_true(output.contains("declare function createServer"))
+
+      println("\nComprehensive declaration file output:")
+      println(output)
+    }
+    Err(diagnostics) => {
+      println("Parse error:")
+      for i = 0; i < diagnostics.length(); i = i + 1 {
+        println("  " + diagnostics[i].message)
+      }
+      assert_true(false)
+    }
+  }
+}
+
+///|
+/// Test: Interface with extends clause
+test "emit interface with extends" {
+  let source = "interface Base { id: number; }\ninterface Extended extends Base { name: string; }"
+  let scanner = Scanner::new(source, "test.ts")
+  let tokens = scan_all(scanner)
+
+  match parse_source_file(tokens, "test.ts") {
+    Ok(source_file) => {
+      let ctx = DeclarationEmitterContext::default()
+      let output = emit_declaration_file(source_file, ctx)
+
+      // Should contain extends clause
+      assert_true(output.contains("interface Extended extends Base"))
+      assert_true(output.contains("name: string"))
+
+      println("\nInterface with extends output:")
+      println(output)
+    }
+    Err(diagnostics) => {
+      println("Parse error:")
+      for i = 0; i < diagnostics.length(); i = i + 1 {
+        println("  " + diagnostics[i].message)
+      }
+      assert_true(false)
+    }
+  }
+}
+
+///|
+/// Test: Const enum
+test "emit const enum" {
+  let source = "const enum Direction { Up, Down, Left, Right }"
+  let scanner = Scanner::new(source, "test.ts")
+  let tokens = scan_all(scanner)
+
+  match parse_source_file(tokens, "test.ts") {
+    Ok(source_file) => {
+      let ctx = DeclarationEmitterContext::default()
+      let output = emit_declaration_file(source_file, ctx)
+
+      // Should contain const enum
+      assert_true(output.contains("const enum Direction"))
+      assert_true(output.contains("Up"))
+      assert_true(output.contains("Down"))
+
+      println("\nConst enum output:")
+      println(output)
+    }
+    Err(diagnostics) => {
+      println("Parse error:")
+      for i = 0; i < diagnostics.length(); i = i + 1 {
+        println("  " + diagnostics[i].message)
+      }
+      assert_true(false)
+    }
+  }
+}
+
+///|
+/// Test: Enum with initializers
+test "emit enum with initializers" {
+  let source = "enum HttpStatus { OK = 200, NotFound = 404, ServerError = 500 }"
+  let scanner = Scanner::new(source, "test.ts")
+  let tokens = scan_all(scanner)
+
+  match parse_source_file(tokens, "test.ts") {
+    Ok(source_file) => {
+      let ctx = DeclarationEmitterContext::default()
+      let output = emit_declaration_file(source_file, ctx)
+
+      // Should contain enum with values
+      assert_true(output.contains("enum HttpStatus"))
+      assert_true(output.contains("OK = 200") || output.contains("OK = \"200\""))
+
+      println("\nEnum with initializers output:")
+      println(output)
+    }
+    Err(diagnostics) => {
+      println("Parse error:")
+      for i = 0; i < diagnostics.length(); i = i + 1 {
+        println("  " + diagnostics[i].message)
+      }
+      assert_true(false)
+    }
+  }
+}

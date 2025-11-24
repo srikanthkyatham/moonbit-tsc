@@ -64,7 +64,7 @@ test "generate_output_with_sourcemap mode SourceMapMode::NoMap" {
   let output = generate_output_with_sourcemap(
     js_code,
     sourcemap,
-    SourceMapMode::NoMap,
+    SourceMapMode::no_map(),
     "output.js"
   )
 
@@ -94,7 +94,7 @@ test "generate_output_with_sourcemap mode SourceMapMode::InlineMap" {
   let output = generate_output_with_sourcemap(
     js_code,
     sourcemap,
-    SourceMapMode::InlineMap,
+    SourceMapMode::inline_map(),
     "output.js"
   )
 
@@ -131,7 +131,7 @@ test "generate_output_with_sourcemap mode SourceMapMode::ExternalMap" {
   let output = generate_output_with_sourcemap(
     js_code,
     sourcemap,
-    SourceMapMode::ExternalMap,
+    SourceMapMode::external_map(),
     "output.js"
   )
 
@@ -169,14 +169,14 @@ test "inline vs external source map output differs" {
   let inline_output = generate_output_with_sourcemap(
     js_code,
     sourcemap,
-    SourceMapMode::InlineMap,
+    SourceMapMode::inline_map(),
     "output.js"
   )
 
   let external_output = generate_output_with_sourcemap(
     js_code,
     sourcemap,
-    SourceMapMode::ExternalMap,
+    SourceMapMode::external_map(),
     "output.js"
   )
 
@@ -201,7 +201,7 @@ test "generate_output_with_sourcemap with multi-line code" {
   let output = generate_output_with_sourcemap(
     js_code,
     sourcemap,
-    SourceMapMode::ExternalMap,
+    SourceMapMode::external_map(),
     "math.js"
   )
 
