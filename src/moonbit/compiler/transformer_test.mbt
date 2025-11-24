@@ -174,3 +174,157 @@ test "transform object literal" {
     _ => assert_true(false)
   }
 }
+
+///|
+/// Test: Transform arrow function without types
+test "transform arrow function basic" {
+  let stmts = parse_source("const add = (x, y) => x + y;")
+  let transformed = transform_stmt(stmts[0])
+
+  match transformed {
+    VariableStatement(vs) => {
+      let decl = vs.declarations[0]
+      match decl.initializer {
+        Some(ArrowFunction(af)) => {
+          assert_eq(af.parameters.length(), 2)
+        }
+        _ => assert_true(false)
+      }
+    }
+    _ => assert_true(false)
+  }
+}
+
+///|
+/// Test: Transform for loop
+test "transform for loop" {
+  let stmts = parse_source("for (let i = 0; i < 10; i++) {}")
+  let transformed = transform_stmt(stmts[0])
+
+  match transformed {
+    ForStatement(fs) => {
+      match fs.initializer {
+        Some(VariableStatement(vs)) => {
+          assert_true(vs.is_let)
+        }
+        _ => assert_true(false)
+      }
+    }
+    _ => assert_true(false)
+  }
+}
+
+///|
+/// Test: Transform if statement
+test "transform if statement" {
+  let stmts = parse_source("if (true) { const x = 1; }")
+  let transformed = transform_stmt(stmts[0])
+
+  match transformed {
+    IfStatement(if_stmt) => {
+      match if_stmt.then_statement {
+        BlockStatement(bs) => {
+          assert_eq(bs.statements.length(), 1)
+        }
+        _ => assert_true(false)
+      }
+    }
+    _ => assert_true(false)
+  }
+}
+
+///|
+/// Test: Transform return statement
+test "transform return statement" {
+  let stmts = parse_source("function test() { return 42; }")
+  let transformed = transform_stmt(stmts[0])
+
+  match transformed {
+    FunctionDeclaration(fd) => {
+      match fd.body {
+        Some(BlockStatement(bs)) => {
+          assert_eq(bs.statements.length(), 1)
+          match bs.statements[0] {
+            ReturnStatement(_) => assert_true(true)
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    _ => assert_true(false)
+  }
+}
+
+///|
+/// Test: Transform var declaration
+test "transform var declaration" {
+  let stmts = parse_source("var x = 10;")
+  let transformed = transform_stmt(stmts[0])
+
+  match transformed {
+    VariableStatement(vs) => {
+      assert_false(vs.is_const)
+      assert_false(vs.is_let)
+    }
+    _ => assert_true(false)
+  }
+}
+
+///|
+/// Test: Transform while loop
+test "transform while loop" {
+  let stmts = parse_source("while (true) {}")
+  let transformed = transform_stmt(stmts[0])
+
+  match transformed {
+    WhileStatement(ws) => {
+      match ws.condition {
+        BooleanLiteral(bl) => assert_eq(bl.value, true)
+        _ => assert_true(false)
+      }
+    }
+    _ => assert_true(false)
+  }
+}
+
+///|
+/// Test: Transform binary expression
+test "transform binary expression" {
+  let stmts = parse_source("const result = 1 + 2;")
+  let transformed = transform_stmt(stmts[0])
+
+  match transformed {
+    VariableStatement(vs) => {
+      let decl = vs.declarations[0]
+      match decl.initializer {
+        Some(BinaryExpression(be)) => {
+          match be.operator {
+            Add => assert_true(true)
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    _ => assert_true(false)
+  }
+}
+
+///|
+/// Test: Transform call expression
+test "transform call expression" {
+  let stmts = parse_source("const result = foo();")
+  let transformed = transform_stmt(stmts[0])
+
+  match transformed {
+    VariableStatement(vs) => {
+      let decl = vs.declarations[0]
+      match decl.initializer {
+        Some(CallExpression(_)) => assert_true(true)
+        _ => assert_true(false)
+      }
+    }
+    _ => assert_true(false)
+  }
+}
