@@ -798,6 +798,24 @@ fn parse_postfix_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
           Err(p) => return Err(decrement_depth(p))
         }
       }
+
+      // Postfix increment/decrement
+      PlusPlus(_) | MinusMinus(_) => {
+        let start_loc = get_location(left)
+        let operator = match token {
+          PlusPlus(_) => UnaryOperator::Increment
+          MinusMinus(_) => UnaryOperator::Decrement
+          _ => UnaryOperator::Plus // Should never happen
+        }
+        parser = advance_parser(parser)
+        left = Node::UnaryExpression(UnaryExpression::{
+          operator,
+          operand: left,
+          is_prefix: false,
+          location: start_loc,
+        })
+      }
+
       _ => should_continue = false
     }
   }

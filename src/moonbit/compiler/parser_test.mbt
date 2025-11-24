@@ -2,6 +2,7 @@
 // Tests for the TypeScript parser (token stream -> AST)
 
 // Helper function to create tokens from source
+
 ///|
 fn tokens_from_source(source : String) -> Array[Token] {
   let scanner = Scanner::new(source, "test.ts")
