@@ -55,7 +55,7 @@ pub enum Target {
 ///|
 /// Create a new transformer context
 pub fn TransformerContext::new(target : Target) -> TransformerContext {
-  { target }
+  { target, }
 }
 
 ///|
@@ -104,11 +104,12 @@ pub fn transform(node : Node, ctx : TransformerContext) -> Node {
     // Import/Export - keep as-is but transform any embedded expressions
     ImportDeclaration(id) => ImportDeclaration(id)
     ExportDeclaration(ed) => ExportDeclaration(ed)
-    ExportAssignment(ea) => ExportAssignment({
-      expression: transform(ea.expression, ctx),
-      is_export_equals: ea.is_export_equals,
-      location: ea.location,
-    })
+    ExportAssignment(ea) =>
+      ExportAssignment({
+        expression: transform(ea.expression, ctx),
+        is_export_equals: ea.is_export_equals,
+        location: ea.location,
+      })
 
     // Control Flow Statements
     IfStatement(if_stmt) => transform_if_statement(if_stmt, ctx)
@@ -117,7 +118,8 @@ pub fn transform(node : Node, ctx : TransformerContext) -> Node {
     ForInStatement(for_in_stmt) => transform_for_in_statement(for_in_stmt, ctx)
     ForOfStatement(for_of_stmt) => transform_for_of_statement(for_of_stmt, ctx)
     WhileStatement(while_stmt) => transform_while_statement(while_stmt, ctx)
-    DoWhileStatement(do_while_stmt) => transform_do_while_statement(do_while_stmt, ctx)
+    DoWhileStatement(do_while_stmt) =>
+      transform_do_while_statement(do_while_stmt, ctx)
     BreakStatement(break_stmt) => BreakStatement(break_stmt)
     ContinueStatement(cont_stmt) => ContinueStatement(cont_stmt)
     ReturnStatement(ret_stmt) => transform_return_statement(ret_stmt, ctx)
@@ -126,9 +128,11 @@ pub fn transform(node : Node, ctx : TransformerContext) -> Node {
 
     // Other Statements
     BlockStatement(block_stmt) => transform_block_statement(block_stmt, ctx)
-    ExpressionStatement(expr_stmt) => transform_expression_statement(expr_stmt, ctx)
+    ExpressionStatement(expr_stmt) =>
+      transform_expression_statement(expr_stmt, ctx)
     EmptyStatement(empty_stmt) => EmptyStatement(empty_stmt)
-    LabeledStatement(labeled_stmt) => transform_labeled_statement(labeled_stmt, ctx)
+    LabeledStatement(labeled_stmt) =>
+      transform_labeled_statement(labeled_stmt, ctx)
     WithStatement(with_stmt) => transform_with_statement(with_stmt, ctx)
     DebuggerStatement(debug_stmt) => DebuggerStatement(debug_stmt)
 
@@ -138,12 +142,15 @@ pub fn transform(node : Node, ctx : TransformerContext) -> Node {
     ConditionalExpression(ce) => transform_conditional_expression(ce, ctx)
     CallExpression(ce) => transform_call_expression(ce, ctx)
     NewExpression(ne) => transform_new_expression(ne, ctx)
-    PropertyAccessExpression(pae) => transform_property_access_expression(pae, ctx)
-    ElementAccessExpression(eae) => transform_element_access_expression(eae, ctx)
+    PropertyAccessExpression(pae) =>
+      transform_property_access_expression(pae, ctx)
+    ElementAccessExpression(eae) =>
+      transform_element_access_expression(eae, ctx)
     ArrowFunction(af) => transform_arrow_function(af, ctx)
     FunctionExpression(fe) => transform_function_expression(fe, ctx)
     ArrayLiteralExpression(ale) => transform_array_literal_expression(ale, ctx)
-    ObjectLiteralExpression(ole) => transform_object_literal_expression(ole, ctx)
+    ObjectLiteralExpression(ole) =>
+      transform_object_literal_expression(ole, ctx)
     ParenthesizedExpression(pe) => transform_parenthesized_expression(pe, ctx)
     TemplateExpression(te) => transform_template_expression(te, ctx)
 
@@ -151,7 +158,6 @@ pub fn transform(node : Node, ctx : TransformerContext) -> Node {
     AsExpression(ae) => transform(ae.expression, ctx)
     TypeAssertionExpression(tae) => transform(tae.expression, ctx)
     NonNullExpression(nne) => transform(nne.expression, ctx)
-
     SpreadExpression(se) => transform_spread_expression(se, ctx)
 
     // Binding Patterns
@@ -168,13 +174,20 @@ pub fn transform(node : Node, ctx : TransformerContext) -> Node {
     SuperExpression(se) => SuperExpression(se)
 
     // Type Nodes - should not appear in runtime code, return empty
-    TypeReference(_) | UnionType(_) | IntersectionType(_) | FunctionType(_) |
-    ArrayType(_) | TupleType(_) | LiteralType(_) | KeywordType(_) |
-    MappedType(_) | ConditionalType(_) | IndexedAccessType(_) => {
+    TypeReference(_)
+    | UnionType(_)
+    | IntersectionType(_)
+    | FunctionType(_)
+    | ArrayType(_)
+    | TupleType(_)
+    | LiteralType(_)
+    | KeywordType(_)
+    | MappedType(_)
+    | ConditionalType(_)
+    | IndexedAccessType(_) =>
       // These should only appear in type positions and will be stripped
       // If they somehow appear in expression position, it's an error
       abort("Type node in expression position during transformation")
-    }
 
     // Class members - transform if needed
     Parameter(p) => transform_parameter(p, ctx)
@@ -191,7 +204,10 @@ pub fn transform(node : Node, ctx : TransformerContext) -> Node {
 
 ///|
 /// Transform an array of statements
-fn transform_statements(statements : Array[Node], ctx : TransformerContext) -> Array[Node] {
+fn transform_statements(
+  statements : Array[Node],
+  ctx : TransformerContext,
+) -> Array[Node] {
   let result : Array[Node] = []
   for stmt in statements {
     let transformed = transform(stmt, ctx)
@@ -206,7 +222,10 @@ fn transform_statements(statements : Array[Node], ctx : TransformerContext) -> A
 
 ///|
 /// Transform variable statement (remove type annotations, downlevel const/let for ES5)
-fn transform_variable_statement(vs : VariableStatement, ctx : TransformerContext) -> Node {
+fn transform_variable_statement(
+  vs : VariableStatement,
+  ctx : TransformerContext,
+) -> Node {
   let transformed_decls : Array[VariableDeclaration] = []
   for decl in vs.declarations {
     transformed_decls.push(VariableDeclaration::{
@@ -226,7 +245,6 @@ fn transform_variable_statement(vs : VariableStatement, ctx : TransformerContext
   } else {
     (vs.is_const, vs.is_let)
   }
-
   VariableStatement(VariableStatement::{
     declarations: transformed_decls,
     is_const,
@@ -237,7 +255,10 @@ fn transform_variable_statement(vs : VariableStatement, ctx : TransformerContext
 
 ///|
 /// Transform function declaration (remove type annotations)
-fn transform_function_declaration(fd : FunctionDeclaration, ctx : TransformerContext) -> Node {
+fn transform_function_declaration(
+  fd : FunctionDeclaration,
+  ctx : TransformerContext,
+) -> Node {
   FunctionDeclaration({
     name: match fd.name {
       Some(n) => Some(transform(n, ctx))
@@ -258,13 +279,15 @@ fn transform_function_declaration(fd : FunctionDeclaration, ctx : TransformerCon
 
 ///|
 /// Transform class declaration (remove type annotations)
-fn transform_class_declaration(cd : ClassDeclaration, ctx : TransformerContext) -> Node {
+fn transform_class_declaration(
+  cd : ClassDeclaration,
+  ctx : TransformerContext,
+) -> Node {
   let transformed_members : Array[Node] = []
   for member in cd.members {
     let transformed = transform(member, ctx)
     transformed_members.push(transformed)
   }
-
   ClassDeclaration({
     name: match cd.name {
       Some(n) => Some(transform(n, ctx))
@@ -280,7 +303,10 @@ fn transform_class_declaration(cd : ClassDeclaration, ctx : TransformerContext) 
 
 ///|
 /// Transform heritage clauses (remove implements, keep extends)
-fn transform_heritage_clauses(clauses : Array[HeritageClause], ctx : TransformerContext) -> Array[HeritageClause] {
+fn transform_heritage_clauses(
+  clauses : Array[HeritageClause],
+  ctx : TransformerContext,
+) -> Array[HeritageClause] {
   let result : Array[HeritageClause] = []
   for clause in clauses {
     match clause.kind {
@@ -296,10 +322,9 @@ fn transform_heritage_clauses(clauses : Array[HeritageClause], ctx : Transformer
           location: clause.location,
         })
       }
-      Implements => {
+      Implements =>
         // Remove implements clause (TypeScript only)
         continue
-      }
     }
   }
   result
@@ -307,29 +332,25 @@ fn transform_heritage_clauses(clauses : Array[HeritageClause], ctx : Transformer
 
 ///|
 /// Transform enum declaration to JavaScript object
-fn transform_enum_declaration(ed : EnumDeclaration, ctx : TransformerContext) -> Node {
+fn transform_enum_declaration(
+  ed : EnumDeclaration,
+  ctx : TransformerContext,
+) -> Node {
   // For now, convert enums to const objects
   // Future: support const enums, numeric enums, string enums properly
 
   let properties : Array[ObjectProperty] = []
-  for member in ed.members {
-    let value_node = match member.initializer {
+  for a_member in ed.members {
+    let value_node = match a_member.initializer {
       Some(init) => transform(init, ctx)
-      None => {
+      None =>
         // Auto-increment numeric enums - for now, just use the string name
-        StringLiteral({
-          value: member.name,
-          location: member.location,
-        })
-      }
+        StringLiteral({ value: a_member.name, location: a_member.location })
     }
-    properties.push(PropertyAssignment(
-      member.name,
-      value_node,
-      member.location,
-    ))
+    properties.push(
+      PropertyAssignment(a_member.name, value_node, a_member.location),
+    )
   }
-
   let object_literal = ObjectLiteralExpression({
     properties,
     location: ed.location,
@@ -337,12 +358,14 @@ fn transform_enum_declaration(ed : EnumDeclaration, ctx : TransformerContext) ->
 
   // Create: const EnumName = { ... }
   VariableStatement({
-    declarations: [{
-      name: Identifier({ name: ed.name, location: ed.location }),
-      type_annotation: None,
-      initializer: Some(object_literal),
-      location: ed.location,
-    }],
+    declarations: [
+      {
+        name: Identifier({ name: ed.name, location: ed.location }),
+        type_annotation: None,
+        initializer: Some(object_literal),
+        location: ed.location,
+      },
+    ],
     is_const: true,
     is_let: false,
     location: ed.location,
@@ -351,7 +374,10 @@ fn transform_enum_declaration(ed : EnumDeclaration, ctx : TransformerContext) ->
 
 ///|
 /// Transform parameters (remove type annotations)
-fn transform_parameters(params : Array[Node], ctx : TransformerContext) -> Array[Node] {
+fn transform_parameters(
+  params : Array[Node],
+  ctx : TransformerContext,
+) -> Array[Node] {
   let result : Array[Node] = []
   for param in params {
     result.push(transform(param, ctx))
@@ -377,7 +403,10 @@ fn transform_parameter(p : Parameter, ctx : TransformerContext) -> Node {
 
 ///|
 /// Transform if statement
-fn transform_if_statement(if_stmt : IfStatement, ctx : TransformerContext) -> Node {
+fn transform_if_statement(
+  if_stmt : IfStatement,
+  ctx : TransformerContext,
+) -> Node {
   IfStatement(IfStatement::{
     condition: transform(if_stmt.condition, ctx),
     then_statement: transform(if_stmt.then_statement, ctx),
@@ -391,7 +420,10 @@ fn transform_if_statement(if_stmt : IfStatement, ctx : TransformerContext) -> No
 
 ///|
 /// Transform switch statement
-fn transform_switch_statement(ss : SwitchStatement, ctx : TransformerContext) -> Node {
+fn transform_switch_statement(
+  ss : SwitchStatement,
+  ctx : TransformerContext,
+) -> Node {
   let transformed_cases : Array[CaseClause] = []
   for case in ss.cases {
     transformed_cases.push({
@@ -433,7 +465,10 @@ fn transform_for_statement(fs : ForStatement, ctx : TransformerContext) -> Node 
 
 ///|
 /// Transform for-in statement
-fn transform_for_in_statement(fis : ForInStatement, ctx : TransformerContext) -> Node {
+fn transform_for_in_statement(
+  fis : ForInStatement,
+  ctx : TransformerContext,
+) -> Node {
   ForInStatement({
     initializer: transform(fis.initializer, ctx),
     expression: transform(fis.expression, ctx),
@@ -444,7 +479,10 @@ fn transform_for_in_statement(fis : ForInStatement, ctx : TransformerContext) ->
 
 ///|
 /// Transform for-of statement (downlevel to traditional for loop for ES5)
-fn transform_for_of_statement(fos : ForOfStatement, ctx : TransformerContext) -> Node {
+fn transform_for_of_statement(
+  fos : ForOfStatement,
+  ctx : TransformerContext,
+) -> Node {
   // For ES5, we would convert for-of to traditional for loop with index
   // for (const item of array) becomes:
   // for (var _i = 0; _i < array.length; _i++) { var item = array[_i]; ...body }
@@ -469,7 +507,10 @@ fn transform_for_of_statement(fos : ForOfStatement, ctx : TransformerContext) ->
 
 ///|
 /// Transform while statement
-fn transform_while_statement(ws : WhileStatement, ctx : TransformerContext) -> Node {
+fn transform_while_statement(
+  ws : WhileStatement,
+  ctx : TransformerContext,
+) -> Node {
   WhileStatement({
     condition: transform(ws.condition, ctx),
     statement: transform(ws.statement, ctx),
@@ -479,7 +520,10 @@ fn transform_while_statement(ws : WhileStatement, ctx : TransformerContext) -> N
 
 ///|
 /// Transform do-while statement
-fn transform_do_while_statement(dws : DoWhileStatement, ctx : TransformerContext) -> Node {
+fn transform_do_while_statement(
+  dws : DoWhileStatement,
+  ctx : TransformerContext,
+) -> Node {
   DoWhileStatement({
     statement: transform(dws.statement, ctx),
     condition: transform(dws.condition, ctx),
@@ -489,7 +533,10 @@ fn transform_do_while_statement(dws : DoWhileStatement, ctx : TransformerContext
 
 ///|
 /// Transform return statement
-fn transform_return_statement(rs : ReturnStatement, ctx : TransformerContext) -> Node {
+fn transform_return_statement(
+  rs : ReturnStatement,
+  ctx : TransformerContext,
+) -> Node {
   ReturnStatement({
     expression: match rs.expression {
       Some(e) => Some(transform(e, ctx))
@@ -501,7 +548,10 @@ fn transform_return_statement(rs : ReturnStatement, ctx : TransformerContext) ->
 
 ///|
 /// Transform throw statement
-fn transform_throw_statement(ts : ThrowStatement, ctx : TransformerContext) -> Node {
+fn transform_throw_statement(
+  ts : ThrowStatement,
+  ctx : TransformerContext,
+) -> Node {
   ThrowStatement({
     expression: transform(ts.expression, ctx),
     location: ts.location,
@@ -514,14 +564,15 @@ fn transform_try_statement(ts : TryStatement, ctx : TransformerContext) -> Node 
   TryStatement({
     try_block: transform(ts.try_block, ctx),
     catch_clause: match ts.catch_clause {
-      Some(cc) => Some({
-        variable_declaration: match cc.variable_declaration {
-          Some(vd) => Some(transform(vd, ctx))
-          None => None
-        },
-        block: transform(cc.block, ctx),
-        location: cc.location,
-      })
+      Some(cc) =>
+        Some({
+          variable_declaration: match cc.variable_declaration {
+            Some(vd) => Some(transform(vd, ctx))
+            None => None
+          },
+          block: transform(cc.block, ctx),
+          location: cc.location,
+        })
       None => None
     },
     finally_block: match ts.finally_block {
@@ -534,7 +585,10 @@ fn transform_try_statement(ts : TryStatement, ctx : TransformerContext) -> Node 
 
 ///|
 /// Transform block statement
-fn transform_block_statement(bs : BlockStatement, ctx : TransformerContext) -> Node {
+fn transform_block_statement(
+  bs : BlockStatement,
+  ctx : TransformerContext,
+) -> Node {
   BlockStatement({
     statements: transform_statements(bs.statements, ctx),
     location: bs.location,
@@ -543,7 +597,10 @@ fn transform_block_statement(bs : BlockStatement, ctx : TransformerContext) -> N
 
 ///|
 /// Transform expression statement
-fn transform_expression_statement(es : ExpressionStatement, ctx : TransformerContext) -> Node {
+fn transform_expression_statement(
+  es : ExpressionStatement,
+  ctx : TransformerContext,
+) -> Node {
   ExpressionStatement({
     expression: transform(es.expression, ctx),
     location: es.location,
@@ -552,7 +609,10 @@ fn transform_expression_statement(es : ExpressionStatement, ctx : TransformerCon
 
 ///|
 /// Transform labeled statement
-fn transform_labeled_statement(ls : LabeledStatement, ctx : TransformerContext) -> Node {
+fn transform_labeled_statement(
+  ls : LabeledStatement,
+  ctx : TransformerContext,
+) -> Node {
   LabeledStatement({
     label: ls.label,
     statement: transform(ls.statement, ctx),
@@ -562,7 +622,10 @@ fn transform_labeled_statement(ls : LabeledStatement, ctx : TransformerContext) 
 
 ///|
 /// Transform with statement
-fn transform_with_statement(ws : WithStatement, ctx : TransformerContext) -> Node {
+fn transform_with_statement(
+  ws : WithStatement,
+  ctx : TransformerContext,
+) -> Node {
   WithStatement({
     expression: transform(ws.expression, ctx),
     statement: transform(ws.statement, ctx),
@@ -572,7 +635,10 @@ fn transform_with_statement(ws : WithStatement, ctx : TransformerContext) -> Nod
 
 ///|
 /// Transform binary expression (downlevel exponentiation for ES5)
-fn transform_binary_expression(be : BinaryExpression, ctx : TransformerContext) -> Node {
+fn transform_binary_expression(
+  be : BinaryExpression,
+  ctx : TransformerContext,
+) -> Node {
   // For ES5, convert exponentiation operator (**) to Math.pow()
   if ctx.target == ES5 && be.operator == Exponentiate {
     // Create Math.pow(left, right) call
@@ -585,7 +651,6 @@ fn transform_binary_expression(be : BinaryExpression, ctx : TransformerContext) 
       name: "pow",
       location: be.location,
     })
-
     Node::CallExpression({
       expression: math_pow,
       type_arguments: [],
@@ -604,7 +669,10 @@ fn transform_binary_expression(be : BinaryExpression, ctx : TransformerContext) 
 
 ///|
 /// Transform unary expression
-fn transform_unary_expression(ue : UnaryExpression, ctx : TransformerContext) -> Node {
+fn transform_unary_expression(
+  ue : UnaryExpression,
+  ctx : TransformerContext,
+) -> Node {
   UnaryExpression({
     operator: ue.operator,
     operand: transform(ue.operand, ctx),
@@ -615,7 +683,10 @@ fn transform_unary_expression(ue : UnaryExpression, ctx : TransformerContext) ->
 
 ///|
 /// Transform conditional expression
-fn transform_conditional_expression(ce : ConditionalExpression, ctx : TransformerContext) -> Node {
+fn transform_conditional_expression(
+  ce : ConditionalExpression,
+  ctx : TransformerContext,
+) -> Node {
   ConditionalExpression({
     condition: transform(ce.condition, ctx),
     when_true: transform(ce.when_true, ctx),
@@ -626,7 +697,10 @@ fn transform_conditional_expression(ce : ConditionalExpression, ctx : Transforme
 
 ///|
 /// Transform call expression (remove type arguments)
-fn transform_call_expression(ce : CallExpression, ctx : TransformerContext) -> Node {
+fn transform_call_expression(
+  ce : CallExpression,
+  ctx : TransformerContext,
+) -> Node {
   let transformed_args : Array[Node] = []
   for arg in ce.arguments {
     transformed_args.push(transform(arg, ctx))
@@ -641,7 +715,10 @@ fn transform_call_expression(ce : CallExpression, ctx : TransformerContext) -> N
 
 ///|
 /// Transform new expression (remove type arguments)
-fn transform_new_expression(ne : NewExpression, ctx : TransformerContext) -> Node {
+fn transform_new_expression(
+  ne : NewExpression,
+  ctx : TransformerContext,
+) -> Node {
   let transformed_args = match ne.arguments {
     Some(args) => {
       let result : Array[Node] = []
@@ -662,7 +739,10 @@ fn transform_new_expression(ne : NewExpression, ctx : TransformerContext) -> Nod
 
 ///|
 /// Transform property access expression
-fn transform_property_access_expression(pae : PropertyAccessExpression, ctx : TransformerContext) -> Node {
+fn transform_property_access_expression(
+  pae : PropertyAccessExpression,
+  ctx : TransformerContext,
+) -> Node {
   PropertyAccessExpression({
     expression: transform(pae.expression, ctx),
     name: pae.name,
@@ -672,7 +752,10 @@ fn transform_property_access_expression(pae : PropertyAccessExpression, ctx : Tr
 
 ///|
 /// Transform element access expression
-fn transform_element_access_expression(eae : ElementAccessExpression, ctx : TransformerContext) -> Node {
+fn transform_element_access_expression(
+  eae : ElementAccessExpression,
+  ctx : TransformerContext,
+) -> Node {
   ElementAccessExpression({
     expression: transform(eae.expression, ctx),
     argument_expression: transform(eae.argument_expression, ctx),
@@ -682,7 +765,10 @@ fn transform_element_access_expression(eae : ElementAccessExpression, ctx : Tran
 
 ///|
 /// Transform arrow function (remove type annotations, downlevel for ES5)
-fn transform_arrow_function(af : ArrowFunction, ctx : TransformerContext) -> Node {
+fn transform_arrow_function(
+  af : ArrowFunction,
+  ctx : TransformerContext,
+) -> Node {
   // For ES5 target, convert arrow functions to regular function expressions
   if ctx.target == ES5 {
     // Arrow function body might be expression or block
@@ -695,13 +781,9 @@ fn transform_arrow_function(af : ArrowFunction, ctx : TransformerContext) -> Nod
           expression: Some(af.body),
           location: af.location,
         })
-        BlockStatement({
-          statements: [return_stmt],
-          location: af.location,
-        })
+        BlockStatement({ statements: [return_stmt], location: af.location })
       }
     }
-
     FunctionExpression({
       name: None, // Anonymous function
       type_parameters: [],
@@ -727,7 +809,10 @@ fn transform_arrow_function(af : ArrowFunction, ctx : TransformerContext) -> Nod
 
 ///|
 /// Transform function expression (remove type annotations)
-fn transform_function_expression(fe : FunctionExpression, ctx : TransformerContext) -> Node {
+fn transform_function_expression(
+  fe : FunctionExpression,
+  ctx : TransformerContext,
+) -> Node {
   FunctionExpression({
     name: fe.name,
     type_parameters: [], // Remove type parameters
@@ -742,7 +827,10 @@ fn transform_function_expression(fe : FunctionExpression, ctx : TransformerConte
 
 ///|
 /// Transform array literal expression
-fn transform_array_literal_expression(ale : ArrayLiteralExpression, ctx : TransformerContext) -> Node {
+fn transform_array_literal_expression(
+  ale : ArrayLiteralExpression,
+  ctx : TransformerContext,
+) -> Node {
   let transformed_elements : Array[Node?] = []
   for element in ale.elements {
     match element {
@@ -758,35 +846,41 @@ fn transform_array_literal_expression(ale : ArrayLiteralExpression, ctx : Transf
 
 ///|
 /// Transform object literal expression
-fn transform_object_literal_expression(ole : ObjectLiteralExpression, ctx : TransformerContext) -> Node {
+fn transform_object_literal_expression(
+  ole : ObjectLiteralExpression,
+  ctx : TransformerContext,
+) -> Node {
   let transformed_properties : Array[ObjectProperty] = []
   for prop in ole.properties {
     let transformed_prop = match prop {
-      PropertyAssignment(name, value, loc) => PropertyAssignment(
-        name,
-        transform(value, ctx),
-        loc,
-      )
+      PropertyAssignment(name, value, loc) =>
+        PropertyAssignment(name, transform(value, ctx), loc)
       ShorthandProperty(name, loc) => ShorthandProperty(name, loc)
       SpreadAssignment(expr, loc) => SpreadAssignment(transform(expr, ctx), loc)
-      MethodDeclaration(name, func, loc) => {
+      MethodDeclaration(name, func, loc) =>
         match transform_function_expression(func, ctx) {
           FunctionExpression(fe) => MethodDeclaration(name, fe, loc)
-          _ => abort("transform_function_expression should return FunctionExpression")
+          _ =>
+            abort(
+              "transform_function_expression should return FunctionExpression",
+            )
         }
-      }
-      GetAccessor(name, func, loc) => {
+      GetAccessor(name, func, loc) =>
         match transform_function_expression(func, ctx) {
           FunctionExpression(fe) => GetAccessor(name, fe, loc)
-          _ => abort("transform_function_expression should return FunctionExpression")
+          _ =>
+            abort(
+              "transform_function_expression should return FunctionExpression",
+            )
         }
-      }
-      SetAccessor(name, func, loc) => {
+      SetAccessor(name, func, loc) =>
         match transform_function_expression(func, ctx) {
           FunctionExpression(fe) => SetAccessor(name, fe, loc)
-          _ => abort("transform_function_expression should return FunctionExpression")
+          _ =>
+            abort(
+              "transform_function_expression should return FunctionExpression",
+            )
         }
-      }
     }
     transformed_properties.push(transformed_prop)
   }
@@ -798,7 +892,10 @@ fn transform_object_literal_expression(ole : ObjectLiteralExpression, ctx : Tran
 
 ///|
 /// Transform parenthesized expression
-fn transform_parenthesized_expression(pe : ParenthesizedExpression, ctx : TransformerContext) -> Node {
+fn transform_parenthesized_expression(
+  pe : ParenthesizedExpression,
+  ctx : TransformerContext,
+) -> Node {
   ParenthesizedExpression({
     expression: transform(pe.expression, ctx),
     location: pe.location,
@@ -807,7 +904,10 @@ fn transform_parenthesized_expression(pe : ParenthesizedExpression, ctx : Transf
 
 ///|
 /// Transform template expression (downlevel to string concatenation for ES5)
-fn transform_template_expression(te : TemplateExpression, ctx : TransformerContext) -> Node {
+fn transform_template_expression(
+  te : TemplateExpression,
+  ctx : TransformerContext,
+) -> Node {
   // For ES5, convert template literals to string concatenation
   // Example: `Hello ${name}!` becomes "Hello " + name + "!"
   if ctx.target == ES5 {
@@ -841,7 +941,6 @@ fn transform_template_expression(te : TemplateExpression, ctx : TransformerConte
         })
       }
     }
-
     result
   } else {
     // ES2015+ preserves template literals
@@ -863,7 +962,10 @@ fn transform_template_expression(te : TemplateExpression, ctx : TransformerConte
 
 ///|
 /// Transform spread expression
-fn transform_spread_expression(se : SpreadExpression, ctx : TransformerContext) -> Node {
+fn transform_spread_expression(
+  se : SpreadExpression,
+  ctx : TransformerContext,
+) -> Node {
   SpreadExpression({
     expression: transform(se.expression, ctx),
     location: se.location,
@@ -872,7 +974,10 @@ fn transform_spread_expression(se : SpreadExpression, ctx : TransformerContext) 
 
 ///|
 /// Transform array binding pattern
-fn transform_array_binding_pattern(abp : ArrayBindingPattern, ctx : TransformerContext) -> Node {
+fn transform_array_binding_pattern(
+  abp : ArrayBindingPattern,
+  ctx : TransformerContext,
+) -> Node {
   let transformed_elements : Array[Node?] = []
   for element in abp.elements {
     match element {
@@ -880,15 +985,15 @@ fn transform_array_binding_pattern(abp : ArrayBindingPattern, ctx : TransformerC
       None => transformed_elements.push(None)
     }
   }
-  ArrayBindingPattern({
-    elements: transformed_elements,
-    location: abp.location,
-  })
+  ArrayBindingPattern({ elements: transformed_elements, location: abp.location })
 }
 
 ///|
 /// Transform object binding pattern
-fn transform_object_binding_pattern(obp : ObjectBindingPattern, ctx : TransformerContext) -> Node {
+fn transform_object_binding_pattern(
+  obp : ObjectBindingPattern,
+  ctx : TransformerContext,
+) -> Node {
   let transformed_properties : Array[BindingElement] = []
   for prop in obp.properties {
     transformed_properties.push({
@@ -905,7 +1010,10 @@ fn transform_object_binding_pattern(obp : ObjectBindingPattern, ctx : Transforme
 
 ///|
 /// Transform property declaration (remove type annotation)
-fn transform_property_declaration(pd : PropertyDeclaration, ctx : TransformerContext) -> Node {
+fn transform_property_declaration(
+  pd : PropertyDeclaration,
+  ctx : TransformerContext,
+) -> Node {
   PropertyDeclaration({
     name: pd.name,
     type_annotation: None, // Remove type annotation
@@ -920,7 +1028,10 @@ fn transform_property_declaration(pd : PropertyDeclaration, ctx : TransformerCon
 
 ///|
 /// Transform method declaration (remove type annotations)
-fn transform_method_declaration(md : MethodDeclaration, ctx : TransformerContext) -> Node {
+fn transform_method_declaration(
+  md : MethodDeclaration,
+  ctx : TransformerContext,
+) -> Node {
   MethodDeclaration({
     name: md.name,
     type_parameters: [], // Remove type parameters
@@ -939,7 +1050,10 @@ fn transform_method_declaration(md : MethodDeclaration, ctx : TransformerContext
 
 ///|
 /// Transform constructor declaration (remove type annotations)
-fn transform_constructor_declaration(cd : ConstructorDeclaration, ctx : TransformerContext) -> Node {
+fn transform_constructor_declaration(
+  cd : ConstructorDeclaration,
+  ctx : TransformerContext,
+) -> Node {
   ConstructorDeclaration({
     parameters: transform_parameters(cd.parameters, ctx),
     body: match cd.body {
@@ -982,7 +1096,10 @@ fn transform_set_accessor(sa : SetAccessor, ctx : TransformerContext) -> Node {
 
 ///|
 /// Transform module declaration
-fn transform_module_declaration(md : ModuleDeclaration, ctx : TransformerContext) -> Node {
+fn transform_module_declaration(
+  md : ModuleDeclaration,
+  ctx : TransformerContext,
+) -> Node {
   ModuleDeclaration({
     name: md.name,
     body: match md.body {

@@ -579,7 +579,35 @@ fn emit_switch_statement(ss : SwitchStatement, ctx : EmitterContext) -> String {
 fn emit_for_statement(fs : ForStatement, ctx : EmitterContext) -> String {
   let mut result = ctx.get_indent() + "for ("
 
+  // Emit initializer (without trailing semicolon if it's a variable statement)
   match fs.initializer {
+    Some(VariableStatement(vs)) => {
+      let keyword = if vs.is_const {
+        "const"
+      } else if vs.is_let {
+        "let"
+      } else {
+        "var"
+      }
+
+      let mut decls = ""
+      for i = 0; i < vs.declarations.length(); i = i + 1 {
+        let decl = vs.declarations[i]
+        let name = match decl.name {
+          Identifier(id) => id.name
+          _ => emit(decl.name, ctx)
+        }
+        decls = decls + name
+        match decl.initializer {
+          Some(init) => decls = decls + " = " + emit(init, ctx)
+          None => ()
+        }
+        if i < vs.declarations.length() - 1 {
+          decls = decls + ", "
+        }
+      }
+      result = result + keyword + " " + decls
+    }
     Some(init) => result = result + emit(init, ctx)
     None => ()
   }

@@ -98,12 +98,11 @@ test "emit if-else statement" {
 
 ///|
 /// Test: Emit for loop
-/// SKIPPED: Parser doesn't support compound assignment (+=) in for loop incrementor yet
-// test "emit for loop" {
-//   let js = compile_to_js("for (let i = 0; i < 10; i++) { sum += i; }")
-//   assert_true(js.contains("for (let i = 0; i < 10; i++)"))
-//   assert_true(js.contains("sum += i;"))
-// }
+test "emit for loop" {
+  let js = compile_to_js("for (let i = 0; i < 10; i++) { sum += i; }")
+  assert_true(js.contains("for (let i = 0; i < 10; i++)"))
+  assert_true(js.contains("sum += i;"))
+}
 
 ///|
 /// Test: Emit for-in loop
@@ -242,12 +241,10 @@ test "emit conditional expression" {
 
 ///|
 /// Test: Emit new expression
-/// SKIPPED: Parser doesn't support new expressions yet
-// test "emit new expression" {
-//   let js = compile_to_js("const obj = new MyClass();")
-//   println("DEBUG new: " + js)
-//   assert_true(js.contains("new MyClass()"))
-// }
+test "emit new expression" {
+  let js = compile_to_js("const obj = new MyClass();")
+  assert_true(js.contains("new MyClass()"))
+}
 
 ///|
 /// Test: Emit class declaration
@@ -281,11 +278,10 @@ test "emit continue statement" {
 
 ///|
 /// Test: Emit throw statement
-/// SKIPPED: Parser doesn't support "new Error(...)" syntax yet
-// test "emit throw statement" {
-//   let js = compile_to_js("if (error) throw new Error(\"Failed\");")
-//   assert_true(js.contains("throw new Error(\"Failed\");"))
-// }
+test "emit throw statement" {
+  let js = compile_to_js("if (error) throw new Error(\"Failed\");")
+  assert_true(js.contains("throw new Error(\"Failed\");"))
+}
 
 ///|
 /// Test: Type annotations are removed
@@ -378,12 +374,11 @@ test "emit increment decrement" {
 
 ///|
 /// Test: Emit compound assignment
-/// SKIPPED: Parser doesn't support compound assignment operators yet
-// test "emit compound assignment" {
-//   let js = compile_to_js("x += 5; y *= 2;")
-//   assert_true(js.contains("x += 5;"))
-//   assert_true(js.contains("y *= 2;"))
-// }
+test "emit compound assignment" {
+  let js = compile_to_js("x += 5; y *= 2;")
+  assert_true(js.contains("x += 5;"))
+  assert_true(js.contains("y *= 2;"))
+}
 
 ///|
 /// Test: Emit logical operators
@@ -401,11 +396,10 @@ test "emit bitwise operators" {
 
 ///|
 /// Test: Emit typeof operator
-/// SKIPPED: Parser doesn't support typeof operator yet
-// test "emit typeof operator" {
-//   let js = compile_to_js("const type = typeof x;")
-//   assert_true(js.contains("typeof x"))
-// }
+test "emit typeof operator" {
+  let js = compile_to_js("const t = typeof x;")
+  assert_true(js.contains("typeof x"))
+}
 
 ///|
 /// Test: Emit delete operator
@@ -469,18 +463,20 @@ test "emit string escapes" {
 
 ///|
 /// Test: Emit function expression
-/// SKIPPED: Parser doesn't support function expressions yet
+/// TODO: Parser issue - function keyword after = needs investigation
 // test "emit function expression" {
 //   let js = compile_to_js("const fn = function(x) { return x * 2; };")
+//   println("DEBUG function expression: " + js)
 //   assert_true(js.contains("function(x)"))
 //   assert_true(js.contains("return x * 2;"))
 // }
 
 ///|
 /// Test: Emit named function expression
-/// SKIPPED: Parser doesn't support function expressions yet
+/// TODO: Parser issue - function keyword after = needs investigation
 // test "emit named function expression" {
 //   let js = compile_to_js("const factorial = function fact(n) { return n <= 1 ? 1 : n * fact(n - 1); };")
+//   println("DEBUG named function expression: " + js)
 //   assert_true(js.contains("function fact(n)"))
 // }
 

@@ -1127,25 +1127,39 @@ fn parse_unary_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
   }
 
   let token = current_token(parser)
-  match get_unary_operator(token) {
-    Some(op) => {
-      let start_loc = token.location()
+
+  // Check for "new" expression first
+  match token {
+    KeywordNew(start_loc) => {
       let parser = advance_parser(parser)
       let parser = increment_depth(parser)
-      match parse_unary_expression(parser) {
-        Ok((operand, parser)) => {
+      // Parse the constructor expression (which might have property/element access)
+      match parse_postfix_expression(parser) {
+        Ok((expr, parser)) => {
           let parser = decrement_depth(parser)
-          Ok(
-            (
-              Node::UnaryExpression(UnaryExpression::{
-                operator: op,
-                operand,
-                is_prefix: true,
+          // Check if there are explicit call arguments
+          match current_token(parser) {
+            OpenParen(_) => {
+              // Has explicit arguments
+              let parser = advance_parser(parser)
+              let (arguments, parser) = parse_argument_list(parser)
+              Ok((Node::NewExpression(NewExpression::{
+                expression: expr,
+                type_arguments: [],
+                arguments: Some(arguments),
                 location: start_loc,
-              }),
-              parser,
-            ),
-          )
+              }), parser))
+            }
+            _ => {
+              // No arguments (e.g., new Date)
+              Ok((Node::NewExpression(NewExpression::{
+                expression: expr,
+                type_arguments: [],
+                arguments: None,
+                location: start_loc,
+              }), parser))
+            }
+          }
         }
         Err(parser) => {
           let parser = decrement_depth(parser)
@@ -1153,7 +1167,37 @@ fn parse_unary_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
         }
       }
     }
-    None => parse_postfix_expression(parser)
+    _ => {
+      // Not a new expression, check for other unary operators
+      match get_unary_operator(token) {
+        Some(op) => {
+          let start_loc = token.location()
+          let parser = advance_parser(parser)
+          let parser = increment_depth(parser)
+          match parse_unary_expression(parser) {
+            Ok((operand, parser)) => {
+              let parser = decrement_depth(parser)
+              Ok(
+                (
+                  Node::UnaryExpression(UnaryExpression::{
+                    operator: op,
+                    operand,
+                    is_prefix: true,
+                    location: start_loc,
+                  }),
+                  parser,
+                ),
+              )
+            }
+            Err(parser) => {
+              let parser = decrement_depth(parser)
+              Err(parser)
+            }
+          }
+        }
+        None => parse_postfix_expression(parser)
+      }
+    }
   }
 }
 
@@ -1506,6 +1550,61 @@ fn parse_primary_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
 
     // Object literal
     OpenBrace(_) => parse_object_literal(parser)
+
+    // Function expression (e.g., function() {} or function foo() {})
+    KeywordFunction(start_loc) => {
+      let parser = advance_parser(parser) // consume 'function'
+
+      // Optional function name
+      let (name, parser) = match current_token(parser) {
+        Identifier(fname, _) => (Some(fname), advance_parser(parser))
+        _ => (None, parser)
+      }
+
+      // Parse parameters
+      match expect(parser, fn(t) { matches_open_paren(t) }) {
+        Ok(parser) => {
+          let parser = advance_parser(parser) // consume '('
+          let (params, parser) = parse_parameter_list(parser)
+
+          match expect(parser, fn(t) { matches_close_paren(t) }) {
+            Ok(parser) => {
+              let parser = advance_parser(parser) // consume ')'
+
+              // Parse optional return type
+              let (return_type, parser) = match current_token(parser) {
+                Colon(_) => {
+                  let parser = advance_parser(parser)
+                  match parse_type(parser) {
+                    Ok((ty, p)) => (Some(ty), p)
+                    Err(p) => (None, p)
+                  }
+                }
+                _ => (None, parser)
+              }
+
+              // Parse function body
+              match parse_block_statement(parser) {
+                Ok((body, parser)) =>
+                  Ok((Node::FunctionExpression(FunctionExpression::{
+                    name,
+                    type_parameters: [],
+                    parameters: params,
+                    return_type,
+                    body,
+                    is_async: false,
+                    is_generator: false,
+                    location: start_loc,
+                  }), parser))
+                Err(parser) => Err(parser)
+              }
+            }
+            Err(parser) => Err(parser)
+          }
+        }
+        Err(parser) => Err(parser)
+      }
+    }
 
     _ =>
       Err(add_error(parser, "Unexpected token in expression", token.location()))
@@ -3655,6 +3754,15 @@ fn get_binary_operator(token : Token) -> BinaryOperator? {
     GreaterThanGreaterThanGreaterThan(_) => Some(BinaryOperator::UnsignedRightShift)
     KeywordIn(_) => Some(BinaryOperator::In)
     KeywordInstanceOf(_) => Some(BinaryOperator::InstanceOf)
+    // Compound assignment operators
+    PlusEquals(_) => Some(BinaryOperator::AddAssign)
+    MinusEquals(_) => Some(BinaryOperator::SubtractAssign)
+    StarEquals(_) => Some(BinaryOperator::MultiplyAssign)
+    SlashEquals(_) => Some(BinaryOperator::DivideAssign)
+    PercentEquals(_) => Some(BinaryOperator::RemainderAssign)
+    AmpersandEquals(_) => Some(BinaryOperator::BitwiseAndAssign)
+    BarEquals(_) => Some(BinaryOperator::BitwiseOrAssign)
+    CaretEquals(_) => Some(BinaryOperator::BitwiseXorAssign)
     _ => None
   }
 }
