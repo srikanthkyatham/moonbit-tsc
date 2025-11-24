@@ -1,0 +1,589 @@
+// Binder Tests
+// Tests for the TypeScript binder (AST -> Symbol Tables)
+
+///|
+/// Helper to parse and bind source code
+fn parse_and_bind(source : String) -> BindResult {
+  let tokens = tokens_from_source(source)
+  match parse_source_file(tokens, "test.ts") {
+    Ok(source_file) => bind_source_file(source_file)
+    Err(diagnostics) => Err(diagnostics)
+  }
+}
+
+///|
+/// Helper to create tokens from source (defined in parser_test.mbt as well)
+// fn tokens_from_source(source : String) -> Array[Token] {
+//   let scanner = Scanner::new(source, "test.ts")
+//   scan_all(scanner)
+// }
+
+// ============================================================================
+// Variable Declaration Tests
+// ============================================================================
+
+///|
+test "bind variable declaration" {
+  let result = parse_and_bind("const x = 42;")
+  match result {
+    Ok(bound) => {
+      assert_eq(bound.file_path, "test.ts")
+      assert_true(bound.global_scope.symbols.contains("x"))
+      match bound.global_scope.symbols.get("x") {
+        Some(sym) => {
+          assert_eq(sym.name, "x")
+          match sym.kind {
+            Variable => ()
+            _ => assert_true(false)
+          }
+        }
+        None => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "bind multiple variables" {
+  let result = parse_and_bind("let x = 1; const y = 2; var z = 3;")
+  match result {
+    Ok(bound) => {
+      assert_true(bound.global_scope.symbols.contains("x"))
+      assert_true(bound.global_scope.symbols.contains("y"))
+      assert_true(bound.global_scope.symbols.contains("z"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "detect duplicate variable declaration" {
+  let result = parse_and_bind("const x = 1; const x = 2;")
+  match result {
+    Ok(_) => assert_true(false) // Should have error
+    Err(diagnostics) => {
+      assert_true(diagnostics.length() > 0)
+      // Check that diagnostic mentions duplicate identifier
+      match diagnostics[0] {
+        diag => assert_true(diag.message.contains("Duplicate"))
+      }
+    }
+  }
+}
+
+// ============================================================================
+// Function Declaration Tests
+// ============================================================================
+
+///|
+test "bind function declaration" {
+  let result = parse_and_bind("function greet() {}")
+  match result {
+    Ok(bound) => {
+      assert_true(bound.global_scope.symbols.contains("greet"))
+      match bound.global_scope.symbols.get("greet") {
+        Some(sym) => {
+          assert_eq(sym.name, "greet")
+          match sym.kind {
+            Function => ()
+            _ => assert_true(false)
+          }
+        }
+        None => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "bind function with parameters" {
+  let result = parse_and_bind("function add(a, b) { return a + b; }")
+  match result {
+    Ok(bound) => {
+      assert_true(bound.global_scope.symbols.contains("add"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+// ============================================================================
+// Class Declaration Tests
+// ============================================================================
+
+///|
+test "bind class declaration" {
+  let result = parse_and_bind("class Foo {}")
+  match result {
+    Ok(bound) => {
+      assert_true(bound.global_scope.symbols.contains("Foo"))
+      match bound.global_scope.symbols.get("Foo") {
+        Some(sym) => {
+          assert_eq(sym.name, "Foo")
+          match sym.kind {
+            Class => ()
+            _ => assert_true(false)
+          }
+        }
+        None => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "bind class with methods" {
+  let result = parse_and_bind("class Foo { bar() {} }")
+  match result {
+    Ok(bound) => {
+      assert_true(bound.global_scope.symbols.contains("Foo"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+// ============================================================================
+// Interface Declaration Tests
+// ============================================================================
+
+///|
+test "bind interface declaration" {
+  let result = parse_and_bind("interface IFoo {}")
+  match result {
+    Ok(bound) => {
+      assert_true(bound.global_scope.symbols.contains("IFoo"))
+      match bound.global_scope.symbols.get("IFoo") {
+        Some(sym) => {
+          assert_eq(sym.name, "IFoo")
+          match sym.kind {
+            Interface => ()
+            _ => assert_true(false)
+          }
+        }
+        None => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+// ============================================================================
+// Enum Declaration Tests
+// ============================================================================
+
+///|
+test "bind enum declaration" {
+  let result = parse_and_bind("enum Color { Red, Green, Blue }")
+  match result {
+    Ok(bound) => {
+      assert_true(bound.global_scope.symbols.contains("Color"))
+      match bound.global_scope.symbols.get("Color") {
+        Some(sym) => {
+          assert_eq(sym.name, "Color")
+          match sym.kind {
+            Enum => ()
+            _ => assert_true(false)
+          }
+        }
+        None => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+// ============================================================================
+// Type Alias Tests
+// ============================================================================
+
+///|
+test "bind type alias" {
+  let result = parse_and_bind("type Foo = Bar;")
+  match result {
+    Ok(bound) => {
+      assert_true(bound.global_scope.symbols.contains("Foo"))
+      match bound.global_scope.symbols.get("Foo") {
+        Some(sym) => {
+          assert_eq(sym.name, "Foo")
+          match sym.kind {
+            Type => ()
+            _ => assert_true(false)
+          }
+        }
+        None => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+// ============================================================================
+// Import Declaration Tests
+// ============================================================================
+
+///|
+test "bind default import" {
+  let result = parse_and_bind("import foo from 'module';")
+  match result {
+    Ok(bound) => {
+      assert_true(bound.global_scope.symbols.contains("foo"))
+      match bound.global_scope.symbols.get("foo") {
+        Some(sym) => {
+          assert_eq(sym.name, "foo")
+          match sym.kind {
+            Alias => ()
+            _ => assert_true(false)
+          }
+        }
+        None => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "bind named import" {
+  let result = parse_and_bind("import { a, b } from 'module';")
+  match result {
+    Ok(bound) => {
+      assert_true(bound.global_scope.symbols.contains("a"))
+      assert_true(bound.global_scope.symbols.contains("b"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "bind namespace import" {
+  let result = parse_and_bind("import * as foo from 'module';")
+  match result {
+    Ok(bound) => {
+      assert_true(bound.global_scope.symbols.contains("foo"))
+      match bound.global_scope.symbols.get("foo") {
+        Some(sym) => {
+          assert_eq(sym.name, "foo")
+          match sym.kind {
+            Module => ()
+            _ => assert_true(false)
+          }
+        }
+        None => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+// ============================================================================
+// Scope Tests
+// ============================================================================
+
+///|
+test "bind block creates new scope" {
+  let result = parse_and_bind("{ const x = 1; }")
+  match result {
+    Ok(bound) => {
+      // Variable x should not be in global scope
+      assert_false(bound.global_scope.symbols.contains("x"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "bind function creates new scope" {
+  let result = parse_and_bind("function f() { const x = 1; }")
+  match result {
+    Ok(bound) => {
+      // Function f should be in global scope
+      assert_true(bound.global_scope.symbols.contains("f"))
+      // Variable x should not be in global scope
+      assert_false(bound.global_scope.symbols.contains("x"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+// ============================================================================
+// Variable Shadowing Tests
+// ============================================================================
+
+///|
+test "bind variable shadowing in nested blocks allowed" {
+  let result = parse_and_bind("const x = 1; { const x = 2; }")
+  match result {
+    Ok(bound) => {
+      // Outer x should be in global scope
+      assert_true(bound.global_scope.symbols.contains("x"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "bind variable shadowing in function allowed" {
+  let result = parse_and_bind("const x = 1; function f() { const x = 2; }")
+  match result {
+    Ok(bound) => {
+      // Outer x should be in global scope
+      assert_true(bound.global_scope.symbols.contains("x"))
+      // Function f should also be in global scope
+      assert_true(bound.global_scope.symbols.contains("f"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "bind duplicate in same block scope error" {
+  let result = parse_and_bind("{ const x = 1; const x = 2; }")
+  match result {
+    Ok(_) => assert_true(false) // Should have error
+    Err(diagnostics) => {
+      assert_true(diagnostics.length() > 0)
+      match diagnostics[0] {
+        diag => assert_true(diag.message.contains("Duplicate"))
+      }
+    }
+  }
+}
+
+///|
+test "bind let vs const duplicate error" {
+  let result = parse_and_bind("let x = 1; const x = 2;")
+  match result {
+    Ok(_) => assert_true(false) // Should have error
+    Err(diagnostics) => {
+      assert_true(diagnostics.length() > 0)
+    }
+  }
+}
+
+// ============================================================================
+// Nested Scope Tests
+// ============================================================================
+
+///|
+test "bind nested block scopes" {
+  let result = parse_and_bind("{ const x = 1; { const y = 2; { const z = 3; } } }")
+  match result {
+    Ok(bound) => {
+      // None of the variables should be in global scope
+      assert_false(bound.global_scope.symbols.contains("x"))
+      assert_false(bound.global_scope.symbols.contains("y"))
+      assert_false(bound.global_scope.symbols.contains("z"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "bind if statement creates block scope" {
+  let result = parse_and_bind("if (true) { const x = 1; }")
+  match result {
+    Ok(bound) => {
+      // x should not be in global scope
+      assert_false(bound.global_scope.symbols.contains("x"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "bind for loop creates block scope" {
+  let result = parse_and_bind("for (let i = 0; i < 10; i++) { const x = i; }")
+  match result {
+    Ok(bound) => {
+      // Neither i nor x should be in global scope
+      assert_false(bound.global_scope.symbols.contains("i"))
+      assert_false(bound.global_scope.symbols.contains("x"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "bind while loop creates block scope" {
+  let result = parse_and_bind("while (true) { const x = 1; }")
+  match result {
+    Ok(bound) => {
+      // x should not be in global scope
+      assert_false(bound.global_scope.symbols.contains("x"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+// ============================================================================
+// Function Parameter Scope Tests
+// ============================================================================
+
+///|
+test "bind function parameters in function scope" {
+  let result = parse_and_bind("function add(a, b) { return a + b; }")
+  match result {
+    Ok(bound) => {
+      // Function should be in global scope
+      assert_true(bound.global_scope.symbols.contains("add"))
+      // Parameters should not be in global scope
+      assert_false(bound.global_scope.symbols.contains("a"))
+      assert_false(bound.global_scope.symbols.contains("b"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "bind parameter shadowing outer variable allowed" {
+  let result = parse_and_bind("const x = 1; function f(x) { return x; }")
+  match result {
+    Ok(bound) => {
+      // Both x and f should be in global scope
+      assert_true(bound.global_scope.symbols.contains("x"))
+      assert_true(bound.global_scope.symbols.contains("f"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "bind duplicate parameters error" {
+  let result = parse_and_bind("function f(x, x) { }")
+  match result {
+    Ok(_) => assert_true(false) // Should have error
+    Err(diagnostics) => {
+      assert_true(diagnostics.length() > 0)
+      match diagnostics[0] {
+        diag => assert_true(diag.message.contains("Duplicate"))
+      }
+    }
+  }
+}
+
+// ============================================================================
+// Catch Clause Scope Tests
+// ============================================================================
+
+///|
+test "bind catch parameter creates scope" {
+  let result = parse_and_bind("try { } catch (e) { const x = e; }")
+  match result {
+    Ok(bound) => {
+      // Neither e nor x should be in global scope
+      assert_false(bound.global_scope.symbols.contains("e"))
+      assert_false(bound.global_scope.symbols.contains("x"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "bind catch parameter shadowing allowed" {
+  let result = parse_and_bind("const e = 1; try { } catch (e) { }")
+  match result {
+    Ok(bound) => {
+      // Outer e should be in global scope
+      assert_true(bound.global_scope.symbols.contains("e"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+// ============================================================================
+// Multiple Declaration Types Tests
+// ============================================================================
+
+///|
+test "bind function and variable same name error" {
+  let result = parse_and_bind("const foo = 1; function foo() {}")
+  match result {
+    Ok(_) => assert_true(false) // Should have error
+    Err(diagnostics) => {
+      assert_true(diagnostics.length() > 0)
+      match diagnostics[0] {
+        diag => assert_true(diag.message.contains("Duplicate"))
+      }
+    }
+  }
+}
+
+///|
+test "bind class and variable same name error" {
+  let result = parse_and_bind("const Foo = 1; class Foo {}")
+  match result {
+    Ok(_) => assert_true(false) // Should have error
+    Err(diagnostics) => {
+      assert_true(diagnostics.length() > 0)
+    }
+  }
+}
+
+///|
+test "bind interface and class same name error" {
+  let result = parse_and_bind("interface Foo {} class Foo {}")
+  match result {
+    Ok(_) => assert_true(false) // Should have error
+    Err(diagnostics) => {
+      assert_true(diagnostics.length() > 0)
+    }
+  }
+}
+
+// ============================================================================
+// Import Shadowing Tests
+// ============================================================================
+
+///|
+test "bind import shadowing local variable error" {
+  let result = parse_and_bind("const foo = 1; import foo from 'module';")
+  match result {
+    Ok(_) => assert_true(false) // Should have error
+    Err(diagnostics) => {
+      assert_true(diagnostics.length() > 0)
+    }
+  }
+}
+
+///|
+test "bind multiple named imports" {
+  let result = parse_and_bind("import { a, b, c } from 'module';")
+  match result {
+    Ok(bound) => {
+      assert_true(bound.global_scope.symbols.contains("a"))
+      assert_true(bound.global_scope.symbols.contains("b"))
+      assert_true(bound.global_scope.symbols.contains("c"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "bind mixed import (default and named)" {
+  let result = parse_and_bind("import foo, { bar } from 'module';")
+  match result {
+    Ok(bound) => {
+      assert_true(bound.global_scope.symbols.contains("foo"))
+      assert_true(bound.global_scope.symbols.contains("bar"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+// ============================================================================
+// Empty Source Tests
+// ============================================================================
+
+///|
+test "bind empty source" {
+  let result = parse_and_bind("")
+  match result {
+    Ok(bound) => {
+      assert_eq(bound.file_path, "test.ts")
+      assert_eq(bound.symbol_count, 0)
+    }
+    Err(_) => assert_true(false)
+  }
+}
