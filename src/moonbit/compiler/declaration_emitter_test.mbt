@@ -811,3 +811,87 @@ test "emit mapped types" {
     }
   }
 }
+
+/// Test: Type assertions with 'as' keyword
+test "emit as expressions" {
+  let source = "const value = getValue() as string; const num = getNum() as number;"
+  let scanner = Scanner::new(source, "test.ts")
+  let tokens = scan_all(scanner)
+
+  match parse_source_file(tokens, "test.ts") {
+    Ok(source_file) => {
+      let ctx = DeclarationEmitterContext::default()
+      let output = emit_declaration_file(source_file, ctx)
+
+      // Type assertions should be parsed and emitted
+      assert_true(output.contains("value"))
+      assert_true(output.contains("num"))
+
+      println("\nAs expressions output:")
+      println(output)
+    }
+    Err(diagnostics) => {
+      println("Parse error:")
+      for i = 0; i < diagnostics.length(); i = i + 1 {
+        println("  " + diagnostics[i].message)
+      }
+      assert_true(false)
+    }
+  }
+}
+
+/// Test: Type assertions with angle brackets
+test "emit type assertion expressions" {
+  let source = "const value = <string>getValue(); const num = <number>getNum();"
+  let scanner = Scanner::new(source, "test.ts")
+  let tokens = scan_all(scanner)
+
+  match parse_source_file(tokens, "test.ts") {
+    Ok(source_file) => {
+      let ctx = DeclarationEmitterContext::default()
+      let output = emit_declaration_file(source_file, ctx)
+
+      // Type assertions should be parsed and emitted
+      assert_true(output.contains("value"))
+      assert_true(output.contains("num"))
+
+      println("\nType assertion expressions output:")
+      println(output)
+    }
+    Err(diagnostics) => {
+      println("Parse error:")
+      for i = 0; i < diagnostics.length(); i = i + 1 {
+        println("  " + diagnostics[i].message)
+      }
+      assert_true(false)
+    }
+  }
+}
+
+/// Test: Non-null assertions
+test "emit non-null expressions" {
+  let source = "const value = getValue()!; const prop = obj.property!;"
+  let scanner = Scanner::new(source, "test.ts")
+  let tokens = scan_all(scanner)
+
+  match parse_source_file(tokens, "test.ts") {
+    Ok(source_file) => {
+      let ctx = DeclarationEmitterContext::default()
+      let output = emit_declaration_file(source_file, ctx)
+
+      // Non-null assertions should be parsed and emitted
+      assert_true(output.contains("value"))
+      assert_true(output.contains("prop"))
+
+      println("\nNon-null expressions output:")
+      println(output)
+    }
+    Err(diagnostics) => {
+      println("Parse error:")
+      for i = 0; i < diagnostics.length(); i = i + 1 {
+        println("  " + diagnostics[i].message)
+      }
+      assert_true(false)
+    }
+  }
+}

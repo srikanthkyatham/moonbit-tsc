@@ -1032,6 +1032,10 @@ fn emit_decl_expression(node : Node) -> String {
     StringLiteral(str) => "\"" + str.value + "\""
     BooleanLiteral(bool) => if bool.value { "true" } else { "false" }
     NullLiteral(_) => "null"
+    // Type assertions - unwrap to inner expression
+    AsExpression(ae) => emit_decl_expression(ae.expression)
+    TypeAssertionExpression(tae) => emit_decl_expression(tae.expression)
+    NonNullExpression(nne) => emit_decl_expression(nne.expression)
     _ => "unknown"
   }
 }

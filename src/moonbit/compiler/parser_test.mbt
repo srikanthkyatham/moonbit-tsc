@@ -1039,3 +1039,306 @@ test "parse switch with multiple cases" {
     Err(_) => assert_true(false)
   }
 }
+
+// ===== Advanced Type System Tests =====
+
+///|
+test "parse indexed access type" {
+  let tokens = tokens_from_source("type Name = Person['name'];")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        TypeAliasDeclaration(decl) => {
+          match decl.type_node {
+            IndexedAccessType(_) => ()
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse indexed access with generic type" {
+  let tokens = tokens_from_source("type Value<T, K> = T[K];")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        TypeAliasDeclaration(decl) => {
+          match decl.type_node {
+            IndexedAccessType(_) => ()
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse conditional type" {
+  let tokens = tokens_from_source("type IsString<T> = T extends string ? string : number;")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        TypeAliasDeclaration(decl) => {
+          match decl.type_node {
+            ConditionalType(_) => ()
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse conditional type with complex extends" {
+  let tokens = tokens_from_source("type NonNullable<T> = T extends number ? string : T;")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        TypeAliasDeclaration(decl) => {
+          match decl.type_node {
+            ConditionalType(_) => ()
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse mapped type" {
+  let tokens = tokens_from_source("type MyMap<K, T> = { [P in K]: T };")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        TypeAliasDeclaration(decl) => {
+          match decl.type_node {
+            MappedType(_) => ()
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse mapped type with simple constraint" {
+  let tokens = tokens_from_source("type MyMap<K> = { [P in K]: string };")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        TypeAliasDeclaration(decl) => {
+          match decl.type_node {
+            MappedType(_) => ()
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+// ===== Type Assertion Expression Tests =====
+
+///|
+test "parse non-null assertion" {
+  let tokens = tokens_from_source("const x = getValue()!;")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        VariableStatement(stmt) => {
+          match stmt.declarations[0].initializer {
+            Some(NonNullExpression(_)) => ()
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse non-null assertion on property access" {
+  let tokens = tokens_from_source("const x = obj.property!;")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        VariableStatement(stmt) => {
+          match stmt.declarations[0].initializer {
+            Some(NonNullExpression(_)) => ()
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse as expression" {
+  let tokens = tokens_from_source("const x = value as string;")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        VariableStatement(stmt) => {
+          match stmt.declarations[0].initializer {
+            Some(AsExpression(_)) => ()
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse as expression with complex type" {
+  let tokens = tokens_from_source("const x = getValue() as Array[number];")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        VariableStatement(stmt) => {
+          match stmt.declarations[0].initializer {
+            Some(AsExpression(_)) => ()
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse type assertion with angle brackets" {
+  let tokens = tokens_from_source("const x = <string>getValue();")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        VariableStatement(stmt) => {
+          match stmt.declarations[0].initializer {
+            Some(TypeAssertionExpression(_)) => ()
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse type assertion with complex type" {
+  let tokens = tokens_from_source("const x = <Array[string]>getArray();")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        VariableStatement(stmt) => {
+          match stmt.declarations[0].initializer {
+            Some(TypeAssertionExpression(_)) => ()
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse chained type assertions" {
+  let tokens = tokens_from_source("const x = (value as any) as string;")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        VariableStatement(stmt) => {
+          match stmt.declarations[0].initializer {
+            Some(AsExpression(_)) => ()
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse combined non-null and as assertion" {
+  let tokens = tokens_from_source("const x = getValue()! as string;")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        VariableStatement(stmt) => {
+          match stmt.declarations[0].initializer {
+            Some(AsExpression(ae)) => {
+              match ae.expression {
+                NonNullExpression(_) => ()
+                _ => assert_true(false)
+              }
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}

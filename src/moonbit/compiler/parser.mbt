@@ -1318,6 +1318,33 @@ fn parse_postfix_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
         })
       }
 
+      // Non-null assertion (!)
+      Exclamation(_) => {
+        let start_loc = get_location(left)
+        parser = advance_parser(parser)
+        left = Node::NonNullExpression(NonNullExpression::{
+          expression: left,
+          location: start_loc,
+        })
+      }
+
+      // Type assertion with 'as' keyword (expr as Type)
+      KeywordAs(_) => {
+        let start_loc = get_location(left)
+        parser = advance_parser(parser)
+        match parse_type(parser) {
+          Ok((type_node, next_parser)) => {
+            left = Node::AsExpression(AsExpression::{
+              expression: left,
+              type_node,
+              location: start_loc,
+            })
+            parser = next_parser
+          }
+          Err(p) => return Err(p)
+        }
+      }
+
       _ => should_continue = false
     }
   }
@@ -1594,6 +1621,50 @@ fn parse_primary_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
           }
         }
         Err(parser) => Err(parser)
+      }
+    }
+
+    // Type assertion with angle brackets (<Type>expr)
+    LessThan(_) => {
+      let start_loc = token.location()
+      let saved_parser = parser
+      let mut parser = advance_parser(parser) // consume '<'
+
+      // Try to parse as type assertion
+      match parse_type(parser) {
+        Ok((type_node, next_parser)) => {
+          match current_token(next_parser) {
+            GreaterThan(_) => {
+              parser = advance_parser(next_parser) // consume '>'
+
+              // Parse the expression being asserted
+              match parse_unary_expression(parser) {
+                Ok((expr, next_parser)) => {
+                  Ok((
+                    Node::TypeAssertionExpression(TypeAssertionExpression::{
+                      type_node,
+                      expression: expr,
+                      location: start_loc,
+                    }),
+                    next_parser,
+                  ))
+                }
+                Err(_) => {
+                  // Failed to parse expression, backtrack
+                  Err(saved_parser)
+                }
+              }
+            }
+            _ => {
+              // No closing >, not a type assertion, backtrack
+              Err(saved_parser)
+            }
+          }
+        }
+        Err(_) => {
+          // Failed to parse type, not a type assertion, backtrack
+          Err(saved_parser)
+        }
       }
     }
 
