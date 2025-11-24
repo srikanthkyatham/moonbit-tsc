@@ -842,6 +842,81 @@ test "parse string literal union type" {
   }
 }
 
+///|
+test "parse generic interface" {
+  let tokens = tokens_from_source("interface Result<T, E> { value: T; error: E; }")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        InterfaceDeclaration(iface) => {
+          assert_eq(iface.name, "Result")
+          assert_eq(iface.type_parameters.length(), 2)
+          assert_eq(iface.type_parameters[0].name, "T")
+          assert_eq(iface.type_parameters[1].name, "E")
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse arrow function type" {
+  let tokens = tokens_from_source("type Handler = (event: string) => void;")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        TypeAliasDeclaration(type_alias) => {
+          assert_eq(type_alias.name, "Handler")
+          match type_alias.type_node {
+            FunctionType(func_type) => {
+              assert_eq(func_type.parameters.length(), 1)
+              // Verify it's a function type with void return
+              match func_type.return_type {
+                KeywordType(keyword) => {
+                  match keyword.kind {
+                    Void => ()
+                    _ => assert_true(false)
+                  }
+                }
+                _ => assert_true(false)
+              }
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse const enum" {
+  let tokens = tokens_from_source("const enum Direction { Up, Down, Left, Right }")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        EnumDeclaration(enum_decl) => {
+          assert_eq(enum_decl.name, "Direction")
+          assert_eq(enum_decl.is_const, true)
+          assert_eq(enum_decl.members.length(), 4)
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
 // ============================================================================
 // Switch Statement Tests
 // ============================================================================
