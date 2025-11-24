@@ -2256,29 +2256,119 @@ fn parse_interface_declaration(
   match current_token(parser) {
     OpenBrace(_) => {
       let parser = advance_parser(parser)
-      // For now, skip interface members - just find closing brace
-      let parser = skip_until_token(parser, fn (t) {
-        match t {
-          CloseBrace(_) => true
-          _ => false
+      let members = []
+      let mut parser = parser
+
+      // Parse property signatures
+      while true {
+        match current_token(parser) {
+          CloseBrace(loc) => {
+            parser = advance_parser(parser)
+            return Ok((
+              Node::InterfaceDeclaration(InterfaceDeclaration::{
+                name,
+                type_parameters: [],
+                heritage_clauses,
+                members,
+                location: SourceLocation::new(start_loc.file_path, start_loc.start, loc.end)
+              }),
+              parser
+            ))
+          }
+          Identifier(prop_name, prop_loc) => {
+            parser = advance_parser(parser)
+
+            // Check if it's a method (has parentheses) or property (has colon)
+            match current_token(parser) {
+              OpenParen(_) => {
+                // Method signature: name(): returnType
+                parser = advance_parser(parser) // consume '('
+
+                // Skip parameters for now - just find closing paren
+                let mut paren_depth = 1
+                while paren_depth > 0 && parser.position < parser.tokens.length() {
+                  match current_token(parser) {
+                    OpenParen(_) => {
+                      paren_depth = paren_depth + 1
+                      parser = advance_parser(parser)
+                    }
+                    CloseParen(_) => {
+                      paren_depth = paren_depth - 1
+                      parser = advance_parser(parser)
+                    }
+                    _ => parser = advance_parser(parser)
+                  }
+                }
+
+                // Parse return type
+                let return_type = match current_token(parser) {
+                  Colon(_) => {
+                    parser = advance_parser(parser)
+                    match parse_type(parser) {
+                      Ok((t, p)) => {
+                        parser = p
+                        Some(t)
+                      }
+                      Err(_) => None
+                    }
+                  }
+                  _ => None
+                }
+
+                // Create method declaration
+                members.push(Node::MethodDeclaration(MethodDeclaration::{
+                  name: prop_name,
+                  type_parameters: [],
+                  parameters: [], // Skipped for simplicity
+                  return_type,
+                  body: None,
+                  location: prop_loc,
+                  modifiers: [],
+                  is_async: false,
+                  is_generator: false,
+                }))
+
+                // Optional semicolon or comma
+                match current_token(parser) {
+                  Semicolon(_) | Comma(_) => parser = advance_parser(parser)
+                  _ => ()
+                }
+              }
+              Colon(_) => {
+                // Property signature: name: type
+                parser = advance_parser(parser)
+
+                // Parse property type
+                match parse_type(parser) {
+                  Ok((prop_type, p)) => {
+                    parser = p
+
+                    // Create property declaration
+                    members.push(Node::PropertyDeclaration(PropertyDeclaration::{
+                      name: prop_name,
+                      type_annotation: Some(prop_type),
+                      initializer: None,
+                      location: prop_loc,
+                      modifiers: [],
+                    }))
+
+                    // Optional semicolon or comma
+                    match current_token(parser) {
+                      Semicolon(_) | Comma(_) => parser = advance_parser(parser)
+                      _ => ()
+                    }
+                  }
+                  Err(p) => return Err(p)
+                }
+              }
+              _ => return Err(add_error(parser, "Expected ':' or '(' after property name", prop_loc))
+            }
+          }
+          _ => break
         }
-      })
-      match current_token(parser) {
-        CloseBrace(loc) => {
-          let parser = advance_parser(parser)
-          Ok((
-            Node::InterfaceDeclaration(InterfaceDeclaration::{
-              name,
-              type_parameters: [],
-              heritage_clauses,
-              members: [],
-              location: SourceLocation::new(start_loc.file_path, start_loc.start, loc.end)
-            }),
-            parser
-          ))
-        }
-        _ => Err(add_error(parser, "Expected '}' after interface body", current_token(parser).location()))
       }
+
+      Err(add_error(parser, "Expected '}' after interface body", current_token(parser).location()))
     }
     _ => Err(add_error(parser, "Expected '{' after interface name", current_token(parser).location()))
   }

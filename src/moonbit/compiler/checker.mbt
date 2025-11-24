@@ -1451,7 +1451,24 @@ fn get_type_from_type_node(
           let (t, c) = undefined_type(checker)
           (Some(t), c)
         }
-        _ => (None, checker)
+        _ => {
+          // Try to look up the type name in the symbol table (for interfaces, classes, etc.)
+          match lookup_symbol(checker, type_ref.type_name) {
+            Some(symbol) => {
+              match symbol.kind {
+                Interface => {
+                  // Resolve interface to an Object type with its properties
+                  match resolve_interface_type(checker, symbol) {
+                    (Some(t), c) => (Some(t), c)
+                    (None, c) => (None, c)
+                  }
+                }
+                _ => (None, checker) // Other symbol kinds not yet supported
+              }
+            }
+            None => (None, checker)
+          }
+        }
       }
     }
     ArrayType(array_type) => {
@@ -1553,5 +1570,68 @@ fn lookup_symbol(checker : TypeChecker, name : String) -> Symbol? {
   match checker.global_scope {
     Some(scope) => scope.symbols.get(name)
     None => None
+  }
+}
+
+///|
+/// Resolve an interface symbol to an Object type with its property types
+fn resolve_interface_type(
+  checker : TypeChecker,
+  interface_symbol : Symbol
+) -> (Type?, TypeChecker) {
+  // Get the interface declaration from the symbol
+  match interface_symbol.value_declaration {
+    Some(InterfaceDeclaration(interface_decl)) => {
+      // Build property map from interface members
+      let properties : Map[String, PropertySignature] = Map::new()
+      let mut checker = checker
+
+      for i = 0; i < interface_decl.members.length(); i = i + 1 {
+        match interface_decl.members[i] {
+          PropertyDeclaration(prop) => {
+            // Get the property type
+            let (prop_type, c) = match prop.type_annotation {
+              Some(type_node) => {
+                match get_type_from_type_node(checker, type_node) {
+                  (Some(t), c2) => (t, c2)
+                  (None, c2) => {
+                    let (t, c3) = any_type(c2)
+                    (t, c3)
+                  }
+                }
+              }
+              None => any_type(checker)
+            }
+            checker = c
+
+            properties.set(
+              prop.name,
+              {
+                name: prop.name,
+                prop_type,
+                is_optional: false,
+                is_readonly: false,
+              },
+            )
+          }
+          _ => () // Skip non-property members
+        }
+      }
+
+      let (info, checker) = create_type_info(checker)
+      (
+        Some(
+          Object({
+            properties,
+            call_signatures: [],
+            construct_signatures: [],
+            index_signatures: [],
+            info,
+          }),
+        ),
+        checker,
+      )
+    }
+    _ => (None, checker)
   }
 }

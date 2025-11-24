@@ -442,8 +442,29 @@ fn bind_interface_declaration(
   binder : Binder,
   interface : InterfaceDeclaration,
 ) -> Binder {
-  let symbol = Symbol::new(interface.name, SymbolKind::Interface, binder.next_symbol_id)
-  let symbol = symbol.add_declaration(Node::InterfaceDeclaration(interface))
+  // Create members symbol table for interface properties
+  let members : SymbolTable = Map::new()
+
+  // Bind each interface member (property signature)
+  for i = 0; i < interface.members.length(); i = i + 1 {
+    match interface.members[i] {
+      PropertyDeclaration(prop) => {
+        let prop_symbol = Symbol::new(prop.name, SymbolKind::Property, binder.next_symbol_id)
+        members.set(prop.name, prop_symbol)
+      }
+      _ => () // Skip other member types for now
+    }
+  }
+
+  let mut symbol = Symbol::new(interface.name, SymbolKind::Interface, binder.next_symbol_id)
+  let interface_node = Node::InterfaceDeclaration(interface)
+  symbol = symbol.add_declaration(interface_node)
+  symbol = {
+    ..symbol,
+    members: Some(members),
+    value_declaration: Some(interface_node)
+  }
+
   declare_symbol(binder, interface.name, symbol)
 }
 
