@@ -652,8 +652,34 @@ fn parse_assignment_expression(
     }
   }
 
-  // Otherwise, parse as conditional expression
-  parse_conditional_expression(parser)
+  // Parse left-hand side (conditional expression)
+  let (left, parser) = match parse_conditional_expression(parser) {
+    Ok((expr, p)) => (expr, p)
+    Err(p) => return Err(p)
+  }
+
+  // Check for assignment operators
+  match current_token(parser) {
+    Equals(_) => {
+      let start_loc = get_location(left)
+      let parser = advance_parser(parser)
+      let (right, parser) = match parse_assignment_expression(parser) {
+        Ok((expr, p)) => (expr, p)
+        Err(p) => return Err(p)
+      }
+      Ok((
+        Node::BinaryExpression(BinaryExpression::{
+          left,
+          operator: BinaryOperator::Assign,
+          right,
+          location: start_loc,
+        }),
+        parser,
+      ))
+    }
+    // TODO: Add other assignment operators (+=, -=, etc.)
+    _ => Ok((left, parser))
+  }
 }
 
 ///|

@@ -544,6 +544,16 @@ fn infer_binary_expression_type(
       )
       boolean_type(checker)
     }
+    // Assignment operators: return the type of the right-hand side
+    Assign
+    | AddAssign
+    | SubtractAssign
+    | MultiplyAssign
+    | DivideAssign
+    | RemainderAssign
+    | BitwiseAndAssign
+    | BitwiseOrAssign
+    | BitwiseXorAssign => (right_type, checker)
     _ => any_type(checker)
   }
 }
