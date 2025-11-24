@@ -102,7 +102,7 @@ fn bind_statement(binder : Binder, node : Node) -> Binder {
   match node {
     // Variable declarations
     VariableStatement(var_stmt) => {
-      bind_variable_declarations(binder, var_stmt.declarations)
+      bind_variable_declarations(binder, var_stmt.declarations, var_stmt.is_const)
     }
 
     // Function declaration
@@ -249,22 +249,24 @@ fn bind_statement(binder : Binder, node : Node) -> Binder {
 fn bind_variable_declarations(
   binder : Binder,
   declarations : Array[VariableDeclaration],
+  is_const : Bool,
 ) -> Binder {
-  bind_variable_declarations_aux(binder, declarations, 0)
+  bind_variable_declarations_aux(binder, declarations, is_const, 0)
 }
 
 ///|
 fn bind_variable_declarations_aux(
   binder : Binder,
   declarations : Array[VariableDeclaration],
+  is_const : Bool,
   index : Int,
 ) -> Binder {
   if index >= declarations.length() {
     binder
   } else {
     let decl = declarations[index]
-    let binder = bind_variable_declaration(binder, decl)
-    bind_variable_declarations_aux(binder, declarations, index + 1)
+    let binder = bind_variable_declaration(binder, decl, is_const)
+    bind_variable_declarations_aux(binder, declarations, is_const, index + 1)
   }
 }
 
@@ -272,6 +274,7 @@ fn bind_variable_declarations_aux(
 fn bind_variable_declaration(
   binder : Binder,
   decl : VariableDeclaration,
+  is_const : Bool,
 ) -> Binder {
   // Extract name from identifier node
   let name = match decl.name {
@@ -279,7 +282,12 @@ fn bind_variable_declaration(
     _ => return binder // Binding patterns not yet supported
   }
 
-  let symbol = Symbol::new(name, SymbolKind::Variable, binder.next_symbol_id)
+  let mut symbol = Symbol::new(name, SymbolKind::Variable, binder.next_symbol_id)
+
+  // Set const flag on symbol
+  if is_const {
+    symbol = { ..symbol, flags: { ..symbol.flags, is_const: true } }
+  }
 
   let binder = declare_symbol(binder, name, symbol)
 

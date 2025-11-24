@@ -52,6 +52,7 @@ pub struct SymbolFlags {
   is_assignment : Bool
   is_optional : Bool
   is_readonly : Bool
+  is_const : Bool  // Track const vs let/var
   is_static : Bool
   is_private : Bool
   is_protected : Bool
@@ -72,6 +73,7 @@ pub fn SymbolFlags::default() -> SymbolFlags {
     is_assignment: false,
     is_optional: false,
     is_readonly: false,
+    is_const: false,  // Default is let/var
     is_static: false,
     is_private: false,
     is_protected: false,

@@ -151,6 +151,7 @@ pub struct TypeChecker {
   node_types : Map[String, Type] // Node identifier -> Type
   diagnostics : Array[Diagnostic]
   file_path : String
+  global_scope : Scope? // Global scope for symbol lookup
 } derive(Show)
 
 ///|
@@ -168,7 +169,7 @@ pub struct TypedFile {
 
 ///|
 /// Create a new type checker
-pub fn TypeChecker::new(file_path : String) -> TypeChecker {
+pub fn TypeChecker::new(file_path : String, global_scope : Scope?) -> TypeChecker {
   {
     next_type_id: 0,
     type_cache: Map::new(),
@@ -176,6 +177,7 @@ pub fn TypeChecker::new(file_path : String) -> TypeChecker {
     node_types: Map::new(),
     diagnostics: [],
     file_path,
+    global_scope,
   }
 }
 
@@ -283,7 +285,7 @@ pub fn error_type(checker : TypeChecker) -> (Type, TypeChecker) {
 pub fn check_source_file(
   bound : BoundSourceFile
 ) -> CheckResult {
-  let checker = TypeChecker::new(bound.file_path)
+  let checker = TypeChecker::new(bound.file_path, Some(bound.global_scope))
   let checker = check_statements(checker, bound.statements)
 
   // Return result
@@ -553,7 +555,30 @@ fn infer_binary_expression_type(
     | RemainderAssign
     | BitwiseAndAssign
     | BitwiseOrAssign
-    | BitwiseXorAssign => (right_type, checker)
+    | BitwiseXorAssign => {
+      // Check if trying to assign to a const variable
+      let checker = match bin_expr.left {
+        Identifier(id) => {
+          match lookup_symbol(checker, id.name) {
+            Some(symbol) => {
+              if symbol.flags.is_const {
+                add_diagnostic(
+                  checker,
+                  "Cannot assign to '\{id.name}' because it is a constant",
+                  get_node_location(BinaryExpression(bin_expr)),
+                  2588,
+                )
+              } else {
+                checker
+              }
+            }
+            None => checker
+          }
+        }
+        _ => checker
+      }
+      (right_type, checker)
+    }
     _ => any_type(checker)
   }
 }
@@ -1519,5 +1544,14 @@ fn type_to_string(t : Type) -> String {
     Object(_) => "object"
     TypeReference(ref) => ref.name
     Error(_) => "error"
+  }
+}
+
+///|
+/// Look up a symbol by name in the global scope
+fn lookup_symbol(checker : TypeChecker, name : String) -> Symbol? {
+  match checker.global_scope {
+    Some(scope) => scope.symbols.get(name)
+    None => None
   }
 }

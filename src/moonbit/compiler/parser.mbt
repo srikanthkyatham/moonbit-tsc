@@ -1245,6 +1245,62 @@ fn parse_primary_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
         ),
       )
 
+    // new expression
+    KeywordNew(start_loc) => {
+      let parser = advance_parser(parser) // consume 'new'
+
+      // Parse the constructor identifier (e.g., Foo)
+      match current_token(parser) {
+        Identifier(name, loc) => {
+          let expr = Node::Identifier(Identifier::{ name, location: loc })
+          let parser = advance_parser(parser) // consume identifier
+
+          // Check for optional arguments
+          match current_token(parser) {
+            OpenParen(_) => {
+              let parser = advance_parser(parser) // consume '('
+              let parser = increment_depth(parser)
+
+              // Parse arguments
+              let (args, parser) = parse_argument_list(parser)
+
+              let parser = decrement_depth(parser)
+              match expect(parser, fn(t) { matches_close_paren(t) }) {
+                Ok(parser) =>
+                  Ok(
+                    (
+                      Node::NewExpression(NewExpression::{
+                        expression: expr,
+                        type_arguments: [],
+                        arguments: Some(args),
+                        location: start_loc,
+                      }),
+                      advance_parser(parser),
+                    ),
+                  )
+                Err(parser) => Err(parser)
+              }
+            }
+            _ =>
+              // No arguments
+              Ok(
+                (
+                  Node::NewExpression(NewExpression::{
+                    expression: expr,
+                    type_arguments: [],
+                    arguments: None,
+                    location: start_loc,
+                  }),
+                  parser,
+                ),
+              )
+          }
+        }
+        _ =>
+          Err(add_error(parser, "Expected identifier after 'new'", start_loc))
+      }
+    }
+
     // Parenthesized expression
     OpenParen(_) => {
       let start_loc = token.location()
