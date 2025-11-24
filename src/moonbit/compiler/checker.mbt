@@ -643,7 +643,7 @@ fn infer_new_expression_type(
   checker : TypeChecker,
   new_expr : NewExpression
 ) -> (Type, TypeChecker) {
-  let (_, checker) = infer_type(checker, new_expr.expression)
+  let (expr_type, checker) = infer_type(checker, new_expr.expression)
 
   // Check arguments if present
   let mut checker = checker
@@ -657,8 +657,9 @@ fn infer_new_expression_type(
     None => ()
   }
 
-  // TODO: Return the constructed instance type based on constructor
-  any_type(checker)
+  // Return the constructed instance type
+  // For a class constructor, the expression type should be the class/object type
+  (expr_type, checker)
 }
 
 ///|

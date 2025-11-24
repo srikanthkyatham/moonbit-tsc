@@ -1875,21 +1875,40 @@ fn parse_class_members_aux(parser : Parser, acc : Array[Node]) -> (Array[Node], 
 
         // Property with initializer or type annotation
         _ => {
-          // Skip until semicolon or next member
-          let parser = skip_until_token(parser, fn (t) {
-            match t {
-              Semicolon(_) | Identifier(_, _) | CloseBrace(_) => true
-              _ => false
+          // Parse optional type annotation
+          let (type_annotation, parser) = match current_token(parser) {
+            Colon(_) => {
+              let parser = advance_parser(parser)
+              match parse_type(parser) {
+                Ok((ty, p)) => (Some(ty), p)
+                Err(p) => (None, p)
+              }
             }
-          })
+            _ => (None, parser)
+          }
+
+          // Parse optional initializer
+          let (initializer, parser) = match current_token(parser) {
+            Equals(_) => {
+              let parser = advance_parser(parser)
+              match parse_assignment_expression(parser) {
+                Ok((expr, p)) => (Some(expr), p)
+                Err(p) => (None, p)
+              }
+            }
+            _ => (None, parser)
+          }
+
+          // Consume optional semicolon
           let parser = match current_token(parser) {
             Semicolon(_) => advance_parser(parser)
             _ => parser
           }
+
           acc.push(Node::PropertyDeclaration(PropertyDeclaration::{
             name,
-            type_annotation: None,
-            initializer: None,
+            type_annotation,
+            initializer,
             modifiers: [],
             location: loc
           }))
