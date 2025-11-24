@@ -89,6 +89,7 @@ pub enum Node {
   // Other
   Parameter(Parameter)
   PropertyDeclaration(PropertyDeclaration)
+  IndexSignatureDeclaration(IndexSignatureDeclaration)
   MethodDeclaration(MethodDeclaration)
   ConstructorDeclaration(ConstructorDeclaration)
   GetAccessor(GetAccessor)
@@ -806,6 +807,14 @@ pub struct PropertyDeclaration {
 } derive(Show)
 
 ///|
+pub struct IndexSignatureDeclaration {
+  parameter_name : String
+  parameter_type : Node
+  return_type : Node
+  location : SourceLocation
+} derive(Show)
+
+///|
 pub struct MethodDeclaration {
   name : String
   type_parameters : Array[TypeParameter]
@@ -932,6 +941,7 @@ pub fn get_location(node : Node) -> SourceLocation {
     IndexedAccessType(i) => i.location
     Parameter(p) => p.location
     PropertyDeclaration(p) => p.location
+    IndexSignatureDeclaration(i) => i.location
     MethodDeclaration(m) => m.location
     ConstructorDeclaration(c) => c.location
     GetAccessor(g) => g.location

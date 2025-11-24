@@ -192,6 +192,7 @@ pub fn transform(node : Node, ctx : TransformerContext) -> Node {
     // Class members - transform if needed
     Parameter(p) => transform_parameter(p, ctx)
     PropertyDeclaration(pd) => transform_property_declaration(pd, ctx)
+    IndexSignatureDeclaration(isd) => EmptyStatement({ location: isd.location })  // Type-only, remove
     MethodDeclaration(md) => transform_method_declaration(md, ctx)
     ConstructorDeclaration(cd) => transform_constructor_declaration(cd, ctx)
     GetAccessor(ga) => transform_get_accessor(ga, ctx)

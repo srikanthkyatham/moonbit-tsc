@@ -2653,7 +2653,7 @@ fn parse_interface_declaration(
             let bracket_loc = current_token(parser).location()
             parser = advance_parser(parser)
             // Parse index parameter name
-            let _index_name = match current_token(parser) {
+            let index_name = match current_token(parser) {
               Identifier(n, _) => {
                 parser = advance_parser(parser)
                 n
@@ -2666,7 +2666,7 @@ fn parse_interface_declaration(
               _ => return Err(add_error(parser, "Expected ':' after index parameter", current_token(parser).location()))
             }
             // Parse index type (string or number)
-            let _index_type = match parse_type(parser) {
+            let index_type = match parse_type(parser) {
               Ok((t, p)) => {
                 parser = p
                 t
@@ -2691,13 +2691,12 @@ fn parse_interface_declaration(
               }
               Err(p) => return Err(p)
             }
-            // Create index signature as a property
-            members.push(Node::PropertyDeclaration(PropertyDeclaration::{
-              name: "[index]",
-              type_annotation: Some(value_type),
-              initializer: None,
+            // Create index signature
+            members.push(Node::IndexSignatureDeclaration(IndexSignatureDeclaration::{
+              parameter_name: index_name,
+              parameter_type: index_type,
+              return_type: value_type,
               location: bracket_loc,
-              modifiers: [],
             }))
             // Optional semicolon or comma
             match current_token(parser) {

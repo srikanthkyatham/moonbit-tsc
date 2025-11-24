@@ -493,6 +493,7 @@ fn emit_decl_interface(
 fn emit_decl_type_element(node : Node, ctx : DeclarationEmitterContext) -> String? {
   match node {
     PropertyDeclaration(prop) => Some(emit_decl_property_signature(prop, ctx))
+    IndexSignatureDeclaration(idx) => Some(emit_decl_index_signature(idx, ctx))
     MethodDeclaration(meth) => Some(emit_decl_method_signature(meth, ctx))
     ConstructorDeclaration(ctor) => Some(emit_decl_constructor_signature(ctor, ctx))
     _ => None
@@ -517,6 +518,15 @@ fn emit_decl_property_signature(prop : PropertyDeclaration, ctx : DeclarationEmi
   }
 
   output + ";"
+}
+
+///|
+/// Emit an index signature
+fn emit_decl_index_signature(idx : IndexSignatureDeclaration, ctx : DeclarationEmitterContext) -> String {
+  let indent = ctx.get_indent()
+  let param_type = emit_decl_type_node(idx.parameter_type, ctx)
+  let return_type = emit_decl_type_node(idx.return_type, ctx)
+  indent + "[" + idx.parameter_name + ": " + param_type + "]: " + return_type + ";"
 }
 
 ///|

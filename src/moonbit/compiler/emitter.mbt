@@ -197,6 +197,7 @@ pub fn emit(node : Node, ctx : EmitterContext) -> String {
     // Other
     Parameter(p) => emit_parameter(p, ctx)
     PropertyDeclaration(pd) => emit_property_declaration(pd, ctx)
+    IndexSignatureDeclaration(_) => ""  // Type-only, no JS emission
     MethodDeclaration(md) => emit_method_declaration(md, ctx)
     ConstructorDeclaration(cd) => emit_constructor_declaration(cd, ctx)
     GetAccessor(ga) => emit_get_accessor(ga, ctx)
