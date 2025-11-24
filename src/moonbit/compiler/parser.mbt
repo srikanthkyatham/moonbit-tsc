@@ -2079,6 +2079,33 @@ fn parse_primary_type(parser : Parser) -> Result[(Node, Parser), Parser] {
         parser,
       ))
     }
+    OpenParen(_) => {
+      // Function type: (param: type, ...) => returnType
+      let parser = advance_parser(parser) // consume '('
+      let (parameters, parser) = parse_parameter_list(parser)
+
+      // Expect =>
+      match current_token(parser) {
+        Arrow(_) => {
+          let parser = advance_parser(parser)
+          match parse_type(parser) {
+            Ok((return_type, parser)) => {
+              Ok((
+                Node::FunctionType(FunctionType::{
+                  type_parameters: [],
+                  parameters,
+                  return_type,
+                  location: loc,
+                }),
+                parser,
+              ))
+            }
+            Err(p) => Err(p)
+          }
+        }
+        _ => Err(add_error(parser, "Expected '=>' in function type", current_token(parser).location()))
+      }
+    }
     _ => Err(add_error(parser, "Expected type", loc))
   }
 }
@@ -2390,6 +2417,12 @@ fn parse_interface_declaration(
     _ => return Err(add_error(parser, "Expected interface name", current_token(parser).location()))
   }
 
+  // Parse type parameters if present
+  let (type_parameters, parser) = match current_token(parser) {
+    LessThan(_) => parse_type_parameters(parser)
+    _ => ([], parser)
+  }
+
   // Parse heritage clauses (extends only for interfaces)
   let (heritage_clauses, parser) = parse_heritage_clauses(parser)
 
@@ -2408,7 +2441,7 @@ fn parse_interface_declaration(
             return Ok((
               Node::InterfaceDeclaration(InterfaceDeclaration::{
                 name,
-                type_parameters: [],
+                type_parameters,
                 heritage_clauses,
                 members,
                 location: SourceLocation::new(start_loc.file_path, start_loc.start, loc.end)
