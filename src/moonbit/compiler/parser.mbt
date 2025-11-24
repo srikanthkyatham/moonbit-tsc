@@ -1230,83 +1230,835 @@ fn parse_identifier(parser : Parser) -> Result[(Identifier, Parser), Parser] {
 
 ///|
 fn parse_class_declaration(parser : Parser) -> Result[(Node, Parser), Parser] {
-  Err(
-    add_error(
-      parser,
-      "Class declaration not yet implemented",
-      current_token(parser).location(),
-    ),
-  )
+  // [abstract] class Name [extends Super] [implements I1, I2] { members }
+  let start_loc = current_token(parser).location()
+  let parser = advance_parser(parser) // consume 'class'
+
+  // Parse class name
+  let (name, parser) = match current_token(parser) {
+    Identifier(n, loc) => (Some(Node::Identifier(Identifier::{ name: n, location: loc })), advance_parser(parser))
+    _ => (None, parser) // Anonymous class allowed in expressions
+  }
+
+  // Parse heritage clauses (extends, implements)
+  let (heritage_clauses, parser) = parse_heritage_clauses(parser)
+
+  // Parse class body
+  match current_token(parser) {
+    OpenBrace(_) => {
+      let parser = advance_parser(parser)
+      let (members, parser) = parse_class_members(parser)
+      match current_token(parser) {
+        CloseBrace(loc) => {
+          let parser = advance_parser(parser)
+          Ok((
+            Node::ClassDeclaration(ClassDeclaration::{
+              name,
+              type_parameters: [],
+              heritage_clauses,
+              members,
+              is_abstract: false,
+              location: SourceLocation::new(start_loc.file_path, start_loc.start, loc.end)
+            }),
+            parser
+          ))
+        }
+        _ => Err(add_error(parser, "Expected '}' after class body", current_token(parser).location()))
+      }
+    }
+    _ => Err(add_error(parser, "Expected '{' after class name", current_token(parser).location()))
+  }
+}
+
+///|
+/// Parse heritage clauses (extends, implements)
+fn parse_heritage_clauses(parser : Parser) -> (Array[HeritageClause], Parser) {
+  parse_heritage_clauses_aux(parser, [])
+}
+
+///|
+fn parse_heritage_clauses_aux(parser : Parser, acc : Array[HeritageClause]) -> (Array[HeritageClause], Parser) {
+  match current_token(parser) {
+    KeywordExtends(_) => {
+      let start_loc = current_token(parser).location()
+      let parser = advance_parser(parser)
+      let (types, parser) = parse_heritage_types(parser)
+      acc.push(HeritageClause::{
+        kind: HeritageKind::Extends,
+        types,
+        location: start_loc
+      })
+      parse_heritage_clauses_aux(parser, acc)
+    }
+    KeywordImplements(_) => {
+      let start_loc = current_token(parser).location()
+      let parser = advance_parser(parser)
+      let (types, parser) = parse_heritage_types(parser)
+      acc.push(HeritageClause::{
+        kind: HeritageKind::Implements,
+        types,
+        location: start_loc
+      })
+      parse_heritage_clauses_aux(parser, acc)
+    }
+    _ => (acc, parser)
+  }
+}
+
+///|
+/// Parse comma-separated list of types (for extends/implements)
+fn parse_heritage_types(parser : Parser) -> (Array[Node], Parser) {
+  parse_heritage_types_aux(parser, [])
+}
+
+///|
+fn parse_heritage_types_aux(parser : Parser, acc : Array[Node]) -> (Array[Node], Parser) {
+  match current_token(parser) {
+    Identifier(name, loc) => {
+      acc.push(Node::Identifier(Identifier::{ name, location: loc }))
+      let parser = advance_parser(parser)
+      match current_token(parser) {
+        Comma(_) => parse_heritage_types_aux(advance_parser(parser), acc)
+        _ => (acc, parser)
+      }
+    }
+    _ => (acc, parser)
+  }
+}
+
+///|
+/// Parse class members
+fn parse_class_members(parser : Parser) -> (Array[Node], Parser) {
+  parse_class_members_aux(parser, [])
+}
+
+///|
+fn parse_class_members_aux(parser : Parser, acc : Array[Node]) -> (Array[Node], Parser) {
+  match current_token(parser) {
+    CloseBrace(_) | EOF(_) => (acc, parser)
+
+    // Constructor
+    Identifier("constructor", loc) => {
+      let parser = advance_parser(parser)
+      match current_token(parser) {
+        OpenParen(_) => {
+          let parser = advance_parser(parser)
+          // Skip parameters for now - just find closing paren
+          let parser = skip_until_token(parser, fn (t) {
+            match t {
+              CloseParen(_) => true
+              _ => false
+            }
+          })
+          let parser = advance_parser(parser) // consume ')'
+          // Parse body
+          let (body, parser) = match current_token(parser) {
+            OpenBrace(_) => {
+              match parse_block_statement(parser) {
+                Ok((b, p)) => (Some(b), p)
+                Err(p) => (None, p)
+              }
+            }
+            _ => (None, parser)
+          }
+          acc.push(Node::ConstructorDeclaration(ConstructorDeclaration::{
+            parameters: [],
+            body,
+            location: loc
+          }))
+          parse_class_members_aux(parser, acc)
+        }
+        _ => parse_class_members_aux(parser, acc)
+      }
+    }
+
+    // Property or method
+    Identifier(name, loc) => {
+      let parser = advance_parser(parser)
+      match current_token(parser) {
+        // Method
+        OpenParen(_) => {
+          let parser = advance_parser(parser)
+          let parser = skip_until_token(parser, fn (t) {
+            match t {
+              CloseParen(_) => true
+              _ => false
+            }
+          })
+          let parser = advance_parser(parser) // consume ')'
+          let (body, parser) = match current_token(parser) {
+            OpenBrace(_) => {
+              match parse_block_statement(parser) {
+                Ok((b, p)) => (Some(b), p)
+                Err(p) => (None, p)
+              }
+            }
+            _ => (None, parser)
+          }
+          acc.push(Node::MethodDeclaration(MethodDeclaration::{
+            name,
+            type_parameters: [],
+            parameters: [],
+            return_type: None,
+            body,
+            modifiers: [],
+            is_async: false,
+            is_generator: false,
+            location: loc
+          }))
+          parse_class_members_aux(parser, acc)
+        }
+
+        // Property with initializer or type annotation
+        _ => {
+          // Skip until semicolon or next member
+          let parser = skip_until_token(parser, fn (t) {
+            match t {
+              Semicolon(_) | Identifier(_, _) | CloseBrace(_) => true
+              _ => false
+            }
+          })
+          let parser = match current_token(parser) {
+            Semicolon(_) => advance_parser(parser)
+            _ => parser
+          }
+          acc.push(Node::PropertyDeclaration(PropertyDeclaration::{
+            name,
+            type_annotation: None,
+            initializer: None,
+            modifiers: [],
+            location: loc
+          }))
+          parse_class_members_aux(parser, acc)
+        }
+      }
+    }
+
+    // Skip other tokens
+    _ => parse_class_members_aux(advance_parser(parser), acc)
+  }
+}
+
+///|
+/// Helper: Skip tokens until predicate is true
+fn skip_until_token(parser : Parser, predicate : (Token) -> Bool) -> Parser {
+  if is_at_end(parser) || predicate(current_token(parser)) {
+    parser
+  } else {
+    skip_until_token(advance_parser(parser), predicate)
+  }
 }
 
 ///|
 fn parse_interface_declaration(
   parser : Parser,
 ) -> Result[(Node, Parser), Parser] {
-  Err(
-    add_error(
-      parser,
-      "Interface declaration not yet implemented",
-      current_token(parser).location(),
-    ),
-  )
+  // interface Name [extends I1, I2] { members }
+  let start_loc = current_token(parser).location()
+  let parser = advance_parser(parser) // consume 'interface'
+
+  // Parse interface name
+  let (name, parser) = match current_token(parser) {
+    Identifier(n, _) => (n, advance_parser(parser))
+    _ => return Err(add_error(parser, "Expected interface name", current_token(parser).location()))
+  }
+
+  // Parse heritage clauses (extends only for interfaces)
+  let (heritage_clauses, parser) = parse_heritage_clauses(parser)
+
+  // Parse interface body
+  match current_token(parser) {
+    OpenBrace(_) => {
+      let parser = advance_parser(parser)
+      // For now, skip interface members - just find closing brace
+      let parser = skip_until_token(parser, fn (t) {
+        match t {
+          CloseBrace(_) => true
+          _ => false
+        }
+      })
+      match current_token(parser) {
+        CloseBrace(loc) => {
+          let parser = advance_parser(parser)
+          Ok((
+            Node::InterfaceDeclaration(InterfaceDeclaration::{
+              name,
+              type_parameters: [],
+              heritage_clauses,
+              members: [],
+              location: SourceLocation::new(start_loc.file_path, start_loc.start, loc.end)
+            }),
+            parser
+          ))
+        }
+        _ => Err(add_error(parser, "Expected '}' after interface body", current_token(parser).location()))
+      }
+    }
+    _ => Err(add_error(parser, "Expected '{' after interface name", current_token(parser).location()))
+  }
 }
 
 ///|
 fn parse_type_alias_declaration(
   parser : Parser,
 ) -> Result[(Node, Parser), Parser] {
-  Err(
-    add_error(
-      parser,
-      "Type alias not yet implemented",
-      current_token(parser).location(),
-    ),
-  )
+  // type Name = Type
+  let start_loc = current_token(parser).location()
+  let parser = advance_parser(parser) // consume 'type'
+
+  // Parse type name
+  let (name, parser) = match current_token(parser) {
+    Identifier(n, _) => (n, advance_parser(parser))
+    _ => return Err(add_error(parser, "Expected type name", current_token(parser).location()))
+  }
+
+  // Expect '='
+  let parser = match current_token(parser) {
+    Equals(_) => advance_parser(parser)
+    _ => return Err(add_error(parser, "Expected '=' in type alias", current_token(parser).location()))
+  }
+
+  // Parse type (for now, just use a placeholder)
+  let (type_node, parser) = match parse_type(parser) {
+    Ok((t, p)) => (t, p)
+    Err(p) => return Err(p)
+  }
+
+  let end_loc = get_location(type_node)
+
+  // Consume optional semicolon
+  let parser = match current_token(parser) {
+    Semicolon(_) => advance_parser(parser)
+    _ => parser
+  }
+
+  Ok((
+    Node::TypeAliasDeclaration(TypeAliasDeclaration::{
+      name,
+      type_parameters: [],
+      type_node,
+      location: SourceLocation::new(start_loc.file_path, start_loc.start, end_loc.end)
+    }),
+    parser
+  ))
 }
 
 ///|
 fn parse_enum_declaration(parser : Parser) -> Result[(Node, Parser), Parser] {
-  Err(
-    add_error(
-      parser,
-      "Enum declaration not yet implemented",
-      current_token(parser).location(),
-    ),
-  )
+  // enum Name { A, B = 1, C }
+  let start_loc = current_token(parser).location()
+  let parser = advance_parser(parser) // consume 'enum'
+
+  // Parse enum name
+  let (name, parser) = match current_token(parser) {
+    Identifier(n, _) => (n, advance_parser(parser))
+    _ => return Err(add_error(parser, "Expected enum name", current_token(parser).location()))
+  }
+
+  // Parse enum body
+  match current_token(parser) {
+    OpenBrace(_) => {
+      let parser = advance_parser(parser)
+      let (members, parser) = parse_enum_members(parser)
+      match current_token(parser) {
+        CloseBrace(loc) => {
+          let parser = advance_parser(parser)
+          Ok((
+            Node::EnumDeclaration(EnumDeclaration::{
+              name,
+              members,
+              is_const: false,
+              location: SourceLocation::new(start_loc.file_path, start_loc.start, loc.end)
+            }),
+            parser
+          ))
+        }
+        _ => Err(add_error(parser, "Expected '}' after enum body", current_token(parser).location()))
+      }
+    }
+    _ => Err(add_error(parser, "Expected '{' after enum name", current_token(parser).location()))
+  }
+}
+
+///|
+/// Parse enum members
+fn parse_enum_members(parser : Parser) -> (Array[EnumMember], Parser) {
+  parse_enum_members_aux(parser, [])
+}
+
+///|
+fn parse_enum_members_aux(parser : Parser, acc : Array[EnumMember]) -> (Array[EnumMember], Parser) {
+  match current_token(parser) {
+    CloseBrace(_) | EOF(_) => (acc, parser)
+    Identifier(name, loc) => {
+      let parser = advance_parser(parser)
+      // Check for initializer
+      let (initializer, parser) = match current_token(parser) {
+        Equals(_) => {
+          let parser = advance_parser(parser)
+          match parse_expression(parser) {
+            Ok((expr, p)) => (Some(expr), p)
+            Err(p) => (None, p)
+          }
+        }
+        _ => (None, parser)
+      }
+      acc.push(EnumMember::{ name, initializer, location: loc })
+      // Check for comma
+      match current_token(parser) {
+        Comma(_) => parse_enum_members_aux(advance_parser(parser), acc)
+        _ => (acc, parser)
+      }
+    }
+    _ => (acc, parser)
+  }
 }
 
 ///|
 fn parse_import_declaration(parser : Parser) -> Result[(Node, Parser), Parser] {
-  Err(
-    add_error(
-      parser,
-      "Import declaration not yet implemented",
-      current_token(parser).location(),
-    ),
-  )
+  // import [importClause] from 'module'
+  // import 'module'
+  let start_loc = current_token(parser).location()
+  let parser = advance_parser(parser) // consume 'import'
+
+  // Check for side-effect only import: import 'module'
+  match current_token(parser) {
+    StringLiteral(module_specifier, _) => {
+      let parser = advance_parser(parser)
+      // Consume optional semicolon
+      let parser = match current_token(parser) {
+        Semicolon(_) => advance_parser(parser)
+        _ => parser
+      }
+      let end_loc = current_token(parser).location()
+      return Ok((
+        Node::ImportDeclaration(ImportDeclaration::{
+          import_clause: None,
+          module_specifier,
+          location: SourceLocation::new(start_loc.file_path, start_loc.start, end_loc.end)
+        }),
+        parser
+      ))
+    }
+    _ => ()
+  }
+
+  // Parse import clause (default and/or named imports)
+  let (default_import, parser) = match current_token(parser) {
+    Identifier(name, _) => {
+      let parser = advance_parser(parser)
+      // Check if there's a comma for mixed import
+      match current_token(parser) {
+        Comma(_) => {
+          let parser = advance_parser(parser)
+          (Some(name), parser)
+        }
+        _ => (Some(name), parser)
+      }
+    }
+    _ => (None, parser)
+  }
+
+  // Parse named bindings (namespace or named imports)
+  let (named_bindings, parser) = match current_token(parser) {
+    Star(_) => {
+      // Namespace import: * as name
+      let parser = advance_parser(parser)
+      match current_token(parser) {
+        KeywordAs(_) => {
+          let parser = advance_parser(parser)
+          match current_token(parser) {
+            Identifier(name, loc) => {
+              let parser = advance_parser(parser)
+              (Some(NamedImports::NamespaceImport(name, loc)), parser)
+            }
+            _ => return Err(add_error(parser, "Expected identifier after 'as'", current_token(parser).location()))
+          }
+        }
+        _ => return Err(add_error(parser, "Expected 'as' after '*'", current_token(parser).location()))
+      }
+    }
+    OpenBrace(_) => {
+      // Named imports: { a, b, c as d }
+      let parser = advance_parser(parser)
+      let (specifiers, parser) = parse_import_specifiers(parser)
+      match current_token(parser) {
+        CloseBrace(loc) => {
+          let parser = advance_parser(parser)
+          (Some(NamedImports::NamedImports(specifiers, loc)), parser)
+        }
+        _ => return Err(add_error(parser, "Expected '}' after import specifiers", current_token(parser).location()))
+      }
+    }
+    _ => (None, parser)
+  }
+
+  // Expect 'from' keyword
+  let parser = match current_token(parser) {
+    KeywordFrom(_) => advance_parser(parser)
+    _ => return Err(add_error(parser, "Expected 'from' after import clause", current_token(parser).location()))
+  }
+
+  // Parse module specifier (string literal)
+  let (module_specifier, parser) = match current_token(parser) {
+    StringLiteral(spec, _) => (spec, advance_parser(parser))
+    _ => return Err(add_error(parser, "Expected module specifier string", current_token(parser).location()))
+  }
+
+  let end_loc = current_token(parser).location()
+
+  // Build import clause if we have default or named imports
+  let import_clause = if default_import is None && named_bindings is None {
+    None
+  } else {
+    Some(ImportClause::{
+      name: default_import,
+      named_bindings,
+      location: SourceLocation::new(start_loc.file_path, start_loc.start, end_loc.end)
+    })
+  }
+
+  // Consume optional semicolon
+  let parser = match current_token(parser) {
+    Semicolon(_) => advance_parser(parser)
+    _ => parser
+  }
+
+  Ok((
+    Node::ImportDeclaration(ImportDeclaration::{
+      import_clause,
+      module_specifier,
+      location: SourceLocation::new(start_loc.file_path, start_loc.start, end_loc.end)
+    }),
+    parser
+  ))
+}
+
+///|
+/// Helper: Parse import specifiers { a, b as c, d }
+fn parse_import_specifiers(parser : Parser) -> (Array[ImportSpecifier], Parser) {
+  parse_import_specifiers_aux(parser, [])
+}
+
+///|
+/// Tail-recursive helper for parsing import specifiers
+fn parse_import_specifiers_aux(parser : Parser, acc : Array[ImportSpecifier]) -> (Array[ImportSpecifier], Parser) {
+  match current_token(parser) {
+    CloseBrace(_) | EOF(_) => (acc, parser)
+    Identifier(name, loc) => {
+      let parser = advance_parser(parser)
+      // Check for 'as' renaming
+      match current_token(parser) {
+        KeywordAs(_) => {
+          let parser = advance_parser(parser)
+          match current_token(parser) {
+            Identifier(local_name, _) => {
+              let parser = advance_parser(parser)
+              acc.push(ImportSpecifier::{ property_name: Some(name), name: local_name, location: loc })
+              // Check for comma
+              match current_token(parser) {
+                Comma(_) => parse_import_specifiers_aux(advance_parser(parser), acc)
+                _ => (acc, parser)
+              }
+            }
+            _ => (acc, parser) // Error, but continue
+          }
+        }
+        _ => {
+          // No renaming
+          acc.push(ImportSpecifier::{ property_name: None, name, location: loc })
+          // Check for comma
+          match current_token(parser) {
+            Comma(_) => parse_import_specifiers_aux(advance_parser(parser), acc)
+            _ => (acc, parser)
+          }
+        }
+      }
+    }
+    _ => (acc, parser)
+  }
 }
 
 ///|
 fn parse_export_declaration(parser : Parser) -> Result[(Node, Parser), Parser] {
-  Err(
-    add_error(
-      parser,
-      "Export declaration not yet implemented",
-      current_token(parser).location(),
-    ),
-  )
+  // export { a, b }
+  // export { a, b } from 'module'
+  // export * from 'module'
+  // export default expression
+  // export const/let/var/function/class ...
+  let start_loc = current_token(parser).location()
+  let parser = advance_parser(parser) // consume 'export'
+
+  match current_token(parser) {
+    // export default expression
+    KeywordDefault(_) => {
+      let parser = advance_parser(parser)
+      match parse_expression(parser) {
+        Ok((expression, parser)) => {
+          let end_loc = get_location(expression)
+          // Consume optional semicolon
+          let parser = match current_token(parser) {
+            Semicolon(_) => advance_parser(parser)
+            _ => parser
+          }
+          Ok((
+            Node::ExportAssignment(ExportAssignment::{
+              expression,
+              is_export_equals: false,
+              location: SourceLocation::new(start_loc.file_path, start_loc.start, end_loc.end)
+            }),
+            parser
+          ))
+        }
+        Err(p) => Err(p)
+      }
+    }
+
+    // export * from 'module'
+    Star(_) => {
+      let parser = advance_parser(parser)
+      match current_token(parser) {
+        KeywordFrom(_) => {
+          let parser = advance_parser(parser)
+          match current_token(parser) {
+            StringLiteral(module_specifier, _) => {
+              let parser = advance_parser(parser)
+              // Consume optional semicolon
+              let parser = match current_token(parser) {
+                Semicolon(_) => advance_parser(parser)
+                _ => parser
+              }
+              let end_loc = current_token(parser).location()
+              Ok((
+                Node::ExportDeclaration(ExportDeclaration::{
+                  export_clause: None,
+                  module_specifier: Some(module_specifier),
+                  location: SourceLocation::new(start_loc.file_path, start_loc.start, end_loc.end)
+                }),
+                parser
+              ))
+            }
+            _ => Err(add_error(parser, "Expected module specifier after 'from'", current_token(parser).location()))
+          }
+        }
+        _ => Err(add_error(parser, "Expected 'from' after 'export *'", current_token(parser).location()))
+      }
+    }
+
+    // export { a, b } [from 'module']
+    OpenBrace(_) => {
+      let parser = advance_parser(parser)
+      let (specifiers, parser) = parse_export_specifiers(parser)
+      match current_token(parser) {
+        CloseBrace(loc) => {
+          let parser = advance_parser(parser)
+          // Check for 'from' clause
+          let (module_specifier, parser) = match current_token(parser) {
+            KeywordFrom(_) => {
+              let parser = advance_parser(parser)
+              match current_token(parser) {
+                StringLiteral(spec, _) => (Some(spec), advance_parser(parser))
+                _ => return Err(add_error(parser, "Expected module specifier after 'from'", current_token(parser).location()))
+              }
+            }
+            _ => (None, parser)
+          }
+          // Consume optional semicolon
+          let parser = match current_token(parser) {
+            Semicolon(_) => advance_parser(parser)
+            _ => parser
+          }
+          let end_loc = current_token(parser).location()
+          Ok((
+            Node::ExportDeclaration(ExportDeclaration::{
+              export_clause: Some(NamedExports::NamedExports(specifiers, loc)),
+              module_specifier,
+              location: SourceLocation::new(start_loc.file_path, start_loc.start, end_loc.end)
+            }),
+            parser
+          ))
+        }
+        _ => Err(add_error(parser, "Expected '}' after export specifiers", current_token(parser).location()))
+      }
+    }
+
+    // export declaration (const, let, var, function, class, etc.)
+    _ => {
+      // Parse the declaration and wrap it
+      match parse_statement(parser) {
+        Ok((stmt, parser)) => {
+          // For now, just return the statement itself
+          // In a full implementation, we'd wrap this in an ExportDeclaration node
+          Ok((stmt, parser))
+        }
+        Err(p) => Err(p)
+      }
+    }
+  }
+}
+
+///|
+/// Helper: Parse export specifiers { a, b as c, d }
+fn parse_export_specifiers(parser : Parser) -> (Array[ExportSpecifier], Parser) {
+  parse_export_specifiers_aux(parser, [])
+}
+
+///|
+/// Tail-recursive helper for parsing export specifiers
+fn parse_export_specifiers_aux(parser : Parser, acc : Array[ExportSpecifier]) -> (Array[ExportSpecifier], Parser) {
+  match current_token(parser) {
+    CloseBrace(_) | EOF(_) => (acc, parser)
+    Identifier(name, loc) => {
+      let parser = advance_parser(parser)
+      // Check for 'as' renaming
+      match current_token(parser) {
+        KeywordAs(_) => {
+          let parser = advance_parser(parser)
+          match current_token(parser) {
+            Identifier(export_name, _) => {
+              let parser = advance_parser(parser)
+              acc.push(ExportSpecifier::{ property_name: Some(name), name: export_name, location: loc })
+              // Check for comma
+              match current_token(parser) {
+                Comma(_) => parse_export_specifiers_aux(advance_parser(parser), acc)
+                _ => (acc, parser)
+              }
+            }
+            _ => (acc, parser) // Error, but continue
+          }
+        }
+        _ => {
+          // No renaming
+          acc.push(ExportSpecifier::{ property_name: None, name, location: loc })
+          // Check for comma
+          match current_token(parser) {
+            Comma(_) => parse_export_specifiers_aux(advance_parser(parser), acc)
+            _ => (acc, parser)
+          }
+        }
+      }
+    }
+    _ => (acc, parser)
+  }
 }
 
 ///|
 fn parse_switch_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
-  Err(
-    add_error(
-      parser,
-      "Switch statement not yet implemented",
-      current_token(parser).location(),
-    ),
-  )
+  // switch (expression) { case value: statements; default: statements; }
+  let start_loc = current_token(parser).location()
+  let parser = advance_parser(parser) // consume 'switch'
+
+  // Expect '('
+  let parser = match current_token(parser) {
+    OpenParen(_) => advance_parser(parser)
+    _ => return Err(add_error(parser, "Expected '(' after 'switch'", current_token(parser).location()))
+  }
+
+  // Parse expression
+  let (expression, parser) = match parse_expression(parser) {
+    Ok((expr, p)) => (expr, p)
+    Err(p) => return Err(p)
+  }
+
+  // Expect ')'
+  let parser = match current_token(parser) {
+    CloseParen(_) => advance_parser(parser)
+    _ => return Err(add_error(parser, "Expected ')' after switch expression", current_token(parser).location()))
+  }
+
+  // Expect '{'
+  let parser = match current_token(parser) {
+    OpenBrace(_) => advance_parser(parser)
+    _ => return Err(add_error(parser, "Expected '{' after switch header", current_token(parser).location()))
+  }
+
+  // Parse case clauses
+  let (cases, parser) = parse_case_clauses(parser)
+
+  // Expect '}'
+  let end_loc = match current_token(parser) {
+    CloseBrace(loc) => loc
+    _ => return Err(add_error(parser, "Expected '}' after switch body", current_token(parser).location()))
+  }
+  let parser = advance_parser(parser)
+
+  Ok((
+    Node::SwitchStatement(SwitchStatement::{
+      expression,
+      cases,
+      location: SourceLocation::new(start_loc.file_path, start_loc.start, end_loc.end)
+    }),
+    parser
+  ))
+}
+
+///|
+/// Parse case clauses
+fn parse_case_clauses(parser : Parser) -> (Array[CaseClause], Parser) {
+  parse_case_clauses_aux(parser, [])
+}
+
+///|
+fn parse_case_clauses_aux(parser : Parser, acc : Array[CaseClause]) -> (Array[CaseClause], Parser) {
+  match current_token(parser) {
+    CloseBrace(_) | EOF(_) => (acc, parser)
+
+    // case expression:
+    KeywordCase(loc) => {
+      let parser = advance_parser(parser)
+      let (expression, parser) = match parse_expression(parser) {
+        Ok((expr, p)) => (Some(expr), p)
+        Err(p) => (None, p)
+      }
+      // Expect ':'
+      let parser = match current_token(parser) {
+        Colon(_) => advance_parser(parser)
+        _ => parser // Continue anyway
+      }
+      // Parse statements until next case/default or close brace
+      let (statements, parser) = parse_case_statements(parser)
+      acc.push(CaseClause::{ expression, statements, location: loc })
+      parse_case_clauses_aux(parser, acc)
+    }
+
+    // default:
+    KeywordDefault(loc) => {
+      let parser = advance_parser(parser)
+      // Expect ':'
+      let parser = match current_token(parser) {
+        Colon(_) => advance_parser(parser)
+        _ => parser // Continue anyway
+      }
+      // Parse statements until next case or close brace
+      let (statements, parser) = parse_case_statements(parser)
+      acc.push(CaseClause::{ expression: None, statements, location: loc })
+      parse_case_clauses_aux(parser, acc)
+    }
+
+    _ => (acc, parser)
+  }
+}
+
+///|
+/// Parse statements within a case clause
+fn parse_case_statements(parser : Parser) -> (Array[Node], Parser) {
+  parse_case_statements_aux(parser, [])
+}
+
+///|
+fn parse_case_statements_aux(parser : Parser, acc : Array[Node]) -> (Array[Node], Parser) {
+  match current_token(parser) {
+    KeywordCase(_) | KeywordDefault(_) | CloseBrace(_) | EOF(_) => (acc, parser)
+    _ => {
+      match parse_statement(parser) {
+        Ok((stmt, p)) => {
+          acc.push(stmt)
+          parse_case_statements_aux(p, acc)
+        }
+        Err(p) => (acc, p)
+      }
+    }
+  }
 }
 
 ///|
