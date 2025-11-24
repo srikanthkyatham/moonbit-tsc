@@ -1853,17 +1853,24 @@ fn parse_type(parser : Parser) -> Result[(Node, Parser), Parser] {
   let result = parse_primary_type(parser)
   match result {
     Ok((type_node, parser)) => {
-      // Check for array type syntax (type[])
+      // Check for array type syntax (type[]) and indexed access (type[K])
       let (type_node, parser) = parse_array_type_suffix(parser, type_node)
-      // Check for union type (|)
-      parse_union_or_intersection_type(parser, type_node)
+      // Check for conditional type (T extends U ? X : Y)
+      let result = parse_conditional_type(parser, type_node)
+      match result {
+        Ok((type_node, parser)) => {
+          // Check for union/intersection type (|, &)
+          parse_union_or_intersection_type(parser, type_node)
+        }
+        Err(p) => Err(p)
+      }
     }
     Err(p) => Err(p)
   }
 }
 
 ///|
-/// Parse array type suffix (handles type[], type[][], etc.)
+/// Parse array type suffix and indexed access type (handles type[], Type[K], etc.)
 fn parse_array_type_suffix(parser : Parser, base_type : Node) -> (Node, Parser) {
   let mut type_node = base_type
   let mut parser = parser
@@ -1875,13 +1882,36 @@ fn parse_array_type_suffix(parser : Parser, base_type : Node) -> (Node, Parser) 
         parser = advance_parser(parser)
         match current_token(parser) {
           CloseBracket(_) => {
+            // Array type: Type[]
             parser = advance_parser(parser)
             type_node = Node::ArrayType(ArrayType::{
               element_type: type_node,
               location: start_loc,
             })
           }
-          _ => break
+          _ => {
+            // Indexed access type: Type[IndexType]
+            match parse_type(parser) {
+              Ok((index_type, p)) => {
+                parser = p
+                match current_token(parser) {
+                  CloseBracket(_) => {
+                    parser = advance_parser(parser)
+                    type_node = Node::IndexedAccessType(IndexedAccessType::{
+                      object_type: type_node,
+                      index_type,
+                      location: start_loc,
+                    })
+                  }
+                  _ => {
+                    // Not a valid indexed access, break
+                    break
+                  }
+                }
+              }
+              Err(_) => break
+            }
+          }
         }
       }
       _ => break
@@ -1889,6 +1919,73 @@ fn parse_array_type_suffix(parser : Parser, base_type : Node) -> (Node, Parser) 
   }
 
   (type_node, parser)
+}
+
+///|
+/// Parse conditional type (T extends U ? X : Y)
+fn parse_conditional_type(parser : Parser, check_type : Node) -> Result[(Node, Parser), Parser] {
+  match current_token(parser) {
+    KeywordExtends(_) => {
+      let start_loc = get_location(check_type)
+      let parser = advance_parser(parser) // consume 'extends'
+
+      // Parse extends type
+      match parse_primary_type(parser) {
+        Ok((extends_type, parser)) => {
+          let (extends_type, parser) = parse_array_type_suffix(parser, extends_type)
+
+          // Expect '?'
+          match current_token(parser) {
+            Question(_) => {
+              let parser = advance_parser(parser)
+
+              // Parse true type
+              match parse_type(parser) {
+                Ok((true_type, parser)) => {
+                  // Expect ':'
+                  match current_token(parser) {
+                    Colon(_) => {
+                      let parser = advance_parser(parser)
+
+                      // Parse false type
+                      match parse_type(parser) {
+                        Ok((false_type, parser)) => {
+                          Ok((
+                            Node::ConditionalType(ConditionalType::{
+                              check_type,
+                              extends_type,
+                              true_type,
+                              false_type,
+                              location: start_loc,
+                            }),
+                            parser,
+                          ))
+                        }
+                        Err(p) => Err(p)
+                      }
+                    }
+                    _ => {
+                      // Not a conditional type, return check_type as-is
+                      Ok((check_type, parser))
+                    }
+                  }
+                }
+                Err(p) => Err(p)
+              }
+            }
+            _ => {
+              // No '?' after extends, not a conditional type
+              // This might be a constraint in a generic type parameter context
+              // Return the check_type as-is
+              Ok((check_type, parser))
+            }
+          }
+        }
+        Err(p) => Err(p)
+      }
+    }
+    _ => Ok((check_type, parser))
+  }
 }
 
 ///|
@@ -2024,19 +2121,109 @@ fn parse_primary_type(parser : Parser) -> Result[(Node, Parser), Parser] {
         ),
       )
     OpenBrace(_) => {
-      // Object type literal: { prop: type, ... }
       let parser = advance_parser(parser) // consume {
+
+      // Try to parse as mapped type: { [P in KeyType]: ValueType }
+      let mut parser = parser
+
+      match current_token(parser) {
+        OpenBracket(_) => {
+          let saved_parser = parser
+          parser = advance_parser(parser) // consume [
+
+          // Check for mapped type pattern: identifier followed by 'in'
+          match current_token(parser) {
+            Identifier(param_name, param_loc) => {
+              parser = advance_parser(parser)
+              match current_token(parser) {
+                KeywordIn(_) => {
+                  // This is a mapped type!
+                  parser = advance_parser(parser) // consume 'in'
+
+                  // Parse the constraint type (e.g., keyof T)
+                  match parse_type(parser) {
+                    Ok((constraint_type, p)) => {
+                      parser = p
+                      // Expect ]
+                      match current_token(parser) {
+                        CloseBracket(_) => {
+                          parser = advance_parser(parser)
+
+                          // Expect :
+                          match current_token(parser) {
+                            Colon(_) => {
+                              parser = advance_parser(parser)
+                              match parse_type(parser) {
+                                Ok((value_type, p)) => {
+                                  parser = p
+                                  // Expect }
+                                  match current_token(parser) {
+                                    CloseBrace(_) => {
+                                      parser = advance_parser(parser)
+                                      return Ok((
+                                        Node::MappedType(MappedType::{
+                                          type_parameter: TypeParameter::{
+                                            name: param_name,
+                                            constraint: Some(constraint_type),
+                                            default: None,
+                                            location: param_loc,
+                                          },
+                                          type_node: Some(value_type),
+                                          location: loc,
+                                        }),
+                                        parser,
+                                      ))
+                                    }
+                                    _ => {
+                                      // Failed, reset
+                                      parser = saved_parser
+                                    }
+                                  }
+                                }
+                                Err(_) => {
+                                  parser = saved_parser
+                                }
+                              }
+                            }
+                            _ => {
+                              parser = saved_parser
+                            }
+                          }
+                        }
+                        _ => {
+                          parser = saved_parser
+                        }
+                      }
+                    }
+                    Err(_) => {
+                      parser = saved_parser
+                    }
+                  }
+                }
+                _ => {
+                  parser = saved_parser
+                }
+              }
+            }
+            _ => {
+              parser = saved_parser
+            }
+          }
+        }
+        _ => ()
+      }
+
+      // Parse as regular object type literal: { prop: type, ... }
       let properties = []
       let mut parser = parser
 
-      // Parse property signatures
       while true {
         match current_token(parser) {
           CloseBrace(_) => {
             parser = advance_parser(parser)
             break
           }
-          Identifier(name, prop_loc) => {
+          Identifier(name, _) => {
             parser = advance_parser(parser)
             // Expect :
             match current_token(parser) {

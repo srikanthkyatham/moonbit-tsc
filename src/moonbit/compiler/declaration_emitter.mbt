@@ -869,6 +869,9 @@ fn emit_decl_type_node(node : Node, ctx : DeclarationEmitterContext) -> String {
     ArrayType(array_type) => emit_decl_array_type(array_type, ctx)
     TupleType(tuple_type) => emit_decl_tuple_type(tuple_type, ctx)
     LiteralType(literal) => emit_decl_literal_type(literal)
+    IndexedAccessType(indexed) => emit_decl_indexed_access_type(indexed, ctx)
+    ConditionalType(cond) => emit_decl_conditional_type(cond, ctx)
+    MappedType(mapped) => emit_decl_mapped_type(mapped, ctx)
     _ => "any"
   }
 }
@@ -972,6 +975,52 @@ fn emit_decl_literal_type(literal : LiteralType) -> String {
     NullLiteral(_) => "null"
     _ => "any"
   }
+}
+
+///|
+/// Emit an indexed access type (T[K])
+fn emit_decl_indexed_access_type(indexed : IndexedAccessType, ctx : DeclarationEmitterContext) -> String {
+  let object_type = emit_decl_type_node(indexed.object_type, ctx)
+  let index_type = emit_decl_type_node(indexed.index_type, ctx)
+  object_type + "[" + index_type + "]"
+}
+
+///|
+/// Emit a conditional type (T extends U ? X : Y)
+fn emit_decl_conditional_type(cond : ConditionalType, ctx : DeclarationEmitterContext) -> String {
+  let check = emit_decl_type_node(cond.check_type, ctx)
+  let extends = emit_decl_type_node(cond.extends_type, ctx)
+  let true_type = emit_decl_type_node(cond.true_type, ctx)
+  let false_type = emit_decl_type_node(cond.false_type, ctx)
+  check + " extends " + extends + " ? " + true_type + " : " + false_type
+}
+
+///|
+/// Emit a mapped type ({ [P in keyof T]: T[P] })
+fn emit_decl_mapped_type(mapped : MappedType, ctx : DeclarationEmitterContext) -> String {
+  let mut output = "{ [" + mapped.type_parameter.name + " in "
+
+  match mapped.type_parameter.constraint {
+    Some(constraint) => {
+      output = output + emit_decl_type_node(constraint, ctx)
+    }
+    None => {
+      output = output + "any"
+    }
+  }
+
+  output = output + "]"
+
+  match mapped.type_node {
+    Some(type_node) => {
+      output = output + ": " + emit_decl_type_node(type_node, ctx)
+    }
+    None => {
+      output = output + ": any"
+    }
+  }
+
+  output + " }"
 }
 
 ///|

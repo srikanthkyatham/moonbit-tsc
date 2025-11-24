@@ -725,3 +725,89 @@ test "emit index signatures" {
     }
   }
 }
+
+/// Test: Indexed access types
+test "emit indexed access types" {
+  let source = "type PersonName = Person['name']; type ArrayElement = Array[number]; type TypeAtKey<T, K> = T[K];"
+  let scanner = Scanner::new(source, "test.ts")
+  let tokens = scan_all(scanner)
+
+  match parse_source_file(tokens, "test.ts") {
+    Ok(source_file) => {
+      let ctx = DeclarationEmitterContext::default()
+      let output = emit_declaration_file(source_file, ctx)
+
+      // Should contain indexed access type syntax
+      assert_true(output.contains("Person["))
+      assert_true(output.contains("Array["))
+      assert_true(output.contains("T[K]"))
+
+      println("\nIndexed access types output:")
+      println(output)
+    }
+    Err(diagnostics) => {
+      println("Parse error:")
+      for i = 0; i < diagnostics.length(); i = i + 1 {
+        println("  " + diagnostics[i].message)
+      }
+      assert_true(false)
+    }
+  }
+}
+
+/// Test: Conditional types
+test "emit conditional types" {
+  let source = "type IsString<T> = T extends string ? string : number; type NonNullable<T> = T extends number ? string : T;"
+  let scanner = Scanner::new(source, "test.ts")
+  let tokens = scan_all(scanner)
+
+  match parse_source_file(tokens, "test.ts") {
+    Ok(source_file) => {
+      let ctx = DeclarationEmitterContext::default()
+      let output = emit_declaration_file(source_file, ctx)
+
+      // Should contain conditional type syntax
+      assert_true(output.contains(" extends "))
+      assert_true(output.contains(" ? "))
+      assert_true(output.contains(" : "))
+
+      println("\nConditional types output:")
+      println(output)
+    }
+    Err(diagnostics) => {
+      println("Parse error:")
+      for i = 0; i < diagnostics.length(); i = i + 1 {
+        println("  " + diagnostics[i].message)
+      }
+      assert_true(false)
+    }
+  }
+}
+
+/// Test: Mapped types
+test "emit mapped types" {
+  let source = "type MyMapped<K> = { [P in K]: string }; type AnotherMapped<T, K> = { [P in K]: T };"
+  let scanner = Scanner::new(source, "test.ts")
+  let tokens = scan_all(scanner)
+
+  match parse_source_file(tokens, "test.ts") {
+    Ok(source_file) => {
+      let ctx = DeclarationEmitterContext::default()
+      let output = emit_declaration_file(source_file, ctx)
+
+      // Should contain mapped type syntax
+      assert_true(output.contains("[P in "))
+      assert_true(output.contains("{ [P in "))
+
+      println("\nMapped types output:")
+      println(output)
+    }
+    Err(diagnostics) => {
+      println("Parse error:")
+      for i = 0; i < diagnostics.length(); i = i + 1 {
+        println("  " + diagnostics[i].message)
+      }
+      assert_true(false)
+    }
+  }
+}
