@@ -23,7 +23,6 @@ fn parse_source(source : String) -> Array[Node] {
 test "transform variable with type" {
   let stmts = parse_source("const x: number = 42;")
   let transformed = transform_stmt(stmts[0])
-
   match transformed {
     VariableStatement(vs) => {
       let decl = vs.declarations[0]
@@ -39,16 +38,16 @@ test "transform variable with type" {
 ///|
 /// Test: Transform function with type annotations
 test "transform function with types" {
-  let stmts = parse_source("function foo(x: number): string { return \"hello\"; }")
-
+  let stmts = parse_source(
+    "function foo(x: number): string { return \"hello\"; }",
+  )
   let transformed = transform_stmt(stmts[0])
   match transformed {
-    FunctionDeclaration(fd) => {
+    FunctionDeclaration(fd) =>
       match fd.return_type {
         None => assert_true(true)
         Some(_) => assert_true(false)
       }
-    }
     _ => assert_true(false)
   }
 }
@@ -83,16 +82,14 @@ test "transform type alias" {
 /// Test: Transform enum - should become const object
 test "transform enum" {
   let stmts = parse_source("enum Color { Red, Green, Blue }")
-
   let transformed = transform_stmt(stmts[0])
   match transformed {
     VariableStatement(vs) => {
       assert_true(vs.is_const)
       let decl = vs.declarations[0]
       match decl.initializer {
-        Some(ObjectLiteralExpression(ole)) => {
+        Some(ObjectLiteralExpression(ole)) =>
           assert_eq(ole.properties.length(), 3)
-        }
         _ => assert_true(false)
       }
     }
@@ -104,15 +101,13 @@ test "transform enum" {
 /// Test: Transform class - basic transformation
 test "transform class" {
   let stmts = parse_source("class Foo {}")
-
   let transformed = transform_stmt(stmts[0])
   match transformed {
-    ClassDeclaration(cd) => {
+    ClassDeclaration(cd) =>
       match cd.name {
         Some(Identifier(id)) => assert_eq(id.name, "Foo")
         _ => assert_true(false)
       }
-    }
     _ => assert_true(false)
   }
 }
@@ -122,7 +117,6 @@ test "transform class" {
 test "transform simple expression" {
   let stmts = parse_source("const x = 42;")
   let transformed = transform_stmt(stmts[0])
-
   match transformed {
     VariableStatement(vs) => {
       let decl = vs.declarations[0]
@@ -140,14 +134,11 @@ test "transform simple expression" {
 test "transform array literal" {
   let stmts = parse_source("const arr = [1, 2, 3];")
   let transformed = transform_stmt(stmts[0])
-
   match transformed {
     VariableStatement(vs) => {
       let decl = vs.declarations[0]
       match decl.initializer {
-        Some(ArrayLiteralExpression(ale)) => {
-          assert_eq(ale.elements.length(), 3)
-        }
+        Some(ArrayLiteralExpression(ale)) => assert_eq(ale.elements.length(), 3)
         _ => assert_true(false)
       }
     }
@@ -160,14 +151,12 @@ test "transform array literal" {
 test "transform object literal" {
   let stmts = parse_source("const obj = { x: 1, y: 2 };")
   let transformed = transform_stmt(stmts[0])
-
   match transformed {
     VariableStatement(vs) => {
       let decl = vs.declarations[0]
       match decl.initializer {
-        Some(ObjectLiteralExpression(ole)) => {
+        Some(ObjectLiteralExpression(ole)) =>
           assert_eq(ole.properties.length(), 2)
-        }
         _ => assert_true(false)
       }
     }
@@ -180,14 +169,11 @@ test "transform object literal" {
 test "transform arrow function basic" {
   let stmts = parse_source("const add = (x, y) => x + y;")
   let transformed = transform_stmt(stmts[0])
-
   match transformed {
     VariableStatement(vs) => {
       let decl = vs.declarations[0]
       match decl.initializer {
-        Some(ArrowFunction(af)) => {
-          assert_eq(af.parameters.length(), 2)
-        }
+        Some(ArrowFunction(af)) => assert_eq(af.parameters.length(), 2)
         _ => assert_true(false)
       }
     }
@@ -200,16 +186,12 @@ test "transform arrow function basic" {
 test "transform for loop" {
   let stmts = parse_source("for (let i = 0; i < 10; i++) {}")
   let transformed = transform_stmt(stmts[0])
-
   match transformed {
-    ForStatement(fs) => {
+    ForStatement(fs) =>
       match fs.initializer {
-        Some(VariableStatement(vs)) => {
-          assert_true(vs.is_let)
-        }
+        Some(VariableStatement(vs)) => assert_true(vs.is_let)
         _ => assert_true(false)
       }
-    }
     _ => assert_true(false)
   }
 }
@@ -219,16 +201,12 @@ test "transform for loop" {
 test "transform if statement" {
   let stmts = parse_source("if (true) { const x = 1; }")
   let transformed = transform_stmt(stmts[0])
-
   match transformed {
-    IfStatement(if_stmt) => {
+    IfStatement(if_stmt) =>
       match if_stmt.then_statement {
-        BlockStatement(bs) => {
-          assert_eq(bs.statements.length(), 1)
-        }
+        BlockStatement(bs) => assert_eq(bs.statements.length(), 1)
         _ => assert_true(false)
       }
-    }
     _ => assert_true(false)
   }
 }
@@ -238,9 +216,8 @@ test "transform if statement" {
 test "transform return statement" {
   let stmts = parse_source("function test() { return 42; }")
   let transformed = transform_stmt(stmts[0])
-
   match transformed {
-    FunctionDeclaration(fd) => {
+    FunctionDeclaration(fd) =>
       match fd.body {
         Some(BlockStatement(bs)) => {
           assert_eq(bs.statements.length(), 1)
@@ -251,7 +228,6 @@ test "transform return statement" {
         }
         _ => assert_true(false)
       }
-    }
     _ => assert_true(false)
   }
 }
@@ -261,7 +237,6 @@ test "transform return statement" {
 test "transform var declaration" {
   let stmts = parse_source("var x = 10;")
   let transformed = transform_stmt(stmts[0])
-
   match transformed {
     VariableStatement(vs) => {
       assert_false(vs.is_const)
@@ -276,14 +251,12 @@ test "transform var declaration" {
 test "transform while loop" {
   let stmts = parse_source("while (true) {}")
   let transformed = transform_stmt(stmts[0])
-
   match transformed {
-    WhileStatement(ws) => {
+    WhileStatement(ws) =>
       match ws.condition {
         BooleanLiteral(bl) => assert_eq(bl.value, true)
         _ => assert_true(false)
       }
-    }
     _ => assert_true(false)
   }
 }
@@ -293,17 +266,15 @@ test "transform while loop" {
 test "transform binary expression" {
   let stmts = parse_source("const result = 1 + 2;")
   let transformed = transform_stmt(stmts[0])
-
   match transformed {
     VariableStatement(vs) => {
       let decl = vs.declarations[0]
       match decl.initializer {
-        Some(BinaryExpression(be)) => {
+        Some(BinaryExpression(be)) =>
           match be.operator {
             Add => assert_true(true)
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
     }
@@ -316,12 +287,97 @@ test "transform binary expression" {
 test "transform call expression" {
   let stmts = parse_source("const result = foo();")
   let transformed = transform_stmt(stmts[0])
-
   match transformed {
     VariableStatement(vs) => {
       let decl = vs.declarations[0]
       match decl.initializer {
         Some(CallExpression(_)) => assert_true(true)
+        _ => assert_true(false)
+      }
+    }
+    _ => assert_true(false)
+  }
+}
+
+///|
+/// Test: ES5 target - arrow function to regular function
+test "transform arrow function to function for ES5" {
+  let stmts = parse_source("const add = (x, y) => x + y;")
+  let ctx = TransformerContext::es5()
+  let transformed = transform(stmts[0], ctx)
+  match transformed {
+    VariableStatement(vs) => {
+      let decl = vs.declarations[0]
+      match decl.initializer {
+        Some(FunctionExpression(fe)) =>
+          // Should be converted to function expression
+          assert_eq(fe.parameters.length(), 2)
+        _ => assert_true(false)
+      }
+    }
+    _ => assert_true(false)
+  }
+}
+
+///|
+/// Test: ES5 target - const to var
+test "transform const to var for ES5" {
+  let stmts = parse_source("const x = 42;")
+  let ctx = TransformerContext::es5()
+  let transformed = transform(stmts[0], ctx)
+  match transformed {
+    VariableStatement(vs) => {
+      // Should be converted to var (not const)
+      assert_false(vs.is_const)
+      assert_false(vs.is_let)
+    }
+    _ => assert_true(false)
+  }
+}
+
+///|
+/// Test: ES5 target - let to var
+test "transform let to var for ES5" {
+  let stmts = parse_source("let x = 42;")
+  let ctx = TransformerContext::es5()
+  let transformed = transform(stmts[0], ctx)
+  match transformed {
+    VariableStatement(vs) => {
+      // Should be converted to var (not let)
+      assert_false(vs.is_const)
+      assert_false(vs.is_let)
+    }
+    _ => assert_true(false)
+  }
+}
+
+///|
+/// Test: ES2015 target - preserves const
+test "transform preserves const for ES2015" {
+  let stmts = parse_source("const x = 42;")
+  let ctx = TransformerContext::es2015()
+  let transformed = transform(stmts[0], ctx)
+  match transformed {
+    VariableStatement(vs) =>
+      // Should preserve const for ES2015+
+      assert_true(vs.is_const)
+    _ => assert_true(false)
+  }
+}
+
+///|
+/// Test: ES2015 target - preserves arrow function
+test "transform preserves arrow function for ES2015" {
+  let stmts = parse_source("const add = (x, y) => x + y;")
+  let ctx = TransformerContext::es2015()
+  let transformed = transform(stmts[0], ctx)
+  match transformed {
+    VariableStatement(vs) => {
+      let decl = vs.declarations[0]
+      match decl.initializer {
+        Some(ArrowFunction(_)) =>
+          // Should remain as arrow function for ES2015+
+          assert_true(true)
         _ => assert_true(false)
       }
     }

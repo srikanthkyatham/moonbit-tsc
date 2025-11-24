@@ -35,6 +35,18 @@ pub fn TransformerContext::default() -> TransformerContext {
 }
 
 ///|
+/// Create transformer context for ES5 target
+pub fn TransformerContext::es5() -> TransformerContext {
+  { target: ES5 }
+}
+
+///|
+/// Create transformer context for ES2015 target
+pub fn TransformerContext::es2015() -> TransformerContext {
+  { target: ES2015 }
+}
+
+///|
 /// Transform a TypeScript AST to JavaScript AST
 pub fn transform(node : Node, ctx : TransformerContext) -> Node {
   match node {
@@ -163,7 +175,7 @@ fn transform_statements(statements : Array[Node], ctx : TransformerContext) -> A
 }
 
 ///|
-/// Transform variable statement (remove type annotations)
+/// Transform variable statement (remove type annotations, downlevel const/let for ES5)
 fn transform_variable_statement(vs : VariableStatement, ctx : TransformerContext) -> Node {
   let transformed_decls : Array[VariableDeclaration] = []
   for decl in vs.declarations {
@@ -177,10 +189,18 @@ fn transform_variable_statement(vs : VariableStatement, ctx : TransformerContext
       location: decl.location,
     })
   }
+
+  // For ES5, convert const/let to var
+  let (is_const, is_let) = if ctx.target == ES5 {
+    (false, false) // ES5 only has var
+  } else {
+    (vs.is_const, vs.is_let)
+  }
+
   VariableStatement(VariableStatement::{
     declarations: transformed_decls,
-    is_const: vs.is_const,
-    is_let: vs.is_let,
+    is_const,
+    is_let,
     location: vs.location,
   })
 }
@@ -508,14 +528,35 @@ fn transform_with_statement(ws : WithStatement, ctx : TransformerContext) -> Nod
 }
 
 ///|
-/// Transform binary expression
+/// Transform binary expression (downlevel exponentiation for ES5)
 fn transform_binary_expression(be : BinaryExpression, ctx : TransformerContext) -> Node {
-  BinaryExpression({
-    left: transform(be.left, ctx),
-    operator: be.operator,
-    right: transform(be.right, ctx),
-    location: be.location,
-  })
+  // For ES5, convert exponentiation operator (**) to Math.pow()
+  if ctx.target == ES5 && be.operator == Exponentiate {
+    // Create Math.pow(left, right) call
+    let math_identifier = Node::Identifier({
+      name: "Math",
+      location: be.location,
+    })
+    let math_pow = Node::PropertyAccessExpression({
+      expression: math_identifier,
+      name: "pow",
+      location: be.location,
+    })
+
+    Node::CallExpression({
+      expression: math_pow,
+      type_arguments: [],
+      arguments: [transform(be.left, ctx), transform(be.right, ctx)],
+      location: be.location,
+    })
+  } else {
+    BinaryExpression({
+      left: transform(be.left, ctx),
+      operator: be.operator,
+      right: transform(be.right, ctx),
+      location: be.location,
+    })
+  }
 }
 
 ///|
@@ -597,16 +638,48 @@ fn transform_element_access_expression(eae : ElementAccessExpression, ctx : Tran
 }
 
 ///|
-/// Transform arrow function (remove type annotations)
+/// Transform arrow function (remove type annotations, downlevel for ES5)
 fn transform_arrow_function(af : ArrowFunction, ctx : TransformerContext) -> Node {
-  ArrowFunction({
-    type_parameters: [], // Remove type parameters
-    parameters: transform_parameters(af.parameters, ctx),
-    return_type: None, // Remove return type
-    body: transform(af.body, ctx),
-    is_async: af.is_async,
-    location: af.location,
-  })
+  // For ES5 target, convert arrow functions to regular function expressions
+  if ctx.target == ES5 {
+    // Arrow function body might be expression or block
+    let function_body = match af.body {
+      // If body is not a block, wrap in return statement
+      BlockStatement(_) => af.body
+      _ => {
+        // Create a block with return statement
+        let return_stmt = ReturnStatement({
+          expression: Some(af.body),
+          location: af.location,
+        })
+        BlockStatement({
+          statements: [return_stmt],
+          location: af.location,
+        })
+      }
+    }
+
+    FunctionExpression({
+      name: None, // Anonymous function
+      type_parameters: [],
+      parameters: transform_parameters(af.parameters, ctx),
+      return_type: None,
+      body: transform(function_body, ctx),
+      is_async: af.is_async,
+      is_generator: false,
+      location: af.location,
+    })
+  } else {
+    // ES2015+ keeps arrow functions
+    ArrowFunction({
+      type_parameters: [], // Remove type parameters
+      parameters: transform_parameters(af.parameters, ctx),
+      return_type: None, // Remove return type
+      body: transform(af.body, ctx),
+      is_async: af.is_async,
+      location: af.location,
+    })
+  }
 }
 
 ///|
