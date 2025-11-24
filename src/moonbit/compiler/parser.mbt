@@ -3,11 +3,17 @@
 // Uses recursive descent parsing strategy
 
 ///|
+/// Maximum recursion depth for expression parsing
+/// Prevents stack overflow on deeply nested expressions
+let max_expression_depth : Int = 1000
+
+///|
 /// Parser state
 pub struct Parser {
   tokens : Array[Token]
   position : Int
   diagnostics : Array[Diagnostic]
+  depth : Int  // Current recursion depth for expression parsing
 } derive(Show)
 
 ///|
@@ -17,7 +23,7 @@ pub type ParseResult[T] = Result[T, Array[Diagnostic]]
 ///|
 /// Create a new parser
 pub fn Parser::new(tokens : Array[Token]) -> Parser {
-  { tokens, position: 0, diagnostics: [] }
+  { tokens, position: 0, diagnostics: [], depth: 0 }
 }
 
 ///|
@@ -53,14 +59,29 @@ fn parse_statements_aux(parser : Parser, acc : Array[Node]) -> (Array[Node], Par
   if is_at_end(parser) {
     (acc, parser)
   } else {
+    let current_position = parser.position
     match parse_statement(parser) {
       Ok((stmt, next_parser)) => {
         acc.push(stmt)
-        parse_statements_aux(next_parser, acc)
+        // Safeguard: ensure parser advanced
+        if next_parser.position == current_position {
+          // Parser stuck - force advance to prevent infinite loop
+          parse_statements_aux(advance_parser(next_parser), acc)
+        } else {
+          parse_statements_aux(next_parser, acc)
+        }
       }
-      Err(next_parser) =>
+      Err(next_parser) => {
         // Error recovery: skip to next statement
-        parse_statements_aux(skip_to_next_statement(next_parser), acc)
+        let recovered_parser = skip_to_next_statement(next_parser)
+        // Safeguard: ensure error recovery advanced parser
+        if recovered_parser.position == current_position {
+          // Still stuck - force advance and stop parsing to prevent infinite loop
+          (acc, advance_parser(recovered_parser))
+        } else {
+          parse_statements_aux(recovered_parser, acc)
+        }
+      }
     }
   }
 }
@@ -136,8 +157,12 @@ fn parse_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
 }
 
 ///|
-/// Parse variable statement (let/const/var)
-fn parse_variable_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
+/// Helper: Parse variable declarations without consuming trailing semicolon
+/// Used in contexts like for-loops where semicolon is handled separately
+fn parse_variable_declaration_list(
+  parser : Parser,
+  consume_keyword : Bool,
+) -> Result[(Array[VariableDeclaration], Bool, Bool, SourceLocation, Parser), Parser] {
   let start_token = current_token(parser)
   let is_const = match start_token {
     KeywordConst(_) => true
@@ -147,7 +172,7 @@ fn parse_variable_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
     KeywordLet(_) => true
     _ => false
   }
-  let parser = advance_parser(parser)
+  let parser = if consume_keyword { advance_parser(parser) } else { parser }
 
   // Parse variable declarations
   let declarations : Array[VariableDeclaration] = []
@@ -170,20 +195,31 @@ fn parse_variable_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
     }
   }
 
-  // Expect semicolon
-  parser = expect_semicolon(parser)
   let location = start_token.location()
-  Ok(
-    (
-      Node::VariableStatement(VariableStatement::{
-        declarations,
-        is_const,
-        is_let,
-        location,
-      }),
-      parser,
-    ),
-  )
+  Ok((declarations, is_const, is_let, location, parser))
+}
+
+///|
+/// Parse variable statement (let/const/var)
+fn parse_variable_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
+  match parse_variable_declaration_list(parser, true) {
+    Ok((declarations, is_const, is_let, location, parser)) => {
+      // Expect semicolon for standalone variable statements
+      let parser = expect_semicolon(parser)
+      Ok(
+        (
+          Node::VariableStatement(VariableStatement::{
+            declarations,
+            is_const,
+            is_let,
+            location,
+          }),
+          parser,
+        ),
+      )
+    }
+    Err(parser) => Err(parser)
+  }
 }
 
 ///|
@@ -607,6 +643,12 @@ fn parse_binary_expression(
   parser : Parser,
   min_precedence : Int,
 ) -> Result[(Node, Parser), Parser] {
+  // Check recursion depth to prevent stack overflow
+  let parser = match check_depth(parser) {
+    Ok(p) => p
+    Err(p) => return Err(p)
+  }
+
   let (left_val, parser_val) = match parse_unary_expression(parser) {
     Ok((expr, p)) => (expr, p)
     Err(p) => return Err(p)
@@ -630,10 +672,11 @@ fn parse_binary_expression(
       } else {
         let start_loc = get_location(left)
         parser = advance_parser(parser)
+        parser = increment_depth(parser)
         let (right, next_parser) = match
           parse_binary_expression(parser, precedence + 1) {
-          Ok((expr, p)) => (expr, p)
-          Err(p) => return Err(p)
+          Ok((expr, p)) => (expr, decrement_depth(p))
+          Err(p) => return Err(decrement_depth(p))
         }
         left = Node::BinaryExpression(BinaryExpression::{
           left,
@@ -651,13 +694,21 @@ fn parse_binary_expression(
 ///|
 /// Parse unary expression
 fn parse_unary_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
+  // Check recursion depth to prevent stack overflow
+  let parser = match check_depth(parser) {
+    Ok(p) => p
+    Err(p) => return Err(p)
+  }
+
   let token = current_token(parser)
   match get_unary_operator(token) {
     Some(op) => {
       let start_loc = token.location()
       let parser = advance_parser(parser)
+      let parser = increment_depth(parser)
       match parse_unary_expression(parser) {
-        Ok((operand, parser)) =>
+        Ok((operand, parser)) => {
+          let parser = decrement_depth(parser)
           Ok(
             (
               Node::UnaryExpression(UnaryExpression::{
@@ -669,7 +720,11 @@ fn parse_unary_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
               parser,
             ),
           )
-        Err(parser) => Err(parser)
+        }
+        Err(parser) => {
+          let parser = decrement_depth(parser)
+          Err(parser)
+        }
       }
     }
     None => parse_postfix_expression(parser)
@@ -724,9 +779,10 @@ fn parse_postfix_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
       OpenBracket(_) => {
         let start_loc = get_location(left)
         parser = advance_parser(parser)
+        parser = increment_depth(parser)
         match parse_expression(parser) {
           Ok((index, next_parser)) => {
-            parser = next_parser
+            parser = decrement_depth(next_parser)
             match expect(parser, fn(t) { matches_close_bracket(t) }) {
               Ok(p) => {
                 parser = advance_parser(p)
@@ -739,7 +795,7 @@ fn parse_postfix_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
               Err(p) => return Err(p)
             }
           }
-          Err(p) => return Err(p)
+          Err(p) => return Err(decrement_depth(p))
         }
       }
       _ => should_continue = false
@@ -863,8 +919,10 @@ fn parse_primary_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
     OpenParen(_) => {
       let start_loc = token.location()
       let parser = advance_parser(parser)
+      let parser = increment_depth(parser)
       match parse_expression(parser) {
-        Ok((expr, parser)) =>
+        Ok((expr, parser)) => {
+          let parser = decrement_depth(parser)
           match expect(parser, fn(t) { matches_close_paren(t) }) {
             Ok(parser) =>
               Ok(
@@ -878,7 +936,11 @@ fn parse_primary_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
               )
             Err(parser) => Err(parser)
           }
-        Err(parser) => Err(parser)
+        }
+        Err(parser) => {
+          let parser = decrement_depth(parser)
+          Err(parser)
+        }
       }
     }
 
@@ -1247,8 +1309,18 @@ fn parse_for_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
   let (initializer, parser) = match current_token(parser) {
     Semicolon(_) => (None, parser)
     KeywordLet(_) | KeywordConst(_) | KeywordVar(_) => {
-      match parse_variable_statement(parser) {
-        Ok((stmt, p)) => (Some(stmt), p)
+      // Use parse_variable_declaration_list to avoid consuming the semicolon
+      // The semicolon belongs to the for-loop syntax, not the variable declaration
+      match parse_variable_declaration_list(parser, true) {
+        Ok((declarations, is_const, is_let, location, p)) => {
+          let stmt = Node::VariableStatement(VariableStatement::{
+            declarations,
+            is_const,
+            is_let,
+            location,
+          })
+          (Some(stmt), p)
+        }
         Err(p) => (None, p)
       }
     }
@@ -1683,6 +1755,29 @@ fn advance_parser(parser : Parser) -> Parser {
     { ..parser, position: parser.position + 1 }
   } else {
     parser
+  }
+}
+
+///|
+/// Increment parser depth (for expression parsing)
+fn increment_depth(parser : Parser) -> Parser {
+  { ..parser, depth: parser.depth + 1 }
+}
+
+///|
+/// Decrement parser depth (for expression parsing)
+fn decrement_depth(parser : Parser) -> Parser {
+  { ..parser, depth: parser.depth - 1 }
+}
+
+///|
+/// Check if recursion depth exceeds limit
+fn check_depth(parser : Parser) -> Result[Parser, Parser] {
+  if parser.depth > max_expression_depth {
+    let loc = current_token(parser).location()
+    Err(add_error(parser, "Expression too deeply nested (stack overflow prevention)", loc))
+  } else {
+    Ok(parser)
   }
 }
 
