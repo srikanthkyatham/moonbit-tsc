@@ -1566,39 +1566,33 @@ fn parse_primary_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
         Ok(parser) => {
           let parser = advance_parser(parser) // consume '('
           let (params, parser) = parse_parameter_list(parser)
+          // Note: parse_parameter_list consumes the closing ')'
 
-          match expect(parser, fn(t) { matches_close_paren(t) }) {
-            Ok(parser) => {
-              let parser = advance_parser(parser) // consume ')'
-
-              // Parse optional return type
-              let (return_type, parser) = match current_token(parser) {
-                Colon(_) => {
-                  let parser = advance_parser(parser)
-                  match parse_type(parser) {
-                    Ok((ty, p)) => (Some(ty), p)
-                    Err(p) => (None, p)
-                  }
-                }
-                _ => (None, parser)
-              }
-
-              // Parse function body
-              match parse_block_statement(parser) {
-                Ok((body, parser)) =>
-                  Ok((Node::FunctionExpression(FunctionExpression::{
-                    name,
-                    type_parameters: [],
-                    parameters: params,
-                    return_type,
-                    body,
-                    is_async: false,
-                    is_generator: false,
-                    location: start_loc,
-                  }), parser))
-                Err(parser) => Err(parser)
+          // Parse optional return type
+          let (return_type, parser) = match current_token(parser) {
+            Colon(_) => {
+              let parser = advance_parser(parser)
+              match parse_type(parser) {
+                Ok((ty, p)) => (Some(ty), p)
+                Err(p) => (None, p)
               }
             }
+            _ => (None, parser)
+          }
+
+          // Parse function body
+          match parse_block_statement(parser) {
+            Ok((body, parser)) =>
+              Ok((Node::FunctionExpression(FunctionExpression::{
+                name,
+                type_parameters: [],
+                parameters: params,
+                return_type,
+                body,
+                is_async: false,
+                is_generator: false,
+                location: start_loc,
+              }), parser))
             Err(parser) => Err(parser)
           }
         }

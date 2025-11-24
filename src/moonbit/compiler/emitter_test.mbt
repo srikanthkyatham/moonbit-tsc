@@ -463,22 +463,18 @@ test "emit string escapes" {
 
 ///|
 /// Test: Emit function expression
-/// TODO: Parser issue - function keyword after = needs investigation
-// test "emit function expression" {
-//   let js = compile_to_js("const fn = function(x) { return x * 2; };")
-//   println("DEBUG function expression: " + js)
-//   assert_true(js.contains("function(x)"))
-//   assert_true(js.contains("return x * 2;"))
-// }
+test "emit function expression" {
+  let js = compile_to_js("const fn = function(x) { return x * 2; };")
+  assert_true(js.contains("function(x)"))
+  assert_true(js.contains("return x * 2;"))
+}
 
 ///|
 /// Test: Emit named function expression
-/// TODO: Parser issue - function keyword after = needs investigation
-// test "emit named function expression" {
-//   let js = compile_to_js("const factorial = function fact(n) { return n <= 1 ? 1 : n * fact(n - 1); };")
-//   println("DEBUG named function expression: " + js)
-//   assert_true(js.contains("function fact(n)"))
-// }
+test "emit named function expression" {
+  let js = compile_to_js("const factorial = function fact(n) { return n <= 1 ? 1 : n * fact(n - 1); };")
+  assert_true(js.contains("function fact(n)"))
+}
 
 ///|
 /// Test: Emit simple spread expression
