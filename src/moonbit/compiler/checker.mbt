@@ -848,6 +848,7 @@ fn is_assignable(source : Type, target : Type) -> Bool {
     (Undefined(_), Undefined(_)) => true
     (Null(_), Null(_)) => true
     // Undefined and null are assignable to most types (like TypeScript)
+    (Undefined(_), Void(_)) => true
     (Undefined(_), Number(_)) => true
     (Undefined(_), String(_)) => true
     (Undefined(_), Boolean(_)) => true
@@ -1388,6 +1389,16 @@ fn get_type_from_type_node(
           (Some(t), c)
         }
         _ => (None, checker)
+      }
+    }
+    ArrayType(array_type) => {
+      // Handle array types
+      match get_type_from_type_node(checker, array_type.element_type) {
+        (Some(element_type), c) => {
+          let (info, c2) = create_type_info(c)
+          (Some(Array({ element_type, info })), c2)
+        }
+        (None, c) => (None, c)
       }
     }
     _ => (None, checker)

@@ -973,6 +973,41 @@ fn parse_postfix_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
   while should_continue {
     let token = current_token(parser)
     match token {
+      // Type arguments for generic calls (e.g., func<T>(...))
+      LessThan(_) => {
+        // Try to parse type arguments - if successful and followed by OpenParen, it's a generic call
+        let saved_parser = parser
+        match parse_type_argument_list(parser) {
+          Ok((type_args, next_parser)) => {
+            match current_token(next_parser) {
+              OpenParen(_) => {
+                // It's a generic function call
+                let start_loc = get_location(left)
+                parser = advance_parser(next_parser)
+                let (arguments, next_parser) = parse_argument_list(parser)
+                parser = next_parser
+                left = Node::CallExpression(CallExpression::{
+                  expression: left,
+                  type_arguments: type_args,
+                  arguments,
+                  location: start_loc,
+                })
+              }
+              _ => {
+                // Not a generic call, backtrack - treat < as comparison
+                parser = saved_parser
+                should_continue = false
+              }
+            }
+          }
+          Err(_) => {
+            // Failed to parse type arguments, treat < as comparison
+            parser = saved_parser
+            should_continue = false
+          }
+        }
+      }
+
       // Function call
       OpenParen(_) => {
         let start_loc = get_location(left)
@@ -1157,6 +1192,15 @@ fn parse_primary_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
     KeywordNull(loc) =>
       Ok((Node::NullLiteral(NullLiteral::{ location: loc }), advance_parser(parser)))
 
+    // undefined (as expression literal)
+    KeywordUndefined(loc) =>
+      Ok(
+        (
+          Node::Identifier(Identifier::{ name: "undefined", location: loc }),
+          advance_parser(parser),
+        ),
+      )
+
     // this
     KeywordThis(loc) =>
       Ok(
@@ -1339,8 +1383,43 @@ fn parse_object_property(
         Ok((id, next_parser)) => {
           let parser = next_parser
 
-          // Check for shorthand or full property
+          // Check for method, shorthand, or full property
           match current_token(parser) {
+            OpenParen(_) => {
+              // Method declaration: greet() { ... }
+              let parser = advance_parser(parser) // consume (
+              let (parameters, parser) = parse_parameter_list(parser)
+
+              // Optional return type
+              let (return_type, parser) = match current_token(parser) {
+                Colon(_) => {
+                  let parser = advance_parser(parser)
+                  match parse_type(parser) {
+                    Ok((ty, p)) => (Some(ty), p)
+                    Err(p) => (None, p)
+                  }
+                }
+                _ => (None, parser)
+              }
+
+              // Parse method body
+              match parse_block_statement(parser) {
+                Ok((body, parser)) => {
+                  let func_expr = FunctionExpression::{
+                    name: None,
+                    type_parameters: [],
+                    parameters,
+                    return_type,
+                    body,
+                    is_async: false,
+                    is_generator: false,
+                    location: start_loc,
+                  }
+                  Ok((ObjectProperty::MethodDeclaration(id.name, func_expr, start_loc), parser))
+                }
+                Err(parser) => Err(parser)
+              }
+            }
             Colon(_) => {
               let parser = advance_parser(parser)
               match parse_assignment_expression(parser) {
@@ -1431,11 +1510,42 @@ fn parse_type(parser : Parser) -> Result[(Node, Parser), Parser] {
   let result = parse_primary_type(parser)
   match result {
     Ok((type_node, parser)) => {
+      // Check for array type syntax (type[])
+      let (type_node, parser) = parse_array_type_suffix(parser, type_node)
       // Check for union type (|)
       parse_union_or_intersection_type(parser, type_node)
     }
     Err(p) => Err(p)
   }
+}
+
+///|
+/// Parse array type suffix (handles type[], type[][], etc.)
+fn parse_array_type_suffix(parser : Parser, base_type : Node) -> (Node, Parser) {
+  let mut type_node = base_type
+  let mut parser = parser
+
+  while true {
+    match current_token(parser) {
+      OpenBracket(_) => {
+        let start_loc = get_location(type_node)
+        parser = advance_parser(parser)
+        match current_token(parser) {
+          CloseBracket(_) => {
+            parser = advance_parser(parser)
+            type_node = Node::ArrayType(ArrayType::{
+              element_type: type_node,
+              location: start_loc,
+            })
+          }
+          _ => break
+        }
+      }
+      _ => break
+    }
+  }
+
+  (type_node, parser)
 }
 
 ///|
@@ -1702,15 +1812,9 @@ fn parse_class_members_aux(parser : Parser, acc : Array[Node]) -> (Array[Node], 
       let parser = advance_parser(parser)
       match current_token(parser) {
         OpenParen(_) => {
+          // Consume the OpenParen, then parse parameters
           let parser = advance_parser(parser)
-          // Skip parameters for now - just find closing paren
-          let parser = skip_until_token(parser, fn (t) {
-            match t {
-              CloseParen(_) => true
-              _ => false
-            }
-          })
-          let parser = advance_parser(parser) // consume ')'
+          let (parameters, parser) = parse_parameter_list(parser)
           // Parse body
           let (body, parser) = match current_token(parser) {
             OpenBrace(_) => {
@@ -1722,7 +1826,7 @@ fn parse_class_members_aux(parser : Parser, acc : Array[Node]) -> (Array[Node], 
             _ => (None, parser)
           }
           acc.push(Node::ConstructorDeclaration(ConstructorDeclaration::{
-            parameters: [],
+            parameters,
             body,
             location: loc
           }))
@@ -2934,6 +3038,65 @@ fn parse_type_parameters(parser : Parser) -> (Array[TypeParameter], Parser) {
   }
 
   (type_params, parser)
+}
+
+///|
+/// Parse type argument list (for generic function/type usage)
+fn parse_type_argument_list(parser : Parser) -> Result[(Array[Node], Parser), Parser] {
+  // Save diagnostics length for backtracking
+  let initial_diag_length = parser.diagnostics.length()
+
+  // Expect <
+  let parser = match current_token(parser) {
+    LessThan(_) => advance_parser(parser)
+    _ => return Err(parser)
+  }
+
+  let type_args = []
+  let mut parser = parser
+
+  // Parse type argument list
+  while true {
+    match current_token(parser) {
+      GreaterThan(_) => {
+        parser = advance_parser(parser)
+        break
+      }
+      _ => {
+        match parse_type(parser) {
+          Ok((ty, p)) => {
+            type_args.push(ty)
+            parser = p
+
+            // Check for comma
+            match current_token(parser) {
+              Comma(_) => {
+                parser = advance_parser(parser)
+                continue
+              }
+              GreaterThan(_) => continue
+              _ => {
+                // Failed to parse - restore diagnostics and return error
+                while parser.diagnostics.length() > initial_diag_length {
+                  let _ = parser.diagnostics.pop()
+                }
+                return Err(parser)
+              }
+            }
+          }
+          Err(p) => {
+            // Failed to parse type - restore diagnostics and return error
+            while p.diagnostics.length() > initial_diag_length {
+              let _ = p.diagnostics.pop()
+            }
+            return Err(p)
+          }
+        }
+      }
+    }
+  }
+
+  Ok((type_args, parser))
 }
 
 // ============================================================================
