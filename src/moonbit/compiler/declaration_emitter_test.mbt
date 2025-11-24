@@ -483,3 +483,245 @@ test "emit enum with initializers" {
     }
   }
 }
+
+///|
+/// Test: Export default function
+test "emit export default function" {
+  let source = "export default function greet(name: string): string { return 'Hello ' + name; }"
+  let scanner = Scanner::new(source, "test.ts")
+  let tokens = scan_all(scanner)
+
+  match parse_source_file(tokens, "test.ts") {
+    Ok(source_file) => {
+      let ctx = DeclarationEmitterContext::default()
+      let output = emit_declaration_file(source_file, ctx)
+
+      // Should contain export default declaration
+      assert_true(output.contains("export default"))
+      assert_true(output.contains("function greet"))
+      assert_true(output.contains("name: string"))
+      assert_true(output.contains(": string"))
+
+      println("\nExport default function output:")
+      println(output)
+    }
+    Err(diagnostics) => {
+      println("Parse error:")
+      for i = 0; i < diagnostics.length(); i = i + 1 {
+        println("  " + diagnostics[i].message)
+      }
+      assert_true(false)
+    }
+  }
+}
+
+///|
+/// Test: Export default class
+test "emit export default class" {
+  let source = "export default class User { name: string; age: number; constructor(name: string, age: number) {} }"
+  let scanner = Scanner::new(source, "test.ts")
+  let tokens = scan_all(scanner)
+
+  match parse_source_file(tokens, "test.ts") {
+    Ok(source_file) => {
+      let ctx = DeclarationEmitterContext::default()
+      let output = emit_declaration_file(source_file, ctx)
+
+      // Should contain export default class
+      assert_true(output.contains("export default"))
+      assert_true(output.contains("class User"))
+      assert_true(output.contains("name: string"))
+      assert_true(output.contains("age: number"))
+
+      println("\nExport default class output:")
+      println(output)
+    }
+    Err(diagnostics) => {
+      println("Parse error:")
+      for i = 0; i < diagnostics.length(); i = i + 1 {
+        println("  " + diagnostics[i].message)
+      }
+      assert_true(false)
+    }
+  }
+}
+
+///|
+/// Test: Readonly modifiers
+test "emit readonly modifiers" {
+  let source = "interface Config { readonly host: string; readonly port: number; }"
+  let scanner = Scanner::new(source, "test.ts")
+  let tokens = scan_all(scanner)
+
+  match parse_source_file(tokens, "test.ts") {
+    Ok(source_file) => {
+      let ctx = DeclarationEmitterContext::default()
+      let output = emit_declaration_file(source_file, ctx)
+
+      // Should contain readonly modifiers
+      assert_true(output.contains("readonly host"))
+      assert_true(output.contains("readonly port"))
+
+      println("\nReadonly modifiers output:")
+      println(output)
+    }
+    Err(diagnostics) => {
+      println("Parse error:")
+      for i = 0; i < diagnostics.length(); i = i + 1 {
+        println("  " + diagnostics[i].message)
+      }
+      assert_true(false)
+    }
+  }
+}
+
+///|
+/// Test: Static class members
+test "emit static class members" {
+  let source = "class MathUtils { static PI: number; static abs(x: number): number { return x; } }"
+  let scanner = Scanner::new(source, "test.ts")
+  let tokens = scan_all(scanner)
+
+  match parse_source_file(tokens, "test.ts") {
+    Ok(source_file) => {
+      let ctx = DeclarationEmitterContext::default()
+      let output = emit_declaration_file(source_file, ctx)
+
+      // Should contain static members
+      assert_true(output.contains("static PI"))
+      assert_true(output.contains("static abs"))
+
+      println("\nStatic class members output:")
+      println(output)
+    }
+    Err(diagnostics) => {
+      println("Parse error:")
+      for i = 0; i < diagnostics.length(); i = i + 1 {
+        println("  " + diagnostics[i].message)
+      }
+      assert_true(false)
+    }
+  }
+}
+
+///|
+/// Test: Async functions
+test "emit async functions" {
+  let source = "async function fetchData(url: string): Promise<string> { return ''; }"
+  let scanner = Scanner::new(source, "test.ts")
+  let tokens = scan_all(scanner)
+
+  match parse_source_file(tokens, "test.ts") {
+    Ok(source_file) => {
+      let ctx = DeclarationEmitterContext::default()
+      let output = emit_declaration_file(source_file, ctx)
+
+      // Should contain async keyword (or at least the function signature)
+      assert_true(output.contains("function fetchData"))
+      assert_true(output.contains("url: string"))
+      assert_true(output.contains("Promise"))
+
+      println("\nAsync functions output:")
+      println(output)
+    }
+    Err(diagnostics) => {
+      println("Parse error:")
+      for i = 0; i < diagnostics.length(); i = i + 1 {
+        println("  " + diagnostics[i].message)
+      }
+      assert_true(false)
+    }
+  }
+}
+
+///|
+/// Test: Tuple types
+test "emit tuple types" {
+  let source = "type Point = [number, number]; type NamedPoint = [x: number, y: number];"
+  let scanner = Scanner::new(source, "test.ts")
+  let tokens = scan_all(scanner)
+
+  match parse_source_file(tokens, "test.ts") {
+    Ok(source_file) => {
+      let ctx = DeclarationEmitterContext::default()
+      let output = emit_declaration_file(source_file, ctx)
+
+      // Should contain tuple types
+      assert_true(output.contains("type Point"))
+      assert_true(output.contains("["))
+      assert_true(output.contains("number"))
+
+      println("\nTuple types output:")
+      println(output)
+    }
+    Err(diagnostics) => {
+      println("Parse error:")
+      for i = 0; i < diagnostics.length(); i = i + 1 {
+        println("  " + diagnostics[i].message)
+      }
+      assert_true(false)
+    }
+  }
+}
+
+///|
+/// Test: Intersection types
+test "emit intersection types" {
+  let source = "type Named = { name: string }; type Aged = { age: number }; type Person = Named & Aged;"
+  let scanner = Scanner::new(source, "test.ts")
+  let tokens = scan_all(scanner)
+
+  match parse_source_file(tokens, "test.ts") {
+    Ok(source_file) => {
+      let ctx = DeclarationEmitterContext::default()
+      let output = emit_declaration_file(source_file, ctx)
+
+      // Should contain intersection types
+      assert_true(output.contains("type Person"))
+      assert_true(output.contains("&"))
+      assert_true(output.contains("Named"))
+      assert_true(output.contains("Aged"))
+
+      println("\nIntersection types output:")
+      println(output)
+    }
+    Err(diagnostics) => {
+      println("Parse error:")
+      for i = 0; i < diagnostics.length(); i = i + 1 {
+        println("  " + diagnostics[i].message)
+      }
+      assert_true(false)
+    }
+  }
+}
+
+///|
+/// Test: Index signatures
+test "emit index signatures" {
+  let source = "interface StringMap { [key: string]: string; } interface NumberMap { [index: number]: number; }"
+  let scanner = Scanner::new(source, "test.ts")
+  let tokens = scan_all(scanner)
+
+  match parse_source_file(tokens, "test.ts") {
+    Ok(source_file) => {
+      let ctx = DeclarationEmitterContext::default()
+      let output = emit_declaration_file(source_file, ctx)
+
+      // Should contain index signatures
+      assert_true(output.contains("interface StringMap"))
+      assert_true(output.contains("["))
+      assert_true(output.contains("key"))
+      assert_true(output.contains("string"))
+
+      println("\nIndex signatures output:")
+      println(output)
+    }
+    Err(diagnostics) => {
+      println("Parse error:")
+      for i = 0; i < diagnostics.length(); i = i + 1 {
+        println("  " + diagnostics[i].message)
+      }
+      assert_true(false)
+    }
+  }
+}

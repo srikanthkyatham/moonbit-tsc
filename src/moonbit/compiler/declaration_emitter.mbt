@@ -745,7 +745,27 @@ fn emit_decl_export_assignment(
   if assign.is_export_equals {
     indent + "export = " + emit_decl_expression(assign.expression) + ";"
   } else {
-    indent + "export default " + emit_decl_expression(assign.expression) + ";"
+    // Check if the expression is a function or class declaration
+    match assign.expression {
+      FunctionDeclaration(func) => {
+        // Emit as export default function (not top-level since it's exported)
+        let func_decl = emit_decl_function(func, ctx, false)
+        // Remove the indent and add "export default " prefix
+        let func_body = func_decl.substring(start=indent.length())
+        indent + "export default " + func_body
+      }
+      ClassDeclaration(cls) => {
+        // Emit as export default class (not top-level since it's exported)
+        let cls_decl = emit_decl_class(cls, ctx, false)
+        // Remove the indent and add "export default " prefix
+        let cls_body = cls_decl.substring(start=indent.length())
+        indent + "export default " + cls_body
+      }
+      _ => {
+        // For expressions, use the original behavior
+        indent + "export default " + emit_decl_expression(assign.expression) + ";"
+      }
+    }
   }
 }
 

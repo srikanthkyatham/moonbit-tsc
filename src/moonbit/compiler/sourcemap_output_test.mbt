@@ -268,3 +268,111 @@ test "inline source map includes actual JSON data" {
   assert_true(comment.length() > 50)  // Should be substantial
   assert_true(comment.contains("sourceMappingURL"))
 }
+
+/// Test: Source map for class methods
+test "sourcemap for class methods" {
+  let builder = SourceMapBuilder::new()
+  let _ = builder.add_source("class.ts")
+
+  // Add mappings for class declaration and methods
+  builder.add_mapping(0, 0, "class.ts", 0, 0, None)  // class keyword
+  builder.add_mapping(0, 6, "class.ts", 0, 6, Some("Person"))  // class name
+  builder.add_mapping(1, 2, "class.ts", 1, 2, Some("greet"))  // method name
+  builder.add_mapping(1, 12, "class.ts", 1, 12, None)  // method params
+
+  let sourcemap = builder.build(Some("class.js"))
+  let json = sourcemap.to_json()
+
+  // Verify sourcemap contains method mappings
+  assert_true(json.contains("\"sources\""))
+  assert_true(json.contains("class.ts"))
+  assert_true(json.contains("\"names\""))
+  assert_true(json.contains("Person"))
+  assert_true(json.contains("greet"))
+}
+
+/// Test: Source map for property access chains
+test "sourcemap for property access" {
+  let builder = SourceMapBuilder::new()
+  let _ = builder.add_source("access.ts")
+  let _ = builder.add_name("user")
+  let _ = builder.add_name("profile")
+  let _ = builder.add_name("name")
+
+  // Add mappings for: user.profile.name
+  builder.add_mapping(0, 0, "access.ts", 0, 0, Some("user"))
+  builder.add_mapping(0, 5, "access.ts", 0, 5, Some("profile"))
+  builder.add_mapping(0, 13, "access.ts", 0, 13, Some("name"))
+
+  let sourcemap = builder.build(Some("access.js"))
+  let json = sourcemap.to_json()
+
+  assert_true(json.contains("user"))
+  assert_true(json.contains("profile"))
+  assert_true(json.contains("name"))
+}
+
+/// Test: Source map for binary expressions
+test "sourcemap for binary expressions" {
+  let builder = SourceMapBuilder::new()
+  let _ = builder.add_source("math.ts")
+  let _ = builder.add_name("a")
+  let _ = builder.add_name("b")
+
+  // Add mappings for: a + b * 2
+  builder.add_mapping(0, 0, "math.ts", 0, 0, Some("a"))
+  builder.add_mapping(0, 4, "math.ts", 0, 4, Some("b"))
+
+  let sourcemap = builder.build(Some("math.js"))
+  let json = sourcemap.to_json()
+
+  assert_true(json.contains("\"names\""))
+  assert_true(json.contains("math.ts"))
+}
+
+/// Test: Source map with multiple files
+test "sourcemap with multiple files" {
+  let builder = SourceMapBuilder::new()
+  let _ = builder.add_source("main.ts")
+  let _ = builder.add_source("utils.ts")
+  let _ = builder.add_name("main")
+  let _ = builder.add_name("helper")
+
+  // Mappings from main.ts
+  builder.add_mapping(0, 0, "main.ts", 0, 0, Some("main"))
+  builder.new_line()
+
+  // Mappings from utils.ts
+  builder.add_mapping(1, 0, "utils.ts", 0, 0, Some("helper"))
+
+  let sourcemap = builder.build(Some("bundle.js"))
+  let json = sourcemap.to_json()
+
+  assert_true(json.contains("main.ts"))
+  assert_true(json.contains("utils.ts"))
+  assert_true(json.contains("main"))
+  assert_true(json.contains("helper"))
+}
+
+/// Test: Complex nested structure sourcemap
+test "sourcemap for nested structures" {
+  let builder = SourceMapBuilder::new()
+  let _ = builder.add_source("nested.ts")
+  let _ = builder.add_name("obj")
+  let _ = builder.add_name("nested")
+  let _ = builder.add_name("value")
+
+  // Object with nested properties
+  builder.add_mapping(0, 0, "nested.ts", 0, 0, None)  // const keyword
+  builder.add_mapping(0, 6, "nested.ts", 0, 6, Some("obj"))  // obj name
+  builder.add_mapping(1, 2, "nested.ts", 1, 2, Some("nested"))  // nested property
+  builder.add_mapping(2, 4, "nested.ts", 2, 4, Some("value"))  // deeply nested
+
+  let sourcemap = builder.build(Some("nested.js"))
+  let json = sourcemap.to_json()
+
+  assert_true(json.contains("nested.ts"))
+  assert_true(json.contains("obj"))
+  assert_true(json.contains("nested"))
+  assert_true(json.contains("value"))
+}

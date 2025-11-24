@@ -1980,17 +1980,29 @@ fn parse_primary_type(parser : Parser) -> Result[(Node, Parser), Parser] {
         ),
       )
     }
-    Identifier(name, _) =>
+    Identifier(name, _) => {
+      let parser = advance_parser(parser)
+      // Check for generic type arguments
+      let (type_arguments, parser) = match current_token(parser) {
+        LessThan(_) => {
+          match parse_type_argument_list(parser) {
+            Ok((args, p)) => (args, p)
+            Err(p) => ([], p)
+          }
+        }
+        _ => ([], parser)
+      }
       Ok(
         (
           Node::TypeReference(TypeReference::{
             type_name: name,
-            type_arguments: [],
+            type_arguments,
             location: loc,
           }),
-          advance_parser(parser),
+          parser,
         ),
       )
+    }
     StringLiteral(value, _) =>
       Ok(
         (
@@ -2088,6 +2100,79 @@ fn parse_primary_type(parser : Parser) -> Result[(Node, Parser), Parser] {
         _ => Err(add_error(parser, "Expected '=>' in function type", current_token(parser).location()))
       }
     }
+    OpenBracket(_) => {
+      // Tuple type: [type1, type2, ...] or [name: type1, name2: type2, ...]
+      let parser = advance_parser(parser) // consume '['
+      let element_types = []
+      let mut parser = parser
+
+      while true {
+        match current_token(parser) {
+          CloseBracket(_) => {
+            parser = advance_parser(parser)
+            break
+          }
+          _ => {
+            // Parse type (ignoring optional name: prefix for now)
+            match current_token(parser) {
+              Identifier(_, _) => {
+                // Could be "name: type" or just a type reference
+                let saved_parser = parser
+                parser = advance_parser(parser)
+                match current_token(parser) {
+                  Colon(_) => {
+                    // It's a named tuple element, skip the name and parse the type
+                    parser = advance_parser(parser)
+                    match parse_type(parser) {
+                      Ok((t, p)) => {
+                        element_types.push(t)
+                        parser = p
+                      }
+                      Err(p) => return Err(p)
+                    }
+                  }
+                  _ => {
+                    // It's just a type reference, backtrack
+                    parser = saved_parser
+                    match parse_type(parser) {
+                      Ok((t, p)) => {
+                        element_types.push(t)
+                        parser = p
+                      }
+                      Err(p) => return Err(p)
+                    }
+                  }
+                }
+              }
+              _ => {
+                match parse_type(parser) {
+                  Ok((t, p)) => {
+                    element_types.push(t)
+                    parser = p
+                  }
+                  Err(p) => return Err(p)
+                }
+              }
+            }
+
+            // Optional comma
+            match current_token(parser) {
+              Comma(_) => parser = advance_parser(parser)
+              CloseBracket(_) => () // Will be handled in next iteration
+              _ => ()
+            }
+          }
+        }
+      }
+
+      Ok((
+        Node::TupleType(TupleType::{
+          element_types,
+          location: loc,
+        }),
+        parser,
+      ))
+    }
     _ => Err(add_error(parser, "Expected type", loc))
   }
 }
@@ -2130,7 +2215,37 @@ fn parse_union_or_intersection_type(
       }
       Ok((Node::UnionType(UnionType::{ types, location: loc }), parser))
     }
-    _ => Ok((first_type, parser)) // Not a union, return original type
+    Ampersand(_) => {
+      // Intersection type: type1 & type2 & type3
+      let types = [first_type]
+      let mut parser = parser
+      while true {
+        match current_token(parser) {
+          Ampersand(_) => {
+            parser = advance_parser(parser) // consume &
+            match parse_primary_type(parser) {
+              Ok((type_node, p)) => {
+                types.push(type_node)
+                parser = p
+              }
+              Err(p) => return Err(p)
+            }
+          }
+          _ => break
+        }
+      }
+      let loc = match first_type {
+        Node::KeywordType(kt) => kt.location
+        Node::TypeReference(tr) => tr.location
+        _ => {
+          start: { line: 0, column: 0, offset: 0 },
+          end: { line: 0, column: 0, offset: 0 },
+          file_path: "",
+        }
+      }
+      Ok((Node::IntersectionType(IntersectionType::{ types, location: loc }), parser))
+    }
+    _ => Ok((first_type, parser)) // Not a union or intersection, return original type
   }
 }
 
@@ -2264,6 +2379,96 @@ fn parse_class_members(parser : Parser) -> (Array[Node], Parser) {
 fn parse_class_members_aux(parser : Parser, acc : Array[Node]) -> (Array[Node], Parser) {
   match current_token(parser) {
     CloseBrace(_) | EOF(_) => (acc, parser)
+
+    // Static modifier
+    KeywordStatic(_) => {
+      let parser = advance_parser(parser)
+      // Now expect an identifier for property or method name
+      match current_token(parser) {
+        Identifier(name, loc) => {
+          let parser = advance_parser(parser)
+          match current_token(parser) {
+            // Static method
+            OpenParen(_) => {
+              let parser = advance_parser(parser)
+              let (parameters, parser) = parse_parameter_list(parser)
+
+              let (return_type, parser) = match current_token(parser) {
+                Colon(_) => {
+                  let parser = advance_parser(parser)
+                  match parse_type(parser) {
+                    Ok((ty, p)) => (Some(ty), p)
+                    Err(p) => (None, p)
+                  }
+                }
+                _ => (None, parser)
+              }
+
+              let (body, parser) = match current_token(parser) {
+                OpenBrace(_) => {
+                  match parse_block_statement(parser) {
+                    Ok((b, p)) => (Some(b), p)
+                    Err(p) => (None, p)
+                  }
+                }
+                _ => (None, parser)
+              }
+              acc.push(Node::MethodDeclaration(MethodDeclaration::{
+                name,
+                type_parameters: [],
+                parameters,
+                return_type,
+                body,
+                modifiers: [Modifier::Static],
+                is_async: false,
+                is_generator: false,
+                location: loc
+              }))
+              parse_class_members_aux(parser, acc)
+            }
+            // Static property
+            _ => {
+              let (type_annotation, parser) = match current_token(parser) {
+                Colon(_) => {
+                  let parser = advance_parser(parser)
+                  match parse_type(parser) {
+                    Ok((ty, p)) => (Some(ty), p)
+                    Err(p) => (None, p)
+                  }
+                }
+                _ => (None, parser)
+              }
+
+              let (initializer, parser) = match current_token(parser) {
+                Equals(_) => {
+                  let parser = advance_parser(parser)
+                  match parse_assignment_expression(parser) {
+                    Ok((expr, p)) => (Some(expr), p)
+                    Err(p) => (None, p)
+                  }
+                }
+                _ => (None, parser)
+              }
+
+              acc.push(Node::PropertyDeclaration(PropertyDeclaration::{
+                name,
+                type_annotation,
+                initializer,
+                location: loc,
+                modifiers: [Modifier::Static],
+              }))
+
+              let parser = match current_token(parser) {
+                Semicolon(_) => advance_parser(parser)
+                _ => parser
+              }
+              parse_class_members_aux(parser, acc)
+            }
+          }
+        }
+        _ => parse_class_members_aux(parser, acc)
+      }
+    }
 
     // Constructor
     Identifier("constructor", loc) => {
@@ -2442,6 +2647,99 @@ fn parse_interface_declaration(
               }),
               parser
             ))
+          }
+          // Index signature: [key: string]: value
+          OpenBracket(_) => {
+            let bracket_loc = current_token(parser).location()
+            parser = advance_parser(parser)
+            // Parse index parameter name
+            let _index_name = match current_token(parser) {
+              Identifier(n, _) => {
+                parser = advance_parser(parser)
+                n
+              }
+              _ => return Err(add_error(parser, "Expected index parameter name", current_token(parser).location()))
+            }
+            // Expect colon
+            match current_token(parser) {
+              Colon(_) => parser = advance_parser(parser)
+              _ => return Err(add_error(parser, "Expected ':' after index parameter", current_token(parser).location()))
+            }
+            // Parse index type (string or number)
+            let _index_type = match parse_type(parser) {
+              Ok((t, p)) => {
+                parser = p
+                t
+              }
+              Err(p) => return Err(p)
+            }
+            // Expect closing bracket
+            match current_token(parser) {
+              CloseBracket(_) => parser = advance_parser(parser)
+              _ => return Err(add_error(parser, "Expected ']' after index signature", current_token(parser).location()))
+            }
+            // Expect colon for value type
+            match current_token(parser) {
+              Colon(_) => parser = advance_parser(parser)
+              _ => return Err(add_error(parser, "Expected ':' after index signature", current_token(parser).location()))
+            }
+            // Parse value type
+            let value_type = match parse_type(parser) {
+              Ok((t, p)) => {
+                parser = p
+                t
+              }
+              Err(p) => return Err(p)
+            }
+            // Create index signature as a property
+            members.push(Node::PropertyDeclaration(PropertyDeclaration::{
+              name: "[index]",
+              type_annotation: Some(value_type),
+              initializer: None,
+              location: bracket_loc,
+              modifiers: [],
+            }))
+            // Optional semicolon or comma
+            match current_token(parser) {
+              Semicolon(_) | Comma(_) => parser = advance_parser(parser)
+              _ => ()
+            }
+          }
+          // Readonly modifier
+          KeywordReadonly(_) => {
+            parser = advance_parser(parser)
+            // Now expect an identifier
+            let (prop_name, prop_loc) = match current_token(parser) {
+              Identifier(n, loc) => {
+                parser = advance_parser(parser)
+                (n, loc)
+              }
+              _ => return Err(add_error(parser, "Expected property name after readonly", current_token(parser).location()))
+            }
+            // Must be followed by colon (readonly properties, not methods)
+            match current_token(parser) {
+              Colon(_) => {
+                parser = advance_parser(parser)
+                match parse_type(parser) {
+                  Ok((prop_type, p)) => {
+                    parser = p
+                    members.push(Node::PropertyDeclaration(PropertyDeclaration::{
+                      name: prop_name,
+                      type_annotation: Some(prop_type),
+                      initializer: None,
+                      location: prop_loc,
+                      modifiers: [Modifier::Readonly],
+                    }))
+                    match current_token(parser) {
+                      Semicolon(_) | Comma(_) => parser = advance_parser(parser)
+                      _ => ()
+                    }
+                  }
+                  Err(p) => return Err(p)
+                }
+              }
+              _ => return Err(add_error(parser, "Expected ':' after readonly property name", current_token(parser).location()))
+            }
           }
           Identifier(prop_name, prop_loc) => {
             parser = advance_parser(parser)
@@ -2840,27 +3138,50 @@ fn parse_export_declaration(parser : Parser) -> Result[(Node, Parser), Parser] {
   let parser = advance_parser(parser) // consume 'export'
 
   match current_token(parser) {
-    // export default expression
+    // export default expression/declaration
     KeywordDefault(_) => {
       let parser = advance_parser(parser)
-      match parse_expression(parser) {
-        Ok((expression, parser)) => {
-          let end_loc = get_location(expression)
-          // Consume optional semicolon
-          let parser = match current_token(parser) {
-            Semicolon(_) => advance_parser(parser)
-            _ => parser
+      // Check if it's a declaration (function or class)
+      match current_token(parser) {
+        KeywordFunction(_) | KeywordClass(_) => {
+          // Parse as declaration
+          match parse_statement(parser) {
+            Ok((declaration, parser)) => {
+              let end_loc = get_location(declaration)
+              Ok((
+                Node::ExportAssignment(ExportAssignment::{
+                  expression: declaration,
+                  is_export_equals: false,
+                  location: SourceLocation::new(start_loc.file_path, start_loc.start, end_loc.end)
+                }),
+                parser
+              ))
+            }
+            Err(p) => Err(p)
           }
-          Ok((
-            Node::ExportAssignment(ExportAssignment::{
-              expression,
-              is_export_equals: false,
-              location: SourceLocation::new(start_loc.file_path, start_loc.start, end_loc.end)
-            }),
-            parser
-          ))
         }
-        Err(p) => Err(p)
+        _ => {
+          // Parse as expression
+          match parse_expression(parser) {
+            Ok((expression, parser)) => {
+              let end_loc = get_location(expression)
+              // Consume optional semicolon
+              let parser = match current_token(parser) {
+                Semicolon(_) => advance_parser(parser)
+                _ => parser
+              }
+              Ok((
+                Node::ExportAssignment(ExportAssignment::{
+                  expression,
+                  is_export_equals: false,
+                  location: SourceLocation::new(start_loc.file_path, start_loc.start, end_loc.end)
+                }),
+                parser
+              ))
+            }
+            Err(p) => Err(p)
+          }
+        }
       }
     }
 
