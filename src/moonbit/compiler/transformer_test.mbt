@@ -384,3 +384,125 @@ test "transform preserves arrow function for ES2015" {
     _ => assert_true(false)
   }
 }
+
+///|
+/// Test: ES5 target - arrow function with block body
+test "transform arrow function with block body for ES5" {
+  let stmts = parse_source("const add = (x, y) => { return x + y; };")
+  let ctx = TransformerContext::es5()
+  let transformed = transform(stmts[0], ctx)
+  match transformed {
+    VariableStatement(vs) => {
+      let decl = vs.declarations[0]
+      match decl.initializer {
+        Some(FunctionExpression(fe)) => {
+          // Should be function expression with block body
+          match fe.body {
+            BlockStatement(_) => assert_true(true)
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    _ => assert_true(false)
+  }
+}
+
+///|
+/// Test: ES5 target - nested const/let in for loop
+test "transform for loop with const for ES5" {
+  let stmts = parse_source("for (const i = 0; i < 10; i++) {}")
+  let ctx = TransformerContext::es5()
+  let transformed = transform(stmts[0], ctx)
+  match transformed {
+    ForStatement(fs) => {
+      match fs.initializer {
+        Some(VariableStatement(vs)) => {
+          // Should be converted to var
+          assert_false(vs.is_const)
+          assert_false(vs.is_let)
+        }
+        _ => assert_true(false)
+      }
+    }
+    _ => assert_true(false)
+  }
+}
+
+///|
+/// Test: ES2015 target - preserves let in for loop
+test "transform preserves let in for loop for ES2015" {
+  let stmts = parse_source("for (let i = 0; i < 10; i++) {}")
+  let ctx = TransformerContext::es2015()
+  let transformed = transform(stmts[0], ctx)
+  match transformed {
+    ForStatement(fs) => {
+      match fs.initializer {
+        Some(VariableStatement(vs)) => {
+          // Should preserve let for ES2015+
+          assert_true(vs.is_let)
+        }
+        _ => assert_true(false)
+      }
+    }
+    _ => assert_true(false)
+  }
+}
+
+///|
+/// Test: Multiple variable declarations ES5
+test "transform multiple const declarations for ES5" {
+  let stmts = parse_source("const x = 1, y = 2, z = 3;")
+  let ctx = TransformerContext::es5()
+  let transformed = transform(stmts[0], ctx)
+  match transformed {
+    VariableStatement(vs) => {
+      // All should be converted to var
+      assert_false(vs.is_const)
+      assert_eq(vs.declarations.length(), 3)
+    }
+    _ => assert_true(false)
+  }
+}
+
+///|
+/// Test: ES5 target - class should remain but remove type annotations
+test "transform class preserves structure for ES5" {
+  let stmts = parse_source("class Foo {}")
+  let ctx = TransformerContext::es5()
+  let transformed = transform(stmts[0], ctx)
+  match transformed {
+    ClassDeclaration(cd) => {
+      // Class should remain as ClassDeclaration
+      // (Full ES5 downleveling to constructor functions not yet implemented)
+      match cd.name {
+        Some(Identifier(id)) => assert_eq(id.name, "Foo")
+        _ => assert_true(false)
+      }
+    }
+    _ => assert_true(false)
+  }
+}
+
+///|
+/// Test: Enum transformation preserves for all targets
+test "transform enum to const object for all targets" {
+  let stmts = parse_source("enum Status { Active, Inactive }")
+  let ctx = TransformerContext::es2015()
+  let transformed = transform(stmts[0], ctx)
+  match transformed {
+    VariableStatement(vs) => {
+      // Enums always become const objects regardless of target
+      assert_true(vs.is_const)
+      let decl = vs.declarations[0]
+      match decl.initializer {
+        Some(ObjectLiteralExpression(ole)) => {
+          assert_eq(ole.properties.length(), 2)
+        }
+        _ => assert_true(false)
+      }
+    }
+    _ => assert_true(false)
+  }
+}

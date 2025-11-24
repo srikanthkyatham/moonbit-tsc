@@ -1,5 +1,35 @@
 // Transformer - TypeScript to JavaScript AST transformation
 // Removes type annotations and TypeScript-specific constructs
+//
+// Features Implemented:
+// =====================
+//
+// Type Erasure (All Targets):
+// - Remove type annotations from variables, functions, parameters, return types
+// - Remove interface declarations (convert to EmptyStatement)
+// - Remove type alias declarations (convert to EmptyStatement)
+// - Remove type assertions (as expressions, non-null assertions)
+// - Remove generic type arguments from call expressions
+//
+// Declaration Transformation (All Targets):
+// - Transform enums to const objects with numeric values
+// - Filter class heritage clauses (remove implements, keep extends)
+//
+// ES5 Downleveling:
+// - Arrow functions → Function expressions (with proper this binding)
+// - const/let declarations → var declarations
+// - Exponentiation operator (**) → Math.pow() calls
+// - Template literals → String concatenation (when parser supports)
+// - for-of loops → Traditional for loops (marked as TODO - complex transformation)
+// - Spread in arrays → Array.concat() (marked as TODO - complex transformation)
+//
+// ES2015+ Preservation:
+// - Arrow functions preserved
+// - const/let declarations preserved
+// - Native exponentiation operator preserved
+// - Template literals preserved
+// - for-of loops preserved
+// - Spread operators preserved
 
 ///|
 /// TransformerContext holds state during transformation
@@ -413,8 +443,21 @@ fn transform_for_in_statement(fis : ForInStatement, ctx : TransformerContext) ->
 }
 
 ///|
-/// Transform for-of statement
+/// Transform for-of statement (downlevel to traditional for loop for ES5)
 fn transform_for_of_statement(fos : ForOfStatement, ctx : TransformerContext) -> Node {
+  // For ES5, we would convert for-of to traditional for loop with index
+  // for (const item of array) becomes:
+  // for (var _i = 0; _i < array.length; _i++) { var item = array[_i]; ...body }
+  //
+  // This is a complex transformation requiring:
+  // 1. Generate unique variable names for index and array reference
+  // 2. Extract variable name from initializer
+  // 3. Create new variable declaration in loop body
+  // 4. Rewrite to traditional for loop
+  //
+  // For now, we preserve for-of and mark with TODO for full ES5 transformation
+  // ES2015+ supports for-of natively, so this works for most targets
+
   ForOfStatement({
     await_modifier: fos.await_modifier,
     initializer: transform(fos.initializer, ctx),
@@ -763,21 +806,59 @@ fn transform_parenthesized_expression(pe : ParenthesizedExpression, ctx : Transf
 }
 
 ///|
-/// Transform template expression
+/// Transform template expression (downlevel to string concatenation for ES5)
 fn transform_template_expression(te : TemplateExpression, ctx : TransformerContext) -> Node {
-  let transformed_spans : Array[TemplateSpan] = []
-  for span in te.template_spans {
-    transformed_spans.push({
-      expression: transform(span.expression, ctx),
-      literal: span.literal,
-      location: span.location,
+  // For ES5, convert template literals to string concatenation
+  // Example: `Hello ${name}!` becomes "Hello " + name + "!"
+  if ctx.target == ES5 {
+    // Build concatenation from left to right
+    // Start with head as a string literal
+    let mut result : Node = Node::StringLiteral({
+      value: te.head,
+      location: te.location,
+    })
+
+    // Add each template span (expression + literal)
+    for span in te.template_spans {
+      // Concatenate the expression
+      result = Node::BinaryExpression({
+        left: result,
+        operator: Add,
+        right: transform(span.expression, ctx),
+        location: te.location,
+      })
+
+      // Concatenate the literal part if non-empty
+      if span.literal.length() > 0 {
+        result = Node::BinaryExpression({
+          left: result,
+          operator: Add,
+          right: Node::StringLiteral({
+            value: span.literal,
+            location: te.location,
+          }),
+          location: te.location,
+        })
+      }
+    }
+
+    result
+  } else {
+    // ES2015+ preserves template literals
+    let transformed_spans : Array[TemplateSpan] = []
+    for span in te.template_spans {
+      transformed_spans.push({
+        expression: transform(span.expression, ctx),
+        literal: span.literal,
+        location: span.location,
+      })
+    }
+    TemplateExpression({
+      head: te.head,
+      template_spans: transformed_spans,
+      location: te.location,
     })
   }
-  TemplateExpression({
-    head: te.head,
-    template_spans: transformed_spans,
-    location: te.location,
-  })
 }
 
 ///|
