@@ -1195,7 +1195,34 @@ fn check_class_declaration(
   checker : TypeChecker,
   class_decl : ClassDeclaration
 ) -> TypeChecker {
-  // TODO: Check class members
+  // Check class members (constructors, methods, properties)
+  let mut checker = checker
+  for i = 0; i < class_decl.members.length(); i = i + 1 {
+    checker = match class_decl.members[i] {
+      ConstructorDeclaration(ctor) => {
+        match ctor.body {
+          Some(body) => check_statement(checker, body)
+          None => checker
+        }
+      }
+      MethodDeclaration(method) => {
+        match method.body {
+          Some(body) => check_statement(checker, body)
+          None => checker
+        }
+      }
+      PropertyDeclaration(prop) => {
+        match prop.initializer {
+          Some(init) => {
+            let (_, c) = infer_type(checker, init)
+            c
+          }
+          None => checker
+        }
+      }
+      _ => checker
+    }
+  }
   checker
 }
 

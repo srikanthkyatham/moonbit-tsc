@@ -1635,6 +1635,56 @@ fn parse_primary_type(parser : Parser) -> Result[(Node, Parser), Parser] {
           advance_parser(parser),
         ),
       )
+    OpenBrace(_) => {
+      // Object type literal: { prop: type, ... }
+      let parser = advance_parser(parser) // consume {
+      let properties = []
+      let mut parser = parser
+
+      // Parse property signatures
+      while true {
+        match current_token(parser) {
+          CloseBrace(_) => {
+            parser = advance_parser(parser)
+            break
+          }
+          Identifier(name, prop_loc) => {
+            parser = advance_parser(parser)
+            // Expect :
+            match current_token(parser) {
+              Colon(_) => {
+                parser = advance_parser(parser)
+                match parse_type(parser) {
+                  Ok((prop_type, p)) => {
+                    properties.push((name, prop_type))
+                    parser = p
+                    // Optional comma or semicolon
+                    match current_token(parser) {
+                      Comma(_) | Semicolon(_) => parser = advance_parser(parser)
+                      _ => ()
+                    }
+                  }
+                  Err(p) => return Err(p)
+                }
+              }
+              _ => break
+            }
+          }
+          _ => break
+        }
+      }
+
+      // For now, return a simple type reference representing the object type
+      // A full implementation would create a proper ObjectType node
+      Ok((
+        Node::TypeReference(TypeReference::{
+          type_name: "object",
+          type_arguments: [],
+          location: loc,
+        }),
+        parser,
+      ))
+    }
     _ => Err(add_error(parser, "Expected type", loc))
   }
 }
