@@ -92,7 +92,7 @@ fn parse_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
   let token = current_token(parser)
   match token {
     // Variable declarations
-    KeywordLet(_) | KeywordConst(_) | KeywordVar(_) =>
+    KeywordLet(_) | KeywordVar(_) =>
       parse_variable_statement(parser)
 
     // Function declaration
@@ -116,8 +116,23 @@ fn parse_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
     // Type alias
     KeywordType(_) => parse_type_alias_declaration(parser)
 
-    // Enum declaration
-    KeywordEnum(_) => parse_enum_declaration(parser)
+    // Enum declaration (check for const enum)
+    KeywordConst(_) => {
+      // Look ahead for enum keyword
+      let next_token = peek_token(parser)
+      match next_token {
+        KeywordEnum(_) => {
+          // const enum
+          let parser = advance_parser(parser) // consume 'const'
+          parse_enum_declaration(parser, true) // is_const = true
+        }
+        _ => {
+          // Regular const declaration
+          parse_variable_statement(parser)
+        }
+      }
+    }
+    KeywordEnum(_) => parse_enum_declaration(parser, false)
 
     // Import declaration
     KeywordImport(_) => parse_import_declaration(parser)
@@ -1970,12 +1985,45 @@ fn parse_primary_type(parser : Parser) -> Result[(Node, Parser), Parser] {
           advance_parser(parser),
         ),
       )
+    Identifier(name, _) if name == "true" || name == "false" => {
+      // Boolean literal types
+      let value = name == "true"
+      Ok(
+        (
+          Node::LiteralType(LiteralType::{
+            literal: Node::BooleanLiteral(BooleanLiteral::{ value, location: loc }),
+            location: loc,
+          }),
+          advance_parser(parser),
+        ),
+      )
+    }
     Identifier(name, _) =>
       Ok(
         (
           Node::TypeReference(TypeReference::{
             type_name: name,
             type_arguments: [],
+            location: loc,
+          }),
+          advance_parser(parser),
+        ),
+      )
+    StringLiteral(value, _) =>
+      Ok(
+        (
+          Node::LiteralType(LiteralType::{
+            literal: Node::StringLiteral(StringLiteral::{ value, location: loc }),
+            location: loc,
+          }),
+          advance_parser(parser),
+        ),
+      )
+    NumericLiteral(value, _) =>
+      Ok(
+        (
+          Node::LiteralType(LiteralType::{
+            literal: Node::NumericLiteral(NumericLiteral::{ value, location: loc }),
             location: loc,
           }),
           advance_parser(parser),
@@ -2519,8 +2567,8 @@ fn parse_type_alias_declaration(
 }
 
 ///|
-fn parse_enum_declaration(parser : Parser) -> Result[(Node, Parser), Parser] {
-  // enum Name { A, B = 1, C }
+fn parse_enum_declaration(parser : Parser, is_const : Bool) -> Result[(Node, Parser), Parser] {
+  // enum Name { A, B = 1, C } or const enum Name { A, B }
   let start_loc = current_token(parser).location()
   let parser = advance_parser(parser) // consume 'enum'
 
@@ -2542,7 +2590,7 @@ fn parse_enum_declaration(parser : Parser) -> Result[(Node, Parser), Parser] {
             Node::EnumDeclaration(EnumDeclaration::{
               name,
               members,
-              is_const: false,
+              is_const,
               location: SourceLocation::new(start_loc.file_path, start_loc.start, loc.end)
             }),
             parser
@@ -3635,6 +3683,27 @@ fn advance_parser(parser : Parser) -> Parser {
     { ..parser, position: parser.position + 1 }
   } else {
     parser
+  }
+}
+
+///|
+/// Peek at the next token without advancing the parser
+fn peek_token(parser : Parser) -> Token {
+  let next_pos = parser.position + 1
+  if next_pos < parser.tokens.length() {
+    match parser.tokens.get(next_pos) {
+      Some(token) => token
+      None =>
+        EOF(
+          SourceLocation::new(
+            "",
+            Position::new(0, 0, 0),
+            Position::new(0, 0, 0),
+          ),
+        )
+    }
+  } else {
+    EOF(SourceLocation::new("", Position::new(0, 0, 0), Position::new(0, 0, 0)))
   }
 }
 

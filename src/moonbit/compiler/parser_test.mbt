@@ -703,6 +703,145 @@ test "parse simple type alias" {
   }
 }
 
+///|
+test "parse string literal type" {
+  let tokens = tokens_from_source("type Status = \"active\";")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        TypeAliasDeclaration(type_alias) => {
+          match type_alias.type_node {
+            LiteralType(literal) => {
+              match literal.literal {
+                StringLiteral(_) => ()
+                _ => assert_true(false)
+              }
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse numeric literal type" {
+  let tokens = tokens_from_source("type Answer = 42;")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        TypeAliasDeclaration(type_alias) => {
+          match type_alias.type_node {
+            LiteralType(literal) => {
+              match literal.literal {
+                NumericLiteral(_) => ()
+                _ => assert_true(false)
+              }
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse boolean literal type true" {
+  let tokens = tokens_from_source("type AlwaysTrue = true;")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        TypeAliasDeclaration(type_alias) => {
+          match type_alias.type_node {
+            LiteralType(literal) => {
+              match literal.literal {
+                BooleanLiteral(bool) => assert_eq(bool.value, true)
+                _ => assert_true(false)
+              }
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse boolean literal type false" {
+  let tokens = tokens_from_source("type AlwaysFalse = false;")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        TypeAliasDeclaration(type_alias) => {
+          match type_alias.type_node {
+            LiteralType(literal) => {
+              match literal.literal {
+                BooleanLiteral(bool) => assert_eq(bool.value, false)
+                _ => assert_true(false)
+              }
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse string literal union type" {
+  let tokens = tokens_from_source("type Status = \"active\" | \"inactive\" | \"pending\";")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        TypeAliasDeclaration(type_alias) => {
+          match type_alias.type_node {
+            UnionType(union) => {
+              assert_eq(union.types.length(), 3)
+              // Check that all are literal types
+              for i = 0; i < union.types.length(); i = i + 1 {
+                match union.types[i] {
+                  LiteralType(literal) => {
+                    match literal.literal {
+                      StringLiteral(_) => ()
+                      _ => assert_true(false)
+                    }
+                  }
+                  _ => assert_true(false)
+                }
+              }
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
 // ============================================================================
 // Switch Statement Tests
 // ============================================================================
