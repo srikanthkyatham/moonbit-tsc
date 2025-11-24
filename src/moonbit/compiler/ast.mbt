@@ -60,6 +60,10 @@ pub enum Node {
   NonNullExpression(NonNullExpression)
   SpreadExpression(SpreadExpression)
 
+  // Binding Patterns
+  ArrayBindingPattern(ArrayBindingPattern)
+  ObjectBindingPattern(ObjectBindingPattern)
+
   // Primary Expressions
   Identifier(Identifier)
   NumericLiteral(NumericLiteral)
@@ -628,6 +632,28 @@ pub struct SpreadExpression {
 } derive(Show)
 
 ///|
+/// Array binding pattern for destructuring ([a, b])
+pub struct ArrayBindingPattern {
+  elements : Array[Node?] // Can be Identifier, ArrayBindingPattern, ObjectBindingPattern, or None for holes
+  location : SourceLocation
+} derive(Show)
+
+///|
+/// Object binding pattern for destructuring ({ x, y })
+pub struct ObjectBindingPattern {
+  properties : Array[BindingElement]
+  location : SourceLocation
+} derive(Show)
+
+///|
+/// Binding element in object pattern
+pub struct BindingElement {
+  property_name : String // The property name from the source object
+  name : Node // The binding name (Identifier or nested pattern)
+  location : SourceLocation
+} derive(Show)
+
+///|
 /// Primary expressions
 pub struct Identifier {
   name : String
@@ -884,6 +910,8 @@ pub fn get_location(node : Node) -> SourceLocation {
     TypeAssertionExpression(t) => t.location
     NonNullExpression(n) => n.location
     SpreadExpression(s) => s.location
+    ArrayBindingPattern(a) => a.location
+    ObjectBindingPattern(o) => o.location
     Identifier(i) => i.location
     NumericLiteral(n) => n.location
     StringLiteral(s) => s.location

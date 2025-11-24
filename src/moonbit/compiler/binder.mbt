@@ -276,25 +276,55 @@ fn bind_variable_declaration(
   decl : VariableDeclaration,
   is_const : Bool,
 ) -> Binder {
-  // Extract name from identifier node
-  let name = match decl.name {
-    Identifier(id) => id.name
-    _ => return binder // Binding patterns not yet supported
-  }
-
-  let mut symbol = Symbol::new(name, SymbolKind::Variable, binder.next_symbol_id)
-
-  // Set const flag on symbol
-  if is_const {
-    symbol = { ..symbol, flags: { ..symbol.flags, is_const: true } }
-  }
-
-  let binder = declare_symbol(binder, name, symbol)
+  // Bind the pattern (identifier, array pattern, or object pattern)
+  let binder = bind_binding_pattern(binder, decl.name, is_const)
 
   // Bind initializer expression if present
   match decl.initializer {
     Some(init) => bind_expression(binder, init)
     None => binder
+  }
+}
+
+///|
+/// Bind a binding pattern (recursively binds all identifiers)
+fn bind_binding_pattern(
+  binder : Binder,
+  pattern : Node,
+  is_const : Bool,
+) -> Binder {
+  match pattern {
+    Identifier(id) => {
+      let mut symbol = Symbol::new(id.name, SymbolKind::Variable, binder.next_symbol_id)
+
+      // Set const flag on symbol
+      if is_const {
+        symbol = { ..symbol, flags: { ..symbol.flags, is_const: true } }
+      }
+
+      declare_symbol(binder, id.name, symbol)
+    }
+    ArrayBindingPattern(array_pattern) => {
+      let mut binder = binder
+      for i = 0; i < array_pattern.elements.length(); i = i + 1 {
+        match array_pattern.elements[i] {
+          Some(element) => {
+            binder = bind_binding_pattern(binder, element, is_const)
+          }
+          None => () // Hole in pattern
+        }
+      }
+      binder
+    }
+    ObjectBindingPattern(obj_pattern) => {
+      let mut binder = binder
+      for i = 0; i < obj_pattern.properties.length(); i = i + 1 {
+        let prop = obj_pattern.properties[i]
+        binder = bind_binding_pattern(binder, prop.name, is_const)
+      }
+      binder
+    }
+    _ => binder // Unknown pattern type
   }
 }
 

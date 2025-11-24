@@ -230,12 +230,31 @@ fn parse_variable_declaration(
   let start_loc = current_token(parser).location()
 
   // Parse name (identifier or binding pattern)
-  let (name, parser) = match parse_identifier(parser) {
-    Ok((id, p)) => (Node::Identifier(id), p)
-    Err(p) =>
-      return Err(
-        add_error(p, "Expected identifier in variable declaration", start_loc),
-      )
+  let (name, parser) = match current_token(parser) {
+    OpenBracket(_) => {
+      // Array destructuring pattern
+      match parse_array_binding_pattern(parser) {
+        Ok((pattern, p)) => (pattern, p)
+        Err(p) => return Err(p)
+      }
+    }
+    OpenBrace(_) => {
+      // Object destructuring pattern
+      match parse_object_binding_pattern(parser) {
+        Ok((pattern, p)) => (pattern, p)
+        Err(p) => return Err(p)
+      }
+    }
+    _ => {
+      // Regular identifier
+      match parse_identifier(parser) {
+        Ok((id, p)) => (Node::Identifier(id), p)
+        Err(p) =>
+          return Err(
+            add_error(p, "Expected identifier in variable declaration", start_loc),
+          )
+      }
+    }
   }
 
   // Optional type annotation
@@ -272,6 +291,158 @@ fn parse_variable_declaration(
       parser,
     ),
   )
+}
+
+///|
+/// Parse array binding pattern: [a, b] or [a, , c]
+fn parse_array_binding_pattern(
+  parser : Parser
+) -> Result[(Node, Parser), Parser] {
+  let start_loc = current_token(parser).location()
+  let parser = advance_parser(parser) // consume '['
+
+  let elements = []
+  let mut parser = parser
+
+  while true {
+    match current_token(parser) {
+      CloseBracket(_) => {
+        parser = advance_parser(parser)
+        break
+      }
+      Comma(_) => {
+        // Hole in array pattern
+        elements.push(None)
+        parser = advance_parser(parser)
+      }
+      Identifier(name, loc) => {
+        elements.push(Some(Node::Identifier(Identifier::{ name, location: loc })))
+        parser = advance_parser(parser)
+
+        // Optional comma
+        match current_token(parser) {
+          Comma(_) => parser = advance_parser(parser)
+          _ => ()
+        }
+      }
+      OpenBracket(_) => {
+        // Nested array pattern
+        match parse_array_binding_pattern(parser) {
+          Ok((pattern, p)) => {
+            elements.push(Some(pattern))
+            parser = p
+
+            match current_token(parser) {
+              Comma(_) => parser = advance_parser(parser)
+              _ => ()
+            }
+          }
+          Err(p) => return Err(p)
+        }
+      }
+      OpenBrace(_) => {
+        // Nested object pattern
+        match parse_object_binding_pattern(parser) {
+          Ok((pattern, p)) => {
+            elements.push(Some(pattern))
+            parser = p
+
+            match current_token(parser) {
+              Comma(_) => parser = advance_parser(parser)
+              _ => ()
+            }
+          }
+          Err(p) => return Err(p)
+        }
+      }
+      _ => break
+    }
+  }
+
+  Ok((
+    Node::ArrayBindingPattern(ArrayBindingPattern::{
+      elements,
+      location: start_loc,
+    }),
+    parser,
+  ))
+}
+
+///|
+/// Parse object binding pattern: { x, y } or { x: a, y: b }
+fn parse_object_binding_pattern(
+  parser : Parser
+) -> Result[(Node, Parser), Parser] {
+  let start_loc = current_token(parser).location()
+  let parser = advance_parser(parser) // consume '{'
+
+  let properties = []
+  let mut parser = parser
+
+  while true {
+    match current_token(parser) {
+      CloseBrace(_) => {
+        parser = advance_parser(parser)
+        break
+      }
+      Identifier(prop_name, prop_loc) => {
+        parser = advance_parser(parser)
+
+        // Check for colon (renaming: { x: a })
+        let (name, p2) = match current_token(parser) {
+          Colon(_) => {
+            let p2 = advance_parser(parser)
+
+            // Parse the binding name (can be identifier or nested pattern)
+            match current_token(p2) {
+              Identifier(bind_name, bind_loc) => {
+                (Node::Identifier(Identifier::{ name: bind_name, location: bind_loc }), advance_parser(p2))
+              }
+              OpenBracket(_) => {
+                match parse_array_binding_pattern(p2) {
+                  Ok((pattern, p)) => (pattern, p)
+                  Err(p) => return Err(p)
+                }
+              }
+              OpenBrace(_) => {
+                match parse_object_binding_pattern(p2) {
+                  Ok((pattern, p)) => (pattern, p)
+                  Err(p) => return Err(p)
+                }
+              }
+              _ => return Err(add_error(p2, "Expected identifier after colon", prop_loc))
+            }
+          }
+          _ => {
+            // Shorthand: { x } means { x: x }
+            (Node::Identifier(Identifier::{ name: prop_name, location: prop_loc }), parser)
+          }
+        }
+        parser = p2
+
+        properties.push(BindingElement::{
+          property_name: prop_name,
+          name,
+          location: prop_loc,
+        })
+
+        // Optional comma
+        match current_token(parser) {
+          Comma(_) => parser = advance_parser(parser)
+          _ => ()
+        }
+      }
+      _ => break
+    }
+  }
+
+  Ok((
+    Node::ObjectBindingPattern(ObjectBindingPattern::{
+      properties,
+      location: start_loc,
+    }),
+    parser,
+  ))
 }
 
 ///|
