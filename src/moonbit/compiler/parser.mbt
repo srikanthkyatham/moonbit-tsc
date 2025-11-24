@@ -787,10 +787,23 @@ fn is_arrow_function_ahead(parser : Parser) -> Bool {
         }
         index = index + 1
       }
-      // Check if token after closing paren is Arrow
+      // Check if token after closing paren is Arrow or Colon (for return type)
       if index < parser.tokens.length() {
         match parser.tokens[index] {
           Arrow(_) => true
+          Colon(_) => {
+            // Return type annotation: (params): type => body
+            // Scan ahead to find Arrow after the type
+            let mut type_index = index + 1
+            while type_index < parser.tokens.length() {
+              match parser.tokens[type_index] {
+                Arrow(_) => return true
+                Semicolon(_) | OpenBrace(_) | CloseBrace(_) | EOF(_) => return false
+                _ => type_index = type_index + 1
+              }
+            }
+            false
+          }
           _ => false
         }
       } else {
