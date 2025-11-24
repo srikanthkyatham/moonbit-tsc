@@ -1,3 +1,8 @@
+# packages
 .mooncakes
 target
+# claude settings
 .claude
+# backup files
+*.*.bak*
+*.sh
