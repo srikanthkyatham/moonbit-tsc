@@ -2,23 +2,60 @@
 // Converts transformed AST to JavaScript source code
 
 ///|
-/// Emitter context for controlling output format
+/// Emitter context for controlling output format and source map generation
 pub struct EmitterContext {
   indent_level : Int
   indent_string : String
   newline_at_rules : Bool
-} derive(Show)
+  source_map_builder : SourceMapBuilder?  // Optional source map builder
+  source_file : String?                    // Source file name for mappings
+  mut generated_line : Int                 // Current generated line (0-based)
+  mut generated_column : Int               // Current generated column (0-based)
+}
 
 ///|
-/// Create default emitter context
+/// Create default emitter context (without source maps)
 pub fn EmitterContext::default() -> EmitterContext {
-  { indent_level: 0, indent_string: "  ", newline_at_rules: true }
+  {
+    indent_level: 0,
+    indent_string: "  ",
+    newline_at_rules: true,
+    source_map_builder: None,
+    source_file: None,
+    generated_line: 0,
+    generated_column: 0
+  }
+}
+
+///|
+/// Create emitter context with source map support
+pub fn EmitterContext::with_source_map(
+  builder : SourceMapBuilder,
+  source_file : String
+) -> EmitterContext {
+  {
+    indent_level: 0,
+    indent_string: "  ",
+    newline_at_rules: true,
+    source_map_builder: Some(builder),
+    source_file: Some(source_file),
+    generated_line: 0,
+    generated_column: 0
+  }
 }
 
 ///|
 /// Increase indentation level
-fn EmitterContext::indent(self : EmitterContext) -> EmitterContext {
-  { indent_level: self.indent_level + 1, indent_string: self.indent_string, newline_at_rules: self.newline_at_rules }
+pub fn EmitterContext::indent(self : EmitterContext) -> EmitterContext {
+  {
+    indent_level: self.indent_level + 1,
+    indent_string: self.indent_string,
+    newline_at_rules: self.newline_at_rules,
+    source_map_builder: self.source_map_builder,
+    source_file: self.source_file,
+    generated_line: self.generated_line,
+    generated_column: self.generated_column
+  }
 }
 
 ///|
@@ -29,6 +66,43 @@ fn EmitterContext::get_indent(self : EmitterContext) -> String {
     result = result + self.indent_string
   }
   result
+}
+
+///|
+/// Emit text and track position for source maps
+pub fn EmitterContext::emit_text(self : EmitterContext, text : String) -> Unit {
+  // Update column position
+  self.generated_column = self.generated_column + text.length()
+}
+
+///|
+/// Emit newline and track position for source maps
+pub fn EmitterContext::emit_newline(self : EmitterContext) -> Unit {
+  self.generated_line = self.generated_line + 1
+  self.generated_column = 0
+}
+
+///|
+/// Add a source mapping if source map builder is enabled
+pub fn EmitterContext::add_mapping(
+  self : EmitterContext,
+  original_line : Int,
+  original_column : Int,
+  name : String?
+) -> Unit {
+  match (self.source_map_builder, self.source_file) {
+    (Some(builder), Some(source)) => {
+      builder.add_mapping(
+        self.generated_line,
+        self.generated_column,
+        source,
+        original_line,
+        original_column,
+        name
+      )
+    }
+    _ => ()
+  }
 }
 
 ///|
@@ -95,7 +169,11 @@ pub fn emit(node : Node, ctx : EmitterContext) -> String {
     ObjectBindingPattern(obp) => emit_object_binding_pattern(obp, ctx)
 
     // Primary Expressions
-    Identifier(id) => id.name
+    Identifier(id) => {
+      // Add mapping for identifier reference
+      ctx.add_mapping(id.location.start.line, id.location.start.column, Some(id.name))
+      id.name
+    }
     NumericLiteral(nl) => nl.value
     StringLiteral(sl) => "\"" + escape_string(sl.value) + "\""
     BooleanLiteral(bl) => if bl.value { "true" } else { "false" }
@@ -135,8 +213,10 @@ fn emit_source_file(sf : SourceFile, ctx : EmitterContext) -> String {
     let stmt_str = emit(sf.statements[i], ctx)
     if stmt_str.length() > 0 {
       result = result + stmt_str
+      ctx.emit_text(stmt_str)
       if i < sf.statements.length() - 1 {
         result = result + "\n"
+        ctx.emit_newline()
       }
     }
   }
@@ -146,6 +226,9 @@ fn emit_source_file(sf : SourceFile, ctx : EmitterContext) -> String {
 ///|
 /// Emit variable statement
 fn emit_variable_statement(vs : VariableStatement, ctx : EmitterContext) -> String {
+  // Add source mapping at the start of the statement
+  ctx.add_mapping(vs.location.start.line, vs.location.start.column, None)
+
   let keyword = if vs.is_const {
     "const"
   } else if vs.is_let {
@@ -158,7 +241,11 @@ fn emit_variable_statement(vs : VariableStatement, ctx : EmitterContext) -> Stri
   for i = 0; i < vs.declarations.length(); i = i + 1 {
     let decl = vs.declarations[i]
     let name = match decl.name {
-      Identifier(id) => id.name
+      Identifier(id) => {
+        // Add mapping for identifier
+        ctx.add_mapping(id.location.start.line, id.location.start.column, Some(id.name))
+        id.name
+      }
       _ => emit(decl.name, ctx)  // For binding patterns
     }
 
@@ -180,6 +267,9 @@ fn emit_variable_statement(vs : VariableStatement, ctx : EmitterContext) -> Stri
 ///|
 /// Emit function declaration
 fn emit_function_declaration(fd : FunctionDeclaration, ctx : EmitterContext) -> String {
+  // Add source mapping at the start of the function declaration
+  ctx.add_mapping(fd.location.start.line, fd.location.start.column, None)
+
   let mut result = ctx.get_indent()
 
   if fd.is_async {
@@ -193,7 +283,11 @@ fn emit_function_declaration(fd : FunctionDeclaration, ctx : EmitterContext) -> 
   }
 
   match fd.name {
-    Some(Identifier(id)) => result = result + " " + id.name
+    Some(Identifier(id)) => {
+      // Add mapping for function name
+      ctx.add_mapping(id.location.start.line, id.location.start.column, Some(id.name))
+      result = result + " " + id.name
+    }
     _ => ()
   }
 
@@ -257,10 +351,17 @@ fn emit_parameter(p : Parameter, ctx : EmitterContext) -> String {
 ///|
 /// Emit class declaration
 fn emit_class_declaration(cd : ClassDeclaration, ctx : EmitterContext) -> String {
+  // Add source mapping at the start of the class declaration
+  ctx.add_mapping(cd.location.start.line, cd.location.start.column, None)
+
   let mut result = ctx.get_indent() + "class "
 
   match cd.name {
-    Some(Identifier(id)) => result = result + id.name
+    Some(Identifier(id)) => {
+      // Add mapping for class name
+      ctx.add_mapping(id.location.start.line, id.location.start.column, Some(id.name))
+      result = result + id.name
+    }
     _ => ()
   }
 
@@ -520,6 +621,9 @@ fn emit_export_assignment(ea : ExportAssignment, ctx : EmitterContext) -> String
 ///|
 /// Emit if statement
 fn emit_if_statement(if_stmt : IfStatement, ctx : EmitterContext) -> String {
+  // Add source mapping at the start of the if statement
+  ctx.add_mapping(if_stmt.location.start.line, if_stmt.location.start.column, None)
+
   let mut result = ctx.get_indent() + "if ("
   result = result + emit(if_stmt.condition, ctx)
   result = result + ") "
@@ -577,6 +681,9 @@ fn emit_switch_statement(ss : SwitchStatement, ctx : EmitterContext) -> String {
 ///|
 /// Emit for statement
 fn emit_for_statement(fs : ForStatement, ctx : EmitterContext) -> String {
+  // Add source mapping at the start of the for statement
+  ctx.add_mapping(fs.location.start.line, fs.location.start.column, None)
+
   let mut result = ctx.get_indent() + "for ("
 
   // Emit initializer (without trailing semicolon if it's a variable statement)
@@ -759,6 +866,9 @@ fn emit_continue_statement(cs : ContinueStatement, ctx : EmitterContext) -> Stri
 ///|
 /// Emit return statement
 fn emit_return_statement(rs : ReturnStatement, ctx : EmitterContext) -> String {
+  // Add source mapping at the start of the return statement
+  ctx.add_mapping(rs.location.start.line, rs.location.start.column, None)
+
   let mut result = ctx.get_indent() + "return"
 
   match rs.expression {
@@ -886,6 +996,9 @@ fn emit_conditional_expression(ce : ConditionalExpression, ctx : EmitterContext)
 ///|
 /// Emit call expression
 fn emit_call_expression(ce : CallExpression, ctx : EmitterContext) -> String {
+  // Add source mapping at the start of the call expression
+  ctx.add_mapping(ce.location.start.line, ce.location.start.column, None)
+
   let mut result = emit(ce.expression, ctx)
   result = result + "("
 
@@ -925,6 +1038,8 @@ fn emit_new_expression(ne : NewExpression, ctx : EmitterContext) -> String {
 ///|
 /// Emit property access expression
 fn emit_property_access_expression(pae : PropertyAccessExpression, ctx : EmitterContext) -> String {
+  // Add source mapping at the property access
+  ctx.add_mapping(pae.location.start.line, pae.location.start.column, Some(pae.name))
   emit(pae.expression, ctx) + "." + pae.name
 }
 
