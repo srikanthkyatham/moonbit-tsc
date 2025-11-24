@@ -928,52 +928,21 @@ fn try_parse_arrow_function(
   }
 
   // Parse parameters
-  let params = []
+  let (params, parser) = parse_parameter_list(parser)
   let mut parser = parser
-  let mut first = true
-  let mut should_continue = true
 
-  while should_continue {
-    should_continue = match current_token(parser) {
-      CloseParen(_) => false
-      _ => true
-    }
-    if !should_continue {
-      break
-    }
-
-    if !first {
-      match current_token(parser) {
-        Comma(_) => parser = advance_parser(parser)
-        _ => return Err(original_parser)
+  // Parse optional return type annotation
+  let (return_type, p) = match current_token(parser) {
+    Colon(_) => {
+      parser = advance_parser(parser)
+      match parse_type(parser) {
+        Ok((ty, p)) => (Some(ty), p)
+        Err(_) => return Err(original_parser)
       }
     }
-    first = false
-
-    // Parse parameter (just identifier for now, full parameter support later)
-    match parse_identifier(parser) {
-      Ok((id, p)) => {
-        params.push(
-          Node::Parameter(Parameter::{
-            name: Node::Identifier(id),
-            type_annotation: None,
-            initializer: None,
-            is_optional: false,
-            is_rest: false,
-            location: id.location,
-          }),
-        )
-        parser = p
-      }
-      Err(_) => return Err(original_parser)
-    }
+    _ => (None, parser)
   }
-
-  // Consume closing paren
-  parser = match current_token(parser) {
-    CloseParen(_) => advance_parser(parser)
-    _ => return Err(original_parser)
-  }
+  parser = p
 
   // Expect arrow =>
   parser = match current_token(parser) {
@@ -1004,7 +973,7 @@ fn try_parse_arrow_function(
       Node::ArrowFunction(ArrowFunction::{
         type_parameters: [],
         parameters: params,
-        return_type: None,
+        return_type,
         body,
         is_async: false,
         location: start_loc,
@@ -2256,7 +2225,12 @@ fn parse_heritage_types(parser : Parser) -> (Array[Node], Parser) {
 fn parse_heritage_types_aux(parser : Parser, acc : Array[Node]) -> (Array[Node], Parser) {
   match current_token(parser) {
     Identifier(name, loc) => {
-      acc.push(Node::Identifier(Identifier::{ name, location: loc }))
+      // Create TypeReference instead of Identifier for heritage types
+      acc.push(Node::TypeReference(TypeReference::{
+        type_name: name,
+        type_arguments: [],
+        location: loc
+      }))
       let parser = advance_parser(parser)
       match current_token(parser) {
         Comma(_) => parse_heritage_types_aux(advance_parser(parser), acc)
@@ -2314,13 +2288,20 @@ fn parse_class_members_aux(parser : Parser, acc : Array[Node]) -> (Array[Node], 
         // Method
         OpenParen(_) => {
           let parser = advance_parser(parser)
-          let parser = skip_until_token(parser, fn (t) {
-            match t {
-              CloseParen(_) => true
-              _ => false
+          let (parameters, parser) = parse_parameter_list(parser)
+
+          // Parse optional return type
+          let (return_type, parser) = match current_token(parser) {
+            Colon(_) => {
+              let parser = advance_parser(parser)
+              match parse_type(parser) {
+                Ok((ty, p)) => (Some(ty), p)
+                Err(p) => (None, p)
+              }
             }
-          })
-          let parser = advance_parser(parser) // consume ')'
+            _ => (None, parser)
+          }
+
           let (body, parser) = match current_token(parser) {
             OpenBrace(_) => {
               match parse_block_statement(parser) {
@@ -2333,8 +2314,8 @@ fn parse_class_members_aux(parser : Parser, acc : Array[Node]) -> (Array[Node], 
           acc.push(Node::MethodDeclaration(MethodDeclaration::{
             name,
             type_parameters: [],
-            parameters: [],
-            return_type: None,
+            parameters,
+            return_type,
             body,
             modifiers: [],
             is_async: false,

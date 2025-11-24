@@ -169,7 +169,10 @@ pub struct TypedFile {
 
 ///|
 /// Create a new type checker
-pub fn TypeChecker::new(file_path : String, global_scope : Scope?) -> TypeChecker {
+pub fn TypeChecker::new(
+  file_path : String,
+  global_scope : Scope?,
+) -> TypeChecker {
   {
     next_type_id: 0,
     type_cache: Map::new(),
@@ -282,9 +285,7 @@ pub fn error_type(checker : TypeChecker) -> (Type, TypeChecker) {
 
 ///|
 /// Check a bound source file
-pub fn check_source_file(
-  bound : BoundSourceFile
-) -> CheckResult {
+pub fn check_source_file(bound : BoundSourceFile) -> CheckResult {
   let checker = TypeChecker::new(bound.file_path, Some(bound.global_scope))
   let checker = check_statements(checker, bound.statements)
 
@@ -295,7 +296,6 @@ pub fn check_source_file(
     types: checker.node_types,
     diagnostics: checker.diagnostics,
   }
-
   if checker.diagnostics.is_empty() {
     Ok(typed_file)
   } else {
@@ -307,7 +307,7 @@ pub fn check_source_file(
 /// Check an array of statements
 fn check_statements(
   checker : TypeChecker,
-  statements : Array[Node]
+  statements : Array[Node],
 ) -> TypeChecker {
   let mut checker = checker
   for i = 0; i < statements.length(); i = i + 1 {
@@ -321,10 +321,8 @@ fn check_statements(
 fn check_statement(checker : TypeChecker, node : Node) -> TypeChecker {
   match node {
     VariableStatement(var_stmt) => check_variable_statement(checker, var_stmt)
-    ExpressionStatement(expr_stmt) => check_expression_statement(
-      checker,
-      expr_stmt,
-    )
+    ExpressionStatement(expr_stmt) =>
+      check_expression_statement(checker, expr_stmt)
     FunctionDeclaration(func) => check_function_declaration(checker, func)
     ReturnStatement(ret) => check_return_statement(checker, ret)
     IfStatement(if_stmt) => check_if_statement(checker, if_stmt)
@@ -355,7 +353,7 @@ fn check_statement(checker : TypeChecker, node : Node) -> TypeChecker {
 /// Check variable statement
 fn check_variable_statement(
   checker : TypeChecker,
-  var_stmt : VariableStatement
+  var_stmt : VariableStatement,
 ) -> TypeChecker {
   let mut checker = checker
   for i = 0; i < var_stmt.declarations.length(); i = i + 1 {
@@ -368,7 +366,7 @@ fn check_variable_statement(
 /// Check variable declaration
 fn check_variable_declaration(
   checker : TypeChecker,
-  decl : VariableDeclaration
+  decl : VariableDeclaration,
 ) -> TypeChecker {
   // Get the declared type (if any)
   let (declared_type, checker) = match decl.type_annotation {
@@ -387,7 +385,7 @@ fn check_variable_declaration(
 
   // Check compatibility if both are present
   let checker = match (declared_type, init_type) {
-    (Some(decl_t), Some(init_t)) => {
+    (Some(decl_t), Some(init_t)) =>
       if is_assignable(init_t, decl_t) {
         checker
       } else {
@@ -398,10 +396,8 @@ fn check_variable_declaration(
           2322,
         )
       }
-    }
     _ => checker
   }
-
   checker
 }
 
@@ -413,7 +409,7 @@ fn check_variable_declaration(
 /// Check expression statement
 fn check_expression_statement(
   checker : TypeChecker,
-  expr_stmt : ExpressionStatement
+  expr_stmt : ExpressionStatement,
 ) -> TypeChecker {
   let (_, checker) = infer_type(checker, expr_stmt.expression)
   checker
@@ -427,15 +423,15 @@ fn infer_type(checker : TypeChecker, expr : Node) -> (Type, TypeChecker) {
     StringLiteral(_) => string_type(checker)
     BooleanLiteral(_) => boolean_type(checker)
     NullLiteral(_) => null_type(checker)
-    Identifier(id) => {
+    Identifier(id) =>
       // Check for undefined identifier
       if id.name == "undefined" {
         undefined_type(checker)
       } else {
         infer_identifier_type(checker, id)
       }
-    }
-    BinaryExpression(bin_expr) => infer_binary_expression_type(checker, bin_expr)
+    BinaryExpression(bin_expr) =>
+      infer_binary_expression_type(checker, bin_expr)
     UnaryExpression(un_expr) => infer_unary_expression_type(checker, un_expr)
     CallExpression(call) => infer_call_expression_type(checker, call)
     PropertyAccessExpression(prop) => infer_property_access_type(checker, prop)
@@ -445,7 +441,8 @@ fn infer_type(checker : TypeChecker, expr : Node) -> (Type, TypeChecker) {
     ArrowFunction(arrow) => infer_arrow_function_type(checker, arrow)
     ConditionalExpression(cond) => infer_conditional_type(checker, cond)
     NewExpression(new_expr) => infer_new_expression_type(checker, new_expr)
-    TemplateExpression(template) => infer_template_expression_type(checker, template)
+    TemplateExpression(template) =>
+      infer_template_expression_type(checker, template)
     ThisExpression(_) => infer_this_type(checker)
     SpreadExpression(spread) => infer_type(checker, spread.expression)
     _ => any_type(checker) // Fallback for unhandled expressions
@@ -456,7 +453,7 @@ fn infer_type(checker : TypeChecker, expr : Node) -> (Type, TypeChecker) {
 /// Infer identifier type
 fn infer_identifier_type(
   checker : TypeChecker,
-  id : Identifier
+  id : Identifier,
 ) -> (Type, TypeChecker) {
   // TODO: Look up symbol in scope and get its type
   // For now, return any type
@@ -467,7 +464,7 @@ fn infer_identifier_type(
 /// Infer binary expression type
 fn infer_binary_expression_type(
   checker : TypeChecker,
-  bin_expr : BinaryExpression
+  bin_expr : BinaryExpression,
 ) -> (Type, TypeChecker) {
   let (left_type, checker) = infer_type(checker, bin_expr.left)
   let (right_type, checker) = infer_type(checker, bin_expr.right)
@@ -475,7 +472,7 @@ fn infer_binary_expression_type(
   // Determine result type based on operator
   match bin_expr.operator {
     // Addition: can be number + number -> number OR string + string -> string
-    Add => {
+    Add =>
       // Check if either operand is a string
       match (left_type, right_type) {
         (String(_), _) | (_, String(_)) => string_type(checker)
@@ -490,13 +487,8 @@ fn infer_binary_expression_type(
           number_type(checker)
         }
       }
-    }
     // Arithmetic operators: number op number -> number
-    Subtract
-    | Multiply
-    | Divide
-    | Remainder
-    | Exponentiate => {
+    Subtract | Multiply | Divide | Remainder | Exponentiate => {
       let checker = check_numeric_operands(
         checker,
         left_type,
@@ -558,9 +550,9 @@ fn infer_binary_expression_type(
     | BitwiseXorAssign => {
       // Check if trying to assign to a const variable
       let checker = match bin_expr.left {
-        Identifier(id) => {
+        Identifier(id) =>
           match lookup_symbol(checker, id.name) {
-            Some(symbol) => {
+            Some(symbol) =>
               if symbol.flags.is_const {
                 add_diagnostic(
                   checker,
@@ -571,10 +563,8 @@ fn infer_binary_expression_type(
               } else {
                 checker
               }
-            }
             None => checker
           }
-        }
         _ => checker
       }
       (right_type, checker)
@@ -587,10 +577,9 @@ fn infer_binary_expression_type(
 /// Infer unary expression type
 fn infer_unary_expression_type(
   checker : TypeChecker,
-  un_expr : UnaryExpression
+  un_expr : UnaryExpression,
 ) -> (Type, TypeChecker) {
   let (operand_type, checker) = infer_type(checker, un_expr.operand)
-
   match un_expr.operator {
     Plus | Minus | BitwiseNot => {
       let checker = check_numeric_operand(
@@ -622,7 +611,7 @@ fn infer_unary_expression_type(
 /// Infer call expression type
 fn infer_call_expression_type(
   checker : TypeChecker,
-  call : CallExpression
+  call : CallExpression,
 ) -> (Type, TypeChecker) {
   let (func_type, checker) = infer_type(checker, call.expression)
 
@@ -641,17 +630,16 @@ fn infer_call_expression_type(
 /// Infer property access type
 fn infer_property_access_type(
   checker : TypeChecker,
-  prop : PropertyAccessExpression
+  prop : PropertyAccessExpression,
 ) -> (Type, TypeChecker) {
   let (object_type, checker) = infer_type(checker, prop.expression)
   // TODO: Look up property in object type
   match object_type {
-    Object(obj_type) => {
+    Object(obj_type) =>
       match obj_type.properties.get(prop.name) {
         Some(property) => (property.prop_type, checker)
         None => any_type(checker)
       }
-    }
     _ => any_type(checker)
   }
 }
@@ -660,11 +648,10 @@ fn infer_property_access_type(
 /// Infer element access type (bracket notation)
 fn infer_element_access_type(
   checker : TypeChecker,
-  elem : ElementAccessExpression
+  elem : ElementAccessExpression,
 ) -> (Type, TypeChecker) {
   let (object_type, checker) = infer_type(checker, elem.expression)
   let (_, checker) = infer_type(checker, elem.argument_expression)
-
   match object_type {
     Array(arr_type) => (arr_type.element_type, checker)
     Object(_) => any_type(checker) // TODO: Better object property lookup
@@ -676,19 +663,18 @@ fn infer_element_access_type(
 /// Infer new expression type (constructor call)
 fn infer_new_expression_type(
   checker : TypeChecker,
-  new_expr : NewExpression
+  new_expr : NewExpression,
 ) -> (Type, TypeChecker) {
   let (expr_type, checker) = infer_type(checker, new_expr.expression)
 
   // Check arguments if present
   let mut checker = checker
   match new_expr.arguments {
-    Some(args) => {
+    Some(args) =>
       for i = 0; i < args.length(); i = i + 1 {
         let (_, c) = infer_type(checker, args[i])
         checker = c
       }
-    }
     None => ()
   }
 
@@ -701,7 +687,7 @@ fn infer_new_expression_type(
 /// Infer template expression type
 fn infer_template_expression_type(
   checker : TypeChecker,
-  template : TemplateExpression
+  template : TemplateExpression,
 ) -> (Type, TypeChecker) {
   // Check all template spans
   let mut checker = checker
@@ -721,17 +707,15 @@ fn infer_this_type(checker : TypeChecker) -> (Type, TypeChecker) {
   any_type(checker)
 }
 
-
 ///|
 /// Infer array literal type
 fn infer_array_literal_type(
   checker : TypeChecker,
-  arr : ArrayLiteralExpression
+  arr : ArrayLiteralExpression,
 ) -> (Type, TypeChecker) {
   // Infer element types and create union
   let mut checker = checker
   let element_types = []
-
   for i = 0; i < arr.elements.length(); i = i + 1 {
     match arr.elements[i] {
       Some(elem) => {
@@ -752,7 +736,6 @@ fn infer_array_literal_type(
     let (info, checker) = create_type_info(checker)
     (Union({ types: element_types, info }), checker)
   }
-
   let (info, checker) = create_type_info(checker)
   (Array({ element_type: elem_union, info }), checker)
 }
@@ -761,25 +744,25 @@ fn infer_array_literal_type(
 /// Infer object literal type
 fn infer_object_literal_type(
   checker : TypeChecker,
-  obj : ObjectLiteralExpression
+  obj : ObjectLiteralExpression,
 ) -> (Type, TypeChecker) {
   let mut checker = checker
   let properties = Map::new()
-
   for i = 0; i < obj.properties.length(); i = i + 1 {
     match obj.properties[i] {
       PropertyAssignment(name, value, _) => {
         let (prop_type, c) = infer_type(checker, value)
-        properties.set(
+        properties.set(name, {
           name,
-          { name, prop_type, is_optional: false, is_readonly: false },
-        )
+          prop_type,
+          is_optional: false,
+          is_readonly: false,
+        })
         checker = c
       }
       _ => ()
     }
   }
-
   let (info, checker) = create_type_info(checker)
   (
     Object({
@@ -797,7 +780,7 @@ fn infer_object_literal_type(
 /// Infer arrow function type
 fn infer_arrow_function_type(
   checker : TypeChecker,
-  arrow : ArrowFunction
+  arrow : ArrowFunction,
 ) -> (Type, TypeChecker) {
   // Build parameter list
   let parameters = []
@@ -806,12 +789,11 @@ fn infer_arrow_function_type(
     match arrow.parameters[i] {
       Parameter(param) => {
         let (param_type, c) = match param.type_annotation {
-          Some(type_node) => {
+          Some(type_node) =>
             match get_type_from_type_node(checker, type_node) {
               (Some(t), c2) => (t, c2)
               (None, c2) => any_type(c2)
             }
-          }
           None => any_type(checker)
         }
         checker = c
@@ -828,19 +810,17 @@ fn infer_arrow_function_type(
 
   // Get return type
   let (return_type, checker) = match arrow.return_type {
-    Some(type_node) => {
+    Some(type_node) =>
       match get_type_from_type_node(checker, type_node) {
         (Some(t), c) => (t, c)
         (None, c) => any_type(c)
       }
-    }
     None => {
       // Infer from body
       let (t, c) = infer_type(checker, arrow.body)
       (t, c)
     }
   }
-
   let (info, checker) = create_type_info(checker)
   (Function({ parameters, return_type, info }), checker)
 }
@@ -849,7 +829,7 @@ fn infer_arrow_function_type(
 /// Infer conditional expression type
 fn infer_conditional_type(
   checker : TypeChecker,
-  cond : ConditionalExpression
+  cond : ConditionalExpression,
 ) -> (Type, TypeChecker) {
   let (condition_type, checker) = infer_type(checker, cond.condition)
   let (then_type, checker) = infer_type(checker, cond.when_true)
@@ -906,20 +886,14 @@ fn is_assignable(source : Type, target : Type) -> Bool {
     // Union source is assignable to target if all members are assignable
     (Union(union), target) => is_union_assignable_to(union, target)
     // Array types
-    (Array(source_arr), Array(target_arr)) => is_assignable(
-      source_arr.element_type,
-      target_arr.element_type,
-    )
+    (Array(source_arr), Array(target_arr)) =>
+      is_assignable(source_arr.element_type, target_arr.element_type)
     // Object types - structural typing
-    (Object(source_obj), Object(target_obj)) => is_object_assignable(
-      source_obj,
-      target_obj,
-    )
+    (Object(source_obj), Object(target_obj)) =>
+      is_object_assignable(source_obj, target_obj)
     // Function types - check parameter and return types
-    (Function(source_fn), Function(target_fn)) => is_function_assignable(
-      source_fn,
-      target_fn,
-    )
+    (Function(source_fn), Function(target_fn)) =>
+      is_function_assignable(source_fn, target_fn)
     _ => false
   }
 }
@@ -952,28 +926,23 @@ fn is_union_assignable_to(union : CheckerUnionType, target : Type) -> Bool {
 
 ///|
 /// Check if source object is assignable to target object (structural typing)
-fn is_object_assignable(
-  source : ObjectType,
-  target : ObjectType
-) -> Bool {
+fn is_object_assignable(source : ObjectType, target : ObjectType) -> Bool {
   // Check that all required properties in target exist in source
   let target_props = target.properties.iter()
   let mut assignable = true
   for entry in target_props {
     let (prop_name, target_prop) = entry
     match source.properties.get(prop_name) {
-      Some(source_prop) => {
+      Some(source_prop) =>
         if !is_assignable(source_prop.prop_type, target_prop.prop_type) {
           assignable = false
           break
         }
-      }
-      None => {
+      None =>
         if !target_prop.is_optional {
           assignable = false
           break
         }
-      }
     }
   }
   assignable
@@ -983,7 +952,7 @@ fn is_object_assignable(
 /// Check if source function is assignable to target function
 fn is_function_assignable(
   source : CheckerFunctionType,
-  target : CheckerFunctionType
+  target : CheckerFunctionType,
 ) -> Bool {
   // Return type must be assignable
   if !is_assignable(source.return_type, target.return_type) {
@@ -994,10 +963,12 @@ fn is_function_assignable(
   if source.parameters.length() < target.parameters.length() {
     return false
   }
-
   let mut assignable = true
   for i = 0; i < target.parameters.length(); i = i + 1 {
-    if !is_assignable(target.parameters[i].param_type, source.parameters[i].param_type) {
+    if !is_assignable(
+        target.parameters[i].param_type,
+        source.parameters[i].param_type,
+      ) {
       assignable = false
       break
     }
@@ -1036,21 +1007,14 @@ fn check_numeric_operands(
 ) -> TypeChecker {
   let checker = if !is_numeric_type(left) {
     add_diagnostic(
-      checker,
-      "Left operand must be of type 'number'",
-      location,
-      2363,
+      checker, "Left operand must be of type 'number'", location, 2363,
     )
   } else {
     checker
   }
-
   if !is_numeric_type(right) {
     add_diagnostic(
-      checker,
-      "Right operand must be of type 'number'",
-      location,
-      2363,
+      checker, "Right operand must be of type 'number'", location, 2363,
     )
   } else {
     checker
@@ -1066,12 +1030,7 @@ fn check_numeric_operand(
   location : SourceLocation,
 ) -> TypeChecker {
   if !is_numeric_type(operand) {
-    add_diagnostic(
-      checker,
-      "Operand must be of type 'number'",
-      location,
-      2363,
-    )
+    add_diagnostic(checker, "Operand must be of type 'number'", location, 2363)
   } else {
     checker
   }
@@ -1110,7 +1069,7 @@ fn is_numeric_type(t : Type) -> Bool {
 /// Check function declaration
 fn check_function_declaration(
   checker : TypeChecker,
-  func : FunctionDeclaration
+  func : FunctionDeclaration,
 ) -> TypeChecker {
   // Check function body
   let checker = match func.body {
@@ -1128,7 +1087,7 @@ fn check_function_declaration(
 /// Check return statement
 fn check_return_statement(
   checker : TypeChecker,
-  ret : ReturnStatement
+  ret : ReturnStatement,
 ) -> TypeChecker {
   match ret.expression {
     Some(expr) => {
@@ -1143,7 +1102,7 @@ fn check_return_statement(
 /// Check if statement
 fn check_if_statement(
   checker : TypeChecker,
-  if_stmt : IfStatement
+  if_stmt : IfStatement,
 ) -> TypeChecker {
   let (_, checker) = infer_type(checker, if_stmt.condition)
   let checker = check_statement(checker, if_stmt.then_statement)
@@ -1157,7 +1116,7 @@ fn check_if_statement(
 /// Check while statement
 fn check_while_statement(
   checker : TypeChecker,
-  while_stmt : WhileStatement
+  while_stmt : WhileStatement,
 ) -> TypeChecker {
   let (_, checker) = infer_type(checker, while_stmt.condition)
   check_statement(checker, while_stmt.statement)
@@ -1167,7 +1126,7 @@ fn check_while_statement(
 /// Check do-while statement
 fn check_do_while_statement(
   checker : TypeChecker,
-  do_while : DoWhileStatement
+  do_while : DoWhileStatement,
 ) -> TypeChecker {
   let checker = check_statement(checker, do_while.statement)
   let (_, checker) = infer_type(checker, do_while.condition)
@@ -1178,14 +1137,12 @@ fn check_do_while_statement(
 /// Check for statement
 fn check_for_statement(
   checker : TypeChecker,
-  for_stmt : ForStatement
+  for_stmt : ForStatement,
 ) -> TypeChecker {
   // Check initializer
   let checker = match for_stmt.initializer {
-    Some(VariableStatement(var_stmt)) => check_variable_statement(
-      checker,
-      var_stmt,
-    )
+    Some(VariableStatement(var_stmt)) =>
+      check_variable_statement(checker, var_stmt)
     Some(expr) => {
       let (_, c) = infer_type(checker, expr)
       c
@@ -1219,7 +1176,7 @@ fn check_for_statement(
 /// Check block statement
 fn check_block_statement(
   checker : TypeChecker,
-  block : BlockStatement
+  block : BlockStatement,
 ) -> TypeChecker {
   check_statements(checker, block.statements)
 }
@@ -1228,25 +1185,23 @@ fn check_block_statement(
 /// Check class declaration
 fn check_class_declaration(
   checker : TypeChecker,
-  class_decl : ClassDeclaration
+  class_decl : ClassDeclaration,
 ) -> TypeChecker {
   // Check class members (constructors, methods, properties)
   let mut checker = checker
   for i = 0; i < class_decl.members.length(); i = i + 1 {
     checker = match class_decl.members[i] {
-      ConstructorDeclaration(ctor) => {
+      ConstructorDeclaration(ctor) =>
         match ctor.body {
           Some(body) => check_statement(checker, body)
           None => checker
         }
-      }
-      MethodDeclaration(method) => {
-        match method.body {
+      MethodDeclaration(method_dec) =>
+        match method_dec.body {
           Some(body) => check_statement(checker, body)
           None => checker
         }
-      }
-      PropertyDeclaration(prop) => {
+      PropertyDeclaration(prop) =>
         match prop.initializer {
           Some(init) => {
             let (_, c) = infer_type(checker, init)
@@ -1254,7 +1209,6 @@ fn check_class_declaration(
           }
           None => checker
         }
-      }
       _ => checker
     }
   }
@@ -1265,7 +1219,7 @@ fn check_class_declaration(
 /// Check enum declaration
 fn check_enum_declaration(
   checker : TypeChecker,
-  enum_decl : EnumDeclaration
+  enum_decl : EnumDeclaration,
 ) -> TypeChecker {
   // TODO: Check enum members
   checker
@@ -1275,15 +1229,13 @@ fn check_enum_declaration(
 /// Check try statement
 fn check_try_statement(
   checker : TypeChecker,
-  try_stmt : TryStatement
+  try_stmt : TryStatement,
 ) -> TypeChecker {
   let checker = check_statement(checker, try_stmt.try_block)
-
   let checker = match try_stmt.catch_clause {
     Some(catch_clause) => check_statement(checker, catch_clause.block)
     None => checker
   }
-
   match try_stmt.finally_block {
     Some(finally) => check_statement(checker, finally)
     None => checker
@@ -1294,7 +1246,7 @@ fn check_try_statement(
 /// Check throw statement
 fn check_throw_statement(
   checker : TypeChecker,
-  throw_stmt : ThrowStatement
+  throw_stmt : ThrowStatement,
 ) -> TypeChecker {
   let (_, checker) = infer_type(checker, throw_stmt.expression)
   checker
@@ -1304,10 +1256,9 @@ fn check_throw_statement(
 /// Check switch statement
 fn check_switch_statement(
   checker : TypeChecker,
-  switch_stmt : SwitchStatement
+  switch_stmt : SwitchStatement,
 ) -> TypeChecker {
   let (_, checker) = infer_type(checker, switch_stmt.expression)
-
   let mut checker = checker
   for i = 0; i < switch_stmt.cases.length(); i = i + 1 {
     let case_clause = switch_stmt.cases[i]
@@ -1316,13 +1267,11 @@ fn check_switch_statement(
         let (_, c) = infer_type(checker, case_expr)
         checker = check_statements(c, case_clause.statements)
       }
-      None => {
+      None =>
         // Default case
         checker = check_statements(checker, case_clause.statements)
-      }
     }
   }
-
   checker
 }
 
@@ -1334,11 +1283,11 @@ fn check_switch_statement(
 /// Get type from type node
 fn get_type_from_type_node(
   checker : TypeChecker,
-  type_node : Node
+  type_node : Node,
 ) -> (Type?, TypeChecker) {
   match type_node {
     // Handle keyword types (from parser)
-    KeywordType(kw_type) => {
+    KeywordType(kw_type) =>
       match kw_type.kind {
         Number => {
           let (t, c) = number_type(checker)
@@ -1397,7 +1346,6 @@ fn get_type_from_type_node(
           )
         }
       }
-    }
     UnionType(union_type) => {
       // Handle union types
       let mut checker = checker
@@ -1408,15 +1356,13 @@ fn get_type_from_type_node(
             types.push(t)
             checker = c
           }
-          (None, c) => {
-            checker = c
-          }
+          (None, c) => checker = c
         }
       }
       let (info, checker) = create_type_info(checker)
       (Some(Union({ types, info })), checker)
     }
-    TypeReference(type_ref) => {
+    TypeReference(type_ref) =>
       // Look up type reference
       match type_ref.type_name {
         "number" => {
@@ -1451,27 +1397,23 @@ fn get_type_from_type_node(
           let (t, c) = undefined_type(checker)
           (Some(t), c)
         }
-        _ => {
+        _ =>
           // Try to look up the type name in the symbol table (for interfaces, classes, etc.)
           match lookup_symbol(checker, type_ref.type_name) {
-            Some(symbol) => {
+            Some(symbol) =>
               match symbol.kind {
-                Interface => {
+                Interface =>
                   // Resolve interface to an Object type with its properties
                   match resolve_interface_type(checker, symbol) {
                     (Some(t), c) => (Some(t), c)
                     (None, c) => (None, c)
                   }
-                }
                 _ => (None, checker) // Other symbol kinds not yet supported
               }
-            }
             None => (None, checker)
           }
-        }
       }
-    }
-    ArrayType(array_type) => {
+    ArrayType(array_type) =>
       // Handle array types
       match get_type_from_type_node(checker, array_type.element_type) {
         (Some(element_type), c) => {
@@ -1480,7 +1422,6 @@ fn get_type_from_type_node(
         }
         (None, c) => (None, c)
       }
-    }
     _ => (None, checker)
   }
 }
@@ -1577,7 +1518,7 @@ fn lookup_symbol(checker : TypeChecker, name : String) -> Symbol? {
 /// Resolve an interface symbol to an Object type with its property types
 fn resolve_interface_type(
   checker : TypeChecker,
-  interface_symbol : Symbol
+  interface_symbol : Symbol,
 ) -> (Type?, TypeChecker) {
   // Get the interface declaration from the symbol
   match interface_symbol.value_declaration {
@@ -1585,13 +1526,12 @@ fn resolve_interface_type(
       // Build property map from interface members
       let properties : Map[String, PropertySignature] = Map::new()
       let mut checker = checker
-
       for i = 0; i < interface_decl.members.length(); i = i + 1 {
         match interface_decl.members[i] {
           PropertyDeclaration(prop) => {
             // Get the property type
             let (prop_type, c) = match prop.type_annotation {
-              Some(type_node) => {
+              Some(type_node) =>
                 match get_type_from_type_node(checker, type_node) {
                   (Some(t), c2) => (t, c2)
                   (None, c2) => {
@@ -1599,25 +1539,19 @@ fn resolve_interface_type(
                     (t, c3)
                   }
                 }
-              }
               None => any_type(checker)
             }
             checker = c
-
-            properties.set(
-              prop.name,
-              {
-                name: prop.name,
-                prop_type,
-                is_optional: false,
-                is_readonly: false,
-              },
-            )
+            properties.set(prop.name, {
+              name: prop.name,
+              prop_type,
+              is_optional: false,
+              is_readonly: false,
+            })
           }
           _ => () // Skip non-property members
         }
       }
-
       let (info, checker) = create_type_info(checker)
       (
         Some(

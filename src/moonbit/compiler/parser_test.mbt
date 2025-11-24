@@ -917,6 +917,61 @@ test "parse const enum" {
   }
 }
 
+///|
+test "parse arrow function with return type annotation" {
+  let tokens = tokens_from_source("const square = (x: number): number => x * x;")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        VariableStatement(var_stmt) => {
+          assert_eq(var_stmt.declarations.length(), 1)
+          let decl = var_stmt.declarations[0]
+          match decl.initializer {
+            Some(ArrowFunction(arrow)) => {
+              assert_eq(arrow.parameters.length(), 1)
+              // Verify return type is present
+              match arrow.return_type {
+                Some(_) => ()
+                None => assert_true(false)
+              }
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(diagnostics) => {
+      println("Parse error:")
+      for i = 0; i < diagnostics.length(); i = i + 1 {
+        println("  " + diagnostics[i].message)
+      }
+      assert_true(false)
+    }
+  }
+}
+
+///|
+test "parse method call callback with arrow function" {
+  let tokens = tokens_from_source("const doubled = numbers.map(x => x * 2);")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(_) => {
+      // Just verify it parses successfully
+      assert_true(true)
+    }
+    Err(diagnostics) => {
+      println("Parse error:")
+      for i = 0; i < diagnostics.length(); i = i + 1 {
+        println("  " + diagnostics[i].message)
+      }
+      assert_true(false)
+    }
+  }
+}
+
 // ============================================================================
 // Switch Statement Tests
 // ============================================================================
