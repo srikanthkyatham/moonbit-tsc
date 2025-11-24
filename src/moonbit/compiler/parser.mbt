@@ -44,20 +44,25 @@ pub fn parse_source_file(
 ///|
 /// Parse all statements until EOF
 fn parse_statements(parser : Parser) -> (Array[Node], Parser) {
-  let statements : Array[Node] = []
-  let mut parser = parser
-  while !is_at_end(parser) {
+  parse_statements_aux(parser, [])
+}
+
+///|
+/// Tail-recursive helper for parse_statements with accumulator
+fn parse_statements_aux(parser : Parser, acc : Array[Node]) -> (Array[Node], Parser) {
+  if is_at_end(parser) {
+    (acc, parser)
+  } else {
     match parse_statement(parser) {
       Ok((stmt, next_parser)) => {
-        statements.push(stmt)
-        parser = next_parser
+        acc.push(stmt)
+        parse_statements_aux(next_parser, acc)
       }
       Err(next_parser) =>
         // Error recovery: skip to next statement
-        parser = skip_to_next_statement(next_parser)
+        parse_statements_aux(skip_to_next_statement(next_parser), acc)
     }
   }
-  (statements, parser)
 }
 
 ///|
@@ -102,63 +107,14 @@ fn parse_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
     // Control flow
     KeywordIf(_) => parse_if_statement(parser)
     KeywordSwitch(_) => parse_switch_statement(parser)
-    KeywordFor(_) =>
-      Err(
-        add_error(
-          parser,
-          "For statements not yet implemented",
-          current_token(parser).location(),
-        ),
-      )
-    KeywordWhile(_) =>
-      Err(
-        add_error(
-          parser,
-          "While statements not yet implemented",
-          current_token(parser).location(),
-        ),
-      )
-    KeywordDo(_) =>
-      Err(
-        add_error(
-          parser,
-          "Do-while statements not yet implemented",
-          current_token(parser).location(),
-        ),
-      )
-    KeywordBreak(_) =>
-      Err(
-        add_error(
-          parser,
-          "Break statements not yet implemented",
-          current_token(parser).location(),
-        ),
-      )
-    KeywordContinue(_) =>
-      Err(
-        add_error(
-          parser,
-          "Continue statements not yet implemented",
-          current_token(parser).location(),
-        ),
-      )
+    KeywordFor(_) => parse_for_statement(parser)
+    KeywordWhile(_) => parse_while_statement(parser)
+    KeywordDo(_) => parse_do_while_statement(parser)
+    KeywordBreak(_) => parse_break_statement(parser)
+    KeywordContinue(_) => parse_continue_statement(parser)
     KeywordReturn(_) => parse_return_statement(parser)
-    KeywordThrow(_) =>
-      Err(
-        add_error(
-          parser,
-          "Throw statements not yet implemented",
-          current_token(parser).location(),
-        ),
-      )
-    KeywordTry(_) =>
-      Err(
-        add_error(
-          parser,
-          "Try statements not yet implemented",
-          current_token(parser).location(),
-        ),
-      )
+    KeywordThrow(_) => parse_throw_statement(parser)
+    KeywordTry(_) => parse_try_statement(parser)
 
     // Block statement
     OpenBrace(_) => parse_block_statement(parser)
@@ -362,36 +318,27 @@ fn parse_function_declaration(
 ///|
 /// Parse parameter list
 fn parse_parameter_list(parser : Parser) -> (Array[Node], Parser) {
-  let parameters : Array[Node] = []
-  let mut parser = parser
-
   // Check for empty parameter list
   match current_token(parser) {
-    CloseParen(_) => return (parameters, advance_parser(parser))
-    _ =>
-      // Empty - continue to parameter parsing
-      ignore(())
+    CloseParen(_) => ([], advance_parser(parser))
+    _ => parse_parameter_list_aux(parser, [])
   }
-  let mut should_continue = true
-  while should_continue {
-    match parse_parameter(parser) {
-      Ok((param, next_parser)) => {
-        parameters.push(param)
-        parser = next_parser
-        match current_token(parser) {
-          Comma(_) => parser = advance_parser(parser)
-          // Continue loop
-          CloseParen(_) => {
-            parser = advance_parser(parser)
-            should_continue = false
-          }
-          _ => should_continue = false
-        }
+}
+
+///|
+/// Tail-recursive helper for parse_parameter_list with accumulator
+fn parse_parameter_list_aux(parser : Parser, acc : Array[Node]) -> (Array[Node], Parser) {
+  match parse_parameter(parser) {
+    Ok((param, next_parser)) => {
+      acc.push(param)
+      match current_token(next_parser) {
+        Comma(_) => parse_parameter_list_aux(advance_parser(next_parser), acc)
+        CloseParen(_) => (acc, advance_parser(next_parser))
+        _ => (acc, next_parser)
       }
-      Err(_) => should_continue = false
     }
+    Err(_) => (acc, parser)
   }
-  (parameters, parser)
 }
 
 ///|
@@ -841,14 +788,36 @@ fn parse_argument_list(parser : Parser) -> (Array[Node], Parser) {
 fn parse_primary_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
   let token = current_token(parser)
   match token {
-    // Identifier
-    Identifier(name, loc) =>
+    // Boolean literals (must come before general Identifier)
+    Identifier(name, loc) if name == "true" || name == "false" => {
+      let value = name == "true"
       Ok(
         (
-          Node::Identifier(Identifier::{ name, location: loc }),
+          Node::BooleanLiteral(BooleanLiteral::{ value, location: loc }),
           advance_parser(parser),
         ),
       )
+    }
+
+    // Arrow function (with single parameter, no parens)
+    // Must check before general Identifier to look ahead for =>
+    Identifier(name, loc) =>
+      // Look ahead for =>
+      if parser.position + 1 < parser.tokens.length() {
+        match parser.tokens.get(parser.position + 1) {
+          Some(Arrow(_)) => parse_arrow_function_single_param(parser)
+          _ =>
+            // Regular identifier
+            Ok(
+              (Node::Identifier(Identifier::{ name, location: loc }), advance_parser(parser)),
+            )
+        }
+      } else {
+        // Regular identifier (at end of tokens)
+        Ok(
+          (Node::Identifier(Identifier::{ name, location: loc }), advance_parser(parser)),
+        )
+      }
 
     // Numeric literal
     NumericLiteral(value, loc) =>
@@ -868,25 +837,9 @@ fn parse_primary_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
         ),
       )
 
-    // Boolean literals
-    Identifier(name, loc) if name == "true" || name == "false" => {
-      let value = name == "true"
-      Ok(
-        (
-          Node::BooleanLiteral(BooleanLiteral::{ value, location: loc }),
-          advance_parser(parser),
-        ),
-      )
-    }
-
     // null
     KeywordNull(loc) =>
-      Ok(
-        (
-          Node::NullLiteral(NullLiteral::{ location: loc }),
-          advance_parser(parser),
-        ),
-      )
+      Ok((Node::NullLiteral(NullLiteral::{ location: loc }), advance_parser(parser)))
 
     // this
     KeywordThis(loc) =>
@@ -935,17 +888,6 @@ fn parse_primary_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
     // Object literal
     OpenBrace(_) => parse_object_literal(parser)
 
-    // Arrow function (with single parameter, no parens)
-    Identifier(_, _) =>
-      // Look ahead for =>
-      if parser.position + 1 < parser.tokens.length() {
-        match parser.tokens.get(parser.position + 1) {
-          Some(Arrow(_)) => parse_arrow_function_single_param(parser)
-          _ => Err(add_error(parser, "Unexpected token", token.location()))
-        }
-      } else {
-        Err(add_error(parser, "Unexpected token", token.location()))
-      }
     _ =>
       Err(add_error(parser, "Unexpected token in expression", token.location()))
   }
@@ -1298,29 +1240,24 @@ fn parse_for_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
   // Expect '('
   let parser = match current_token(parser) {
     OpenParen(_) => advance_parser(parser)
-    _ =>
-      return Err(
-        add_error(
-          parser,
-          "Expected '(' after 'for'",
-          current_token(parser).location(),
-        ),
-      )
+    _ => return Err(add_error(parser, "Expected '(' after 'for'", current_token(parser).location()))
   }
 
   // Parse initializer (or for-in/for-of variable)
   let (initializer, parser) = match current_token(parser) {
     Semicolon(_) => (None, parser)
-    KeywordLet(_) | KeywordConst(_) | KeywordVar(_) =>
+    KeywordLet(_) | KeywordConst(_) | KeywordVar(_) => {
       match parse_variable_statement(parser) {
         Ok((stmt, p)) => (Some(stmt), p)
         Err(p) => (None, p)
       }
-    _ =>
+    }
+    _ => {
       match parse_expression(parser) {
         Ok((expr, p)) => (Some(expr), p)
         Err(p) => (None, p)
       }
+    }
   }
 
   // Check for for-in or for-of
@@ -1330,97 +1267,53 @@ fn parse_for_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
       let parser = advance_parser(parser)
       let (expression, parser) = match parse_expression(parser) {
         Ok((expr, p)) => (expr, p)
-        Err(p) =>
-          return Err(
-            add_error(
-              p,
-              "Expected expression in for-in",
-              current_token(p).location(),
-            ),
-          )
+        Err(p) => return Err(add_error(p, "Expected expression in for-in", current_token(p).location()))
       }
       let parser = match current_token(parser) {
         CloseParen(_) => advance_parser(parser)
-        _ =>
-          return Err(
-            add_error(
-              parser,
-              "Expected ')' in for-in",
-              current_token(parser).location(),
-            ),
-          )
+        _ => return Err(add_error(parser, "Expected ')' in for-in", current_token(parser).location()))
       }
       let (statement, parser) = match parse_statement(parser) {
         Ok((stmt, p)) => (stmt, p)
         Err(p) => return Err(p)
       }
       let end_loc = get_location(statement)
-      return Ok(
-        (
-          Node::ForInStatement(ForInStatement::{
-            initializer: initializer.unwrap_or(
-              Node::EmptyStatement(EmptyStatement::{ location: start_loc }),
-            ),
-            expression,
-            statement,
-            location: SourceLocation::new(
-              start_loc.file_path,
-              start_loc.start,
-              end_loc.end,
-            ),
-          }),
-          parser,
-        ),
-      )
+      return Ok((
+        Node::ForInStatement(ForInStatement::{
+          initializer: initializer.unwrap_or(Node::EmptyStatement(EmptyStatement::{ location: start_loc })),
+          expression,
+          statement,
+          location: SourceLocation::new(start_loc.file_path, start_loc.start, end_loc.end)
+        }),
+        parser
+      ))
     }
     KeywordOf(_) => {
       // for-of loop
       let parser = advance_parser(parser)
       let (expression, parser) = match parse_expression(parser) {
         Ok((expr, p)) => (expr, p)
-        Err(p) =>
-          return Err(
-            add_error(
-              p,
-              "Expected expression in for-of",
-              current_token(p).location(),
-            ),
-          )
+        Err(p) => return Err(add_error(p, "Expected expression in for-of", current_token(p).location()))
       }
       let parser = match current_token(parser) {
         CloseParen(_) => advance_parser(parser)
-        _ =>
-          return Err(
-            add_error(
-              parser,
-              "Expected ')' in for-of",
-              current_token(parser).location(),
-            ),
-          )
+        _ => return Err(add_error(parser, "Expected ')' in for-of", current_token(parser).location()))
       }
       let (statement, parser) = match parse_statement(parser) {
         Ok((stmt, p)) => (stmt, p)
         Err(p) => return Err(p)
       }
       let end_loc = get_location(statement)
-      return Ok(
-        (
-          Node::ForOfStatement(ForOfStatement::{
-            initializer: initializer.unwrap_or(
-              Node::EmptyStatement(EmptyStatement::{ location: start_loc }),
-            ),
-            expression,
-            statement,
-            await_modifier: false,
-            location: SourceLocation::new(
-              start_loc.file_path,
-              start_loc.start,
-              end_loc.end,
-            ),
-          }),
-          parser,
-        ),
-      )
+      return Ok((
+        Node::ForOfStatement(ForOfStatement::{
+          initializer: initializer.unwrap_or(Node::EmptyStatement(EmptyStatement::{ location: start_loc })),
+          expression,
+          statement,
+          await_modifier: false,
+          location: SourceLocation::new(start_loc.file_path, start_loc.start, end_loc.end)
+        }),
+        parser
+      ))
     }
     _ => ()
   }
@@ -1429,60 +1322,37 @@ fn parse_for_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
   // Expect semicolon after initializer
   let parser = match current_token(parser) {
     Semicolon(_) => advance_parser(parser)
-    _ =>
-      return Err(
-        add_error(
-          parser,
-          "Expected ';' after for loop initializer",
-          current_token(parser).location(),
-        ),
-      )
+    _ => return Err(add_error(parser, "Expected ';' after for loop initializer", current_token(parser).location()))
   }
 
   // Parse condition
   let (condition, parser) = match current_token(parser) {
     Semicolon(_) => (None, parser)
-    _ =>
-      match parse_expression(parser) {
-        Ok((expr, p)) => (Some(expr), p)
-        Err(p) => (None, p)
-      }
+    _ => match parse_expression(parser) {
+      Ok((expr, p)) => (Some(expr), p)
+      Err(p) => (None, p)
+    }
   }
 
   // Expect semicolon after condition
   let parser = match current_token(parser) {
     Semicolon(_) => advance_parser(parser)
-    _ =>
-      return Err(
-        add_error(
-          parser,
-          "Expected ';' after for loop condition",
-          current_token(parser).location(),
-        ),
-      )
+    _ => return Err(add_error(parser, "Expected ';' after for loop condition", current_token(parser).location()))
   }
 
   // Parse incrementor
   let (incrementor, parser) = match current_token(parser) {
     CloseParen(_) => (None, parser)
-    _ =>
-      match parse_expression(parser) {
-        Ok((expr, p)) => (Some(expr), p)
-        Err(p) => (None, p)
-      }
+    _ => match parse_expression(parser) {
+      Ok((expr, p)) => (Some(expr), p)
+      Err(p) => (None, p)
+    }
   }
 
   // Expect ')'
   let parser = match current_token(parser) {
     CloseParen(_) => advance_parser(parser)
-    _ =>
-      return Err(
-        add_error(
-          parser,
-          "Expected ')' after for loop header",
-          current_token(parser).location(),
-        ),
-      )
+    _ => return Err(add_error(parser, "Expected ')' after for loop header", current_token(parser).location()))
   }
 
   // Parse statement
@@ -1490,23 +1360,19 @@ fn parse_for_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
     Ok((stmt, p)) => (stmt, p)
     Err(p) => return Err(p)
   }
+
   let end_loc = get_location(statement)
-  Ok(
-    (
-      Node::ForStatement(ForStatement::{
-        initializer,
-        condition,
-        incrementor,
-        statement,
-        location: SourceLocation::new(
-          start_loc.file_path,
-          start_loc.start,
-          end_loc.end,
-        ),
-      }),
-      parser,
-    ),
-  )
+
+  Ok((
+    Node::ForStatement(ForStatement::{
+      initializer,
+      condition,
+      incrementor,
+      statement,
+      location: SourceLocation::new(start_loc.file_path, start_loc.start, end_loc.end)
+    }),
+    parser
+  ))
 }
 
 ///|
@@ -1518,14 +1384,7 @@ fn parse_while_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
   // Expect '('
   let parser = match current_token(parser) {
     OpenParen(_) => advance_parser(parser)
-    _ =>
-      return Err(
-        add_error(
-          parser,
-          "Expected '(' after 'while'",
-          current_token(parser).location(),
-        ),
-      )
+    _ => return Err(add_error(parser, "Expected '(' after 'while'", current_token(parser).location()))
   }
 
   // Parse condition
@@ -1537,14 +1396,7 @@ fn parse_while_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
   // Expect ')'
   let parser = match current_token(parser) {
     CloseParen(_) => advance_parser(parser)
-    _ =>
-      return Err(
-        add_error(
-          parser,
-          "Expected ')' after while condition",
-          current_token(parser).location(),
-        ),
-      )
+    _ => return Err(add_error(parser, "Expected ')' after while condition", current_token(parser).location()))
   }
 
   // Parse statement
@@ -1552,21 +1404,17 @@ fn parse_while_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
     Ok((stmt, p)) => (stmt, p)
     Err(p) => return Err(p)
   }
+
   let end_loc = get_location(statement)
-  Ok(
-    (
-      Node::WhileStatement(WhileStatement::{
-        condition,
-        statement,
-        location: SourceLocation::new(
-          start_loc.file_path,
-          start_loc.start,
-          end_loc.end,
-        ),
-      }),
-      parser,
-    ),
-  )
+
+  Ok((
+    Node::WhileStatement(WhileStatement::{
+      condition,
+      statement,
+      location: SourceLocation::new(start_loc.file_path, start_loc.start, end_loc.end)
+    }),
+    parser
+  ))
 }
 
 ///|
@@ -1584,27 +1432,13 @@ fn parse_do_while_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
   // Expect 'while'
   let parser = match current_token(parser) {
     KeywordWhile(_) => advance_parser(parser)
-    _ =>
-      return Err(
-        add_error(
-          parser,
-          "Expected 'while' after do statement",
-          current_token(parser).location(),
-        ),
-      )
+    _ => return Err(add_error(parser, "Expected 'while' after do statement", current_token(parser).location()))
   }
 
   // Expect '('
   let parser = match current_token(parser) {
     OpenParen(_) => advance_parser(parser)
-    _ =>
-      return Err(
-        add_error(
-          parser,
-          "Expected '(' after 'while'",
-          current_token(parser).location(),
-        ),
-      )
+    _ => return Err(add_error(parser, "Expected '(' after 'while'", current_token(parser).location()))
   }
 
   // Parse condition
@@ -1616,14 +1450,7 @@ fn parse_do_while_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
   // Expect ')'
   let parser = match current_token(parser) {
     CloseParen(_) => advance_parser(parser)
-    _ =>
-      return Err(
-        add_error(
-          parser,
-          "Expected ')' after while condition",
-          current_token(parser).location(),
-        ),
-      )
+    _ => return Err(add_error(parser, "Expected ')' after while condition", current_token(parser).location()))
   }
 
   // Expect ';'
@@ -1632,20 +1459,15 @@ fn parse_do_while_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
     Semicolon(_) => advance_parser(parser)
     _ => parser // Semicolon is optional in some contexts
   }
-  Ok(
-    (
-      Node::DoWhileStatement(DoWhileStatement::{
-        statement,
-        condition,
-        location: SourceLocation::new(
-          start_loc.file_path,
-          start_loc.start,
-          end_loc.end,
-        ),
-      }),
-      parser,
-    ),
-  )
+
+  Ok((
+    Node::DoWhileStatement(DoWhileStatement::{
+      statement,
+      condition,
+      location: SourceLocation::new(start_loc.file_path, start_loc.start, end_loc.end)
+    }),
+    parser
+  ))
 }
 
 ///|
@@ -1666,19 +1488,14 @@ fn parse_break_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
     Semicolon(_) => advance_parser(parser)
     _ => parser
   }
-  Ok(
-    (
-      Node::BreakStatement(BreakStatement::{
-        label,
-        location: SourceLocation::new(
-          start_loc.file_path,
-          start_loc.start,
-          end_loc.end,
-        ),
-      }),
-      parser,
-    ),
-  )
+
+  Ok((
+    Node::BreakStatement(BreakStatement::{
+      label,
+      location: SourceLocation::new(start_loc.file_path, start_loc.start, end_loc.end)
+    }),
+    parser
+  ))
 }
 
 ///|
@@ -1699,19 +1516,14 @@ fn parse_continue_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
     Semicolon(_) => advance_parser(parser)
     _ => parser
   }
-  Ok(
-    (
-      Node::ContinueStatement(ContinueStatement::{
-        label,
-        location: SourceLocation::new(
-          start_loc.file_path,
-          start_loc.start,
-          end_loc.end,
-        ),
-      }),
-      parser,
-    ),
-  )
+
+  Ok((
+    Node::ContinueStatement(ContinueStatement::{
+      label,
+      location: SourceLocation::new(start_loc.file_path, start_loc.start, end_loc.end)
+    }),
+    parser
+  ))
 }
 
 ///|
@@ -1723,14 +1535,7 @@ fn parse_throw_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
   // Parse expression
   let (expression, parser) = match parse_expression(parser) {
     Ok((expr, p)) => (expr, p)
-    Err(p) =>
-      return Err(
-        add_error(
-          p,
-          "Expected expression after 'throw'",
-          current_token(p).location(),
-        ),
-      )
+    Err(p) => return Err(add_error(p, "Expected expression after 'throw'", current_token(p).location()))
   }
 
   // Expect semicolon (optional due to ASI)
@@ -1739,19 +1544,14 @@ fn parse_throw_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
     Semicolon(_) => advance_parser(parser)
     _ => parser
   }
-  Ok(
-    (
-      Node::ThrowStatement(ThrowStatement::{
-        expression,
-        location: SourceLocation::new(
-          start_loc.file_path,
-          start_loc.start,
-          end_loc.end,
-        ),
-      }),
-      parser,
-    ),
-  )
+
+  Ok((
+    Node::ThrowStatement(ThrowStatement::{
+      expression,
+      location: SourceLocation::new(start_loc.file_path, start_loc.start, end_loc.end)
+    }),
+    parser
+  ))
 }
 
 ///|
@@ -1763,10 +1563,7 @@ fn parse_try_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
   // Parse try block
   let (try_block, parser) = match parse_block_statement(parser) {
     Ok((block, p)) => (block, p)
-    Err(p) =>
-      return Err(
-        add_error(p, "Expected block after 'try'", current_token(p).location()),
-      )
+    Err(p) => return Err(add_error(p, "Expected block after 'try'", current_token(p).location()))
   }
 
   // Parse optional catch clause
@@ -1785,14 +1582,7 @@ fn parse_try_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
           }
           let parser = match current_token(parser) {
             CloseParen(_) => advance_parser(parser)
-            _ =>
-              return Err(
-                add_error(
-                  parser,
-                  "Expected ')' after catch parameter",
-                  current_token(parser).location(),
-                ),
-              )
+            _ => return Err(add_error(parser, "Expected ')' after catch parameter", current_token(parser).location()))
           }
           (param, parser)
         }
@@ -1802,15 +1592,9 @@ fn parse_try_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
       // Parse catch block
       let (catch_block, parser) = match parse_block_statement(parser) {
         Ok((block, p)) => (block, p)
-        Err(p) =>
-          return Err(
-            add_error(
-              p,
-              "Expected block in catch clause",
-              current_token(p).location(),
-            ),
-          )
+        Err(p) => return Err(add_error(p, "Expected block in catch clause", current_token(p).location()))
       }
+
       let catch_end = get_location(catch_block)
       let clause = CatchClause::{
         variable_declaration: match parameter {
@@ -1818,12 +1602,9 @@ fn parse_try_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
           None => None
         },
         block: catch_block,
-        location: SourceLocation::new(
-          catch_start.file_path,
-          catch_start.start,
-          catch_end.end,
-        ),
+        location: SourceLocation::new(catch_start.file_path, catch_start.start, catch_end.end)
       }
+
       (Some(clause), parser)
     }
     _ => (None, parser)
@@ -1835,14 +1616,7 @@ fn parse_try_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
       let parser = advance_parser(parser) // consume 'finally'
       match parse_block_statement(parser) {
         Ok((block, p)) => (Some(block), p)
-        Err(p) =>
-          return Err(
-            add_error(
-              p,
-              "Expected block after 'finally'",
-              current_token(p).location(),
-            ),
-          )
+        Err(p) => return Err(add_error(p, "Expected block after 'finally'", current_token(p).location()))
       }
     }
     _ => (None, parser)
@@ -1850,37 +1624,26 @@ fn parse_try_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
 
   // Must have either catch or finally
   if catch_clause is None && finally_block is None {
-    return Err(
-      add_error(
-        parser,
-        "Missing catch or finally clause",
-        current_token(parser).location(),
-      ),
-    )
+    return Err(add_error(parser, "Missing catch or finally clause", current_token(parser).location()))
   }
+
   let end_loc = match finally_block {
     Some(block) => get_location(block)
-    None =>
-      match catch_clause {
-        Some(clause) => clause.location
-        None => get_location(try_block)
-      }
+    None => match catch_clause {
+      Some(clause) => clause.location
+      None => get_location(try_block)
+    }
   }
-  Ok(
-    (
-      Node::TryStatement(TryStatement::{
-        try_block,
-        catch_clause,
-        finally_block,
-        location: SourceLocation::new(
-          start_loc.file_path,
-          start_loc.start,
-          end_loc.end,
-        ),
-      }),
-      parser,
-    ),
-  )
+
+  Ok((
+    Node::TryStatement(TryStatement::{
+      try_block,
+      catch_clause,
+      finally_block,
+      location: SourceLocation::new(start_loc.file_path, start_loc.start, end_loc.end)
+    }),
+    parser
+  ))
 }
 
 ///|
