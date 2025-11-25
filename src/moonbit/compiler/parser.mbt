@@ -3963,6 +3963,30 @@ fn parse_class_members_aux(parser : Parser, acc : Array[Node]) -> (Array[Node], 
       parse_class_member_with_modifiers(parser, acc, [Modifier::Public])
     }
 
+    // Static modifier
+    KeywordStatic(_) => {
+      let parser = advance_parser(parser)
+      parse_class_member_with_modifiers(parser, acc, [Modifier::Static])
+    }
+
+    // Readonly modifier
+    KeywordReadonly(_) => {
+      let parser = advance_parser(parser)
+      parse_class_member_with_modifiers(parser, acc, [Modifier::Readonly])
+    }
+
+    // Abstract modifier
+    KeywordAbstract(_) => {
+      let parser = advance_parser(parser)
+      parse_class_member_with_modifiers(parser, acc, [Modifier::Abstract])
+    }
+
+    // Async modifier
+    KeywordAsync(_) => {
+      let parser = advance_parser(parser)
+      parse_class_member_with_modifiers(parser, acc, [Modifier::Async])
+    }
+
     // Property or method
     Identifier(name, loc) => {
       let parser = advance_parser(parser)
@@ -4057,9 +4081,45 @@ fn parse_class_members_aux(parser : Parser, acc : Array[Node]) -> (Array[Node], 
 }
 
 ///|
-/// Parse class member with modifiers (private/protected/public)
+/// Parse class member with modifiers (private/protected/public/static/readonly/abstract/async)
 fn parse_class_member_with_modifiers(parser : Parser, acc : Array[Node], modifiers : Array[Modifier]) -> (Array[Node], Parser) {
   match current_token(parser) {
+    // Handle chained modifiers
+    KeywordPublic(_) => {
+      let parser = advance_parser(parser)
+      modifiers.push(Modifier::Public)
+      parse_class_member_with_modifiers(parser, acc, modifiers)
+    }
+    KeywordPrivate(_) => {
+      let parser = advance_parser(parser)
+      modifiers.push(Modifier::Private)
+      parse_class_member_with_modifiers(parser, acc, modifiers)
+    }
+    KeywordProtected(_) => {
+      let parser = advance_parser(parser)
+      modifiers.push(Modifier::Protected)
+      parse_class_member_with_modifiers(parser, acc, modifiers)
+    }
+    KeywordStatic(_) => {
+      let parser = advance_parser(parser)
+      modifiers.push(Modifier::Static)
+      parse_class_member_with_modifiers(parser, acc, modifiers)
+    }
+    KeywordReadonly(_) => {
+      let parser = advance_parser(parser)
+      modifiers.push(Modifier::Readonly)
+      parse_class_member_with_modifiers(parser, acc, modifiers)
+    }
+    KeywordAbstract(_) => {
+      let parser = advance_parser(parser)
+      modifiers.push(Modifier::Abstract)
+      parse_class_member_with_modifiers(parser, acc, modifiers)
+    }
+    KeywordAsync(_) => {
+      let parser = advance_parser(parser)
+      modifiers.push(Modifier::Async)
+      parse_class_member_with_modifiers(parser, acc, modifiers)
+    }
     Identifier(name, loc) => {
       let parser = advance_parser(parser)
       match current_token(parser) {
@@ -4086,9 +4146,17 @@ fn parse_class_member_with_modifiers(parser : Parser, acc : Array[Node], modifie
             }
             _ => (None, parser)
           }
+          // Check if Async modifier is present
+          let mut is_async = false
+          for modifier in modifiers {
+            if modifier == Modifier::Async {
+              is_async = true
+              break
+            }
+          }
           acc.push(Node::MethodDeclaration(MethodDeclaration::{
             name, type_parameters: [], parameters, return_type, body,
-            modifiers, is_async: false, is_generator: false, location: loc
+            modifiers, is_async, is_generator: false, location: loc
           }))
           parse_class_members_aux(parser, acc)
         }

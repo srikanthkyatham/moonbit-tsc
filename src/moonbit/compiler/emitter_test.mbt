@@ -526,3 +526,24 @@ test "emit debugger statement in function" {
   assert_true(js.contains("debugger;"))
   assert_true(js.contains("return 1;"))
 }
+
+///|
+/// Test: Emit static class member
+test "emit static class member" {
+  let js = compile_to_js("class Counter { static count = 0; }")
+  assert_true(js.contains("static count = 0;"))
+}
+
+///|
+/// Test: Emit static method
+test "emit static method" {
+  let js = compile_to_js("class Utils { static helper() { return 1; } }")
+  assert_true(js.contains("static helper()"))
+}
+
+///|
+/// Test: Emit async method
+test "emit async method" {
+  let js = compile_to_js("class Api { async fetch() { return 1; } }")
+  assert_true(js.contains("async fetch()"))
+}

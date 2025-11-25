@@ -3472,3 +3472,73 @@ test "check debugger statement in if block" {
     Err(_) => assert_true(false)
   }
 }
+
+// ============================================================================
+// Class Modifier Tests
+// ============================================================================
+
+///|
+test "check static class member" {
+  let result = parse_bind_and_check("class Counter { static count = 0; }")
+  match result {
+    Ok(typed) => {
+      assert_eq(typed.file_path, "test.ts")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "check static method" {
+  let result = parse_bind_and_check("class Utils { static helper() { return 1; } }")
+  match result {
+    Ok(typed) => {
+      assert_eq(typed.file_path, "test.ts")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "check readonly property" {
+  let result = parse_bind_and_check("class Config { readonly name: string; }")
+  match result {
+    Ok(typed) => {
+      assert_eq(typed.file_path, "test.ts")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "check abstract class" {
+  let result = parse_bind_and_check("abstract class Animal { abstract speak(): void; }")
+  match result {
+    Ok(typed) => {
+      assert_eq(typed.file_path, "test.ts")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "check async method" {
+  let result = parse_bind_and_check("class Api { async fetch() { return await data; } }")
+  match result {
+    Ok(typed) => {
+      assert_eq(typed.file_path, "test.ts")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "check public static readonly" {
+  let result = parse_bind_and_check("class Constants { public static readonly PI = 3.14; }")
+  match result {
+    Ok(typed) => {
+      assert_eq(typed.file_path, "test.ts")
+    }
+    Err(_) => assert_true(false)
+  }
+}
