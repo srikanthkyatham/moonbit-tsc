@@ -37,6 +37,32 @@ fn has_diagnostic_containing(diagnostics : Array[@compiler.Diagnostic], substrin
   false
 }
 
+///|
+/// Helper to check if any diagnostic has a specific error code
+fn has_diagnostic_code(diagnostics : Array[@compiler.Diagnostic], code : Int) -> Bool {
+  for i = 0; i < diagnostics.length(); i = i + 1 {
+    if diagnostics[i].code == code {
+      return true
+    }
+  }
+  false
+}
+
+///|
+/// Helper to check if diagnostic has both the expected code and message substring
+fn has_diagnostic_with_code_and_message(
+  diagnostics : Array[@compiler.Diagnostic],
+  code : Int,
+  substring : String
+) -> Bool {
+  for i = 0; i < diagnostics.length(); i = i + 1 {
+    if diagnostics[i].code == code && diagnostics[i].message.contains(substring) {
+      return true
+    }
+  }
+  false
+}
+
 // ============================================================================
 // TS2322: Type Assignment Errors
 // ============================================================================
@@ -49,6 +75,8 @@ test "unit/checker/error/TS2322 - string to number assignment" {
     Err(diagnostics) => {
       assert_true(diagnostics.length() > 0)
       assert_true(has_diagnostic_containing(diagnostics, "not assignable"))
+      // Verify error code TS2322
+      assert_true(has_diagnostic_code(diagnostics, 2322))
     }
   }
 }
@@ -60,7 +88,8 @@ test "unit/checker/error/TS2322 - boolean to number assignment" {
     Ok(_) => assert_true(false)
     Err(diagnostics) => {
       assert_true(diagnostics.length() > 0)
-      assert_true(has_diagnostic_containing(diagnostics, "not assignable"))
+      // Verify error code TS2322 with message
+      assert_true(has_diagnostic_with_code_and_message(diagnostics, 2322, "not assignable"))
     }
   }
 }
@@ -72,7 +101,7 @@ test "unit/checker/error/TS2322 - number to string assignment" {
     Ok(_) => assert_true(false)
     Err(diagnostics) => {
       assert_true(diagnostics.length() > 0)
-      assert_true(has_diagnostic_containing(diagnostics, "not assignable"))
+      assert_true(has_diagnostic_with_code_and_message(diagnostics, 2322, "not assignable"))
     }
   }
 }
@@ -127,7 +156,7 @@ test "unit/checker/error/TS2322 - union type mismatch" {
     Ok(_) => assert_true(false)
     Err(diagnostics) => {
       assert_true(diagnostics.length() > 0)
-      assert_true(has_diagnostic_containing(diagnostics, "not assignable"))
+      assert_true(has_diagnostic_with_code_and_message(diagnostics, 2322, "not assignable"))
     }
   }
 }
@@ -144,6 +173,8 @@ test "unit/checker/error/TS2363 - string subtraction" {
     Err(diagnostics) => {
       assert_true(diagnostics.length() > 0)
       assert_true(has_diagnostic_containing(diagnostics, "number"))
+      // Verify error code TS2363
+      assert_true(has_diagnostic_code(diagnostics, 2363))
     }
   }
 }
@@ -155,7 +186,8 @@ test "unit/checker/error/TS2363 - boolean multiplication" {
     Ok(_) => assert_true(false)
     Err(diagnostics) => {
       assert_true(diagnostics.length() > 0)
-      assert_true(has_diagnostic_containing(diagnostics, "number"))
+      // Verify error code TS2363 with message
+      assert_true(has_diagnostic_with_code_and_message(diagnostics, 2363, "number"))
     }
   }
 }
@@ -167,7 +199,7 @@ test "unit/checker/error/TS2363 - string division" {
     Ok(_) => assert_true(false)
     Err(diagnostics) => {
       assert_true(diagnostics.length() > 0)
-      assert_true(has_diagnostic_containing(diagnostics, "number"))
+      assert_true(has_diagnostic_with_code_and_message(diagnostics, 2363, "number"))
     }
   }
 }
@@ -193,7 +225,7 @@ test "unit/checker/error/TS2363 - unary minus on string" {
     Ok(_) => assert_true(false)
     Err(diagnostics) => {
       assert_true(diagnostics.length() > 0)
-      assert_true(has_diagnostic_containing(diagnostics, "number"))
+      assert_true(has_diagnostic_with_code_and_message(diagnostics, 2363, "number"))
     }
   }
 }
@@ -227,6 +259,8 @@ test "unit/checker/error/TS2588 - reassign const variable" {
     Err(diagnostics) => {
       assert_true(diagnostics.length() > 0)
       assert_true(has_diagnostic_containing(diagnostics, "constant"))
+      // Verify error code TS2588
+      assert_true(has_diagnostic_code(diagnostics, 2588))
     }
   }
 }
@@ -241,7 +275,7 @@ test "unit/checker/error/TS2588 - compound assignment to const" {
     }
     Err(diagnostics) => {
       assert_true(diagnostics.length() > 0)
-      assert_true(has_diagnostic_containing(diagnostics, "constant"))
+      assert_true(has_diagnostic_with_code_and_message(diagnostics, 2588, "constant"))
     }
   }
 }
@@ -295,6 +329,8 @@ test "unit/checker/error/TS7027 - code after return" {
     Err(diagnostics) => {
       assert_true(diagnostics.length() > 0)
       assert_true(has_diagnostic_containing(diagnostics, "Unreachable"))
+      // Verify error code TS7027
+      assert_true(has_diagnostic_code(diagnostics, 7027))
     }
   }
 }
@@ -320,7 +356,7 @@ test "unit/checker/error/TS7027 - multiple statements after return" {
     Ok(_) => assert_true(false)
     Err(diagnostics) => {
       assert_true(diagnostics.length() > 0)
-      assert_true(has_diagnostic_containing(diagnostics, "Unreachable"))
+      assert_true(has_diagnostic_with_code_and_message(diagnostics, 7027, "Unreachable"))
     }
   }
 }
@@ -349,6 +385,8 @@ test "unit/checker/error/TS2511 - instantiate abstract class" {
     Err(diagnostics) => {
       assert_true(diagnostics.length() > 0)
       assert_true(has_diagnostic_containing(diagnostics, "abstract"))
+      // Verify error code TS2511
+      assert_true(has_diagnostic_code(diagnostics, 2511))
     }
   }
 }
@@ -388,6 +426,8 @@ test "unit/checker/error/TS2322 - return type mismatch" {
     Err(diagnostics) => {
       assert_true(diagnostics.length() > 0)
       assert_true(has_diagnostic_containing(diagnostics, "not assignable") || has_diagnostic_containing(diagnostics, "return"))
+      // Verify error code TS2322
+      assert_true(has_diagnostic_code(diagnostics, 2322))
     }
   }
 }
@@ -400,6 +440,8 @@ test "unit/checker/error/TS2355 - non-void must return value" {
     Err(diagnostics) => {
       assert_true(diagnostics.length() > 0)
       assert_true(has_diagnostic_containing(diagnostics, "return a value") || has_diagnostic_containing(diagnostics, "not assignable"))
+      // Verify error code TS2355
+      assert_true(has_diagnostic_code(diagnostics, 2355))
     }
   }
 }

@@ -2063,8 +2063,8 @@ fn check_type_constraint(
   location : SourceLocation,
 ) -> TypeChecker {
   if not(is_assignable(type_arg, constraint)) {
-    add_diagnostic(
-      checker, "Type does not satisfy the constraint", location, 2344,
+    add_diagnostic_with_code(
+      checker, "Type does not satisfy the constraint", location, DiagnosticCode::TS2344,
     )
   } else {
     checker
@@ -2084,13 +2084,13 @@ fn check_type_arguments(
   // Check arity
   let min_required = count_required_type_params(type_params)
   if type_args.length() < min_required {
-    checker = add_diagnostic(
-      checker, "Generic type requires more type arguments", location, 2314,
+    checker = add_diagnostic_with_code(
+      checker, "Generic type requires more type arguments", location, DiagnosticCode::TS2314,
     )
   }
   if type_args.length() > type_params.length() {
-    checker = add_diagnostic(
-      checker, "Too many type arguments provided", location, 2558,
+    checker = add_diagnostic_with_code(
+      checker, "Too many type arguments provided", location, DiagnosticCode::TS2558,
     )
   }
 
@@ -2593,11 +2593,11 @@ fn check_unreachable_code(
   let mut found_terminator = false
   for stmt in statements {
     if found_terminator {
-      checker = add_diagnostic(
+      checker = add_diagnostic_with_code(
         checker,
         "Unreachable code detected.",
         get_node_location(stmt),
-        7027,
+        DiagnosticCode::TS7027,
       )
       break
     }
@@ -2651,11 +2651,11 @@ fn check_abstract_instantiation(
   class_symbol : Symbol,
 ) -> TypeChecker {
   if class_symbol.flags.is_abstract {
-    add_diagnostic(
+    add_diagnostic_with_code(
       checker,
       "Cannot create an instance of an abstract class.",
       get_node_location(NewExpression(new_expr)),
-      2511,
+      DiagnosticCode::TS2511,
     )
   } else {
     checker
@@ -2671,11 +2671,11 @@ fn check_const_assignment(
   location : SourceLocation,
 ) -> TypeChecker {
   if symbol.flags.is_const {
-    add_diagnostic(
+    add_diagnostic_with_code(
       checker,
       "Cannot assign to '" + var_name + "' because it is a constant.",
       location,
-      2588,
+      DiagnosticCode::TS2588,
     )
   } else {
     checker
@@ -2702,11 +2702,11 @@ fn check_return_type_consistency(
                 let (return_type, c) = infer_type(checker, expr)
                 checker = c
                 if not(is_assignable(return_type, declared_return)) {
-                  checker = add_diagnostic(
+                  checker = add_diagnostic_with_code(
                     checker,
                     "Type is not assignable to the declared return type.",
                     get_node_location(expr),
-                    2322,
+                    DiagnosticCode::TS2322,
                   )
                 }
               }
@@ -2715,11 +2715,11 @@ fn check_return_type_consistency(
                 match declared_return {
                   Void(_) | Any(_) => ()
                   _ =>
-                    checker = add_diagnostic(
+                    checker = add_diagnostic_with_code(
                       checker,
                       "A function whose declared return type is not void must return a value.",
                       ret.location,
-                      2355,
+                      DiagnosticCode::TS2355,
                     )
                 }
             }
@@ -3523,11 +3523,11 @@ fn check_assignment_compatibility(
   if is_assignable(source, target) {
     checker
   } else {
-    add_diagnostic(
+    add_diagnostic_with_code(
       checker,
       "Type '\{type_to_string(source)}' is not assignable to type '\{type_to_string(target)}'",
       location,
-      2322,
+      TS2322,
     )
   }
 }
@@ -3542,15 +3542,15 @@ fn check_numeric_operands(
   location : SourceLocation,
 ) -> TypeChecker {
   let checker = if !is_numeric_type(left) {
-    add_diagnostic(
-      checker, "Left operand must be of type 'number'", location, 2363,
+    add_diagnostic_with_code(
+      checker, "Left operand must be of type 'number'", location, TS2363,
     )
   } else {
     checker
   }
   if !is_numeric_type(right) {
-    add_diagnostic(
-      checker, "Right operand must be of type 'number'", location, 2363,
+    add_diagnostic_with_code(
+      checker, "Right operand must be of type 'number'", location, TS2363,
     )
   } else {
     checker
@@ -3566,7 +3566,9 @@ fn check_numeric_operand(
   location : SourceLocation,
 ) -> TypeChecker {
   if !is_numeric_type(operand) {
-    add_diagnostic(checker, "Operand must be of type 'number'", location, 2363)
+    add_diagnostic_with_code(
+      checker, "Operand must be of type 'number'", location, TS2363,
+    )
   } else {
     checker
   }
@@ -4150,14 +4152,14 @@ fn convert_mapped_modifier(ast_mod : MappedTypeModifier) -> MappedModifier {
 }
 
 ///|
-/// Add a diagnostic
-fn add_diagnostic(
+/// Add a diagnostic with DiagnosticCode enum
+fn add_diagnostic_with_code(
   checker : TypeChecker,
   message : String,
   location : SourceLocation,
-  code : Int,
+  code : DiagnosticCode,
 ) -> TypeChecker {
-  let diag = Diagnostic::error(message, location, code)
+  let diag = Diagnostic::error_with_code(message, location, code)
   let new_diagnostics = checker.diagnostics
   new_diagnostics.push(diag)
   { ..checker, diagnostics: new_diagnostics }

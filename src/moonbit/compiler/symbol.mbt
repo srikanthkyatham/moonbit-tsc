@@ -327,6 +327,59 @@ pub enum DiagnosticCategory {
 } derive(Show, Eq)
 
 ///|
+/// TypeScript diagnostic error codes
+/// These codes match the official TypeScript compiler error codes
+pub enum DiagnosticCode {
+  // Type Assignment Errors (2300-2399)
+  TS2314  // Generic type requires more type arguments
+  TS2322  // Type 'X' is not assignable to type 'Y'
+  TS2344  // Type 'X' does not satisfy the constraint 'Y'
+  TS2355  // A function whose declared type is neither 'void' nor 'any' must return a value
+  TS2363  // The right-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type
+
+  // Variable/Constant Errors (2500-2599)
+  TS2511  // Cannot create an instance of an abstract class
+  TS2558  // Expected X type arguments, but got Y
+  TS2588  // Cannot assign to 'X' because it is a constant
+
+  // Unreachable Code (7000-7099)
+  TS7027  // Unreachable code detected
+} derive(Show, Eq)
+
+///|
+/// Convert DiagnosticCode to its numeric value
+pub fn DiagnosticCode::to_int(self : DiagnosticCode) -> Int {
+  match self {
+    TS2314 => 2314
+    TS2322 => 2322
+    TS2344 => 2344
+    TS2355 => 2355
+    TS2363 => 2363
+    TS2511 => 2511
+    TS2558 => 2558
+    TS2588 => 2588
+    TS7027 => 7027
+  }
+}
+
+///|
+/// Convert numeric code to DiagnosticCode (if valid)
+pub fn DiagnosticCode::from_int(code : Int) -> DiagnosticCode? {
+  match code {
+    2314 => Some(TS2314)
+    2322 => Some(TS2322)
+    2344 => Some(TS2344)
+    2355 => Some(TS2355)
+    2363 => Some(TS2363)
+    2511 => Some(TS2511)
+    2558 => Some(TS2558)
+    2588 => Some(TS2588)
+    7027 => Some(TS7027)
+    _ => None
+  }
+}
+
+///|
 /// Create a new diagnostic
 pub fn Diagnostic::error(
   message : String,
@@ -352,6 +405,22 @@ pub fn Diagnostic::suggestion(
   code : Int,
 ) -> Diagnostic {
   { message, location, category: DiagnosticCategory::Suggestion, code }
+}
+
+///|
+/// Create an error diagnostic with a DiagnosticCode enum
+pub fn Diagnostic::error_with_code(
+  message : String,
+  location : SourceLocation,
+  code : DiagnosticCode,
+) -> Diagnostic {
+  { message, location, category: DiagnosticCategory::Error, code: code.to_int() }
+}
+
+///|
+/// Check if a diagnostic has a specific DiagnosticCode
+pub fn Diagnostic::has_code(self : Diagnostic, code : DiagnosticCode) -> Bool {
+  self.code == code.to_int()
 }
 
 // ============================================================================
