@@ -15,21 +15,31 @@
 // - Transform enums to const objects with numeric values
 // - Filter class heritage clauses (remove implements, keep extends)
 //
-// ES5 Downleveling:
-// - Arrow functions → Function expressions (with proper this binding)
+// Target-Based Downleveling:
+// -------------------------
+// ES5 (< ES2015):
+// - Arrow functions → Function expressions
 // - const/let declarations → var declarations
+// - Template literals → String concatenation
+// - for-of loops → Traditional for loops (TODO - complex transformation)
+// - Spread in arrays → Array.concat() (TODO - complex transformation)
+//
+// < ES2016:
 // - Exponentiation operator (**) → Math.pow() calls
-// - Template literals → String concatenation (when parser supports)
-// - for-of loops → Traditional for loops (marked as TODO - complex transformation)
-// - Spread in arrays → Array.concat() (marked as TODO - complex transformation)
+//
+// < ES2020:
+// - Optional chaining (?.) → Conditional expressions (a?.b → a == null ? undefined : a.b)
+// - Nullish coalescing (??) → Conditional expressions (a ?? b → a !== null ? a : b)
 //
 // ES2015+ Preservation:
-// - Arrow functions preserved
-// - const/let declarations preserved
-// - Native exponentiation operator preserved
-// - Template literals preserved
-// - for-of loops preserved
-// - Spread operators preserved
+// - Arrow functions, const/let, template literals preserved
+//
+// ES2016+ Preservation:
+// - Exponentiation operator (**) preserved
+//
+// ES2020+ (ESNext) Preservation:
+// - Optional chaining (?.) preserved
+// - Nullish coalescing (??) preserved
 
 ///|
 /// TransformerContext holds state during transformation
@@ -53,6 +63,33 @@ pub enum Target {
 } derive(Show, Eq)
 
 ///|
+/// Get the ordinal value of a target for comparison
+pub fn Target::ordinal(self : Target) -> Int {
+  match self {
+    ES5 => 0
+    ES2015 => 1
+    ES2016 => 2
+    ES2017 => 3
+    ES2018 => 4
+    ES2019 => 5
+    ES2020 => 6
+    ESNext => 7
+  }
+}
+
+///|
+/// Check if target supports a feature introduced in a specific version
+pub fn Target::supports(self : Target, min_version : Target) -> Bool {
+  self.ordinal() >= min_version.ordinal()
+}
+
+///|
+/// Check if target is older than a specific version (requires downleveling)
+pub fn Target::older_than(self : Target, version : Target) -> Bool {
+  self.ordinal() < version.ordinal()
+}
+
+///|
 /// Create a new transformer context
 pub fn TransformerContext::new(target : Target) -> TransformerContext {
   { target, }
@@ -74,6 +111,42 @@ pub fn TransformerContext::es5() -> TransformerContext {
 /// Create transformer context for ES2015 target
 pub fn TransformerContext::es2015() -> TransformerContext {
   { target: ES2015 }
+}
+
+///|
+/// Create transformer context for ES2016 target
+pub fn TransformerContext::es2016() -> TransformerContext {
+  { target: ES2016 }
+}
+
+///|
+/// Create transformer context for ES2017 target
+pub fn TransformerContext::es2017() -> TransformerContext {
+  { target: ES2017 }
+}
+
+///|
+/// Create transformer context for ES2018 target
+pub fn TransformerContext::es2018() -> TransformerContext {
+  { target: ES2018 }
+}
+
+///|
+/// Create transformer context for ES2019 target
+pub fn TransformerContext::es2019() -> TransformerContext {
+  { target: ES2019 }
+}
+
+///|
+/// Create transformer context for ES2020 target
+pub fn TransformerContext::es2020() -> TransformerContext {
+  { target: ES2020 }
+}
+
+///|
+/// Create transformer context for ESNext target
+pub fn TransformerContext::esnext() -> TransformerContext {
+  { target: ESNext }
 }
 
 ///|
@@ -204,12 +277,12 @@ pub fn transform(node : Node, ctx : TransformerContext) -> Node {
     // Class members - transform if needed
     Parameter(p) => transform_parameter(p, ctx)
     PropertyDeclaration(pd) => transform_property_declaration(pd, ctx)
-    IndexSignatureDeclaration(isd) => EmptyStatement({ location: isd.location })  // Type-only, remove
+    IndexSignatureDeclaration(isd) => EmptyStatement({ location: isd.location }) // Type-only, remove
     MethodDeclaration(md) => transform_method_declaration(md, ctx)
     ConstructorDeclaration(cd) => transform_constructor_declaration(cd, ctx)
     GetAccessor(ga) => transform_get_accessor(ga, ctx)
     SetAccessor(sa) => transform_set_accessor(sa, ctx)
-    Decorator(d) => Decorator(d)  // Keep decorators as-is
+    Decorator(d) => Decorator(d) // Keep decorators as-is
 
     // Module declaration
     ModuleDeclaration(md) => transform_module_declaration(md, ctx)
@@ -246,7 +319,7 @@ fn transform_statements(
 }
 
 ///|
-/// Transform variable statement (remove type annotations, downlevel const/let for ES5)
+/// Transform variable statement (remove type annotations, downlevel const/let for < ES2015)
 fn transform_variable_statement(
   vs : VariableStatement,
   ctx : TransformerContext,
@@ -264,8 +337,9 @@ fn transform_variable_statement(
     })
   }
 
-  // For ES5, convert const/let to var
-  let (is_const, is_let) = if ctx.target == ES5 {
+  // const/let were introduced in ES2015
+  // For < ES2015 (ES5), convert const/let to var
+  let (is_const, is_let) = if ctx.target.older_than(ES2015) {
     (false, false) // ES5 only has var
   } else {
     (vs.is_const, vs.is_let)
@@ -311,8 +385,8 @@ fn transform_class_declaration(
   ctx : TransformerContext,
 ) -> Node {
   let transformed_members : Array[Node] = []
-  for member in cd.members {
-    let transformed = transform(member, ctx)
+  for cmember in cd.members {
+    let transformed = transform(cmember, ctx)
     transformed_members.push(transformed)
   }
   ClassDeclaration({
@@ -665,13 +739,14 @@ fn transform_with_statement(
 }
 
 ///|
-/// Transform binary expression (downlevel exponentiation for ES5)
+/// Transform binary expression (downlevel based on target)
 fn transform_binary_expression(
   be : BinaryExpression,
   ctx : TransformerContext,
 ) -> Node {
-  // For ES5, convert exponentiation operator (**) to Math.pow()
-  if ctx.target == ES5 && be.operator == Exponentiate {
+  // Exponentiation operator (**) was introduced in ES2016
+  // For < ES2016, convert to Math.pow()
+  if ctx.target.older_than(ES2016) && be.operator == Exponentiate {
     // Create Math.pow(left, right) call
     let math_identifier = Node::Identifier({
       name: "Math",
@@ -686,6 +761,25 @@ fn transform_binary_expression(
       expression: math_pow,
       type_arguments: [],
       arguments: [transform(be.left, ctx), transform(be.right, ctx)],
+      location: be.location,
+    })
+  } else if ctx.target.older_than(ES2020) && be.operator == NullishCoalescing {
+    // Nullish coalescing (??) was introduced in ES2020
+    // Transform: a ?? b  →  a !== null && a !== undefined ? a : b
+    // Simplified: (a != null ? a : b) for loose equality
+    let left_transformed = transform(be.left, ctx)
+    let right_transformed = transform(be.right, ctx)
+    // Create: left != null ? left : right
+    // Note: This is a simplified transform; full transform would need temp variable
+    Node::ConditionalExpression({
+      condition: Node::BinaryExpression({
+        left: left_transformed,
+        operator: StrictNotEquals,
+        right: Node::NullLiteral({ location: be.location }),
+        location: be.location,
+      }),
+      when_true: left_transformed,
+      when_false: right_transformed,
       location: be.location,
     })
   } else {
@@ -795,13 +889,14 @@ fn transform_element_access_expression(
 }
 
 ///|
-/// Transform arrow function (remove type annotations, downlevel for ES5)
+/// Transform arrow function (remove type annotations, downlevel for < ES2015)
 fn transform_arrow_function(
   af : ArrowFunction,
   ctx : TransformerContext,
 ) -> Node {
-  // For ES5 target, convert arrow functions to regular function expressions
-  if ctx.target == ES5 {
+  // Arrow functions were introduced in ES2015
+  // For < ES2015 (ES5), convert arrow functions to regular function expressions
+  if ctx.target.older_than(ES2015) {
     // Arrow function body might be expression or block
     let function_body = match af.body {
       // If body is not a block, wrap in return statement
@@ -913,7 +1008,11 @@ fn transform_object_literal_expression(
             )
         }
       ComputedPropertyAssignment(name_expr, value, loc) =>
-        ComputedPropertyAssignment(transform(name_expr, ctx), transform(value, ctx), loc)
+        ComputedPropertyAssignment(
+          transform(name_expr, ctx),
+          transform(value, ctx),
+          loc,
+        )
     }
     transformed_properties.push(transformed_prop)
   }
@@ -936,14 +1035,15 @@ fn transform_parenthesized_expression(
 }
 
 ///|
-/// Transform template expression (downlevel to string concatenation for ES5)
+/// Transform template expression (downlevel to string concatenation for < ES2015)
 fn transform_template_expression(
   te : TemplateExpression,
   ctx : TransformerContext,
 ) -> Node {
-  // For ES5, convert template literals to string concatenation
+  // Template literals were introduced in ES2015
+  // For < ES2015 (ES5), convert template literals to string concatenation
   // Example: `Hello ${name}!` becomes "Hello " + name + "!"
-  if ctx.target == ES5 {
+  if ctx.target.older_than(ES2015) {
     // Build concatenation from left to right
     // Start with head as a string literal
     let mut result : Node = Node::StringLiteral({
@@ -1006,30 +1106,87 @@ fn transform_spread_expression(
 }
 
 ///|
-/// Transform optional chain expression
-fn transform_optional_chain(oc : OptionalChain, ctx : TransformerContext) -> Node {
+/// Transform optional chain expression (downlevel for < ES2020)
+fn transform_optional_chain(
+  oc : OptionalChain,
+  ctx : TransformerContext,
+) -> Node {
   let transformed_expr = transform(oc.expression, ctx)
-  let transformed_chain = match oc.chain {
-    OptionalChainKind::Property(prop) => OptionalChainKind::Property(prop)
-    OptionalChainKind::Call(args) => {
-      let transformed_args : Array[Node] = []
-      for arg in args {
-        transformed_args.push(transform(arg, ctx))
+
+  // Optional chaining (?.) was introduced in ES2020
+  // For < ES2020, transform: a?.b → a == null ? undefined : a.b
+  if ctx.target.older_than(ES2020) {
+    // Create the null check condition: expr == null
+    let null_check = Node::BinaryExpression({
+      left: transformed_expr,
+      operator: Equals, // loose equality catches both null and undefined
+      right: Node::NullLiteral({ location: oc.location }),
+      location: oc.location,
+    })
+
+    // Create the property access / call / element access
+    let access_expr = match oc.chain {
+      OptionalChainKind::Property(prop) =>
+        Node::PropertyAccessExpression({
+          expression: transformed_expr,
+          name: prop,
+          location: oc.location,
+        })
+      OptionalChainKind::Call(args) => {
+        let transformed_args : Array[Node] = []
+        for arg in args {
+          transformed_args.push(transform(arg, ctx))
+        }
+        Node::CallExpression({
+          expression: transformed_expr,
+          type_arguments: [],
+          arguments: transformed_args,
+          location: oc.location,
+        })
       }
-      OptionalChainKind::Call(transformed_args)
+      OptionalChainKind::Element(index) =>
+        Node::ElementAccessExpression({
+          expression: transformed_expr,
+          argument_expression: transform(index, ctx),
+          location: oc.location,
+        })
     }
-    OptionalChainKind::Element(index) => OptionalChainKind::Element(transform(index, ctx))
+
+    // Create: expr == null ? undefined : expr.prop
+    Node::ConditionalExpression({
+      condition: null_check,
+      when_true: Node::Identifier({ name: "undefined", location: oc.location }),
+      when_false: access_expr,
+      location: oc.location,
+    })
+  } else {
+    // ES2020+ keeps optional chaining
+    let transformed_chain = match oc.chain {
+      OptionalChainKind::Property(prop) => OptionalChainKind::Property(prop)
+      OptionalChainKind::Call(args) => {
+        let transformed_args : Array[Node] = []
+        for arg in args {
+          transformed_args.push(transform(arg, ctx))
+        }
+        OptionalChainKind::Call(transformed_args)
+      }
+      OptionalChainKind::Element(index) =>
+        OptionalChainKind::Element(transform(index, ctx))
+    }
+    OptionalChain({
+      expression: transformed_expr,
+      chain: transformed_chain,
+      location: oc.location,
+    })
   }
-  OptionalChain({
-    expression: transformed_expr,
-    chain: transformed_chain,
-    location: oc.location,
-  })
 }
 
 ///|
 /// Transform await expression
-fn transform_await_expression(ae : AwaitExpression, ctx : TransformerContext) -> Node {
+fn transform_await_expression(
+  ae : AwaitExpression,
+  ctx : TransformerContext,
+) -> Node {
   AwaitExpression({
     expression: transform(ae.expression, ctx),
     location: ae.location,
@@ -1038,7 +1195,10 @@ fn transform_await_expression(ae : AwaitExpression, ctx : TransformerContext) ->
 
 ///|
 /// Transform yield expression
-fn transform_yield_expression(ye : YieldExpression, ctx : TransformerContext) -> Node {
+fn transform_yield_expression(
+  ye : YieldExpression,
+  ctx : TransformerContext,
+) -> Node {
   YieldExpression({
     expression: match ye.expression {
       Some(expr) => Some(transform(expr, ctx))

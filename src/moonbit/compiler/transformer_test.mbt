@@ -506,3 +506,291 @@ test "transform enum to const object for all targets" {
     _ => assert_true(false)
   }
 }
+
+///|
+/// Test: ES5 target - exponentiation to Math.pow
+test "transform exponentiation to Math.pow for ES5" {
+  let stmts = parse_source("const result = 2 ** 3;")
+  let ctx = TransformerContext::es5()
+  let transformed = transform(stmts[0], ctx)
+  match transformed {
+    VariableStatement(vs) => {
+      let decl = vs.declarations[0]
+      match decl.initializer {
+        Some(CallExpression(ce)) =>
+          // Should be converted to Math.pow(2, 3)
+          match ce.expression {
+            PropertyAccessExpression(pae) => {
+              assert_eq(pae.name, "pow")
+              match pae.expression {
+                Identifier(id) => assert_eq(id.name, "Math")
+                _ => assert_true(false)
+              }
+            }
+            _ => assert_true(false)
+          }
+        _ => assert_true(false)
+      }
+    }
+    _ => assert_true(false)
+  }
+}
+
+///|
+/// Test: ES2016 target - preserves exponentiation operator
+test "transform preserves exponentiation for ES2016" {
+  let stmts = parse_source("const result = 2 ** 3;")
+  let ctx = TransformerContext::es2016()
+  let transformed = transform(stmts[0], ctx)
+  match transformed {
+    VariableStatement(vs) => {
+      let decl = vs.declarations[0]
+      match decl.initializer {
+        Some(BinaryExpression(be)) =>
+          // Should preserve ** operator for ES2016+
+          match be.operator {
+            Exponentiate => assert_true(true)
+            _ => assert_true(false)
+          }
+        _ => assert_true(false)
+      }
+    }
+    _ => assert_true(false)
+  }
+}
+
+///|
+/// Test: ES2015 target - exponentiation downleveled (< ES2016)
+test "transform exponentiation to Math.pow for ES2015" {
+  let stmts = parse_source("const result = x ** y;")
+  let ctx = TransformerContext::es2015()
+  let transformed = transform(stmts[0], ctx)
+  match transformed {
+    VariableStatement(vs) => {
+      let decl = vs.declarations[0]
+      match decl.initializer {
+        Some(CallExpression(ce)) =>
+          // Should be converted to Math.pow for ES2015 (< ES2016)
+          match ce.expression {
+            PropertyAccessExpression(pae) => assert_eq(pae.name, "pow")
+            _ => assert_true(false)
+          }
+        _ => assert_true(false)
+      }
+    }
+    _ => assert_true(false)
+  }
+}
+
+///|
+/// Test: ES2019 target - nullish coalescing to conditional
+test "transform nullish coalescing for ES2019" {
+  let stmts = parse_source("const result = x ?? y;")
+  let ctx = TransformerContext::es2019()
+  let transformed = transform(stmts[0], ctx)
+  match transformed {
+    VariableStatement(vs) => {
+      let decl = vs.declarations[0]
+      match decl.initializer {
+        Some(ConditionalExpression(_)) =>
+          // Should be converted to conditional for ES2019 (< ES2020)
+          assert_true(true)
+        _ => assert_true(false)
+      }
+    }
+    _ => assert_true(false)
+  }
+}
+
+///|
+/// Test: ES2020 target - preserves nullish coalescing
+test "transform preserves nullish coalescing for ES2020" {
+  let stmts = parse_source("const result = x ?? y;")
+  let ctx = TransformerContext::es2020()
+  let transformed = transform(stmts[0], ctx)
+  match transformed {
+    VariableStatement(vs) => {
+      let decl = vs.declarations[0]
+      match decl.initializer {
+        Some(BinaryExpression(be)) =>
+          // Should preserve ?? operator for ES2020+
+          match be.operator {
+            NullishCoalescing => assert_true(true)
+            _ => assert_true(false)
+          }
+        _ => assert_true(false)
+      }
+    }
+    _ => assert_true(false)
+  }
+}
+
+///|
+/// Test: ESNext target - preserves nullish coalescing
+test "transform preserves nullish coalescing for ESNext" {
+  let stmts = parse_source("const result = a ?? b;")
+  let ctx = TransformerContext::esnext()
+  let transformed = transform(stmts[0], ctx)
+  match transformed {
+    VariableStatement(vs) => {
+      let decl = vs.declarations[0]
+      match decl.initializer {
+        Some(BinaryExpression(be)) =>
+          match be.operator {
+            NullishCoalescing => assert_true(true)
+            _ => assert_true(false)
+          }
+        _ => assert_true(false)
+      }
+    }
+    _ => assert_true(false)
+  }
+}
+
+///|
+/// Test: ES2019 target - optional chaining to conditional
+test "transform optional chaining for ES2019" {
+  let stmts = parse_source("const result = obj?.prop;")
+  let ctx = TransformerContext::es2019()
+  let transformed = transform(stmts[0], ctx)
+  match transformed {
+    VariableStatement(vs) => {
+      let decl = vs.declarations[0]
+      match decl.initializer {
+        Some(ConditionalExpression(_)) =>
+          // Should be converted to conditional for ES2019 (< ES2020)
+          assert_true(true)
+        _ => assert_true(false)
+      }
+    }
+    _ => assert_true(false)
+  }
+}
+
+///|
+/// Test: ES2020 target - preserves optional chaining
+test "transform preserves optional chaining for ES2020" {
+  let stmts = parse_source("const result = obj?.prop;")
+  let ctx = TransformerContext::es2020()
+  let transformed = transform(stmts[0], ctx)
+  match transformed {
+    VariableStatement(vs) => {
+      let decl = vs.declarations[0]
+      match decl.initializer {
+        Some(OptionalChain(_)) =>
+          // Should preserve ?. for ES2020+
+          assert_true(true)
+        _ => assert_true(false)
+      }
+    }
+    _ => assert_true(false)
+  }
+}
+
+///|
+/// Test: ES2017 target - preserves exponentiation
+test "transform preserves exponentiation for ES2017" {
+  let stmts = parse_source("const result = 2 ** 10;")
+  let ctx = TransformerContext::es2017()
+  let transformed = transform(stmts[0], ctx)
+  match transformed {
+    VariableStatement(vs) => {
+      let decl = vs.declarations[0]
+      match decl.initializer {
+        Some(BinaryExpression(be)) =>
+          match be.operator {
+            Exponentiate => assert_true(true)
+            _ => assert_true(false)
+          }
+        _ => assert_true(false)
+      }
+    }
+    _ => assert_true(false)
+  }
+}
+
+///|
+/// Test: ES2018 target - optional chaining downleveled
+test "transform optional chaining for ES2018" {
+  let stmts = parse_source("const result = foo?.bar;")
+  let ctx = TransformerContext::es2018()
+  let transformed = transform(stmts[0], ctx)
+  match transformed {
+    VariableStatement(vs) => {
+      let decl = vs.declarations[0]
+      match decl.initializer {
+        Some(ConditionalExpression(_)) =>
+          // Should be downleveled for ES2018 (< ES2020)
+          assert_true(true)
+        _ => assert_true(false)
+      }
+    }
+    _ => assert_true(false)
+  }
+}
+
+///|
+/// Test: Target ordinal comparison
+test "target ordinal values" {
+  let es5 = TransformerContext::es5().target
+  let es2015 = TransformerContext::es2015().target
+  let es2016 = TransformerContext::es2016().target
+  let es2017 = TransformerContext::es2017().target
+  let es2018 = TransformerContext::es2018().target
+  let es2019 = TransformerContext::es2019().target
+  let es2020 = TransformerContext::es2020().target
+  let esnext = TransformerContext::esnext().target
+
+  assert_true(es5.ordinal() < es2015.ordinal())
+  assert_true(es2015.ordinal() < es2016.ordinal())
+  assert_true(es2016.ordinal() < es2017.ordinal())
+  assert_true(es2017.ordinal() < es2018.ordinal())
+  assert_true(es2018.ordinal() < es2019.ordinal())
+  assert_true(es2019.ordinal() < es2020.ordinal())
+  assert_true(es2020.ordinal() < esnext.ordinal())
+}
+
+///|
+/// Test: Target supports helper
+test "target supports method" {
+  let es5 = TransformerContext::es5().target
+  let es2015 = TransformerContext::es2015().target
+  let es2016 = TransformerContext::es2016().target
+  let es2019 = TransformerContext::es2019().target
+  let es2020 = TransformerContext::es2020().target
+  let esnext = TransformerContext::esnext().target
+
+  // ES5 doesn't support ES2015 features
+  assert_false(es5.supports(es2015))
+  // ES2015 supports itself
+  assert_true(es2015.supports(es2015))
+  // ES2020 supports all previous features
+  assert_true(es2020.supports(es2015))
+  assert_true(es2020.supports(es2016))
+  assert_true(es2020.supports(es2019))
+  // ESNext supports everything
+  assert_true(esnext.supports(es2020))
+}
+
+///|
+/// Test: Target older_than helper
+test "target older_than method" {
+  let es5 = TransformerContext::es5().target
+  let es2015 = TransformerContext::es2015().target
+  let es2016 = TransformerContext::es2016().target
+  let es2019 = TransformerContext::es2019().target
+  let es2020 = TransformerContext::es2020().target
+  let esnext = TransformerContext::esnext().target
+
+  // ES5 is older than all ES2015+
+  assert_true(es5.older_than(es2015))
+  assert_true(es5.older_than(es2016))
+  assert_true(es5.older_than(es2020))
+  // ES2015 is older than ES2016 but not ES2015 itself
+  assert_false(es2015.older_than(es2015))
+  assert_true(es2015.older_than(es2016))
+  // ES2019 is older than ES2020
+  assert_true(es2019.older_than(es2020))
+  // ESNext is not older than anything
+  assert_false(esnext.older_than(es2020))
+}
