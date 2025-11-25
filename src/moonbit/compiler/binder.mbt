@@ -211,10 +211,12 @@ fn bind_statement(binder : Binder, node : Node) -> Binder {
 
     // Return statement
     ReturnStatement(ret_stmt) => {
-      match ret_stmt.expression {
+      let binder = match ret_stmt.expression {
         Some(expr) => bind_expression(binder, expr)
         None => binder
       }
+      // Create return flow node
+      create_return_flow(binder, node)
     }
 
     // Throw statement
@@ -927,6 +929,18 @@ fn create_array_mutation_flow(binder : Binder, node : Node) -> Binder {
     ..binder,
     next_flow_id: flow_id,
     current_flow: Some(FlowNode::ArrayMutation(flow_array_mutation)),
+  }
+}
+
+///|
+fn create_return_flow(binder : Binder, node : Node) -> Binder {
+  let flow_id = binder.next_flow_id + 1
+  let antecedent = get_current_flow_id(binder)
+  let flow_return = FlowReturn::{ node, antecedent, id: flow_id }
+  {
+    ..binder,
+    next_flow_id: flow_id,
+    current_flow: Some(FlowNode::Return(flow_return)),
   }
 }
 

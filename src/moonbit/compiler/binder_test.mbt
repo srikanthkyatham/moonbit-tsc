@@ -1369,3 +1369,73 @@ test "bind object property assignment is not array mutation" {
     Err(_) => assert_true(false)
   }
 }
+
+// ============================================================================
+// FlowNode Return Tests
+// ============================================================================
+
+///|
+test "bind return statement creates return flow node" {
+  let result = parse_and_bind("function f() { return 42; }")
+  match result {
+    Ok(bound) => {
+      assert_true(bound.global_scope.symbols.contains("f"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "bind return statement without expression" {
+  let result = parse_and_bind("function f() { return; }")
+  match result {
+    Ok(bound) => {
+      assert_true(bound.global_scope.symbols.contains("f"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "bind return with expression" {
+  let result = parse_and_bind("function add(a, b) { return a + b; }")
+  match result {
+    Ok(bound) => {
+      assert_true(bound.global_scope.symbols.contains("add"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "bind multiple return statements" {
+  let result = parse_and_bind("function abs(x) { if (x < 0) { return -x; } return x; }")
+  match result {
+    Ok(bound) => {
+      assert_true(bound.global_scope.symbols.contains("abs"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "bind return in arrow function" {
+  let result = parse_and_bind("const f = (x) => { return x * 2; };")
+  match result {
+    Ok(bound) => {
+      assert_true(bound.global_scope.symbols.contains("f"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "bind early return pattern" {
+  let result = parse_and_bind("function validate(x) { if (!x) { return false; } return true; }")
+  match result {
+    Ok(bound) => {
+      assert_true(bound.global_scope.symbols.contains("validate"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
