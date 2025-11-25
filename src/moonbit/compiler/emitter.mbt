@@ -163,6 +163,9 @@ pub fn emit(node : Node, ctx : EmitterContext) -> String {
     TypeAssertionExpression(tae) => emit(tae.expression, ctx)  // Unwrap
     NonNullExpression(nne) => emit(nne.expression, ctx)  // Unwrap
     SpreadExpression(se) => emit_spread_expression(se, ctx)
+    OptionalChain(oc) => emit_optional_chain(oc, ctx)
+    AwaitExpression(ae) => emit_await_expression(ae, ctx)
+    YieldExpression(ye) => emit_yield_expression(ye, ctx)
 
     // Binding Patterns
     ArrayBindingPattern(abp) => emit_array_binding_pattern(abp, ctx)
@@ -202,6 +205,7 @@ pub fn emit(node : Node, ctx : EmitterContext) -> String {
     ConstructorDeclaration(cd) => emit_constructor_declaration(cd, ctx)
     GetAccessor(ga) => emit_get_accessor(ga, ctx)
     SetAccessor(sa) => emit_set_accessor(sa, ctx)
+    Decorator(_) => ""  // Decorators are handled separately
     ModuleDeclaration(_) => ""  // TODO: Implement if needed
   }
 }
@@ -1181,6 +1185,42 @@ fn emit_spread_expression(se : SpreadExpression, ctx : EmitterContext) -> String
 }
 
 ///|
+/// Emit optional chain expression
+fn emit_optional_chain(oc : OptionalChain, ctx : EmitterContext) -> String {
+  let base = emit(oc.expression, ctx)
+  match oc.chain {
+    OptionalChainKind::Property(prop) => base + "?." + prop
+    OptionalChainKind::Call(args) => {
+      let mut result = base + "?.("
+      for i = 0; i < args.length(); i = i + 1 {
+        result = result + emit(args[i], ctx)
+        if i < args.length() - 1 {
+          result = result + ", "
+        }
+      }
+      result + ")"
+    }
+    OptionalChainKind::Element(index) => base + "?.[" + emit(index, ctx) + "]"
+  }
+}
+
+///|
+/// Emit await expression
+fn emit_await_expression(ae : AwaitExpression, ctx : EmitterContext) -> String {
+  "await " + emit(ae.expression, ctx)
+}
+
+///|
+/// Emit yield expression
+fn emit_yield_expression(ye : YieldExpression, ctx : EmitterContext) -> String {
+  let yield_kw = if ye.is_delegate { "yield*" } else { "yield" }
+  match ye.expression {
+    Some(expr) => yield_kw + " " + emit(expr, ctx)
+    None => yield_kw
+  }
+}
+
+///|
 /// Emit array binding pattern
 fn emit_array_binding_pattern(abp : ArrayBindingPattern, ctx : EmitterContext) -> String {
   let mut result = "["
@@ -1254,6 +1294,13 @@ fn operator_to_string(op : BinaryOperator) -> String {
     BitwiseAndAssign => "&="
     BitwiseOrAssign => "|="
     BitwiseXorAssign => "^="
+    ExponentiateAssign => "**="
+    LeftShiftAssign => "<<="
+    RightShiftAssign => ">>="
+    UnsignedRightShiftAssign => ">>>="
+    LogicalAndAssign => "&&="
+    LogicalOrAssign => "||="
+    NullishCoalescingAssign => "??="
     Comma => ","
   }
 }

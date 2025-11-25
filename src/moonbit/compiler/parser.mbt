@@ -107,8 +107,53 @@ fn parse_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
       }
     }
 
+    // Decorator(s) followed by class/function declaration
+    At(_) => {
+      let (decorators, parser) = parse_decorators(parser)
+      match current_token(parser) {
+        KeywordClass(_) => parse_class_declaration_with_decorators(parser, false, decorators)
+        KeywordAbstract(_) => {
+          let parser = advance_parser(parser)
+          match current_token(parser) {
+            KeywordClass(_) => parse_class_declaration_with_decorators(parser, true, decorators)
+            _ => {
+              let loc = current_token(parser).location()
+              Err(add_error(parser, "Expected 'class' after 'abstract'", loc))
+            }
+          }
+        }
+        KeywordFunction(_) => parse_function_declaration(parser, false, false)
+        KeywordAsync(_) => {
+          let parser = advance_parser(parser)
+          match current_token(parser) {
+            KeywordFunction(_) => parse_function_declaration(parser, true, false)
+            _ => {
+              let loc = current_token(parser).location()
+              Err(add_error(parser, "Expected 'function' after decorators and 'async'", loc))
+            }
+          }
+        }
+        _ => {
+          let loc = current_token(parser).location()
+          Err(add_error(parser, "Expected class or function declaration after decorators", loc))
+        }
+      }
+    }
+
     // Class declaration
-    KeywordClass(_) => parse_class_declaration(parser)
+    KeywordClass(_) => parse_class_declaration_with_decorators(parser, false, [])
+
+    // Abstract class declaration
+    KeywordAbstract(_) => {
+      let parser = advance_parser(parser) // consume 'abstract'
+      match current_token(parser) {
+        KeywordClass(_) => parse_class_declaration_with_decorators(parser, true, [])
+        _ => {
+          let loc = current_token(parser).location()
+          Err(add_error(parser, "Expected 'class' after 'abstract'", loc))
+        }
+      }
+    }
 
     // Interface declaration
     KeywordInterface(_) => parse_interface_declaration(parser)
@@ -133,6 +178,9 @@ fn parse_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
       }
     }
     KeywordEnum(_) => parse_enum_declaration(parser, false)
+
+    // Namespace/module declaration
+    KeywordNamespace(_) | KeywordModule(_) => parse_module_declaration(parser)
 
     // Import declaration
     KeywordImport(_) => parse_import_declaration(parser)
@@ -164,6 +212,32 @@ fn parse_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
           advance_parser(parser),
         ),
       )
+    }
+
+    // Check for labeled statement: identifier followed by colon
+    Identifier(name, loc) => {
+      let next_token = peek_token(parser)
+      match next_token {
+        Colon(_) => {
+          // This is a labeled statement
+          let parser = advance_parser(parser) // consume identifier
+          let parser = advance_parser(parser) // consume colon
+          match parse_statement(parser) {
+            Ok((stmt, parser)) => Ok(
+              (
+                Node::LabeledStatement(LabeledStatement::{
+                  label: name,
+                  statement: stmt,
+                  location: loc,
+                }),
+                parser,
+              ),
+            )
+            Err(parser) => Err(parser)
+          }
+        }
+        _ => parse_expression_statement(parser)
+      }
     }
 
     // Expression statement (default)
@@ -1125,7 +1199,77 @@ fn parse_unary_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
 
   let token = current_token(parser)
 
-  // Check for "new" expression first
+  // Check for "await" expression
+  match token {
+    KeywordAwait(start_loc) => {
+      let parser = advance_parser(parser)
+      let parser = increment_depth(parser)
+      match parse_unary_expression(parser) {
+        Ok((expr, parser)) => {
+          let parser = decrement_depth(parser)
+          return Ok((Node::AwaitExpression(AwaitExpression::{
+            expression: expr,
+            location: start_loc,
+          }), parser))
+        }
+        Err(parser) => {
+          let parser = decrement_depth(parser)
+          return Err(parser)
+        }
+      }
+    }
+    _ => ()
+  }
+
+  // Check for "yield" expression
+  match token {
+    KeywordYield(start_loc) => {
+      let parser = advance_parser(parser)
+      // Check for yield* (delegate)
+      let (is_delegate, parser) = match current_token(parser) {
+        Star(_) => (true, advance_parser(parser))
+        _ => (false, parser)
+      }
+      // Yield can have an optional expression
+      let parser = increment_depth(parser)
+      // Try to parse expression, but it's optional for yield
+      match current_token(parser) {
+        // These tokens indicate end of yield expression (no argument)
+        Semicolon(_) | CloseParen(_) | CloseBracket(_) | CloseBrace(_) | Comma(_) | Colon(_) => {
+          let parser = decrement_depth(parser)
+          return Ok((Node::YieldExpression(YieldExpression::{
+            expression: None,
+            is_delegate,
+            location: start_loc,
+          }), parser))
+        }
+        _ => {
+          match parse_expression(parser) {
+            Ok((expr, parser)) => {
+              let parser = decrement_depth(parser)
+              return Ok((Node::YieldExpression(YieldExpression::{
+                expression: Some(expr),
+                is_delegate,
+                location: start_loc,
+              }), parser))
+            }
+            Err(_) => {
+              // No expression, that's okay for yield
+              let parser = decrement_depth(parser)
+              return Ok((Node::YieldExpression(YieldExpression::{
+                expression: None,
+                is_delegate,
+                location: start_loc,
+              }), parser))
+            }
+          }
+        }
+      }
+    }
+    _ => ()
+  }
+
+  // Check for "new" expression
   match token {
     KeywordNew(start_loc) => {
       let parser = advance_parser(parser)
@@ -1274,6 +1418,61 @@ fn parse_postfix_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
             parser = next_parser
           }
           Err(p) => return Err(p)
+        }
+      }
+
+      // Optional chaining - property access, call, or element access
+      QuestionDot(_) => {
+        let start_loc = get_location(left)
+        parser = advance_parser(parser)
+        match current_token(parser) {
+          // Optional element access: obj?.[index]
+          OpenBracket(_) => {
+            parser = advance_parser(parser)
+            parser = increment_depth(parser)
+            match parse_expression(parser) {
+              Ok((index, next_parser)) => {
+                parser = decrement_depth(next_parser)
+                match expect(parser, fn(t) { matches_close_bracket(t) }) {
+                  Ok(p) => {
+                    parser = advance_parser(p)
+                    left = Node::OptionalChain(OptionalChain::{
+                      expression: left,
+                      chain: OptionalChainKind::Element(index),
+                      location: start_loc,
+                    })
+                  }
+                  Err(p) => return Err(p)
+                }
+              }
+              Err(p) => return Err(decrement_depth(p))
+            }
+          }
+          // Optional call: func?.()
+          OpenParen(_) => {
+            parser = advance_parser(parser)
+            let (arguments, next_parser) = parse_argument_list(parser)
+            parser = next_parser
+            left = Node::OptionalChain(OptionalChain::{
+              expression: left,
+              chain: OptionalChainKind::Call(arguments),
+              location: start_loc,
+            })
+          }
+          // Optional property access: obj?.prop
+          _ => {
+            match parse_identifier(parser) {
+              Ok((id, next_parser)) => {
+                left = Node::OptionalChain(OptionalChain::{
+                  expression: left,
+                  chain: OptionalChainKind::Property(id.name),
+                  location: start_loc,
+                })
+                parser = next_parser
+              }
+              Err(p) => return Err(p)
+            }
+          }
         }
       }
 
@@ -2135,6 +2334,26 @@ fn parse_primary_type(parser : Parser) -> Result[(Node, Parser), Parser] {
           advance_parser(parser),
         ),
       )
+    KeywordUnknown(_) =>
+      Ok(
+        (
+          Node::KeywordType(KeywordType::{
+            kind: TypeKeyword::Unknown,
+            location: loc,
+          }),
+          advance_parser(parser),
+        ),
+      )
+    KeywordNever(_) =>
+      Ok(
+        (
+          Node::KeywordType(KeywordType::{
+            kind: TypeKeyword::Never,
+            location: loc,
+          }),
+          advance_parser(parser),
+        ),
+      )
     Identifier(name, _) if name == "true" || name == "false" => {
       // Boolean literal types
       let value = name == "true"
@@ -2296,6 +2515,14 @@ fn parse_primary_type(parser : Parser) -> Result[(Node, Parser), Parser] {
           }
           Identifier(name, _) => {
             parser = advance_parser(parser)
+            // Check for optional property marker (?)
+            match current_token(parser) {
+              Question(_) => {
+                // Optional property - consume ?
+                parser = advance_parser(parser)
+              }
+              _ => ()
+            }
             // Expect :
             match current_token(parser) {
               Colon(_) => {
@@ -2311,6 +2538,68 @@ fn parse_primary_type(parser : Parser) -> Result[(Node, Parser), Parser] {
                     }
                   }
                   Err(p) => return Err(p)
+                }
+              }
+              _ => break
+            }
+          }
+          // Handle call signature: (): type
+          OpenParen(_) => {
+            let call_start = current_token(parser).location()
+            parser = advance_parser(parser)
+            let (params, p) = parse_parameter_list(parser)
+            parser = p
+            // Expect :
+            match current_token(parser) {
+              Colon(_) => {
+                parser = advance_parser(parser)
+                match parse_type(parser) {
+                  Ok((return_type, p)) => {
+                    let _ = params
+                    let _ = return_type
+                    let _ = call_start
+                    // For now, just skip call signatures
+                    parser = p
+                    // Optional semicolon
+                    match current_token(parser) {
+                      Semicolon(_) => parser = advance_parser(parser)
+                      _ => ()
+                    }
+                  }
+                  Err(p) => return Err(p)
+                }
+              }
+              _ => break
+            }
+          }
+          // Handle construct signature: new(): type
+          KeywordNew(_) => {
+            parser = advance_parser(parser)
+            match current_token(parser) {
+              OpenParen(_) => {
+                parser = advance_parser(parser)
+                let (params, p) = parse_parameter_list(parser)
+                parser = p
+                // Expect :
+                match current_token(parser) {
+                  Colon(_) => {
+                    parser = advance_parser(parser)
+                    match parse_type(parser) {
+                      Ok((return_type, p)) => {
+                        let _ = params
+                        let _ = return_type
+                        // For now, just skip construct signatures
+                        parser = p
+                        // Optional semicolon
+                        match current_token(parser) {
+                          Semicolon(_) => parser = advance_parser(parser)
+                          _ => ()
+                        }
+                      }
+                      Err(p) => return Err(p)
+                    }
+                  }
+                  _ => break
                 }
               }
               _ => break
@@ -2525,7 +2814,34 @@ fn parse_identifier(parser : Parser) -> Result[(Identifier, Parser), Parser] {
 // ============================================================================
 
 ///|
-fn parse_class_declaration(parser : Parser) -> Result[(Node, Parser), Parser] {
+/// Parse a list of decorators (@decorator)
+fn parse_decorators(parser : Parser) -> (Array[Node], Parser) {
+  let decorators : Array[Node] = []
+  let mut parser = parser
+  while true {
+    match current_token(parser) {
+      At(start_loc) => {
+        parser = advance_parser(parser) // consume '@'
+        // Parse the decorator expression (can be identifier, property access, or call)
+        match parse_expression(parser) {
+          Ok((expr, p)) => {
+            decorators.push(Node::Decorator(Decorator::{
+              expression: expr,
+              location: start_loc,
+            }))
+            parser = p
+          }
+          Err(_) => break
+        }
+      }
+      _ => break
+    }
+  }
+  (decorators, parser)
+}
+
+///|
+fn parse_class_declaration_with_decorators(parser : Parser, is_abstract : Bool, decorators : Array[Node]) -> Result[(Node, Parser), Parser] {
   // [abstract] class Name [extends Super] [implements I1, I2] { members }
   let start_loc = current_token(parser).location()
   let parser = advance_parser(parser) // consume 'class'
@@ -2553,7 +2869,8 @@ fn parse_class_declaration(parser : Parser) -> Result[(Node, Parser), Parser] {
               type_parameters: [],
               heritage_clauses,
               members,
-              is_abstract: false,
+              is_abstract,
+              decorators,
               location: SourceLocation::new(start_loc.file_path, start_loc.start, loc.end)
             }),
             parser
@@ -2998,6 +3315,97 @@ fn parse_interface_declaration(
               _ => return Err(add_error(parser, "Expected ':' after readonly property name", current_token(parser).location()))
             }
           }
+          // Call signature: (): returnType
+          OpenParen(_) => {
+            let call_loc = current_token(parser).location()
+            parser = advance_parser(parser) // consume '('
+
+            // Parse parameters
+            let (params, p) = parse_parameter_list(parser)
+            parser = p
+
+            // Parse return type
+            let return_type = match current_token(parser) {
+              Colon(_) => {
+                parser = advance_parser(parser)
+                match parse_type(parser) {
+                  Ok((t, p)) => {
+                    parser = p
+                    Some(t)
+                  }
+                  Err(_) => None
+                }
+              }
+              _ => None
+            }
+
+            // Create call signature as a method with empty name (call signature)
+            members.push(Node::MethodDeclaration(MethodDeclaration::{
+              name: "",
+              type_parameters: [],
+              parameters: params,
+              return_type,
+              body: None,
+              location: call_loc,
+              modifiers: [],
+              is_async: false,
+              is_generator: false,
+            }))
+
+            // Optional semicolon or comma
+            match current_token(parser) {
+              Semicolon(_) | Comma(_) => parser = advance_parser(parser)
+              _ => ()
+            }
+          }
+          // Construct signature: new(): returnType
+          KeywordNew(_) => {
+            let new_loc = current_token(parser).location()
+            parser = advance_parser(parser) // consume 'new'
+
+            match current_token(parser) {
+              OpenParen(_) => {
+                parser = advance_parser(parser)
+                let (params, p) = parse_parameter_list(parser)
+                parser = p
+
+                // Parse return type
+                let return_type = match current_token(parser) {
+                  Colon(_) => {
+                    parser = advance_parser(parser)
+                    match parse_type(parser) {
+                      Ok((t, p)) => {
+                        parser = p
+                        Some(t)
+                      }
+                      Err(_) => None
+                    }
+                  }
+                  _ => None
+                }
+
+                // Create construct signature as a method with "new" name
+                members.push(Node::MethodDeclaration(MethodDeclaration::{
+                  name: "new",
+                  type_parameters: [],
+                  parameters: params,
+                  return_type,
+                  body: None,
+                  location: new_loc,
+                  modifiers: [],
+                  is_async: false,
+                  is_generator: false,
+                }))
+
+                // Optional semicolon or comma
+                match current_token(parser) {
+                  Semicolon(_) | Comma(_) => parser = advance_parser(parser)
+                  _ => ()
+                }
+              }
+              _ => return Err(add_error(parser, "Expected '(' after 'new'", current_token(parser).location()))
+            }
+          }
           Identifier(prop_name, prop_loc) => {
             parser = advance_parser(parser)
 
@@ -3216,6 +3624,73 @@ fn parse_enum_members_aux(parser : Parser, acc : Array[EnumMember]) -> (Array[En
       }
     }
     _ => (acc, parser)
+  }
+}
+
+///|
+/// Parse namespace or module declaration
+fn parse_module_declaration(parser : Parser) -> Result[(Node, Parser), Parser] {
+  // namespace Name { statements }
+  // module Name { statements }
+  let start_loc = current_token(parser).location()
+  let parser = advance_parser(parser) // consume 'namespace' or 'module'
+
+  // Parse namespace/module name
+  let (name, parser) = match current_token(parser) {
+    Identifier(n, _) => (n, advance_parser(parser))
+    StringLiteral(s, _) => (s, advance_parser(parser)) // For ambient modules like declare module "fs"
+    _ => return Err(add_error(parser, "Expected namespace/module name", current_token(parser).location()))
+  }
+
+  // Parse body
+  match current_token(parser) {
+    OpenBrace(_) => {
+      // Parse block body
+      match parse_block_statement(parser) {
+        Ok((body, parser)) => {
+          let end_loc = get_location(body)
+          Ok((
+            Node::ModuleDeclaration(ModuleDeclaration::{
+              name,
+              body: Some(body),
+              location: SourceLocation::new(start_loc.file_path, start_loc.start, end_loc.end)
+            }),
+            parser
+          ))
+        }
+        Err(p) => Err(p)
+      }
+    }
+    Dot(_) => {
+      // Dotted name like namespace A.B.C
+      let parser = advance_parser(parser)
+      match parse_module_declaration(parser) {
+        Ok((nested, parser)) => {
+          let end_loc = get_location(nested)
+          Ok((
+            Node::ModuleDeclaration(ModuleDeclaration::{
+              name,
+              body: Some(nested),
+              location: SourceLocation::new(start_loc.file_path, start_loc.start, end_loc.end)
+            }),
+            parser
+          ))
+        }
+        Err(p) => Err(p)
+      }
+    }
+    _ => {
+      // Empty module/namespace (declaration only)
+      let parser = expect_semicolon(parser)
+      Ok((
+        Node::ModuleDeclaration(ModuleDeclaration::{
+          name,
+          body: None,
+          location: start_loc
+        }),
+        parser
+      ))
+    }
   }
 }
 
@@ -4431,6 +4906,13 @@ fn get_binary_operator(token : Token) -> BinaryOperator? {
     AmpersandEquals(_) => Some(BinaryOperator::BitwiseAndAssign)
     BarEquals(_) => Some(BinaryOperator::BitwiseOrAssign)
     CaretEquals(_) => Some(BinaryOperator::BitwiseXorAssign)
+    StarStarEquals(_) => Some(BinaryOperator::ExponentiateAssign)
+    LessThanLessThanEquals(_) => Some(BinaryOperator::LeftShiftAssign)
+    GreaterThanGreaterThanEquals(_) => Some(BinaryOperator::RightShiftAssign)
+    GreaterThanGreaterThanGreaterThanEquals(_) => Some(BinaryOperator::UnsignedRightShiftAssign)
+    AmpersandAmpersandEquals(_) => Some(BinaryOperator::LogicalAndAssign)
+    BarBarEquals(_) => Some(BinaryOperator::LogicalOrAssign)
+    QuestionQuestionEquals(_) => Some(BinaryOperator::NullishCoalescingAssign)
     _ => None
   }
 }

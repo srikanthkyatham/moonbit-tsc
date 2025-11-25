@@ -445,6 +445,14 @@ fn infer_type(checker : TypeChecker, expr : Node) -> (Type, TypeChecker) {
       infer_template_expression_type(checker, template)
     ThisExpression(_) => infer_this_type(checker)
     SpreadExpression(spread) => infer_type(checker, spread.expression)
+    OptionalChain(oc) => infer_optional_chain_type(checker, oc)
+    AwaitExpression(ae) => infer_await_expression_type(checker, ae)
+    YieldExpression(ye) => infer_yield_expression_type(checker, ye)
+    AsExpression(as_expr) => infer_as_expression_type(checker, as_expr)
+    NonNullExpression(nne) => infer_non_null_expression_type(checker, nne)
+    TypeAssertionExpression(tae) => infer_type_assertion_type(checker, tae)
+    ParenthesizedExpression(pe) => infer_type(checker, pe.expression)
+    FunctionExpression(fe) => infer_function_expression_type(checker, fe)
     _ => any_type(checker) // Fallback for unhandled expressions
   }
 }
@@ -708,6 +716,177 @@ fn infer_this_type(checker : TypeChecker) -> (Type, TypeChecker) {
 }
 
 ///|
+/// Infer optional chain type (obj?.prop, func?.(), arr?.[0])
+fn infer_optional_chain_type(
+  checker : TypeChecker,
+  oc : OptionalChain,
+) -> (Type, TypeChecker) {
+  // Get the type of the base expression
+  let (base_type, checker) = infer_type(checker, oc.expression)
+  // Optional chaining can return undefined if base is null/undefined
+  // For now, return the property/call/element type or any
+  let _ = base_type  // Mark as used
+  match oc.chain {
+    OptionalChainKind::Property(_) => {
+      // Property access returns any for now (should look up property type)
+      any_type(checker)
+    }
+    OptionalChainKind::Call(args) => {
+      // Check argument types
+      let mut checker = checker
+      for arg in args {
+        let (_, c) = infer_type(checker, arg)
+        checker = c
+      }
+      // Call returns any for now
+      any_type(checker)
+    }
+    OptionalChainKind::Element(index) => {
+      // Check index type
+      let (_, checker) = infer_type(checker, index)
+      any_type(checker)
+    }
+  }
+}
+
+///|
+/// Infer await expression type
+fn infer_await_expression_type(
+  checker : TypeChecker,
+  ae : AwaitExpression,
+) -> (Type, TypeChecker) {
+  // Get the type of the awaited expression
+  let (promise_type, checker) = infer_type(checker, ae.expression)
+  // For now, unwrap Promise<T> to T (simplified)
+  // In full implementation, check if it's actually a Promise
+  match promise_type {
+    TypeReference(tr) =>
+      if tr.name == "Promise" && tr.type_arguments.length() > 0 {
+        (tr.type_arguments[0], checker)
+      } else {
+        (promise_type, checker)
+      }
+    _ => (promise_type, checker)
+  }
+}
+
+///|
+/// Infer yield expression type
+fn infer_yield_expression_type(
+  checker : TypeChecker,
+  ye : YieldExpression,
+) -> (Type, TypeChecker) {
+  // Get the type of the yielded expression if present
+  match ye.expression {
+    Some(expr) => {
+      let (expr_type, checker) = infer_type(checker, expr)
+      // For yield*, should iterate over the expression
+      // For plain yield, return the expression type
+      (expr_type, checker)
+    }
+    None => undefined_type(checker)
+  }
+}
+
+///|
+/// Infer 'as' expression type (type assertion)
+fn infer_as_expression_type(
+  checker : TypeChecker,
+  as_expr : AsExpression,
+) -> (Type, TypeChecker) {
+  // Check the expression first
+  let (_, checker) = infer_type(checker, as_expr.expression)
+  // Return the asserted type
+  let (type_opt, checker) = get_type_from_type_node(checker, as_expr.type_node)
+  match type_opt {
+    Some(t) => (t, checker)
+    None => any_type(checker)
+  }
+}
+
+///|
+/// Infer non-null expression type
+fn infer_non_null_expression_type(
+  checker : TypeChecker,
+  nne : NonNullExpression,
+) -> (Type, TypeChecker) {
+  // Get the type of the expression and remove null/undefined
+  let (expr_type, checker) = infer_type(checker, nne.expression)
+  // For now, just return the expression type
+  // In full implementation, remove null/undefined from union
+  (expr_type, checker)
+}
+
+///|
+/// Infer type assertion expression type
+fn infer_type_assertion_type(
+  checker : TypeChecker,
+  tae : TypeAssertionExpression,
+) -> (Type, TypeChecker) {
+  // Check the expression first
+  let (_, checker) = infer_type(checker, tae.expression)
+  // Return the asserted type
+  let (type_opt, checker) = get_type_from_type_node(checker, tae.type_node)
+  match type_opt {
+    Some(t) => (t, checker)
+    None => any_type(checker)
+  }
+}
+
+///|
+/// Infer function expression type
+fn infer_function_expression_type(
+  checker : TypeChecker,
+  fe : FunctionExpression,
+) -> (Type, TypeChecker) {
+  // Build a function type from the function expression
+  let params : Array[CheckerParameter] = []
+  let mut checker = checker
+
+  for param_node in fe.parameters {
+    match param_node {
+      Parameter(p) => {
+        let (param_type, c) = match p.type_annotation {
+          Some(type_node) => {
+            let (type_opt, c) = get_type_from_type_node(checker, type_node)
+            match type_opt {
+              Some(t) => (t, c)
+              None => any_type(c)
+            }
+          }
+          None => any_type(checker)
+        }
+        checker = c
+        params.push({
+          name: match p.name {
+            Identifier(id) => id.name
+            _ => ""
+          },
+          param_type,
+          is_optional: p.is_optional,
+          is_rest: p.is_rest,
+        })
+      }
+      _ => ()
+    }
+  }
+
+  let (return_type, checker) = match fe.return_type {
+    Some(type_node) => {
+      let (type_opt, c) = get_type_from_type_node(checker, type_node)
+      match type_opt {
+        Some(t) => (t, c)
+        None => any_type(c)
+      }
+    }
+    None => any_type(checker)
+  }
+
+  let (info, checker) = create_type_info(checker)
+  (Function({ parameters: params, return_type, info }), checker)
+}
+
+///|
 /// Infer array literal type
 fn infer_array_literal_type(
   checker : TypeChecker,
@@ -856,6 +1035,8 @@ fn is_assignable(source : Type, target : Type) -> Bool {
     // Unknown is only assignable to unknown or any
     (Unknown(_), Unknown(_)) => true
     (Unknown(_), Any(_)) => true
+    // Any type is assignable to unknown (unknown is a safe top type)
+    (_, Unknown(_)) => true
     // Same primitive types
     (Number(_), Number(_)) => true
     (String(_), String(_)) => true

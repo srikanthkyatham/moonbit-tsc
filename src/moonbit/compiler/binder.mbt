@@ -239,6 +239,11 @@ fn bind_statement(binder : Binder, node : Node) -> Binder {
       bind_expression(binder, expr_stmt.expression)
     }
 
+    // Labeled statement
+    LabeledStatement(labeled) => {
+      bind_statement(binder, labeled.statement)
+    }
+
     // Other statements - no binding needed
     _ => binder
   }
@@ -719,6 +724,47 @@ fn bind_expression(binder : Binder, node : Node) -> Binder {
       let binder = bind_expression(binder, cond_expr.condition)
       let binder = bind_expression(binder, cond_expr.when_true)
       bind_expression(binder, cond_expr.when_false)
+    }
+
+    // Optional chain expression
+    OptionalChain(oc) => {
+      let binder = bind_expression(binder, oc.expression)
+      match oc.chain {
+        OptionalChainKind::Call(args) => bind_expressions(binder, args)
+        OptionalChainKind::Element(index) => bind_expression(binder, index)
+        OptionalChainKind::Property(_) => binder
+      }
+    }
+
+    // Await expression
+    AwaitExpression(ae) => bind_expression(binder, ae.expression)
+
+    // Yield expression
+    YieldExpression(ye) => {
+      match ye.expression {
+        Some(expr) => bind_expression(binder, expr)
+        None => binder
+      }
+    }
+
+    // As expression (type assertion)
+    AsExpression(as_expr) => bind_expression(binder, as_expr.expression)
+
+    // Non-null expression
+    NonNullExpression(nne) => bind_expression(binder, nne.expression)
+
+    // Type assertion expression
+    TypeAssertionExpression(tae) => bind_expression(binder, tae.expression)
+
+    // Parenthesized expression
+    ParenthesizedExpression(pe) => bind_expression(binder, pe.expression)
+
+    // Function expression
+    FunctionExpression(fe) => {
+      let binder = push_scope(binder)
+      let binder = bind_parameters(binder, fe.parameters)
+      let binder = bind_statement(binder, fe.body)
+      pop_scope(binder)
     }
 
     // Other expressions

@@ -139,10 +139,20 @@ pub fn scan_token(scanner : Scanner) -> (Token, Scanner) {
       match peek_char(scanner) {
         '*' => {
           let scanner = advance(scanner)
-          (
-            StarStar(make_location(scanner, start_pos, start_line, start_col)),
-            scanner,
-          )
+          match peek_char(scanner) {
+            '=' => {
+              let scanner = advance(scanner)
+              (
+                StarStarEquals(make_location(scanner, start_pos, start_line, start_col)),
+                scanner,
+              )
+            }
+            _ =>
+              (
+                StarStar(make_location(scanner, start_pos, start_line, start_col)),
+                scanner,
+              )
+          }
         }
         '=' => {
           let scanner = advance(scanner)
@@ -210,12 +220,24 @@ pub fn scan_token(scanner : Scanner) -> (Token, Scanner) {
       match peek_char(scanner) {
         '<' => {
           let scanner = advance(scanner)
-          (
-            LessThanLessThan(
-              make_location(scanner, start_pos, start_line, start_col),
-            ),
-            scanner,
-          )
+          match peek_char(scanner) {
+            '=' => {
+              let scanner = advance(scanner)
+              (
+                LessThanLessThanEquals(
+                  make_location(scanner, start_pos, start_line, start_col),
+                ),
+                scanner,
+              )
+            }
+            _ =>
+              (
+                LessThanLessThan(
+                  make_location(scanner, start_pos, start_line, start_col),
+                ),
+                scanner,
+              )
+          }
         }
         '=' => {
           let scanner = advance(scanner)
@@ -250,8 +272,29 @@ pub fn scan_token(scanner : Scanner) -> (Token, Scanner) {
           match peek_char(scanner) {
             '>' => {
               let scanner = advance(scanner)
+              match peek_char(scanner) {
+                '=' => {
+                  let scanner = advance(scanner)
+                  (
+                    GreaterThanGreaterThanGreaterThanEquals(
+                      make_location(scanner, start_pos, start_line, start_col),
+                    ),
+                    scanner,
+                  )
+                }
+                _ =>
+                  (
+                    GreaterThanGreaterThanGreaterThan(
+                      make_location(scanner, start_pos, start_line, start_col),
+                    ),
+                    scanner,
+                  )
+              }
+            }
+            '=' => {
+              let scanner = advance(scanner)
               (
-                GreaterThanGreaterThanGreaterThan(
+                GreaterThanGreaterThanEquals(
                   make_location(scanner, start_pos, start_line, start_col),
                 ),
                 scanner,
@@ -360,12 +403,24 @@ pub fn scan_token(scanner : Scanner) -> (Token, Scanner) {
       match peek_char(scanner) {
         '&' => {
           let scanner = advance(scanner)
-          (
-            AmpersandAmpersand(
-              make_location(scanner, start_pos, start_line, start_col),
-            ),
-            scanner,
-          )
+          match peek_char(scanner) {
+            '=' => {
+              let scanner = advance(scanner)
+              (
+                AmpersandAmpersandEquals(
+                  make_location(scanner, start_pos, start_line, start_col),
+                ),
+                scanner,
+              )
+            }
+            _ =>
+              (
+                AmpersandAmpersand(
+                  make_location(scanner, start_pos, start_line, start_col),
+                ),
+                scanner,
+              )
+          }
         }
         '=' => {
           let scanner = advance(scanner)
@@ -388,10 +443,20 @@ pub fn scan_token(scanner : Scanner) -> (Token, Scanner) {
       match peek_char(scanner) {
         '|' => {
           let scanner = advance(scanner)
-          (
-            BarBar(make_location(scanner, start_pos, start_line, start_col)),
-            scanner,
-          )
+          match peek_char(scanner) {
+            '=' => {
+              let scanner = advance(scanner)
+              (
+                BarBarEquals(make_location(scanner, start_pos, start_line, start_col)),
+                scanner,
+              )
+            }
+            _ =>
+              (
+                BarBar(make_location(scanner, start_pos, start_line, start_col)),
+                scanner,
+              )
+          }
         }
         '=' => {
           let scanner = advance(scanner)
@@ -435,12 +500,24 @@ pub fn scan_token(scanner : Scanner) -> (Token, Scanner) {
       match peek_char(scanner) {
         '?' => {
           let scanner = advance(scanner)
-          (
-            QuestionQuestion(
-              make_location(scanner, start_pos, start_line, start_col),
-            ),
-            scanner,
-          )
+          match peek_char(scanner) {
+            '=' => {
+              let scanner = advance(scanner)
+              (
+                QuestionQuestionEquals(
+                  make_location(scanner, start_pos, start_line, start_col),
+                ),
+                scanner,
+              )
+            }
+            _ =>
+              (
+                QuestionQuestion(
+                  make_location(scanner, start_pos, start_line, start_col),
+                ),
+                scanner,
+              )
+          }
         }
         '.' => {
           let scanner = advance(scanner)
@@ -544,6 +621,10 @@ pub fn scan_token(scanner : Scanner) -> (Token, Scanner) {
     ',' => {
       let scanner = advance(scanner)
       (Comma(make_location(scanner, start_pos, start_line, start_col)), scanner)
+    }
+    '@' => {
+      let scanner = advance(scanner)
+      (At(make_location(scanner, start_pos, start_line, start_col)), scanner)
     }
     _ => {
       let scanner = advance(scanner)

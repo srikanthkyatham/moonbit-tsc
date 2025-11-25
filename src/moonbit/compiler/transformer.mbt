@@ -159,6 +159,9 @@ pub fn transform(node : Node, ctx : TransformerContext) -> Node {
     TypeAssertionExpression(tae) => transform(tae.expression, ctx)
     NonNullExpression(nne) => transform(nne.expression, ctx)
     SpreadExpression(se) => transform_spread_expression(se, ctx)
+    OptionalChain(oc) => transform_optional_chain(oc, ctx)
+    AwaitExpression(ae) => transform_await_expression(ae, ctx)
+    YieldExpression(ye) => transform_yield_expression(ye, ctx)
 
     // Binding Patterns
     ArrayBindingPattern(abp) => transform_array_binding_pattern(abp, ctx)
@@ -197,6 +200,7 @@ pub fn transform(node : Node, ctx : TransformerContext) -> Node {
     ConstructorDeclaration(cd) => transform_constructor_declaration(cd, ctx)
     GetAccessor(ga) => transform_get_accessor(ga, ctx)
     SetAccessor(sa) => transform_set_accessor(sa, ctx)
+    Decorator(d) => Decorator(d)  // Keep decorators as-is
 
     // Module declaration
     ModuleDeclaration(md) => transform_module_declaration(md, ctx)
@@ -298,6 +302,7 @@ fn transform_class_declaration(
     heritage_clauses: transform_heritage_clauses(cd.heritage_clauses, ctx),
     members: transformed_members,
     is_abstract: cd.is_abstract,
+    decorators: cd.decorators,
     location: cd.location,
   })
 }
@@ -970,6 +975,50 @@ fn transform_spread_expression(
   SpreadExpression({
     expression: transform(se.expression, ctx),
     location: se.location,
+  })
+}
+
+///|
+/// Transform optional chain expression
+fn transform_optional_chain(oc : OptionalChain, ctx : TransformerContext) -> Node {
+  let transformed_expr = transform(oc.expression, ctx)
+  let transformed_chain = match oc.chain {
+    OptionalChainKind::Property(prop) => OptionalChainKind::Property(prop)
+    OptionalChainKind::Call(args) => {
+      let transformed_args : Array[Node] = []
+      for arg in args {
+        transformed_args.push(transform(arg, ctx))
+      }
+      OptionalChainKind::Call(transformed_args)
+    }
+    OptionalChainKind::Element(index) => OptionalChainKind::Element(transform(index, ctx))
+  }
+  OptionalChain({
+    expression: transformed_expr,
+    chain: transformed_chain,
+    location: oc.location,
+  })
+}
+
+///|
+/// Transform await expression
+fn transform_await_expression(ae : AwaitExpression, ctx : TransformerContext) -> Node {
+  AwaitExpression({
+    expression: transform(ae.expression, ctx),
+    location: ae.location,
+  })
+}
+
+///|
+/// Transform yield expression
+fn transform_yield_expression(ye : YieldExpression, ctx : TransformerContext) -> Node {
+  YieldExpression({
+    expression: match ye.expression {
+      Some(expr) => Some(transform(expr, ctx))
+      None => None
+    },
+    is_delegate: ye.is_delegate,
+    location: ye.location,
   })
 }
 

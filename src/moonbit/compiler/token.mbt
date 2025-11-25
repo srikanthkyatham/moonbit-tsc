@@ -126,6 +126,13 @@ pub enum Token {
   AmpersandEquals(SourceLocation) // &=
   BarEquals(SourceLocation) // |=
   CaretEquals(SourceLocation) // ^=
+  StarStarEquals(SourceLocation) // **=
+  LessThanLessThanEquals(SourceLocation) // <<=
+  GreaterThanGreaterThanEquals(SourceLocation) // >>=
+  GreaterThanGreaterThanGreaterThanEquals(SourceLocation) // >>>=
+  AmpersandAmpersandEquals(SourceLocation) // &&=
+  BarBarEquals(SourceLocation) // ||=
+  QuestionQuestionEquals(SourceLocation) // ??=
 
   // Increment/Decrement
   PlusPlus(SourceLocation) // ++
@@ -158,6 +165,9 @@ pub enum Token {
   // JSX
   LessThanSlash(SourceLocation) // </
   SlashGreaterThan(SourceLocation) // />
+
+  // Decorator
+  At(SourceLocation) // @
 
   // Special
   EOF(SourceLocation)
@@ -282,6 +292,13 @@ pub fn Token::location(self : Token) -> SourceLocation {
     | AmpersandEquals(loc)
     | BarEquals(loc)
     | CaretEquals(loc)
+    | StarStarEquals(loc)
+    | LessThanLessThanEquals(loc)
+    | GreaterThanGreaterThanEquals(loc)
+    | GreaterThanGreaterThanGreaterThanEquals(loc)
+    | AmpersandAmpersandEquals(loc)
+    | BarBarEquals(loc)
+    | QuestionQuestionEquals(loc)
     | PlusPlus(loc)
     | MinusMinus(loc)
     | Question(loc)
@@ -304,6 +321,7 @@ pub fn Token::location(self : Token) -> SourceLocation {
     | TemplateTail(_, loc)
     | LessThanSlash(loc)
     | SlashGreaterThan(loc)
+    | At(loc)
     | EOF(loc)
     | Unknown(_, loc) => loc
   }

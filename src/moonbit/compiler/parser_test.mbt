@@ -1342,3 +1342,412 @@ test "parse combined non-null and as assertion" {
     Err(_) => assert_true(false)
   }
 }
+
+// ============================================================================
+// New Parser Feature Tests
+// ============================================================================
+
+// Unknown/Never Type Tests
+
+///|
+test "parse unknown type annotation" {
+  let tokens = tokens_from_source("const x: unknown = null;")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        VariableStatement(stmt) => {
+          match stmt.declarations[0].type_annotation {
+            Some(KeywordType(kt)) => {
+              match kt.kind {
+                TypeKeyword::Unknown => ()
+                _ => assert_true(false)
+              }
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse never type annotation" {
+  let tokens = tokens_from_source("function fail(): never { throw new Error(); }")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        FunctionDeclaration(func) => {
+          match func.return_type {
+            Some(KeywordType(kt)) => {
+              match kt.kind {
+                TypeKeyword::Never => ()
+                _ => assert_true(false)
+              }
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+// Optional Chaining Tests
+
+///|
+test "parse optional property access" {
+  let tokens = tokens_from_source("const x = obj?.prop;")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        VariableStatement(stmt) => {
+          match stmt.declarations[0].initializer {
+            Some(OptionalChain(_)) => ()
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse optional call expression" {
+  let tokens = tokens_from_source("const x = func?.();")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        VariableStatement(stmt) => {
+          match stmt.declarations[0].initializer {
+            Some(OptionalChain(_)) => ()
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse optional element access" {
+  let tokens = tokens_from_source("const x = arr?.[0];")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        VariableStatement(stmt) => {
+          match stmt.declarations[0].initializer {
+            Some(OptionalChain(_)) => ()
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+// Abstract Class Tests
+
+///|
+test "parse abstract class declaration" {
+  let tokens = tokens_from_source("abstract class Animal { }")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        ClassDeclaration(cls) => {
+          assert_true(cls.is_abstract)
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse non-abstract class declaration" {
+  let tokens = tokens_from_source("class Dog { }")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        ClassDeclaration(cls) => {
+          assert_true(not(cls.is_abstract))
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+// Await Expression Tests
+
+///|
+test "parse await expression" {
+  let tokens = tokens_from_source("async function fetch() { const data = await getData(); }")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        FunctionDeclaration(func) => {
+          assert_true(func.is_async)
+          match func.body {
+            Some(BlockStatement(block)) => {
+              assert_eq(block.statements.length(), 1)
+              match block.statements[0] {
+                VariableStatement(stmt) => {
+                  match stmt.declarations[0].initializer {
+                    Some(AwaitExpression(_)) => ()
+                    _ => assert_true(false)
+                  }
+                }
+                _ => assert_true(false)
+              }
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+// Yield Expression Tests
+
+///|
+test "parse yield expression" {
+  let tokens = tokens_from_source("function* gen() { yield 1; }")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        FunctionDeclaration(func) => {
+          assert_true(func.is_generator)
+          match func.body {
+            Some(BlockStatement(block)) => {
+              assert_eq(block.statements.length(), 1)
+              match block.statements[0] {
+                ExpressionStatement(stmt) => {
+                  match stmt.expression {
+                    YieldExpression(ye) => {
+                      assert_true(not(ye.is_delegate))
+                    }
+                    _ => assert_true(false)
+                  }
+                }
+                _ => assert_true(false)
+              }
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse yield delegate expression" {
+  let tokens = tokens_from_source("function* gen() { yield* other(); }")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        FunctionDeclaration(func) => {
+          assert_true(func.is_generator)
+          match func.body {
+            Some(BlockStatement(block)) => {
+              match block.statements[0] {
+                ExpressionStatement(stmt) => {
+                  match stmt.expression {
+                    YieldExpression(ye) => {
+                      assert_true(ye.is_delegate)
+                    }
+                    _ => assert_true(false)
+                  }
+                }
+                _ => assert_true(false)
+              }
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+// Generator Function Tests
+
+///|
+test "parse generator function declaration" {
+  let tokens = tokens_from_source("function* generate() { }")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        FunctionDeclaration(func) => {
+          assert_true(func.is_generator)
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+// Decorator Tests
+
+///|
+test "parse class with simple decorator" {
+  let tokens = tokens_from_source("@Component class MyClass { }")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        ClassDeclaration(cls) => {
+          assert_eq(cls.decorators.length(), 1)
+          match cls.decorators[0] {
+            Decorator(_) => ()
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse class with decorator factory" {
+  let tokens = tokens_from_source("@Injectable() class Service { }")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        ClassDeclaration(cls) => {
+          assert_eq(cls.decorators.length(), 1)
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse class with multiple decorators" {
+  let tokens = tokens_from_source("@Component @Serializable class Entity { }")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        ClassDeclaration(cls) => {
+          assert_eq(cls.decorators.length(), 2)
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+// Namespace/Module Tests
+
+///|
+test "parse namespace declaration" {
+  let tokens = tokens_from_source("namespace MyNamespace { }")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        ModuleDeclaration(mod_decl) => {
+          assert_eq(mod_decl.name, "MyNamespace")
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse module declaration" {
+  let tokens = tokens_from_source("module MyModule { }")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        ModuleDeclaration(mod_decl) => {
+          assert_eq(mod_decl.name, "MyModule")
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse namespace with content" {
+  let tokens = tokens_from_source("namespace Utils { const PI = 3.14; }")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        ModuleDeclaration(mod_decl) => {
+          assert_eq(mod_decl.name, "Utils")
+          match mod_decl.body {
+            Some(BlockStatement(block)) => {
+              assert_eq(block.statements.length(), 1)
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}

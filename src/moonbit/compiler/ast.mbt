@@ -59,6 +59,9 @@ pub enum Node {
   TypeAssertionExpression(TypeAssertionExpression)
   NonNullExpression(NonNullExpression)
   SpreadExpression(SpreadExpression)
+  OptionalChain(OptionalChain)
+  AwaitExpression(AwaitExpression)
+  YieldExpression(YieldExpression)
 
   // Binding Patterns
   ArrayBindingPattern(ArrayBindingPattern)
@@ -94,6 +97,7 @@ pub enum Node {
   ConstructorDeclaration(ConstructorDeclaration)
   GetAccessor(GetAccessor)
   SetAccessor(SetAccessor)
+  Decorator(Decorator)
 } derive(Show)
 
 ///|
@@ -152,6 +156,7 @@ pub struct ClassDeclaration {
   heritage_clauses : Array[HeritageClause]
   members : Array[Node]
   is_abstract : Bool
+  decorators : Array[Node]
   location : SourceLocation
 } derive(Show)
 
@@ -459,6 +464,13 @@ pub enum BinaryOperator {
   BitwiseAndAssign // &=
   BitwiseOrAssign // |=
   BitwiseXorAssign // ^=
+  ExponentiateAssign // **=
+  LeftShiftAssign // <<=
+  RightShiftAssign // >>=
+  UnsignedRightShiftAssign // >>>=
+  LogicalAndAssign // &&=
+  LogicalOrAssign // ||=
+  NullishCoalescingAssign // ??=
 
   // Other
   In
@@ -629,6 +641,37 @@ pub struct NonNullExpression {
 /// Spread (...expr)
 pub struct SpreadExpression {
   expression : Node
+  location : SourceLocation
+} derive(Show)
+
+///|
+/// Optional chain expression (obj?.prop, func?.(), arr?.[0])
+pub struct OptionalChain {
+  expression : Node
+  chain : OptionalChainKind
+  location : SourceLocation
+} derive(Show)
+
+///|
+/// Kind of optional chain
+pub enum OptionalChainKind {
+  Property(String)       // obj?.prop
+  Call(Array[Node])      // func?.()
+  Element(Node)          // arr?.[0]
+} derive(Show)
+
+///|
+/// Await expression (await expr)
+pub struct AwaitExpression {
+  expression : Node
+  location : SourceLocation
+} derive(Show)
+
+///|
+/// Yield expression (yield expr, yield* expr)
+pub struct YieldExpression {
+  expression : Node?
+  is_delegate : Bool  // true for yield*
   location : SourceLocation
 } derive(Show)
 
@@ -853,6 +896,13 @@ pub struct SetAccessor {
 } derive(Show)
 
 ///|
+/// Decorator (@decorator or @decorator(args))
+pub struct Decorator {
+  expression : Node  // The decorator expression (identifier or call expression)
+  location : SourceLocation
+} derive(Show)
+
+///|
 /// Modifiers
 #valtype
 pub enum Modifier {
@@ -919,6 +969,9 @@ pub fn get_location(node : Node) -> SourceLocation {
     TypeAssertionExpression(t) => t.location
     NonNullExpression(n) => n.location
     SpreadExpression(s) => s.location
+    OptionalChain(o) => o.location
+    AwaitExpression(a) => a.location
+    YieldExpression(y) => y.location
     ArrayBindingPattern(a) => a.location
     ObjectBindingPattern(o) => o.location
     Identifier(i) => i.location
@@ -946,5 +999,6 @@ pub fn get_location(node : Node) -> SourceLocation {
     ConstructorDeclaration(c) => c.location
     GetAccessor(g) => g.location
     SetAccessor(s) => s.location
+    Decorator(d) => d.location
   }
 }
