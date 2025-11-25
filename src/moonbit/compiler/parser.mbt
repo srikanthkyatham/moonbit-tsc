@@ -3474,13 +3474,33 @@ fn parse_primary_type_with_readonly(parser : Parser, is_readonly : Bool) -> Resu
       let mut parser = parser
       let saved_parser_start = parser
 
-      // Check for optional readonly modifier
-      let has_readonly = match current_token(parser) {
+      // Check for readonly modifier: +readonly, -readonly, or readonly
+      let readonly_modifier : MappedTypeModifier = match current_token(parser) {
+        Plus(_) => {
+          parser = advance_parser(parser)
+          match current_token(parser) {
+            KeywordReadonly(_) => {
+              parser = advance_parser(parser)
+              MappedTypeModifier::Plus
+            }
+            _ => MappedTypeModifier::Unchanged  // Just a + without readonly, reset handled later
+          }
+        }
+        Minus(_) => {
+          parser = advance_parser(parser)
+          match current_token(parser) {
+            KeywordReadonly(_) => {
+              parser = advance_parser(parser)
+              MappedTypeModifier::Minus
+            }
+            _ => MappedTypeModifier::Unchanged  // Just a - without readonly
+          }
+        }
         KeywordReadonly(_) => {
           parser = advance_parser(parser)
-          true
+          MappedTypeModifier::Plus  // readonly without +/- means add
         }
-        _ => false
+        _ => MappedTypeModifier::Unchanged
       }
 
       match current_token(parser) {
@@ -3507,10 +3527,21 @@ fn parse_primary_type_with_readonly(parser : Parser, is_readonly : Bool) -> Resu
                           parser = advance_parser(parser)
 
                           // Check for optional modifier: ?, -?, +?
-                          let is_optional = match current_token(parser) {
+                          let optional_modifier : MappedTypeModifier = match current_token(parser) {
                             Question(_) => {
                               parser = advance_parser(parser)
-                              true
+                              MappedTypeModifier::Plus  // ? means add optional
+                            }
+                            Plus(_) => {
+                              parser = advance_parser(parser)
+                              // Expect ? after +
+                              match current_token(parser) {
+                                Question(_) => {
+                                  parser = advance_parser(parser)
+                                  MappedTypeModifier::Plus  // +? adds optional
+                                }
+                                _ => MappedTypeModifier::Unchanged
+                              }
                             }
                             Minus(_) => {
                               parser = advance_parser(parser)
@@ -3518,15 +3549,13 @@ fn parse_primary_type_with_readonly(parser : Parser, is_readonly : Bool) -> Resu
                               match current_token(parser) {
                                 Question(_) => {
                                   parser = advance_parser(parser)
-                                  false  // -? removes optional
+                                  MappedTypeModifier::Minus  // -? removes optional
                                 }
-                                _ => false
+                                _ => MappedTypeModifier::Unchanged
                               }
                             }
-                            _ => false
+                            _ => MappedTypeModifier::Unchanged
                           }
-                          let _ = is_optional  // Mark as used
-                          let _ = has_readonly  // Mark as used
 
                           // Expect :
                           match current_token(parser) {
@@ -3553,6 +3582,8 @@ fn parse_primary_type_with_readonly(parser : Parser, is_readonly : Bool) -> Resu
                                             location: param_loc,
                                           },
                                           type_node: Some(value_type),
+                                          readonly_modifier,
+                                          optional_modifier,
                                           location: loc,
                                         }),
                                         final_parser,

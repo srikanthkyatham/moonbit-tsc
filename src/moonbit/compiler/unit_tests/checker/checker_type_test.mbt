@@ -498,3 +498,159 @@ test "unit/checker/integration - check union type annotation" {
     Err(_) => assert_true(false)
   }
 }
+
+// ============================================================================
+// Index Signature Tests
+// ============================================================================
+
+///|
+test "unit/checker/index-signature - string index signature" {
+  let result = parse_bind_check("interface StringIndex { [key: string]: number; }")
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/checker/index-signature - number index signature" {
+  let result = parse_bind_check("interface NumberIndex { [index: number]: string; }")
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/checker/index-signature - readonly index signature" {
+  let result = parse_bind_check("interface ReadonlyIndex { readonly [key: string]: number; }")
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/checker/index-signature - with known properties" {
+  let result = parse_bind_check("interface WithProps { name: string; [key: string]: string; }")
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false)
+  }
+}
+
+// ============================================================================
+// Mapped Type Tests
+// ============================================================================
+
+///|
+test "unit/checker/mapped-type - basic mapped type" {
+  let result = parse_bind_check("type MyMapped<K extends string> = { [P in K]: string };")
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/checker/mapped-type - with readonly modifier" {
+  let result = parse_bind_check("type ReadonlyMapped<T> = { readonly [P in keyof T]: T[P] };")
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/checker/mapped-type - with optional modifier" {
+  let result = parse_bind_check("type OptionalMapped<T> = { [P in keyof T]?: T[P] };")
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/checker/mapped-type - with plus readonly modifier" {
+  let result = parse_bind_check("type AddReadonly<T> = { +readonly [P in keyof T]: T[P] };")
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/checker/mapped-type - with minus readonly modifier" {
+  let result = parse_bind_check("type RemoveReadonly<T> = { -readonly [P in keyof T]: T[P] };")
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/checker/mapped-type - with plus optional modifier" {
+  let result = parse_bind_check("type AddOptional<T> = { [P in keyof T]+?: T[P] };")
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/checker/mapped-type - with minus optional modifier" {
+  let result = parse_bind_check("type RemoveOptional<T> = { [P in keyof T]-?: T[P] };")
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/checker/mapped-type - both modifiers" {
+  let result = parse_bind_check("type FullMapped<T> = { readonly [P in keyof T]?: T[P] };")
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false)
+  }
+}
+
+// ============================================================================
+// CheckerTypeParameter Integration Tests
+// ============================================================================
+
+///|
+test "unit/checker/type-param - generic function with constraint" {
+  let result = parse_bind_check("function process<T extends number>(value: T): T { return value; }")
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/checker/type-param - generic with default type" {
+  let result = parse_bind_check("function create<T = string>(value: T): T { return value; }")
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/checker/type-param - generic class with constraint" {
+  let result = parse_bind_check("class Container<T extends object> { value: T; }")
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/checker/type-param - generic interface with multiple params" {
+  let result = parse_bind_check("interface Map<K extends string, V> { get(key: K): V; }")
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false)
+  }
+}
