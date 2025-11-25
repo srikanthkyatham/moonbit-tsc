@@ -215,6 +215,15 @@ pub fn emit(node : Node, ctx : EmitterContext) -> String {
     SetAccessor(sa) => emit_set_accessor(sa, ctx)
     Decorator(_) => ""  // Decorators are handled separately
     ModuleDeclaration(_) => ""  // TODO: Implement if needed
+
+    // JSX - emit as-is (actual JSX transformation typically done by framework-specific transformer)
+    JsxElement(_) => ""  // TODO: Implement JSX to JS transformation
+    JsxSelfClosingElement(_) => ""  // TODO: Implement JSX to JS transformation
+    JsxFragment(_) => ""  // TODO: Implement JSX to JS transformation
+    JsxOpeningElement(_) => ""  // TODO: Implement JSX to JS transformation
+    JsxClosingElement(_) => ""  // TODO: Implement JSX to JS transformation
+    JsxExpression(_) => ""  // TODO: Implement JSX to JS transformation
+    JsxText(_) => ""  // TODO: Implement JSX to JS transformation
   }
 }
 

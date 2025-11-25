@@ -106,6 +106,15 @@ pub enum Node {
   GetAccessor(GetAccessor)
   SetAccessor(SetAccessor)
   Decorator(Decorator)
+
+  // JSX
+  JsxElement(JsxElement)
+  JsxSelfClosingElement(JsxSelfClosingElement)
+  JsxFragment(JsxFragment)
+  JsxOpeningElement(JsxOpeningElement)
+  JsxClosingElement(JsxClosingElement)
+  JsxExpression(JsxExpression)
+  JsxText(JsxText)
 } derive(Show)
 
 ///|
@@ -999,6 +1008,128 @@ pub struct Decorator {
   location : SourceLocation
 } derive(Show)
 
+// ============================================================================
+// JSX Types
+// ============================================================================
+
+///|
+/// JSX element: <tag>...</tag>
+pub struct JsxElement {
+  opening_element : Node  // JsxOpeningElement
+  children : Array[JsxChild]
+  closing_element : Node?  // JsxClosingElement
+  location : SourceLocation
+} derive(Show)
+
+///|
+/// JSX self-closing element: <tag ... />
+pub struct JsxSelfClosingElement {
+  tag_name : JsxTagName
+  type_arguments : Array[Node]
+  attributes : Array[JsxAttribute]
+  location : SourceLocation
+} derive(Show)
+
+///|
+/// JSX fragment: <>...</>
+pub struct JsxFragment {
+  opening_fragment : SourceLocation
+  children : Array[JsxChild]
+  closing_fragment : SourceLocation
+  location : SourceLocation
+} derive(Show)
+
+///|
+/// JSX opening element: <tag ...>
+pub struct JsxOpeningElement {
+  tag_name : JsxTagName
+  type_arguments : Array[Node]
+  attributes : Array[JsxAttribute]
+  location : SourceLocation
+} derive(Show)
+
+///|
+/// JSX closing element: </tag>
+pub struct JsxClosingElement {
+  tag_name : JsxTagName
+  location : SourceLocation
+} derive(Show)
+
+///|
+/// JSX expression container: {expression}
+pub struct JsxExpression {
+  expression : Node?  // None for empty expression {}
+  location : SourceLocation
+} derive(Show)
+
+///|
+/// JSX text content between tags
+pub struct JsxText {
+  text : String
+  location : SourceLocation
+} derive(Show)
+
+///|
+/// JSX tag name types
+pub enum JsxTagName {
+  /// Simple identifier: div, span, MyComponent
+  Identifier(String, SourceLocation)
+  /// Namespaced name: svg:rect, xlink:href
+  NamespacedName(String, String, SourceLocation)
+  /// Property access: Module.Component.SubComponent
+  PropertyAccess(Node, String, SourceLocation)
+} derive(Show)
+
+///|
+/// JSX attribute types
+pub enum JsxAttribute {
+  /// Regular attribute: name="value" or name={expr}
+  Attribute(JsxAttributeNode)
+  /// Spread attribute: {...props}
+  SpreadAttribute(Node, SourceLocation)
+} derive(Show)
+
+///|
+/// JSX attribute node
+pub struct JsxAttributeNode {
+  name : JsxAttributeName
+  initializer : JsxAttributeValue?  // None for boolean attributes like "disabled"
+  location : SourceLocation
+} derive(Show)
+
+///|
+/// JSX attribute name
+pub enum JsxAttributeName {
+  /// Simple identifier: onClick, className
+  Identifier(String, SourceLocation)
+  /// Namespaced name: xlink:href
+  NamespacedName(String, String, SourceLocation)
+} derive(Show)
+
+///|
+/// JSX attribute value
+pub enum JsxAttributeValue {
+  /// String literal: "text"
+  StringLiteral(String, SourceLocation)
+  /// Expression: {expr}
+  Expression(Node, SourceLocation)
+  /// Nested JSX element
+  Element(Node, SourceLocation)
+} derive(Show)
+
+///|
+/// JSX child types
+pub enum JsxChild {
+  /// Text content
+  Text(String, SourceLocation)
+  /// Expression: {expr}
+  Expression(JsxExpression)
+  /// Nested element
+  Element(Node, SourceLocation)
+  /// Fragment
+  Fragment(Node, SourceLocation)
+} derive(Show)
+
 ///|
 /// Modifiers
 #valtype
@@ -1105,5 +1236,12 @@ pub fn get_location(node : Node) -> SourceLocation {
     GetAccessor(g) => g.location
     SetAccessor(s) => s.location
     Decorator(d) => d.location
+    JsxElement(j) => j.location
+    JsxSelfClosingElement(j) => j.location
+    JsxFragment(j) => j.location
+    JsxOpeningElement(j) => j.location
+    JsxClosingElement(j) => j.location
+    JsxExpression(j) => j.location
+    JsxText(j) => j.location
   }
 }

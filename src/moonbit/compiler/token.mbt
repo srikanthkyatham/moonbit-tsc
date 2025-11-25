@@ -6,12 +6,14 @@
 pub enum Token {
   // Literals
   NumericLiteral(String, SourceLocation)
+  BigIntLiteral(String, SourceLocation) // 123n, 0xFFn, 0o77n, 0b1010n
   StringLiteral(String, SourceLocation)
   TemplateLiteral(String, SourceLocation)
   RegExpLiteral(String, SourceLocation)
 
   // Identifiers and Keywords
   Identifier(String, SourceLocation)
+  PrivateIdentifier(String, SourceLocation) // #fieldName
 
   // Reserved Keywords
   // Type Keywords
@@ -200,10 +202,12 @@ pub struct Position {
 pub fn Token::location(self : Token) -> SourceLocation {
   match self {
     NumericLiteral(_, loc)
+    | BigIntLiteral(_, loc)
     | StringLiteral(_, loc)
     | TemplateLiteral(_, loc)
     | RegExpLiteral(_, loc)
     | Identifier(_, loc)
+    | PrivateIdentifier(_, loc)
     | KeywordAny(loc)
     | KeywordBoolean(loc)
     | KeywordNumber(loc)

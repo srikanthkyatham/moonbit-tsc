@@ -212,6 +212,15 @@ pub fn transform(node : Node, ctx : TransformerContext) -> Node {
 
     // Module declaration
     ModuleDeclaration(md) => transform_module_declaration(md, ctx)
+
+    // JSX - keep as-is (JSX transformation is typically done by another transformer)
+    JsxElement(jsx) => JsxElement(jsx)
+    JsxSelfClosingElement(jsx) => JsxSelfClosingElement(jsx)
+    JsxFragment(jsx) => JsxFragment(jsx)
+    JsxOpeningElement(jsx) => JsxOpeningElement(jsx)
+    JsxClosingElement(jsx) => JsxClosingElement(jsx)
+    JsxExpression(jsx) => JsxExpression(jsx)
+    JsxText(jsx) => JsxText(jsx)
   }
 }
 

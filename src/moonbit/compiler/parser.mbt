@@ -8,12 +8,61 @@
 let max_expression_depth : Int = 1000
 
 ///|
+/// Maximum errors before giving up
+let max_errors : Int = 100
+
+///|
+/// Parser context flags for handling ambiguous constructs
+pub struct ParserContext {
+  /// Allow 'in' operator (false in for-in initializer)
+  allow_in : Bool
+  /// Allow 'yield' as identifier (false in generators)
+  allow_yield : Bool
+  /// Allow 'await' as identifier (false in async functions)
+  allow_await : Bool
+  /// Currently parsing type context
+  in_type_context : Bool
+  /// Currently parsing expression context
+  in_expression_context : Bool
+  /// Currently in strict mode
+  strict_mode : Bool
+  /// Currently parsing JSX
+  in_jsx : Bool
+  /// Currently parsing decorator
+  in_decorator : Bool
+  /// Disallow comma operator
+  disallow_comma : Bool
+  /// In conditional expression (for : vs ? disambiguation)
+  in_conditional : Bool
+} derive(Show)
+
+///|
+/// Default parser context
+pub fn ParserContext::default() -> ParserContext {
+  {
+    allow_in: true,
+    allow_yield: true,
+    allow_await: false,
+    in_type_context: false,
+    in_expression_context: false,
+    strict_mode: false,
+    in_jsx: false,
+    in_decorator: false,
+    disallow_comma: false,
+    in_conditional: false,
+  }
+}
+
+///|
 /// Parser state
 pub struct Parser {
   tokens : Array[Token]
   position : Int
   diagnostics : Array[Diagnostic]
   depth : Int  // Current recursion depth for expression parsing
+  context : ParserContext
+  /// Stack of saved contexts for restoration
+  context_stack : Array[ParserContext]
 } derive(Show)
 
 ///|
@@ -23,7 +72,224 @@ pub type ParseResult[T] = Result[T, Array[Diagnostic]]
 ///|
 /// Create a new parser
 pub fn Parser::new(tokens : Array[Token]) -> Parser {
-  { tokens, position: 0, diagnostics: [], depth: 0 }
+  { tokens, position: 0, diagnostics: [], depth: 0, context: ParserContext::default(), context_stack: [] }
+}
+
+///|
+/// Save current context and push new one
+fn push_context(parser : Parser, new_context : ParserContext) -> Parser {
+  let stack = parser.context_stack.copy()
+  stack.push(parser.context)
+  { ..parser, context: new_context, context_stack: stack }
+}
+
+///|
+/// Restore previous context
+fn pop_context(parser : Parser) -> Parser {
+  if parser.context_stack.is_empty() {
+    parser
+  } else {
+    let stack = parser.context_stack.copy()
+    match stack.pop() {
+      Some(prev_context) => { ..parser, context: prev_context, context_stack: stack }
+      None => parser
+    }
+  }
+}
+
+///|
+/// Modify context temporarily
+fn with_context(
+  parser : Parser,
+  modifier : (ParserContext) -> ParserContext,
+) -> Parser {
+  { ..parser, context: modifier(parser.context) }
+}
+
+///|
+/// Add error with limit check
+fn add_error_checked(
+  parser : Parser,
+  message : String,
+  location : SourceLocation,
+  code : Int,
+) -> Parser {
+  if parser.diagnostics.length() >= max_errors {
+    parser  // Stop adding errors
+  } else {
+    let diagnostic = Diagnostic::error(message, location, code)
+    let diagnostics = parser.diagnostics
+    diagnostics.push(diagnostic)
+    { ..parser, diagnostics }
+  }
+}
+
+// ============================================================================
+// Enhanced Error Recovery
+// ============================================================================
+
+///|
+/// Parser error codes
+pub enum ParserErrorCode {
+  // General
+  UnexpectedToken
+  UnexpectedEOF
+
+  // Declarations
+  ExpectedIdentifier
+  ExpectedTypeAnnotation
+  ExpectedExpression
+  ExpectedStatement
+
+  // Punctuation
+  ExpectedSemicolon
+  ExpectedComma
+  ExpectedColon
+  ExpectedOpenParen
+  ExpectedCloseParen
+  ExpectedOpenBrace
+  ExpectedCloseBrace
+  ExpectedOpenBracket
+  ExpectedCloseBracket
+
+  // Keywords
+  ExpectedFunctionKeyword
+  ExpectedClassKeyword
+
+  // JSX
+  JSXClosingTagMismatch
+  JSXExpectedClosingTag
+  JSXExpectedAttributeValue
+
+  // JSON
+  JSONExpectedPropertyName
+  JSONExpectedValue
+  JSONTrailingComma
+
+  // JSDoc
+  JSDocInvalidTag
+  JSDocInvalidType
+} derive(Show, Eq)
+
+///|
+/// Get numeric code for error
+pub fn ParserErrorCode::to_int(self : ParserErrorCode) -> Int {
+  match self {
+    UnexpectedToken => 1001
+    UnexpectedEOF => 1002
+    ExpectedIdentifier => 1003
+    ExpectedTypeAnnotation => 1004
+    ExpectedExpression => 1005
+    ExpectedStatement => 1006
+    ExpectedSemicolon => 1007
+    ExpectedComma => 1008
+    ExpectedColon => 1009
+    ExpectedOpenParen => 1010
+    ExpectedCloseParen => 1011
+    ExpectedOpenBrace => 1012
+    ExpectedCloseBrace => 1013
+    ExpectedOpenBracket => 1014
+    ExpectedCloseBracket => 1015
+    ExpectedFunctionKeyword => 1016
+    ExpectedClassKeyword => 1017
+    JSXClosingTagMismatch => 1100
+    JSXExpectedClosingTag => 1101
+    JSXExpectedAttributeValue => 1102
+    JSONExpectedPropertyName => 1200
+    JSONExpectedValue => 1201
+    JSONTrailingComma => 1202
+    JSDocInvalidTag => 1300
+    JSDocInvalidType => 1301
+  }
+}
+
+///|
+/// Add error with specific error code
+fn add_error_with_code(
+  parser : Parser,
+  message : String,
+  location : SourceLocation,
+  code : ParserErrorCode,
+) -> Parser {
+  add_error_checked(parser, message, location, code.to_int())
+}
+
+///|
+/// Check if token is a statement start (synchronization point)
+fn is_statement_start(token : Token) -> Bool {
+  match token {
+    KeywordLet(_) | KeywordConst(_) | KeywordVar(_) | KeywordFunction(_) |
+    KeywordClass(_) | KeywordInterface(_) | KeywordType(_) | KeywordEnum(_) |
+    KeywordIf(_) | KeywordFor(_) | KeywordWhile(_) | KeywordDo(_) |
+    KeywordReturn(_) | KeywordThrow(_) | KeywordTry(_) | KeywordSwitch(_) |
+    KeywordBreak(_) | KeywordContinue(_) | KeywordImport(_) | KeywordExport(_) |
+    OpenBrace(_) | Semicolon(_) | KeywordDebugger(_) => true
+    _ => false
+  }
+}
+
+///|
+/// Synchronize to next statement (enhanced version)
+fn synchronize_to_statement(parser : Parser) -> Parser {
+  let mut parser = parser
+  while !is_at_end(parser) {
+    // Check if current token is a statement start
+    if is_statement_start(current_token(parser)) {
+      return parser
+    }
+
+    // Check if previous token ended a statement
+    match current_token(parser) {
+      Semicolon(_) => return advance_parser(parser)
+      CloseBrace(_) => return parser
+      _ => parser = advance_parser(parser)
+    }
+  }
+  parser
+}
+
+///|
+/// Synchronize to expression end
+fn synchronize_to_expression_end(parser : Parser) -> Parser {
+  let mut parser = parser
+  let mut paren_depth = 0
+  let mut bracket_depth = 0
+  let mut brace_depth = 0
+
+  while !is_at_end(parser) {
+    match current_token(parser) {
+      OpenParen(_) => paren_depth = paren_depth + 1
+      CloseParen(_) => {
+        if paren_depth == 0 {
+          return parser
+        }
+        paren_depth = paren_depth - 1
+      }
+      OpenBracket(_) => bracket_depth = bracket_depth + 1
+      CloseBracket(_) => {
+        if bracket_depth == 0 {
+          return parser
+        }
+        bracket_depth = bracket_depth - 1
+      }
+      OpenBrace(_) => brace_depth = brace_depth + 1
+      CloseBrace(_) => {
+        if brace_depth == 0 {
+          return parser
+        }
+        brace_depth = brace_depth - 1
+      }
+      Semicolon(_) | Comma(_) => {
+        if paren_depth == 0 && bracket_depth == 0 && brace_depth == 0 {
+          return parser
+        }
+      }
+      _ => ()
+    }
+    parser = advance_parser(parser)
+  }
+
+  parser
 }
 
 ///|
@@ -2128,13 +2394,18 @@ fn parse_primary_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
       }
     }
 
-    // Type assertion with angle brackets (<Type>expr)
+    // JSX element or Type assertion with angle brackets (<Type>expr)
     LessThan(_) => {
       let start_loc = token.location()
       let saved_parser = parser
-      let mut parser = advance_parser(parser) // consume '<'
 
-      // Try to parse as type assertion
+      // First check if it's a JSX element
+      if is_jsx_start(parser) {
+        return parse_jsx_element_or_fragment(parser)
+      }
+
+      // Otherwise try to parse as type assertion
+      let mut parser = advance_parser(parser) // consume '<'
       match parse_type(parser) {
         Ok((type_node, next_parser)) => {
           match current_token(next_parser) {
@@ -6224,6 +6495,493 @@ fn parse_type_argument_list(parser : Parser) -> Result[(Array[Node], Parser), Pa
   }
 
   Ok((type_args, parser))
+}
+
+// ============================================================================
+// JSX Parsing
+// ============================================================================
+
+///|
+/// Check if current position starts JSX element
+fn is_jsx_start(parser : Parser) -> Bool {
+  match current_token(parser) {
+    LessThan(_) => {
+      // Check if it's JSX or less-than operator
+      // JSX: <identifier, <>, </
+      let next = peek_token(parser)
+      match next {
+        Identifier(_, _) => true
+        GreaterThan(_) => true      // Fragment <>
+        Slash(_) => false           // Not JSX (< /)
+        LessThan(_) => false        // Not JSX (<<)
+        _ => false
+      }
+    }
+    _ => false
+  }
+}
+
+///|
+/// Parse JSX element or fragment
+fn parse_jsx_element_or_fragment(parser : Parser) -> Result[(Node, Parser), Parser] {
+  let start_loc = current_token(parser).location()
+  let parser = advance_parser(parser)  // consume <
+
+  match current_token(parser) {
+    GreaterThan(_) => {
+      // Fragment: <>...</>
+      parse_jsx_fragment(parser, start_loc)
+    }
+    Identifier(_, _) => {
+      // Element: <tag>...</tag> or <tag />
+      parse_jsx_element(parser, start_loc)
+    }
+    _ => {
+      Err(add_error(parser, "Expected JSX element name or '>'", start_loc))
+    }
+  }
+}
+
+///|
+/// Parse JSX element (after initial <)
+fn parse_jsx_element(
+  parser : Parser,
+  start_loc : SourceLocation,
+) -> Result[(Node, Parser), Parser] {
+  // Parse tag name
+  let (tag_name, parser) = match parse_jsx_tag_name(parser) {
+    Ok((name, p)) => (name, p)
+    Err(p) => return Err(p)
+  }
+
+  // Parse attributes
+  let (attributes, parser) = parse_jsx_attributes(parser)
+
+  match current_token(parser) {
+    SlashGreaterThan(_) => {
+      // Self-closing: <tag ... />
+      let parser = advance_parser(parser)
+      let end_loc = current_token(parser).location()
+      Ok((Node::JsxSelfClosingElement(JsxSelfClosingElement::{
+        tag_name,
+        type_arguments: [],
+        attributes,
+        location: SourceLocation::span(start_loc, end_loc),
+      }), parser))
+    }
+    GreaterThan(_) => {
+      // Opening tag: <tag ...>
+      let parser = advance_parser(parser)
+      let opening = Node::JsxOpeningElement(JsxOpeningElement::{
+        tag_name: tag_name,
+        type_arguments: [],
+        attributes,
+        location: start_loc,
+      })
+
+      // Parse children
+      let (children, parser) = parse_jsx_children(parser)
+
+      // Parse closing tag
+      match parse_jsx_closing_element(parser, tag_name) {
+        Ok((closing, parser)) => {
+          let end_loc = get_location(closing)
+          Ok((Node::JsxElement(JsxElement::{
+            opening_element: opening,
+            children,
+            closing_element: Some(closing),
+            location: SourceLocation::span(start_loc, end_loc),
+          }), parser))
+        }
+        Err(p) => Err(p)
+      }
+    }
+    _ => {
+      Err(add_error(parser, "Expected '>' or '/>' in JSX element", start_loc))
+    }
+  }
+}
+
+///|
+/// Parse JSX tag name (identifier or member expression)
+fn parse_jsx_tag_name(parser : Parser) -> Result[(JsxTagName, Parser), Parser] {
+  let start_loc = current_token(parser).location()
+
+  match current_token(parser) {
+    Identifier(name, loc) => {
+      let parser = advance_parser(parser)
+
+      // Check for namespaced name: svg:rect
+      match current_token(parser) {
+        Colon(_) => {
+          let parser = advance_parser(parser)
+          match current_token(parser) {
+            Identifier(local_name, _) => {
+              let parser = advance_parser(parser)
+              Ok((JsxTagName::NamespacedName(name, local_name, loc), parser))
+            }
+            _ => Err(add_error(parser, "Expected identifier after ':' in JSX tag", loc))
+          }
+        }
+        // Check for member expression: Module.Component
+        Dot(_) => {
+          let mut parser = parser
+          let mut current_expr = Node::Identifier(Identifier::{ name, location: loc })
+
+          while true {
+            match current_token(parser) {
+              Dot(_) => {
+                parser = advance_parser(parser)
+                match current_token(parser) {
+                  Identifier(member_name, member_loc) => {
+                    parser = advance_parser(parser)
+                    current_expr = Node::PropertyAccessExpression(PropertyAccessExpression::{
+                      expression: current_expr,
+                      name: member_name,
+                      location: member_loc,
+                    })
+                  }
+                  _ => return Err(add_error(parser, "Expected identifier after '.' in JSX tag", loc))
+                }
+              }
+              _ => break
+            }
+          }
+
+          Ok((JsxTagName::PropertyAccess(current_expr, "", loc), parser))
+        }
+        _ => Ok((JsxTagName::Identifier(name, loc), parser))
+      }
+    }
+    _ => {
+      Err(add_error(parser, "Expected JSX element name", start_loc))
+    }
+  }
+}
+
+///|
+/// Parse JSX attributes
+fn parse_jsx_attributes(parser : Parser) -> (Array[JsxAttribute], Parser) {
+  let attributes : Array[JsxAttribute] = []
+  let mut parser = parser
+
+  while !is_jsx_attribute_end(parser) {
+    match current_token(parser) {
+      // Spread attribute: {...props}
+      OpenBrace(_) => {
+        let loc = current_token(parser).location()
+        parser = advance_parser(parser)
+
+        match current_token(parser) {
+          DotDotDot(_) => {
+            parser = advance_parser(parser)
+            match parse_expression(parser) {
+              Ok((expr, p)) => {
+                parser = p
+                match current_token(parser) {
+                  CloseBrace(_) => {
+                    parser = advance_parser(parser)
+                    attributes.push(JsxAttribute::SpreadAttribute(expr, loc))
+                  }
+                  _ => break
+                }
+              }
+              Err(_) => break
+            }
+          }
+          _ => break
+        }
+      }
+      // Regular attribute: name="value" or name={expr}
+      Identifier(name, loc) => {
+        parser = advance_parser(parser)
+
+        // Check for namespaced attribute: xlink:href
+        let attr_name = match current_token(parser) {
+          Colon(_) => {
+            parser = advance_parser(parser)
+            match current_token(parser) {
+              Identifier(local_name, _) => {
+                parser = advance_parser(parser)
+                JsxAttributeName::NamespacedName(name, local_name, loc)
+              }
+              _ => {
+                JsxAttributeName::Identifier(name, loc)
+              }
+            }
+          }
+          _ => JsxAttributeName::Identifier(name, loc)
+        }
+
+        // Check for value
+        let initializer = match current_token(parser) {
+          Equals(_) => {
+            parser = advance_parser(parser)
+            match parse_jsx_attribute_value(parser) {
+              Ok((value, p)) => {
+                parser = p
+                Some(value)
+              }
+              Err(_) => None
+            }
+          }
+          _ => None  // Boolean attribute like "disabled"
+        }
+
+        attributes.push(JsxAttribute::Attribute(JsxAttributeNode::{
+          name: attr_name,
+          initializer,
+          location: loc,
+        }))
+      }
+      _ => break
+    }
+  }
+
+  (attributes, parser)
+}
+
+///|
+/// Check if we're at end of JSX attributes
+fn is_jsx_attribute_end(parser : Parser) -> Bool {
+  match current_token(parser) {
+    GreaterThan(_) | SlashGreaterThan(_) | EOF(_) => true
+    _ => false
+  }
+}
+
+///|
+/// Parse JSX attribute value
+fn parse_jsx_attribute_value(parser : Parser) -> Result[(JsxAttributeValue, Parser), Parser] {
+  let loc = current_token(parser).location()
+
+  match current_token(parser) {
+    // String value: "text"
+    StringLiteral(value, _) => {
+      let parser = advance_parser(parser)
+      Ok((JsxAttributeValue::StringLiteral(value, loc), parser))
+    }
+    // Expression value: {expr}
+    OpenBrace(_) => {
+      let parser = advance_parser(parser)
+      match parse_expression(parser) {
+        Ok((expr, parser)) => {
+          match current_token(parser) {
+            CloseBrace(_) => {
+              let parser = advance_parser(parser)
+              Ok((JsxAttributeValue::Expression(expr, loc), parser))
+            }
+            _ => Err(add_error(parser, "Expected '}' after JSX attribute expression", loc))
+          }
+        }
+        Err(p) => Err(p)
+      }
+    }
+    // Nested JSX element
+    LessThan(_) => {
+      match parse_jsx_element_or_fragment(parser) {
+        Ok((element, parser)) => {
+          Ok((JsxAttributeValue::Element(element, loc), parser))
+        }
+        Err(p) => Err(p)
+      }
+    }
+    _ => {
+      Err(add_error(parser, "Expected JSX attribute value", loc))
+    }
+  }
+}
+
+///|
+/// Parse JSX children
+fn parse_jsx_children(parser : Parser) -> (Array[JsxChild], Parser) {
+  let children : Array[JsxChild] = []
+  let mut parser = parser
+
+  while !is_jsx_children_end(parser) {
+    let loc = current_token(parser).location()
+
+    match current_token(parser) {
+      // Nested element: <child>...</child>
+      LessThan(_) => {
+        // Check if it's closing tag
+        let next = peek_token(parser)
+        match next {
+          Slash(_) => break  // Closing tag, stop parsing children
+          _ => {
+            match parse_jsx_element_or_fragment(parser) {
+              Ok((element, p)) => {
+                parser = p
+                children.push(JsxChild::Element(element, loc))
+              }
+              Err(p) => {
+                parser = p
+                break
+              }
+            }
+          }
+        }
+      }
+      // Expression: {expr}
+      OpenBrace(_) => {
+        parser = advance_parser(parser)
+
+        // Check for empty expression {}
+        match current_token(parser) {
+          CloseBrace(_) => {
+            parser = advance_parser(parser)
+            children.push(JsxChild::Expression(JsxExpression::{
+              expression: None,
+              location: loc,
+            }))
+          }
+          _ => {
+            match parse_expression(parser) {
+              Ok((expr, p)) => {
+                parser = p
+                match current_token(parser) {
+                  CloseBrace(_) => {
+                    parser = advance_parser(parser)
+                    children.push(JsxChild::Expression(JsxExpression::{
+                      expression: Some(expr),
+                      location: loc,
+                    }))
+                  }
+                  _ => break
+                }
+              }
+              Err(_) => break
+            }
+          }
+        }
+      }
+      // Text content - for now, skip non-element, non-expression tokens
+      // A full implementation would need special scanner support for JSX text
+      _ => {
+        // Skip this token as JSX text handling requires scanner support
+        parser = advance_parser(parser)
+      }
+    }
+  }
+
+  (children, parser)
+}
+
+///|
+/// Check if we're at end of JSX children
+fn is_jsx_children_end(parser : Parser) -> Bool {
+  match current_token(parser) {
+    LessThanSlash(_) | EOF(_) => true
+    LessThan(_) => {
+      // Check if it's a closing tag
+      match peek_token(parser) {
+        Slash(_) => true
+        _ => false
+      }
+    }
+    _ => false
+  }
+}
+
+///|
+/// Parse JSX closing element: </tag>
+fn parse_jsx_closing_element(
+  parser : Parser,
+  expected_tag : JsxTagName,
+) -> Result[(Node, Parser), Parser] {
+  let start_loc = current_token(parser).location()
+
+  // Expect </
+  let parser = match current_token(parser) {
+    LessThanSlash(_) => advance_parser(parser)
+    LessThan(_) => {
+      let parser = advance_parser(parser)
+      match current_token(parser) {
+        Slash(_) => advance_parser(parser)
+        _ => return Err(add_error(parser, "Expected closing tag", start_loc))
+      }
+    }
+    _ => return Err(add_error(parser, "Expected '</'", start_loc))
+  }
+
+  // Parse tag name
+  let (tag_name, parser) = match parse_jsx_tag_name(parser) {
+    Ok((name, p)) => (name, p)
+    Err(p) => return Err(p)
+  }
+
+  // Verify tag name matches
+  if !jsx_tag_names_match(expected_tag, tag_name) {
+    let parser = add_error(
+      parser,
+      "JSX closing tag does not match opening tag",
+      start_loc,
+    )
+    // Continue anyway to try to recover
+    let _ = parser
+  }
+
+  // Expect >
+  let parser = match current_token(parser) {
+    GreaterThan(_) => advance_parser(parser)
+    _ => return Err(add_error(parser, "Expected '>' after closing tag", start_loc))
+  }
+
+  let end_loc = current_token(parser).location()
+
+  Ok((Node::JsxClosingElement(JsxClosingElement::{
+    tag_name,
+    location: SourceLocation::span(start_loc, end_loc),
+  }), parser))
+}
+
+///|
+/// Check if two JSX tag names match
+fn jsx_tag_names_match(a : JsxTagName, b : JsxTagName) -> Bool {
+  match (a, b) {
+    (JsxTagName::Identifier(name_a, _), JsxTagName::Identifier(name_b, _)) =>
+      name_a == name_b
+    (JsxTagName::NamespacedName(ns_a, local_a, _),
+     JsxTagName::NamespacedName(ns_b, local_b, _)) =>
+      ns_a == ns_b && local_a == local_b
+    _ => false  // PropertyAccess comparison would need deeper check
+  }
+}
+
+///|
+/// Parse JSX fragment: <>...</>
+fn parse_jsx_fragment(
+  parser : Parser,
+  start_loc : SourceLocation,
+) -> Result[(Node, Parser), Parser] {
+  // Already consumed <, expect >
+  let parser = match current_token(parser) {
+    GreaterThan(_) => advance_parser(parser)
+    _ => return Err(add_error(parser, "Expected '>' for fragment", start_loc))
+  }
+  let opening_loc = start_loc
+
+  // Parse children
+  let (children, parser) = parse_jsx_children(parser)
+
+  // Expect </>
+  let parser = match current_token(parser) {
+    LessThanSlash(_) => advance_parser(parser)
+    _ => return Err(add_error(parser, "Expected '</>' to close fragment", start_loc))
+  }
+
+  let parser = match current_token(parser) {
+    GreaterThan(_) => advance_parser(parser)
+    _ => return Err(add_error(parser, "Expected '>' to close fragment", start_loc))
+  }
+  let closing_loc = current_token(parser).location()
+
+  Ok((Node::JsxFragment(JsxFragment::{
+    opening_fragment: opening_loc,
+    children,
+    closing_fragment: closing_loc,
+    location: SourceLocation::span(start_loc, closing_loc),
+  }), parser))
 }
 
 // ============================================================================
