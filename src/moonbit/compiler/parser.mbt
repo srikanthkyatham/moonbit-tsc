@@ -299,6 +299,12 @@ pub fn parse_source_file(
   file_path : String,
 ) -> ParseResult[SourceFile] {
   let parser = Parser::new(tokens)
+  // Enable JSX mode for .tsx and .jsx files
+  let parser = if file_path.has_suffix(".tsx") || file_path.has_suffix(".jsx") {
+    { ..parser, context: { ..parser.context, in_jsx: true } }
+  } else {
+    parser
+  }
   let (statements, parser) = parse_statements(parser)
   let eof_token = current_token(parser)
   if parser.diagnostics.length() > 0 {
@@ -6458,6 +6464,39 @@ fn parse_type_parameters(parser : Parser) -> (Array[TypeParameter], Parser) {
 }
 
 ///|
+/// Check if current token is a greater-than (or starts with one) in type context
+/// Returns true if token is >, >>, or >>>
+fn is_greater_than_in_type_context(parser : Parser) -> Bool {
+  match current_token(parser) {
+    GreaterThan(_) => true
+    GreaterThanGreaterThan(_) => true
+    GreaterThanGreaterThanGreaterThan(_) => true
+    _ => false
+  }
+}
+
+///|
+/// Consume a single > in type context, handling >> and >>> tokens
+/// For >>: replaces token with single > and doesn't advance (leaves one > for outer context)
+/// For >>>: replaces token with >> and doesn't advance
+fn consume_greater_than_in_type_context(parser : Parser) -> Parser {
+  match current_token(parser) {
+    GreaterThan(_) => advance_parser(parser)
+    GreaterThanGreaterThan(loc) => {
+      // Replace >> with > at current position (consume one >)
+      parser.tokens[parser.position] = GreaterThan(loc)
+      parser
+    }
+    GreaterThanGreaterThanGreaterThan(loc) => {
+      // Replace >>> with >> at current position (consume one >)
+      parser.tokens[parser.position] = GreaterThanGreaterThan(loc)
+      parser
+    }
+    _ => parser
+  }
+}
+
+///|
 /// Parse type argument list (for generic function/type usage)
 fn parse_type_argument_list(parser : Parser) -> Result[(Array[Node], Parser), Parser] {
   // Save diagnostics length for backtracking
@@ -6474,41 +6513,42 @@ fn parse_type_argument_list(parser : Parser) -> Result[(Array[Node], Parser), Pa
 
   // Parse type argument list
   while true {
-    match current_token(parser) {
-      GreaterThan(_) => {
-        parser = advance_parser(parser)
-        break
-      }
-      _ => {
-        match parse_type(parser) {
-          Ok((ty, p)) => {
-            type_args.push(ty)
-            parser = p
+    // Check for closing > (also handles >> and >>> for nested generics)
+    if is_greater_than_in_type_context(parser) {
+      parser = consume_greater_than_in_type_context(parser)
+      break
+    }
 
-            // Check for comma
-            match current_token(parser) {
-              Comma(_) => {
-                parser = advance_parser(parser)
-                continue
-              }
-              GreaterThan(_) => continue
-              _ => {
-                // Failed to parse - restore diagnostics and return error
-                while parser.diagnostics.length() > initial_diag_length {
-                  let _ = parser.diagnostics.pop()
-                }
-                return Err(parser)
-              }
-            }
+    match parse_type(parser) {
+      Ok((ty, p)) => {
+        type_args.push(ty)
+        parser = p
+
+        // Check for comma or closing >
+        match current_token(parser) {
+          Comma(_) => {
+            parser = advance_parser(parser)
+            continue
           }
-          Err(p) => {
-            // Failed to parse type - restore diagnostics and return error
-            while p.diagnostics.length() > initial_diag_length {
-              let _ = p.diagnostics.pop()
+          _ => {
+            // Check for > or >> or >>> (closing bracket)
+            if is_greater_than_in_type_context(parser) {
+              continue
             }
-            return Err(p)
+            // Failed to parse - restore diagnostics and return error
+            while parser.diagnostics.length() > initial_diag_length {
+              let _ = parser.diagnostics.pop()
+            }
+            return Err(parser)
           }
         }
+      }
+      Err(p) => {
+        // Failed to parse type - restore diagnostics and return error
+        while p.diagnostics.length() > initial_diag_length {
+          let _ = p.diagnostics.pop()
+        }
+        return Err(p)
       }
     }
   }
@@ -6522,7 +6562,12 @@ fn parse_type_argument_list(parser : Parser) -> Result[(Array[Node], Parser), Pa
 
 ///|
 /// Check if current position starts JSX element
+/// Only returns true if JSX mode is enabled (for .tsx files)
 fn is_jsx_start(parser : Parser) -> Bool {
+  // Only parse JSX if explicitly in JSX mode
+  if not(parser.context.in_jsx) {
+    return false
+  }
   match current_token(parser) {
     LessThan(_) => {
       // Check if it's JSX or less-than operator

@@ -1277,7 +1277,30 @@ test "parse type assertion with angle brackets" {
 
 ///|
 test "parse type assertion with complex type" {
-  let tokens = tokens_from_source("const x = <Array[string]>getArray();")
+  let tokens = tokens_from_source("const x = <Array<string>>getArray();")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        VariableStatement(stmt) => {
+          match stmt.declarations[0].initializer {
+            Some(TypeAssertionExpression(_)) => ()
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse type assertion with deeply nested generics" {
+  // 4 levels of Array nesting + 1 outer type assertion = 5 closing >
+  // Scanner tokenizes >>>>> as >>> followed by >>
+  let tokens = tokens_from_source("const x = <Array<Array<Array<Array<string>>>>>getValue();")
   let result = parse_source_file(tokens, "test.ts")
   match result {
     Ok(source_file) => {
