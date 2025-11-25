@@ -182,6 +182,7 @@ pub fn emit(node : Node, ctx : EmitterContext) -> String {
     StringLiteral(sl) => "\"" + escape_string(sl.value) + "\""
     BooleanLiteral(bl) => if bl.value { "true" } else { "false" }
     NullLiteral(_) => "null"
+    RegExpLiteral(rl) => rl.pattern
     ThisExpression(_) => "this"
     SuperExpression(_) => "super"
 
@@ -202,6 +203,7 @@ pub fn emit(node : Node, ctx : EmitterContext) -> String {
     TypePredicate(_) => ""
     TypeOperator(_) => ""
     InferType(_) => ""
+    TemplateLiteralType(_) => ""
 
     // Other
     Parameter(p) => emit_parameter(p, ctx)

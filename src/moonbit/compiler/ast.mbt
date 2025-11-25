@@ -74,6 +74,7 @@ pub enum Node {
   StringLiteral(StringLiteral)
   BooleanLiteral(BooleanLiteral)
   NullLiteral(NullLiteral)
+  RegExpLiteral(RegExpLiteral)
   ThisExpression(ThisExpression)
   SuperExpression(SuperExpression)
 
@@ -94,6 +95,7 @@ pub enum Node {
   TypePredicate(TypePredicate)
   TypeOperator(TypeOperator)
   InferType(InferType)
+  TemplateLiteralType(TemplateLiteralType)
 
   // Other
   Parameter(Parameter)
@@ -743,6 +745,12 @@ pub struct NullLiteral {
 } derive(Show)
 
 ///|
+pub struct RegExpLiteral {
+  pattern : String  // Full regex including /pattern/flags
+  location : SourceLocation
+} derive(Show)
+
+///|
 pub struct ThisExpression {
   location : SourceLocation
 } derive(Show)
@@ -891,6 +899,21 @@ pub struct TypeOperator {
 pub struct InferType {
   type_parameter : String
   location : SourceLocation
+} derive(Show)
+
+///|
+/// Template literal type: `on${string}`, `color-${Color}`
+pub struct TemplateLiteralType {
+  head : String  // Text before first interpolation
+  spans : Array[TemplateLiteralTypeSpan]  // Interpolated types and tail text
+  location : SourceLocation
+} derive(Show)
+
+///|
+/// Span in a template literal type
+pub struct TemplateLiteralTypeSpan {
+  type_node : Node  // The interpolated type
+  literal : String  // Text after the interpolation
 } derive(Show)
 
 ///|
@@ -1047,6 +1070,7 @@ pub fn get_location(node : Node) -> SourceLocation {
     StringLiteral(s) => s.location
     BooleanLiteral(b) => b.location
     NullLiteral(n) => n.location
+    RegExpLiteral(r) => r.location
     ThisExpression(t) => t.location
     SuperExpression(s) => s.location
     TypeReference(t) => t.location
@@ -1065,6 +1089,7 @@ pub fn get_location(node : Node) -> SourceLocation {
     TypePredicate(tp) => tp.location
     TypeOperator(to) => to.location
     InferType(it) => it.location
+    TemplateLiteralType(t) => t.location
     Parameter(p) => p.location
     PropertyDeclaration(p) => p.location
     IndexSignatureDeclaration(i) => i.location

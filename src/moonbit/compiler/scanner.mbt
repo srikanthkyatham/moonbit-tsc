@@ -30,20 +30,107 @@ pub fn Scanner::new(source : String, file_path : String) -> Scanner {
 pub fn scan_all(scanner : Scanner) -> Array[Token] {
   let tokens : Array[Token] = []
   let mut current_scanner = scanner
+  let mut prev_token : Token? = None
+  let mut template_depth = 0  // Track nested template interpolations
   let mut should_continue = true
   while should_continue {
-    let (token, next_scanner) = scan_token(current_scanner)
+    // After CloseBrace inside a template interpolation, scan template continuation
+    let (token, next_scanner) = match prev_token {
+      Some(CloseBrace(_)) if template_depth > 0 => {
+        scan_template_continuation(current_scanner)
+      }
+      _ => scan_token_with_context(current_scanner, prev_token)
+    }
     tokens.push(token)
+    // Track template depth
     match token {
+      TemplateHead(_, _) | TemplateMiddle(_, _) => template_depth = template_depth + 1
+      TemplateTail(_, _) => template_depth = template_depth - 1
       EOF(_) => should_continue = false
-      _ => current_scanner = next_scanner
+      _ => ()
+    }
+    match token {
+      EOF(_) => ()
+      _ => {
+        prev_token = Some(token)
+        current_scanner = next_scanner
+      }
     }
   }
   tokens
 }
 
 ///|
-/// Scan a single token
+/// Scan a single token with context (for regex disambiguation)
+pub fn scan_token_with_context(scanner : Scanner, prev_token : Token?) -> (Token, Scanner) {
+  // Skip whitespace and comments
+  let scanner = skip_trivia(scanner)
+
+  // Check if at end
+  if scanner.position >= scanner.length {
+    let loc = current_location(scanner)
+    return (EOF(loc), scanner)
+  }
+
+  let start_pos = scanner.position
+  let start_line = scanner.line
+  let start_col = scanner.column
+  let ch = peek_char(scanner)
+
+  // Helper to create location
+  fn make_location(
+    scanner : Scanner,
+    start_pos : Int,
+    start_line : Int,
+    start_col : Int,
+  ) -> SourceLocation {
+    SourceLocation::new(
+      scanner.file_path,
+      Position::new(start_line, start_col, start_pos),
+      Position::new(scanner.line, scanner.column, scanner.position),
+    )
+  }
+
+  // Special handling for / - could be regex or division
+  if ch == '/' {
+    let scanner_after_slash = advance(scanner)
+    let next_ch = peek_char(scanner_after_slash)
+    // Check for comments first
+    if next_ch == '/' || next_ch == '*' {
+      // It's a comment, let regular scan_token handle it
+      return scan_token(scanner)
+    }
+    // Check for /= and />
+    if next_ch == '=' {
+      let scanner = advance(scanner_after_slash)
+      return (SlashEquals(make_location(scanner, start_pos, start_line, start_col)), scanner)
+    }
+    if next_ch == '>' {
+      let scanner = advance(scanner_after_slash)
+      return (SlashGreaterThan(make_location(scanner, start_pos, start_line, start_col)), scanner)
+    }
+    // Check if previous token allows regex
+    if allows_regex(prev_token) {
+      // Try to scan as regex
+      match scan_regex(scanner_after_slash, start_pos, start_line, start_col) {
+        Some(result) => return result
+        None => {
+          // Fall back to division
+          return (Slash(make_location(scanner_after_slash, start_pos, start_line, start_col)), scanner_after_slash)
+        }
+      }
+    } else {
+      // Division operator
+      return (Slash(make_location(scanner_after_slash, start_pos, start_line, start_col)), scanner_after_slash)
+    }
+  }
+
+  // Delegate to regular scan_token for other cases
+  scan_token(scanner)
+}
+
+///|
+/// Scan a single token (without context)
 pub fn scan_token(scanner : Scanner) -> (Token, Scanner) {
   // Skip whitespace and comments
   let scanner = skip_trivia(scanner)
@@ -794,7 +881,7 @@ fn scan_string(
 }
 
 ///|
-/// Scan a template literal (basic implementation)
+/// Scan a template literal - handles interpolations properly
 fn scan_template(
   scanner : Scanner,
   start_pos : Int,
@@ -806,18 +893,125 @@ fn scan_template(
   while scanner.position < scanner.length {
     let ch = peek_char(scanner)
     if ch == '`' {
+      // End of template
       scanner = advance(scanner)
-      break
+      let loc = SourceLocation::new(
+        scanner.file_path,
+        Position::new(start_line, start_col, start_pos),
+        Position::new(scanner.line, scanner.column, scanner.position),
+      )
+      return (TemplateLiteral(text, loc), scanner)
+    }
+    if ch == '$' {
+      let next_scanner = advance(scanner)
+      if next_scanner.position < next_scanner.length && peek_char(next_scanner) == '{' {
+        // Start of interpolation - return TemplateHead
+        scanner = advance(next_scanner) // Skip ${
+        let loc = SourceLocation::new(
+          scanner.file_path,
+          Position::new(start_line, start_col, start_pos),
+          Position::new(scanner.line, scanner.column, scanner.position),
+        )
+        return (TemplateHead(text, loc), scanner)
+      }
+    }
+    if ch == '\\' {
+      // Escape sequence
+      scanner = advance(scanner)
+      if scanner.position < scanner.length {
+        let escaped = peek_char(scanner)
+        match escaped {
+          'n' => text = text + "\n"
+          'r' => text = text + "\r"
+          't' => text = text + "\t"
+          '\\' => text = text + "\\"
+          '`' => text = text + "`"
+          '$' => text = text + "$"
+          _ => {
+            text = text + "\\"
+            text = text + Char::to_string(escaped)
+          }
+        }
+        scanner = advance(scanner)
+        continue
+      }
     }
     text = text + Char::to_string(ch)
     scanner = advance(scanner)
   }
+  // Reached end of file without closing backtick
   let loc = SourceLocation::new(
     scanner.file_path,
     Position::new(start_line, start_col, start_pos),
     Position::new(scanner.line, scanner.column, scanner.position),
   )
   (TemplateLiteral(text, loc), scanner)
+}
+
+///|
+/// Continue scanning after an interpolation - returns TemplateMiddle or TemplateTail
+pub fn scan_template_continuation(scanner : Scanner) -> (Token, Scanner) {
+  let start_pos = scanner.position
+  let start_line = scanner.line
+  let start_col = scanner.column
+  let mut scanner = scanner
+  let mut text = ""
+  while scanner.position < scanner.length {
+    let ch = peek_char(scanner)
+    if ch == '`' {
+      // End of template
+      scanner = advance(scanner)
+      let loc = SourceLocation::new(
+        scanner.file_path,
+        Position::new(start_line, start_col, start_pos),
+        Position::new(scanner.line, scanner.column, scanner.position),
+      )
+      return (TemplateTail(text, loc), scanner)
+    }
+    if ch == '$' {
+      let next_scanner = advance(scanner)
+      if next_scanner.position < next_scanner.length && peek_char(next_scanner) == '{' {
+        // Another interpolation - return TemplateMiddle
+        scanner = advance(next_scanner) // Skip ${
+        let loc = SourceLocation::new(
+          scanner.file_path,
+          Position::new(start_line, start_col, start_pos),
+          Position::new(scanner.line, scanner.column, scanner.position),
+        )
+        return (TemplateMiddle(text, loc), scanner)
+      }
+    }
+    if ch == '\\' {
+      // Escape sequence
+      scanner = advance(scanner)
+      if scanner.position < scanner.length {
+        let escaped = peek_char(scanner)
+        match escaped {
+          'n' => text = text + "\n"
+          'r' => text = text + "\r"
+          't' => text = text + "\t"
+          '\\' => text = text + "\\"
+          '`' => text = text + "`"
+          '$' => text = text + "$"
+          _ => {
+            text = text + "\\"
+            text = text + Char::to_string(escaped)
+          }
+        }
+        scanner = advance(scanner)
+        continue
+      }
+    }
+    text = text + Char::to_string(ch)
+    scanner = advance(scanner)
+  }
+  // Reached end of file without closing backtick
+  let loc = SourceLocation::new(
+    scanner.file_path,
+    Position::new(start_line, start_col, start_pos),
+    Position::new(scanner.line, scanner.column, scanner.position),
+  )
+  (TemplateTail(text, loc), scanner)
 }
 
 ///|
@@ -936,4 +1130,124 @@ fn advance_line(scanner : Scanner) -> Scanner {
 fn current_location(scanner : Scanner) -> SourceLocation {
   let pos = Position::new(scanner.line, scanner.column, scanner.position)
   SourceLocation::new(scanner.file_path, pos, pos)
+}
+
+///|
+/// Scan a regex literal: /pattern/flags
+fn scan_regex(
+  scanner : Scanner,
+  start_pos : Int,
+  start_line : Int,
+  start_col : Int,
+) -> (Token, Scanner)? {
+  // Already consumed the opening /
+  let mut scanner = scanner
+  let mut pattern = ""
+  let mut in_char_class = false
+  let mut found_closing_slash = false
+
+  // Scan the pattern
+  while scanner.position < scanner.length {
+    let ch = peek_char(scanner)
+    match ch {
+      '/' if not(in_char_class) => {
+        // End of pattern
+        scanner = advance(scanner) // consume closing /
+        found_closing_slash = true
+        break
+      }
+      '[' => {
+        in_char_class = true
+        pattern = pattern + "["
+        scanner = advance(scanner)
+      }
+      ']' => {
+        in_char_class = false
+        pattern = pattern + "]"
+        scanner = advance(scanner)
+      }
+      '\\' => {
+        // Escape sequence
+        pattern = pattern + "\\"
+        scanner = advance(scanner)
+        if scanner.position < scanner.length {
+          let escaped = peek_char(scanner)
+          pattern = pattern + Char::to_string(escaped)
+          scanner = advance(scanner)
+        }
+      }
+      '\n' | '\r' => {
+        // Invalid - newline in regex
+        return None
+      }
+      _ => {
+        pattern = pattern + Char::to_string(ch)
+        scanner = advance(scanner)
+      }
+    }
+  }
+
+  // Must have found the closing /
+  if not(found_closing_slash) {
+    return None
+  }
+
+  // Scan flags (g, i, m, s, u, y)
+  let mut flags = ""
+  while scanner.position < scanner.length {
+    let ch = peek_char(scanner)
+    match ch {
+      'g' | 'i' | 'm' | 's' | 'u' | 'y' => {
+        flags = flags + Char::to_string(ch)
+        scanner = advance(scanner)
+      }
+      _ => break
+    }
+  }
+
+  let full_regex = "/" + pattern + "/" + flags
+  let loc = SourceLocation::new(
+    scanner.file_path,
+    Position::new(start_line, start_col, start_pos),
+    Position::new(scanner.line, scanner.column, scanner.position),
+  )
+  Some((RegExpLiteral(full_regex, loc), scanner))
+}
+
+///|
+/// Check if previous token allows regex literal
+fn allows_regex(prev_token : Token?) -> Bool {
+  match prev_token {
+    None => true  // Start of file
+    Some(token) => match token {
+      // Operators that can precede a regex
+      Equals(_) | PlusEquals(_) | MinusEquals(_) | StarEquals(_) | SlashEquals(_)
+      | PercentEquals(_) | AmpersandEquals(_) | BarEquals(_) | CaretEquals(_)
+      | StarStarEquals(_) | LessThanLessThanEquals(_) | GreaterThanGreaterThanEquals(_)
+      | GreaterThanGreaterThanGreaterThanEquals(_) | AmpersandAmpersandEquals(_)
+      | BarBarEquals(_) | QuestionQuestionEquals(_) => true
+      // Comparison/logical operators
+      EqualsEquals(_) | ExclamationEquals(_) | EqualsEqualsEquals(_)
+      | ExclamationEqualsEquals(_) | LessThan(_) | GreaterThan(_)
+      | LessThanEquals(_) | GreaterThanEquals(_) | AmpersandAmpersand(_)
+      | BarBar(_) | QuestionQuestion(_) => true
+      // Arithmetic operators (but not + or - which could be unary)
+      Star(_) | Slash(_) | Percent(_) | StarStar(_) => true
+      // Bitwise operators
+      Ampersand(_) | Bar(_) | Caret(_) | Tilde(_)
+      | LessThanLessThan(_) | GreaterThanGreaterThan(_)
+      | GreaterThanGreaterThanGreaterThan(_) => true
+      // Other operators
+      Exclamation(_) | Question(_) | Colon(_) | Arrow(_) | Comma(_) => true
+      // Opening brackets/parens
+      OpenParen(_) | OpenBracket(_) | OpenBrace(_) => true
+      // Semicolon (statement boundary)
+      Semicolon(_) => true
+      // Keywords that precede expressions
+      KeywordReturn(_) | KeywordThrow(_) | KeywordCase(_) | KeywordIn(_)
+      | KeywordTypeOf(_) | KeywordDelete(_) | KeywordNew(_) | KeywordAwait(_)
+      | KeywordYield(_) => true
+      _ => false
+    }
+  }
 }

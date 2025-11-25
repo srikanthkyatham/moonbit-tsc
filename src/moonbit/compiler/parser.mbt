@@ -1855,7 +1855,7 @@ fn parse_primary_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
         ),
       )
 
-    // Template literal (simple - treat as string for now)
+    // Template literal (simple - no interpolation)
     TemplateLiteral(value, loc) =>
       Ok(
         (
@@ -1868,9 +1868,61 @@ fn parse_primary_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
         ),
       )
 
+    // Template literal with interpolation
+    TemplateHead(head, loc) => {
+      let mut parser = advance_parser(parser)
+      let template_spans : Array[TemplateSpan] = []
+
+      while true {
+        // Parse the interpolated expression
+        let expr_start = current_token(parser).location()
+        match parse_expression(parser) {
+          Ok((expr, p)) => {
+            parser = p
+            // Expect CloseBrace
+            match current_token(parser) {
+              CloseBrace(_) => {
+                parser = advance_parser(parser)
+                // Check for TemplateTail or TemplateMiddle
+                match current_token(parser) {
+                  TemplateTail(tail_text, span_loc) => {
+                    template_spans.push(TemplateSpan::{ expression: expr, literal: tail_text, location: span_loc })
+                    parser = advance_parser(parser)
+                    break
+                  }
+                  TemplateMiddle(middle_text, span_loc) => {
+                    template_spans.push(TemplateSpan::{ expression: expr, literal: middle_text, location: span_loc })
+                    parser = advance_parser(parser)
+                    // Continue loop to parse next expression
+                  }
+                  _ => return Err(add_error(parser, "Expected template continuation after }", current_token(parser).location()))
+                }
+              }
+              _ => return Err(add_error(parser, "Expected '}' after expression in template literal", current_token(parser).location()))
+            }
+          }
+          Err(p) => return Err(p)
+        }
+      }
+      Ok(
+        (
+          Node::TemplateExpression(TemplateExpression::{
+            head,
+            template_spans,
+            location: loc,
+          }),
+          parser,
+        ),
+      )
+    }
+
     // null
     KeywordNull(loc) =>
       Ok((Node::NullLiteral(NullLiteral::{ location: loc }), advance_parser(parser)))
+
+    // regex literal
+    RegExpLiteral(pattern, loc) =>
+      Ok((Node::RegExpLiteral(RegExpLiteral::{ pattern, location: loc }), advance_parser(parser)))
 
     // undefined (as expression literal)
     KeywordUndefined(loc) =>
@@ -2918,6 +2970,64 @@ fn parse_primary_type_with_readonly(parser : Parser, is_readonly : Bool) -> Resu
           advance_parser(parser),
         ),
       )
+    // Template literal type without interpolation: `hello`
+    TemplateLiteral(text, _) =>
+      Ok(
+        (
+          Node::TemplateLiteralType(TemplateLiteralType::{
+            head: text,
+            spans: [],
+            location: loc,
+          }),
+          advance_parser(parser),
+        ),
+      )
+    // Template literal type with interpolation: `on${string}`
+    TemplateHead(head, _) => {
+      let mut parser = advance_parser(parser)
+      let spans : Array[TemplateLiteralTypeSpan] = []
+
+      while true {
+        // Parse the type in the interpolation
+        match parse_type(parser) {
+          Ok((type_node, p)) => {
+            parser = p
+            // Expect CloseBrace
+            match current_token(parser) {
+              CloseBrace(_) => {
+                parser = advance_parser(parser)
+                // Check for TemplateTail or TemplateMiddle
+                match current_token(parser) {
+                  TemplateTail(tail_text, _) => {
+                    spans.push(TemplateLiteralTypeSpan::{ type_node, literal: tail_text })
+                    parser = advance_parser(parser)
+                    break
+                  }
+                  TemplateMiddle(middle_text, _) => {
+                    spans.push(TemplateLiteralTypeSpan::{ type_node, literal: middle_text })
+                    parser = advance_parser(parser)
+                    // Continue loop to parse next type
+                  }
+                  _ => return Err(add_error(parser, "Expected template continuation after }", current_token(parser).location()))
+                }
+              }
+              _ => return Err(add_error(parser, "Expected '}' after type in template literal type", current_token(parser).location()))
+            }
+          }
+          Err(p) => return Err(p)
+        }
+      }
+      Ok(
+        (
+          Node::TemplateLiteralType(TemplateLiteralType::{
+            head,
+            spans,
+            location: loc,
+          }),
+          parser,
+        ),
+      )
+    }
     OpenBrace(_) => {
       let parser = advance_parser(parser) // consume {
 

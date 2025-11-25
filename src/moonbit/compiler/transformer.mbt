@@ -174,6 +174,7 @@ pub fn transform(node : Node, ctx : TransformerContext) -> Node {
     StringLiteral(sl) => StringLiteral(sl)
     BooleanLiteral(bl) => BooleanLiteral(bl)
     NullLiteral(nl) => NullLiteral(nl)
+    RegExpLiteral(rl) => RegExpLiteral(rl)
     ThisExpression(te) => ThisExpression(te)
     SuperExpression(se) => SuperExpression(se)
 
@@ -193,7 +194,8 @@ pub fn transform(node : Node, ctx : TransformerContext) -> Node {
     | RestType(_)
     | TypePredicate(_)
     | TypeOperator(_)
-    | InferType(_) =>
+    | InferType(_)
+    | TemplateLiteralType(_) =>
       // These should only appear in type positions and will be stripped
       // If they somehow appear in expression position, it's an error
       abort("Type node in expression position during transformation")
