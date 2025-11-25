@@ -337,6 +337,9 @@ pub enum DiagnosticCode {
   TS2355  // A function whose declared type is neither 'void' nor 'any' must return a value
   TS2363  // The right-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type
 
+  // Enum Errors (2400-2499)
+  TS2474  // const enum member initializers can only contain literal values and other computed enum values
+
   // Variable/Constant Errors (2500-2599)
   TS2511  // Cannot create an instance of an abstract class
   TS2558  // Expected X type arguments, but got Y
@@ -355,6 +358,7 @@ pub fn DiagnosticCode::to_int(self : DiagnosticCode) -> Int {
     TS2344 => 2344
     TS2355 => 2355
     TS2363 => 2363
+    TS2474 => 2474
     TS2511 => 2511
     TS2558 => 2558
     TS2588 => 2588
@@ -371,6 +375,7 @@ pub fn DiagnosticCode::from_int(code : Int) -> DiagnosticCode? {
     2344 => Some(TS2344)
     2355 => Some(TS2355)
     2363 => Some(TS2363)
+    2474 => Some(TS2474)
     2511 => Some(TS2511)
     2558 => Some(TS2558)
     2588 => Some(TS2588)

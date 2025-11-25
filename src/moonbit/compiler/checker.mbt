@@ -4229,12 +4229,125 @@ fn build_class_type_for_this(
 
 ///|
 /// Check enum declaration
+/// Validates enum members and their initializers
 fn check_enum_declaration(
   checker : TypeChecker,
   enum_decl : EnumDeclaration,
 ) -> TypeChecker {
-  // TODO: Check enum members
-  checker
+  check_enum_members(checker, enum_decl.members, enum_decl.is_const, 0)
+}
+
+///|
+/// Check enum members recursively
+fn check_enum_members(
+  checker : TypeChecker,
+  members : Array[EnumMember],
+  is_const : Bool,
+  index : Int,
+) -> TypeChecker {
+  if index >= members.length() {
+    checker
+  } else {
+    let member = members[index]
+    let checker = check_enum_member(checker, member, is_const)
+    check_enum_members(checker, members, is_const, index + 1)
+  }
+}
+
+///|
+/// Check a single enum member
+/// Validates that the initializer (if present) is a valid enum initializer
+fn check_enum_member(
+  checker : TypeChecker,
+  member : EnumMember,
+  is_const : Bool,
+) -> TypeChecker {
+  match member.initializer {
+    Some(init) => {
+      // Infer the type of the initializer
+      let (init_type, checker) = infer_type(checker, init)
+      // Validate the initializer type
+      validate_enum_initializer(checker, init_type, init, member.location, is_const)
+    }
+    None => checker // No initializer is valid (auto-incremented)
+  }
+}
+
+///|
+/// Validate that an enum initializer has a valid type
+/// For const enums: must be a numeric or string literal
+/// For regular enums: must be a number or string type
+fn validate_enum_initializer(
+  checker : TypeChecker,
+  init_type : Type,
+  init : Node,
+  location : SourceLocation,
+  is_const : Bool,
+) -> TypeChecker {
+  // Check if the initializer type is valid for an enum member
+  if is_valid_enum_initializer_type(init_type) {
+    // For const enums, we need to ensure the initializer is a compile-time constant
+    if is_const {
+      if is_const_enum_initializer(init) {
+        checker
+      } else {
+        add_diagnostic_with_code(
+          checker,
+          "const enum member initializers can only contain literal values and other computed enum values",
+          location,
+          TS2474,
+        )
+      }
+    } else {
+      checker
+    }
+  } else {
+    add_diagnostic_with_code(
+      checker,
+      "Type '\{type_to_string(init_type)}' is not assignable to type 'number' or 'string' for enum member",
+      location,
+      TS2322,
+    )
+  }
+}
+
+///|
+/// Check if a type is valid for an enum initializer
+/// Valid types are: number, string, or literal types
+fn is_valid_enum_initializer_type(t : Type) -> Bool {
+  match t {
+    Number(_) => true
+    String(_) => true
+    NumberLiteral(_) => true
+    StringLiteral(_) => true
+    Any(_) => true // Allow any for flexibility
+    _ => false
+  }
+}
+
+///|
+/// Check if an expression is a valid const enum initializer
+/// Must be a literal value or reference to another enum member
+fn is_const_enum_initializer(expr : Node) -> Bool {
+  match expr {
+    NumericLiteral(_) => true
+    StringLiteral(_) => true
+    UnaryExpression(un) => {
+      // Allow unary minus on numeric literals (e.g., -1)
+      match un.operator {
+        Minus | Plus => is_const_enum_initializer(un.operand)
+        _ => false
+      }
+    }
+    PropertyAccessExpression(_) => true // Allow references to other enum members
+    Identifier(_) => true // Allow references to other enum members
+    BinaryExpression(bin) => {
+      // Allow binary expressions with literals (e.g., 1 + 2, 1 << 2)
+      is_const_enum_initializer(bin.left) && is_const_enum_initializer(bin.right)
+    }
+    ParenthesizedExpression(paren) => is_const_enum_initializer(paren.expression)
+    _ => false
+  }
 }
 
 ///|
