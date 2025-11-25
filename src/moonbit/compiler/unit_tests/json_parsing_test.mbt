@@ -335,6 +335,18 @@ test "parse JSON empty object" {
 
 ///|
 test "parse JSON object with single property" {
+  // Using JSON-style string keys
+  let result = parse_json_value("{ \"name\": \"test\" }")
+  match result {
+    Some(@compiler.Node::ObjectLiteralExpression(obj)) => {
+      assert_eq(obj.properties.length(), 1)
+    }
+    _ => fail("Expected ObjectLiteralExpression")
+  }
+}
+
+///|
+test "parse JSON object with identifier key" {
   // Using identifier-style keys (TypeScript syntax)
   let result = parse_json_value("{ name: \"test\" }")
   match result {
@@ -347,7 +359,7 @@ test "parse JSON object with single property" {
 
 ///|
 test "parse JSON object with multiple properties" {
-  let result = parse_json_value("{ name: \"test\", value: 42 }")
+  let result = parse_json_value("{ \"name\": \"test\", \"value\": 42 }")
   match result {
     Some(@compiler.Node::ObjectLiteralExpression(obj)) => {
       assert_eq(obj.properties.length(), 2)
@@ -358,7 +370,7 @@ test "parse JSON object with multiple properties" {
 
 ///|
 test "parse JSON nested objects" {
-  let result = parse_json_value("{ outer: { inner: 1 } }")
+  let result = parse_json_value("{ \"outer\": { \"inner\": 1 } }")
   match result {
     Some(@compiler.Node::ObjectLiteralExpression(obj)) => {
       assert_eq(obj.properties.length(), 1)
@@ -369,7 +381,7 @@ test "parse JSON nested objects" {
 
 ///|
 test "parse JSON object with array value" {
-  let result = parse_json_value("{ items: [1, 2, 3] }")
+  let result = parse_json_value("{ \"items\": [1, 2, 3] }")
   match result {
     Some(@compiler.Node::ObjectLiteralExpression(obj)) => {
       assert_eq(obj.properties.length(), 1)
@@ -384,7 +396,7 @@ test "parse JSON object with array value" {
 
 ///|
 test "parse complex JSON structure" {
-  let json = "{ users: [{ name: \"Alice\", age: 30 }, { name: \"Bob\", age: 25 }], count: 2 }"
+  let json = "{ \"users\": [{ \"name\": \"Alice\", \"age\": 30 }, { \"name\": \"Bob\", \"age\": 25 }], \"count\": 2 }"
   let result = parse_json_value(json)
   match result {
     Some(@compiler.Node::ObjectLiteralExpression(obj)) => {
@@ -396,7 +408,7 @@ test "parse complex JSON structure" {
 
 ///|
 test "parse JSON with deeply nested structure" {
-  let json = "{ a: { b: { c: { d: 1 } } } }"
+  let json = "{ \"a\": { \"b\": { \"c\": { \"d\": 1 } } } }"
   let result = parse_json_value(json)
   match result {
     Some(@compiler.Node::ObjectLiteralExpression(_)) => ()
@@ -406,7 +418,7 @@ test "parse JSON with deeply nested structure" {
 
 ///|
 test "parse JSON array of objects" {
-  let json = "[{ id: 1 }, { id: 2 }, { id: 3 }]"
+  let json = "[{ \"id\": 1 }, { \"id\": 2 }, { \"id\": 3 }]"
   let result = parse_json_value(json)
   match result {
     Some(@compiler.Node::ArrayLiteralExpression(arr)) => {
@@ -422,10 +434,21 @@ test "parse JSON array of objects" {
 
 ///|
 test "parse JSON with whitespace" {
-  let result = parse_json_value("  {  key  :  \"value\"  }  ")
+  let result = parse_json_value("  {  \"key\"  :  \"value\"  }  ")
   match result {
     Some(@compiler.Node::ObjectLiteralExpression(obj)) => {
       assert_eq(obj.properties.length(), 1)
+    }
+    _ => fail("Expected ObjectLiteralExpression")
+  }
+}
+
+///|
+test "parse object with numeric keys" {
+  let result = parse_json_value("{ 0: \"first\", 1: \"second\" }")
+  match result {
+    Some(@compiler.Node::ObjectLiteralExpression(obj)) => {
+      assert_eq(obj.properties.length(), 2)
     }
     _ => fail("Expected ObjectLiteralExpression")
   }
