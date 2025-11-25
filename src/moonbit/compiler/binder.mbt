@@ -251,6 +251,8 @@ fn bind_statement(binder : Binder, node : Node) -> Binder {
 
     // Labeled statement
     LabeledStatement(labeled) => {
+      // Create label flow node for the labeled statement
+      let binder = create_label_flow(binder)
       bind_statement(binder, labeled.statement)
     }
 
@@ -901,6 +903,18 @@ fn create_switch_clause_flow(
     ..binder,
     next_flow_id: flow_id,
     current_flow: Some(FlowNode::SwitchClause(flow_switch_clause)),
+  }
+}
+
+///|
+fn create_label_flow(binder : Binder) -> Binder {
+  let flow_id = binder.next_flow_id + 1
+  let antecedent = get_current_flow_id(binder)
+  let flow_label = FlowLabel::{ antecedents: [antecedent], id: flow_id }
+  {
+    ..binder,
+    next_flow_id: flow_id,
+    current_flow: Some(FlowNode::Label(flow_label)),
   }
 }
 

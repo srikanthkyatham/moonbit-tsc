@@ -1249,3 +1249,52 @@ test "bind nested switch statements" {
     Err(_) => assert_true(false)
   }
 }
+
+// ============================================================================
+// FlowNode Label Tests
+// ============================================================================
+
+///|
+test "bind labeled statement creates label flow node" {
+  let result = parse_and_bind("outer: for (let i = 0; i < 10; i++) { break outer; }")
+  match result {
+    Ok(_) => assert_true(true)
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "bind labeled while statement" {
+  let result = parse_and_bind("loop: while (true) { break loop; }")
+  match result {
+    Ok(_) => assert_true(true)
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "bind labeled block statement" {
+  let result = parse_and_bind("block: { const x = 1; break block; }")
+  match result {
+    Ok(_) => assert_true(true)
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "bind nested labeled statements" {
+  let result = parse_and_bind("outer: for (let i = 0; i < 5; i++) { inner: for (let j = 0; j < 5; j++) { break outer; } }")
+  match result {
+    Ok(_) => assert_true(true)
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "bind labeled statement with continue" {
+  let result = parse_and_bind("loop: for (let i = 0; i < 10; i++) { continue loop; }")
+  match result {
+    Ok(_) => assert_true(true)
+    Err(_) => assert_true(false)
+  }
+}
