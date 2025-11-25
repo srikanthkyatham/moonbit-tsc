@@ -582,3 +582,24 @@ test "emit export let" {
   let js = compile_to_js("export let value = 'test';")
   assert_true(js.contains("export let value = "))
 }
+
+///|
+/// Test: Emit export default function
+test "emit export default function" {
+  let js = compile_to_js("export default function greet() { return 'hello'; }")
+  assert_true(js.contains("export default function greet()"))
+}
+
+///|
+/// Test: Emit export default class
+test "emit export default class" {
+  let js = compile_to_js("export default class Person { name = ''; }")
+  assert_true(js.contains("export default class Person"))
+}
+
+///|
+/// Test: Emit export default async function
+test "emit export default async function" {
+  let js = compile_to_js("export default async function load() { return 1; }")
+  assert_true(js.contains("export default async function load()"))
+}

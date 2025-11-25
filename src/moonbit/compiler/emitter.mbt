@@ -249,11 +249,36 @@ fn has_export_modifier(modifiers : Array[Modifier]) -> Bool {
   false
 }
 
+///|
+/// Check if modifiers array has Default modifier
+fn has_default_modifier(modifiers : Array[Modifier]) -> Bool {
+  for modifier in modifiers {
+    if modifier == Modifier::Default {
+      return true
+    }
+  }
+  false
+}
+
+///|
+/// Get export prefix based on modifiers (export, export default, or empty)
+fn get_export_prefix(modifiers : Array[Modifier]) -> String {
+  if has_export_modifier(modifiers) {
+    if has_default_modifier(modifiers) {
+      "export default "
+    } else {
+      "export "
+    }
+  } else {
+    ""
+  }
+}
+
 fn emit_variable_statement(vs : VariableStatement, ctx : EmitterContext) -> String {
   // Add source mapping at the start of the statement
   ctx.add_mapping(vs.location.start.line, vs.location.start.column, None)
 
-  let export_prefix = if has_export_modifier(vs.modifiers) { "export " } else { "" }
+  let export_prefix = get_export_prefix(vs.modifiers)
 
   let keyword = if vs.is_const {
     "const"
@@ -298,9 +323,7 @@ fn emit_function_declaration(fd : FunctionDeclaration, ctx : EmitterContext) -> 
 
   let mut result = ctx.get_indent()
 
-  if has_export_modifier(fd.modifiers) {
-    result = result + "export "
-  }
+  result = result + get_export_prefix(fd.modifiers)
 
   if fd.is_async {
     result = result + "async "
@@ -384,7 +407,7 @@ fn emit_class_declaration(cd : ClassDeclaration, ctx : EmitterContext) -> String
   // Add source mapping at the start of the class declaration
   ctx.add_mapping(cd.location.start.line, cd.location.start.column, None)
 
-  let export_prefix = if has_export_modifier(cd.modifiers) { "export " } else { "" }
+  let export_prefix = get_export_prefix(cd.modifiers)
   let mut result = ctx.get_indent() + export_prefix + "class "
 
   match cd.name {

@@ -212,6 +212,28 @@ fn emit_decl_binding_name(node : Node) -> String {
 
 ///|
 /// Emit a function declaration
+///|
+/// Check if modifiers have Export modifier
+fn has_export_mod(modifiers : Array[Modifier]) -> Bool {
+  for m in modifiers {
+    if m == Modifier::Export {
+      return true
+    }
+  }
+  false
+}
+
+///|
+/// Check if modifiers have Default modifier
+fn has_default_mod(modifiers : Array[Modifier]) -> Bool {
+  for m in modifiers {
+    if m == Modifier::Default {
+      return true
+    }
+  }
+  false
+}
+
 fn emit_decl_function(
   func : FunctionDeclaration,
   ctx : DeclarationEmitterContext,
@@ -220,8 +242,16 @@ fn emit_decl_function(
   let indent = ctx.get_indent()
   let mut output = indent
 
-  // Add declare keyword for top-level functions
-  if is_top_level {
+  // Handle export modifiers
+  let is_exported = has_export_mod(func.modifiers)
+  let is_default = has_default_mod(func.modifiers)
+
+  if is_exported && is_default {
+    output = output + "export default "
+  } else if is_exported {
+    output = output + "export "
+  } else if is_top_level {
+    // Add declare keyword for top-level non-exported functions
     output = output + "declare "
   }
 
@@ -275,8 +305,16 @@ fn emit_decl_class(
   let indent = ctx.get_indent()
   let mut output = indent
 
-  // Add declare keyword for top-level classes
-  if is_top_level {
+  // Handle export modifiers
+  let is_exported = has_export_mod(cls.modifiers)
+  let is_default = has_default_mod(cls.modifiers)
+
+  if is_exported && is_default {
+    output = output + "export default "
+  } else if is_exported {
+    output = output + "export "
+  } else if is_top_level {
+    // Add declare keyword for top-level non-exported classes
     output = output + "declare "
   }
 

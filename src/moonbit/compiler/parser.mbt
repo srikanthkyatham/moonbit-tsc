@@ -5046,24 +5046,17 @@ fn parse_export_declaration(parser : Parser) -> Result[(Node, Parser), Parser] {
       // Check if it's a declaration (function or class)
       match current_token(parser) {
         KeywordFunction(_) | KeywordClass(_) => {
-          // Parse as declaration
+          // Parse as declaration and add Export + Default modifiers
           match parse_statement(parser) {
             Ok((declaration, parser)) => {
-              let end_loc = get_location(declaration)
-              Ok((
-                Node::ExportAssignment(ExportAssignment::{
-                  expression: declaration,
-                  is_export_equals: false,
-                  location: SourceLocation::new(start_loc.file_path, start_loc.start, end_loc.end)
-                }),
-                parser
-              ))
+              let decl_with_modifiers = add_export_default_modifiers(declaration)
+              Ok((decl_with_modifiers, parser))
             }
             Err(p) => Err(p)
           }
         }
         _ => {
-          // Parse as expression
+          // Parse as expression - use ExportAssignment
           match parse_expression(parser) {
             Ok((expression, parser)) => {
               let end_loc = get_location(expression)
@@ -5258,6 +5251,47 @@ fn add_export_modifier(node : Node) -> Node {
         is_const: ed.is_const,
         modifiers: new_modifiers,
         location: ed.location,
+      })
+    }
+    _ => node // For other nodes, return as-is
+  }
+}
+
+///|
+/// Helper: Add Export and Default modifiers to a declaration
+fn add_export_default_modifiers(node : Node) -> Node {
+  match node {
+    FunctionDeclaration(fd) => {
+      let new_modifiers : Array[Modifier] = [Modifier::Export, Modifier::Default]
+      for m in fd.modifiers {
+        new_modifiers.push(m)
+      }
+      Node::FunctionDeclaration(FunctionDeclaration::{
+        name: fd.name,
+        type_parameters: fd.type_parameters,
+        parameters: fd.parameters,
+        return_type: fd.return_type,
+        body: fd.body,
+        is_async: fd.is_async,
+        is_generator: fd.is_generator,
+        modifiers: new_modifiers,
+        location: fd.location,
+      })
+    }
+    ClassDeclaration(cd) => {
+      let new_modifiers : Array[Modifier] = [Modifier::Export, Modifier::Default]
+      for m in cd.modifiers {
+        new_modifiers.push(m)
+      }
+      Node::ClassDeclaration(ClassDeclaration::{
+        name: cd.name,
+        type_parameters: cd.type_parameters,
+        heritage_clauses: cd.heritage_clauses,
+        members: cd.members,
+        is_abstract: cd.is_abstract,
+        decorators: cd.decorators,
+        modifiers: new_modifiers,
+        location: cd.location,
       })
     }
     _ => node // For other nodes, return as-is
