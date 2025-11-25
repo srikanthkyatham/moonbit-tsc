@@ -10,8 +10,11 @@
 pub struct Binder {
   scopes : Array[Scope] // Stack of scopes
   current_scope_id : Int
+  containers : Array[Container] // Stack of containers
+  current_container_id : Int
   next_symbol_id : Int
   next_scope_id : Int
+  next_container_id : Int
   next_flow_id : Int
   file_path : String
   diagnostics : Array[Diagnostic]
@@ -26,11 +29,15 @@ pub type BindResult = Result[BoundSourceFile, Array[Diagnostic]]
 /// Create a new binder
 fn Binder::new(file_path : String) -> Binder {
   let global_scope = Scope::new(None, 0)
+  let source_file_container = Container::new(ContainerKind::SourceFile, None, 0)
   {
     scopes: [global_scope],
     current_scope_id: 0,
+    containers: [source_file_container],
+    current_container_id: 0,
     next_symbol_id: 0,
     next_scope_id: 1,
+    next_container_id: 1,
     next_flow_id: 0,
     file_path,
     diagnostics: [],
@@ -147,7 +154,9 @@ fn bind_statement(binder : Binder, node : Node) -> Binder {
     // Block statement
     BlockStatement(block) => {
       let binder = push_scope(binder)
+      let binder = push_container(binder, ContainerKind::Block)
       let binder = bind_statements(binder, block.statements)
+      let binder = pop_container(binder)
       pop_scope(binder)
     }
 
@@ -166,6 +175,7 @@ fn bind_statement(binder : Binder, node : Node) -> Binder {
     // For statement
     ForStatement(for_stmt) => {
       let binder = push_scope(binder)
+      let binder = push_container(binder, ContainerKind::ForStatement)
       let binder = match for_stmt.initializer {
         Some(init) => bind_statement(binder, init)
         None => binder
@@ -183,6 +193,7 @@ fn bind_statement(binder : Binder, node : Node) -> Binder {
         None => binder
       }
       let binder = bind_statement(binder, for_stmt.statement)
+      let binder = pop_container(binder)
       pop_scope(binder)
     }
 
@@ -233,12 +244,14 @@ fn bind_statement(binder : Binder, node : Node) -> Binder {
       let binder = match try_stmt.catch_clause {
         Some(catch_info) => {
           let binder = push_scope(binder)
+          let binder = push_container(binder, ContainerKind::CatchBlock)
           // Bind catch variable if present
           let binder = match catch_info.variable_declaration {
             Some(_) => binder // TODO: bind catch variable
             None => binder
           }
           let binder = bind_statement(binder, catch_info.block)
+          let binder = pop_container(binder)
           pop_scope(binder)
         }
         None => binder
@@ -378,8 +391,9 @@ fn bind_function_declaration(
 
   let binder = declare_symbol(binder, name, symbol)
 
-  // Create new scope for function body
+  // Create new scope and container for function body
   let binder = push_scope(binder)
+  let binder = push_container(binder, ContainerKind::Function)
 
   // Bind type parameters (generics)
   let binder = bind_type_parameters(binder, func.type_parameters)
@@ -393,6 +407,7 @@ fn bind_function_declaration(
     None => binder
   }
 
+  let binder = pop_container(binder)
   pop_scope(binder)
 }
 
@@ -409,8 +424,9 @@ fn bind_class_declaration(binder : Binder, class_decl : ClassDeclaration) -> Bin
 
   let binder = declare_symbol(binder, name, symbol)
 
-  // Create new scope for class body
+  // Create new scope and container for class body
   let binder = push_scope(binder)
+  let binder = push_container(binder, ContainerKind::Class)
 
   // Bind type parameters (generics)
   let binder = bind_type_parameters(binder, class_decl.type_parameters)
@@ -418,6 +434,7 @@ fn bind_class_declaration(binder : Binder, class_decl : ClassDeclaration) -> Bin
   // Bind class members
   let binder = bind_class_members(binder, class_decl.members)
 
+  let binder = pop_container(binder)
   pop_scope(binder)
 }
 
@@ -449,8 +466,10 @@ fn bind_class_members_aux(
         match meth.body {
           Some(body) => {
             let binder = push_scope(binder)
+            let binder = push_container(binder, ContainerKind::Function)
             let binder = bind_parameters(binder, meth.parameters)
             let binder = bind_statement(binder, body)
+            let binder = pop_container(binder)
             pop_scope(binder)
           }
           None => binder
@@ -463,8 +482,10 @@ fn bind_class_members_aux(
         match ctor.body {
           Some(body) => {
             let binder = push_scope(binder)
+            let binder = push_container(binder, ContainerKind::Function)
             let binder = bind_parameters(binder, ctor.parameters)
             let binder = bind_statement(binder, body)
+            let binder = pop_container(binder)
             pop_scope(binder)
           }
           None => binder
@@ -477,7 +498,9 @@ fn bind_class_members_aux(
         match getter.body {
           Some(body) => {
             let binder = push_scope(binder)
+            let binder = push_container(binder, ContainerKind::Function)
             let binder = bind_statement(binder, body)
+            let binder = pop_container(binder)
             pop_scope(binder)
           }
           None => binder
@@ -490,9 +513,11 @@ fn bind_class_members_aux(
         match setter.body {
           Some(body) => {
             let binder = push_scope(binder)
+            let binder = push_container(binder, ContainerKind::Function)
             // Bind setter parameter
             let binder = bind_parameters(binder, [setter.parameter])
             let binder = bind_statement(binder, body)
+            let binder = pop_container(binder)
             pop_scope(binder)
           }
           None => binder
@@ -513,8 +538,9 @@ fn bind_interface_declaration(
   // Create members symbol table for interface properties
   let members : SymbolTable = Map::new()
 
-  // Create scope for interface to bind type parameters
+  // Create scope and container for interface to bind type parameters
   let binder = push_scope(binder)
+  let binder = push_container(binder, ContainerKind::Interface)
 
   // Bind type parameters (generics)
   let binder = bind_type_parameters(binder, interface.type_parameters)
@@ -530,6 +556,7 @@ fn bind_interface_declaration(
     }
   }
 
+  let binder = pop_container(binder)
   let binder = pop_scope(binder)
 
   let mut symbol = Symbol::new(interface.name, SymbolKind::Interface, binder.next_symbol_id)
@@ -552,8 +579,14 @@ fn bind_enum_declaration(binder : Binder, enum_decl : EnumDeclaration) -> Binder
 
   let binder = declare_symbol(binder, enum_decl.name, symbol)
 
+  // Push container for enum body
+  let binder = push_container(binder, ContainerKind::EnumDeclaration)
+
   // Bind enum members
-  bind_enum_members(binder, enum_decl.members)
+  let binder = bind_enum_members(binder, enum_decl.members)
+
+  // Pop container
+  pop_container(binder)
 }
 
 ///|
@@ -614,8 +647,9 @@ fn bind_module_declaration(
   let symbol = symbol.add_declaration(Node::ModuleDeclaration(mod_decl))
   let binder = declare_symbol(binder, mod_decl.name, symbol)
 
-  // Push scope for module body
+  // Push scope and container for module body
   let binder = push_scope(binder)
+  let binder = push_container(binder, ContainerKind::Module)
 
   // Bind module body if present
   let binder = match mod_decl.body {
@@ -623,7 +657,8 @@ fn bind_module_declaration(
     None => binder
   }
 
-  // Pop scope
+  // Pop container and scope
+  let binder = pop_container(binder)
   pop_scope(binder)
 }
 
@@ -1202,8 +1237,10 @@ fn bind_expression(binder : Binder, node : Node) -> Binder {
     // Arrow function
     ArrowFunction(arrow) => {
       let binder = push_scope(binder)
+      let binder = push_container(binder, ContainerKind::Function)
       let binder = bind_parameters(binder, arrow.parameters)
       let binder = bind_statement(binder, arrow.body)
+      let binder = pop_container(binder)
       pop_scope(binder)
     }
 
@@ -1252,8 +1289,10 @@ fn bind_expression(binder : Binder, node : Node) -> Binder {
     // Function expression
     FunctionExpression(fe) => {
       let binder = push_scope(binder)
+      let binder = push_container(binder, ContainerKind::Function)
       let binder = bind_parameters(binder, fe.parameters)
       let binder = bind_statement(binder, fe.body)
+      let binder = pop_container(binder)
       pop_scope(binder)
     }
 
@@ -1371,6 +1410,96 @@ fn pop_scope(binder : Binder) -> Binder {
 /// Get current scope
 fn current_scope(binder : Binder) -> Scope {
   binder.scopes[binder.scopes.length() - 1]
+}
+
+// ============================================================================
+// Container management
+// ============================================================================
+
+///|
+/// Push a new container onto the container stack
+fn push_container(binder : Binder, kind : ContainerKind) -> Binder {
+  let new_container = Container::new(kind, Some(binder.current_container_id), binder.next_container_id)
+  let new_containers = binder.containers
+  new_containers.push(new_container)
+  {
+    ..binder,
+    containers: new_containers,
+    current_container_id: binder.next_container_id,
+    next_container_id: binder.next_container_id + 1,
+  }
+}
+
+///|
+/// Pop the current container from the container stack
+fn pop_container(binder : Binder) -> Binder {
+  let current_container = binder.containers[binder.containers.length() - 1]
+  let parent_id = match current_container.parent {
+    Some(id) => id
+    None => 0 // Should not happen (SourceFile is always at the bottom)
+  }
+
+  let new_containers = binder.containers
+  let _ = new_containers.pop()
+
+  { ..binder, containers: new_containers, current_container_id: parent_id }
+}
+
+///|
+/// Get current container
+pub fn current_container(binder : Binder) -> Container {
+  binder.containers[binder.containers.length() - 1]
+}
+
+///|
+/// Get the enclosing function container (for var hoisting)
+pub fn get_enclosing_function_container(binder : Binder) -> Container? {
+  let mut i = binder.containers.length() - 1
+  while i >= 0 {
+    let container = binder.containers[i]
+    match container.kind {
+      ContainerKind::Function | ContainerKind::SourceFile => return Some(container)
+      _ => i = i - 1
+    }
+  }
+  None
+}
+
+///|
+/// Get the enclosing block container (for let/const scoping)
+pub fn get_enclosing_block_container(binder : Binder) -> Container? {
+  let mut i = binder.containers.length() - 1
+  while i >= 0 {
+    let container = binder.containers[i]
+    match container.kind {
+      ContainerKind::Block | ContainerKind::ForStatement | ContainerKind::CatchBlock |
+      ContainerKind::Function | ContainerKind::SourceFile => return Some(container)
+      _ => i = i - 1
+    }
+  }
+  None
+}
+
+///|
+/// Check if we're inside a class container
+pub fn is_in_class(binder : Binder) -> Bool {
+  let mut i = binder.containers.length() - 1
+  while i >= 0 {
+    let container = binder.containers[i]
+    match container.kind {
+      ContainerKind::Class => return true
+      ContainerKind::Function | ContainerKind::SourceFile => return false
+      _ => i = i - 1
+    }
+  }
+  false
+}
+
+///|
+/// Check if we're at the top level of a source file
+pub fn is_top_level(binder : Binder) -> Bool {
+  binder.containers.length() == 1 &&
+    binder.containers[0].kind == ContainerKind::SourceFile
 }
 
 ///|

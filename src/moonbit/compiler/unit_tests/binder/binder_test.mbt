@@ -521,3 +521,247 @@ test "export class detection" {
     Err(_) => assert_true(false)
   }
 }
+
+// ============================================================================
+// Container Tracking Tests
+// ============================================================================
+
+///|
+test "function container creates correct scope for parameters" {
+  // Test that function container is properly tracking scope
+  let source = "function outer(a: number) { function inner(b: number) { return a + b; } }"
+  match parse_and_bind(source) {
+    Ok(bound_file) => {
+      // outer should be in global scope
+      assert_true(bound_file.global_scope.symbols.contains("outer"))
+      // a, inner, b should NOT be in global scope (they're in function containers)
+      assert_false(bound_file.global_scope.symbols.contains("a"))
+      assert_false(bound_file.global_scope.symbols.contains("inner"))
+      assert_false(bound_file.global_scope.symbols.contains("b"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "class container creates correct scope for members" {
+  // Test that class container properly scopes methods and properties
+  let source = "class MyClass { prop: number; method(x: number) { return this.prop + x; } }"
+  match parse_and_bind(source) {
+    Ok(bound_file) => {
+      // MyClass should be in global scope
+      assert_true(bound_file.global_scope.symbols.contains("MyClass"))
+      // prop, method, x should NOT be in global scope (they're in class/function containers)
+      assert_false(bound_file.global_scope.symbols.contains("prop"))
+      assert_false(bound_file.global_scope.symbols.contains("method"))
+      assert_false(bound_file.global_scope.symbols.contains("x"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "block container creates correct scope for variables" {
+  // Test that block container properly scopes let/const variables
+  let source = "{ const blockVar = 1; { const nestedVar = 2; } }"
+  match parse_and_bind(source) {
+    Ok(bound_file) => {
+      // Block-scoped variables should NOT be in global scope
+      assert_false(bound_file.global_scope.symbols.contains("blockVar"))
+      assert_false(bound_file.global_scope.symbols.contains("nestedVar"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "for statement container creates correct scope" {
+  // Test that ForStatement container properly scopes loop variables
+  let source = "for (let i = 0; i < 10; i++) { const loopVar = i; }"
+  match parse_and_bind(source) {
+    Ok(bound_file) => {
+      // Loop variables should NOT be in global scope
+      assert_false(bound_file.global_scope.symbols.contains("i"))
+      assert_false(bound_file.global_scope.symbols.contains("loopVar"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "catch block container creates correct scope" {
+  // Test that CatchBlock container properly scopes catch variable
+  let source = "try { throw new Error(); } catch (e) { const handler = e; }"
+  match parse_and_bind(source) {
+    Ok(bound_file) => {
+      // Catch variables should NOT be in global scope
+      assert_false(bound_file.global_scope.symbols.contains("e"))
+      assert_false(bound_file.global_scope.symbols.contains("handler"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "interface container creates correct scope for type parameters" {
+  // Test that interface container properly scopes type parameters
+  let source = "interface Container<T> { value: T; }"
+  match parse_and_bind(source) {
+    Ok(bound_file) => {
+      // Interface should be in global scope
+      assert_true(bound_file.global_scope.symbols.contains("Container"))
+      // Type parameter T should NOT be in global scope
+      assert_false(bound_file.global_scope.symbols.contains("T"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "module/namespace container creates correct scope" {
+  // Test that Module container properly scopes namespace contents
+  let source = "namespace MyNS { export const nsVar = 1; function nsFunc() {} }"
+  match parse_and_bind(source) {
+    Ok(bound_file) => {
+      // Namespace should be in global scope
+      assert_true(bound_file.global_scope.symbols.contains("MyNS"))
+      // Namespace members should NOT be in global scope
+      assert_false(bound_file.global_scope.symbols.contains("nsVar"))
+      assert_false(bound_file.global_scope.symbols.contains("nsFunc"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "enum container creates correct scope for members" {
+  // Test that EnumDeclaration container properly handles enum members
+  let source = "enum Status { Active, Inactive, Pending }"
+  match parse_and_bind(source) {
+    Ok(bound_file) => {
+      // Enum should be in global scope
+      assert_true(bound_file.global_scope.symbols.contains("Status"))
+      // Enum members should also be bound (in global scope for TypeScript)
+      assert_true(bound_file.global_scope.symbols.contains("Active"))
+      assert_true(bound_file.global_scope.symbols.contains("Inactive"))
+      assert_true(bound_file.global_scope.symbols.contains("Pending"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "arrow function container creates correct scope" {
+  // Test that arrow function properly creates function container
+  let source = "const add = (a: number, b: number) => { const sum = a + b; return sum; };"
+  match parse_and_bind(source) {
+    Ok(bound_file) => {
+      // add should be in global scope
+      assert_true(bound_file.global_scope.symbols.contains("add"))
+      // Arrow function params and locals should NOT be in global scope
+      assert_false(bound_file.global_scope.symbols.contains("a"))
+      assert_false(bound_file.global_scope.symbols.contains("b"))
+      assert_false(bound_file.global_scope.symbols.contains("sum"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "function expression container creates correct scope" {
+  // Test that function expression properly creates function container
+  let source = "const multiply = function(x: number, y: number) { const result = x * y; return result; };"
+  match parse_and_bind(source) {
+    Ok(bound_file) => {
+      // multiply should be in global scope
+      assert_true(bound_file.global_scope.symbols.contains("multiply"))
+      // Function expression params and locals should NOT be in global scope
+      assert_false(bound_file.global_scope.symbols.contains("x"))
+      assert_false(bound_file.global_scope.symbols.contains("y"))
+      assert_false(bound_file.global_scope.symbols.contains("result"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "class method container creates correct scope" {
+  // Test that class method creates function container for its body
+  let source = "class Calculator { add(a: number, b: number) { const sum = a + b; return sum; } }"
+  match parse_and_bind(source) {
+    Ok(bound_file) => {
+      // Calculator should be in global scope
+      assert_true(bound_file.global_scope.symbols.contains("Calculator"))
+      // Method params and locals should NOT be in global scope
+      assert_false(bound_file.global_scope.symbols.contains("a"))
+      assert_false(bound_file.global_scope.symbols.contains("b"))
+      assert_false(bound_file.global_scope.symbols.contains("sum"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "class constructor container creates correct scope" {
+  // Test that constructor creates function container for its body
+  let source = "class Person { constructor(name: string) { const greeting = 'Hello ' + name; } }"
+  match parse_and_bind(source) {
+    Ok(bound_file) => {
+      // Person should be in global scope
+      assert_true(bound_file.global_scope.symbols.contains("Person"))
+      // Constructor params and locals should NOT be in global scope
+      assert_false(bound_file.global_scope.symbols.contains("name"))
+      assert_false(bound_file.global_scope.symbols.contains("greeting"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "getter accessor container creates correct scope" {
+  // Test that getter creates function container for its body
+  let source = "class Circle { get area() { const pi = 3.14; return pi; } }"
+  match parse_and_bind(source) {
+    Ok(bound_file) => {
+      // Circle should be in global scope
+      assert_true(bound_file.global_scope.symbols.contains("Circle"))
+      // Getter locals should NOT be in global scope
+      assert_false(bound_file.global_scope.symbols.contains("pi"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "setter accessor container creates correct scope" {
+  // Test that setter creates function container for its body
+  let source = "class Circle { set radius(value: number) { const r = value; } }"
+  match parse_and_bind(source) {
+    Ok(bound_file) => {
+      // Circle should be in global scope
+      assert_true(bound_file.global_scope.symbols.contains("Circle"))
+      // Setter param and locals should NOT be in global scope
+      assert_false(bound_file.global_scope.symbols.contains("value"))
+      assert_false(bound_file.global_scope.symbols.contains("r"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "nested containers maintain correct scope hierarchy" {
+  // Test deeply nested container hierarchy
+  let source = "class Outer { method() { const nested = () => { for (let i = 0; i < 1; i++) { const deep = i; } }; } }"
+  match parse_and_bind(source) {
+    Ok(bound_file) => {
+      // Only Outer should be in global scope
+      assert_true(bound_file.global_scope.symbols.contains("Outer"))
+      // All nested declarations should NOT be in global scope
+      assert_false(bound_file.global_scope.symbols.contains("method"))
+      assert_false(bound_file.global_scope.symbols.contains("nested"))
+      assert_false(bound_file.global_scope.symbols.contains("i"))
+      assert_false(bound_file.global_scope.symbols.contains("deep"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
