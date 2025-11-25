@@ -1175,3 +1175,77 @@ test "bind nested conditions creates multiple condition flow nodes" {
     Err(_) => assert_true(false)
   }
 }
+
+// ============================================================================
+// FlowNode SwitchClause Tests
+// ============================================================================
+
+///|
+test "bind switch statement creates switch clause flow nodes" {
+  let result = parse_and_bind("const x = 1; switch (x) { case 1: break; case 2: break; }")
+  match result {
+    Ok(bound) => {
+      assert_true(bound.global_scope.symbols.contains("x"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "bind switch statement with default clause" {
+  let result = parse_and_bind("const x = 1; switch (x) { case 1: break; default: break; }")
+  match result {
+    Ok(bound) => {
+      assert_true(bound.global_scope.symbols.contains("x"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "bind switch statement with multiple cases" {
+  let result = parse_and_bind("const x = 1; switch (x) { case 1: case 2: case 3: break; default: break; }")
+  match result {
+    Ok(bound) => {
+      assert_true(bound.global_scope.symbols.contains("x"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "bind switch statement with block scoped variables" {
+  let result = parse_and_bind("const x = 1; switch (x) { case 1: { const a = 1; break; } case 2: { const b = 2; break; } }")
+  match result {
+    Ok(bound) => {
+      assert_true(bound.global_scope.symbols.contains("x"))
+      // Block-scoped variables should not be in global scope
+      assert_false(bound.global_scope.symbols.contains("a"))
+      assert_false(bound.global_scope.symbols.contains("b"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "bind switch statement with expression" {
+  let result = parse_and_bind("const x = 1; const y = 2; switch (x + y) { case 3: break; }")
+  match result {
+    Ok(bound) => {
+      assert_true(bound.global_scope.symbols.contains("x"))
+      assert_true(bound.global_scope.symbols.contains("y"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "bind nested switch statements" {
+  let result = parse_and_bind("const x = 1; switch (x) { case 1: switch (x) { case 1: break; } break; }")
+  match result {
+    Ok(bound) => {
+      assert_true(bound.global_scope.symbols.contains("x"))
+    }
+    Err(_) => assert_true(false)
+  }
+}

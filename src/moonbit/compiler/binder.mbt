@@ -206,7 +206,7 @@ fn bind_statement(binder : Binder, node : Node) -> Binder {
     // Switch statement
     SwitchStatement(switch_stmt) => {
       let binder = bind_expression(binder, switch_stmt.expression)
-      bind_case_clauses(binder, switch_stmt.cases)
+      bind_case_clauses(binder, node, switch_stmt.cases)
     }
 
     // Return statement
@@ -705,13 +705,18 @@ fn bind_export_assignment(
 
 ///|
 /// Bind case clauses
-fn bind_case_clauses(binder : Binder, cases : Array[CaseClause]) -> Binder {
-  bind_case_clauses_aux(binder, cases, 0)
+fn bind_case_clauses(
+  binder : Binder,
+  switch_statement : Node,
+  cases : Array[CaseClause],
+) -> Binder {
+  bind_case_clauses_aux(binder, switch_statement, cases, 0)
 }
 
 ///|
 fn bind_case_clauses_aux(
   binder : Binder,
+  switch_statement : Node,
   cases : Array[CaseClause],
   index : Int,
 ) -> Binder {
@@ -719,6 +724,14 @@ fn bind_case_clauses_aux(
     binder
   } else {
     let case_clause = cases[index]
+
+    // Create switch clause flow node for this case
+    let binder = create_switch_clause_flow(
+      binder,
+      switch_statement,
+      index,
+      cases.length(),
+    )
 
     // Bind case expression if present
     let binder = match case_clause.expression {
@@ -729,7 +742,7 @@ fn bind_case_clauses_aux(
     // Bind case statements
     let binder = bind_statements(binder, case_clause.statements)
 
-    bind_case_clauses_aux(binder, cases, index + 1)
+    bind_case_clauses_aux(binder, switch_statement, cases, index + 1)
   }
 }
 
@@ -865,6 +878,29 @@ fn create_condition_flow(binder : Binder, expression : Node) -> Binder {
     ..binder,
     next_flow_id: flow_id,
     current_flow: Some(FlowNode::Condition(flow_condition)),
+  }
+}
+
+///|
+fn create_switch_clause_flow(
+  binder : Binder,
+  switch_statement : Node,
+  clause_start : Int,
+  clause_end : Int,
+) -> Binder {
+  let flow_id = binder.next_flow_id + 1
+  let antecedent = get_current_flow_id(binder)
+  let flow_switch_clause = FlowSwitchClause::{
+    switch_statement,
+    clause_start,
+    clause_end,
+    antecedent,
+    id: flow_id,
+  }
+  {
+    ..binder,
+    next_flow_id: flow_id,
+    current_flow: Some(FlowNode::SwitchClause(flow_switch_clause)),
   }
 }
 
