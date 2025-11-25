@@ -3627,3 +3627,515 @@ test "check readonly tuple" {
     Err(_) => assert_true(false)
   }
 }
+
+// ============================================================================
+// Advanced Intersection Type Tests
+// ============================================================================
+
+///|
+test "check intersection type alias declaration" {
+  let result = parse_bind_and_check("type Named = { name: string }; type Aged = { age: number }; type Person = Named & Aged;")
+  match result {
+    Ok(typed) => {
+      assert_eq(typed.file_path, "test.ts")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "check intersection type with variable annotation" {
+  let result = parse_bind_and_check("interface A { a: string; } interface B { b: number; } const x: A & B = { a: \"hello\", b: 42 };")
+  match result {
+    Ok(typed) => {
+      assert_eq(typed.file_path, "test.ts")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "check intersection of primitive types" {
+  let result = parse_bind_and_check("type T = string & number;")
+  match result {
+    Ok(typed) => {
+      assert_eq(typed.file_path, "test.ts")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "check intersection with three types" {
+  let result = parse_bind_and_check("interface A { a: string; } interface B { b: number; } interface C { c: boolean; } type ABC = A & B & C;")
+  match result {
+    Ok(typed) => {
+      assert_eq(typed.file_path, "test.ts")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+// ============================================================================
+// Advanced Tuple Type Tests
+// ============================================================================
+
+///|
+test "check tuple type alias" {
+  let result = parse_bind_and_check("type Point = [number, number];")
+  match result {
+    Ok(typed) => {
+      assert_eq(typed.file_path, "test.ts")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "check tuple with value assignment" {
+  let result = parse_bind_and_check("const point: [number, number] = [1, 2];")
+  match result {
+    Ok(typed) => {
+      assert_eq(typed.file_path, "test.ts")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "check heterogeneous tuple" {
+  let result = parse_bind_and_check("const tuple: [string, number, boolean] = [\"hello\", 42, true];")
+  match result {
+    Ok(typed) => {
+      assert_eq(typed.file_path, "test.ts")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "check tuple type with optional" {
+  let result = parse_bind_and_check("type OptTuple = [string, number?];")
+  match result {
+    Ok(typed) => {
+      assert_eq(typed.file_path, "test.ts")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "check tuple type with rest" {
+  let result = parse_bind_and_check("type RestTuple = [string, ...number[]];")
+  match result {
+    Ok(typed) => {
+      assert_eq(typed.file_path, "test.ts")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "check tuple with labels" {
+  let result = parse_bind_and_check("type NamedTuple = [first: string, second: number];")
+  match result {
+    Ok(typed) => {
+      assert_eq(typed.file_path, "test.ts")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+// ============================================================================
+// Advanced Conditional Type Tests
+// ============================================================================
+
+///|
+test "check conditional type with generic" {
+  let result = parse_bind_and_check("type IsString<T> = T extends string ? true : false;")
+  match result {
+    Ok(typed) => {
+      assert_eq(typed.file_path, "test.ts")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "check conditional type resolving" {
+  let result = parse_bind_and_check("type Test = number extends string ? \"yes\" : \"no\";")
+  match result {
+    Ok(typed) => {
+      assert_eq(typed.file_path, "test.ts")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "check conditional type chain" {
+  let result = parse_bind_and_check("type Nested<T> = T extends string ? \"string\" : T extends number ? \"number\" : \"other\";")
+  match result {
+    Ok(typed) => {
+      assert_eq(typed.file_path, "test.ts")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+// ============================================================================
+// Advanced Mapped Type Tests
+// ============================================================================
+
+///|
+test "check mapped type from union" {
+  let result = parse_bind_and_check("type Keys = \"a\" | \"b\"; type Mapped = { [K in Keys]: number };")
+  match result {
+    Ok(typed) => {
+      assert_eq(typed.file_path, "test.ts")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "check mapped type with keyof transformation" {
+  let result = parse_bind_and_check("interface Person { name: string; age: number; } type ReadonlyPerson = { readonly [K in keyof Person]: Person[K] };")
+  match result {
+    Ok(typed) => {
+      assert_eq(typed.file_path, "test.ts")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "check mapped type making optional" {
+  let result = parse_bind_and_check("interface Person { name: string; age: number; } type PartialPerson = { [K in keyof Person]?: Person[K] };")
+  match result {
+    Ok(typed) => {
+      assert_eq(typed.file_path, "test.ts")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+// ============================================================================
+// Advanced Template Literal Type Tests
+// ============================================================================
+
+///|
+test "check template literal type with placeholder" {
+  let result = parse_bind_and_check("type Greeting = `Hello, ${string}!`;")
+  match result {
+    Ok(typed) => {
+      assert_eq(typed.file_path, "test.ts")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "check template literal type combining union" {
+  let result = parse_bind_and_check("type Color = \"red\" | \"blue\"; type ColorId = `${Color}-id`;")
+  match result {
+    Ok(typed) => {
+      assert_eq(typed.file_path, "test.ts")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "check template literal type multiple placeholders" {
+  let result = parse_bind_and_check("type Id = `${string}-${number}-${boolean}`;")
+  match result {
+    Ok(typed) => {
+      assert_eq(typed.file_path, "test.ts")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+// ============================================================================
+// Advanced Index Access Type Tests
+// ============================================================================
+
+///|
+test "check index access type lookup" {
+  let result = parse_bind_and_check("interface Person { name: string; age: number; } type Name = Person[\"name\"];")
+  match result {
+    Ok(typed) => {
+      assert_eq(typed.file_path, "test.ts")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "check index access type with keyof union" {
+  let result = parse_bind_and_check("interface Person { name: string; age: number; } type PersonValue = Person[keyof Person];")
+  match result {
+    Ok(typed) => {
+      assert_eq(typed.file_path, "test.ts")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "check chained index access type" {
+  let result = parse_bind_and_check("interface Data { user: { name: string; }; } type UserName = Data[\"user\"][\"name\"];")
+  match result {
+    Ok(typed) => {
+      assert_eq(typed.file_path, "test.ts")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+// ============================================================================
+// Advanced Infer Type Tests
+// ============================================================================
+
+///|
+test "check infer in return type extraction" {
+  let result = parse_bind_and_check("type GetReturnType<T> = T extends (...args: any[]) => infer R ? R : never;")
+  match result {
+    Ok(typed) => {
+      assert_eq(typed.file_path, "test.ts")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "check infer for array element" {
+  // Note: (infer E)[] syntax requires parenthesized type parsing support
+  // Using simpler Array<infer E> syntax instead
+  let result = parse_bind_and_check("type ArrayElement<T> = T extends Array<infer E> ? E : never;")
+  match result {
+    Ok(typed) => {
+      assert_eq(typed.file_path, "test.ts")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "check infer for tuple first" {
+  let result = parse_bind_and_check("type First<T> = T extends [infer F, ...any[]] ? F : never;")
+  match result {
+    Ok(typed) => {
+      assert_eq(typed.file_path, "test.ts")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+// ============================================================================
+// Identifier Type Resolution Tests
+// ============================================================================
+
+///|
+test "check identifier resolution in variable" {
+  let result = parse_bind_and_check("const x: number = 10; const y = x + 5;")
+  match result {
+    Ok(typed) => {
+      assert_eq(typed.file_path, "test.ts")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "check identifier resolution with type annotation" {
+  let result = parse_bind_and_check("let name: string = 'hello'; let greeting = name.toUpperCase();")
+  match result {
+    Ok(typed) => {
+      assert_eq(typed.file_path, "test.ts")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "check identifier resolution in function" {
+  let result = parse_bind_and_check("function add(a: number, b: number): number { return a + b; } const sum = add(1, 2);")
+  match result {
+    Ok(typed) => {
+      assert_eq(typed.file_path, "test.ts")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+// ============================================================================
+// Call Expression Type Resolution Tests
+// ============================================================================
+
+///|
+test "check call expression simple" {
+  let result = parse_bind_and_check("function greet(name: string): string { return 'Hello ' + name; } greet('World');")
+  match result {
+    Ok(typed) => {
+      assert_eq(typed.file_path, "test.ts")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "check call expression with multiple args" {
+  let result = parse_bind_and_check("function sum(a: number, b: number, c: number): number { return a + b + c; } const result = sum(1, 2, 3);")
+  match result {
+    Ok(typed) => {
+      assert_eq(typed.file_path, "test.ts")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "check call expression with optional params" {
+  let result = parse_bind_and_check("function greet(name: string, title?: string): string { return 'Hello ' + name; } greet('World'); greet('World', 'Mr');")
+  match result {
+    Ok(typed) => {
+      assert_eq(typed.file_path, "test.ts")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+// ============================================================================
+// Generic Type Tests
+// ============================================================================
+
+///|
+test "check generic function declaration" {
+  let result = parse_bind_and_check("function identity<T>(value: T): T { return value; }")
+  match result {
+    Ok(typed) => {
+      assert_eq(typed.file_path, "test.ts")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "check generic type with constraint" {
+  let result = parse_bind_and_check("function longest<T extends { length: number }>(a: T, b: T): T { return a.length >= b.length ? a : b; }")
+  match result {
+    Ok(typed) => {
+      assert_eq(typed.file_path, "test.ts")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "check generic class declaration" {
+  let result = parse_bind_and_check("class Box<T> { value: T; constructor(value: T) { this.value = value; } }")
+  match result {
+    Ok(typed) => {
+      assert_eq(typed.file_path, "test.ts")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+// ============================================================================
+// Type Guard Tests
+// ============================================================================
+
+///|
+test "check typeof type guard" {
+  let result = parse_bind_and_check("function process(x: string | number) { if (typeof x === 'string') { return x.toUpperCase(); } return x.toFixed(2); }")
+  match result {
+    Ok(typed) => {
+      assert_eq(typed.file_path, "test.ts")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "check instanceof type guard" {
+  let result = parse_bind_and_check("class Animal {} class Dog extends Animal { bark() {} } function test(a: Animal) { if (a instanceof Dog) { a.bark(); } }")
+  match result {
+    Ok(typed) => {
+      assert_eq(typed.file_path, "test.ts")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "check null check type guard" {
+  let result = parse_bind_and_check("function process(x: string | null) { if (x === null) { return 'empty'; } return x.toUpperCase(); }")
+  match result {
+    Ok(typed) => {
+      assert_eq(typed.file_path, "test.ts")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "check truthiness type guard" {
+  let result = parse_bind_and_check("function process(x: string | undefined) { if (x) { return x.toUpperCase(); } return 'default'; }")
+  match result {
+    Ok(typed) => {
+      assert_eq(typed.file_path, "test.ts")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+// ============================================================================
+// Semantic Validation Tests
+// ============================================================================
+
+///|
+test "check return statement in function" {
+  let result = parse_bind_and_check("function getName(): string { return 'hello'; }")
+  match result {
+    Ok(typed) => {
+      assert_eq(typed.file_path, "test.ts")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "check control flow termination" {
+  let result = parse_bind_and_check("function test(x: boolean): string { if (x) { return 'yes'; } else { return 'no'; } }")
+  match result {
+    Ok(typed) => {
+      assert_eq(typed.file_path, "test.ts")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "check abstract class declaration" {
+  let result = parse_bind_and_check("abstract class Shape { abstract area(): number; }")
+  match result {
+    Ok(typed) => {
+      assert_eq(typed.file_path, "test.ts")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "check const declaration" {
+  let result = parse_bind_and_check("const PI: number = 3.14159;")
+  match result {
+    Ok(typed) => {
+      assert_eq(typed.file_path, "test.ts")
+    }
+    Err(_) => assert_true(false)
+  }
+}

@@ -36,6 +36,27 @@ pub enum Type {
   // Type references
   TypeReference(TypeReferenceType)
 
+  // Intersection types (A & B)
+  Intersection(CheckerIntersectionType)
+
+  // Tuple types ([T1, T2, T3])
+  Tuple(CheckerTupleType)
+
+  // Conditional types (T extends U ? X : Y)
+  Conditional(CheckerConditionalType)
+
+  // Mapped types ({ [K in keyof T]: T[K] })
+  Mapped(CheckerMappedType)
+
+  // Template literal types (`${string}-${number}`)
+  TemplateLiteral(CheckerTemplateLiteralType)
+
+  // Index access types (T[K])
+  IndexAccess(CheckerIndexAccessType)
+
+  // Infer types (infer R)
+  Infer(CheckerInferType)
+
   // Error type (for type errors)
   Error(TypeInfo)
 } derive(Show)
@@ -140,6 +161,96 @@ pub struct TypeReferenceType {
   name : String
   type_arguments : Array[Type]
   info : TypeInfo
+} derive(Show)
+
+///|
+/// Intersection type info (A & B)
+pub struct CheckerIntersectionType {
+  types : Array[Type]
+  info : TypeInfo
+} derive(Show)
+
+///|
+/// Tuple type info ([T1, T2, T3])
+pub struct CheckerTupleType {
+  element_types : Array[TupleElement]
+  info : TypeInfo
+} derive(Show)
+
+///|
+/// Tuple element (can be optional or rest)
+pub struct TupleElement {
+  element_type : Type
+  is_optional : Bool
+  is_rest : Bool
+  label : String? // Named tuple elements
+} derive(Show)
+
+///|
+/// Conditional type info (T extends U ? X : Y)
+pub struct CheckerConditionalType {
+  check_type : Type
+  extends_type : Type
+  true_type : Type
+  false_type : Type
+  info : TypeInfo
+} derive(Show)
+
+///|
+/// Mapped type info ({ [K in keyof T]: T[K] })
+pub struct CheckerMappedType {
+  type_parameter : CheckerTypeParameter
+  name_type : Type? // For key remapping: as NewKey
+  template_type : Type
+  readonly_modifier : MappedModifier
+  optional_modifier : MappedModifier
+  info : TypeInfo
+} derive(Show)
+
+///|
+/// Modifier for mapped types (+, -, or none)
+pub enum MappedModifier {
+  Unchanged // No modifier
+  Add // +readonly, +?
+  Remove // -readonly, -?
+} derive(Show, Eq)
+
+///|
+/// Template literal type info (`${string}-${number}`)
+pub struct CheckerTemplateLiteralType {
+  texts : Array[String] // Static text parts
+  types : Array[Type] // Interpolated types
+  info : TypeInfo
+} derive(Show)
+
+///|
+/// Index access type info (T[K])
+pub struct CheckerIndexAccessType {
+  object_type : Type
+  index_type : Type
+  info : TypeInfo
+} derive(Show)
+
+///|
+/// Infer type placeholder (infer R)
+pub struct CheckerInferType {
+  type_parameter_name : String
+  info : TypeInfo
+} derive(Show)
+
+///|
+/// Type narrowing information for a variable
+pub struct NarrowedType {
+  original_type : Type
+  narrowed_type : Type
+} derive(Show)
+
+///|
+/// Type guard information
+pub struct TypeGuardInfo {
+  parameter_name : String
+  type_when_true : Type?
+  type_when_false : Type?
 } derive(Show)
 
 ///|
@@ -458,14 +569,300 @@ fn infer_type(checker : TypeChecker, expr : Node) -> (Type, TypeChecker) {
 }
 
 ///|
-/// Infer identifier type
+/// Infer identifier type by looking up symbol in scope chain
 fn infer_identifier_type(
   checker : TypeChecker,
   id : Identifier,
 ) -> (Type, TypeChecker) {
-  // TODO: Look up symbol in scope and get its type
-  // For now, return any type
-  any_type(checker)
+  // Look up symbol in scope chain
+  match lookup_symbol(checker, id.name) {
+    Some(symbol) => {
+      // Get type from symbol
+      match get_symbol_type(checker, symbol) {
+        (Some(t), c) => (t, c)
+        (None, c) => {
+          // Symbol exists but type not yet computed - infer from declaration
+          infer_symbol_type(c, symbol)
+        }
+      }
+    }
+    None => {
+      // Undeclared identifier - return any type without error
+      // (error would be too strict for current implementation)
+      any_type(checker)
+    }
+  }
+}
+
+///|
+/// Get cached type for a symbol
+fn get_symbol_type(checker : TypeChecker, symbol : Symbol) -> (Type?, TypeChecker) {
+  match checker.symbol_types.get(symbol.id) {
+    Some(t) => (Some(t), checker)
+    None => (None, checker)
+  }
+}
+
+///|
+/// Infer type from symbol's declaration
+fn infer_symbol_type(
+  checker : TypeChecker,
+  symbol : Symbol,
+) -> (Type, TypeChecker) {
+  match symbol.value_declaration {
+    Some(node) => infer_declaration_type(checker, node, symbol)
+    None => any_type(checker)
+  }
+}
+
+///|
+/// Infer type from a declaration node
+fn infer_declaration_type(
+  checker : TypeChecker,
+  node : Node,
+  symbol : Symbol,
+) -> (Type, TypeChecker) {
+  match node {
+    VariableStatement(var_stmt) => {
+      // Get the first declaration from the statement
+      if var_stmt.declarations.is_empty() {
+        return any_type(checker)
+      }
+      let var_decl = var_stmt.declarations[0]
+      // Check for explicit type annotation first
+      match var_decl.type_annotation {
+        Some(type_node) => {
+          match get_type_from_type_node(checker, type_node) {
+            (Some(t), c) => {
+              // Cache the type for future lookups
+              let new_symbol_types = c.symbol_types
+              new_symbol_types.set(symbol.id, t)
+              (t, { ..c, symbol_types: new_symbol_types })
+            }
+            (None, c) => infer_from_initializer(c, var_decl.initializer, symbol)
+          }
+        }
+        None => infer_from_initializer(checker, var_decl.initializer, symbol)
+      }
+    }
+    FunctionDeclaration(func_decl) => infer_function_declaration_type(checker, func_decl, symbol)
+    ClassDeclaration(class_decl) => infer_class_declaration_type(checker, class_decl, symbol)
+    Parameter(param) => infer_parameter_type(checker, param, symbol)
+    _ => any_type(checker)
+  }
+}
+
+///|
+/// Infer type from initializer expression
+fn infer_from_initializer(
+  checker : TypeChecker,
+  initializer : Node?,
+  symbol : Symbol,
+) -> (Type, TypeChecker) {
+  match initializer {
+    Some(init) => {
+      let (t, c) = infer_type(checker, init)
+      // Cache the type
+      let new_symbol_types = c.symbol_types
+      new_symbol_types.set(symbol.id, t)
+      (t, { ..c, symbol_types: new_symbol_types })
+    }
+    None => any_type(checker)
+  }
+}
+
+///|
+/// Infer type from function declaration
+fn infer_function_declaration_type(
+  checker : TypeChecker,
+  func : FunctionDeclaration,
+  symbol : Symbol,
+) -> (Type, TypeChecker) {
+  // Build parameter list
+  let parameters : Array[CheckerParameter] = []
+  let mut checker = checker
+
+  for param_node in func.parameters {
+    match param_node {
+      Parameter(p) => {
+        let (param_type, c) = match p.type_annotation {
+          Some(type_node) => {
+            match get_type_from_type_node(checker, type_node) {
+              (Some(t), c2) => (t, c2)
+              (None, c2) => any_type(c2)
+            }
+          }
+          None => any_type(checker)
+        }
+        checker = c
+        parameters.push({
+          name: get_parameter_name(p.name),
+          param_type,
+          is_optional: p.is_optional,
+          is_rest: p.is_rest,
+        })
+      }
+      _ => ()
+    }
+  }
+
+  // Get return type
+  let (return_type, checker) = match func.return_type {
+    Some(type_node) => {
+      match get_type_from_type_node(checker, type_node) {
+        (Some(t), c) => (t, c)
+        (None, c) => any_type(c)
+      }
+    }
+    None => any_type(checker)
+  }
+
+  let (info, checker) = create_type_info(checker)
+  let func_type = Type::Function({ parameters, return_type, info })
+
+  // Cache the type
+  let new_symbol_types = checker.symbol_types
+  new_symbol_types.set(symbol.id, func_type)
+  (func_type, { ..checker, symbol_types: new_symbol_types })
+}
+
+///|
+/// Infer type from class declaration
+fn infer_class_declaration_type(
+  checker : TypeChecker,
+  class_decl : ClassDeclaration,
+  symbol : Symbol,
+) -> (Type, TypeChecker) {
+  // Build object type for the class instance
+  let properties : Map[String, PropertySignature] = Map::new()
+  let mut checker = checker
+
+  for class_member in class_decl.members {
+    match class_member {
+      PropertyDeclaration(prop) => {
+        let (prop_type, c) = match prop.type_annotation {
+          Some(type_node) => {
+            match get_type_from_type_node(checker, type_node) {
+              (Some(t), c2) => (t, c2)
+              (None, c2) => any_type(c2)
+            }
+          }
+          None => {
+            match prop.initializer {
+              Some(init) => infer_type(checker, init)
+              None => any_type(checker)
+            }
+          }
+        }
+        checker = c
+        // Check if property has readonly modifier
+        let has_readonly = has_modifier(prop.modifiers, Modifier::Readonly)
+        properties.set(prop.name, {
+          name: prop.name,
+          prop_type,
+          is_optional: false,
+          is_readonly: has_readonly,
+        })
+      }
+      MethodDeclaration(method_decl) => {
+        let (method_type, c) = infer_method_type(checker, method_decl)
+        checker = c
+        properties.set(method_decl.name, {
+          name: method_decl.name,
+          prop_type: method_type,
+          is_optional: false,
+          is_readonly: false,
+        })
+      }
+      _ => ()
+    }
+  }
+
+  let (info, checker) = create_type_info(checker)
+  let class_type = Type::Object({
+    properties,
+    call_signatures: [],
+    construct_signatures: [],
+    index_signatures: [],
+    info,
+  })
+
+  // Cache the type
+  let new_symbol_types = checker.symbol_types
+  new_symbol_types.set(symbol.id, class_type)
+  (class_type, { ..checker, symbol_types: new_symbol_types })
+}
+
+///|
+/// Infer type from method declaration
+fn infer_method_type(
+  checker : TypeChecker,
+  method_decl : MethodDeclaration,
+) -> (Type, TypeChecker) {
+  // Build parameter list
+  let parameters : Array[CheckerParameter] = []
+  let mut checker = checker
+
+  for param_node in method_decl.parameters {
+    match param_node {
+      Parameter(p) => {
+        let (param_type, c) = match p.type_annotation {
+          Some(type_node) => {
+            match get_type_from_type_node(checker, type_node) {
+              (Some(t), c2) => (t, c2)
+              (None, c2) => any_type(c2)
+            }
+          }
+          None => any_type(checker)
+        }
+        checker = c
+        parameters.push({
+          name: get_parameter_name(p.name),
+          param_type,
+          is_optional: p.is_optional,
+          is_rest: p.is_rest,
+        })
+      }
+      _ => ()
+    }
+  }
+
+  // Get return type
+  let (return_type, checker) = match method_decl.return_type {
+    Some(type_node) => {
+      match get_type_from_type_node(checker, type_node) {
+        (Some(t), c) => (t, c)
+        (None, c) => any_type(c)
+      }
+    }
+    None => any_type(checker)
+  }
+
+  let (info, checker) = create_type_info(checker)
+  (Type::Function({ parameters, return_type, info }), checker)
+}
+
+///|
+/// Infer type from parameter
+fn infer_parameter_type(
+  checker : TypeChecker,
+  param : Parameter,
+  symbol : Symbol,
+) -> (Type, TypeChecker) {
+  let (param_type, checker) = match param.type_annotation {
+    Some(type_node) => {
+      match get_type_from_type_node(checker, type_node) {
+        (Some(t), c) => (t, c)
+        (None, c) => any_type(c)
+      }
+    }
+    None => any_type(checker)
+  }
+
+  // Cache the type
+  let new_symbol_types = checker.symbol_types
+  new_symbol_types.set(symbol.id, param_type)
+  (param_type, { ..checker, symbol_types: new_symbol_types })
 }
 
 ///|
@@ -616,22 +1013,870 @@ fn infer_unary_expression_type(
 }
 
 ///|
-/// Infer call expression type
+/// Infer call expression type with signature matching
 fn infer_call_expression_type(
   checker : TypeChecker,
   call : CallExpression,
 ) -> (Type, TypeChecker) {
   let (func_type, checker) = infer_type(checker, call.expression)
 
-  // Check arguments
+  // Infer argument types
   let mut checker = checker
+  let arg_types : Array[Type] = []
   for i = 0; i < call.arguments.length(); i = i + 1 {
-    let (_, c) = infer_type(checker, call.arguments[i])
+    let (arg_type, c) = infer_type(checker, call.arguments[i])
+    arg_types.push(arg_type)
     checker = c
   }
 
-  // TODO: Check function signature and return appropriate type
-  any_type(checker)
+  // Get call signatures from function type
+  let signatures = get_call_signatures(func_type)
+
+  if signatures.is_empty() {
+    // Try to infer from Function type directly
+    match func_type {
+      Type::Function(func) => {
+        // Return the function's return type
+        (func.return_type, checker)
+      }
+      Any(_) => {
+        // Any is callable and returns any
+        any_type(checker)
+      }
+      _ => {
+        // Not callable - return any for now (could add diagnostic)
+        any_type(checker)
+      }
+    }
+  } else {
+    // Resolve which overload matches
+    match resolve_call_overload(checker, signatures, arg_types) {
+      Some((return_type, c)) => (return_type, c)
+      None => {
+        // No overload matches - return any for now
+        any_type(checker)
+      }
+    }
+  }
+}
+
+///|
+/// Get call signatures from a type
+fn get_call_signatures(t : Type) -> Array[CheckerSignature] {
+  match t {
+    Type::Function(func) => {
+      let result : Array[CheckerSignature] = []
+      result.push({
+        parameters: func.parameters,
+        return_type: func.return_type,
+        type_parameters: [],
+      })
+      result
+    }
+    Type::Object(obj) => obj.call_signatures
+    Union(union) => {
+      // Collect signatures from union members
+      let result : Array[CheckerSignature] = []
+      for union_member in union.types {
+        let member_sigs = get_call_signatures(union_member)
+        for sig in member_sigs {
+          result.push(sig)
+        }
+      }
+      result
+    }
+    _ => []
+  }
+}
+
+///|
+/// Resolve which overload matches the call
+fn resolve_call_overload(
+  checker : TypeChecker,
+  signatures : Array[CheckerSignature],
+  arg_types : Array[Type],
+) -> (Type, TypeChecker)? {
+  // Try each signature in order
+  for sig in signatures {
+    match try_signature(checker, sig, arg_types) {
+      Some((return_type, c)) => return Some((return_type, c))
+      None => continue
+    }
+  }
+  None
+}
+
+///|
+/// Try to apply a signature to arguments
+fn try_signature(
+  checker : TypeChecker,
+  signature : CheckerSignature,
+  arg_types : Array[Type],
+) -> (Type, TypeChecker)? {
+  // Check argument count
+  let min_params = count_required_params(signature.parameters)
+  let max_params = if has_rest_param(signature.parameters) {
+    9999 // Large number to represent unlimited params for rest
+  } else {
+    signature.parameters.length()
+  }
+
+  if arg_types.length() < min_params || arg_types.length() > max_params {
+    return None
+  }
+
+  // Check each argument against corresponding parameter type
+  for i = 0; i < arg_types.length(); i = i + 1 {
+    let param_idx = if i < signature.parameters.length() {
+      i
+    } else {
+      signature.parameters.length() - 1
+    }
+    let param_type = signature.parameters[param_idx].param_type
+    if not(is_assignable(arg_types[i], param_type)) {
+      return None
+    }
+  }
+
+  Some((signature.return_type, checker))
+}
+
+///|
+/// Count required parameters (non-optional, non-rest)
+fn count_required_params(params : Array[CheckerParameter]) -> Int {
+  let mut count = 0
+  for param in params {
+    if not(param.is_optional) && not(param.is_rest) {
+      count = count + 1
+    }
+  }
+  count
+}
+
+///|
+/// Check if signature has a rest parameter
+fn has_rest_param(params : Array[CheckerParameter]) -> Bool {
+  if params.is_empty() {
+    return false
+  }
+  params[params.length() - 1].is_rest
+}
+
+// ============================================================================
+// Generic Type Instantiation and Constraint Checking
+// ============================================================================
+
+///|
+/// Substitute type parameters with actual type arguments
+fn substitute_type_parameters(
+  checker : TypeChecker,
+  target_type : Type,
+  type_params : Array[CheckerTypeParameter],
+  type_args : Array[Type],
+) -> (Type, TypeChecker) {
+  // Build substitution map
+  let substitutions : Map[String, Type] = Map::new()
+  for i = 0; i < type_params.length(); i = i + 1 {
+    if i < type_args.length() {
+      substitutions.set(type_params[i].name, type_args[i])
+    } else {
+      // Use default type if available
+      match type_params[i].default_type {
+        Some(default_t) => substitutions.set(type_params[i].name, default_t)
+        None => () // Missing type argument
+      }
+    }
+  }
+
+  // Recursively substitute
+  substitute_in_type(checker, target_type, substitutions)
+}
+
+///|
+/// Recursively substitute type parameters in a type
+fn substitute_in_type(
+  checker : TypeChecker,
+  t : Type,
+  substitutions : Map[String, Type],
+) -> (Type, TypeChecker) {
+  match t {
+    TypeReference(type_ref) => {
+      // Check if this is a type parameter
+      match substitutions.get(type_ref.name) {
+        Some(substituted) => (substituted, checker)
+        None => {
+          // Substitute in type arguments
+          let mut checker = checker
+          let new_args : Array[Type] = []
+          for arg in type_ref.type_arguments {
+            let (new_arg, c) = substitute_in_type(checker, arg, substitutions)
+            new_args.push(new_arg)
+            checker = c
+          }
+          let (info, checker) = create_type_info(checker)
+          (TypeReference({ name: type_ref.name, type_arguments: new_args, info }), checker)
+        }
+      }
+    }
+    Type::Function(func) => {
+      // Substitute in parameters and return type
+      let mut checker = checker
+      let new_params : Array[CheckerParameter] = []
+      for param in func.parameters {
+        let (new_type, c) = substitute_in_type(checker, param.param_type, substitutions)
+        checker = c
+        new_params.push({
+          name: param.name,
+          param_type: new_type,
+          is_optional: param.is_optional,
+          is_rest: param.is_rest,
+        })
+      }
+      let (new_return, checker) = substitute_in_type(checker, func.return_type, substitutions)
+      let (info, checker) = create_type_info(checker)
+      (Type::Function({ parameters: new_params, return_type: new_return, info }), checker)
+    }
+    Type::Array(arr) => {
+      let (new_elem, checker) = substitute_in_type(checker, arr.element_type, substitutions)
+      let (info, checker) = create_type_info(checker)
+      (Type::Array({ element_type: new_elem, info }), checker)
+    }
+    Union(union) => {
+      let mut checker = checker
+      let new_types : Array[Type] = []
+      for union_member in union.types {
+        let (new_member, c) = substitute_in_type(checker, union_member, substitutions)
+        new_types.push(new_member)
+        checker = c
+      }
+      let (info, checker) = create_type_info(checker)
+      (Union({ types: new_types, info }), checker)
+    }
+    Type::Object(obj) => {
+      let mut checker = checker
+      let new_props : Map[String, PropertySignature] = Map::new()
+      for entry in obj.properties {
+        let (name, prop) = entry
+        let (new_type, c) = substitute_in_type(checker, prop.prop_type, substitutions)
+        checker = c
+        new_props.set(name, {
+          name: prop.name,
+          prop_type: new_type,
+          is_optional: prop.is_optional,
+          is_readonly: prop.is_readonly,
+        })
+      }
+      let (info, checker) = create_type_info(checker)
+      (Type::Object({
+        properties: new_props,
+        call_signatures: obj.call_signatures,
+        construct_signatures: obj.construct_signatures,
+        index_signatures: obj.index_signatures,
+        info,
+      }), checker)
+    }
+    _ => (t, checker) // Primitives don't need substitution
+  }
+}
+
+///|
+/// Check that type argument satisfies constraint
+fn check_type_constraint(
+  checker : TypeChecker,
+  type_arg : Type,
+  constraint : Type,
+  location : SourceLocation,
+) -> TypeChecker {
+  if not(is_assignable(type_arg, constraint)) {
+    add_diagnostic(
+      checker,
+      "Type does not satisfy the constraint",
+      location,
+      2344,
+    )
+  } else {
+    checker
+  }
+}
+
+///|
+/// Check all type arguments against their constraints
+fn check_type_arguments(
+  checker : TypeChecker,
+  type_params : Array[CheckerTypeParameter],
+  type_args : Array[Type],
+  location : SourceLocation,
+) -> TypeChecker {
+  let mut checker = checker
+
+  // Check arity
+  let min_required = count_required_type_params(type_params)
+  if type_args.length() < min_required {
+    checker = add_diagnostic(
+      checker,
+      "Generic type requires more type arguments",
+      location,
+      2314,
+    )
+  }
+  if type_args.length() > type_params.length() {
+    checker = add_diagnostic(
+      checker,
+      "Too many type arguments provided",
+      location,
+      2558,
+    )
+  }
+
+  // Check constraints
+  for i = 0; i < type_args.length() && i < type_params.length(); i = i + 1 {
+    match type_params[i].constraint {
+      Some(constraint) => {
+        checker = check_type_constraint(checker, type_args[i], constraint, location)
+      }
+      None => ()
+    }
+  }
+
+  checker
+}
+
+///|
+/// Count required type parameters (those without defaults)
+fn count_required_type_params(type_params : Array[CheckerTypeParameter]) -> Int {
+  let mut count = 0
+  for param in type_params {
+    if param.default_type.is_none() {
+      count = count + 1
+    }
+  }
+  count
+}
+
+///|
+/// Infer type arguments from call arguments
+fn infer_type_arguments(
+  checker : TypeChecker,
+  type_params : Array[CheckerTypeParameter],
+  param_types : Array[Type],
+  arg_types : Array[Type],
+) -> (Array[Type], TypeChecker) {
+  // Build inference context - maps type param names to candidate types
+  let inferences : Map[String, Array[Type]] = Map::new()
+  for param in type_params {
+    inferences.set(param.name, [])
+  }
+
+  // Collect inferences from argument positions
+  for i = 0; i < param_types.length() && i < arg_types.length(); i = i + 1 {
+    infer_from_types(arg_types[i], param_types[i], inferences)
+  }
+
+  let mut checker = checker
+
+  // Resolve inferences
+  let result : Array[Type] = []
+  for param in type_params {
+    match inferences.get(param.name) {
+      Some(candidates) => {
+        if not(candidates.is_empty()) {
+          // Use first candidate (could use best common type)
+          result.push(candidates[0])
+        } else {
+          // Use constraint or default
+          match param.default_type {
+            Some(default_t) => result.push(default_t)
+            None => {
+              match param.constraint {
+                Some(constraint) => result.push(constraint)
+                None => {
+                  let (t, c) = any_type(checker)
+                  result.push(t)
+                  checker = c
+                }
+              }
+            }
+          }
+        }
+      }
+      None => {
+        let (t, c) = any_type(checker)
+        result.push(t)
+        checker = c
+      }
+    }
+  }
+
+  (result, checker)
+}
+
+///|
+/// Infer type parameter from source to target type
+fn infer_from_types(
+  source : Type,
+  target : Type,
+  inferences : Map[String, Array[Type]],
+) -> Unit {
+  match target {
+    TypeReference(type_ref) => {
+      // Check if target is a type parameter we're inferring
+      match inferences.get(type_ref.name) {
+        Some(candidates) => candidates.push(source)
+        None => {
+          // Not a type parameter - recurse into type arguments
+          match source {
+            TypeReference(source_ref) => {
+              for i = 0; i < type_ref.type_arguments.length() && i < source_ref.type_arguments.length(); i = i + 1 {
+                infer_from_types(
+                  source_ref.type_arguments[i],
+                  type_ref.type_arguments[i],
+                  inferences,
+                )
+              }
+            }
+            _ => ()
+          }
+        }
+      }
+    }
+    Type::Array(arr) => {
+      match source {
+        Type::Array(source_arr) => {
+          infer_from_types(source_arr.element_type, arr.element_type, inferences)
+        }
+        _ => ()
+      }
+    }
+    Type::Function(func) => {
+      match source {
+        Type::Function(source_func) => {
+          // Infer from return type
+          infer_from_types(source_func.return_type, func.return_type, inferences)
+          // Infer from parameters (contravariant)
+          for i = 0; i < func.parameters.length() && i < source_func.parameters.length(); i = i + 1 {
+            infer_from_types(
+              func.parameters[i].param_type,
+              source_func.parameters[i].param_type,
+              inferences,
+            )
+          }
+        }
+        _ => ()
+      }
+    }
+    _ => ()
+  }
+}
+
+// ============================================================================
+// Type Guards and Narrowing
+// ============================================================================
+
+///|
+/// Check if expression is a type guard and extract guard info
+fn get_type_guard_info(
+  checker : TypeChecker,
+  expr : Node,
+) -> TypeGuardInfo? {
+  match expr {
+    // typeof x === "string"
+    BinaryExpression(bin) => get_binary_type_guard(checker, bin)
+    // Truthiness check (just identifier)
+    Identifier(id) => {
+      // Narrows out null and undefined
+      Some({
+        parameter_name: id.name,
+        type_when_true: None, // Remove null/undefined
+        type_when_false: None, // null | undefined
+      })
+    }
+    // !x (negation)
+    UnaryExpression(un) => {
+      match un.operator {
+        LogicalNot => {
+          // Flip the narrowing
+          match get_type_guard_info(checker, un.operand) {
+            Some(tg) => Some({
+              parameter_name: tg.parameter_name,
+              type_when_true: tg.type_when_false,
+              type_when_false: tg.type_when_true,
+            })
+            None => None
+          }
+        }
+        _ => None
+      }
+    }
+    _ => None
+  }
+}
+
+///|
+/// Get type guard from binary expression
+fn get_binary_type_guard(
+  checker : TypeChecker,
+  bin : BinaryExpression,
+) -> TypeGuardInfo? {
+  match bin.operator {
+    StrictEquals | Equals => {
+      // typeof x === "string" or x === null
+      match get_typeof_guard(checker, bin.left, bin.right) {
+        Some(tg) => Some(tg)
+        None => {
+          match get_typeof_guard(checker, bin.right, bin.left) {
+            Some(tg) => Some(tg)
+            None => {
+              match get_null_guard(bin.left, bin.right) {
+                Some(tg) => Some(tg)
+                None => get_null_guard(bin.right, bin.left)
+              }
+            }
+          }
+        }
+      }
+    }
+    StrictNotEquals | NotEquals => {
+      // typeof x !== "string" - flip the result
+      let maybe_typeof = match get_typeof_guard(checker, bin.left, bin.right) {
+        Some(tg) => Some(tg)
+        None => get_typeof_guard(checker, bin.right, bin.left)
+      }
+      match maybe_typeof {
+        Some(tg) => Some({
+          parameter_name: tg.parameter_name,
+          type_when_true: tg.type_when_false,
+          type_when_false: tg.type_when_true,
+        })
+        None => {
+          let maybe_null = match get_null_guard(bin.left, bin.right) {
+            Some(tg) => Some(tg)
+            None => get_null_guard(bin.right, bin.left)
+          }
+          match maybe_null {
+            Some(tg) => Some({
+              parameter_name: tg.parameter_name,
+              type_when_true: tg.type_when_false,
+              type_when_false: tg.type_when_true,
+            })
+            None => None
+          }
+        }
+      }
+    }
+    InstanceOf => {
+      // x instanceof Class
+      get_instanceof_guard(bin.left, bin.right)
+    }
+    _ => None
+  }
+}
+
+///|
+/// Get typeof guard: typeof x === "string"
+fn get_typeof_guard(
+  checker : TypeChecker,
+  left : Node,
+  right : Node,
+) -> TypeGuardInfo? {
+  match left {
+    UnaryExpression(un) => {
+      match un.operator {
+        TypeOf => {
+          match un.operand {
+            Identifier(id) => {
+              match right {
+                StringLiteral(s) => {
+                  let narrowed_type = typeof_string_to_type(checker, s.value)
+                  Some({
+                    parameter_name: id.name,
+                    type_when_true: narrowed_type,
+                    type_when_false: None,
+                  })
+                }
+                _ => None
+              }
+            }
+            _ => None
+          }
+        }
+        _ => None
+      }
+    }
+    _ => None
+  }
+}
+
+///|
+/// Get null guard: x === null
+fn get_null_guard(left : Node, right : Node) -> TypeGuardInfo? {
+  match (left, right) {
+    (Identifier(id), NullLiteral(_)) => {
+      Some({
+        parameter_name: id.name,
+        type_when_true: None, // Type is null
+        type_when_false: None, // Remove null from type
+      })
+    }
+    _ => None
+  }
+}
+
+///|
+/// Get instanceof guard: x instanceof Class
+fn get_instanceof_guard(left : Node, right : Node) -> TypeGuardInfo? {
+  match (left, right) {
+    (Identifier(id), Identifier(_)) => {
+      // Return guard info - actual type narrowing would require symbol lookup
+      Some({
+        parameter_name: id.name,
+        type_when_true: None, // Would be the class type
+        type_when_false: None,
+      })
+    }
+    _ => None
+  }
+}
+
+///|
+/// Convert typeof string to type
+fn typeof_string_to_type(checker : TypeChecker, s : String) -> Type? {
+  let (info, _) = create_type_info(checker)
+  match s {
+    "string" => Some(String(info))
+    "number" => Some(Number(info))
+    "boolean" => Some(Boolean(info))
+    "undefined" => Some(Undefined(info))
+    "object" => Some(Type::Object({
+      properties: Map::new(),
+      call_signatures: [],
+      construct_signatures: [],
+      index_signatures: [],
+      info,
+    }))
+    "function" => Some(Type::Function({
+      parameters: [],
+      return_type: Any(info),
+      info,
+    }))
+    "symbol" => Some(Symbol(info))
+    _ => None
+  }
+}
+
+///|
+/// Apply type narrowing based on type guard
+fn apply_type_narrowing(
+  original_type : Type,
+  type_guard_info : TypeGuardInfo,
+  is_true_branch : Bool,
+) -> Type {
+  let narrowed_type = if is_true_branch {
+    type_guard_info.type_when_true
+  } else {
+    type_guard_info.type_when_false
+  }
+  match narrowed_type {
+    Some(t) => t
+    None => original_type // No narrowing available
+  }
+}
+
+///|
+/// Narrow a union type by removing specified types
+fn narrow_union(union : CheckerUnionType, exclude_types : Array[Type]) -> Type {
+  let remaining : Array[Type] = []
+  for union_member in union.types {
+    let should_exclude = exclude_types.iter().any(fn(exclude) {
+      types_are_identical(union_member, exclude)
+    })
+    if not(should_exclude) {
+      remaining.push(union_member)
+    }
+  }
+  if remaining.length() == 1 {
+    remaining[0]
+  } else if remaining.is_empty() {
+    Never(union.info)
+  } else {
+    Union({ types: remaining, info: union.info })
+  }
+}
+
+///|
+/// Check if two types are identical
+fn types_are_identical(t1 : Type, t2 : Type) -> Bool {
+  match (t1, t2) {
+    (Any(_), Any(_)) => true
+    (Unknown(_), Unknown(_)) => true
+    (String(_), String(_)) => true
+    (Number(_), Number(_)) => true
+    (Boolean(_), Boolean(_)) => true
+    (Null(_), Null(_)) => true
+    (Undefined(_), Undefined(_)) => true
+    (Void(_), Void(_)) => true
+    (Never(_), Never(_)) => true
+    (Symbol(_), Symbol(_)) => true
+    _ => false // Simplified - full implementation would be more complex
+  }
+}
+
+// ============================================================================
+// Semantic Validation
+// ============================================================================
+
+///|
+/// Check for unreachable code in statement list
+fn check_unreachable_code(
+  checker : TypeChecker,
+  statements : Array[Node],
+) -> TypeChecker {
+  let mut checker = checker
+  let mut found_terminator = false
+
+  for stmt in statements {
+    if found_terminator {
+      checker = add_diagnostic(
+        checker,
+        "Unreachable code detected.",
+        get_node_location(stmt),
+        7027,
+      )
+      break
+    }
+
+    // Check if statement is a terminator
+    found_terminator = is_terminating_statement(stmt)
+  }
+
+  checker
+}
+
+///|
+/// Check if statement terminates control flow
+fn is_terminating_statement(stmt : Node) -> Bool {
+  match stmt {
+    ReturnStatement(_) => true
+    ThrowStatement(_) => true
+    BreakStatement(_) => true
+    ContinueStatement(_) => true
+    IfStatement(if_stmt) => {
+      // Both branches must terminate
+      let then_terminates = is_block_terminating(if_stmt.then_statement)
+      let else_terminates = match if_stmt.else_statement {
+        Some(else_stmt) => is_block_terminating(else_stmt)
+        None => false
+      }
+      then_terminates && else_terminates
+    }
+    _ => false
+  }
+}
+
+///|
+/// Check if block terminates
+fn is_block_terminating(stmt : Node) -> Bool {
+  match stmt {
+    BlockStatement(block) => {
+      if block.statements.is_empty() {
+        return false
+      }
+      is_terminating_statement(block.statements[block.statements.length() - 1])
+    }
+    _ => is_terminating_statement(stmt)
+  }
+}
+
+///|
+/// Check that abstract class cannot be instantiated
+fn check_abstract_instantiation(
+  checker : TypeChecker,
+  new_expr : NewExpression,
+  class_symbol : Symbol,
+) -> TypeChecker {
+  if class_symbol.flags.is_abstract {
+    add_diagnostic(
+      checker,
+      "Cannot create an instance of an abstract class.",
+      get_node_location(NewExpression(new_expr)),
+      2511,
+    )
+  } else {
+    checker
+  }
+}
+
+///|
+/// Check assignment to const variable
+fn check_const_assignment(
+  checker : TypeChecker,
+  var_name : String,
+  symbol : Symbol,
+  location : SourceLocation,
+) -> TypeChecker {
+  if symbol.flags.is_const {
+    add_diagnostic(
+      checker,
+      "Cannot assign to '" + var_name + "' because it is a constant.",
+      location,
+      2588,
+    )
+  } else {
+    checker
+  }
+}
+
+///|
+/// Validate function return statements
+fn check_return_type_consistency(
+  checker : TypeChecker,
+  func : FunctionDeclaration,
+  declared_return : Type,
+) -> TypeChecker {
+  let mut checker = checker
+
+  // Walk the function body and check all return statements
+  match func.body {
+    Some(BlockStatement(block)) => {
+      for stmt in block.statements {
+        match stmt {
+          ReturnStatement(ret) => {
+            match ret.expression {
+              Some(expr) => {
+                let (return_type, c) = infer_type(checker, expr)
+                checker = c
+                if not(is_assignable(return_type, declared_return)) {
+                  checker = add_diagnostic(
+                    checker,
+                    "Type is not assignable to the declared return type.",
+                    get_node_location(expr),
+                    2322,
+                  )
+                }
+              }
+              None => {
+                // void return - check if compatible
+                match declared_return {
+                  Void(_) | Any(_) => ()
+                  _ => {
+                    checker = add_diagnostic(
+                      checker,
+                      "A function whose declared return type is not void must return a value.",
+                      ret.location,
+                      2355,
+                    )
+                  }
+                }
+              }
+            }
+          }
+          _ => ()
+        }
+      }
+    }
+    _ => ()
+  }
+
+  checker
 }
 
 ///|
@@ -1089,8 +2334,100 @@ fn is_assignable(source : Type, target : Type) -> Bool {
     // Function types - check parameter and return types
     (Function(source_fn), Function(target_fn)) =>
       is_function_assignable(source_fn, target_fn)
+    // Intersection type assignability - source must be assignable to ALL members
+    (source, Intersection(intersection)) =>
+      is_assignable_to_intersection(source, intersection)
+    // Intersection source is assignable if merged type is assignable
+    (Intersection(intersection), target) =>
+      is_intersection_assignable_to(intersection, target)
+    // Tuple types
+    (Tuple(source_tuple), Tuple(target_tuple)) =>
+      is_tuple_assignable(source_tuple, target_tuple)
+    // Tuple is assignable to array if all elements are assignable to element type
+    (Tuple(source_tuple), Array(target_arr)) =>
+      is_tuple_assignable_to_array(source_tuple, target_arr)
     _ => false
   }
+}
+
+///|
+/// Check if source is assignable to intersection type
+fn is_assignable_to_intersection(
+  source : Type,
+  intersection : CheckerIntersectionType,
+) -> Bool {
+  // Source must be assignable to ALL members of the intersection
+  for i = 0; i < intersection.types.length(); i = i + 1 {
+    if !is_assignable(source, intersection.types[i]) {
+      return false
+    }
+  }
+  true
+}
+
+///|
+/// Check if intersection is assignable to target
+fn is_intersection_assignable_to(
+  intersection : CheckerIntersectionType,
+  target : Type,
+) -> Bool {
+  // At least one member must be assignable to target
+  for i = 0; i < intersection.types.length(); i = i + 1 {
+    if is_assignable(intersection.types[i], target) {
+      return true
+    }
+  }
+  false
+}
+
+///|
+/// Check if source tuple is assignable to target tuple
+fn is_tuple_assignable(
+  source : CheckerTupleType,
+  target : CheckerTupleType,
+) -> Bool {
+  // Count required elements in target
+  let mut target_required = 0
+  for i = 0; i < target.element_types.length(); i = i + 1 {
+    if !target.element_types[i].is_optional && !target.element_types[i].is_rest {
+      target_required = target_required + 1
+    }
+  }
+
+  // Source must have at least as many elements as target required
+  if source.element_types.length() < target_required {
+    return false
+  }
+
+  // Check element-wise assignability
+  for i = 0; i < target.element_types.length(); i = i + 1 {
+    if i < source.element_types.length() {
+      if !is_assignable(
+          source.element_types[i].element_type,
+          target.element_types[i].element_type,
+        ) {
+        return false
+      }
+    } else if !target.element_types[i].is_optional {
+      return false
+    }
+  }
+  true
+}
+
+///|
+/// Check if tuple is assignable to array
+fn is_tuple_assignable_to_array(
+  tuple : CheckerTupleType,
+  arr : CheckerArrayType,
+) -> Bool {
+  // All tuple elements must be assignable to array element type
+  for i = 0; i < tuple.element_types.length(); i = i + 1 {
+    if !is_assignable(tuple.element_types[i].element_type, arr.element_type) {
+      return false
+    }
+  }
+  true
 }
 
 ///|
@@ -1698,6 +3035,41 @@ fn type_to_string(t : Type) -> String {
       }
       result
     }
+    Intersection(inter) => {
+      let mut result = ""
+      for i = 0; i < inter.types.length(); i = i + 1 {
+        if i > 0 {
+          result = result + " & "
+        }
+        result = result + type_to_string(inter.types[i])
+      }
+      result
+    }
+    Tuple(tuple) => {
+      let mut result = "["
+      for i = 0; i < tuple.element_types.length(); i = i + 1 {
+        if i > 0 {
+          result = result + ", "
+        }
+        let elem = tuple.element_types[i]
+        match elem.label {
+          Some(label) => result = result + label + ": "
+          None => ()
+        }
+        result = result + type_to_string(elem.element_type)
+        if elem.is_optional {
+          result = result + "?"
+        }
+      }
+      result + "]"
+    }
+    Conditional(cond) =>
+      "\{type_to_string(cond.check_type)} extends \{type_to_string(cond.extends_type)} ? \{type_to_string(cond.true_type)} : \{type_to_string(cond.false_type)}"
+    Mapped(_) => "{ [K in ...]: ... }"
+    TemplateLiteral(_) => "`...`"
+    IndexAccess(ia) =>
+      "\{type_to_string(ia.object_type)}[\{type_to_string(ia.index_type)}]"
+    Infer(inf) => "infer \{inf.type_parameter_name}"
     Function(_) => "function"
     Object(_) => "object"
     TypeReference(ref) => ref.name
