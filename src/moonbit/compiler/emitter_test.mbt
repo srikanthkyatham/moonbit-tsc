@@ -658,3 +658,29 @@ test "emit const enum with values" {
   assert_true(js.contains("Up"))
   assert_true(js.contains("Down"))
 }
+
+///|
+/// Test: Non-null assertion property access (!.) strips assertion
+test "emit non-null assertion property access" {
+  let js = compile_to_js("const x = obj!.property;")
+  // The !. should be stripped, becoming just .property
+  assert_true(js.contains("obj.property"))
+  assert_true(not(js.contains("!")))
+}
+
+///|
+/// Test: Chained non-null assertion property access
+test "emit chained non-null assertion" {
+  let js = compile_to_js("const x = a!.b!.c;")
+  // All !. should be stripped
+  assert_true(js.contains("a.b.c"))
+  assert_true(not(js.contains("!")))
+}
+
+///|
+/// Test: Non-null assertion with method call
+test "emit non-null assertion with method call" {
+  let js = compile_to_js("const x = obj!.method();")
+  assert_true(js.contains("obj.method()"))
+  assert_true(not(js.contains("!")))
+}

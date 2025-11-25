@@ -1617,6 +1617,29 @@ fn parse_postfix_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
         }
       }
 
+      // Non-null assertion property access (obj!.property)
+      ExclamationDot(_) => {
+        let start_loc = get_location(left)
+        parser = advance_parser(parser)
+        // First wrap left in NonNullExpression
+        let non_null_expr = Node::NonNullExpression(NonNullExpression::{
+          expression: left,
+          location: start_loc,
+        })
+        // Then parse the property access
+        match parse_identifier(parser) {
+          Ok((id, next_parser)) => {
+            left = Node::PropertyAccessExpression(PropertyAccessExpression::{
+              expression: non_null_expr,
+              name: id.name,
+              location: start_loc,
+            })
+            parser = next_parser
+          }
+          Err(p) => return Err(p)
+        }
+      }
+
       // Optional chaining - property access, call, or element access
       QuestionDot(_) => {
         let start_loc = get_location(left)

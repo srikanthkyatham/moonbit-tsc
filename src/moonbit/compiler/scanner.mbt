@@ -476,6 +476,15 @@ pub fn scan_token(scanner : Scanner) -> (Token, Scanner) {
               )
           }
         }
+        '.' => {
+          let scanner = advance(scanner)
+          (
+            ExclamationDot(
+              make_location(scanner, start_pos, start_line, start_col),
+            ),
+            scanner,
+          )
+        }
         _ =>
           (
             Exclamation(
