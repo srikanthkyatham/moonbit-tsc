@@ -891,16 +891,24 @@ fn declare_symbol(binder : Binder, name : String, symbol : Symbol) -> Binder {
   // Check for duplicate declaration
   let existing = scope.symbols.get(name)
   match existing {
-    Some(_) => {
-      // Duplicate declaration - add diagnostic
-      let diagnostic = Diagnostic::error(
-        "Duplicate identifier '" + name + "'",
-        SourceLocation::new(binder.file_path, Position::{ line: 0, column: 0, offset: 0 }, Position::{ line: 0, column: 0, offset: 0 }),
-        2300,
-      )
-      let new_diagnostics = binder.diagnostics
-      new_diagnostics.push(diagnostic)
-      { ..binder, diagnostics: new_diagnostics }
+    Some(existing_symbol) => {
+      // Allow function/method overloads (multiple declarations with same name)
+      let is_function_overload = existing_symbol.kind == SymbolKind::Function && symbol.kind == SymbolKind::Function
+      let is_method_overload = existing_symbol.kind == SymbolKind::Method && symbol.kind == SymbolKind::Method
+      if is_function_overload || is_method_overload {
+        // Overload - allow it without error
+        binder
+      } else {
+        // Duplicate declaration - add diagnostic
+        let diagnostic = Diagnostic::error(
+          "Duplicate identifier '" + name + "'",
+          SourceLocation::new(binder.file_path, Position::{ line: 0, column: 0, offset: 0 }, Position::{ line: 0, column: 0, offset: 0 }),
+          2300,
+        )
+        let new_diagnostics = binder.diagnostics
+        new_diagnostics.push(diagnostic)
+        { ..binder, diagnostics: new_diagnostics }
+      }
     }
     None => {
       // Add symbol to current scope

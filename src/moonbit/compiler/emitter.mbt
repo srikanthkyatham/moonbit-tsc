@@ -162,6 +162,7 @@ pub fn emit(node : Node, ctx : EmitterContext) -> String {
     AsExpression(ae) => emit(ae.expression, ctx)  // Unwrap type assertion
     TypeAssertionExpression(tae) => emit(tae.expression, ctx)  // Unwrap
     NonNullExpression(nne) => emit(nne.expression, ctx)  // Unwrap
+    SatisfiesExpression(se) => emit(se.expression, ctx)  // Unwrap satisfies
     SpreadExpression(se) => emit_spread_expression(se, ctx)
     OptionalChain(oc) => emit_optional_chain(oc, ctx)
     AwaitExpression(ae) => emit_await_expression(ae, ctx)
@@ -196,6 +197,11 @@ pub fn emit(node : Node, ctx : EmitterContext) -> String {
     MappedType(_) => ""
     ConditionalType(_) => ""
     IndexedAccessType(_) => ""
+    OptionalType(_) => ""
+    RestType(_) => ""
+    TypePredicate(_) => ""
+    TypeOperator(_) => ""
+    InferType(_) => ""
 
     // Other
     Parameter(p) => emit_parameter(p, ctx)
@@ -1170,10 +1176,14 @@ fn emit_parenthesized_expression(pe : ParenthesizedExpression, ctx : EmitterCont
 fn emit_template_expression(te : TemplateExpression, ctx : EmitterContext) -> String {
   let mut result = "`" + te.head
 
+  // Build ${ as separate strings to avoid MoonBit->JS compilation issues
+  let dollar = "$"
+  let open_brace = "{"
+  let close_brace = "}"
   for span in te.template_spans {
-    result = result + "${"
+    result = result + dollar + open_brace
     result = result + emit(span.expression, ctx)
-    result = result + "}"
+    result = result + close_brace
     result = result + span.literal
   }
 

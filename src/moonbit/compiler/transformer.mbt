@@ -158,6 +158,7 @@ pub fn transform(node : Node, ctx : TransformerContext) -> Node {
     AsExpression(ae) => transform(ae.expression, ctx)
     TypeAssertionExpression(tae) => transform(tae.expression, ctx)
     NonNullExpression(nne) => transform(nne.expression, ctx)
+    SatisfiesExpression(se) => transform(se.expression, ctx)
     SpreadExpression(se) => transform_spread_expression(se, ctx)
     OptionalChain(oc) => transform_optional_chain(oc, ctx)
     AwaitExpression(ae) => transform_await_expression(ae, ctx)
@@ -187,7 +188,12 @@ pub fn transform(node : Node, ctx : TransformerContext) -> Node {
     | KeywordType(_)
     | MappedType(_)
     | ConditionalType(_)
-    | IndexedAccessType(_) =>
+    | IndexedAccessType(_)
+    | OptionalType(_)
+    | RestType(_)
+    | TypePredicate(_)
+    | TypeOperator(_)
+    | InferType(_) =>
       // These should only appear in type positions and will be stripped
       // If they somehow appear in expression position, it's an error
       abort("Type node in expression position during transformation")

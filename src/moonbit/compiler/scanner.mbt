@@ -715,6 +715,7 @@ fn scan_identifier_or_keyword(
     "export" => KeywordExport(loc)
     "from" => KeywordFrom(loc)
     "as" => KeywordAs(loc)
+    "satisfies" => KeywordSatisfies(loc)
     "extends" => KeywordExtends(loc)
     "implements" => KeywordImplements(loc)
     "yield" => KeywordYield(loc)

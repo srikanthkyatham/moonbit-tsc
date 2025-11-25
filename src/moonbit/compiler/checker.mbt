@@ -1540,6 +1540,11 @@ fn get_type_from_type_node(
             c,
           )
         }
+        Const => {
+          // "as const" assertion - returns any for now (full support would make expressions readonly)
+          let (t, c) = any_type(checker)
+          (Some(t), c)
+        }
       }
     UnionType(union_type) => {
       // Handle union types

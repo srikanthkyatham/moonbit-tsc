@@ -99,6 +99,7 @@ fn type_keyword_to_string(keyword : TypeKeyword) -> String {
     String => "string"
     Symbol => "symbol"
     Object => "object"
+    Const => "const"  // For "as const" assertions
   }
 }
 

@@ -56,6 +56,7 @@ pub enum Node {
   ParenthesizedExpression(ParenthesizedExpression)
   TemplateExpression(TemplateExpression)
   AsExpression(AsExpression)
+  SatisfiesExpression(SatisfiesExpression)
   TypeAssertionExpression(TypeAssertionExpression)
   NonNullExpression(NonNullExpression)
   SpreadExpression(SpreadExpression)
@@ -88,6 +89,11 @@ pub enum Node {
   MappedType(MappedType)
   ConditionalType(ConditionalType)
   IndexedAccessType(IndexedAccessType)
+  OptionalType(OptionalType)
+  RestType(RestType)
+  TypePredicate(TypePredicate)
+  TypeOperator(TypeOperator)
+  InferType(InferType)
 
   // Other
   Parameter(Parameter)
@@ -624,6 +630,14 @@ pub struct AsExpression {
 } derive(Show)
 
 ///|
+/// Satisfies expression (expr satisfies Type)
+pub struct SatisfiesExpression {
+  expression : Node
+  type_node : Node
+  location : SourceLocation
+} derive(Show)
+
+///|
 /// Type assertion (<Type>expr)
 pub struct TypeAssertionExpression {
   type_node : Node
@@ -806,6 +820,7 @@ pub enum TypeKeyword {
   String
   Symbol
   Object
+  Const  // For "as const" assertions
 } derive(Show, Eq)
 
 ///|
@@ -828,6 +843,53 @@ pub struct ConditionalType {
 pub struct IndexedAccessType {
   object_type : Node
   index_type : Node
+  location : SourceLocation
+} derive(Show)
+
+///|
+/// Optional type (for tuple optional elements like string? in [number, string?])
+pub struct OptionalType {
+  element_type : Node
+  location : SourceLocation
+} derive(Show)
+
+///|
+/// Rest type (for tuple rest elements like ...number[] in [string, ...number[]])
+pub struct RestType {
+  element_type : Node
+  location : SourceLocation
+} derive(Show)
+
+///|
+/// Type predicate for type guards: x is string, asserts x is string
+pub struct TypePredicate {
+  parameter_name : String
+  type_node : Node?  // The type in "x is type" - None for "asserts x"
+  is_asserts : Bool  // True for "asserts x" or "asserts x is type"
+  location : SourceLocation
+} derive(Show)
+
+///|
+/// Type operator kind (keyof, typeof, unique, readonly)
+pub enum TypeOperatorKind {
+  KeyOf
+  TypeOf
+  Unique  // For "unique symbol"
+  Readonly
+} derive(Show, Eq)
+
+///|
+/// Type operator: keyof T, typeof value, unique symbol, readonly T
+pub struct TypeOperator {
+  operator : TypeOperatorKind
+  type_node : Node
+  location : SourceLocation
+} derive(Show)
+
+///|
+/// Infer type for conditional types: infer R
+pub struct InferType {
+  type_parameter : String
   location : SourceLocation
 } derive(Show)
 
@@ -858,6 +920,7 @@ pub struct IndexSignatureDeclaration {
   parameter_name : String
   parameter_type : Node
   return_type : Node
+  is_readonly : Bool
   location : SourceLocation
 } derive(Show)
 
@@ -970,6 +1033,7 @@ pub fn get_location(node : Node) -> SourceLocation {
     ParenthesizedExpression(p) => p.location
     TemplateExpression(t) => t.location
     AsExpression(a) => a.location
+    SatisfiesExpression(s) => s.location
     TypeAssertionExpression(t) => t.location
     NonNullExpression(n) => n.location
     SpreadExpression(s) => s.location
@@ -996,6 +1060,11 @@ pub fn get_location(node : Node) -> SourceLocation {
     MappedType(m) => m.location
     ConditionalType(c) => c.location
     IndexedAccessType(i) => i.location
+    OptionalType(o) => o.location
+    RestType(r) => r.location
+    TypePredicate(tp) => tp.location
+    TypeOperator(to) => to.location
+    InferType(it) => it.location
     Parameter(p) => p.location
     PropertyDeclaration(p) => p.location
     IndexSignatureDeclaration(i) => i.location

@@ -535,6 +535,88 @@ fn parse_object_binding_pattern(
 }
 
 ///|
+/// Parse return type with type predicate support
+/// Handles: regular types, "x is Type", "asserts x", "asserts x is Type"
+fn parse_return_type(parser : Parser) -> Result[(Node, Parser), Parser] {
+  let start_loc = current_token(parser).location()
+
+  // Check for "asserts" keyword (contextual)
+  match current_token(parser) {
+    Identifier(name, _) if name == "asserts" => {
+      let parser = advance_parser(parser)
+      // Expect parameter name
+      match current_token(parser) {
+        Identifier(param_name, _) => {
+          let parser = advance_parser(parser)
+          // Check for "is" keyword
+          match current_token(parser) {
+            Identifier(is_name, _) if is_name == "is" => {
+              let parser = advance_parser(parser)
+              // Parse the type
+              match parse_type(parser) {
+                Ok((type_node, p)) => Ok((
+                  Node::TypePredicate(TypePredicate::{
+                    parameter_name: param_name,
+                    type_node: Some(type_node),
+                    is_asserts: true,
+                    location: start_loc,
+                  }),
+                  p
+                ))
+                Err(p) => Err(p)
+              }
+            }
+            _ => {
+              // Just "asserts x" without type
+              Ok((
+                Node::TypePredicate(TypePredicate::{
+                  parameter_name: param_name,
+                  type_node: None,
+                  is_asserts: true,
+                  location: start_loc,
+                }),
+                parser
+              ))
+            }
+          }
+        }
+        _ => return Err(add_error(parser, "Expected parameter name after 'asserts'", current_token(parser).location()))
+      }
+    }
+    Identifier(param_name, _) => {
+      // Peek ahead to see if this is "x is Type" pattern
+      let parser2 = advance_parser(parser)
+      match current_token(parser2) {
+        Identifier(is_name, _) if is_name == "is" => {
+          let parser = advance_parser(parser2)
+          // Parse the type
+          match parse_type(parser) {
+            Ok((type_node, p)) => Ok((
+              Node::TypePredicate(TypePredicate::{
+                parameter_name: param_name,
+                type_node: Some(type_node),
+                is_asserts: false,
+                location: start_loc,
+              }),
+              p
+            ))
+            Err(p) => Err(p)
+          }
+        }
+        _ => {
+          // Not a type predicate, parse as regular type
+          parse_type(parser)
+        }
+      }
+    }
+    _ => {
+      // Regular type
+      parse_type(parser)
+    }
+  }
+}
+
+///|
 /// Parse function declaration
 fn parse_function_declaration(
   parser : Parser,
@@ -550,10 +632,10 @@ fn parse_function_declaration(
     _ => (is_generator, parser)
   }
 
-  // Function name (optional for function expressions)
-  let (name, parser) = match parse_identifier(parser) {
-    Ok((id, p)) => (Some(Node::Identifier(id)), p)
-    Err(p) => (None, p)
+  // Function name (optional for function expressions and export default)
+  let (name, parser) = match current_token(parser) {
+    Identifier(id_name, loc) => (Some(Node::Identifier(Identifier::{ name: id_name, location: loc })), advance_parser(parser))
+    _ => (None, parser)  // Anonymous function - no error, name is optional
   }
 
   // Type parameters
@@ -573,11 +655,11 @@ fn parse_function_declaration(
       return Err(add_error(p, "Expected '(' after function name", start_loc))
   }
 
-  // Return type
+  // Return type (with type predicate support)
   let (return_type, parser) = match current_token(parser) {
     Colon(_) => {
       let parser = advance_parser(parser)
-      match parse_type(parser) {
+      match parse_return_type(parser) {
         Ok((ty, p)) => (Some(ty), p)
         Err(p) => (None, p)
       }
@@ -592,6 +674,10 @@ fn parse_function_declaration(
         Ok((block, p)) => (Some(block), p)
         Err(p) => (None, p)
       }
+    Semicolon(_) => {
+      // Function declaration without body (overload signature)
+      (None, advance_parser(parser))
+    }
     _ => (None, parser)
   }
   Ok(
@@ -641,10 +727,50 @@ fn parse_parameter_list_aux(parser : Parser, acc : Array[Node]) -> (Array[Node],
 /// Parse a parameter
 fn parse_parameter(parser : Parser) -> Result[(Node, Parser), Parser] {
   let start_loc = current_token(parser).location()
+  let mut parser = parser
+
+  // Parse parameter decorators (@decorator)
+  while true {
+    match current_token(parser) {
+      At(_) => {
+        // Parse and skip decorator
+        parser = advance_parser(parser) // consume @
+        match current_token(parser) {
+          Identifier(_, _) => {
+            parser = advance_parser(parser) // consume decorator name
+            // Optional decorator arguments
+            match current_token(parser) {
+              OpenParen(_) => {
+                // Skip arguments - simple implementation: find matching close paren
+                parser = advance_parser(parser)
+                let mut depth = 1
+                while depth > 0 {
+                  match current_token(parser) {
+                    OpenParen(_) => {
+                      depth = depth + 1
+                      parser = advance_parser(parser)
+                    }
+                    CloseParen(_) => {
+                      depth = depth - 1
+                      parser = advance_parser(parser)
+                    }
+                    EOF(_) => break
+                    _ => parser = advance_parser(parser)
+                  }
+                }
+              }
+              _ => ()
+            }
+          }
+          _ => ()
+        }
+      }
+      _ => break
+    }
+  }
 
   // Parse parameter property modifiers (public, private, protected, readonly)
   let modifiers : Array[Modifier] = []
-  let mut parser = parser
   while true {
     match current_token(parser) {
       KeywordPublic(_) => {
@@ -865,9 +991,38 @@ fn parse_expression_statement(
 }
 
 ///|
-/// Parse expression
+/// Parse expression (handles comma operator which is the lowest precedence)
 fn parse_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
-  parse_assignment_expression(parser)
+  match parse_assignment_expression(parser) {
+    Ok((first_expr, first_parser)) => {
+      let mut left = first_expr
+      let mut parser = first_parser
+      // Handle comma operator (lowest precedence)
+      while true {
+        match current_token(parser) {
+          Comma(_) => {
+            let start_loc = get_location(left)
+            parser = advance_parser(parser)
+            match parse_assignment_expression(parser) {
+              Ok((right, next_parser)) => {
+                left = Node::BinaryExpression(BinaryExpression::{
+                  operator: BinaryOperator::Comma,
+                  left,
+                  right,
+                  location: start_loc,
+                })
+                parser = next_parser
+              }
+              Err(p) => return Err(p)
+            }
+          }
+          _ => break
+        }
+      }
+      Ok((left, parser))
+    }
+    Err(p) => Err(p)
+  }
 }
 
 ///|
@@ -1554,13 +1709,47 @@ fn parse_postfix_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
         })
       }
 
-      // Type assertion with 'as' keyword (expr as Type)
+      // Type assertion with 'as' keyword (expr as Type) or (expr as const)
       KeywordAs(_) => {
+        let start_loc = get_location(left)
+        parser = advance_parser(parser)
+        // Check for "as const" assertion
+        match current_token(parser) {
+          KeywordConst(loc) => {
+            parser = advance_parser(parser)
+            let type_node = Node::KeywordType(KeywordType::{
+              kind: TypeKeyword::Const,
+              location: loc,
+            })
+            left = Node::AsExpression(AsExpression::{
+              expression: left,
+              type_node,
+              location: start_loc,
+            })
+          }
+          _ => {
+            match parse_type(parser) {
+              Ok((type_node, next_parser)) => {
+                left = Node::AsExpression(AsExpression::{
+                  expression: left,
+                  type_node,
+                  location: start_loc,
+                })
+                parser = next_parser
+              }
+              Err(p) => return Err(p)
+            }
+          }
+        }
+      }
+
+      // Satisfies expression (expr satisfies Type)
+      KeywordSatisfies(_) => {
         let start_loc = get_location(left)
         parser = advance_parser(parser)
         match parse_type(parser) {
           Ok((type_node, next_parser)) => {
-            left = Node::AsExpression(AsExpression::{
+            left = Node::SatisfiesExpression(SatisfiesExpression::{
               expression: left,
               type_node,
               location: start_loc,
@@ -1891,6 +2080,159 @@ fn parse_primary_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
           // Failed to parse type, not a type assertion, backtrack
           Err(saved_parser)
         }
+      }
+    }
+
+    // Async function expression or async arrow function
+    KeywordAsync(start_loc) => {
+      let parser = advance_parser(parser) // consume 'async'
+      match current_token(parser) {
+        // async function expression
+        KeywordFunction(_) => {
+          let parser = advance_parser(parser) // consume 'function'
+          // Optional function name
+          let (name, parser) = match current_token(parser) {
+            Identifier(fname, _) => (Some(fname), advance_parser(parser))
+            _ => (None, parser)
+          }
+          // Parse parameters
+          match expect(parser, fn(t) { matches_open_paren(t) }) {
+            Ok(parser) => {
+              let parser = advance_parser(parser)
+              let (params, parser) = parse_parameter_list(parser)
+              let (return_type, parser) = match current_token(parser) {
+                Colon(_) => {
+                  let parser = advance_parser(parser)
+                  match parse_type(parser) {
+                    Ok((ty, p)) => (Some(ty), p)
+                    Err(p) => (None, p)
+                  }
+                }
+                _ => (None, parser)
+              }
+              match parse_block_statement(parser) {
+                Ok((body, parser)) =>
+                  Ok((Node::FunctionExpression(FunctionExpression::{
+                    name,
+                    type_parameters: [],
+                    parameters: params,
+                    return_type,
+                    body,
+                    is_async: true,
+                    is_generator: false,
+                    location: start_loc,
+                  }), parser))
+                Err(parser) => Err(parser)
+              }
+            }
+            Err(parser) => Err(parser)
+          }
+        }
+        // async arrow function: async () => ... or async (params) => ...
+        OpenParen(_) => {
+          let parser = advance_parser(parser) // consume '('
+          let (params, parser) = parse_parameter_list(parser)
+          // Optional return type
+          let (return_type, parser) = match current_token(parser) {
+            Colon(_) => {
+              let parser = advance_parser(parser)
+              match parse_type(parser) {
+                Ok((ty, p)) => (Some(ty), p)
+                Err(p) => (None, p)
+              }
+            }
+            _ => (None, parser)
+          }
+          // Expect =>
+          match current_token(parser) {
+            Arrow(_) => {
+              let parser = advance_parser(parser)
+              // Parse body (block or expression)
+              match current_token(parser) {
+                OpenBrace(_) => {
+                  match parse_block_statement(parser) {
+                    Ok((body, parser)) =>
+                      Ok((Node::ArrowFunction(ArrowFunction::{
+                        type_parameters: [],
+                        parameters: params,
+                        return_type,
+                        body,
+                        is_async: true,
+                        location: start_loc,
+                      }), parser))
+                    Err(parser) => Err(parser)
+                  }
+                }
+                _ => {
+                  match parse_assignment_expression(parser) {
+                    Ok((expr, parser)) =>
+                      Ok((Node::ArrowFunction(ArrowFunction::{
+                        type_parameters: [],
+                        parameters: params,
+                        return_type,
+                        body: expr,
+                        is_async: true,
+                        location: start_loc,
+                      }), parser))
+                    Err(parser) => Err(parser)
+                  }
+                }
+              }
+            }
+            _ => Err(add_error(parser, "Expected '=>' after async arrow function parameters", current_token(parser).location()))
+          }
+        }
+        // async identifier => ... (single param arrow function)
+        Identifier(name, loc) => {
+          let parser = advance_parser(parser) // consume identifier
+          match current_token(parser) {
+            Arrow(_) => {
+              let parser = advance_parser(parser) // consume '=>'
+              let param = Node::Parameter(Parameter::{
+                name: Node::Identifier(Identifier::{ name, location: loc }),
+                type_annotation: None,
+                initializer: None,
+                is_optional: false,
+                is_rest: false,
+                modifiers: [],
+                location: loc,
+              })
+              // Parse body
+              match current_token(parser) {
+                OpenBrace(_) => {
+                  match parse_block_statement(parser) {
+                    Ok((body, parser)) =>
+                      Ok((Node::ArrowFunction(ArrowFunction::{
+                        type_parameters: [],
+                        parameters: [param],
+                        return_type: None,
+                        body,
+                        is_async: true,
+                        location: start_loc,
+                      }), parser))
+                    Err(parser) => Err(parser)
+                  }
+                }
+                _ => {
+                  match parse_assignment_expression(parser) {
+                    Ok((expr, parser)) =>
+                      Ok((Node::ArrowFunction(ArrowFunction::{
+                        type_parameters: [],
+                        parameters: [param],
+                        return_type: None,
+                        body: expr,
+                        is_async: true,
+                        location: start_loc,
+                      }), parser))
+                    Err(parser) => Err(parser)
+                  }
+                }
+              }
+            }
+            _ => Err(add_error(parser, "Expected '=>' after async identifier", current_token(parser).location()))
+          }
+        }
+        _ => Err(add_error(parser, "Expected function or arrow function after 'async'", current_token(parser).location()))
       }
     }
 
@@ -2456,27 +2798,105 @@ fn parse_primary_type_with_readonly(parser : Parser, is_readonly : Bool) -> Resu
       )
     }
     Identifier(name, _) => {
-      let parser = advance_parser(parser)
-      // Check for generic type arguments
-      let (type_arguments, parser) = match current_token(parser) {
-        LessThan(_) => {
-          match parse_type_argument_list(parser) {
-            Ok((args, p)) => (args, p)
-            Err(p) => ([], p)
+      // Check for type operators: keyof, unique, infer
+      if name == "infer" {
+        let parser = advance_parser(parser)
+        // Parse type parameter name
+        match current_token(parser) {
+          Identifier(param_name, _) => {
+            let parser = advance_parser(parser)
+            Ok((
+              Node::InferType(InferType::{
+                type_parameter: param_name,
+                location: loc,
+              }),
+              parser
+            ))
+          }
+          _ => Err(add_error(parser, "Expected type parameter name after 'infer'", current_token(parser).location()))
+        }
+      } else if name == "keyof" {
+        let parser = advance_parser(parser)
+        // Parse operand type
+        match parse_primary_type(parser) {
+          Ok((operand_type, p)) => Ok((
+            Node::TypeOperator(TypeOperator::{
+              operator: TypeOperatorKind::KeyOf,
+              type_node: operand_type,
+              location: loc,
+            }),
+            p
+          ))
+          Err(p) => Err(p)
+        }
+      } else if name == "unique" {
+        // unique symbol
+        let parser = advance_parser(parser)
+        // Expect symbol keyword or identifier "symbol"
+        match current_token(parser) {
+          KeywordSymbol(sym_loc) => {
+            let parser = advance_parser(parser)
+            Ok((
+              Node::TypeOperator(TypeOperator::{
+                operator: TypeOperatorKind::Unique,
+                type_node: Node::KeywordType(KeywordType::{
+                  kind: TypeKeyword::Symbol,
+                  location: sym_loc,
+                }),
+                location: loc,
+              }),
+              parser
+            ))
+          }
+          Identifier(sym_name, sym_loc) if sym_name == "symbol" => {
+            let parser = advance_parser(parser)
+            Ok((
+              Node::TypeOperator(TypeOperator::{
+                operator: TypeOperatorKind::Unique,
+                type_node: Node::KeywordType(KeywordType::{
+                  kind: TypeKeyword::Symbol,
+                  location: sym_loc,
+                }),
+                location: loc,
+              }),
+              parser
+            ))
+          }
+          _ => {
+            // Just "unique" as a type reference
+            Ok((
+              Node::TypeReference(TypeReference::{
+                type_name: name,
+                type_arguments: [],
+                location: loc,
+              }),
+              parser
+            ))
           }
         }
-        _ => ([], parser)
+      } else {
+        let parser = advance_parser(parser)
+        // Check for generic type arguments
+        let (type_arguments, parser) = match current_token(parser) {
+          LessThan(_) => {
+            match parse_type_argument_list(parser) {
+              Ok((args, p)) => (args, p)
+              Err(p) => ([], p)
+            }
+          }
+          _ => ([], parser)
+        }
+        Ok(
+          (
+            Node::TypeReference(TypeReference::{
+              type_name: name,
+              type_arguments,
+              location: loc,
+            }),
+            parser,
+          ),
+        )
       }
-      Ok(
-        (
-          Node::TypeReference(TypeReference::{
-            type_name: name,
-            type_arguments,
-            location: loc,
-          }),
-          parser,
-        ),
-      )
     }
     StringLiteral(value, _) =>
       Ok(
@@ -2502,7 +2922,18 @@ fn parse_primary_type_with_readonly(parser : Parser, is_readonly : Bool) -> Resu
       let parser = advance_parser(parser) // consume {
 
       // Try to parse as mapped type: { [P in KeyType]: ValueType }
+      // Also handles: { readonly [P in K]: V }, { [P in K]?: V }, { [P in K]-?: V }
       let mut parser = parser
+      let saved_parser_start = parser
+
+      // Check for optional readonly modifier
+      let has_readonly = match current_token(parser) {
+        KeywordReadonly(_) => {
+          parser = advance_parser(parser)
+          true
+        }
+        _ => false
+      }
 
       match current_token(parser) {
         OpenBracket(_) => {
@@ -2527,17 +2958,44 @@ fn parse_primary_type_with_readonly(parser : Parser, is_readonly : Bool) -> Resu
                         CloseBracket(_) => {
                           parser = advance_parser(parser)
 
+                          // Check for optional modifier: ?, -?, +?
+                          let is_optional = match current_token(parser) {
+                            Question(_) => {
+                              parser = advance_parser(parser)
+                              true
+                            }
+                            Minus(_) => {
+                              parser = advance_parser(parser)
+                              // Expect ? after -
+                              match current_token(parser) {
+                                Question(_) => {
+                                  parser = advance_parser(parser)
+                                  false  // -? removes optional
+                                }
+                                _ => false
+                              }
+                            }
+                            _ => false
+                          }
+                          let _ = is_optional  // Mark as used
+                          let _ = has_readonly  // Mark as used
+
                           // Expect :
                           match current_token(parser) {
                             Colon(_) => {
                               parser = advance_parser(parser)
                               match parse_type(parser) {
                                 Ok((value_type, p)) => {
-                                  parser = p
+                                  let final_parser = p
+                                  // Optional semicolon
+                                  let final_parser = match current_token(final_parser) {
+                                    Semicolon(_) => advance_parser(final_parser)
+                                    _ => final_parser
+                                  }
                                   // Expect }
-                                  match current_token(parser) {
+                                  match current_token(final_parser) {
                                     CloseBrace(_) => {
-                                      parser = advance_parser(parser)
+                                      let final_parser = advance_parser(final_parser)
                                       return Ok((
                                         Node::MappedType(MappedType::{
                                           type_parameter: TypeParameter::{
@@ -2549,22 +3007,22 @@ fn parse_primary_type_with_readonly(parser : Parser, is_readonly : Bool) -> Resu
                                           type_node: Some(value_type),
                                           location: loc,
                                         }),
-                                        parser,
+                                        final_parser,
                                       ))
                                     }
                                     _ => {
                                       // Failed, reset
-                                      parser = saved_parser
+                                      parser = saved_parser_start
                                     }
                                   }
                                 }
                                 Err(_) => {
-                                  parser = saved_parser
+                                  parser = saved_parser_start
                                 }
                               }
                             }
                             _ => {
-                              parser = saved_parser
+                              parser = saved_parser_start
                             }
                           }
                         }
@@ -2574,21 +3032,23 @@ fn parse_primary_type_with_readonly(parser : Parser, is_readonly : Bool) -> Resu
                       }
                     }
                     Err(_) => {
-                      parser = saved_parser
+                      parser = saved_parser_start
                     }
                   }
                 }
                 _ => {
-                  parser = saved_parser
+                  parser = saved_parser_start
                 }
               }
             }
             _ => {
-              parser = saved_parser
+              parser = saved_parser_start
             }
           }
         }
-        _ => ()
+        _ => {
+          parser = saved_parser_start
+        }
       }
 
       // Parse as regular object type literal: { prop: type, ... }
@@ -2737,6 +3197,7 @@ fn parse_primary_type_with_readonly(parser : Parser, is_readonly : Bool) -> Resu
     }
     OpenBracket(_) => {
       // Tuple type: [type1, type2, ...] or [name: type1, name2: type2, ...]
+      // Also supports optional elements (type?) and rest elements (...type[])
       let parser = advance_parser(parser) // consume '['
       let element_types = []
       let mut parser = parser
@@ -2748,8 +3209,17 @@ fn parse_primary_type_with_readonly(parser : Parser, is_readonly : Bool) -> Resu
             break
           }
           _ => {
+            // Check for rest element: ...type
+            let is_rest = match current_token(parser) {
+              DotDotDot(_) => {
+                parser = advance_parser(parser)
+                true
+              }
+              _ => false
+            }
+
             // Parse type (ignoring optional name: prefix for now)
-            match current_token(parser) {
+            let (elem_type, new_parser) = match current_token(parser) {
               Identifier(_, _) => {
                 // Could be "name: type" or just a type reference
                 let saved_parser = parser
@@ -2759,21 +3229,42 @@ fn parse_primary_type_with_readonly(parser : Parser, is_readonly : Bool) -> Resu
                     // It's a named tuple element, skip the name and parse the type
                     parser = advance_parser(parser)
                     match parse_type(parser) {
-                      Ok((t, p)) => {
-                        element_types.push(t)
-                        parser = p
-                      }
+                      Ok((t, p)) => (t, p)
                       Err(p) => return Err(p)
+                    }
+                  }
+                  Question(_) => {
+                    // named?: type - named optional element
+                    parser = advance_parser(parser) // consume ?
+                    match current_token(parser) {
+                      Colon(_) => {
+                        parser = advance_parser(parser)
+                        match parse_type(parser) {
+                          Ok((t, p)) => {
+                            let opt_type = Node::OptionalType(OptionalType::{
+                              element_type: t,
+                              location: get_location(t),
+                            })
+                            (opt_type, p)
+                          }
+                          Err(p) => return Err(p)
+                        }
+                      }
+                      _ => {
+                        // Backtrack - just identifier followed by ?
+                        parser = saved_parser
+                        match parse_type(parser) {
+                          Ok((t, p)) => (t, p)
+                          Err(p) => return Err(p)
+                        }
+                      }
                     }
                   }
                   _ => {
                     // It's just a type reference, backtrack
                     parser = saved_parser
                     match parse_type(parser) {
-                      Ok((t, p)) => {
-                        element_types.push(t)
-                        parser = p
-                      }
+                      Ok((t, p)) => (t, p)
                       Err(p) => return Err(p)
                     }
                   }
@@ -2781,14 +3272,36 @@ fn parse_primary_type_with_readonly(parser : Parser, is_readonly : Bool) -> Resu
               }
               _ => {
                 match parse_type(parser) {
-                  Ok((t, p)) => {
-                    element_types.push(t)
-                    parser = p
-                  }
+                  Ok((t, p)) => (t, p)
                   Err(p) => return Err(p)
                 }
               }
             }
+            parser = new_parser
+
+            // Check for optional element: type?
+            let elem_type = match current_token(parser) {
+              Question(_) => {
+                parser = advance_parser(parser)
+                Node::OptionalType(OptionalType::{
+                  element_type: elem_type,
+                  location: get_location(elem_type),
+                })
+              }
+              _ => elem_type
+            }
+
+            // Wrap in RestType if is_rest
+            let elem_type = if is_rest {
+              Node::RestType(RestType::{
+                element_type: elem_type,
+                location: get_location(elem_type),
+              })
+            } else {
+              elem_type
+            }
+
+            element_types.push(elem_type)
 
             // Optional comma
             match current_token(parser) {
@@ -3169,6 +3682,168 @@ fn parse_class_members_aux(parser : Parser, acc : Array[Node]) -> (Array[Node], 
       }
     }
 
+    // Getter: get name() { ... }
+    Identifier("get", start_loc) => {
+      let parser = advance_parser(parser)
+      match current_token(parser) {
+        Identifier(name, _) => {
+          let parser = advance_parser(parser)
+          match current_token(parser) {
+            OpenParen(_) => {
+              let parser = advance_parser(parser)
+              // Getter has no parameters, just close paren
+              let parser = match current_token(parser) {
+                CloseParen(_) => advance_parser(parser)
+                _ => parser
+              }
+              // Optional return type
+              let (return_type, parser) = match current_token(parser) {
+                Colon(_) => {
+                  let parser = advance_parser(parser)
+                  match parse_type(parser) {
+                    Ok((ty, p)) => (Some(ty), p)
+                    Err(p) => (None, p)
+                  }
+                }
+                _ => (None, parser)
+              }
+              // Body
+              let (body, parser) = match current_token(parser) {
+                OpenBrace(_) => {
+                  match parse_block_statement(parser) {
+                    Ok((b, p)) => (Some(b), p)
+                    Err(p) => (None, p)
+                  }
+                }
+                _ => (None, parser)
+              }
+              acc.push(Node::GetAccessor(GetAccessor::{
+                name,
+                return_type,
+                body,
+                modifiers: [],
+                location: start_loc
+              }))
+              parse_class_members_aux(parser, acc)
+            }
+            // Not a getter, treat "get" as property/method name
+            _ => {
+              // Backtrack - treat "get" as the name
+              let name = "get"
+              let loc = start_loc
+              match current_token(parser) {
+                OpenParen(_) => {
+                  let parser = advance_parser(parser)
+                  let (parameters, parser) = parse_parameter_list(parser)
+                  let (return_type, parser) = match current_token(parser) {
+                    Colon(_) => {
+                      let parser = advance_parser(parser)
+                      match parse_type(parser) {
+                        Ok((ty, p)) => (Some(ty), p)
+                        Err(p) => (None, p)
+                      }
+                    }
+                    _ => (None, parser)
+                  }
+                  let (body, parser) = match current_token(parser) {
+                    OpenBrace(_) => {
+                      match parse_block_statement(parser) {
+                        Ok((b, p)) => (Some(b), p)
+                        Err(p) => (None, p)
+                      }
+                    }
+                    _ => (None, parser)
+                  }
+                  acc.push(Node::MethodDeclaration(MethodDeclaration::{
+                    name, type_parameters: [], parameters, return_type, body,
+                    modifiers: [], is_async: false, is_generator: false, location: loc
+                  }))
+                  parse_class_members_aux(parser, acc)
+                }
+                _ => parse_class_members_aux(parser, acc)
+              }
+            }
+          }
+        }
+        // "get" followed by non-identifier - treat as property/method named "get"
+        _ => parse_class_members_aux(parser, acc)
+      }
+    }
+
+    // Setter: set name(value) { ... }
+    Identifier("set", start_loc) => {
+      let parser = advance_parser(parser)
+      match current_token(parser) {
+        Identifier(name, _) => {
+          let parser = advance_parser(parser)
+          match current_token(parser) {
+            OpenParen(_) => {
+              let parser = advance_parser(parser)
+              // Parse single parameter
+              let (parameter, parser) = match parse_parameter(parser) {
+                Ok((param, p)) => (param, p)
+                Err(p) => (Node::Identifier(Identifier::{ name: "value", location: start_loc }), p)
+              }
+              // Consume closing paren
+              let parser = match current_token(parser) {
+                CloseParen(_) => advance_parser(parser)
+                _ => parser
+              }
+              // Optional return type (usually void)
+              let (_, parser) = match current_token(parser) {
+                Colon(_) => {
+                  let parser = advance_parser(parser)
+                  match parse_type(parser) {
+                    Ok((_, p)) => ((), p)
+                    Err(p) => ((), p)
+                  }
+                }
+                _ => ((), parser)
+              }
+              // Body
+              let (body, parser) = match current_token(parser) {
+                OpenBrace(_) => {
+                  match parse_block_statement(parser) {
+                    Ok((b, p)) => (Some(b), p)
+                    Err(p) => (None, p)
+                  }
+                }
+                _ => (None, parser)
+              }
+              acc.push(Node::SetAccessor(SetAccessor::{
+                name,
+                parameter,
+                body,
+                modifiers: [],
+                location: start_loc
+              }))
+              parse_class_members_aux(parser, acc)
+            }
+            _ => parse_class_members_aux(parser, acc)
+          }
+        }
+        _ => parse_class_members_aux(parser, acc)
+      }
+    }
+
+    // Private modifier
+    KeywordPrivate(_) => {
+      let parser = advance_parser(parser)
+      parse_class_member_with_modifiers(parser, acc, [Modifier::Private])
+    }
+
+    // Protected modifier
+    KeywordProtected(_) => {
+      let parser = advance_parser(parser)
+      parse_class_member_with_modifiers(parser, acc, [Modifier::Protected])
+    }
+
+    // Public modifier
+    KeywordPublic(_) => {
+      let parser = advance_parser(parser)
+      parse_class_member_with_modifiers(parser, acc, [Modifier::Public])
+    }
+
     // Property or method
     Identifier(name, loc) => {
       let parser = advance_parser(parser)
@@ -3259,6 +3934,79 @@ fn parse_class_members_aux(parser : Parser, acc : Array[Node]) -> (Array[Node], 
 
     // Skip other tokens
     _ => parse_class_members_aux(advance_parser(parser), acc)
+  }
+}
+
+///|
+/// Parse class member with modifiers (private/protected/public)
+fn parse_class_member_with_modifiers(parser : Parser, acc : Array[Node], modifiers : Array[Modifier]) -> (Array[Node], Parser) {
+  match current_token(parser) {
+    Identifier(name, loc) => {
+      let parser = advance_parser(parser)
+      match current_token(parser) {
+        // Method
+        OpenParen(_) => {
+          let parser = advance_parser(parser)
+          let (parameters, parser) = parse_parameter_list(parser)
+          let (return_type, parser) = match current_token(parser) {
+            Colon(_) => {
+              let parser = advance_parser(parser)
+              match parse_type(parser) {
+                Ok((ty, p)) => (Some(ty), p)
+                Err(p) => (None, p)
+              }
+            }
+            _ => (None, parser)
+          }
+          let (body, parser) = match current_token(parser) {
+            OpenBrace(_) => {
+              match parse_block_statement(parser) {
+                Ok((b, p)) => (Some(b), p)
+                Err(p) => (None, p)
+              }
+            }
+            _ => (None, parser)
+          }
+          acc.push(Node::MethodDeclaration(MethodDeclaration::{
+            name, type_parameters: [], parameters, return_type, body,
+            modifiers, is_async: false, is_generator: false, location: loc
+          }))
+          parse_class_members_aux(parser, acc)
+        }
+        // Property
+        _ => {
+          let (type_annotation, parser) = match current_token(parser) {
+            Colon(_) => {
+              let parser = advance_parser(parser)
+              match parse_type(parser) {
+                Ok((ty, p)) => (Some(ty), p)
+                Err(p) => (None, p)
+              }
+            }
+            _ => (None, parser)
+          }
+          let (initializer, parser) = match current_token(parser) {
+            Equals(_) => {
+              let parser = advance_parser(parser)
+              match parse_assignment_expression(parser) {
+                Ok((expr, p)) => (Some(expr), p)
+                Err(p) => (None, p)
+              }
+            }
+            _ => (None, parser)
+          }
+          let parser = match current_token(parser) {
+            Semicolon(_) => advance_parser(parser)
+            _ => parser
+          }
+          acc.push(Node::PropertyDeclaration(PropertyDeclaration::{
+            name, type_annotation, initializer, modifiers, location: loc
+          }))
+          parse_class_members_aux(parser, acc)
+        }
+      }
+    }
+    _ => parse_class_members_aux(parser, acc)
   }
 }
 
@@ -3366,6 +4114,7 @@ fn parse_interface_declaration(
               parameter_name: index_name,
               parameter_type: index_type,
               return_type: value_type,
+              is_readonly: false,
               location: bracket_loc,
             }))
             // Optional semicolon or comma
@@ -3376,38 +4125,96 @@ fn parse_interface_declaration(
           }
           // Readonly modifier
           KeywordReadonly(_) => {
+            let readonly_loc = current_token(parser).location()
             parser = advance_parser(parser)
-            // Now expect an identifier
-            let (prop_name, prop_loc) = match current_token(parser) {
-              Identifier(n, loc) => {
-                parser = advance_parser(parser)
-                (n, loc)
-              }
-              _ => return Err(add_error(parser, "Expected property name after readonly", current_token(parser).location()))
-            }
-            // Must be followed by colon (readonly properties, not methods)
+            // Check for readonly index signature: readonly [key: type]: type
             match current_token(parser) {
-              Colon(_) => {
+              OpenBracket(_) => {
                 parser = advance_parser(parser)
-                match parse_type(parser) {
-                  Ok((prop_type, p)) => {
+                // Parse index parameter name
+                let index_name = match current_token(parser) {
+                  Identifier(n, _) => {
+                    parser = advance_parser(parser)
+                    n
+                  }
+                  _ => return Err(add_error(parser, "Expected index parameter name", current_token(parser).location()))
+                }
+                // Expect colon
+                match current_token(parser) {
+                  Colon(_) => parser = advance_parser(parser)
+                  _ => return Err(add_error(parser, "Expected ':' after index parameter", current_token(parser).location()))
+                }
+                // Parse index type (string or number)
+                let index_type = match parse_type(parser) {
+                  Ok((t, p)) => {
                     parser = p
-                    members.push(Node::PropertyDeclaration(PropertyDeclaration::{
-                      name: prop_name,
-                      type_annotation: Some(prop_type),
-                      initializer: None,
-                      location: prop_loc,
-                      modifiers: [Modifier::Readonly],
-                    }))
-                    match current_token(parser) {
-                      Semicolon(_) | Comma(_) => parser = advance_parser(parser)
-                      _ => ()
-                    }
+                    t
                   }
                   Err(p) => return Err(p)
                 }
+                // Expect closing bracket
+                match current_token(parser) {
+                  CloseBracket(_) => parser = advance_parser(parser)
+                  _ => return Err(add_error(parser, "Expected ']' after index signature", current_token(parser).location()))
+                }
+                // Expect colon for value type
+                match current_token(parser) {
+                  Colon(_) => parser = advance_parser(parser)
+                  _ => return Err(add_error(parser, "Expected ':' after index signature", current_token(parser).location()))
+                }
+                // Parse value type
+                let value_type = match parse_type(parser) {
+                  Ok((t, p)) => {
+                    parser = p
+                    t
+                  }
+                  Err(p) => return Err(p)
+                }
+                // Create readonly index signature
+                members.push(Node::IndexSignatureDeclaration(IndexSignatureDeclaration::{
+                  parameter_name: index_name,
+                  parameter_type: index_type,
+                  return_type: value_type,
+                  is_readonly: true,
+                  location: readonly_loc,
+                }))
+                // Optional semicolon or comma
+                match current_token(parser) {
+                  Semicolon(_) | Comma(_) => parser = advance_parser(parser)
+                  _ => ()
+                }
               }
-              _ => return Err(add_error(parser, "Expected ':' after readonly property name", current_token(parser).location()))
+              Identifier(n, loc) => {
+                // Readonly property
+                parser = advance_parser(parser)
+                let prop_name = n
+                let prop_loc = loc
+                // Must be followed by colon (readonly properties, not methods)
+                match current_token(parser) {
+                  Colon(_) => {
+                    parser = advance_parser(parser)
+                    match parse_type(parser) {
+                      Ok((prop_type, p)) => {
+                        parser = p
+                        members.push(Node::PropertyDeclaration(PropertyDeclaration::{
+                          name: prop_name,
+                          type_annotation: Some(prop_type),
+                          initializer: None,
+                          location: prop_loc,
+                          modifiers: [Modifier::Readonly],
+                        }))
+                        match current_token(parser) {
+                          Semicolon(_) | Comma(_) => parser = advance_parser(parser)
+                          _ => ()
+                        }
+                      }
+                      Err(p) => return Err(p)
+                    }
+                  }
+                  _ => return Err(add_error(parser, "Expected ':' after readonly property name", current_token(parser).location()))
+                }
+              }
+              _ => return Err(add_error(parser, "Expected property name or '[' after readonly", current_token(parser).location()))
             }
           }
           // Call signature: (): returnType
@@ -3700,11 +4507,11 @@ fn parse_enum_members_aux(parser : Parser, acc : Array[EnumMember]) -> (Array[En
     CloseBrace(_) | EOF(_) => (acc, parser)
     Identifier(name, loc) => {
       let parser = advance_parser(parser)
-      // Check for initializer
+      // Check for initializer (use parse_assignment_expression to not consume commas)
       let (initializer, parser) = match current_token(parser) {
         Equals(_) => {
           let parser = advance_parser(parser)
-          match parse_expression(parser) {
+          match parse_assignment_expression(parser) {
             Ok((expr, p)) => (Some(expr), p)
             Err(p) => (None, p)
           }
