@@ -258,7 +258,7 @@ fn bind_statement(binder : Binder, node : Node) -> Binder {
           let binder = push_container(binder, ContainerKind::CatchBlock)
           // Bind catch variable if present
           let binder = match catch_info.variable_declaration {
-            Some(_) => binder // TODO: bind catch variable
+            Some(var_decl) => bind_catch_variable(binder, var_decl)
             None => binder
           }
           let binder = bind_statement(binder, catch_info.block)
@@ -847,6 +847,22 @@ fn bind_case_clauses_aux(
     let binder = bind_statements(binder, case_clause.statements)
 
     bind_case_clauses_aux(binder, switch_statement, cases, index + 1)
+  }
+}
+
+///|
+/// Bind catch variable (e.g., `catch (e)` or `catch (e: Error)`)
+fn bind_catch_variable(binder : Binder, var_decl : Node) -> Binder {
+  match var_decl {
+    Identifier(id) => {
+      let symbol = Symbol::new(id.name, SymbolKind::Variable, binder.next_symbol_id)
+      declare_symbol(binder, id.name, symbol)
+    }
+    // Handle binding patterns like `catch ({ message })` or `catch ([first, second])`
+    ArrayBindingPattern(_) | ObjectBindingPattern(_) => {
+      bind_binding_pattern(binder, var_decl, false)
+    }
+    _ => binder
   }
 }
 

@@ -4644,14 +4644,9 @@ fn add_diagnostic_with_code(
 }
 
 ///|
-/// Get node location (simplified - returns dummy location for now)
+/// Get node location
 fn get_node_location(node : Node) -> SourceLocation {
-  // TODO: Extract actual location from node
-  {
-    file_path: "",
-    start: { line: 0, column: 0, offset: 0 },
-    end: { line: 0, column: 0, offset: 0 },
-  }
+  get_location(node)
 }
 
 ///|

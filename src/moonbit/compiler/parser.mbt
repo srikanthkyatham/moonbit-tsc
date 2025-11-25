@@ -1417,7 +1417,262 @@ fn parse_assignment_expression(
         parser,
       ))
     }
-    // TODO: Add other assignment operators (+=, -=, etc.)
+    // Compound assignment operators
+    PlusEquals(_) => {
+      let start_loc = get_location(left)
+      let parser = advance_parser(parser)
+      let (right, parser) = match parse_assignment_expression(parser) {
+        Ok((expr, p)) => (expr, p)
+        Err(p) => return Err(p)
+      }
+      Ok((
+        Node::BinaryExpression(BinaryExpression::{
+          left,
+          operator: BinaryOperator::AddAssign,
+          right,
+          location: start_loc,
+        }),
+        parser,
+      ))
+    }
+    MinusEquals(_) => {
+      let start_loc = get_location(left)
+      let parser = advance_parser(parser)
+      let (right, parser) = match parse_assignment_expression(parser) {
+        Ok((expr, p)) => (expr, p)
+        Err(p) => return Err(p)
+      }
+      Ok((
+        Node::BinaryExpression(BinaryExpression::{
+          left,
+          operator: BinaryOperator::SubtractAssign,
+          right,
+          location: start_loc,
+        }),
+        parser,
+      ))
+    }
+    StarEquals(_) => {
+      let start_loc = get_location(left)
+      let parser = advance_parser(parser)
+      let (right, parser) = match parse_assignment_expression(parser) {
+        Ok((expr, p)) => (expr, p)
+        Err(p) => return Err(p)
+      }
+      Ok((
+        Node::BinaryExpression(BinaryExpression::{
+          left,
+          operator: BinaryOperator::MultiplyAssign,
+          right,
+          location: start_loc,
+        }),
+        parser,
+      ))
+    }
+    SlashEquals(_) => {
+      let start_loc = get_location(left)
+      let parser = advance_parser(parser)
+      let (right, parser) = match parse_assignment_expression(parser) {
+        Ok((expr, p)) => (expr, p)
+        Err(p) => return Err(p)
+      }
+      Ok((
+        Node::BinaryExpression(BinaryExpression::{
+          left,
+          operator: BinaryOperator::DivideAssign,
+          right,
+          location: start_loc,
+        }),
+        parser,
+      ))
+    }
+    PercentEquals(_) => {
+      let start_loc = get_location(left)
+      let parser = advance_parser(parser)
+      let (right, parser) = match parse_assignment_expression(parser) {
+        Ok((expr, p)) => (expr, p)
+        Err(p) => return Err(p)
+      }
+      Ok((
+        Node::BinaryExpression(BinaryExpression::{
+          left,
+          operator: BinaryOperator::RemainderAssign,
+          right,
+          location: start_loc,
+        }),
+        parser,
+      ))
+    }
+    StarStarEquals(_) => {
+      let start_loc = get_location(left)
+      let parser = advance_parser(parser)
+      let (right, parser) = match parse_assignment_expression(parser) {
+        Ok((expr, p)) => (expr, p)
+        Err(p) => return Err(p)
+      }
+      Ok((
+        Node::BinaryExpression(BinaryExpression::{
+          left,
+          operator: BinaryOperator::ExponentiateAssign,
+          right,
+          location: start_loc,
+        }),
+        parser,
+      ))
+    }
+    AmpersandEquals(_) => {
+      let start_loc = get_location(left)
+      let parser = advance_parser(parser)
+      let (right, parser) = match parse_assignment_expression(parser) {
+        Ok((expr, p)) => (expr, p)
+        Err(p) => return Err(p)
+      }
+      Ok((
+        Node::BinaryExpression(BinaryExpression::{
+          left,
+          operator: BinaryOperator::BitwiseAndAssign,
+          right,
+          location: start_loc,
+        }),
+        parser,
+      ))
+    }
+    BarEquals(_) => {
+      let start_loc = get_location(left)
+      let parser = advance_parser(parser)
+      let (right, parser) = match parse_assignment_expression(parser) {
+        Ok((expr, p)) => (expr, p)
+        Err(p) => return Err(p)
+      }
+      Ok((
+        Node::BinaryExpression(BinaryExpression::{
+          left,
+          operator: BinaryOperator::BitwiseOrAssign,
+          right,
+          location: start_loc,
+        }),
+        parser,
+      ))
+    }
+    CaretEquals(_) => {
+      let start_loc = get_location(left)
+      let parser = advance_parser(parser)
+      let (right, parser) = match parse_assignment_expression(parser) {
+        Ok((expr, p)) => (expr, p)
+        Err(p) => return Err(p)
+      }
+      Ok((
+        Node::BinaryExpression(BinaryExpression::{
+          left,
+          operator: BinaryOperator::BitwiseXorAssign,
+          right,
+          location: start_loc,
+        }),
+        parser,
+      ))
+    }
+    LessThanLessThanEquals(_) => {
+      let start_loc = get_location(left)
+      let parser = advance_parser(parser)
+      let (right, parser) = match parse_assignment_expression(parser) {
+        Ok((expr, p)) => (expr, p)
+        Err(p) => return Err(p)
+      }
+      Ok((
+        Node::BinaryExpression(BinaryExpression::{
+          left,
+          operator: BinaryOperator::LeftShiftAssign,
+          right,
+          location: start_loc,
+        }),
+        parser,
+      ))
+    }
+    GreaterThanGreaterThanEquals(_) => {
+      let start_loc = get_location(left)
+      let parser = advance_parser(parser)
+      let (right, parser) = match parse_assignment_expression(parser) {
+        Ok((expr, p)) => (expr, p)
+        Err(p) => return Err(p)
+      }
+      Ok((
+        Node::BinaryExpression(BinaryExpression::{
+          left,
+          operator: BinaryOperator::RightShiftAssign,
+          right,
+          location: start_loc,
+        }),
+        parser,
+      ))
+    }
+    GreaterThanGreaterThanGreaterThanEquals(_) => {
+      let start_loc = get_location(left)
+      let parser = advance_parser(parser)
+      let (right, parser) = match parse_assignment_expression(parser) {
+        Ok((expr, p)) => (expr, p)
+        Err(p) => return Err(p)
+      }
+      Ok((
+        Node::BinaryExpression(BinaryExpression::{
+          left,
+          operator: BinaryOperator::UnsignedRightShiftAssign,
+          right,
+          location: start_loc,
+        }),
+        parser,
+      ))
+    }
+    AmpersandAmpersandEquals(_) => {
+      let start_loc = get_location(left)
+      let parser = advance_parser(parser)
+      let (right, parser) = match parse_assignment_expression(parser) {
+        Ok((expr, p)) => (expr, p)
+        Err(p) => return Err(p)
+      }
+      Ok((
+        Node::BinaryExpression(BinaryExpression::{
+          left,
+          operator: BinaryOperator::LogicalAndAssign,
+          right,
+          location: start_loc,
+        }),
+        parser,
+      ))
+    }
+    BarBarEquals(_) => {
+      let start_loc = get_location(left)
+      let parser = advance_parser(parser)
+      let (right, parser) = match parse_assignment_expression(parser) {
+        Ok((expr, p)) => (expr, p)
+        Err(p) => return Err(p)
+      }
+      Ok((
+        Node::BinaryExpression(BinaryExpression::{
+          left,
+          operator: BinaryOperator::LogicalOrAssign,
+          right,
+          location: start_loc,
+        }),
+        parser,
+      ))
+    }
+    QuestionQuestionEquals(_) => {
+      let start_loc = get_location(left)
+      let parser = advance_parser(parser)
+      let (right, parser) = match parse_assignment_expression(parser) {
+        Ok((expr, p)) => (expr, p)
+        Err(p) => return Err(p)
+      }
+      Ok((
+        Node::BinaryExpression(BinaryExpression::{
+          left,
+          operator: BinaryOperator::NullishCoalescingAssign,
+          right,
+          location: start_loc,
+        }),
+        parser,
+      ))
+    }
     _ => Ok((left, parser))
   }
 }
@@ -6407,13 +6662,51 @@ fn parse_try_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
       let catch_start = current_token(parser).location()
       let parser = advance_parser(parser) // consume 'catch'
 
-      // Optional parameter
+      // Optional parameter (can be identifier, array pattern, or object pattern)
       let (parameter, parser) = match current_token(parser) {
         OpenParen(_) => {
           let parser = advance_parser(parser)
-          let (param, parser) = match parse_identifier(parser) {
-            Ok((id, p)) => (Some(id), p)
-            Err(p) => (None, p)
+          // Parse catch parameter: identifier, array pattern, or object pattern
+          let (param, parser) = match current_token(parser) {
+            OpenBracket(_) => {
+              // Array destructuring pattern: catch ([a, b])
+              match parse_array_binding_pattern(parser) {
+                Ok((pattern, p)) => (Some(pattern), p)
+                Err(p) => (None, p)
+              }
+            }
+            OpenBrace(_) => {
+              // Object destructuring pattern: catch ({ message, name })
+              match parse_object_binding_pattern(parser) {
+                Ok((pattern, p)) => (Some(pattern), p)
+                Err(p) => (None, p)
+              }
+            }
+            CloseParen(_) => {
+              // Empty catch: catch ()
+              (None, parser)
+            }
+            _ => {
+              // Regular identifier: catch (e)
+              match parse_identifier(parser) {
+                Ok((id, p)) => (Some(Node::Identifier(id)), p)
+                Err(p) => (None, p)
+              }
+            }
+          }
+          // Optional type annotation: catch (e: unknown)
+          let (param, parser) = match (param, current_token(parser)) {
+            (Some(p), Colon(_)) => {
+              let parser = advance_parser(parser)
+              // Parse the type but we don't store it in catch clause yet
+              // The type annotation is parsed but the catch variable binding
+              // will still work with the identifier/pattern
+              match parse_type(parser) {
+                Ok((_, parser)) => (Some(p), parser)
+                Err(parser) => (Some(p), parser)
+              }
+            }
+            (p, _) => (p, parser)
           }
           let parser = match current_token(parser) {
             CloseParen(_) => advance_parser(parser)
@@ -6432,10 +6725,7 @@ fn parse_try_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
 
       let catch_end = get_location(catch_block)
       let clause = CatchClause::{
-        variable_declaration: match parameter {
-          Some(id) => Some(Node::Identifier(id))
-          None => None
-        },
+        variable_declaration: parameter,
         block: catch_block,
         location: SourceLocation::new(catch_start.file_path, catch_start.start, catch_end.end)
       }

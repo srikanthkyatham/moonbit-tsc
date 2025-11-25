@@ -2154,6 +2154,829 @@ test "ParserContext default values" {
 }
 
 // ============================================================================
+// Compound Assignment Operator Tests
+// ============================================================================
+
+///|
+test "parse addition assignment" {
+  let tokens = tokens_from_source("x += 5;")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        ExpressionStatement(stmt) => {
+          match stmt.expression {
+            BinaryExpression(bin) => {
+              match bin.operator {
+                AddAssign => ()
+                _ => assert_true(false)
+              }
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse subtraction assignment" {
+  let tokens = tokens_from_source("x -= 5;")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        ExpressionStatement(stmt) => {
+          match stmt.expression {
+            BinaryExpression(bin) => {
+              match bin.operator {
+                SubtractAssign => ()
+                _ => assert_true(false)
+              }
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse multiplication assignment" {
+  let tokens = tokens_from_source("x *= 5;")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        ExpressionStatement(stmt) => {
+          match stmt.expression {
+            BinaryExpression(bin) => {
+              match bin.operator {
+                MultiplyAssign => ()
+                _ => assert_true(false)
+              }
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse division assignment" {
+  let tokens = tokens_from_source("x /= 5;")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        ExpressionStatement(stmt) => {
+          match stmt.expression {
+            BinaryExpression(bin) => {
+              match bin.operator {
+                DivideAssign => ()
+                _ => assert_true(false)
+              }
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse remainder assignment" {
+  let tokens = tokens_from_source("x %= 5;")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        ExpressionStatement(stmt) => {
+          match stmt.expression {
+            BinaryExpression(bin) => {
+              match bin.operator {
+                RemainderAssign => ()
+                _ => assert_true(false)
+              }
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse exponentiation assignment" {
+  let tokens = tokens_from_source("x **= 2;")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        ExpressionStatement(stmt) => {
+          match stmt.expression {
+            BinaryExpression(bin) => {
+              match bin.operator {
+                ExponentiateAssign => ()
+                _ => assert_true(false)
+              }
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse bitwise AND assignment" {
+  let tokens = tokens_from_source("x &= 0xFF;")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        ExpressionStatement(stmt) => {
+          match stmt.expression {
+            BinaryExpression(bin) => {
+              match bin.operator {
+                BitwiseAndAssign => ()
+                _ => assert_true(false)
+              }
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse bitwise OR assignment" {
+  let tokens = tokens_from_source("x |= 0xFF;")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        ExpressionStatement(stmt) => {
+          match stmt.expression {
+            BinaryExpression(bin) => {
+              match bin.operator {
+                BitwiseOrAssign => ()
+                _ => assert_true(false)
+              }
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse bitwise XOR assignment" {
+  let tokens = tokens_from_source("x ^= 0xFF;")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        ExpressionStatement(stmt) => {
+          match stmt.expression {
+            BinaryExpression(bin) => {
+              match bin.operator {
+                BitwiseXorAssign => ()
+                _ => assert_true(false)
+              }
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse left shift assignment" {
+  let tokens = tokens_from_source("x <<= 2;")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        ExpressionStatement(stmt) => {
+          match stmt.expression {
+            BinaryExpression(bin) => {
+              match bin.operator {
+                LeftShiftAssign => ()
+                _ => assert_true(false)
+              }
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse right shift assignment" {
+  let tokens = tokens_from_source("x >>= 2;")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        ExpressionStatement(stmt) => {
+          match stmt.expression {
+            BinaryExpression(bin) => {
+              match bin.operator {
+                RightShiftAssign => ()
+                _ => assert_true(false)
+              }
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse unsigned right shift assignment" {
+  let tokens = tokens_from_source("x >>>= 2;")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        ExpressionStatement(stmt) => {
+          match stmt.expression {
+            BinaryExpression(bin) => {
+              match bin.operator {
+                UnsignedRightShiftAssign => ()
+                _ => assert_true(false)
+              }
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse logical AND assignment" {
+  let tokens = tokens_from_source("x &&= true;")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        ExpressionStatement(stmt) => {
+          match stmt.expression {
+            BinaryExpression(bin) => {
+              match bin.operator {
+                LogicalAndAssign => ()
+                _ => assert_true(false)
+              }
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse logical OR assignment" {
+  let tokens = tokens_from_source("x ||= false;")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        ExpressionStatement(stmt) => {
+          match stmt.expression {
+            BinaryExpression(bin) => {
+              match bin.operator {
+                LogicalOrAssign => ()
+                _ => assert_true(false)
+              }
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse nullish coalescing assignment" {
+  let tokens = tokens_from_source("x ??= defaultValue;")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        ExpressionStatement(stmt) => {
+          match stmt.expression {
+            BinaryExpression(bin) => {
+              match bin.operator {
+                NullishCoalescingAssign => ()
+                _ => assert_true(false)
+              }
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse compound assignment with property access" {
+  let tokens = tokens_from_source("obj.count += 1;")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        ExpressionStatement(stmt) => {
+          match stmt.expression {
+            BinaryExpression(bin) => {
+              match bin.operator {
+                AddAssign => ()
+                _ => assert_true(false)
+              }
+              match bin.left {
+                PropertyAccessExpression(_) => ()
+                _ => assert_true(false)
+              }
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse compound assignment with element access" {
+  let tokens = tokens_from_source("arr[0] *= 2;")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        ExpressionStatement(stmt) => {
+          match stmt.expression {
+            BinaryExpression(bin) => {
+              match bin.operator {
+                MultiplyAssign => ()
+                _ => assert_true(false)
+              }
+              match bin.left {
+                ElementAccessExpression(_) => ()
+                _ => assert_true(false)
+              }
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse compound assignment with expression on right side" {
+  let tokens = tokens_from_source("x += y * z;")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        ExpressionStatement(stmt) => {
+          match stmt.expression {
+            BinaryExpression(bin) => {
+              match bin.operator {
+                AddAssign => ()
+                _ => assert_true(false)
+              }
+              match bin.right {
+                BinaryExpression(right_bin) => {
+                  match right_bin.operator {
+                    Multiply => ()
+                    _ => assert_true(false)
+                  }
+                }
+                _ => assert_true(false)
+              }
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse multiple compound assignments" {
+  let tokens = tokens_from_source("x += 1; y -= 2; z *= 3;")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 3)
+      // First statement: x += 1
+      match source_file.statements[0] {
+        ExpressionStatement(stmt) => {
+          match stmt.expression {
+            BinaryExpression(bin) => {
+              match bin.operator {
+                AddAssign => ()
+                _ => assert_true(false)
+              }
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+      // Second statement: y -= 2
+      match source_file.statements[1] {
+        ExpressionStatement(stmt) => {
+          match stmt.expression {
+            BinaryExpression(bin) => {
+              match bin.operator {
+                SubtractAssign => ()
+                _ => assert_true(false)
+              }
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+      // Third statement: z *= 3
+      match source_file.statements[2] {
+        ExpressionStatement(stmt) => {
+          match stmt.expression {
+            BinaryExpression(bin) => {
+              match bin.operator {
+                MultiplyAssign => ()
+                _ => assert_true(false)
+              }
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse compound assignment in function body" {
+  let tokens = tokens_from_source("function increment(x: number) { x += 1; return x; }")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        FunctionDeclaration(func) => {
+          match func.body {
+            Some(BlockStatement(block)) => {
+              assert_eq(block.statements.length(), 2)
+              match block.statements[0] {
+                ExpressionStatement(stmt) => {
+                  match stmt.expression {
+                    BinaryExpression(bin) => {
+                      match bin.operator {
+                        AddAssign => ()
+                        _ => assert_true(false)
+                      }
+                    }
+                    _ => assert_true(false)
+                  }
+                }
+                _ => assert_true(false)
+              }
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse all compound assignment operators in sequence" {
+  let tokens = tokens_from_source(
+    "a += 1; b -= 1; c *= 1; d /= 1; e %= 1; f **= 1; g &= 1; h |= 1; i ^= 1; j <<= 1; k >>= 1; l >>>= 1; m &&= true; n ||= false; o ??= null;",
+  )
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 15)
+      // Verify each operator type using pattern matching
+      // Statement 0: a += 1
+      match source_file.statements[0] {
+        ExpressionStatement(stmt) => {
+          match stmt.expression {
+            BinaryExpression(bin) => {
+              match bin.operator {
+                AddAssign => ()
+                _ => assert_true(false)
+              }
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+      // Statement 1: b -= 1
+      match source_file.statements[1] {
+        ExpressionStatement(stmt) => {
+          match stmt.expression {
+            BinaryExpression(bin) => {
+              match bin.operator {
+                SubtractAssign => ()
+                _ => assert_true(false)
+              }
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+      // Statement 2: c *= 1
+      match source_file.statements[2] {
+        ExpressionStatement(stmt) => {
+          match stmt.expression {
+            BinaryExpression(bin) => {
+              match bin.operator {
+                MultiplyAssign => ()
+                _ => assert_true(false)
+              }
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+      // Statement 3: d /= 1
+      match source_file.statements[3] {
+        ExpressionStatement(stmt) => {
+          match stmt.expression {
+            BinaryExpression(bin) => {
+              match bin.operator {
+                DivideAssign => ()
+                _ => assert_true(false)
+              }
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+      // Statement 4: e %= 1
+      match source_file.statements[4] {
+        ExpressionStatement(stmt) => {
+          match stmt.expression {
+            BinaryExpression(bin) => {
+              match bin.operator {
+                RemainderAssign => ()
+                _ => assert_true(false)
+              }
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+      // Statement 5: f **= 1
+      match source_file.statements[5] {
+        ExpressionStatement(stmt) => {
+          match stmt.expression {
+            BinaryExpression(bin) => {
+              match bin.operator {
+                ExponentiateAssign => ()
+                _ => assert_true(false)
+              }
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+      // Statement 6: g &= 1
+      match source_file.statements[6] {
+        ExpressionStatement(stmt) => {
+          match stmt.expression {
+            BinaryExpression(bin) => {
+              match bin.operator {
+                BitwiseAndAssign => ()
+                _ => assert_true(false)
+              }
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+      // Statement 7: h |= 1
+      match source_file.statements[7] {
+        ExpressionStatement(stmt) => {
+          match stmt.expression {
+            BinaryExpression(bin) => {
+              match bin.operator {
+                BitwiseOrAssign => ()
+                _ => assert_true(false)
+              }
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+      // Statement 8: i ^= 1
+      match source_file.statements[8] {
+        ExpressionStatement(stmt) => {
+          match stmt.expression {
+            BinaryExpression(bin) => {
+              match bin.operator {
+                BitwiseXorAssign => ()
+                _ => assert_true(false)
+              }
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+      // Statement 9: j <<= 1
+      match source_file.statements[9] {
+        ExpressionStatement(stmt) => {
+          match stmt.expression {
+            BinaryExpression(bin) => {
+              match bin.operator {
+                LeftShiftAssign => ()
+                _ => assert_true(false)
+              }
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+      // Statement 10: k >>= 1
+      match source_file.statements[10] {
+        ExpressionStatement(stmt) => {
+          match stmt.expression {
+            BinaryExpression(bin) => {
+              match bin.operator {
+                RightShiftAssign => ()
+                _ => assert_true(false)
+              }
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+      // Statement 11: l >>>= 1
+      match source_file.statements[11] {
+        ExpressionStatement(stmt) => {
+          match stmt.expression {
+            BinaryExpression(bin) => {
+              match bin.operator {
+                UnsignedRightShiftAssign => ()
+                _ => assert_true(false)
+              }
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+      // Statement 12: m &&= true
+      match source_file.statements[12] {
+        ExpressionStatement(stmt) => {
+          match stmt.expression {
+            BinaryExpression(bin) => {
+              match bin.operator {
+                LogicalAndAssign => ()
+                _ => assert_true(false)
+              }
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+      // Statement 13: n ||= false
+      match source_file.statements[13] {
+        ExpressionStatement(stmt) => {
+          match stmt.expression {
+            BinaryExpression(bin) => {
+              match bin.operator {
+                LogicalOrAssign => ()
+                _ => assert_true(false)
+              }
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+      // Statement 14: o ??= null
+      match source_file.statements[14] {
+        ExpressionStatement(stmt) => {
+          match stmt.expression {
+            BinaryExpression(bin) => {
+              match bin.operator {
+                NullishCoalescingAssign => ()
+                _ => assert_true(false)
+              }
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+// ============================================================================
 // Parser Error Code Tests
 // ============================================================================
 // Note: ParserErrorCode enum variants are tested internally in the parser module.

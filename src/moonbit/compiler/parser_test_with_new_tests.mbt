@@ -444,6 +444,197 @@ test "parse try-catch-finally statement" {
 }
 
 ///|
+test "parse try-catch without variable" {
+  let tokens = tokens_from_source("try { } catch { }")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        TryStatement(ts) => {
+          match ts.catch_clause {
+            Some(clause) => {
+              // Catch clause should have no variable declaration
+              assert_true(clause.variable_declaration is None)
+            }
+            None => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse try-catch with object destructuring" {
+  let tokens = tokens_from_source("try { } catch ({ message, name }) { }")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        TryStatement(ts) => {
+          match ts.catch_clause {
+            Some(clause) => {
+              match clause.variable_declaration {
+                Some(ObjectBindingPattern(pattern)) => {
+                  // Should have 2 properties: message and name
+                  assert_eq(pattern.properties.length(), 2)
+                }
+                _ => assert_true(false)
+              }
+            }
+            None => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse try-catch with array destructuring" {
+  let tokens = tokens_from_source("try { } catch ([first, second]) { }")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        TryStatement(ts) => {
+          match ts.catch_clause {
+            Some(clause) => {
+              match clause.variable_declaration {
+                Some(ArrayBindingPattern(pattern)) => {
+                  // Should have 2 elements: first and second
+                  assert_eq(pattern.elements.length(), 2)
+                }
+                _ => assert_true(false)
+              }
+            }
+            None => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse try-catch with type annotation" {
+  let tokens = tokens_from_source("try { } catch (e: unknown) { }")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        TryStatement(ts) => {
+          match ts.catch_clause {
+            Some(clause) => {
+              match clause.variable_declaration {
+                Some(Identifier(id)) => {
+                  // Should have identifier 'e'
+                  assert_eq(id.name, "e")
+                }
+                _ => assert_true(false)
+              }
+            }
+            None => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse try-catch with Error type annotation" {
+  let tokens = tokens_from_source("try { } catch (err: Error) { console.log(err); }")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        TryStatement(ts) => {
+          match ts.catch_clause {
+            Some(clause) => {
+              match clause.variable_declaration {
+                Some(Identifier(id)) => {
+                  assert_eq(id.name, "err")
+                }
+                _ => assert_true(false)
+              }
+            }
+            None => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse try-catch with empty parentheses" {
+  let tokens = tokens_from_source("try { } catch () { }")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        TryStatement(ts) => {
+          match ts.catch_clause {
+            Some(clause) => {
+              // Empty catch () should have no variable declaration
+              assert_true(clause.variable_declaration is None)
+            }
+            None => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse nested try-catch" {
+  let tokens = tokens_from_source("try { try { } catch (inner) { } } catch (outer) { }")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        TryStatement(ts) => {
+          match ts.catch_clause {
+            Some(clause) => {
+              match clause.variable_declaration {
+                Some(Identifier(id)) => {
+                  assert_eq(id.name, "outer")
+                }
+                _ => assert_true(false)
+              }
+            }
+            None => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
 test "parse nested loops" {
   let tokens = tokens_from_source(
     "for (let i = 0; i < 10; i++) { while (true) { break; } }",

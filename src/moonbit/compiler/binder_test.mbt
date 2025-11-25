@@ -492,6 +492,112 @@ test "bind catch parameter shadowing allowed" {
   }
 }
 
+///|
+test "bind try-catch without catch variable" {
+  let result = parse_and_bind("try { const x = 1; } catch { const y = 2; }")
+  match result {
+    Ok(bound) => {
+      // Neither x nor y should be in global scope
+      assert_false(bound.global_scope.symbols.contains("x"))
+      assert_false(bound.global_scope.symbols.contains("y"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "bind try-catch-finally" {
+  let result = parse_and_bind("try { const a = 1; } catch (e) { const b = 2; } finally { const c = 3; }")
+  match result {
+    Ok(bound) => {
+      // None of the variables should be in global scope
+      assert_false(bound.global_scope.symbols.contains("a"))
+      assert_false(bound.global_scope.symbols.contains("b"))
+      assert_false(bound.global_scope.symbols.contains("c"))
+      assert_false(bound.global_scope.symbols.contains("e"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "bind try-finally without catch" {
+  let result = parse_and_bind("try { const x = 1; } finally { const y = 2; }")
+  match result {
+    Ok(bound) => {
+      // Neither x nor y should be in global scope
+      assert_false(bound.global_scope.symbols.contains("x"))
+      assert_false(bound.global_scope.symbols.contains("y"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "bind catch with object destructuring pattern" {
+  let result = parse_and_bind("try { } catch ({ message, name }) { console.log(message); }")
+  match result {
+    Ok(bound) => {
+      // Destructured variables should not be in global scope
+      assert_false(bound.global_scope.symbols.contains("message"))
+      assert_false(bound.global_scope.symbols.contains("name"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "bind catch with array destructuring pattern" {
+  let result = parse_and_bind("try { } catch ([first, second]) { console.log(first); }")
+  match result {
+    Ok(bound) => {
+      // Destructured variables should not be in global scope
+      assert_false(bound.global_scope.symbols.contains("first"))
+      assert_false(bound.global_scope.symbols.contains("second"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "bind catch variable used in catch block" {
+  let result = parse_and_bind("try { throw new Error('test'); } catch (err) { const msg = err.message; }")
+  match result {
+    Ok(bound) => {
+      // err and msg should not be in global scope
+      assert_false(bound.global_scope.symbols.contains("err"))
+      assert_false(bound.global_scope.symbols.contains("msg"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "bind nested try-catch" {
+  let result = parse_and_bind("try { try { } catch (inner) { } } catch (outer) { }")
+  match result {
+    Ok(bound) => {
+      // Both catch variables should not be in global scope
+      assert_false(bound.global_scope.symbols.contains("inner"))
+      assert_false(bound.global_scope.symbols.contains("outer"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "bind catch variable with type annotation" {
+  let result = parse_and_bind("try { } catch (e: unknown) { const x = e; }")
+  match result {
+    Ok(bound) => {
+      // e and x should not be in global scope
+      assert_false(bound.global_scope.symbols.contains("e"))
+      assert_false(bound.global_scope.symbols.contains("x"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
 // ============================================================================
 // Multiple Declaration Types Tests
 // ============================================================================
