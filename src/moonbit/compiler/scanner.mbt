@@ -811,6 +811,7 @@ fn scan_identifier_or_keyword(
     "instanceof" => KeywordInstanceOf(loc)
     "typeof" => KeywordTypeOf(loc)
     "delete" => KeywordDelete(loc)
+    "debugger" => KeywordDebugger(loc)
     _ => Identifier(text, loc)
   }
   (token, scanner)

@@ -199,6 +199,15 @@ fn parse_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
     KeywordReturn(_) => parse_return_statement(parser)
     KeywordThrow(_) => parse_throw_statement(parser)
     KeywordTry(_) => parse_try_statement(parser)
+    KeywordDebugger(loc) => {
+      let parser = advance_parser(parser)
+      // Optional semicolon
+      let parser = match current_token(parser) {
+        Semicolon(_) => advance_parser(parser)
+        _ => parser
+      }
+      Ok((Node::DebuggerStatement(DebuggerStatement::{ location: loc }), parser))
+    }
 
     // Block statement
     OpenBrace(_) => parse_block_statement(parser)

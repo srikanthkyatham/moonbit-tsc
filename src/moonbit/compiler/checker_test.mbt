@@ -3435,3 +3435,40 @@ test "check await using declaration" {
     Err(_) => assert_true(false)
   }
 }
+
+// ============================================================================
+// Debugger Statement Tests
+// ============================================================================
+
+///|
+test "check debugger statement" {
+  let result = parse_bind_and_check("debugger;")
+  match result {
+    Ok(typed) => {
+      assert_eq(typed.file_path, "test.ts")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "check debugger statement without semicolon" {
+  let result = parse_bind_and_check("function test() { debugger }")
+  match result {
+    Ok(typed) => {
+      assert_eq(typed.file_path, "test.ts")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "check debugger statement in if block" {
+  let result = parse_bind_and_check("if (true) { debugger; }")
+  match result {
+    Ok(typed) => {
+      assert_eq(typed.file_path, "test.ts")
+    }
+    Err(_) => assert_true(false)
+  }
+}

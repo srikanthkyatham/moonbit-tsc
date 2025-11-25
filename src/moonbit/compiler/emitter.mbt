@@ -141,9 +141,9 @@ pub fn emit(node : Node, ctx : EmitterContext) -> String {
     BlockStatement(bs) => emit_block_statement(bs, ctx)
     ExpressionStatement(es) => emit_expression_statement(es, ctx)
     EmptyStatement(_) => ""
+    DebuggerStatement(_) => "debugger;"
     LabeledStatement(ls) => emit_labeled_statement(ls, ctx)
     WithStatement(ws) => emit_with_statement(ws, ctx)
-    DebuggerStatement(_) => "debugger;"
 
     // Expressions
     BinaryExpression(be) => emit_binary_expression(be, ctx)

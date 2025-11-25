@@ -131,10 +131,10 @@ pub fn transform(node : Node, ctx : TransformerContext) -> Node {
     ExpressionStatement(expr_stmt) =>
       transform_expression_statement(expr_stmt, ctx)
     EmptyStatement(empty_stmt) => EmptyStatement(empty_stmt)
+    DebuggerStatement(ds) => DebuggerStatement(ds)
     LabeledStatement(labeled_stmt) =>
       transform_labeled_statement(labeled_stmt, ctx)
     WithStatement(with_stmt) => transform_with_statement(with_stmt, ctx)
-    DebuggerStatement(debug_stmt) => DebuggerStatement(debug_stmt)
 
     // Expressions - transform recursively
     BinaryExpression(be) => transform_binary_expression(be, ctx)

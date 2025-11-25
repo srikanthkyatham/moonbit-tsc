@@ -511,3 +511,18 @@ test "emit maintains indentation" {
   assert_true(js.contains("{"))
   assert_true(js.contains("}"))
 }
+
+///|
+/// Test: Emit debugger statement
+test "emit debugger statement" {
+  let js = compile_to_js("debugger;")
+  assert_true(js.contains("debugger;"))
+}
+
+///|
+/// Test: Emit debugger statement in function
+test "emit debugger statement in function" {
+  let js = compile_to_js("function debug() { debugger; return 1; }")
+  assert_true(js.contains("debugger;"))
+  assert_true(js.contains("return 1;"))
+}

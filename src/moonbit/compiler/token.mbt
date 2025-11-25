@@ -82,6 +82,7 @@ pub enum Token {
   KeywordInstanceOf(SourceLocation)
   KeywordTypeOf(SourceLocation)
   KeywordDelete(SourceLocation)
+  KeywordDebugger(SourceLocation)
 
   // Operators
   // Arithmetic
@@ -260,6 +261,7 @@ pub fn Token::location(self : Token) -> SourceLocation {
     | KeywordInstanceOf(loc)
     | KeywordTypeOf(loc)
     | KeywordDelete(loc)
+    | KeywordDebugger(loc)
     | Plus(loc)
     | Minus(loc)
     | Star(loc)
@@ -391,7 +393,8 @@ pub fn Token::is_keyword(self : Token) -> Bool {
     | KeywordOf(_)
     | KeywordInstanceOf(_)
     | KeywordTypeOf(_)
-    | KeywordDelete(_) => true
+    | KeywordDelete(_)
+    | KeywordDebugger(_) => true
     _ => false
   }
 }
