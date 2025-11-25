@@ -23,16 +23,6 @@ pub struct Binder {
 pub type BindResult = Result[BoundSourceFile, Array[Diagnostic]]
 
 ///|
-/// Bound source file (AST with symbol information)
-pub struct BoundSourceFile {
-  file_path : String
-  global_scope : Scope
-  statements : Array[Node]
-  symbol_count : Int
-  diagnostics : Array[Diagnostic]
-} derive(Show)
-
-///|
 /// Create a new binder
 fn Binder::new(file_path : String) -> Binder {
   let global_scope = Scope::new(None, 0)
@@ -61,6 +51,9 @@ pub fn bind_source_file(
     scope => scope
   }
 
+  // Detect module status
+  let module_info = detect_module_status(source_file)
+
   if binder.diagnostics.length() > 0 {
     Err(binder.diagnostics)
   } else {
@@ -70,6 +63,7 @@ pub fn bind_source_file(
       statements: source_file.statements,
       symbol_count: binder.next_symbol_id,
       diagnostics: binder.diagnostics,
+      module_info,
     })
   }
 }
@@ -837,14 +831,22 @@ fn is_assignment_operator(op : BinaryOperator) -> Bool {
 fn get_current_flow_id(binder : Binder) -> Int {
   match binder.current_flow {
     Some(FlowNode::Start(start)) => start.id
+    Some(FlowNode::End(end)) => end.id
     Some(FlowNode::Assignment(assign)) => assign.id
+    Some(FlowNode::ArrayMutation(mutation)) => mutation.id
     Some(FlowNode::Call(call)) => call.id
     Some(FlowNode::Condition(cond)) => cond.id
+    Some(FlowNode::TrueCondition(tc)) => tc.id
+    Some(FlowNode::FalseCondition(fc)) => fc.id
     Some(FlowNode::SwitchClause(clause)) => clause.id
+    Some(FlowNode::LoopLabel(ll)) => ll.id
     Some(FlowNode::Label(label)) => label.id
-    Some(FlowNode::ArrayMutation(mutation)) => mutation.id
+    Some(FlowNode::BranchLabel(bl)) => bl.id
     Some(FlowNode::Return(ret)) => ret.id
+    Some(FlowNode::Throw(t)) => t.id
     Some(FlowNode::Unreachable(unreach)) => unreach.id
+    Some(FlowNode::Narrowing(n)) => n.id
+    Some(FlowNode::Reducer(r)) => r.id
     None => 0
   }
 }
@@ -1219,9 +1221,25 @@ fn declare_symbol(binder : Binder, name : String, symbol : Symbol) -> Binder {
       // Allow getter/setter pairs with the same name
       let is_getter_setter_pair = (existing_symbol.kind == SymbolKind::GetAccessor && symbol.kind == SymbolKind::SetAccessor) ||
         (existing_symbol.kind == SymbolKind::SetAccessor && symbol.kind == SymbolKind::GetAccessor)
-      if is_function_overload || is_method_overload || is_getter_setter_pair {
-        // Overload or getter/setter pair - allow it without error
-        binder
+      // Allow interface merging
+      let is_interface_merge = existing_symbol.kind == SymbolKind::Interface && symbol.kind == SymbolKind::Interface
+      // Allow namespace merging
+      let is_namespace_merge = existing_symbol.kind == SymbolKind::Module && symbol.kind == SymbolKind::Module
+      if is_function_overload || is_method_overload || is_getter_setter_pair || is_interface_merge || is_namespace_merge {
+        // Overload, getter/setter pair, or mergeable declaration - allow it
+        // For interface/namespace merging, merge the symbols
+        if is_interface_merge || is_namespace_merge {
+          let merged_symbol = merge_symbols(existing_symbol, symbol)
+          let new_symbols = scope.symbols
+          new_symbols.set(name, merged_symbol)
+          let updated_scope = { ..scope, symbols: new_symbols }
+          let scope_index = binder.scopes.length() - 1
+          let new_scopes = binder.scopes
+          new_scopes[scope_index] = updated_scope
+          { ..binder, scopes: new_scopes }
+        } else {
+          binder
+        }
       } else {
         // Duplicate declaration - add diagnostic
         let diagnostic = Diagnostic::error(
@@ -1252,4 +1270,549 @@ fn declare_symbol(binder : Binder, name : String, symbol : Symbol) -> Binder {
       }
     }
   }
+}
+
+// ============================================================================
+// Module Detection
+// ============================================================================
+
+///|
+/// Detect module status from source file
+pub fn detect_module_status(source_file : SourceFile) -> ModuleInfo {
+  let mut is_external_module = false
+  let mut is_commonjs_module = false
+  let mut is_strict_mode = false
+  let imports : Array[ImportInfo] = []
+  let exports : Array[ExportInfo] = []
+
+  for i = 0; i < source_file.statements.length(); i = i + 1 {
+    let stmt = source_file.statements[i]
+    match stmt {
+      // Import declaration makes it an ES module
+      ImportDeclaration(import_decl) => {
+        is_external_module = true
+        imports.push(extract_import_info(import_decl))
+      }
+
+      // Export declaration makes it an ES module
+      ExportDeclaration(export_decl) => {
+        is_external_module = true
+        exports.push(extract_export_decl_info(export_decl))
+      }
+
+      // Export assignment could be CommonJS
+      ExportAssignment(export_assign) => {
+        if export_assign.is_export_equals {
+          is_commonjs_module = true
+          exports.push(ExportInfo::{
+            kind: ExportKind::Equals,
+            name: None,
+            is_type_only: false,
+            module_specifier: None,
+            location: export_assign.location,
+          })
+        } else {
+          is_external_module = true
+          exports.push(ExportInfo::{
+            kind: ExportKind::Default,
+            name: None,
+            is_type_only: false,
+            module_specifier: None,
+            location: export_assign.location,
+          })
+        }
+      }
+
+      // Check for "use strict"
+      ExpressionStatement(expr_stmt) => {
+        match expr_stmt.expression {
+          StringLiteral(s) => {
+            if s.value == "use strict" {
+              is_strict_mode = true
+            }
+          }
+          _ => ()
+        }
+      }
+
+      // Export modifiers on declarations
+      FunctionDeclaration(func) => {
+        if binder_has_export_modifier(func.modifiers) {
+          is_external_module = true
+          let is_default = binder_has_default_modifier(func.modifiers)
+          let name = match func.name {
+            Some(Identifier(id)) => Some(id.name)
+            _ => None
+          }
+          exports.push(ExportInfo::{
+            kind: if is_default { ExportKind::Default } else { ExportKind::Declaration },
+            name,
+            is_type_only: false,
+            module_specifier: None,
+            location: func.location,
+          })
+        }
+      }
+
+      ClassDeclaration(class_decl) => {
+        if binder_has_export_modifier(class_decl.modifiers) {
+          is_external_module = true
+          let is_default = binder_has_default_modifier(class_decl.modifiers)
+          let name = match class_decl.name {
+            Some(Identifier(id)) => Some(id.name)
+            _ => None
+          }
+          exports.push(ExportInfo::{
+            kind: if is_default { ExportKind::Default } else { ExportKind::Declaration },
+            name,
+            is_type_only: false,
+            module_specifier: None,
+            location: class_decl.location,
+          })
+        }
+      }
+
+      VariableStatement(var_stmt) => {
+        if binder_has_export_modifier(var_stmt.modifiers) {
+          is_external_module = true
+          for j = 0; j < var_stmt.declarations.length(); j = j + 1 {
+            let decl = var_stmt.declarations[j]
+            let name = get_binding_name(decl.name)
+            exports.push(ExportInfo::{
+              kind: ExportKind::Declaration,
+              name,
+              is_type_only: false,
+              module_specifier: None,
+              location: decl.location,
+            })
+          }
+        }
+      }
+
+      InterfaceDeclaration(interface) => {
+        if binder_has_export_modifier(interface.modifiers) {
+          is_external_module = true
+          exports.push(ExportInfo::{
+            kind: ExportKind::Declaration,
+            name: Some(interface.name),
+            is_type_only: true,
+            module_specifier: None,
+            location: interface.location,
+          })
+        }
+      }
+
+      TypeAliasDeclaration(type_alias) => {
+        if binder_has_export_modifier(type_alias.modifiers) {
+          is_external_module = true
+          exports.push(ExportInfo::{
+            kind: ExportKind::Declaration,
+            name: Some(type_alias.name),
+            is_type_only: true,
+            module_specifier: None,
+            location: type_alias.location,
+          })
+        }
+      }
+
+      EnumDeclaration(enum_decl) => {
+        if binder_has_export_modifier(enum_decl.modifiers) {
+          is_external_module = true
+          exports.push(ExportInfo::{
+            kind: ExportKind::Declaration,
+            name: Some(enum_decl.name),
+            is_type_only: false,
+            module_specifier: None,
+            location: enum_decl.location,
+          })
+        }
+      }
+
+      _ => ()
+    }
+  }
+
+  {
+    is_external_module,
+    is_commonjs_module,
+    is_ambient_module: false,
+    is_strict_mode,
+    module_name: None,
+    imports,
+    exports,
+  }
+}
+
+///|
+/// Extract import info from import declaration
+fn extract_import_info(import_decl : ImportDeclaration) -> ImportInfo {
+  let mut default_import : String? = None
+  let mut namespace_import : String? = None
+  let named_imports : Array[(String, String)] = []
+
+  match import_decl.import_clause {
+    Some(clause) => {
+      // Default import
+      default_import = clause.name
+
+      // Named bindings
+      match clause.named_bindings {
+        Some(NamedImports::NamespaceImport(name, _)) => {
+          namespace_import = Some(name)
+        }
+        Some(NamedImports::NamedImports(specifiers, _)) => {
+          for i = 0; i < specifiers.length(); i = i + 1 {
+            let spec = specifiers[i]
+            let property_name = match spec.property_name {
+              Some(p) => p
+              None => spec.name
+            }
+            named_imports.push((property_name, spec.name))
+          }
+        }
+        None => ()
+      }
+    }
+    None => ()
+  }
+
+  {
+    module_specifier: import_decl.module_specifier,
+    is_type_only: false, // ImportDeclaration doesn't have this field yet
+    default_import,
+    namespace_import,
+    named_imports,
+    location: import_decl.location,
+  }
+}
+
+///|
+/// Extract export info from export declaration
+fn extract_export_decl_info(export_decl : ExportDeclaration) -> ExportInfo {
+  let kind = match export_decl.export_clause {
+    Some(_) => ExportKind::Named
+    None => ExportKind::Namespace
+  }
+
+  {
+    kind,
+    name: None,
+    is_type_only: export_decl.is_type_only,
+    module_specifier: export_decl.module_specifier,
+    location: export_decl.location,
+  }
+}
+
+///|
+/// Check for export modifier (binder version)
+fn binder_has_export_modifier(modifiers : Array[Modifier]) -> Bool {
+  for i = 0; i < modifiers.length(); i = i + 1 {
+    match modifiers[i] {
+      Export => return true
+      _ => ()
+    }
+  }
+  false
+}
+
+///|
+/// Check for default modifier (binder version)
+fn binder_has_default_modifier(modifiers : Array[Modifier]) -> Bool {
+  for i = 0; i < modifiers.length(); i = i + 1 {
+    match modifiers[i] {
+      Default => return true
+      _ => ()
+    }
+  }
+  false
+}
+
+///|
+/// Get binding name from pattern
+fn get_binding_name(pattern : Node) -> String? {
+  match pattern {
+    Identifier(id) => Some(id.name)
+    _ => None
+  }
+}
+
+// ============================================================================
+// Declaration Merging
+// ============================================================================
+
+///|
+/// Check if two symbols can be merged
+pub fn can_merge_symbols(a : Symbol, b : Symbol) -> Bool {
+  match (a.kind, b.kind) {
+    // Interface + Interface = merged interface
+    (Interface, Interface) => true
+
+    // Namespace + Namespace = merged namespace
+    (Module, Module) => true
+
+    // Class + Interface = class implements interface
+    (Class, Interface) | (Interface, Class) => true
+
+    // Function + Namespace = callable namespace
+    (Function, Module) | (Module, Function) => true
+
+    // Enum + Namespace = enum with static members
+    (Enum, Module) | (Module, Enum) => true
+
+    // Type alias can't merge with anything (except itself)
+    (Type, Type) => false
+
+    // Variables can't merge
+    (Variable, _) | (_, Variable) => false
+
+    _ => false
+  }
+}
+
+///|
+/// Merge two symbols
+pub fn merge_symbols(a : Symbol, b : Symbol) -> Symbol {
+  // Combine declarations
+  let declarations = a.declarations.copy()
+  for i = 0; i < b.declarations.length(); i = i + 1 {
+    declarations.push(b.declarations[i])
+  }
+
+  // Merge members
+  let members : SymbolTable? = match (a.members, b.members) {
+    (Some(a_members), Some(b_members)) => {
+      let merged : SymbolTable = Map::new()
+      // Copy a_members to merged
+      a_members.each(fn(name, symbol) { merged.set(name, symbol) })
+      // Add b_members, merging if necessary
+      b_members.each(fn(name, symbol) {
+        match merged.get(name) {
+          Some(existing) => {
+            if can_merge_symbols(existing, symbol) {
+              merged.set(name, merge_symbols(existing, symbol))
+            }
+            // Otherwise skip (error already reported)
+          }
+          None => merged.set(name, symbol)
+        }
+      })
+      Some(merged)
+    }
+    (Some(m), None) => Some(m)
+    (None, Some(m)) => Some(m)
+    (None, None) => None
+  }
+
+  // Merge exports
+  let exports : SymbolTable? = match (a.exports, b.exports) {
+    (Some(a_exports), Some(b_exports)) => {
+      let merged : SymbolTable = Map::new()
+      a_exports.each(fn(name, symbol) { merged.set(name, symbol) })
+      b_exports.each(fn(name, symbol) { merged.set(name, symbol) })
+      Some(merged)
+    }
+    (Some(e), None) => Some(e)
+    (None, Some(e)) => Some(e)
+    (None, None) => None
+  }
+
+  // Merge flags
+  let flags = SymbolFlags::{
+    is_export: a.flags.is_export || b.flags.is_export,
+    is_ambient: a.flags.is_ambient || b.flags.is_ambient,
+    is_merged: true,
+    is_instantiated: a.flags.is_instantiated,
+    is_transient: a.flags.is_transient,
+    is_assignment: a.flags.is_assignment,
+    is_optional: a.flags.is_optional,
+    is_readonly: a.flags.is_readonly,
+    is_const: a.flags.is_const,
+    is_static: a.flags.is_static,
+    is_private: a.flags.is_private,
+    is_protected: a.flags.is_protected,
+    is_public: a.flags.is_public,
+    is_abstract: a.flags.is_abstract,
+    is_async: a.flags.is_async,
+  }
+
+  {
+    ..a,
+    declarations,
+    members,
+    exports,
+    flags,
+  }
+}
+
+///|
+/// Merge global declarations across files
+pub fn merge_global_declarations(
+  files : Array[BoundSourceFile],
+) -> (SymbolTable, Array[Diagnostic]) {
+  let global_symbols : SymbolTable = Map::new()
+  let diagnostics : Array[Diagnostic] = []
+
+  for i = 0; i < files.length(); i = i + 1 {
+    let file = files[i]
+    file.global_scope.symbols.each(fn(name, symbol) {
+      match global_symbols.get(name) {
+        Some(existing) => {
+          if can_merge_symbols(existing, symbol) {
+            global_symbols.set(name, merge_symbols(existing, symbol))
+          } else {
+            // Can't merge - report duplicate
+            diagnostics.push(Diagnostic::error(
+              "Duplicate identifier '" + name + "'",
+              get_symbol_location(symbol),
+              2300,
+            ))
+          }
+        }
+        None => {
+          global_symbols.set(name, symbol)
+        }
+      }
+    })
+  }
+
+  (global_symbols, diagnostics)
+}
+
+///|
+/// Get location from symbol's first declaration
+fn get_symbol_location(symbol : Symbol) -> SourceLocation {
+  match symbol.value_declaration {
+    Some(node) => binder_get_node_location(node)
+    None => {
+      if symbol.declarations.length() > 0 {
+        binder_get_node_location(symbol.declarations[0])
+      } else {
+        SourceLocation::new(
+          "",
+          Position::{ line: 0, column: 0, offset: 0 },
+          Position::{ line: 0, column: 0, offset: 0 },
+        )
+      }
+    }
+  }
+}
+
+///|
+/// Get location from a node (simplified - returns a default location)
+fn binder_get_node_location(node : Node) -> SourceLocation {
+  match node {
+    FunctionDeclaration(f) => f.location
+    ClassDeclaration(c) => c.location
+    InterfaceDeclaration(i) => i.location
+    VariableStatement(v) => v.location
+    TypeAliasDeclaration(t) => t.location
+    EnumDeclaration(e) => e.location
+    _ =>
+      SourceLocation::new(
+        "",
+        Position::{ line: 0, column: 0, offset: 0 },
+        Position::{ line: 0, column: 0, offset: 0 },
+      )
+  }
+}
+
+// ============================================================================
+// Cross-File Linking
+// ============================================================================
+
+///|
+/// Bind entire program (multiple files)
+pub fn bind_program(
+  source_files : Array[SourceFile],
+) -> Result[Program, Array[Diagnostic]] {
+  let bound_files : Array[BoundSourceFile] = []
+  let all_diagnostics : Array[Diagnostic] = []
+  let module_map : Map[String, BoundSourceFile] = Map::new()
+
+  // First pass: bind each file individually
+  for i = 0; i < source_files.length(); i = i + 1 {
+    let source_file = source_files[i]
+    match bind_source_file(source_file) {
+      Ok(bound_file) => {
+        bound_files.push(bound_file)
+        module_map.set(source_file.file_path, bound_file)
+      }
+      Err(diagnostics) => {
+        for j = 0; j < diagnostics.length(); j = j + 1 {
+          all_diagnostics.push(diagnostics[j])
+        }
+      }
+    }
+  }
+
+  // Second pass: merge declarations
+  let (global_symbols, merge_diagnostics) = merge_global_declarations(bound_files)
+  for i = 0; i < merge_diagnostics.length(); i = i + 1 {
+    all_diagnostics.push(merge_diagnostics[i])
+  }
+
+  if all_diagnostics.is_empty() {
+    Ok({
+      source_files: bound_files,
+      global_symbols,
+      module_map,
+    })
+  } else {
+    Err(all_diagnostics)
+  }
+}
+
+// ============================================================================
+// Symbol Table Queries
+// ============================================================================
+
+///|
+/// Find symbol in scope chain
+pub fn find_symbol_in_scope_chain(
+  binder : Binder,
+  name : String,
+) -> Symbol? {
+  let mut scope_id = binder.current_scope_id
+
+  while scope_id >= 0 {
+    let scope = binder.scopes[scope_id]
+    match scope.symbols.get(name) {
+      Some(symbol) => return Some(symbol)
+      None => {
+        match scope.parent {
+          Some(parent_id) => scope_id = parent_id
+          None => return None
+        }
+      }
+    }
+  }
+
+  None
+}
+
+///|
+/// Get all symbols of a specific kind from a scope
+pub fn get_symbols_of_kind(
+  scope : Scope,
+  kind : SymbolKind,
+) -> Array[Symbol] {
+  let result : Array[Symbol] = []
+  scope.symbols.each(fn(_name, symbol) {
+    if symbol.kind == kind {
+      result.push(symbol)
+    }
+  })
+  result
+}
+
+///|
+/// Get exported symbols from a scope
+pub fn get_exports(scope : Scope) -> Array[Symbol] {
+  let result : Array[Symbol] = []
+  scope.symbols.each(fn(_name, symbol) {
+    if symbol.flags.is_export {
+      result.push(symbol)
+    }
+  })
+  result
 }

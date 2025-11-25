@@ -2,6 +2,16 @@
 // Based on TypeScript's SyntaxKind enum
 
 ///|
+/// Comment directive kinds for TypeScript compiler directives
+pub enum CommentDirectiveKind {
+  TsIgnore          // @ts-ignore
+  TsExpectError     // @ts-expect-error
+  TsNocheck         // @ts-nocheck
+  TsCheck           // @ts-check
+  TripleSlashRef    // /// <reference ... />
+} derive(Show, Eq)
+
+///|
 /// Token represents a lexical token in the source code
 pub enum Token {
   // Literals
@@ -178,6 +188,12 @@ pub enum Token {
   // JSDoc
   JSDocComment(String, SourceLocation) // /** ... */
 
+  // Hashbang
+  Hashbang(String, SourceLocation) // #!/usr/bin/env node
+
+  // Comment Directives
+  CommentDirective(CommentDirectiveKind, String, SourceLocation) // @ts-ignore, @ts-expect-error, etc.
+
   // Special
   EOF(SourceLocation)
   Unknown(String, SourceLocation)
@@ -338,6 +354,8 @@ pub fn Token::location(self : Token) -> SourceLocation {
     | SlashGreaterThan(loc)
     | At(loc)
     | JSDocComment(_, loc)
+    | Hashbang(_, loc)
+    | CommentDirective(_, _, loc)
     | EOF(loc)
     | Unknown(_, loc) => loc
   }
