@@ -639,15 +639,16 @@ fn bind_export_declaration(
   binder : Binder,
   export_decl : ExportDeclaration,
 ) -> Binder {
-  // Only create ExportValue symbols for re-exports (when there's a module specifier)
+  // Only create export symbols for re-exports (when there's a module specifier)
   // e.g., `export { foo } from 'module'` creates ExportValue for 'foo'
-  // But `export { foo }` just references an existing local binding
+  // e.g., `export type { Foo } from 'module'` creates ExportType for 'Foo'
+  // Local exports (`export { foo }` or `export type { Foo }`) just reference existing bindings
   match export_decl.module_specifier {
     Some(_) =>
-      // Re-export from another module - create ExportValue symbols
+      // Re-export from another module - create export symbols
       match export_decl.export_clause {
         Some(NamedExports::NamedExports(specifiers, _)) =>
-          bind_export_specifiers(binder, specifiers)
+          bind_export_specifiers(binder, specifiers, export_decl.is_type_only)
         None => binder
       }
     None => binder // Local export - no new bindings needed
@@ -659,24 +660,27 @@ fn bind_export_declaration(
 fn bind_export_specifiers(
   binder : Binder,
   specifiers : Array[ExportSpecifier],
+  is_type_only : Bool,
 ) -> Binder {
-  bind_export_specifiers_aux(binder, specifiers, 0)
+  bind_export_specifiers_aux(binder, specifiers, is_type_only, 0)
 }
 
 ///|
 fn bind_export_specifiers_aux(
   binder : Binder,
   specifiers : Array[ExportSpecifier],
+  is_type_only : Bool,
   index : Int,
 ) -> Binder {
   if index >= specifiers.length() {
     binder
   } else {
     let spec = specifiers[index]
-    // Use the exported name for the symbol
-    let symbol = Symbol::new(spec.name, SymbolKind::ExportValue, binder.next_symbol_id)
+    // Use ExportType for type-only exports, ExportValue otherwise
+    let kind = if is_type_only { SymbolKind::ExportType } else { SymbolKind::ExportValue }
+    let symbol = Symbol::new(spec.name, kind, binder.next_symbol_id)
     let binder = declare_symbol(binder, spec.name, symbol)
-    bind_export_specifiers_aux(binder, specifiers, index + 1)
+    bind_export_specifiers_aux(binder, specifiers, is_type_only, index + 1)
   }
 }
 

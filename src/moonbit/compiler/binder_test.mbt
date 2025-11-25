@@ -876,3 +876,77 @@ test "bind renamed re-export from module" {
     Err(_) => assert_true(false)
   }
 }
+
+// ============================================================================
+// ExportType Tests
+// ============================================================================
+
+///|
+test "bind local type-only export does not create new symbol" {
+  let result = parse_and_bind("type Foo = string; export type { Foo };")
+  match result {
+    Ok(bound) => {
+      // Type alias Foo should be in global scope (the export just references it)
+      assert_true(bound.global_scope.symbols.contains("Foo"))
+      // Check that the symbol is a Type, not ExportType
+      match bound.global_scope.symbols.get("Foo") {
+        Some(sym) => {
+          match sym.kind {
+            Type => ()
+            _ => assert_true(false)
+          }
+        }
+        None => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "bind type-only re-export from module creates ExportType" {
+  let result = parse_and_bind("export type { Foo } from 'module';")
+  match result {
+    Ok(bound) => {
+      // Re-exported type should be in global scope as ExportType
+      assert_true(bound.global_scope.symbols.contains("Foo"))
+      match bound.global_scope.symbols.get("Foo") {
+        Some(sym) => {
+          match sym.kind {
+            ExportType => ()
+            _ => assert_true(false)
+          }
+        }
+        None => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "bind multiple type-only re-exports from module" {
+  let result = parse_and_bind("export type { Foo, Bar } from 'module';")
+  match result {
+    Ok(bound) => {
+      // Both re-exports should be in global scope as ExportType
+      assert_true(bound.global_scope.symbols.contains("Foo"))
+      assert_true(bound.global_scope.symbols.contains("Bar"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "bind renamed type-only re-export from module" {
+  let result = parse_and_bind("export type { Foo as MyFoo } from 'module';")
+  match result {
+    Ok(bound) => {
+      // Exported name should be in global scope as ExportType
+      assert_true(bound.global_scope.symbols.contains("MyFoo"))
+      // Original name should NOT be in global scope
+      assert_false(bound.global_scope.symbols.contains("Foo"))
+    }
+    Err(_) => assert_true(false)
+  }
+}

@@ -264,6 +264,7 @@ pub struct ImportSpecifier {
 pub struct ExportDeclaration {
   export_clause : NamedExports?
   module_specifier : String?
+  is_type_only : Bool
   location : SourceLocation
 } derive(Show)
 

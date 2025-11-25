@@ -5126,6 +5126,7 @@ fn parse_export_declaration(parser : Parser) -> Result[(Node, Parser), Parser] {
                 Node::ExportDeclaration(ExportDeclaration::{
                   export_clause: None,
                   module_specifier: Some(module_specifier),
+                  is_type_only: false,
                   location: SourceLocation::new(start_loc.file_path, start_loc.start, end_loc.end)
                 }),
                 parser
@@ -5135,6 +5136,62 @@ fn parse_export_declaration(parser : Parser) -> Result[(Node, Parser), Parser] {
           }
         }
         _ => Err(add_error(parser, "Expected 'from' after 'export *'", current_token(parser).location()))
+      }
+    }
+
+    // export type { a, b } [from 'module'] OR export type Foo = ...
+    KeywordType(_) => {
+      // Look ahead to determine if this is `export type { ... }` or `export type Foo = ...`
+      let parser_after_type = advance_parser(parser) // consume 'type'
+      match current_token(parser_after_type) {
+        // export type { a, b } [from 'module']
+        OpenBrace(_) => {
+          let parser = advance_parser(parser_after_type)
+          let (specifiers, parser) = parse_export_specifiers(parser)
+          match current_token(parser) {
+            CloseBrace(loc) => {
+              let parser = advance_parser(parser)
+              // Check for 'from' clause
+              let (module_specifier, parser) = match current_token(parser) {
+                KeywordFrom(_) => {
+                  let parser = advance_parser(parser)
+                  match current_token(parser) {
+                    StringLiteral(spec, _) => (Some(spec), advance_parser(parser))
+                    _ => return Err(add_error(parser, "Expected module specifier after 'from'", current_token(parser).location()))
+                  }
+                }
+                _ => (None, parser)
+              }
+              // Consume optional semicolon
+              let parser = match current_token(parser) {
+                Semicolon(_) => advance_parser(parser)
+                _ => parser
+              }
+              let end_loc = current_token(parser).location()
+              Ok((
+                Node::ExportDeclaration(ExportDeclaration::{
+                  export_clause: Some(NamedExports::NamedExports(specifiers, loc)),
+                  module_specifier,
+                  is_type_only: true,
+                  location: SourceLocation::new(start_loc.file_path, start_loc.start, end_loc.end)
+                }),
+                parser
+              ))
+            }
+            _ => Err(add_error(parser, "Expected '}' after export specifiers", current_token(parser).location()))
+          }
+        }
+        // export type Foo = ... (type alias declaration with export)
+        _ => {
+          // Parse as type alias declaration (parser is still at 'type' keyword) and add Export modifier
+          match parse_type_alias_declaration(parser) {
+            Ok((type_alias, parser)) => {
+              let type_alias_with_export = add_export_modifier(type_alias)
+              Ok((type_alias_with_export, parser))
+            }
+            Err(p) => Err(p)
+          }
+        }
       }
     }
 
@@ -5166,6 +5223,7 @@ fn parse_export_declaration(parser : Parser) -> Result[(Node, Parser), Parser] {
             Node::ExportDeclaration(ExportDeclaration::{
               export_clause: Some(NamedExports::NamedExports(specifiers, loc)),
               module_specifier,
+              is_type_only: false,
               location: SourceLocation::new(start_loc.file_path, start_loc.start, end_loc.end)
             }),
             parser
