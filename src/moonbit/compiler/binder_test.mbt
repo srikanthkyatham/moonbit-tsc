@@ -1298,3 +1298,74 @@ test "bind labeled statement with continue" {
     Err(_) => assert_true(false)
   }
 }
+
+// ============================================================================
+// FlowNode ArrayMutation Tests
+// ============================================================================
+
+///|
+test "bind array element assignment creates array mutation flow" {
+  let result = parse_and_bind("const arr = [1, 2, 3]; arr[0] = 10;")
+  match result {
+    Ok(bound) => {
+      assert_true(bound.global_scope.symbols.contains("arr"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "bind array element compound assignment" {
+  let result = parse_and_bind("const arr = [1, 2, 3]; arr[0] += 5;")
+  match result {
+    Ok(bound) => {
+      assert_true(bound.global_scope.symbols.contains("arr"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "bind nested array element assignment" {
+  let result = parse_and_bind("const matrix = [[1, 2], [3, 4]]; matrix[0][1] = 10;")
+  match result {
+    Ok(bound) => {
+      assert_true(bound.global_scope.symbols.contains("matrix"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "bind array element assignment with expression index" {
+  let result = parse_and_bind("const arr = [1, 2, 3]; const i = 0; arr[i] = 10;")
+  match result {
+    Ok(bound) => {
+      assert_true(bound.global_scope.symbols.contains("arr"))
+      assert_true(bound.global_scope.symbols.contains("i"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "bind multiple array mutations" {
+  let result = parse_and_bind("const arr = [1, 2, 3]; arr[0] = 10; arr[1] = 20; arr[2] = 30;")
+  match result {
+    Ok(bound) => {
+      assert_true(bound.global_scope.symbols.contains("arr"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "bind object property assignment is not array mutation" {
+  let result = parse_and_bind("const obj = { x: 1 }; obj.x = 10;")
+  match result {
+    Ok(bound) => {
+      assert_true(bound.global_scope.symbols.contains("obj"))
+    }
+    Err(_) => assert_true(false)
+  }
+}

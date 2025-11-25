@@ -919,6 +919,18 @@ fn create_label_flow(binder : Binder) -> Binder {
 }
 
 ///|
+fn create_array_mutation_flow(binder : Binder, node : Node) -> Binder {
+  let flow_id = binder.next_flow_id + 1
+  let antecedent = get_current_flow_id(binder)
+  let flow_array_mutation = FlowArrayMutation::{ node, antecedent, id: flow_id }
+  {
+    ..binder,
+    next_flow_id: flow_id,
+    current_flow: Some(FlowNode::ArrayMutation(flow_array_mutation)),
+  }
+}
+
+///|
 /// Bind an expression (simplified - just walks the tree)
 fn bind_expression(binder : Binder, node : Node) -> Binder {
   match node {
@@ -932,9 +944,13 @@ fn bind_expression(binder : Binder, node : Node) -> Binder {
     BinaryExpression(bin_expr) => {
       let binder = bind_expression(binder, bin_expr.left)
       let binder = bind_expression(binder, bin_expr.right)
-      // Create flow assignment node for assignment operators
+      // Create flow node for assignment operators
       if is_assignment_operator(bin_expr.operator) {
-        create_assignment_flow(binder, node)
+        // Check if this is an array element assignment (array mutation)
+        match bin_expr.left {
+          ElementAccessExpression(_) => create_array_mutation_flow(binder, node)
+          _ => create_assignment_flow(binder, node)
+        }
       } else {
         binder
       }
