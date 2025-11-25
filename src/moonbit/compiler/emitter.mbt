@@ -1145,6 +1145,9 @@ fn emit_object_literal_expression(ole : ObjectLiteralExpression, ctx : EmitterCo
       SetAccessor(name, func_expr, _) => {
         result = result + "set " + name + emit_function_expression(func_expr, ctx)
       }
+      ComputedPropertyAssignment(name_expr, value, _) => {
+        result = result + "[" + emit(name_expr, ctx) + "]: " + emit(value, ctx)
+      }
     }
 
     if i < ole.properties.length() - 1 {

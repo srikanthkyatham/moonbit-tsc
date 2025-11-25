@@ -642,6 +642,31 @@ fn parse_parameter_list_aux(parser : Parser, acc : Array[Node]) -> (Array[Node],
 fn parse_parameter(parser : Parser) -> Result[(Node, Parser), Parser] {
   let start_loc = current_token(parser).location()
 
+  // Parse parameter property modifiers (public, private, protected, readonly)
+  let modifiers : Array[Modifier] = []
+  let mut parser = parser
+  while true {
+    match current_token(parser) {
+      KeywordPublic(_) => {
+        modifiers.push(Modifier::Public)
+        parser = advance_parser(parser)
+      }
+      KeywordPrivate(_) => {
+        modifiers.push(Modifier::Private)
+        parser = advance_parser(parser)
+      }
+      KeywordProtected(_) => {
+        modifiers.push(Modifier::Protected)
+        parser = advance_parser(parser)
+      }
+      KeywordReadonly(_) => {
+        modifiers.push(Modifier::Readonly)
+        parser = advance_parser(parser)
+      }
+      _ => break
+    }
+  }
+
   // Check for rest parameter
   let (is_rest, parser) = match current_token(parser) {
     DotDotDot(_) => (true, advance_parser(parser))
@@ -691,6 +716,7 @@ fn parse_parameter(parser : Parser) -> Result[(Node, Parser), Parser] {
         initializer,
         is_optional,
         is_rest,
+        modifiers,
         location: start_loc,
       }),
       parser,
@@ -1115,6 +1141,7 @@ fn try_parse_single_param_arrow_function(
       initializer: None,
       is_optional: false,
       is_rest: false,
+      modifiers: [],
       location: id.location,
     }),
   ]
@@ -1979,13 +2006,40 @@ fn parse_object_property(
 ) -> Result[(ObjectProperty, Parser), Parser] {
   let start_loc = current_token(parser).location()
 
-  // Check for spread property
+  // Check for spread property or computed property
   match current_token(parser) {
     DotDotDot(_) => {
       let parser = advance_parser(parser) // consume ...
       match parse_assignment_expression(parser) {
         Ok((expr, parser)) => {
           Ok((ObjectProperty::SpreadAssignment(expr, start_loc), parser))
+        }
+        Err(parser) => Err(parser)
+      }
+    }
+    OpenBracket(_) => {
+      // Computed property: [expression]: value
+      let parser = advance_parser(parser) // consume [
+      match parse_assignment_expression(parser) {
+        Ok((name_expr, parser)) => {
+          match current_token(parser) {
+            CloseBracket(_) => {
+              let parser = advance_parser(parser) // consume ]
+              match current_token(parser) {
+                Colon(_) => {
+                  let parser = advance_parser(parser) // consume :
+                  match parse_assignment_expression(parser) {
+                    Ok((value, parser)) => {
+                      Ok((ObjectProperty::ComputedPropertyAssignment(name_expr, value, start_loc), parser))
+                    }
+                    Err(parser) => Err(parser)
+                  }
+                }
+                _ => Err(add_error(parser, "Expected ':' after computed property name", current_token(parser).location()))
+              }
+            }
+            _ => Err(add_error(parser, "Expected ']' after computed property name", current_token(parser).location()))
+          }
         }
         Err(parser) => Err(parser)
       }
@@ -2096,6 +2150,7 @@ fn parse_arrow_function_single_param(
         initializer: None,
         is_optional: false,
         is_rest: false,
+        modifiers: [],
         location: start_loc,
       })
       Ok(
@@ -2852,6 +2907,12 @@ fn parse_class_declaration_with_decorators(parser : Parser, is_abstract : Bool, 
     _ => (None, parser) // Anonymous class allowed in expressions
   }
 
+  // Parse type parameters if present (e.g., class Box<T>)
+  let (type_parameters, parser) = match current_token(parser) {
+    LessThan(_) => parse_type_parameters(parser)
+    _ => ([], parser)
+  }
+
   // Parse heritage clauses (extends, implements)
   let (heritage_clauses, parser) = parse_heritage_clauses(parser)
 
@@ -2866,7 +2927,7 @@ fn parse_class_declaration_with_decorators(parser : Parser, is_abstract : Bool, 
           Ok((
             Node::ClassDeclaration(ClassDeclaration::{
               name,
-              type_parameters: [],
+              type_parameters,
               heritage_clauses,
               members,
               is_abstract,

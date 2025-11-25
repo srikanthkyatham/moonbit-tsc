@@ -403,6 +403,7 @@ fn transform_parameter(p : Parameter, ctx : TransformerContext) -> Node {
     },
     is_rest: p.is_rest,
     is_optional: p.is_optional,
+    modifiers: p.modifiers, // Preserve modifiers for output
     location: p.location,
   })
 }
@@ -887,6 +888,8 @@ fn transform_object_literal_expression(
               "transform_function_expression should return FunctionExpression",
             )
         }
+      ComputedPropertyAssignment(name_expr, value, loc) =>
+        ComputedPropertyAssignment(transform(name_expr, ctx), transform(value, ctx), loc)
     }
     transformed_properties.push(transformed_prop)
   }

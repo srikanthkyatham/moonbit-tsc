@@ -834,6 +834,10 @@ fn bind_object_properties_aux(
     let binder = match prop {
       PropertyAssignment(_, value, _) => bind_expression(binder, value)
       SpreadAssignment(expr, _) => bind_expression(binder, expr)
+      ComputedPropertyAssignment(name_expr, value, _) => {
+        let binder = bind_expression(binder, name_expr)
+        bind_expression(binder, value)
+      }
       _ => binder
     }
     bind_object_properties_aux(binder, properties, index + 1)

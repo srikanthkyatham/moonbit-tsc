@@ -590,6 +590,7 @@ pub enum ObjectProperty {
   MethodDeclaration(String, FunctionExpression, SourceLocation)
   GetAccessor(String, FunctionExpression, SourceLocation)
   SetAccessor(String, FunctionExpression, SourceLocation)
+  ComputedPropertyAssignment(Node, Node, SourceLocation) // [expression]: value
 } derive(Show)
 
 ///|
@@ -836,6 +837,7 @@ pub struct Parameter {
   initializer : Node?
   is_optional : Bool
   is_rest : Bool
+  modifiers : Array[Modifier]
   location : SourceLocation
 } derive(Show)
 

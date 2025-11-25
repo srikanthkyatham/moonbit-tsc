@@ -939,6 +939,20 @@ fn infer_object_literal_type(
         })
         checker = c
       }
+      ComputedPropertyAssignment(name_expr, value, _) => {
+        // For computed properties, we infer the types but use a dynamic key
+        let (_, c) = infer_type(checker, name_expr)
+        let (prop_type, c) = infer_type(c, value)
+        // Use a computed key placeholder - actual key depends on runtime value
+        let key = "[computed]"
+        properties.set(key, {
+          name: key,
+          prop_type,
+          is_optional: false,
+          is_readonly: false,
+        })
+        checker = c
+      }
       _ => ()
     }
   }
