@@ -1439,3 +1439,67 @@ test "bind early return pattern" {
     Err(_) => assert_true(false)
   }
 }
+
+// ============================================================================
+// FlowNode Unreachable Tests
+// ============================================================================
+
+///|
+test "bind return makes code unreachable" {
+  let result = parse_and_bind("function f() { return 1; const x = 2; }")
+  match result {
+    Ok(bound) => {
+      assert_true(bound.global_scope.symbols.contains("f"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "bind throw makes code unreachable" {
+  let result = parse_and_bind("function f() { throw new Error('error'); const x = 2; }")
+  match result {
+    Ok(bound) => {
+      assert_true(bound.global_scope.symbols.contains("f"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "bind break makes code unreachable" {
+  let result = parse_and_bind("while (true) { break; const x = 1; }")
+  match result {
+    Ok(_) => assert_true(true)
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "bind continue makes code unreachable" {
+  let result = parse_and_bind("while (true) { continue; const x = 1; }")
+  match result {
+    Ok(_) => assert_true(true)
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "bind labeled break makes code unreachable" {
+  let result = parse_and_bind("outer: while (true) { break outer; const x = 1; }")
+  match result {
+    Ok(_) => assert_true(true)
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "bind unreachable after throw in if branch" {
+  let result = parse_and_bind("function f(x) { if (x) { throw new Error(); } return x; }")
+  match result {
+    Ok(bound) => {
+      assert_true(bound.global_scope.symbols.contains("f"))
+    }
+    Err(_) => assert_true(false)
+  }
+}

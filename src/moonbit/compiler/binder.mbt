@@ -215,13 +215,16 @@ fn bind_statement(binder : Binder, node : Node) -> Binder {
         Some(expr) => bind_expression(binder, expr)
         None => binder
       }
-      // Create return flow node
-      create_return_flow(binder, node)
+      // Create return flow node, then mark as unreachable
+      let binder = create_return_flow(binder, node)
+      create_unreachable_flow(binder)
     }
 
     // Throw statement
     ThrowStatement(throw_stmt) => {
-      bind_expression(binder, throw_stmt.expression)
+      let binder = bind_expression(binder, throw_stmt.expression)
+      // After throw, code is unreachable
+      create_unreachable_flow(binder)
     }
 
     // Try statement
@@ -256,6 +259,18 @@ fn bind_statement(binder : Binder, node : Node) -> Binder {
       // Create label flow node for the labeled statement
       let binder = create_label_flow(binder)
       bind_statement(binder, labeled.statement)
+    }
+
+    // Break statement
+    BreakStatement(_) => {
+      // After break, code is unreachable
+      create_unreachable_flow(binder)
+    }
+
+    // Continue statement
+    ContinueStatement(_) => {
+      // After continue, code is unreachable
+      create_unreachable_flow(binder)
     }
 
     // Other statements - no binding needed
@@ -941,6 +956,17 @@ fn create_return_flow(binder : Binder, node : Node) -> Binder {
     ..binder,
     next_flow_id: flow_id,
     current_flow: Some(FlowNode::Return(flow_return)),
+  }
+}
+
+///|
+fn create_unreachable_flow(binder : Binder) -> Binder {
+  let flow_id = binder.next_flow_id + 1
+  let flow_unreachable = FlowUnreachable::{ id: flow_id }
+  {
+    ..binder,
+    next_flow_id: flow_id,
+    current_flow: Some(FlowNode::Unreachable(flow_unreachable)),
   }
 }
 
