@@ -222,7 +222,8 @@ fn bind_statement(binder : Binder, node : Node) -> Binder {
     // Throw statement
     ThrowStatement(throw_stmt) => {
       let binder = bind_expression(binder, throw_stmt.expression)
-      // After throw, code is unreachable
+      // Create throw flow node, then mark as unreachable
+      let binder = create_throw_flow(binder, node)
       create_unreachable_flow(binder)
     }
 
@@ -1001,6 +1002,139 @@ fn create_unreachable_flow(binder : Binder) -> Binder {
 }
 
 ///|
+/// Create a FlowEnd node and update the binder's current flow
+fn create_end_flow(binder : Binder) -> Binder {
+  let flow_id = binder.next_flow_id + 1
+  let antecedent = get_current_flow_id(binder)
+  let flow_end = FlowEnd::{ antecedent, id: flow_id }
+  {
+    ..binder,
+    next_flow_id: flow_id,
+    current_flow: Some(FlowNode::End(flow_end)),
+  }
+}
+
+///|
+/// Create a FlowBranchCondition node for true branch
+fn create_true_condition_flow(binder : Binder, condition_id : Int) -> Binder {
+  let flow_id = binder.next_flow_id + 1
+  let flow_branch = FlowBranchCondition::{
+    antecedent: condition_id,
+    is_true_branch: true,
+    id: flow_id,
+  }
+  {
+    ..binder,
+    next_flow_id: flow_id,
+    current_flow: Some(FlowNode::TrueCondition(flow_branch)),
+  }
+}
+
+///|
+/// Create a FlowBranchCondition node for false branch
+fn create_false_condition_flow(binder : Binder, condition_id : Int) -> Binder {
+  let flow_id = binder.next_flow_id + 1
+  let flow_branch = FlowBranchCondition::{
+    antecedent: condition_id,
+    is_true_branch: false,
+    id: flow_id,
+  }
+  {
+    ..binder,
+    next_flow_id: flow_id,
+    current_flow: Some(FlowNode::FalseCondition(flow_branch)),
+  }
+}
+
+///|
+/// Create a FlowLoopLabel node for loop tracking
+fn create_loop_label_flow(
+  binder : Binder,
+  break_target : Int?,
+  continue_target : Int?,
+) -> Binder {
+  let flow_id = binder.next_flow_id + 1
+  let antecedent = get_current_flow_id(binder)
+  let flow_loop = FlowLoopLabel::{
+    antecedents: [antecedent],
+    break_target,
+    continue_target,
+    id: flow_id,
+  }
+  {
+    ..binder,
+    next_flow_id: flow_id,
+    current_flow: Some(FlowNode::LoopLabel(flow_loop)),
+  }
+}
+
+///|
+/// Create a FlowBranchLabel node for break/continue targets
+fn create_branch_label_flow(binder : Binder, name : String?) -> Binder {
+  let flow_id = binder.next_flow_id + 1
+  let antecedent = get_current_flow_id(binder)
+  let flow_branch_label = FlowBranchLabel::{
+    name,
+    antecedents: [antecedent],
+    id: flow_id,
+  }
+  {
+    ..binder,
+    next_flow_id: flow_id,
+    current_flow: Some(FlowNode::BranchLabel(flow_branch_label)),
+  }
+}
+
+///|
+/// Create a FlowThrow node and update the binder's current flow
+fn create_throw_flow(binder : Binder, node : Node) -> Binder {
+  let flow_id = binder.next_flow_id + 1
+  let antecedent = get_current_flow_id(binder)
+  let flow_throw = FlowThrow::{ node, antecedent, id: flow_id }
+  {
+    ..binder,
+    next_flow_id: flow_id,
+    current_flow: Some(FlowNode::Throw(flow_throw)),
+  }
+}
+
+///|
+/// Create a FlowNarrowing node for type narrowing
+fn create_narrowing_flow(
+  binder : Binder,
+  expression : Node,
+  narrowed_symbol : Int,
+  narrowed_type : Node,
+) -> Binder {
+  let flow_id = binder.next_flow_id + 1
+  let antecedent = get_current_flow_id(binder)
+  let flow_narrowing = FlowNarrowing::{
+    expression,
+    narrowed_symbol,
+    narrowed_type,
+    antecedent,
+    id: flow_id,
+  }
+  {
+    ..binder,
+    next_flow_id: flow_id,
+    current_flow: Some(FlowNode::Narrowing(flow_narrowing)),
+  }
+}
+
+///|
+/// Create a FlowReducer node for merging multiple flows
+fn create_reducer_flow(binder : Binder, antecedents : Array[Int]) -> Binder {
+  let flow_id = binder.next_flow_id + 1
+  let flow_reducer = FlowReducer::{ antecedents, id: flow_id }
+  {
+    ..binder,
+    next_flow_id: flow_id,
+    current_flow: Some(FlowNode::Reducer(flow_reducer)),
+  }
+}
+
+///|
 /// Bind an expression (simplified - just walks the tree)
 fn bind_expression(binder : Binder, node : Node) -> Binder {
   match node {
@@ -1253,10 +1387,13 @@ fn declare_symbol(binder : Binder, name : String, symbol : Symbol) -> Binder {
       let is_interface_merge = existing_symbol.kind == SymbolKind::Interface && symbol.kind == SymbolKind::Interface
       // Allow namespace merging
       let is_namespace_merge = existing_symbol.kind == SymbolKind::Module && symbol.kind == SymbolKind::Module
-      if is_function_overload || is_method_overload || is_getter_setter_pair || is_interface_merge || is_namespace_merge {
+      // Allow interface + namespace merging
+      let is_interface_namespace_merge = (existing_symbol.kind == SymbolKind::Interface && symbol.kind == SymbolKind::Module) ||
+        (existing_symbol.kind == SymbolKind::Module && symbol.kind == SymbolKind::Interface)
+      if is_function_overload || is_method_overload || is_getter_setter_pair || is_interface_merge || is_namespace_merge || is_interface_namespace_merge {
         // Overload, getter/setter pair, or mergeable declaration - allow it
         // For interface/namespace merging, merge the symbols
-        if is_interface_merge || is_namespace_merge {
+        if is_interface_merge || is_namespace_merge || is_interface_namespace_merge {
           let merged_symbol = merge_symbols(existing_symbol, symbol)
           let new_symbols = scope.symbols
           new_symbols.set(name, merged_symbol)
@@ -1586,6 +1723,9 @@ pub fn can_merge_symbols(a : Symbol, b : Symbol) -> Bool {
 
     // Enum + Namespace = enum with static members
     (Enum, Module) | (Module, Enum) => true
+
+    // Interface + Namespace = interface with static members
+    (Interface, Module) | (Module, Interface) => true
 
     // Type alias can't merge with anything (except itself)
     (Type, Type) => false
