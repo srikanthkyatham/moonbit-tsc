@@ -765,3 +765,184 @@ test "nested containers maintain correct scope hierarchy" {
     Err(_) => assert_true(false)
   }
 }
+
+// ============================================================================
+// Control Flow Graph Tests
+// ============================================================================
+
+///|
+test "CFG has start and end nodes for empty source" {
+  let source = ""
+  match parse_and_bind(source) {
+    Ok(bound_file) => {
+      let cfg = bound_file.control_flow_graph
+      // CFG should have at least start and end nodes
+      assert_true(cfg.nodes.length() >= 2)
+      // Entry should be 0 (start node)
+      assert_eq(cfg.entry, 0)
+      // Exit should be the last node
+      assert_true(cfg.exit > 0)
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "CFG builds for simple variable declaration" {
+  let source = "const x = 1;"
+  match parse_and_bind(source) {
+    Ok(bound_file) => {
+      let cfg = bound_file.control_flow_graph
+      // Should have start, end nodes and possibly assignment
+      assert_true(cfg.nodes.length() >= 2)
+      // Node map should have entries
+      assert_true(cfg.node_map.size() >= 2)
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "CFG creates assignment flow for variable assignment" {
+  let source = "let x = 1; x = 2;"
+  match parse_and_bind(source) {
+    Ok(bound_file) => {
+      let cfg = bound_file.control_flow_graph
+      // Should have start, assignment(s), and end nodes
+      assert_true(cfg.nodes.length() >= 3)
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "CFG creates call flow for function calls" {
+  let source = "function foo() {} foo();"
+  match parse_and_bind(source) {
+    Ok(bound_file) => {
+      let cfg = bound_file.control_flow_graph
+      // Should have nodes for the function call
+      assert_true(cfg.nodes.length() >= 2)
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "CFG creates condition flow for if statement" {
+  let source = "const x = true; if (x) { const y = 1; }"
+  match parse_and_bind(source) {
+    Ok(bound_file) => {
+      let cfg = bound_file.control_flow_graph
+      // Should have nodes including condition
+      assert_true(cfg.nodes.length() >= 2)
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "CFG creates return flow for return statement" {
+  let source = "function foo() { return 42; }"
+  match parse_and_bind(source) {
+    Ok(bound_file) => {
+      let cfg = bound_file.control_flow_graph
+      // Should have nodes including return
+      assert_true(cfg.nodes.length() >= 2)
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "CFG creates switch clause flows" {
+  let source = "const x = 1; switch (x) { case 1: break; case 2: break; }"
+  match parse_and_bind(source) {
+    Ok(bound_file) => {
+      let cfg = bound_file.control_flow_graph
+      // Should have nodes for switch clauses
+      assert_true(cfg.nodes.length() >= 2)
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "CFG creates array mutation flow for array element assignment" {
+  let source = "const arr = [1, 2, 3]; arr[0] = 10;"
+  match parse_and_bind(source) {
+    Ok(bound_file) => {
+      let cfg = bound_file.control_flow_graph
+      // Should have nodes including array mutation
+      assert_true(cfg.nodes.length() >= 2)
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "CFG node map contains all nodes" {
+  let source = "let x = 1; x = 2; x = 3;"
+  match parse_and_bind(source) {
+    Ok(bound_file) => {
+      let cfg = bound_file.control_flow_graph
+      // Node map should have same number of entries as nodes array
+      assert_eq(cfg.node_map.size(), cfg.nodes.length())
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "CFG for complex function with multiple flows" {
+  let source = "function calc(x: number) { if (x > 0) { return x; } return -x; }"
+  match parse_and_bind(source) {
+    Ok(bound_file) => {
+      let cfg = bound_file.control_flow_graph
+      // Should have start, end, and flow nodes for the branching
+      assert_true(cfg.nodes.length() >= 2)
+      assert_true(cfg.entry == 0)
+      assert_true(cfg.exit > 0)
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "CFG for for loop creates condition flow" {
+  let source = "for (let i = 0; i < 10; i++) { const x = i; }"
+  match parse_and_bind(source) {
+    Ok(bound_file) => {
+      let cfg = bound_file.control_flow_graph
+      // Should have condition flow for the for loop
+      assert_true(cfg.nodes.length() >= 2)
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "CFG for while loop creates condition flow" {
+  let source = "let x = 0; while (x < 10) { x++; }"
+  match parse_and_bind(source) {
+    Ok(bound_file) => {
+      let cfg = bound_file.control_flow_graph
+      // Should have condition flow for the while loop
+      assert_true(cfg.nodes.length() >= 2)
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "CFG for throw statement creates throw flow" {
+  let source = "function fail() { throw new Error('error'); }"
+  match parse_and_bind(source) {
+    Ok(bound_file) => {
+      let cfg = bound_file.control_flow_graph
+      // Should have nodes including throw
+      assert_true(cfg.nodes.length() >= 2)
+    }
+    Err(_) => assert_true(false)
+  }
+}

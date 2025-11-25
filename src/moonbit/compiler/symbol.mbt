@@ -472,6 +472,7 @@ pub struct BoundSourceFile {
   symbol_count : Int
   diagnostics : Array[Diagnostic]
   module_info : ModuleInfo
+  control_flow_graph : ControlFlowGraph
 } derive(Show)
 
 ///|
@@ -544,6 +545,165 @@ pub fn CFGBuilder::new() -> CFGBuilder {
     loop_stack: [],
     switch_stack: [],
     return_flows: [],
+  }
+}
+
+///|
+/// Build the final ControlFlowGraph from the builder
+pub fn CFGBuilder::build(self : CFGBuilder) -> ControlFlowGraph {
+  // Create the exit node
+  let exit_id = self.next_id
+  let exit_node = FlowNode::End(FlowEnd::{ antecedent: self.current_flow, id: exit_id })
+  let nodes = self.nodes
+  nodes.push(exit_node)
+
+  // Build node map for quick lookup
+  let node_map : Map[Int, FlowNode] = Map::new()
+  for i = 0; i < nodes.length(); i = i + 1 {
+    let node = nodes[i]
+    node_map.set(flow_id(node), node)
+  }
+
+  {
+    nodes,
+    entry: 0, // Start node ID is always 0
+    exit: exit_id,
+    node_map,
+  }
+}
+
+///|
+/// Add an assignment flow node
+pub fn CFGBuilder::add_assignment(self : CFGBuilder, node : Node) -> CFGBuilder {
+  let id = self.next_id
+  let flow_node = FlowNode::Assignment(FlowAssignment::{ node, antecedent: self.current_flow, id })
+  let nodes = self.nodes
+  nodes.push(flow_node)
+  { ..self, next_id: id + 1, current_flow: id }
+}
+
+///|
+/// Add a call flow node
+pub fn CFGBuilder::add_call(self : CFGBuilder, node : Node) -> CFGBuilder {
+  let id = self.next_id
+  let flow_node = FlowNode::Call(FlowCall::{ node, antecedent: self.current_flow, id })
+  let nodes = self.nodes
+  nodes.push(flow_node)
+  { ..self, next_id: id + 1, current_flow: id }
+}
+
+///|
+/// Add a condition flow node
+pub fn CFGBuilder::add_condition(self : CFGBuilder, expression : Node) -> CFGBuilder {
+  let id = self.next_id
+  let flow_node = FlowNode::Condition(FlowCondition::{ expression, antecedent: self.current_flow, id })
+  let nodes = self.nodes
+  nodes.push(flow_node)
+  { ..self, next_id: id + 1, current_flow: id }
+}
+
+///|
+/// Add a return flow node
+pub fn CFGBuilder::add_return(self : CFGBuilder, node : Node) -> CFGBuilder {
+  let id = self.next_id
+  let flow_node = FlowNode::Return(FlowReturn::{ node, antecedent: self.current_flow, id })
+  let nodes = self.nodes
+  nodes.push(flow_node)
+  let return_flows = self.return_flows
+  return_flows.push(id)
+  { ..self, next_id: id + 1, current_flow: id, return_flows }
+}
+
+///|
+/// Add a throw flow node
+pub fn CFGBuilder::add_throw(self : CFGBuilder, node : Node) -> CFGBuilder {
+  let id = self.next_id
+  let flow_node = FlowNode::Throw(FlowThrow::{ node, antecedent: self.current_flow, id })
+  let nodes = self.nodes
+  nodes.push(flow_node)
+  { ..self, next_id: id + 1, current_flow: id }
+}
+
+///|
+/// Add an unreachable flow node
+pub fn CFGBuilder::add_unreachable(self : CFGBuilder) -> CFGBuilder {
+  let id = self.next_id
+  let flow_node = FlowNode::Unreachable(FlowUnreachable::{ id })
+  let nodes = self.nodes
+  nodes.push(flow_node)
+  { ..self, next_id: id + 1, current_flow: id }
+}
+
+///|
+/// Add an array mutation flow node
+pub fn CFGBuilder::add_array_mutation(self : CFGBuilder, node : Node) -> CFGBuilder {
+  let id = self.next_id
+  let flow_node = FlowNode::ArrayMutation(FlowArrayMutation::{ node, antecedent: self.current_flow, id })
+  let nodes = self.nodes
+  nodes.push(flow_node)
+  { ..self, next_id: id + 1, current_flow: id }
+}
+
+///|
+/// Add a switch clause flow node
+pub fn CFGBuilder::add_switch_clause(
+  self : CFGBuilder,
+  switch_statement : Node,
+  clause_start : Int,
+  clause_end : Int,
+) -> CFGBuilder {
+  let id = self.next_id
+  let flow_node = FlowNode::SwitchClause(FlowSwitchClause::{
+    switch_statement,
+    clause_start,
+    clause_end,
+    antecedent: self.current_flow,
+    id,
+  })
+  let nodes = self.nodes
+  nodes.push(flow_node)
+  { ..self, next_id: id + 1, current_flow: id }
+}
+
+///|
+/// Push a loop context
+pub fn CFGBuilder::push_loop(self : CFGBuilder, break_label : Int, continue_label : Int, label_name : String?) -> CFGBuilder {
+  let loop_stack = self.loop_stack
+  loop_stack.push(LoopContext::{ break_label, continue_label, label_name })
+  { ..self, loop_stack }
+}
+
+///|
+/// Pop a loop context
+pub fn CFGBuilder::pop_loop(self : CFGBuilder) -> CFGBuilder {
+  let loop_stack = self.loop_stack
+  let _ = loop_stack.pop()
+  { ..self, loop_stack }
+}
+
+///|
+/// Get current loop context
+pub fn CFGBuilder::current_loop(self : CFGBuilder) -> LoopContext? {
+  if self.loop_stack.length() > 0 {
+    Some(self.loop_stack[self.loop_stack.length() - 1])
+  } else {
+    None
+  }
+}
+
+///|
+/// Create an empty ControlFlowGraph
+pub fn ControlFlowGraph::empty() -> ControlFlowGraph {
+  let start_node = FlowNode::Start(FlowStart::{ id: 0 })
+  let end_node = FlowNode::End(FlowEnd::{ antecedent: 0, id: 1 })
+  let node_map : Map[Int, FlowNode] = Map::new()
+  node_map.set(0, start_node)
+  node_map.set(1, end_node)
+  {
+    nodes: [start_node, end_node],
+    entry: 0,
+    exit: 1,
+    node_map,
   }
 }
 

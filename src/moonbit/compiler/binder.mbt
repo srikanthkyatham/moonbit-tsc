@@ -12,13 +12,12 @@ pub struct Binder {
   current_scope_id : Int
   containers : Array[Container] // Stack of containers
   current_container_id : Int
+  cfg_builder : CFGBuilder // Control flow graph builder
   next_symbol_id : Int
   next_scope_id : Int
   next_container_id : Int
-  next_flow_id : Int
   file_path : String
   diagnostics : Array[Diagnostic]
-  current_flow : FlowNode?
 } derive(Show)
 
 ///|
@@ -35,13 +34,12 @@ fn Binder::new(file_path : String) -> Binder {
     current_scope_id: 0,
     containers: [source_file_container],
     current_container_id: 0,
+    cfg_builder: CFGBuilder::new(),
     next_symbol_id: 0,
     next_scope_id: 1,
     next_container_id: 1,
-    next_flow_id: 0,
     file_path,
     diagnostics: [],
-    current_flow: Some(FlowNode::Start(FlowStart::{ id: 0 })),
   }
 }
 
@@ -61,6 +59,9 @@ pub fn bind_source_file(
   // Detect module status
   let module_info = detect_module_status(source_file)
 
+  // Build the control flow graph
+  let control_flow_graph = binder.cfg_builder.build()
+
   if binder.diagnostics.length() > 0 {
     Err(binder.diagnostics)
   } else {
@@ -71,6 +72,7 @@ pub fn bind_source_file(
       symbol_count: binder.next_symbol_id,
       diagnostics: binder.diagnostics,
       module_info,
+      control_flow_graph,
     })
   }
 }
@@ -898,77 +900,28 @@ fn is_assignment_operator(op : BinaryOperator) -> Bool {
 ///|
 /// Get the ID of the current flow node
 fn get_current_flow_id(binder : Binder) -> Int {
-  match binder.current_flow {
-    Some(FlowNode::Start(start)) => start.id
-    Some(FlowNode::End(end)) => end.id
-    Some(FlowNode::Assignment(assign)) => assign.id
-    Some(FlowNode::ArrayMutation(mutation)) => mutation.id
-    Some(FlowNode::Call(call)) => call.id
-    Some(FlowNode::Condition(cond)) => cond.id
-    Some(FlowNode::TrueCondition(tc)) => tc.id
-    Some(FlowNode::FalseCondition(fc)) => fc.id
-    Some(FlowNode::SwitchClause(clause)) => clause.id
-    Some(FlowNode::LoopLabel(ll)) => ll.id
-    Some(FlowNode::Label(label)) => label.id
-    Some(FlowNode::BranchLabel(bl)) => bl.id
-    Some(FlowNode::Return(ret)) => ret.id
-    Some(FlowNode::Throw(t)) => t.id
-    Some(FlowNode::Unreachable(unreach)) => unreach.id
-    Some(FlowNode::Narrowing(n)) => n.id
-    Some(FlowNode::Reducer(r)) => r.id
-    None => 0
-  }
+  binder.cfg_builder.current_flow
 }
 
 ///|
 /// Create a FlowAssignment node and update the binder's current flow
 fn create_assignment_flow(binder : Binder, node : Node) -> Binder {
-  let flow_id = binder.next_flow_id + 1
-  let antecedent = get_current_flow_id(binder)
-  let flow_assignment = FlowAssignment::{
-    node,
-    antecedent,
-    id: flow_id,
-  }
-  {
-    ..binder,
-    next_flow_id: flow_id,
-    current_flow: Some(FlowNode::Assignment(flow_assignment)),
-  }
+  let cfg_builder = binder.cfg_builder.add_assignment(node)
+  { ..binder, cfg_builder }
 }
 
 ///|
 /// Create a FlowCall node and update the binder's current flow
 fn create_call_flow(binder : Binder, node : Node) -> Binder {
-  let flow_id = binder.next_flow_id + 1
-  let antecedent = get_current_flow_id(binder)
-  let flow_call = FlowCall::{
-    node,
-    antecedent,
-    id: flow_id,
-  }
-  {
-    ..binder,
-    next_flow_id: flow_id,
-    current_flow: Some(FlowNode::Call(flow_call)),
-  }
+  let cfg_builder = binder.cfg_builder.add_call(node)
+  { ..binder, cfg_builder }
 }
 
 ///|
 /// Create a FlowCondition node and update the binder's current flow
 fn create_condition_flow(binder : Binder, expression : Node) -> Binder {
-  let flow_id = binder.next_flow_id + 1
-  let antecedent = get_current_flow_id(binder)
-  let flow_condition = FlowCondition::{
-    expression,
-    antecedent,
-    id: flow_id,
-  }
-  {
-    ..binder,
-    next_flow_id: flow_id,
-    current_flow: Some(FlowNode::Condition(flow_condition)),
-  }
+  let cfg_builder = binder.cfg_builder.add_condition(expression)
+  { ..binder, cfg_builder }
 }
 
 ///|
@@ -978,112 +931,79 @@ fn create_switch_clause_flow(
   clause_start : Int,
   clause_end : Int,
 ) -> Binder {
-  let flow_id = binder.next_flow_id + 1
-  let antecedent = get_current_flow_id(binder)
-  let flow_switch_clause = FlowSwitchClause::{
-    switch_statement,
-    clause_start,
-    clause_end,
-    antecedent,
-    id: flow_id,
-  }
-  {
-    ..binder,
-    next_flow_id: flow_id,
-    current_flow: Some(FlowNode::SwitchClause(flow_switch_clause)),
-  }
+  let cfg_builder = binder.cfg_builder.add_switch_clause(switch_statement, clause_start, clause_end)
+  { ..binder, cfg_builder }
 }
 
 ///|
 fn create_label_flow(binder : Binder) -> Binder {
-  let flow_id = binder.next_flow_id + 1
-  let antecedent = get_current_flow_id(binder)
-  let flow_label = FlowLabel::{ antecedents: [antecedent], id: flow_id }
-  {
-    ..binder,
-    next_flow_id: flow_id,
-    current_flow: Some(FlowNode::Label(flow_label)),
-  }
+  let id = binder.cfg_builder.next_id
+  let antecedent = binder.cfg_builder.current_flow
+  let flow_label = FlowLabel::{ antecedents: [antecedent], id }
+  let nodes = binder.cfg_builder.nodes
+  nodes.push(FlowNode::Label(flow_label))
+  let cfg_builder = { ..binder.cfg_builder, next_id: id + 1, current_flow: id }
+  { ..binder, cfg_builder }
 }
 
 ///|
 fn create_array_mutation_flow(binder : Binder, node : Node) -> Binder {
-  let flow_id = binder.next_flow_id + 1
-  let antecedent = get_current_flow_id(binder)
-  let flow_array_mutation = FlowArrayMutation::{ node, antecedent, id: flow_id }
-  {
-    ..binder,
-    next_flow_id: flow_id,
-    current_flow: Some(FlowNode::ArrayMutation(flow_array_mutation)),
-  }
+  let cfg_builder = binder.cfg_builder.add_array_mutation(node)
+  { ..binder, cfg_builder }
 }
 
 ///|
 fn create_return_flow(binder : Binder, node : Node) -> Binder {
-  let flow_id = binder.next_flow_id + 1
-  let antecedent = get_current_flow_id(binder)
-  let flow_return = FlowReturn::{ node, antecedent, id: flow_id }
-  {
-    ..binder,
-    next_flow_id: flow_id,
-    current_flow: Some(FlowNode::Return(flow_return)),
-  }
+  let cfg_builder = binder.cfg_builder.add_return(node)
+  { ..binder, cfg_builder }
 }
 
 ///|
 fn create_unreachable_flow(binder : Binder) -> Binder {
-  let flow_id = binder.next_flow_id + 1
-  let flow_unreachable = FlowUnreachable::{ id: flow_id }
-  {
-    ..binder,
-    next_flow_id: flow_id,
-    current_flow: Some(FlowNode::Unreachable(flow_unreachable)),
-  }
+  let cfg_builder = binder.cfg_builder.add_unreachable()
+  { ..binder, cfg_builder }
 }
 
 ///|
 /// Create a FlowEnd node and update the binder's current flow
 fn create_end_flow(binder : Binder) -> Binder {
-  let flow_id = binder.next_flow_id + 1
-  let antecedent = get_current_flow_id(binder)
-  let flow_end = FlowEnd::{ antecedent, id: flow_id }
-  {
-    ..binder,
-    next_flow_id: flow_id,
-    current_flow: Some(FlowNode::End(flow_end)),
-  }
+  let id = binder.cfg_builder.next_id
+  let antecedent = binder.cfg_builder.current_flow
+  let flow_end = FlowEnd::{ antecedent, id }
+  let nodes = binder.cfg_builder.nodes
+  nodes.push(FlowNode::End(flow_end))
+  let cfg_builder = { ..binder.cfg_builder, next_id: id + 1, current_flow: id }
+  { ..binder, cfg_builder }
 }
 
 ///|
 /// Create a FlowBranchCondition node for true branch
 fn create_true_condition_flow(binder : Binder, condition_id : Int) -> Binder {
-  let flow_id = binder.next_flow_id + 1
+  let id = binder.cfg_builder.next_id
   let flow_branch = FlowBranchCondition::{
     antecedent: condition_id,
     is_true_branch: true,
-    id: flow_id,
+    id,
   }
-  {
-    ..binder,
-    next_flow_id: flow_id,
-    current_flow: Some(FlowNode::TrueCondition(flow_branch)),
-  }
+  let nodes = binder.cfg_builder.nodes
+  nodes.push(FlowNode::TrueCondition(flow_branch))
+  let cfg_builder = { ..binder.cfg_builder, next_id: id + 1, current_flow: id }
+  { ..binder, cfg_builder }
 }
 
 ///|
 /// Create a FlowBranchCondition node for false branch
 fn create_false_condition_flow(binder : Binder, condition_id : Int) -> Binder {
-  let flow_id = binder.next_flow_id + 1
+  let id = binder.cfg_builder.next_id
   let flow_branch = FlowBranchCondition::{
     antecedent: condition_id,
     is_true_branch: false,
-    id: flow_id,
+    id,
   }
-  {
-    ..binder,
-    next_flow_id: flow_id,
-    current_flow: Some(FlowNode::FalseCondition(flow_branch)),
-  }
+  let nodes = binder.cfg_builder.nodes
+  nodes.push(FlowNode::FalseCondition(flow_branch))
+  let cfg_builder = { ..binder.cfg_builder, next_id: id + 1, current_flow: id }
+  { ..binder, cfg_builder }
 }
 
 ///|
@@ -1093,49 +1013,41 @@ fn create_loop_label_flow(
   break_target : Int?,
   continue_target : Int?,
 ) -> Binder {
-  let flow_id = binder.next_flow_id + 1
-  let antecedent = get_current_flow_id(binder)
+  let id = binder.cfg_builder.next_id
+  let antecedent = binder.cfg_builder.current_flow
   let flow_loop = FlowLoopLabel::{
     antecedents: [antecedent],
     break_target,
     continue_target,
-    id: flow_id,
+    id,
   }
-  {
-    ..binder,
-    next_flow_id: flow_id,
-    current_flow: Some(FlowNode::LoopLabel(flow_loop)),
-  }
+  let nodes = binder.cfg_builder.nodes
+  nodes.push(FlowNode::LoopLabel(flow_loop))
+  let cfg_builder = { ..binder.cfg_builder, next_id: id + 1, current_flow: id }
+  { ..binder, cfg_builder }
 }
 
 ///|
 /// Create a FlowBranchLabel node for break/continue targets
 fn create_branch_label_flow(binder : Binder, name : String?) -> Binder {
-  let flow_id = binder.next_flow_id + 1
-  let antecedent = get_current_flow_id(binder)
+  let id = binder.cfg_builder.next_id
+  let antecedent = binder.cfg_builder.current_flow
   let flow_branch_label = FlowBranchLabel::{
     name,
     antecedents: [antecedent],
-    id: flow_id,
+    id,
   }
-  {
-    ..binder,
-    next_flow_id: flow_id,
-    current_flow: Some(FlowNode::BranchLabel(flow_branch_label)),
-  }
+  let nodes = binder.cfg_builder.nodes
+  nodes.push(FlowNode::BranchLabel(flow_branch_label))
+  let cfg_builder = { ..binder.cfg_builder, next_id: id + 1, current_flow: id }
+  { ..binder, cfg_builder }
 }
 
 ///|
 /// Create a FlowThrow node and update the binder's current flow
 fn create_throw_flow(binder : Binder, node : Node) -> Binder {
-  let flow_id = binder.next_flow_id + 1
-  let antecedent = get_current_flow_id(binder)
-  let flow_throw = FlowThrow::{ node, antecedent, id: flow_id }
-  {
-    ..binder,
-    next_flow_id: flow_id,
-    current_flow: Some(FlowNode::Throw(flow_throw)),
-  }
+  let cfg_builder = binder.cfg_builder.add_throw(node)
+  { ..binder, cfg_builder }
 }
 
 ///|
@@ -1146,32 +1058,30 @@ fn create_narrowing_flow(
   narrowed_symbol : Int,
   narrowed_type : Node,
 ) -> Binder {
-  let flow_id = binder.next_flow_id + 1
-  let antecedent = get_current_flow_id(binder)
+  let id = binder.cfg_builder.next_id
+  let antecedent = binder.cfg_builder.current_flow
   let flow_narrowing = FlowNarrowing::{
     expression,
     narrowed_symbol,
     narrowed_type,
     antecedent,
-    id: flow_id,
+    id,
   }
-  {
-    ..binder,
-    next_flow_id: flow_id,
-    current_flow: Some(FlowNode::Narrowing(flow_narrowing)),
-  }
+  let nodes = binder.cfg_builder.nodes
+  nodes.push(FlowNode::Narrowing(flow_narrowing))
+  let cfg_builder = { ..binder.cfg_builder, next_id: id + 1, current_flow: id }
+  { ..binder, cfg_builder }
 }
 
 ///|
 /// Create a FlowReducer node for merging multiple flows
 fn create_reducer_flow(binder : Binder, antecedents : Array[Int]) -> Binder {
-  let flow_id = binder.next_flow_id + 1
-  let flow_reducer = FlowReducer::{ antecedents, id: flow_id }
-  {
-    ..binder,
-    next_flow_id: flow_id,
-    current_flow: Some(FlowNode::Reducer(flow_reducer)),
-  }
+  let id = binder.cfg_builder.next_id
+  let flow_reducer = FlowReducer::{ antecedents, id }
+  let nodes = binder.cfg_builder.nodes
+  nodes.push(FlowNode::Reducer(flow_reducer))
+  let cfg_builder = { ..binder.cfg_builder, next_id: id + 1, current_flow: id }
+  { ..binder, cfg_builder }
 }
 
 ///|
