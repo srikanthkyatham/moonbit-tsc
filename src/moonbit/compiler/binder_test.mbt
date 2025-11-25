@@ -802,3 +802,77 @@ test "bind class with setter and method" {
     Err(_) => assert_true(false)
   }
 }
+
+// ============================================================================
+// ExportValue Tests
+// ============================================================================
+
+///|
+test "bind named export does not create new symbol" {
+  let result = parse_and_bind("const foo = 1; export { foo };")
+  match result {
+    Ok(bound) => {
+      // Variable should be in global scope (the export just references it)
+      assert_true(bound.global_scope.symbols.contains("foo"))
+      // Check that the symbol is a Variable, not ExportValue
+      match bound.global_scope.symbols.get("foo") {
+        Some(sym) => {
+          match sym.kind {
+            Variable => ()
+            _ => assert_true(false)
+          }
+        }
+        None => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "bind re-export from module creates ExportValue" {
+  let result = parse_and_bind("export { foo } from 'module';")
+  match result {
+    Ok(bound) => {
+      // Re-exported name should be in global scope as ExportValue
+      assert_true(bound.global_scope.symbols.contains("foo"))
+      match bound.global_scope.symbols.get("foo") {
+        Some(sym) => {
+          match sym.kind {
+            ExportValue => ()
+            _ => assert_true(false)
+          }
+        }
+        None => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "bind multiple re-exports from module" {
+  let result = parse_and_bind("export { a, b } from 'module';")
+  match result {
+    Ok(bound) => {
+      // Both re-exports should be in global scope as ExportValue
+      assert_true(bound.global_scope.symbols.contains("a"))
+      assert_true(bound.global_scope.symbols.contains("b"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "bind renamed re-export from module" {
+  let result = parse_and_bind("export { foo as bar } from 'module';")
+  match result {
+    Ok(bound) => {
+      // Exported name should be in global scope as ExportValue
+      assert_true(bound.global_scope.symbols.contains("bar"))
+      // Original name should NOT be in global scope (it's from another module)
+      assert_false(bound.global_scope.symbols.contains("foo"))
+    }
+    Err(_) => assert_true(false)
+  }
+}

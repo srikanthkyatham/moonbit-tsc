@@ -637,10 +637,47 @@ fn bind_import_specifiers_aux(
 /// Bind export declaration
 fn bind_export_declaration(
   binder : Binder,
-  _export_decl : ExportDeclaration,
+  export_decl : ExportDeclaration,
 ) -> Binder {
-  // Exports don't create bindings, they reference existing ones
-  binder
+  // Only create ExportValue symbols for re-exports (when there's a module specifier)
+  // e.g., `export { foo } from 'module'` creates ExportValue for 'foo'
+  // But `export { foo }` just references an existing local binding
+  match export_decl.module_specifier {
+    Some(_) =>
+      // Re-export from another module - create ExportValue symbols
+      match export_decl.export_clause {
+        Some(NamedExports::NamedExports(specifiers, _)) =>
+          bind_export_specifiers(binder, specifiers)
+        None => binder
+      }
+    None => binder // Local export - no new bindings needed
+  }
+}
+
+///|
+/// Bind export specifiers
+fn bind_export_specifiers(
+  binder : Binder,
+  specifiers : Array[ExportSpecifier],
+) -> Binder {
+  bind_export_specifiers_aux(binder, specifiers, 0)
+}
+
+///|
+fn bind_export_specifiers_aux(
+  binder : Binder,
+  specifiers : Array[ExportSpecifier],
+  index : Int,
+) -> Binder {
+  if index >= specifiers.length() {
+    binder
+  } else {
+    let spec = specifiers[index]
+    // Use the exported name for the symbol
+    let symbol = Symbol::new(spec.name, SymbolKind::ExportValue, binder.next_symbol_id)
+    let binder = declare_symbol(binder, spec.name, symbol)
+    bind_export_specifiers_aux(binder, specifiers, index + 1)
+  }
 }
 
 ///|
