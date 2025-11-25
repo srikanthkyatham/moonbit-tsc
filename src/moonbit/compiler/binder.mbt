@@ -556,12 +556,18 @@ fn bind_interface_declaration(
   // Bind type parameters (generics)
   let binder = bind_type_parameters(binder, interface.type_parameters)
 
-  // Bind each interface member (property signature)
+  // Bind each interface member (property signature, index signature)
   for i = 0; i < interface.members.length(); i = i + 1 {
     match interface.members[i] {
       PropertyDeclaration(prop) => {
         let prop_symbol = Symbol::new(prop.name, SymbolKind::Property, binder.next_symbol_id)
         members.set(prop.name, prop_symbol)
+      }
+      IndexSignatureDeclaration(idx_sig) => {
+        // Index signatures don't have a name per se, but we bind them with their parameter name
+        // This helps with type checking when accessing properties dynamically
+        let idx_symbol = Symbol::new(idx_sig.parameter_name, SymbolKind::Property, binder.next_symbol_id)
+        members.set("__index_" + idx_sig.parameter_name, idx_symbol)
       }
       _ => () // Skip other member types for now
     }

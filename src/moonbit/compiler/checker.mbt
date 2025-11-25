@@ -131,6 +131,7 @@ pub struct IndexSignature {
   parameter_name : String
   parameter_type : Type
   return_type : Type
+  is_readonly : Bool
 } derive(Show)
 
 ///|
@@ -447,15 +448,14 @@ pub fn resolve_type_reference(
 ) -> (Type, TypeChecker) {
   // Look up the type name in the type cache or scope
   match checker.type_cache.get(type_ref.name) {
-    Some(resolved) => {
+    Some(resolved) =>
       // If the type has type arguments, instantiate it
       if type_ref.type_arguments.length() > 0 {
         instantiate_generic_type(checker, resolved, type_ref.type_arguments)
       } else {
         (resolved, checker)
       }
-    }
-    None => {
+    None =>
       // Look up in scope for interface/class/type alias
       match lookup_symbol(checker, type_ref.name) {
         Some(symbol) =>
@@ -483,7 +483,6 @@ pub fn resolve_type_reference(
           // Unknown type reference
           (TypeReference(type_ref), checker)
       }
-    }
   }
 }
 
@@ -495,16 +494,14 @@ fn instantiate_generic_type(
   _type_args : Array[Type],
 ) -> (Type, TypeChecker) {
   match generic_type {
-    Type::Function(func_type) => {
+    Type::Function(func_type) =>
       // Substitute type parameters in function type
       // TODO: Full implementation would substitute type params with type args
       (Type::Function(func_type), checker)
-    }
-    Object(obj) => {
+    Object(obj) =>
       // Substitute type parameters in object type properties
       // TODO: Full implementation would substitute type params with type args
       (Object(obj), checker)
-    }
     _ => (generic_type, checker)
   }
 }
@@ -919,10 +916,7 @@ pub fn infer_type_parameters(
 ) -> (Map[String, Type], TypeChecker) {
   let inferred : Map[String, Type] = Map::new()
   let checker = infer_type_parameters_recursive(
-    checker,
-    check_type,
-    extends_type,
-    inferred,
+    checker, check_type, extends_type, inferred,
   )
   (inferred, checker)
 }
@@ -1014,7 +1008,10 @@ fn infer_type_parameters_recursive(
 
 ///|
 /// Create a union type from an array of types
-pub fn union_type(checker : TypeChecker, types : Array[Type]) -> (Type, TypeChecker) {
+pub fn union_type(
+  checker : TypeChecker,
+  types : Array[Type],
+) -> (Type, TypeChecker) {
   // Flatten nested unions and remove duplicates
   let flattened : Array[Type] = []
   for i = 0; i < types.length(); i = i + 1 {
@@ -1025,10 +1022,7 @@ pub fn union_type(checker : TypeChecker, types : Array[Type]) -> (Type, TypeChec
             flattened.push(inner.types[j])
           }
         }
-      other =>
-        if not(contains_type(flattened, other)) {
-          flattened.push(other)
-        }
+      other => if not(contains_type(flattened, other)) { flattened.push(other) }
     }
   }
   // Single type doesn't need union
@@ -1262,27 +1256,27 @@ fn infer_identifier_type(
 ) -> (Type, TypeChecker) {
   // Look up symbol in scope chain
   match lookup_symbol(checker, id.name) {
-    Some(symbol) => {
+    Some(symbol) =>
       // Get type from symbol
       match get_symbol_type(checker, symbol) {
         (Some(t), c) => (t, c)
-        (None, c) => {
+        (None, c) =>
           // Symbol exists but type not yet computed - infer from declaration
           infer_symbol_type(c, symbol)
-        }
       }
-    }
-    None => {
+    None =>
       // Undeclared identifier - return any type without error
       // (error would be too strict for current implementation)
       any_type(checker)
-    }
   }
 }
 
 ///|
 /// Get cached type for a symbol
-fn get_symbol_type(checker : TypeChecker, symbol : Symbol) -> (Type?, TypeChecker) {
+fn get_symbol_type(
+  checker : TypeChecker,
+  symbol : Symbol,
+) -> (Type?, TypeChecker) {
   match checker.symbol_types.get(symbol.id) {
     Some(t) => (Some(t), checker)
     None => (None, checker)
@@ -1317,7 +1311,7 @@ fn infer_declaration_type(
       let var_decl = var_stmt.declarations[0]
       // Check for explicit type annotation first
       match var_decl.type_annotation {
-        Some(type_node) => {
+        Some(type_node) =>
           match get_type_from_type_node(checker, type_node) {
             (Some(t), c) => {
               // Cache the type for future lookups
@@ -1327,12 +1321,13 @@ fn infer_declaration_type(
             }
             (None, c) => infer_from_initializer(c, var_decl.initializer, symbol)
           }
-        }
         None => infer_from_initializer(checker, var_decl.initializer, symbol)
       }
     }
-    FunctionDeclaration(func_decl) => infer_function_declaration_type(checker, func_decl, symbol)
-    ClassDeclaration(class_decl) => infer_class_declaration_type(checker, class_decl, symbol)
+    FunctionDeclaration(func_decl) =>
+      infer_function_declaration_type(checker, func_decl, symbol)
+    ClassDeclaration(class_decl) =>
+      infer_class_declaration_type(checker, class_decl, symbol)
     Parameter(param) => infer_parameter_type(checker, param, symbol)
     _ => any_type(checker)
   }
@@ -1367,17 +1362,15 @@ fn infer_function_declaration_type(
   // Build parameter list
   let parameters : Array[CheckerParameter] = []
   let mut checker = checker
-
   for param_node in func.parameters {
     match param_node {
       Parameter(p) => {
         let (param_type, c) = match p.type_annotation {
-          Some(type_node) => {
+          Some(type_node) =>
             match get_type_from_type_node(checker, type_node) {
               (Some(t), c2) => (t, c2)
               (None, c2) => any_type(c2)
             }
-          }
           None => any_type(checker)
         }
         checker = c
@@ -1394,15 +1387,13 @@ fn infer_function_declaration_type(
 
   // Get return type
   let (return_type, checker) = match func.return_type {
-    Some(type_node) => {
+    Some(type_node) =>
       match get_type_from_type_node(checker, type_node) {
         (Some(t), c) => (t, c)
         (None, c) => any_type(c)
       }
-    }
     None => any_type(checker)
   }
-
   let (info, checker) = create_type_info(checker)
   let func_type = Type::Function({ parameters, return_type, info })
 
@@ -1422,23 +1413,20 @@ fn infer_class_declaration_type(
   // Build object type for the class instance
   let properties : Map[String, PropertySignature] = Map::new()
   let mut checker = checker
-
   for class_member in class_decl.members {
     match class_member {
       PropertyDeclaration(prop) => {
         let (prop_type, c) = match prop.type_annotation {
-          Some(type_node) => {
+          Some(type_node) =>
             match get_type_from_type_node(checker, type_node) {
               (Some(t), c2) => (t, c2)
               (None, c2) => any_type(c2)
             }
-          }
-          None => {
+          None =>
             match prop.initializer {
               Some(init) => infer_type(checker, init)
               None => any_type(checker)
             }
-          }
         }
         checker = c
         // Check if property has readonly modifier
@@ -1463,7 +1451,6 @@ fn infer_class_declaration_type(
       _ => ()
     }
   }
-
   let (info, checker) = create_type_info(checker)
   let class_type = Type::Object({
     properties,
@@ -1488,17 +1475,15 @@ fn infer_method_type(
   // Build parameter list
   let parameters : Array[CheckerParameter] = []
   let mut checker = checker
-
   for param_node in method_decl.parameters {
     match param_node {
       Parameter(p) => {
         let (param_type, c) = match p.type_annotation {
-          Some(type_node) => {
+          Some(type_node) =>
             match get_type_from_type_node(checker, type_node) {
               (Some(t), c2) => (t, c2)
               (None, c2) => any_type(c2)
             }
-          }
           None => any_type(checker)
         }
         checker = c
@@ -1515,15 +1500,13 @@ fn infer_method_type(
 
   // Get return type
   let (return_type, checker) = match method_decl.return_type {
-    Some(type_node) => {
+    Some(type_node) =>
       match get_type_from_type_node(checker, type_node) {
         (Some(t), c) => (t, c)
         (None, c) => any_type(c)
       }
-    }
     None => any_type(checker)
   }
-
   let (info, checker) = create_type_info(checker)
   (Type::Function({ parameters, return_type, info }), checker)
 }
@@ -1536,12 +1519,11 @@ fn infer_parameter_type(
   symbol : Symbol,
 ) -> (Type, TypeChecker) {
   let (param_type, checker) = match param.type_annotation {
-    Some(type_node) => {
+    Some(type_node) =>
       match get_type_from_type_node(checker, type_node) {
         (Some(t), c) => (t, c)
         (None, c) => any_type(c)
       }
-    }
     None => any_type(checker)
   }
 
@@ -1717,31 +1699,26 @@ fn infer_call_expression_type(
 
   // Get call signatures from function type
   let signatures = get_call_signatures(func_type)
-
   if signatures.is_empty() {
     // Try to infer from Function type directly
     match func_type {
-      Type::Function(func) => {
+      Type::Function(func) =>
         // Return the function's return type
         (func.return_type, checker)
-      }
-      Any(_) => {
+      Any(_) =>
         // Any is callable and returns any
         any_type(checker)
-      }
-      _ => {
+      _ =>
         // Not callable - return any for now (could add diagnostic)
         any_type(checker)
-      }
     }
   } else {
     // Resolve which overload matches
     match resolve_call_overload(checker, signatures, arg_types) {
       Some((return_type, c)) => (return_type, c)
-      None => {
+      None =>
         // No overload matches - return any for now
         any_type(checker)
-      }
     }
   }
 }
@@ -1806,7 +1783,6 @@ fn try_signature(
   } else {
     signature.parameters.length()
   }
-
   if arg_types.length() < min_params || arg_types.length() > max_params {
     return None
   }
@@ -1823,7 +1799,6 @@ fn try_signature(
       return None
     }
   }
-
   Some((signature.return_type, checker))
 }
 
@@ -1886,7 +1861,7 @@ fn substitute_in_type(
   substitutions : Map[String, Type],
 ) -> (Type, TypeChecker) {
   match t {
-    TypeReference(type_ref) => {
+    TypeReference(type_ref) =>
       // Check if this is a type parameter
       match substitutions.get(type_ref.name) {
         Some(substituted) => (substituted, checker)
@@ -1900,16 +1875,26 @@ fn substitute_in_type(
             checker = c
           }
           let (info, checker) = create_type_info(checker)
-          (TypeReference({ name: type_ref.name, type_arguments: new_args, info }), checker)
+          (
+            TypeReference({
+              name: type_ref.name,
+              type_arguments: new_args,
+              info,
+            }),
+            checker,
+          )
         }
       }
-    }
     Type::Function(func) => {
       // Substitute in parameters and return type
       let mut checker = checker
       let new_params : Array[CheckerParameter] = []
       for param in func.parameters {
-        let (new_type, c) = substitute_in_type(checker, param.param_type, substitutions)
+        let (new_type, c) = substitute_in_type(
+          checker,
+          param.param_type,
+          substitutions,
+        )
         checker = c
         new_params.push({
           name: param.name,
@@ -1918,12 +1903,23 @@ fn substitute_in_type(
           is_rest: param.is_rest,
         })
       }
-      let (new_return, checker) = substitute_in_type(checker, func.return_type, substitutions)
+      let (new_return, checker) = substitute_in_type(
+        checker,
+        func.return_type,
+        substitutions,
+      )
       let (info, checker) = create_type_info(checker)
-      (Type::Function({ parameters: new_params, return_type: new_return, info }), checker)
+      (
+        Type::Function({ parameters: new_params, return_type: new_return, info }),
+        checker,
+      )
     }
     Type::Array(arr) => {
-      let (new_elem, checker) = substitute_in_type(checker, arr.element_type, substitutions)
+      let (new_elem, checker) = substitute_in_type(
+        checker,
+        arr.element_type,
+        substitutions,
+      )
       let (info, checker) = create_type_info(checker)
       (Type::Array({ element_type: new_elem, info }), checker)
     }
@@ -1931,7 +1927,9 @@ fn substitute_in_type(
       let mut checker = checker
       let new_types : Array[Type] = []
       for union_member in union.types {
-        let (new_member, c) = substitute_in_type(checker, union_member, substitutions)
+        let (new_member, c) = substitute_in_type(
+          checker, union_member, substitutions,
+        )
         new_types.push(new_member)
         checker = c
       }
@@ -1943,7 +1941,11 @@ fn substitute_in_type(
       let new_props : Map[String, PropertySignature] = Map::new()
       for entry in obj.properties {
         let (name, prop) = entry
-        let (new_type, c) = substitute_in_type(checker, prop.prop_type, substitutions)
+        let (new_type, c) = substitute_in_type(
+          checker,
+          prop.prop_type,
+          substitutions,
+        )
         checker = c
         new_props.set(name, {
           name: prop.name,
@@ -1953,13 +1955,16 @@ fn substitute_in_type(
         })
       }
       let (info, checker) = create_type_info(checker)
-      (Type::Object({
-        properties: new_props,
-        call_signatures: obj.call_signatures,
-        construct_signatures: obj.construct_signatures,
-        index_signatures: obj.index_signatures,
-        info,
-      }), checker)
+      (
+        Type::Object({
+          properties: new_props,
+          call_signatures: obj.call_signatures,
+          construct_signatures: obj.construct_signatures,
+          index_signatures: obj.index_signatures,
+          info,
+        }),
+        checker,
+      )
     }
     _ => (t, checker) // Primitives don't need substitution
   }
@@ -1975,10 +1980,7 @@ fn check_type_constraint(
 ) -> TypeChecker {
   if not(is_assignable(type_arg, constraint)) {
     add_diagnostic(
-      checker,
-      "Type does not satisfy the constraint",
-      location,
-      2344,
+      checker, "Type does not satisfy the constraint", location, 2344,
     )
   } else {
     checker
@@ -1999,31 +2001,28 @@ fn check_type_arguments(
   let min_required = count_required_type_params(type_params)
   if type_args.length() < min_required {
     checker = add_diagnostic(
-      checker,
-      "Generic type requires more type arguments",
-      location,
-      2314,
+      checker, "Generic type requires more type arguments", location, 2314,
     )
   }
   if type_args.length() > type_params.length() {
     checker = add_diagnostic(
-      checker,
-      "Too many type arguments provided",
-      location,
-      2558,
+      checker, "Too many type arguments provided", location, 2558,
     )
   }
 
   // Check constraints
   for i = 0; i < type_args.length() && i < type_params.length(); i = i + 1 {
     match type_params[i].constraint {
-      Some(constraint) => {
-        checker = check_type_constraint(checker, type_args[i], constraint, location)
-      }
+      Some(constraint) =>
+        checker = check_type_constraint(
+          checker,
+          type_args[i],
+          constraint,
+          location,
+        )
       None => ()
     }
   }
-
   checker
 }
 
@@ -2057,14 +2056,13 @@ fn infer_type_arguments(
   for i = 0; i < param_types.length() && i < arg_types.length(); i = i + 1 {
     infer_from_types(arg_types[i], param_types[i], inferences)
   }
-
   let mut checker = checker
 
   // Resolve inferences
   let result : Array[Type] = []
   for param in type_params {
     match inferences.get(param.name) {
-      Some(candidates) => {
+      Some(candidates) =>
         if not(candidates.is_empty()) {
           // Use first candidate (could use best common type)
           result.push(candidates[0])
@@ -2072,7 +2070,7 @@ fn infer_type_arguments(
           // Use constraint or default
           match param.default_type {
             Some(default_t) => result.push(default_t)
-            None => {
+            None =>
               match param.constraint {
                 Some(constraint) => result.push(constraint)
                 None => {
@@ -2081,10 +2079,8 @@ fn infer_type_arguments(
                   checker = c
                 }
               }
-            }
           }
         }
-      }
       None => {
         let (t, c) = any_type(checker)
         result.push(t)
@@ -2092,7 +2088,6 @@ fn infer_type_arguments(
       }
     }
   }
-
   (result, checker)
 }
 
@@ -2104,42 +2099,51 @@ fn infer_from_types(
   inferences : Map[String, Array[Type]],
 ) -> Unit {
   match target {
-    TypeReference(type_ref) => {
+    TypeReference(type_ref) =>
       // Check if target is a type parameter we're inferring
       match inferences.get(type_ref.name) {
         Some(candidates) => candidates.push(source)
-        None => {
+        None =>
           // Not a type parameter - recurse into type arguments
           match source {
-            TypeReference(source_ref) => {
-              for i = 0; i < type_ref.type_arguments.length() && i < source_ref.type_arguments.length(); i = i + 1 {
+            TypeReference(source_ref) =>
+              for i = 0
+                  i < type_ref.type_arguments.length() &&
+                 i < source_ref.type_arguments.length()
+                  i = i + 1 {
                 infer_from_types(
                   source_ref.type_arguments[i],
                   type_ref.type_arguments[i],
                   inferences,
                 )
               }
-            }
             _ => ()
           }
-        }
       }
-    }
-    Type::Array(arr) => {
+    Type::Array(arr) =>
       match source {
-        Type::Array(source_arr) => {
-          infer_from_types(source_arr.element_type, arr.element_type, inferences)
-        }
+        Type::Array(source_arr) =>
+          infer_from_types(
+            source_arr.element_type,
+            arr.element_type,
+            inferences,
+          )
         _ => ()
       }
-    }
-    Type::Function(func) => {
+    Type::Function(func) =>
       match source {
         Type::Function(source_func) => {
           // Infer from return type
-          infer_from_types(source_func.return_type, func.return_type, inferences)
+          infer_from_types(
+            source_func.return_type,
+            func.return_type,
+            inferences,
+          )
           // Infer from parameters (contravariant)
-          for i = 0; i < func.parameters.length() && i < source_func.parameters.length(); i = i + 1 {
+          for i = 0
+              i < func.parameters.length() &&
+             i < source_func.parameters.length()
+              i = i + 1 {
             infer_from_types(
               func.parameters[i].param_type,
               source_func.parameters[i].param_type,
@@ -2149,7 +2153,6 @@ fn infer_from_types(
         }
         _ => ()
       }
-    }
     _ => ()
   }
 }
@@ -2160,39 +2163,34 @@ fn infer_from_types(
 
 ///|
 /// Check if expression is a type guard and extract guard info
-fn get_type_guard_info(
-  checker : TypeChecker,
-  expr : Node,
-) -> TypeGuardInfo? {
+fn get_type_guard_info(checker : TypeChecker, expr : Node) -> TypeGuardInfo? {
   match expr {
     // typeof x === "string"
     BinaryExpression(bin) => get_binary_type_guard(checker, bin)
     // Truthiness check (just identifier)
-    Identifier(id) => {
+    Identifier(id) =>
       // Narrows out null and undefined
       Some({
         parameter_name: id.name,
         type_when_true: None, // Remove null/undefined
         type_when_false: None, // null | undefined
       })
-    }
     // !x (negation)
-    UnaryExpression(un) => {
+    UnaryExpression(un) =>
       match un.operator {
-        LogicalNot => {
+        LogicalNot =>
           // Flip the narrowing
           match get_type_guard_info(checker, un.operand) {
-            Some(tg) => Some({
-              parameter_name: tg.parameter_name,
-              type_when_true: tg.type_when_false,
-              type_when_false: tg.type_when_true,
-            })
+            Some(tg) =>
+              Some({
+                parameter_name: tg.parameter_name,
+                type_when_true: tg.type_when_false,
+                type_when_false: tg.type_when_true,
+              })
             None => None
           }
-        }
         _ => None
       }
-    }
     _ => None
   }
 }
@@ -2204,23 +2202,20 @@ fn get_binary_type_guard(
   bin : BinaryExpression,
 ) -> TypeGuardInfo? {
   match bin.operator {
-    StrictEquals | Equals => {
+    StrictEquals | Equals =>
       // typeof x === "string" or x === null
       match get_typeof_guard(checker, bin.left, bin.right) {
         Some(tg) => Some(tg)
-        None => {
+        None =>
           match get_typeof_guard(checker, bin.right, bin.left) {
             Some(tg) => Some(tg)
-            None => {
+            None =>
               match get_null_guard(bin.left, bin.right) {
                 Some(tg) => Some(tg)
                 None => get_null_guard(bin.right, bin.left)
               }
-            }
           }
-        }
       }
-    }
     StrictNotEquals | NotEquals => {
       // typeof x !== "string" - flip the result
       let maybe_typeof = match get_typeof_guard(checker, bin.left, bin.right) {
@@ -2228,31 +2223,32 @@ fn get_binary_type_guard(
         None => get_typeof_guard(checker, bin.right, bin.left)
       }
       match maybe_typeof {
-        Some(tg) => Some({
-          parameter_name: tg.parameter_name,
-          type_when_true: tg.type_when_false,
-          type_when_false: tg.type_when_true,
-        })
+        Some(tg) =>
+          Some({
+            parameter_name: tg.parameter_name,
+            type_when_true: tg.type_when_false,
+            type_when_false: tg.type_when_true,
+          })
         None => {
           let maybe_null = match get_null_guard(bin.left, bin.right) {
             Some(tg) => Some(tg)
             None => get_null_guard(bin.right, bin.left)
           }
           match maybe_null {
-            Some(tg) => Some({
-              parameter_name: tg.parameter_name,
-              type_when_true: tg.type_when_false,
-              type_when_false: tg.type_when_true,
-            })
+            Some(tg) =>
+              Some({
+                parameter_name: tg.parameter_name,
+                type_when_true: tg.type_when_false,
+                type_when_false: tg.type_when_true,
+              })
             None => None
           }
         }
       }
     }
-    InstanceOf => {
+    InstanceOf =>
       // x instanceof Class
       get_instanceof_guard(bin.left, bin.right)
-    }
     _ => None
   }
 }
@@ -2265,11 +2261,11 @@ fn get_typeof_guard(
   right : Node,
 ) -> TypeGuardInfo? {
   match left {
-    UnaryExpression(un) => {
+    UnaryExpression(un) =>
       match un.operator {
-        TypeOf => {
+        TypeOf =>
           match un.operand {
-            Identifier(id) => {
+            Identifier(id) =>
               match right {
                 StringLiteral(s) => {
                   let narrowed_type = typeof_string_to_type(checker, s.value)
@@ -2281,13 +2277,10 @@ fn get_typeof_guard(
                 }
                 _ => None
               }
-            }
             _ => None
           }
-        }
         _ => None
       }
-    }
     _ => None
   }
 }
@@ -2296,13 +2289,12 @@ fn get_typeof_guard(
 /// Get null guard: x === null
 fn get_null_guard(left : Node, right : Node) -> TypeGuardInfo? {
   match (left, right) {
-    (Identifier(id), NullLiteral(_)) => {
+    (Identifier(id), NullLiteral(_)) =>
       Some({
         parameter_name: id.name,
         type_when_true: None, // Type is null
         type_when_false: None, // Remove null from type
       })
-    }
     _ => None
   }
 }
@@ -2311,14 +2303,13 @@ fn get_null_guard(left : Node, right : Node) -> TypeGuardInfo? {
 /// Get instanceof guard: x instanceof Class
 fn get_instanceof_guard(left : Node, right : Node) -> TypeGuardInfo? {
   match (left, right) {
-    (Identifier(id), Identifier(_)) => {
+    (Identifier(id), Identifier(_)) =>
       // Return guard info - actual type narrowing would require symbol lookup
       Some({
         parameter_name: id.name,
         type_when_true: None, // Would be the class type
         type_when_false: None,
       })
-    }
     _ => None
   }
 }
@@ -2332,18 +2323,18 @@ fn typeof_string_to_type(checker : TypeChecker, s : String) -> Type? {
     "number" => Some(Number(info))
     "boolean" => Some(Boolean(info))
     "undefined" => Some(Undefined(info))
-    "object" => Some(Type::Object({
-      properties: Map::new(),
-      call_signatures: [],
-      construct_signatures: [],
-      index_signatures: [],
-      info,
-    }))
-    "function" => Some(Type::Function({
-      parameters: [],
-      return_type: Any(info),
-      info,
-    }))
+    "object" =>
+      Some(
+        Type::Object({
+          properties: Map::new(),
+          call_signatures: [],
+          construct_signatures: [],
+          index_signatures: [],
+          info,
+        }),
+      )
+    "function" =>
+      Some(Type::Function({ parameters: [], return_type: Any(info), info }))
     "symbol" => Some(Symbol(info))
     _ => None
   }
@@ -2372,9 +2363,9 @@ fn apply_type_narrowing(
 fn narrow_union(union : CheckerUnionType, exclude_types : Array[Type]) -> Type {
   let remaining : Array[Type] = []
   for union_member in union.types {
-    let should_exclude = exclude_types.iter().any(fn(exclude) {
-      types_are_identical(union_member, exclude)
-    })
+    let should_exclude = exclude_types
+      .iter()
+      .any(fn(exclude) { types_are_identical(union_member, exclude) })
     if not(should_exclude) {
       remaining.push(union_member)
     }
@@ -2418,7 +2409,6 @@ fn check_unreachable_code(
 ) -> TypeChecker {
   let mut checker = checker
   let mut found_terminator = false
-
   for stmt in statements {
     if found_terminator {
       checker = add_diagnostic(
@@ -2433,7 +2423,6 @@ fn check_unreachable_code(
     // Check if statement is a terminator
     found_terminator = is_terminating_statement(stmt)
   }
-
   checker
 }
 
@@ -2522,10 +2511,10 @@ fn check_return_type_consistency(
 
   // Walk the function body and check all return statements
   match func.body {
-    Some(BlockStatement(block)) => {
+    Some(BlockStatement(block)) =>
       for stmt in block.statements {
         match stmt {
-          ReturnStatement(ret) => {
+          ReturnStatement(ret) =>
             match ret.expression {
               Some(expr) => {
                 let (return_type, c) = infer_type(checker, expr)
@@ -2539,29 +2528,24 @@ fn check_return_type_consistency(
                   )
                 }
               }
-              None => {
+              None =>
                 // void return - check if compatible
                 match declared_return {
                   Void(_) | Any(_) => ()
-                  _ => {
+                  _ =>
                     checker = add_diagnostic(
                       checker,
                       "A function whose declared return type is not void must return a value.",
                       ret.location,
                       2355,
                     )
-                  }
                 }
-              }
             }
-          }
           _ => ()
         }
       }
-    }
     _ => ()
   }
-
   checker
 }
 
@@ -2656,12 +2640,11 @@ fn infer_optional_chain_type(
   let (base_type, checker) = infer_type(checker, oc.expression)
   // Optional chaining can return undefined if base is null/undefined
   // For now, return the property/call/element type or any
-  let _ = base_type  // Mark as used
+  let _ = base_type // Mark as used
   match oc.chain {
-    OptionalChainKind::Property(_) => {
+    OptionalChainKind::Property(_) =>
       // Property access returns any for now (should look up property type)
       any_type(checker)
-    }
     OptionalChainKind::Call(args) => {
       // Check argument types
       let mut checker = checker
@@ -2773,7 +2756,6 @@ fn infer_function_expression_type(
   // Build a function type from the function expression
   let params : Array[CheckerParameter] = []
   let mut checker = checker
-
   for param_node in fe.parameters {
     match param_node {
       Parameter(p) => {
@@ -2801,7 +2783,6 @@ fn infer_function_expression_type(
       _ => ()
     }
   }
-
   let (return_type, checker) = match fe.return_type {
     Some(type_node) => {
       let (type_opt, c) = get_type_from_type_node(checker, type_node)
@@ -2812,7 +2793,6 @@ fn infer_function_expression_type(
     }
     None => any_type(checker)
   }
-
   let (info, checker) = create_type_info(checker)
   (Function({ parameters: params, return_type, info }), checker)
 }
@@ -3051,10 +3031,9 @@ fn is_assignable(source : Type, target : Type) -> Bool {
     // Index access types - need resolution
     (IndexAccess(ia1), IndexAccess(ia2)) =>
       is_assignable(ia1.object_type, ia2.object_type) &&
-        is_assignable(ia1.index_type, ia2.index_type)
+      is_assignable(ia1.index_type, ia2.index_type)
     // Conditional types - compare structure
-    (Conditional(c1), Conditional(c2)) =>
-      is_conditional_assignable(c1, c2)
+    (Conditional(c1), Conditional(c2)) => is_conditional_assignable(c1, c2)
     // Mapped types
     (Mapped(m1), Mapped(m2)) => is_mapped_assignable(m1, m2)
     // Template literal types
@@ -3121,9 +3100,9 @@ fn is_conditional_assignable(
 ) -> Bool {
   // Simplified: same structure check
   is_assignable(source.check_type, target.check_type) &&
-    is_assignable(source.extends_type, target.extends_type) &&
-    is_assignable(source.true_type, target.true_type) &&
-    is_assignable(source.false_type, target.false_type)
+  is_assignable(source.extends_type, target.extends_type) &&
+  is_assignable(source.true_type, target.true_type) &&
+  is_assignable(source.false_type, target.false_type)
 }
 
 ///|
@@ -3582,7 +3561,7 @@ fn check_try_statement(
     None => checker
   }
   match try_stmt.finally_block {
-    Some(finally) => check_statement(checker, finally)
+    Some(finally_block) => check_statement(checker, finally_block)
     None => checker
   }
 }
@@ -3772,7 +3751,80 @@ fn get_type_from_type_node(
         }
         (None, c) => (None, c)
       }
+    MappedType(mapped) => {
+      // Convert AST MappedType to checker MappedType
+      // First, convert the type parameter
+      let mut checker = checker
+
+      // Get constraint type if present
+      let (constraint, c) = match mapped.type_parameter.constraint {
+        Some(constraint_node) =>
+          match get_type_from_type_node(checker, constraint_node) {
+            (Some(t), c2) => (Some(t), c2)
+            (None, c2) => (None, c2)
+          }
+        None => (None, checker)
+      }
+      checker = c
+
+      // Get default type if present
+      let (default_type, c) = match mapped.type_parameter.default {
+        Some(default_node) =>
+          match get_type_from_type_node(checker, default_node) {
+            (Some(t), c2) => (Some(t), c2)
+            (None, c2) => (None, c2)
+          }
+        None => (None, checker)
+      }
+      checker = c
+
+      // Create CheckerTypeParameter
+      let type_param : CheckerTypeParameter = {
+        name: mapped.type_parameter.name,
+        constraint,
+        default_type,
+      }
+
+      // Get template type
+      let (template_type, c) = match mapped.type_node {
+        Some(type_node) =>
+          match get_type_from_type_node(checker, type_node) {
+            (Some(t), c2) => (t, c2)
+            (None, c2) => {
+              let (t, c3) = any_type(c2)
+              (t, c3)
+            }
+          }
+        None => any_type(checker)
+      }
+      checker = c
+
+      // Convert AST modifiers to checker modifiers
+      let readonly_mod = convert_mapped_modifier(mapped.readonly_modifier)
+      let optional_mod = convert_mapped_modifier(mapped.optional_modifier)
+
+      // Create the mapped type
+      let (t, c) = mapped_type(
+        checker,
+        type_param,
+        None,
+        template_type,
+        readonly_mod,
+        optional_mod,
+      )
+      (Some(t), c)
+    }
     _ => (None, checker)
+  }
+}
+
+///|
+/// Convert AST MappedTypeModifier to checker MappedModifier
+fn convert_mapped_modifier(ast_mod : MappedTypeModifier) -> MappedModifier {
+  match ast_mod {
+    Unchanged => MappedModifier::Unchanged
+    Plus => MappedModifier::Add
+    Minus => MappedModifier::Remove
   }
 }
 
@@ -3910,6 +3962,7 @@ fn resolve_interface_type(
     Some(InterfaceDeclaration(interface_decl)) => {
       // Build property map from interface members
       let properties : Map[String, PropertySignature] = Map::new()
+      let index_signatures : Array[IndexSignature] = []
       let mut checker = checker
       for i = 0; i < interface_decl.members.length(); i = i + 1 {
         match interface_decl.members[i] {
@@ -3934,7 +3987,35 @@ fn resolve_interface_type(
               is_readonly: false,
             })
           }
-          _ => () // Skip non-property members
+          IndexSignatureDeclaration(idx_sig) => {
+            // Get the parameter type (key type)
+            let (param_type, c) = match
+              get_type_from_type_node(checker, idx_sig.parameter_type) {
+              (Some(t), c2) => (t, c2)
+              (None, c2) => {
+                let (t, c3) = any_type(c2)
+                (t, c3)
+              }
+            }
+            checker = c
+            // Get the return type (value type)
+            let (ret_type, c) = match
+              get_type_from_type_node(checker, idx_sig.return_type) {
+              (Some(t), c2) => (t, c2)
+              (None, c2) => {
+                let (t, c3) = any_type(c2)
+                (t, c3)
+              }
+            }
+            checker = c
+            index_signatures.push({
+              parameter_name: idx_sig.parameter_name,
+              parameter_type: param_type,
+              return_type: ret_type,
+              is_readonly: idx_sig.is_readonly,
+            })
+          }
+          _ => () // Skip other member types
         }
       }
       let (info, checker) = create_type_info(checker)
@@ -3944,7 +4025,7 @@ fn resolve_interface_type(
             properties,
             call_signatures: [],
             construct_signatures: [],
-            index_signatures: [],
+            index_signatures,
             info,
           }),
         ),
