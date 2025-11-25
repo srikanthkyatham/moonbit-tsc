@@ -2174,12 +2174,18 @@ fn parse_arrow_function_single_param(
 ///|
 /// Parse type (enhanced with union support)
 fn parse_type(parser : Parser) -> Result[(Node, Parser), Parser] {
-  // Parse primary type
-  let result = parse_primary_type(parser)
+  // Check for readonly modifier (readonly number[], readonly [T, U])
+  let (is_readonly, parser) = match current_token(parser) {
+    KeywordReadonly(_) => (true, advance_parser(parser))
+    _ => (false, parser)
+  }
+
+  // Parse primary type with readonly context
+  let result = parse_primary_type_with_readonly(parser, is_readonly)
   match result {
     Ok((type_node, parser)) => {
       // Check for array type syntax (type[]) and indexed access (type[K])
-      let (type_node, parser) = parse_array_type_suffix(parser, type_node)
+      let (type_node, parser) = parse_array_type_suffix_with_readonly(parser, type_node, is_readonly)
       // Check for conditional type (T extends U ? X : Y)
       let result = parse_conditional_type(parser, type_node)
       match result {
@@ -2197,8 +2203,15 @@ fn parse_type(parser : Parser) -> Result[(Node, Parser), Parser] {
 ///|
 /// Parse array type suffix and indexed access type (handles type[], Type[K], etc.)
 fn parse_array_type_suffix(parser : Parser, base_type : Node) -> (Node, Parser) {
+  parse_array_type_suffix_with_readonly(parser, base_type, false)
+}
+
+///|
+/// Parse array type suffix with readonly flag
+fn parse_array_type_suffix_with_readonly(parser : Parser, base_type : Node, is_readonly : Bool) -> (Node, Parser) {
   let mut type_node = base_type
   let mut parser = parser
+  let mut first_array = true
 
   while true {
     match current_token(parser) {
@@ -2209,8 +2222,12 @@ fn parse_array_type_suffix(parser : Parser, base_type : Node) -> (Node, Parser) 
           CloseBracket(_) => {
             // Array type: Type[]
             parser = advance_parser(parser)
+            // Only first array inherits readonly, nested arrays are not readonly by default
+            let array_readonly = if first_array { is_readonly } else { false }
+            first_array = false
             type_node = Node::ArrayType(ArrayType::{
               element_type: type_node,
+              is_readonly: array_readonly,
               location: start_loc,
             })
           }
@@ -2316,6 +2333,12 @@ fn parse_conditional_type(parser : Parser, check_type : Node) -> Result[(Node, P
 ///|
 /// Parse primary type
 fn parse_primary_type(parser : Parser) -> Result[(Node, Parser), Parser] {
+  parse_primary_type_with_readonly(parser, false)
+}
+
+///|
+/// Parse primary type with readonly context for tuples
+fn parse_primary_type_with_readonly(parser : Parser, is_readonly : Bool) -> Result[(Node, Parser), Parser] {
   let token = current_token(parser)
   let loc = token.location()
   match token {
@@ -2404,6 +2427,16 @@ fn parse_primary_type(parser : Parser) -> Result[(Node, Parser), Parser] {
         (
           Node::KeywordType(KeywordType::{
             kind: TypeKeyword::Never,
+            location: loc,
+          }),
+          advance_parser(parser),
+        ),
+      )
+    KeywordSymbol(_) =>
+      Ok(
+        (
+          Node::KeywordType(KeywordType::{
+            kind: TypeKeyword::Symbol,
             location: loc,
           }),
           advance_parser(parser),
@@ -2770,6 +2803,7 @@ fn parse_primary_type(parser : Parser) -> Result[(Node, Parser), Parser] {
       Ok((
         Node::TupleType(TupleType::{
           element_types,
+          is_readonly,
           location: loc,
         }),
         parser,
@@ -4974,6 +5008,7 @@ fn get_binary_operator(token : Token) -> BinaryOperator? {
     AmpersandAmpersandEquals(_) => Some(BinaryOperator::LogicalAndAssign)
     BarBarEquals(_) => Some(BinaryOperator::LogicalOrAssign)
     QuestionQuestionEquals(_) => Some(BinaryOperator::NullishCoalescingAssign)
+    // Note: Comma operator is context-sensitive and handled separately in parenthesized expressions
     _ => None
   }
 }

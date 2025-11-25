@@ -769,12 +769,14 @@ pub struct FunctionType {
 ///|
 pub struct ArrayType {
   element_type : Node
+  is_readonly : Bool
   location : SourceLocation
 } derive(Show)
 
 ///|
 pub struct TupleType {
   element_types : Array[Node]
+  is_readonly : Bool
   location : SourceLocation
 } derive(Show)
 
