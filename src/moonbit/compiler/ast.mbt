@@ -71,6 +71,7 @@ pub enum Node {
   // Primary Expressions
   Identifier(Identifier)
   NumericLiteral(NumericLiteral)
+  BigIntLiteral(BigIntLiteral)
   StringLiteral(StringLiteral)
   BooleanLiteral(BooleanLiteral)
   NullLiteral(NullLiteral)
@@ -744,6 +745,12 @@ pub struct NumericLiteral {
 } derive(Show)
 
 ///|
+pub struct BigIntLiteral {
+  value : String
+  location : SourceLocation
+} derive(Show)
+
+///|
 pub struct StringLiteral {
   value : String
   location : SourceLocation
@@ -1205,6 +1212,7 @@ pub fn get_location(node : Node) -> SourceLocation {
     ObjectBindingPattern(o) => o.location
     Identifier(i) => i.location
     NumericLiteral(n) => n.location
+    BigIntLiteral(b) => b.location
     StringLiteral(s) => s.location
     BooleanLiteral(b) => b.location
     NullLiteral(n) => n.location

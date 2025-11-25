@@ -400,3 +400,341 @@ test "scan whitespace only" {
     _ => assert_true(false)
   }
 }
+
+// ============================================================================
+// Unicode Escape Tests
+// ============================================================================
+
+///|
+test "scan unicode escape 4-digit" {
+  let scanner = Scanner::new("\"\\u0041\\u0042\"", "test.ts")
+  let tokens = scan_all(scanner)
+  assert_eq(tokens.length(), 2) // string + EOF
+  match tokens[0] {
+    StringLiteral(value, _) => assert_eq(value, "AB")
+    _ => assert_true(false)
+  }
+}
+
+///|
+test "scan unicode escape braces" {
+  let scanner = Scanner::new("\"\\u{41}\\u{42}\"", "test.ts")
+  let tokens = scan_all(scanner)
+  assert_eq(tokens.length(), 2) // string + EOF
+  match tokens[0] {
+    StringLiteral(value, _) => assert_eq(value, "AB")
+    _ => assert_true(false)
+  }
+}
+
+///|
+test "scan unicode escape in template" {
+  let scanner = Scanner::new("`\\u0048\\u0069`", "test.ts")
+  let tokens = scan_all(scanner)
+  assert_eq(tokens.length(), 2) // template + EOF
+  match tokens[0] {
+    TemplateLiteral(value, _) => assert_eq(value, "Hi")
+    _ => assert_true(false)
+  }
+}
+
+///|
+test "scan invalid unicode escape keeps literal" {
+  let scanner = Scanner::new("\"\\u00GG\"", "test.ts")
+  let tokens = scan_all(scanner)
+  assert_eq(tokens.length(), 2) // string + EOF
+  match tokens[0] {
+    StringLiteral(value, _) => assert_eq(value, "\\u00GG")
+    _ => assert_true(false)
+  }
+}
+
+// ============================================================================
+// Hex Escape Tests
+// ============================================================================
+
+///|
+test "scan hex escape in string" {
+  let scanner = Scanner::new("\"\\x41\\x42\\x43\"", "test.ts")
+  let tokens = scan_all(scanner)
+  assert_eq(tokens.length(), 2) // string + EOF
+  match tokens[0] {
+    StringLiteral(value, _) => assert_eq(value, "ABC")
+    _ => assert_true(false)
+  }
+}
+
+///|
+test "scan hex escape in template" {
+  let scanner = Scanner::new("`\\x48\\x69`", "test.ts")
+  let tokens = scan_all(scanner)
+  assert_eq(tokens.length(), 2) // template + EOF
+  match tokens[0] {
+    TemplateLiteral(value, _) => assert_eq(value, "Hi")
+    _ => assert_true(false)
+  }
+}
+
+///|
+test "scan invalid hex escape keeps literal" {
+  let scanner = Scanner::new("\"\\xGG\"", "test.ts")
+  let tokens = scan_all(scanner)
+  assert_eq(tokens.length(), 2) // string + EOF
+  match tokens[0] {
+    StringLiteral(value, _) => assert_eq(value, "\\xGG")
+    _ => assert_true(false)
+  }
+}
+
+// ============================================================================
+// Numeric Format Tests
+// ============================================================================
+
+///|
+test "scan hex number lowercase" {
+  let scanner = Scanner::new("0xff", "test.ts")
+  let tokens = scan_all(scanner)
+  assert_eq(tokens.length(), 2) // number + EOF
+  match tokens[0] {
+    NumericLiteral(value, _) => assert_eq(value, "0xff")
+    _ => assert_true(false)
+  }
+}
+
+///|
+test "scan hex number uppercase" {
+  let scanner = Scanner::new("0XFF", "test.ts")
+  let tokens = scan_all(scanner)
+  assert_eq(tokens.length(), 2) // number + EOF
+  match tokens[0] {
+    NumericLiteral(value, _) => assert_eq(value, "0xFF")
+    _ => assert_true(false)
+  }
+}
+
+///|
+test "scan octal number" {
+  let scanner = Scanner::new("0o777", "test.ts")
+  let tokens = scan_all(scanner)
+  assert_eq(tokens.length(), 2) // number + EOF
+  match tokens[0] {
+    NumericLiteral(value, _) => assert_eq(value, "0o777")
+    _ => assert_true(false)
+  }
+}
+
+///|
+test "scan octal number uppercase" {
+  let scanner = Scanner::new("0O123", "test.ts")
+  let tokens = scan_all(scanner)
+  assert_eq(tokens.length(), 2) // number + EOF
+  match tokens[0] {
+    NumericLiteral(value, _) => assert_eq(value, "0o123")
+    _ => assert_true(false)
+  }
+}
+
+///|
+test "scan binary number" {
+  let scanner = Scanner::new("0b1010", "test.ts")
+  let tokens = scan_all(scanner)
+  assert_eq(tokens.length(), 2) // number + EOF
+  match tokens[0] {
+    NumericLiteral(value, _) => assert_eq(value, "0b1010")
+    _ => assert_true(false)
+  }
+}
+
+///|
+test "scan binary number uppercase" {
+  let scanner = Scanner::new("0B1111", "test.ts")
+  let tokens = scan_all(scanner)
+  assert_eq(tokens.length(), 2) // number + EOF
+  match tokens[0] {
+    NumericLiteral(value, _) => assert_eq(value, "0b1111")
+    _ => assert_true(false)
+  }
+}
+
+// ============================================================================
+// BigInt Tests
+// ============================================================================
+
+///|
+test "scan decimal bigint" {
+  let scanner = Scanner::new("123n", "test.ts")
+  let tokens = scan_all(scanner)
+  assert_eq(tokens.length(), 2) // bigint + EOF
+  match tokens[0] {
+    BigIntLiteral(value, _) => assert_eq(value, "123n")
+    _ => assert_true(false)
+  }
+}
+
+///|
+test "scan hex bigint" {
+  let scanner = Scanner::new("0xFFn", "test.ts")
+  let tokens = scan_all(scanner)
+  assert_eq(tokens.length(), 2) // bigint + EOF
+  match tokens[0] {
+    BigIntLiteral(value, _) => assert_eq(value, "0xFFn")
+    _ => assert_true(false)
+  }
+}
+
+///|
+test "scan octal bigint" {
+  let scanner = Scanner::new("0o77n", "test.ts")
+  let tokens = scan_all(scanner)
+  assert_eq(tokens.length(), 2) // bigint + EOF
+  match tokens[0] {
+    BigIntLiteral(value, _) => assert_eq(value, "0o77n")
+    _ => assert_true(false)
+  }
+}
+
+///|
+test "scan binary bigint" {
+  let scanner = Scanner::new("0b1010n", "test.ts")
+  let tokens = scan_all(scanner)
+  assert_eq(tokens.length(), 2) // bigint + EOF
+  match tokens[0] {
+    BigIntLiteral(value, _) => assert_eq(value, "0b1010n")
+    _ => assert_true(false)
+  }
+}
+
+///|
+test "scan zero bigint" {
+  let scanner = Scanner::new("0n", "test.ts")
+  let tokens = scan_all(scanner)
+  assert_eq(tokens.length(), 2) // bigint + EOF
+  match tokens[0] {
+    BigIntLiteral(value, _) => assert_eq(value, "0n")
+    _ => assert_true(false)
+  }
+}
+
+// ============================================================================
+// Numeric Separator Tests
+// ============================================================================
+
+///|
+test "scan decimal with separator" {
+  let scanner = Scanner::new("1_000_000", "test.ts")
+  let tokens = scan_all(scanner)
+  assert_eq(tokens.length(), 2) // number + EOF
+  match tokens[0] {
+    NumericLiteral(value, _) => assert_eq(value, "1000000")
+    _ => assert_true(false)
+  }
+}
+
+///|
+test "scan hex with separator" {
+  let scanner = Scanner::new("0xFF_FF", "test.ts")
+  let tokens = scan_all(scanner)
+  assert_eq(tokens.length(), 2) // number + EOF
+  match tokens[0] {
+    NumericLiteral(value, _) => assert_eq(value, "0xFFFF")
+    _ => assert_true(false)
+  }
+}
+
+///|
+test "scan binary with separator" {
+  let scanner = Scanner::new("0b1010_1010", "test.ts")
+  let tokens = scan_all(scanner)
+  assert_eq(tokens.length(), 2) // number + EOF
+  match tokens[0] {
+    NumericLiteral(value, _) => assert_eq(value, "0b10101010")
+    _ => assert_true(false)
+  }
+}
+
+///|
+test "scan float with separator" {
+  let scanner = Scanner::new("1_000.5", "test.ts")
+  let tokens = scan_all(scanner)
+  assert_eq(tokens.length(), 2) // number + EOF
+  match tokens[0] {
+    NumericLiteral(value, _) => assert_eq(value, "1000.5")
+    _ => assert_true(false)
+  }
+}
+
+///|
+test "scan bigint with separator" {
+  let scanner = Scanner::new("1_000n", "test.ts")
+  let tokens = scan_all(scanner)
+  assert_eq(tokens.length(), 2) // bigint + EOF
+  match tokens[0] {
+    BigIntLiteral(value, _) => assert_eq(value, "1000n")
+    _ => assert_true(false)
+  }
+}
+
+// ============================================================================
+// Private Identifier Tests
+// ============================================================================
+
+///|
+test "scan private identifier" {
+  let scanner = Scanner::new("#privateField", "test.ts")
+  let tokens = scan_all(scanner)
+  assert_eq(tokens.length(), 2) // private identifier + EOF
+  match tokens[0] {
+    PrivateIdentifier(name, _) => assert_eq(name, "#privateField")
+    _ => assert_true(false)
+  }
+}
+
+///|
+test "scan private identifier in class" {
+  let scanner = Scanner::new("class Foo { #field = 1; }", "test.ts")
+  let tokens = scan_all(scanner)
+  // class, Foo, {, #field, =, 1, ;, }, EOF
+  assert_eq(tokens.length(), 9)
+  match tokens[3] {
+    PrivateIdentifier(name, _) => assert_eq(name, "#field")
+    _ => assert_true(false)
+  }
+}
+
+///|
+test "scan invalid private identifier" {
+  let scanner = Scanner::new("# notPrivate", "test.ts")
+  let tokens = scan_all(scanner)
+  // #, notPrivate, EOF
+  assert_eq(tokens.length(), 3)
+  match tokens[0] {
+    Unknown(text, _) => assert_eq(text, "#")
+    _ => assert_true(false)
+  }
+}
+
+// ============================================================================
+// String Escape Sequence Tests
+// ============================================================================
+
+///|
+test "scan string with basic escapes" {
+  let scanner = Scanner::new("\"\\n\\r\\t\"", "test.ts")
+  let tokens = scan_all(scanner)
+  assert_eq(tokens.length(), 2) // string + EOF
+  match tokens[0] {
+    StringLiteral(value, _) => assert_eq(value, "\n\r\t")
+    _ => assert_true(false)
+  }
+}
+
+///|
+test "scan string with quote escapes" {
+  let scanner = Scanner::new("\"\\\"hello\\\"\"", "test.ts")
+  let tokens = scan_all(scanner)
+  assert_eq(tokens.length(), 2) // string + EOF
+  match tokens[0] {
+    StringLiteral(value, _) => assert_eq(value, "\"hello\"")
+    _ => assert_true(false)
+  }
+}

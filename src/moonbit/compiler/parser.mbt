@@ -2149,6 +2149,15 @@ fn parse_primary_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
         ),
       )
 
+    // BigInt literal
+    BigIntLiteral(value, loc) =>
+      Ok(
+        (
+          Node::BigIntLiteral(BigIntLiteral::{ value, location: loc }),
+          advance_parser(parser),
+        ),
+      )
+
     // String literal
     StringLiteral(value, loc) =>
       Ok(
@@ -3348,6 +3357,16 @@ fn parse_primary_type_with_readonly(parser : Parser, is_readonly : Bool) -> Resu
         (
           Node::LiteralType(LiteralType::{
             literal: Node::NumericLiteral(NumericLiteral::{ value, location: loc }),
+            location: loc,
+          }),
+          advance_parser(parser),
+        ),
+      )
+    BigIntLiteral(value, _) =>
+      Ok(
+        (
+          Node::LiteralType(LiteralType::{
+            literal: Node::BigIntLiteral(BigIntLiteral::{ value, location: loc }),
             location: loc,
           }),
           advance_parser(parser),

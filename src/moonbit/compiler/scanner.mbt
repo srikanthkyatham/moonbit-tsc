@@ -722,6 +722,7 @@ pub fn scan_token(scanner : Scanner) -> (Token, Scanner) {
       let scanner = advance(scanner)
       (At(make_location(scanner, start_pos, start_line, start_col)), scanner)
     }
+    '#' => scan_private_identifier(scanner, start_pos, start_line, start_col)
     _ => {
       let scanner = advance(scanner)
       let text = scanner.source.substring(start=start_pos, end=scanner.position)
@@ -829,34 +830,318 @@ fn scan_identifier_or_keyword(
 }
 
 ///|
-/// Scan a number literal
+/// Scan a number literal (all formats: decimal, hex, octal, binary, BigInt, separators)
 fn scan_number(
   scanner : Scanner,
   start_pos : Int,
   start_line : Int,
   start_col : Int,
 ) -> (Token, Scanner) {
-  let mut scanner = scanner
+  let first_char = peek_char(scanner)
 
-  // Simple number scanning (decimal only for now)
+  // Check for special prefixes (0x, 0o, 0b)
+  if first_char == '0' {
+    let scanner_after_zero = advance(scanner)
+    if scanner_after_zero.position < scanner_after_zero.length {
+      let second_char = peek_char(scanner_after_zero)
+      match second_char {
+        'x' | 'X' => return scan_hex_number(scanner_after_zero, start_pos, start_line, start_col)
+        'o' | 'O' => return scan_octal_number(scanner_after_zero, start_pos, start_line, start_col)
+        'b' | 'B' => return scan_binary_number(scanner_after_zero, start_pos, start_line, start_col)
+        _ => ()
+      }
+    }
+  }
+
+  // Decimal number
+  scan_decimal_number(scanner, start_pos, start_line, start_col)
+}
+
+///|
+/// Scan hexadecimal number (0xFF, 0xFFn)
+fn scan_hex_number(
+  scanner : Scanner,
+  start_pos : Int,
+  start_line : Int,
+  start_col : Int,
+) -> (Token, Scanner) {
+  let mut scanner = advance(scanner) // Skip x/X
+  let mut text = "0x"
+
   while scanner.position < scanner.length {
     let ch = peek_char(scanner)
     match ch {
-      '0'..='9' | '.' | 'e' | 'E' | '+' | '-' => scanner = advance(scanner)
+      '0'..='9' | 'a'..='f' | 'A'..='F' => {
+        text = text + Char::to_string(ch)
+        scanner = advance(scanner)
+      }
+      '_' => {
+        // Numeric separator - skip but don't include
+        scanner = advance(scanner)
+      }
       _ => break
     }
   }
+
+  // Check for BigInt suffix
+  let is_bigint = peek_char(scanner) == 'n'
+  if is_bigint {
+    text = text + "n"
+    scanner = advance(scanner)
+  }
+
+  let loc = SourceLocation::new(
+    scanner.file_path,
+    Position::new(start_line, start_col, start_pos),
+    Position::new(scanner.line, scanner.column, scanner.position),
+  )
+
+  if is_bigint {
+    (BigIntLiteral(text, loc), scanner)
+  } else {
+    (NumericLiteral(text, loc), scanner)
+  }
+}
+
+///|
+/// Scan octal number (0o77, 0o77n)
+fn scan_octal_number(
+  scanner : Scanner,
+  start_pos : Int,
+  start_line : Int,
+  start_col : Int,
+) -> (Token, Scanner) {
+  let mut scanner = advance(scanner) // Skip o/O
+  let mut text = "0o"
+
+  while scanner.position < scanner.length {
+    let ch = peek_char(scanner)
+    match ch {
+      '0'..='7' => {
+        text = text + Char::to_string(ch)
+        scanner = advance(scanner)
+      }
+      '_' => {
+        scanner = advance(scanner)
+      }
+      _ => break
+    }
+  }
+
+  // Check for BigInt suffix
+  let is_bigint = peek_char(scanner) == 'n'
+  if is_bigint {
+    text = text + "n"
+    scanner = advance(scanner)
+  }
+
+  let loc = SourceLocation::new(
+    scanner.file_path,
+    Position::new(start_line, start_col, start_pos),
+    Position::new(scanner.line, scanner.column, scanner.position),
+  )
+
+  if is_bigint {
+    (BigIntLiteral(text, loc), scanner)
+  } else {
+    (NumericLiteral(text, loc), scanner)
+  }
+}
+
+///|
+/// Scan binary number (0b1010, 0b1010n)
+fn scan_binary_number(
+  scanner : Scanner,
+  start_pos : Int,
+  start_line : Int,
+  start_col : Int,
+) -> (Token, Scanner) {
+  let mut scanner = advance(scanner) // Skip b/B
+  let mut text = "0b"
+
+  while scanner.position < scanner.length {
+    let ch = peek_char(scanner)
+    match ch {
+      '0' | '1' => {
+        text = text + Char::to_string(ch)
+        scanner = advance(scanner)
+      }
+      '_' => {
+        scanner = advance(scanner)
+      }
+      _ => break
+    }
+  }
+
+  // Check for BigInt suffix
+  let is_bigint = peek_char(scanner) == 'n'
+  if is_bigint {
+    text = text + "n"
+    scanner = advance(scanner)
+  }
+
+  let loc = SourceLocation::new(
+    scanner.file_path,
+    Position::new(start_line, start_col, start_pos),
+    Position::new(scanner.line, scanner.column, scanner.position),
+  )
+
+  if is_bigint {
+    (BigIntLiteral(text, loc), scanner)
+  } else {
+    (NumericLiteral(text, loc), scanner)
+  }
+}
+
+///|
+/// Scan decimal number with full support (separators, floats, exponents, BigInt)
+fn scan_decimal_number(
+  scanner : Scanner,
+  start_pos : Int,
+  start_line : Int,
+  start_col : Int,
+) -> (Token, Scanner) {
+  let mut scanner = scanner
+  let mut text = ""
+  let mut has_dot = false
+  let mut has_exponent = false
+
+  // Integer part
+  while scanner.position < scanner.length {
+    let ch = peek_char(scanner)
+    match ch {
+      '0'..='9' => {
+        text = text + Char::to_string(ch)
+        scanner = advance(scanner)
+      }
+      '_' => {
+        // Numeric separator - skip
+        scanner = advance(scanner)
+      }
+      _ => break
+    }
+  }
+
+  // Decimal part
+  if peek_char(scanner) == '.' {
+    // Check it's not .. (range operator in some contexts)
+    let next_scanner = advance(scanner)
+    if peek_char(next_scanner) != '.' {
+      has_dot = true
+      text = text + "."
+      scanner = next_scanner
+
+      while scanner.position < scanner.length {
+        let ch = peek_char(scanner)
+        match ch {
+          '0'..='9' => {
+            text = text + Char::to_string(ch)
+            scanner = advance(scanner)
+          }
+          '_' => {
+            scanner = advance(scanner)
+          }
+          _ => break
+        }
+      }
+    }
+  }
+
+  // Exponent part
+  let ch = peek_char(scanner)
+  if ch == 'e' || ch == 'E' {
+    has_exponent = true
+    text = text + Char::to_string(ch)
+    scanner = advance(scanner)
+
+    // Optional sign
+    let sign = peek_char(scanner)
+    if sign == '+' || sign == '-' {
+      text = text + Char::to_string(sign)
+      scanner = advance(scanner)
+    }
+
+    // Exponent digits
+    while scanner.position < scanner.length {
+      let ch = peek_char(scanner)
+      match ch {
+        '0'..='9' => {
+          text = text + Char::to_string(ch)
+          scanner = advance(scanner)
+        }
+        '_' => {
+          scanner = advance(scanner)
+        }
+        _ => break
+      }
+    }
+  }
+
+  // BigInt suffix (only valid without decimal or exponent)
+  let is_bigint = not(has_dot) && not(has_exponent) && peek_char(scanner) == 'n'
+  if is_bigint {
+    text = text + "n"
+    scanner = advance(scanner)
+  }
+
+  let loc = SourceLocation::new(
+    scanner.file_path,
+    Position::new(start_line, start_col, start_pos),
+    Position::new(scanner.line, scanner.column, scanner.position),
+  )
+
+  if is_bigint {
+    (BigIntLiteral(text, loc), scanner)
+  } else {
+    (NumericLiteral(text, loc), scanner)
+  }
+}
+
+///|
+/// Scan private identifier (#fieldName)
+fn scan_private_identifier(
+  scanner : Scanner,
+  start_pos : Int,
+  start_line : Int,
+  start_col : Int,
+) -> (Token, Scanner) {
+  let mut scanner = advance(scanner) // Skip #
+
+  // Check if followed by valid identifier start
+  let ch = peek_char(scanner)
+  match ch {
+    'a'..='z' | 'A'..='Z' | '_' | '$' => ()
+    _ => {
+      // Not a valid private identifier - return Unknown("#")
+      let loc = SourceLocation::new(
+        scanner.file_path,
+        Position::new(start_line, start_col, start_pos),
+        Position::new(scanner.line, scanner.column, scanner.position),
+      )
+      return (Unknown("#", loc), scanner)
+    }
+  }
+
+  // Scan identifier part
+  while scanner.position < scanner.length {
+    let ch = peek_char(scanner)
+    match ch {
+      'a'..='z' | 'A'..='Z' | '0'..='9' | '_' | '$' => scanner = advance(scanner)
+      _ => break
+    }
+  }
+
   let text = scanner.source.substring(start=start_pos, end=scanner.position)
   let loc = SourceLocation::new(
     scanner.file_path,
     Position::new(start_line, start_col, start_pos),
     Position::new(scanner.line, scanner.column, scanner.position),
   )
-  (NumericLiteral(text, loc), scanner)
+  (PrivateIdentifier(text, loc), scanner)
 }
 
 ///|
-/// Scan a string literal
+/// Scan a string literal with full escape sequence support
 fn scan_string(
   scanner : Scanner,
   start_pos : Int,
@@ -876,9 +1161,92 @@ fn scan_string(
       scanner = advance(scanner)
       if scanner.position < scanner.length {
         let escaped = peek_char(scanner)
-        text = text + "\\" + Char::to_string(escaped)
-        scanner = advance(scanner)
+        match escaped {
+          'n' => {
+            text = text + "\n"
+            scanner = advance(scanner)
+          }
+          'r' => {
+            text = text + "\r"
+            scanner = advance(scanner)
+          }
+          't' => {
+            text = text + "\t"
+            scanner = advance(scanner)
+          }
+          'b' => {
+            text = text + "\u{0008}"
+            scanner = advance(scanner)
+          }
+          'f' => {
+            text = text + "\u{000C}"
+            scanner = advance(scanner)
+          }
+          'v' => {
+            text = text + "\u{000B}"
+            scanner = advance(scanner)
+          }
+          '0' => {
+            text = text + "\u{0000}"
+            scanner = advance(scanner)
+          }
+          '\\' => {
+            text = text + "\\"
+            scanner = advance(scanner)
+          }
+          '\'' => {
+            text = text + "'"
+            scanner = advance(scanner)
+          }
+          '"' => {
+            text = text + "\""
+            scanner = advance(scanner)
+          }
+          'u' => {
+            match parse_unicode_escape(scanner) {
+              Some((code_point, new_scanner)) => {
+                text = text + code_point_to_string(code_point)
+                scanner = new_scanner
+              }
+              None => {
+                text = text + "\\u"
+                scanner = advance(scanner)
+              }
+            }
+          }
+          'x' => {
+            match parse_hex_escape(scanner) {
+              Some((value, new_scanner)) => {
+                text = text + code_point_to_string(value)
+                scanner = new_scanner
+              }
+              None => {
+                text = text + "\\x"
+                scanner = advance(scanner)
+              }
+            }
+          }
+          '\n' => {
+            // Line continuation - skip the newline
+            scanner = advance_line(scanner)
+          }
+          '\r' => {
+            // Line continuation - skip CR and possibly LF
+            scanner = advance(scanner)
+            if peek_char(scanner) == '\n' {
+              scanner = advance_line(scanner)
+            }
+          }
+          _ => {
+            // Unknown escape - keep literal character
+            text = text + Char::to_string(escaped)
+            scanner = advance(scanner)
+          }
+        }
       }
+    } else if ch == '\n' || ch == '\r' {
+      // Unterminated string - break here
+      break
     } else {
       text = text + Char::to_string(ch)
       scanner = advance(scanner)
@@ -933,23 +1301,86 @@ fn scan_template(
       if scanner.position < scanner.length {
         let escaped = peek_char(scanner)
         match escaped {
-          'n' => text = text + "\n"
-          'r' => text = text + "\r"
-          't' => text = text + "\t"
-          '\\' => text = text + "\\"
-          '`' => text = text + "`"
-          '$' => text = text + "$"
+          'n' => {
+            text = text + "\n"
+            scanner = advance(scanner)
+          }
+          'r' => {
+            text = text + "\r"
+            scanner = advance(scanner)
+          }
+          't' => {
+            text = text + "\t"
+            scanner = advance(scanner)
+          }
+          'b' => {
+            text = text + "\u{0008}"
+            scanner = advance(scanner)
+          }
+          'f' => {
+            text = text + "\u{000C}"
+            scanner = advance(scanner)
+          }
+          'v' => {
+            text = text + "\u{000B}"
+            scanner = advance(scanner)
+          }
+          '0' => {
+            text = text + "\u{0000}"
+            scanner = advance(scanner)
+          }
+          '\\' => {
+            text = text + "\\"
+            scanner = advance(scanner)
+          }
+          '`' => {
+            text = text + "`"
+            scanner = advance(scanner)
+          }
+          '$' => {
+            text = text + "$"
+            scanner = advance(scanner)
+          }
+          'u' => {
+            match parse_unicode_escape(scanner) {
+              Some((code_point, new_scanner)) => {
+                text = text + code_point_to_string(code_point)
+                scanner = new_scanner
+              }
+              None => {
+                text = text + "\\u"
+                scanner = advance(scanner)
+              }
+            }
+          }
+          'x' => {
+            match parse_hex_escape(scanner) {
+              Some((value, new_scanner)) => {
+                text = text + code_point_to_string(value)
+                scanner = new_scanner
+              }
+              None => {
+                text = text + "\\x"
+                scanner = advance(scanner)
+              }
+            }
+          }
           _ => {
             text = text + "\\"
             text = text + Char::to_string(escaped)
+            scanner = advance(scanner)
           }
         }
-        scanner = advance(scanner)
         continue
       }
     }
-    text = text + Char::to_string(ch)
-    scanner = advance(scanner)
+    if ch == '\n' {
+      text = text + Char::to_string(ch)
+      scanner = advance_line(scanner)
+    } else {
+      text = text + Char::to_string(ch)
+      scanner = advance(scanner)
+    }
   }
   // Reached end of file without closing backtick
   let loc = SourceLocation::new(
@@ -999,23 +1430,86 @@ pub fn scan_template_continuation(scanner : Scanner) -> (Token, Scanner) {
       if scanner.position < scanner.length {
         let escaped = peek_char(scanner)
         match escaped {
-          'n' => text = text + "\n"
-          'r' => text = text + "\r"
-          't' => text = text + "\t"
-          '\\' => text = text + "\\"
-          '`' => text = text + "`"
-          '$' => text = text + "$"
+          'n' => {
+            text = text + "\n"
+            scanner = advance(scanner)
+          }
+          'r' => {
+            text = text + "\r"
+            scanner = advance(scanner)
+          }
+          't' => {
+            text = text + "\t"
+            scanner = advance(scanner)
+          }
+          'b' => {
+            text = text + "\u{0008}"
+            scanner = advance(scanner)
+          }
+          'f' => {
+            text = text + "\u{000C}"
+            scanner = advance(scanner)
+          }
+          'v' => {
+            text = text + "\u{000B}"
+            scanner = advance(scanner)
+          }
+          '0' => {
+            text = text + "\u{0000}"
+            scanner = advance(scanner)
+          }
+          '\\' => {
+            text = text + "\\"
+            scanner = advance(scanner)
+          }
+          '`' => {
+            text = text + "`"
+            scanner = advance(scanner)
+          }
+          '$' => {
+            text = text + "$"
+            scanner = advance(scanner)
+          }
+          'u' => {
+            match parse_unicode_escape(scanner) {
+              Some((code_point, new_scanner)) => {
+                text = text + code_point_to_string(code_point)
+                scanner = new_scanner
+              }
+              None => {
+                text = text + "\\u"
+                scanner = advance(scanner)
+              }
+            }
+          }
+          'x' => {
+            match parse_hex_escape(scanner) {
+              Some((value, new_scanner)) => {
+                text = text + code_point_to_string(value)
+                scanner = new_scanner
+              }
+              None => {
+                text = text + "\\x"
+                scanner = advance(scanner)
+              }
+            }
+          }
           _ => {
             text = text + "\\"
             text = text + Char::to_string(escaped)
+            scanner = advance(scanner)
           }
         }
-        scanner = advance(scanner)
         continue
       }
     }
-    text = text + Char::to_string(ch)
-    scanner = advance(scanner)
+    if ch == '\n' {
+      text = text + Char::to_string(ch)
+      scanner = advance_line(scanner)
+    } else {
+      text = text + Char::to_string(ch)
+      scanner = advance(scanner)
+    }
   }
   // Reached end of file without closing backtick
   let loc = SourceLocation::new(
@@ -1142,6 +1636,121 @@ fn advance_line(scanner : Scanner) -> Scanner {
 fn current_location(scanner : Scanner) -> SourceLocation {
   let pos = Position::new(scanner.line, scanner.column, scanner.position)
   SourceLocation::new(scanner.file_path, pos, pos)
+}
+
+///|
+/// Get hex digit value (0-15) or None
+fn hex_digit_value(ch : Char) -> Int? {
+  match ch {
+    '0'..='9' => Some(ch.to_int() - '0'.to_int())
+    'a'..='f' => Some(ch.to_int() - 'a'.to_int() + 10)
+    'A'..='F' => Some(ch.to_int() - 'A'.to_int() + 10)
+    _ => None
+  }
+}
+
+///|
+/// Convert code point to string (handles BMP and supplementary planes)
+fn code_point_to_string(code_point : Int) -> String {
+  if code_point <= 0xFFFF {
+    match code_point.to_char() {
+      Some(ch) => ch.to_string()
+      None => "" // Invalid code point
+    }
+  } else {
+    // Create surrogate pair for supplementary plane characters
+    let adjusted = code_point - 0x10000
+    let high_surrogate = 0xD800 + (adjusted >> 10)
+    let low_surrogate = 0xDC00 + (adjusted & 0x3FF)
+    let high_str = match high_surrogate.to_char() {
+      Some(ch) => ch.to_string()
+      None => ""
+    }
+    let low_str = match low_surrogate.to_char() {
+      Some(ch) => ch.to_string()
+      None => ""
+    }
+    high_str + low_str
+  }
+}
+
+///|
+/// Parse Unicode escape sequence \uXXXX or \u{XXXXX}
+/// Scanner should be positioned at 'u' (after the backslash)
+fn parse_unicode_escape(scanner : Scanner) -> (Int, Scanner)? {
+  let mut scanner = advance(scanner) // Skip 'u'
+
+  if peek_char(scanner) == '{' {
+    // Variable-length: \u{XXXXX}
+    scanner = advance(scanner) // Skip {
+    let mut code_point = 0
+    let mut digit_count = 0
+
+    while scanner.position < scanner.length {
+      let ch = peek_char(scanner)
+      if ch == '}' {
+        scanner = advance(scanner)
+        if digit_count == 0 {
+          return None // Empty \u{}
+        }
+        if code_point > 0x10FFFF {
+          return None // Invalid code point
+        }
+        return Some((code_point, scanner))
+      }
+
+      match hex_digit_value(ch) {
+        Some(value) => {
+          code_point = code_point * 16 + value
+          digit_count = digit_count + 1
+          scanner = advance(scanner)
+        }
+        None => return None // Invalid hex digit
+      }
+    }
+    None // No closing }
+  } else {
+    // Fixed 4-digit: \uXXXX
+    let mut code_point = 0
+    for i = 0; i < 4; i = i + 1 {
+      if scanner.position >= scanner.length {
+        return None
+      }
+      let ch = peek_char(scanner)
+      match hex_digit_value(ch) {
+        Some(value) => {
+          code_point = code_point * 16 + value
+          scanner = advance(scanner)
+        }
+        None => return None
+      }
+    }
+    Some((code_point, scanner))
+  }
+}
+
+///|
+/// Parse hex escape sequence \xXX
+/// Scanner should be positioned at 'x' (after the backslash)
+fn parse_hex_escape(scanner : Scanner) -> (Int, Scanner)? {
+  let mut scanner = advance(scanner) // Skip 'x'
+
+  // Read exactly 2 hex digits
+  let mut value = 0
+  for i = 0; i < 2; i = i + 1 {
+    if scanner.position >= scanner.length {
+      return None
+    }
+    let ch = peek_char(scanner)
+    match hex_digit_value(ch) {
+      Some(digit) => {
+        value = value * 16 + digit
+        scanner = advance(scanner)
+      }
+      None => return None
+    }
+  }
+  Some((value, scanner))
 }
 
 ///|

@@ -179,6 +179,7 @@ pub fn emit(node : Node, ctx : EmitterContext) -> String {
       id.name
     }
     NumericLiteral(nl) => nl.value
+    BigIntLiteral(bi) => bi.value + "n"
     StringLiteral(sl) => "\"" + escape_string(sl.value) + "\""
     BooleanLiteral(bl) => if bl.value { "true" } else { "false" }
     NullLiteral(_) => "null"
@@ -1415,7 +1416,11 @@ fn unary_operator_to_string(op : UnaryOperator) -> String {
 ///|
 /// Escape string for JavaScript string literal
 fn escape_string(s : String) -> String {
-  // For now, just return the string as-is
-  // The parser already handles escape sequences in the source
+  // Re-escape special characters for JavaScript output
   s
+    .replace(old="\\", new="\\\\")
+    .replace(old="\"", new="\\\"")
+    .replace(old="\n", new="\\n")
+    .replace(old="\r", new="\\r")
+    .replace(old="\t", new="\\t")
 }

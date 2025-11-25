@@ -171,6 +171,7 @@ pub fn transform(node : Node, ctx : TransformerContext) -> Node {
     // Primary Expressions - keep as-is
     Identifier(id) => Identifier(id)
     NumericLiteral(nl) => NumericLiteral(nl)
+    BigIntLiteral(bi) => BigIntLiteral(bi)
     StringLiteral(sl) => StringLiteral(sl)
     BooleanLiteral(bl) => BooleanLiteral(bl)
     NullLiteral(nl) => NullLiteral(nl)
