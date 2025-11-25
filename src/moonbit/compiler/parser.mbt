@@ -4748,12 +4748,13 @@ fn parse_enum_declaration(parser : Parser, is_const : Bool) -> Result[(Node, Par
       match current_token(parser) {
         CloseBrace(loc) => {
           let parser = advance_parser(parser)
+          let modifiers : Array[Modifier] = if is_const { [Modifier::Const] } else { [] }
           Ok((
             Node::EnumDeclaration(EnumDeclaration::{
               name,
               members,
               is_const,
-              modifiers: [],
+              modifiers,
               location: SourceLocation::new(start_loc.file_path, start_loc.start, loc.end)
             }),
             parser

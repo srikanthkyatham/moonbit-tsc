@@ -634,3 +634,27 @@ test "emit regular const still works" {
   let js = compile_to_js("const x = 1;")
   assert_true(js.contains("const x = 1;"))
 }
+
+///|
+/// Test: Const enum is emitted (preserveConstEnums behavior)
+test "emit const enum" {
+  let js = compile_to_js("const enum Color { Red, Green, Blue }")
+  // Const enums are emitted as const objects (like --preserveConstEnums)
+  assert_true(js.contains("const Color"))
+}
+
+///|
+/// Test: Regular enum is emitted
+test "emit regular enum" {
+  let js = compile_to_js("enum Status { Active, Inactive }")
+  assert_true(js.contains("const Status"))
+}
+
+///|
+/// Test: Const enum with values
+test "emit const enum with values" {
+  let js = compile_to_js("const enum Direction { Up = 1, Down = 2 }")
+  assert_true(js.contains("const Direction"))
+  assert_true(js.contains("Up"))
+  assert_true(js.contains("Down"))
+}
