@@ -181,6 +181,11 @@ pub enum Token {
   // JSX
   LessThanSlash(SourceLocation) // </
   SlashGreaterThan(SourceLocation) // />
+  JsxText(String, SourceLocation) // Text content between JSX tags
+  JsxTagOpen(SourceLocation) // < in JSX context
+  JsxTagClose(SourceLocation) // > in JSX context
+  JsxExpressionStart(SourceLocation) // { in JSX context
+  JsxExpressionEnd(SourceLocation) // } in JSX context
 
   // Decorator
   At(SourceLocation) // @
@@ -352,6 +357,11 @@ pub fn Token::location(self : Token) -> SourceLocation {
     | TemplateTail(_, loc)
     | LessThanSlash(loc)
     | SlashGreaterThan(loc)
+    | JsxText(_, loc)
+    | JsxTagOpen(loc)
+    | JsxTagClose(loc)
+    | JsxExpressionStart(loc)
+    | JsxExpressionEnd(loc)
     | At(loc)
     | JSDocComment(_, loc)
     | Hashbang(_, loc)
