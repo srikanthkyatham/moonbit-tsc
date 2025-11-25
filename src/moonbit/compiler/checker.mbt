@@ -261,6 +261,7 @@ pub struct TypeChecker {
   type_cache : Map[String, Type]
   symbol_types : Map[Int, Type] // Symbol ID -> Type
   node_types : Map[String, Type] // Node identifier -> Type
+  narrowed_types : Map[String, NarrowedType] // Variable name -> NarrowedType (for control flow narrowing)
   diagnostics : Array[Diagnostic]
   file_path : String
   global_scope : Scope? // Global scope for symbol lookup
@@ -290,6 +291,7 @@ pub fn TypeChecker::new(
     type_cache: Map::new(),
     symbol_types: Map::new(),
     node_types: Map::new(),
+    narrowed_types: Map::new(),
     diagnostics: [],
     file_path,
     global_scope,
@@ -2341,6 +2343,49 @@ fn typeof_string_to_type(checker : TypeChecker, s : String) -> Type? {
 }
 
 ///|
+/// Create a NarrowedType from original and narrowed types
+pub fn create_narrowed_type(original_type : Type, narrowed_type : Type) -> NarrowedType {
+  { original_type, narrowed_type }
+}
+
+///|
+/// Add a narrowed type to the checker for a variable
+fn add_narrowed_type(
+  checker : TypeChecker,
+  variable_name : String,
+  original_type : Type,
+  narrowed_type : Type,
+) -> TypeChecker {
+  let narrowed = create_narrowed_type(original_type, narrowed_type)
+  let new_narrowed_types = checker.narrowed_types
+  new_narrowed_types.set(variable_name, narrowed)
+  { ..checker, narrowed_types: new_narrowed_types }
+}
+
+///|
+/// Get the narrowed type for a variable, or None if not narrowed
+fn get_narrowed_type(checker : TypeChecker, variable_name : String) -> Type? {
+  match checker.narrowed_types.get(variable_name) {
+    Some(narrowed) => Some(narrowed.narrowed_type)
+    None => None
+  }
+}
+
+///|
+/// Remove narrowing for a variable (restore original type)
+fn remove_narrowed_type(checker : TypeChecker, variable_name : String) -> TypeChecker {
+  let new_narrowed_types = checker.narrowed_types
+  new_narrowed_types.remove(variable_name)
+  { ..checker, narrowed_types: new_narrowed_types }
+}
+
+///|
+/// Clear all narrowed types (useful when exiting a narrowing scope)
+fn clear_narrowed_types(checker : TypeChecker) -> TypeChecker {
+  { ..checker, narrowed_types: Map::new() }
+}
+
+///|
 /// Apply type narrowing based on type guard
 fn apply_type_narrowing(
   original_type : Type,
@@ -2355,6 +2400,28 @@ fn apply_type_narrowing(
   match narrowed_type {
     Some(t) => t
     None => original_type // No narrowing available
+  }
+}
+
+///|
+/// Apply type narrowing to checker and return updated checker
+fn apply_narrowing_to_checker(
+  checker : TypeChecker,
+  type_guard_info : TypeGuardInfo,
+  is_true_branch : Bool,
+) -> TypeChecker {
+  let narrowed_type = if is_true_branch {
+    type_guard_info.type_when_true
+  } else {
+    type_guard_info.type_when_false
+  }
+  match narrowed_type {
+    Some(t) => {
+      // Get original type from type cache or create a placeholder
+      let (original, checker) = any_type(checker)
+      add_narrowed_type(checker, type_guard_info.parameter_name, original, t)
+    }
+    None => checker
   }
 }
 
@@ -3423,17 +3490,41 @@ fn check_return_statement(
 }
 
 ///|
-/// Check if statement
+/// Check if statement with type narrowing support
 fn check_if_statement(
   checker : TypeChecker,
   if_stmt : IfStatement,
 ) -> TypeChecker {
+  // Infer the condition type
   let (_, checker) = infer_type(checker, if_stmt.condition)
-  let checker = check_statement(checker, if_stmt.then_statement)
-  match if_stmt.else_statement {
-    Some(else_stmt) => check_statement(checker, else_stmt)
+
+  // Save current narrowed types before entering branches
+  let saved_narrowed_types = checker.narrowed_types
+
+  // Try to extract type guard information from the condition
+  let type_guard = get_type_guard_info(checker, if_stmt.condition)
+
+  // Check then branch with narrowed types (if type guard found)
+  let then_checker = match type_guard {
+    Some(tg_info) => apply_narrowing_to_checker(checker, tg_info, true)
     None => checker
   }
+  let then_checker = check_statement(then_checker, if_stmt.then_statement)
+
+  // Check else branch with opposite narrowing (if type guard found)
+  let final_checker = match if_stmt.else_statement {
+    Some(else_stmt) => {
+      let else_checker = match type_guard {
+        Some(tg_info) => apply_narrowing_to_checker(checker, tg_info, false)
+        None => checker
+      }
+      check_statement(else_checker, else_stmt)
+    }
+    None => then_checker
+  }
+
+  // Restore narrowed types after exiting branches (simplified: just restore saved state)
+  { ..final_checker, narrowed_types: saved_narrowed_types }
 }
 
 ///|

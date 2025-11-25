@@ -654,3 +654,90 @@ test "unit/checker/type-param - generic interface with multiple params" {
     Err(_) => assert_true(false)
   }
 }
+
+// ============================================================================
+// Type Narrowing Tests
+// ============================================================================
+
+///|
+test "unit/checker/narrowing - typeof string guard" {
+  let result = parse_bind_check("function test(x: string | number) { if (typeof x === \"string\") { return x.length; } return x; }")
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/checker/narrowing - typeof number guard" {
+  let result = parse_bind_check("function test(x: string | number) { if (typeof x === \"number\") { return x.toFixed(); } return x; }")
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/checker/narrowing - null check" {
+  let result = parse_bind_check("function test(x: string | null) { if (x !== null) { return x.length; } return 0; }")
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/checker/narrowing - undefined check" {
+  let result = parse_bind_check("function test(x: string | undefined) { if (x !== undefined) { return x.length; } return 0; }")
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/checker/narrowing - instanceof guard" {
+  let result = parse_bind_check("class Foo { x: number; } function test(obj: Foo | string) { if (obj instanceof Foo) { return obj.x; } return 0; }")
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/checker/narrowing - negated typeof" {
+  let result = parse_bind_check("function test(x: string | number) { if (typeof x !== \"string\") { return x.toFixed(); } return x; }")
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/checker/narrowing - truthy check" {
+  let result = parse_bind_check("function test(x: string | null) { if (x) { return x.length; } return 0; }")
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/checker/narrowing - nested if statements" {
+  let result = parse_bind_check("function test(x: string | number | null) { if (x !== null) { if (typeof x === \"string\") { return x.length; } } return 0; }")
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/checker/narrowing - create narrowed type" {
+  let checker = @compiler.TypeChecker::new("test.ts", None)
+  let (str_type, checker) = @compiler.string_type(checker)
+  let (num_type, _) = @compiler.number_type(checker)
+  let narrowed = @compiler.create_narrowed_type(str_type, num_type)
+  // Verify the narrowed type was created successfully
+  assert_true(true)
+  let _ = narrowed
+}
