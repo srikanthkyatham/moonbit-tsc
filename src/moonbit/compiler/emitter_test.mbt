@@ -684,3 +684,111 @@ test "emit non-null assertion with method call" {
   assert_true(js.contains("obj.method()"))
   assert_true(not(js.contains("!")))
 }
+
+// ============================================================================
+// Named Imports Tests
+// ============================================================================
+
+///|
+/// Test: Emit named import with single specifier
+test "emit named import single specifier" {
+  let js = compile_to_js("import { foo } from 'module';")
+  assert_true(js.contains("import { foo } from \"module\";"))
+}
+
+///|
+/// Test: Emit named import with multiple specifiers
+test "emit named import multiple specifiers" {
+  let js = compile_to_js("import { foo, bar, baz } from 'module';")
+  assert_true(js.contains("import { foo, bar, baz } from \"module\";"))
+}
+
+///|
+/// Test: Emit named import with alias
+test "emit named import with alias" {
+  let js = compile_to_js("import { foo as bar } from 'module';")
+  assert_true(js.contains("import { foo as bar } from \"module\";"))
+}
+
+///|
+/// Test: Emit default and named imports together
+test "emit default and named import" {
+  let js = compile_to_js("import React, { useState } from 'react';")
+  assert_true(js.contains("import React, { useState } from \"react\";"))
+}
+
+///|
+/// Test: Emit namespace import
+test "emit namespace import" {
+  let js = compile_to_js("import * as utils from 'utils';")
+  assert_true(js.contains("import * as utils from \"utils\";"))
+}
+
+// ============================================================================
+// Named Exports Tests
+// ============================================================================
+
+///|
+/// Test: Emit named export with single specifier
+test "emit named export single specifier" {
+  let js = compile_to_js("const x = 1; export { x };")
+  assert_true(js.contains("export { x };"))
+}
+
+///|
+/// Test: Emit named export with multiple specifiers
+test "emit named export multiple specifiers" {
+  let js = compile_to_js("const x = 1; const y = 2; export { x, y };")
+  assert_true(js.contains("export { x, y };"))
+}
+
+///|
+/// Test: Emit named export with alias
+test "emit named export with alias" {
+  let js = compile_to_js("const foo = 1; export { foo as bar };")
+  assert_true(js.contains("export { foo as bar };"))
+}
+
+///|
+/// Test: Emit re-export
+test "emit re-export from module" {
+  let js = compile_to_js("export { foo } from 'module';")
+  assert_true(js.contains("export { foo } from \"module\";"))
+}
+
+///|
+/// Test: Emit export all
+test "emit export all" {
+  let js = compile_to_js("export * from 'module';")
+  assert_true(js.contains("export * from \"module\";"))
+}
+
+// ============================================================================
+// Module Declaration (Namespace) Tests
+// ============================================================================
+
+///|
+/// Test: Emit module declaration with exported constant
+test "emit module declaration with export const" {
+  let js = compile_to_js("module Foo { export const x = 1; }")
+  assert_true(js.contains("var Foo;"))
+  assert_true(js.contains("(function (Foo)"))
+  assert_true(js.contains("Foo.x = 1;"))
+  assert_true(js.contains("Foo || (Foo = {})"))
+}
+
+///|
+/// Test: Emit module declaration with exported function
+test "emit module declaration with export function" {
+  let js = compile_to_js("module Utils { export function helper() { return 1; } }")
+  assert_true(js.contains("var Utils;"))
+  assert_true(js.contains("Utils.helper = function()"))
+}
+
+///|
+/// Test: Emit namespace keyword (alias for module)
+test "emit namespace declaration" {
+  let js = compile_to_js("namespace MyLib { export const VERSION = '1.0'; }")
+  assert_true(js.contains("var MyLib;"))
+  assert_true(js.contains("MyLib.VERSION"))
+}

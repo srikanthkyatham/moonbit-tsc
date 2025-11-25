@@ -215,15 +215,15 @@ pub fn emit(node : Node, ctx : EmitterContext) -> String {
     GetAccessor(ga) => emit_get_accessor(ga, ctx)
     SetAccessor(sa) => emit_set_accessor(sa, ctx)
     Decorator(_) => ""  // Decorators are handled separately
-    ModuleDeclaration(_) => ""  // TODO: Implement if needed
+    ModuleDeclaration(md) => emit_module_declaration(md, ctx)
 
-    // JSX - emit as-is (actual JSX transformation typically done by framework-specific transformer)
-    JsxElement(_) => ""  // TODO: Implement JSX to JS transformation
-    JsxSelfClosingElement(_) => ""  // TODO: Implement JSX to JS transformation
-    JsxFragment(_) => ""  // TODO: Implement JSX to JS transformation
-    JsxOpeningElement(_) => ""  // TODO: Implement JSX to JS transformation
-    JsxClosingElement(_) => ""  // TODO: Implement JSX to JS transformation
-    JsxExpression(_) => ""  // TODO: Implement JSX to JS transformation
+    // JSX - transform to React.createElement calls
+    JsxElement(je) => emit_jsx_element(je, ctx)
+    JsxSelfClosingElement(jsce) => emit_jsx_self_closing_element(jsce, ctx)
+    JsxFragment(jf) => emit_jsx_fragment(jf, ctx)
+    JsxOpeningElement(joe) => emit_jsx_opening_element(joe, ctx)
+    JsxClosingElement(_) => ""  // Closing elements are handled by JsxElement
+    JsxExpression(je) => emit_jsx_expression(je, ctx)
 
     // JSDoc - preserved as comments or stripped
     JSDocComment(jsdoc) => emit_jsdoc_comment(jsdoc)
@@ -485,6 +485,161 @@ fn emit_class_declaration(cd : ClassDeclaration, ctx : EmitterContext) -> String
 }
 
 ///|
+/// Emit module declaration (namespace)
+/// TypeScript modules/namespaces compile to IIFEs:
+/// module Foo { export const x = 1; }
+/// -> var Foo; (function(Foo) { Foo.x = 1; })(Foo || (Foo = {}));
+fn emit_module_declaration(md : ModuleDeclaration, ctx : EmitterContext) -> String {
+  let name = md.name
+  let mut result = ctx.get_indent()
+
+  // Declare the variable if it doesn't exist
+  result = result + "var " + name + ";\n"
+
+  // Start the IIFE
+  result = result + ctx.get_indent() + "(function (" + name + ") {\n"
+
+  // Emit the body
+  match md.body {
+    Some(body) => {
+      let inner_ctx = ctx.indent()
+      match body {
+        BlockStatement(bs) => {
+          for stmt in bs.statements {
+            let stmt_str = emit_module_member(stmt, name, inner_ctx)
+            if stmt_str.length() > 0 {
+              result = result + stmt_str + "\n"
+            }
+          }
+        }
+        ModuleDeclaration(nested) => {
+          // Nested module declaration
+          result = result + emit_module_declaration(nested, inner_ctx) + "\n"
+        }
+        _ => {
+          result = result + emit(body, inner_ctx) + "\n"
+        }
+      }
+    }
+    None => ()
+  }
+
+  // Close the IIFE
+  result = result + ctx.get_indent() + "})(" + name + " || (" + name + " = {}));"
+
+  result
+}
+
+///|
+/// Emit module member with namespace prefix for exports
+fn emit_module_member(node : Node, ns_name : String, ctx : EmitterContext) -> String {
+  match node {
+    VariableStatement(vs) => {
+      if has_export_modifier(vs.modifiers) {
+        // Exported variable: add to namespace
+        let mut result = ""
+        for decl in vs.declarations {
+          let decl_name = match decl.name {
+            Identifier(id) => id.name
+            _ => emit(decl.name, ctx)
+          }
+          result = result + ctx.get_indent() + ns_name + "." + decl_name
+          match decl.initializer {
+            Some(init) => result = result + " = " + emit(init, ctx)
+            None => ()
+          }
+          result = result + ";\n"
+        }
+        result
+      } else {
+        emit_variable_statement(vs, ctx)
+      }
+    }
+    FunctionDeclaration(fd) => {
+      if has_export_modifier(fd.modifiers) {
+        // Exported function: assign to namespace
+        let func_name = match fd.name {
+          Some(Identifier(id)) => id.name
+          _ => ""
+        }
+        let mut result = ctx.get_indent() + ns_name + "." + func_name + " = "
+        result = result + "function"
+        if fd.is_generator {
+          result = result + "*"
+        }
+        result = result + "("
+        result = result + emit_parameters(fd.parameters, ctx)
+        result = result + ")"
+        match fd.body {
+          Some(body) => {
+            result = result + " "
+            result = result + emit(body, ctx)
+          }
+          None => result = result + ";"
+        }
+        result
+      } else {
+        emit_function_declaration(fd, ctx)
+      }
+    }
+    ClassDeclaration(cd) => {
+      if has_export_modifier(cd.modifiers) {
+        // Exported class: assign to namespace
+        let class_name = match cd.name {
+          Some(Identifier(id)) => id.name
+          _ => ""
+        }
+        // First emit the class without export prefix
+        let class_str = emit_class_declaration_inner(cd, ctx)
+        ctx.get_indent() + ns_name + "." + class_name + " = " + class_str
+      } else {
+        emit_class_declaration(cd, ctx)
+      }
+    }
+    _ => emit(node, ctx)
+  }
+}
+
+///|
+/// Emit class declaration without export prefix (for module members)
+fn emit_class_declaration_inner(cd : ClassDeclaration, ctx : EmitterContext) -> String {
+  let mut result = "class "
+
+  match cd.name {
+    Some(Identifier(id)) => {
+      result = result + id.name
+    }
+    _ => ()
+  }
+
+  // Emit heritage (extends only)
+  for clause in cd.heritage_clauses {
+    if clause.kind == Extends {
+      result = result + " extends "
+      for i = 0; i < clause.types.length(); i = i + 1 {
+        result = result + emit(clause.types[i], ctx)
+        if i < clause.types.length() - 1 {
+          result = result + ", "
+        }
+      }
+    }
+  }
+
+  result = result + " {\n"
+
+  let inner_ctx = ctx.indent()
+  for class_member in cd.members {
+    let member_str = emit(class_member, inner_ctx)
+    if member_str.length() > 0 {
+      result = result + member_str + "\n"
+    }
+  }
+
+  result = result + ctx.get_indent() + "}"
+  result
+}
+
+///|
 /// Emit property declaration
 fn emit_property_declaration(pd : PropertyDeclaration, ctx : EmitterContext) -> String {
   let mut result = ctx.get_indent()
@@ -652,13 +807,39 @@ fn emit_import_declaration(id : ImportDeclaration, ctx : EmitterContext) -> Stri
         None => ()
       }
 
-      // Named bindings (TODO: implement proper named bindings emission)
+      // Named bindings
       match clause.named_bindings {
-        Some(_bindings) => {
+        Some(bindings) => {
           if has_bindings {
             result = result + ", "
           }
-          result = result + "{ /* named imports */ }"
+          match bindings {
+            NamespaceImport(name, _) => {
+              // import * as name from 'mod'
+              result = result + "* as " + name
+            }
+            NamedImports(specifiers, _) => {
+              // import { a, b, c as d } from 'mod'
+              result = result + "{ "
+              for i = 0; i < specifiers.length(); i = i + 1 {
+                let spec = specifiers[i]
+                match spec.property_name {
+                  Some(prop_name) => {
+                    // import { foo as bar } from 'mod'
+                    result = result + prop_name + " as " + spec.name
+                  }
+                  None => {
+                    // import { foo } from 'mod'
+                    result = result + spec.name
+                  }
+                }
+                if i < specifiers.length() - 1 {
+                  result = result + ", "
+                }
+              }
+              result = result + " }"
+            }
+          }
           has_bindings = true
         }
         None => ()
@@ -682,7 +863,35 @@ fn emit_export_declaration(ed : ExportDeclaration, ctx : EmitterContext) -> Stri
   let mut result = ctx.get_indent() + "export "
 
   match ed.export_clause {
-    Some(_clause) => result = result + "{ /* named exports */ }"
+    Some(clause) => {
+      match clause {
+        NamedExports(specifiers, _) => {
+          // export { a, b, c as d }
+          result = result + "{ "
+          for i = 0; i < specifiers.length(); i = i + 1 {
+            let spec = specifiers[i]
+            match spec.property_name {
+              Some(prop_name) => {
+                // export { foo as bar }
+                result = result + prop_name + " as " + spec.name
+              }
+              None => {
+                // export { foo }
+                result = result + spec.name
+              }
+            }
+            if i < specifiers.length() - 1 {
+              result = result + ", "
+            }
+          }
+          result = result + " }"
+        }
+        NamespaceExport(name, _) => {
+          // export * as ns from 'mod'
+          result = result + "* as " + name
+        }
+      }
+    }
     None => result = result + "*"
   }
 
@@ -1432,4 +1641,233 @@ fn escape_string(s : String) -> String {
 fn emit_jsdoc_comment(jsdoc : JSDocComment) -> String {
   // Preserve JSDoc comments in output for documentation tools
   "/**" + jsdoc.comment + "*/"
+}
+
+// ============================================================================
+// JSX Emission Functions
+// ============================================================================
+
+///|
+/// Emit JSX element: <tag>...</tag> -> React.createElement(tag, props, ...children)
+fn emit_jsx_element(je : JsxElement, ctx : EmitterContext) -> String {
+  // Get tag name and attributes from opening element
+  let (tag_name, attributes) = match je.opening_element {
+    JsxOpeningElement(joe) => (emit_jsx_tag_name(joe.tag_name), joe.attributes)
+    _ => ("\"div\"", [])  // Fallback
+  }
+
+  let mut result = "React.createElement(" + tag_name
+
+  // Emit props
+  result = result + ", " + emit_jsx_attributes(attributes, ctx)
+
+  // Emit children
+  for child in je.children {
+    let child_str = emit_jsx_child(child, ctx)
+    if child_str.length() > 0 {
+      result = result + ", " + child_str
+    }
+  }
+
+  result = result + ")"
+  result
+}
+
+///|
+/// Emit JSX self-closing element: <tag ... /> -> React.createElement(tag, props)
+fn emit_jsx_self_closing_element(jsce : JsxSelfClosingElement, ctx : EmitterContext) -> String {
+  let tag_name = emit_jsx_tag_name(jsce.tag_name)
+  let mut result = "React.createElement(" + tag_name
+
+  // Emit props
+  result = result + ", " + emit_jsx_attributes(jsce.attributes, ctx)
+
+  result = result + ")"
+  result
+}
+
+///|
+/// Emit JSX fragment: <>...</> -> React.createElement(React.Fragment, null, ...children)
+fn emit_jsx_fragment(jf : JsxFragment, ctx : EmitterContext) -> String {
+  let mut result = "React.createElement(React.Fragment, null"
+
+  // Emit children
+  for child in jf.children {
+    let child_str = emit_jsx_child(child, ctx)
+    if child_str.length() > 0 {
+      result = result + ", " + child_str
+    }
+  }
+
+  result = result + ")"
+  result
+}
+
+///|
+/// Emit JSX opening element (used when JsxOpeningElement appears standalone)
+fn emit_jsx_opening_element(joe : JsxOpeningElement, ctx : EmitterContext) -> String {
+  let tag_name = emit_jsx_tag_name(joe.tag_name)
+  let mut result = "React.createElement(" + tag_name
+
+  // Emit props
+  result = result + ", " + emit_jsx_attributes(joe.attributes, ctx)
+
+  result = result + ")"
+  result
+}
+
+///|
+/// Emit JSX expression: {expr}
+fn emit_jsx_expression(je : JsxExpression, ctx : EmitterContext) -> String {
+  match je.expression {
+    Some(expr) => emit(expr, ctx)
+    None => ""
+  }
+}
+
+///|
+/// Emit JSX tag name
+fn emit_jsx_tag_name(tag_name : JsxTagName) -> String {
+  match tag_name {
+    JsxTagName::Identifier(name, _) => {
+      // If starts with lowercase, it's a string (HTML element)
+      // If starts with uppercase, it's a component reference
+      if is_lowercase_start(name) {
+        "\"" + name + "\""
+      } else {
+        name
+      }
+    }
+    JsxTagName::NamespacedName(ns, name, _) => {
+      "\"" + ns + ":" + name + "\""
+    }
+    JsxTagName::PropertyAccess(expr, prop, _) => {
+      // For Member.Component, we need to emit the expression
+      match expr {
+        Identifier(id) => id.name + "." + prop
+        _ => prop  // Fallback
+      }
+    }
+  }
+}
+
+///|
+/// Check if a string starts with a lowercase letter
+fn is_lowercase_start(s : String) -> Bool {
+  if s.length() == 0 {
+    return false
+  }
+  let first_char = s[0]
+  first_char >= 'a' && first_char <= 'z'
+}
+
+///|
+/// Emit JSX attributes as props object
+fn emit_jsx_attributes(attributes : Array[JsxAttribute], ctx : EmitterContext) -> String {
+  if attributes.length() == 0 {
+    return "null"
+  }
+
+  let mut result = "{ "
+  let mut first = true
+
+  for attr in attributes {
+    match attr {
+      JsxAttribute::Attribute(attr_node) => {
+        if not(first) {
+          result = result + ", "
+        }
+        first = false
+
+        let attr_name = emit_jsx_attribute_name(attr_node.name)
+        result = result + attr_name + ": "
+
+        match attr_node.initializer {
+          Some(value) => result = result + emit_jsx_attribute_value(value, ctx)
+          None => result = result + "true"  // Boolean attribute like "disabled"
+        }
+      }
+      JsxAttribute::SpreadAttribute(expr, _) => {
+        if not(first) {
+          result = result + ", "
+        }
+        first = false
+        result = result + "..." + emit(expr, ctx)
+      }
+    }
+  }
+
+  result = result + " }"
+  result
+}
+
+///|
+/// Emit JSX attribute name
+fn emit_jsx_attribute_name(name : JsxAttributeName) -> String {
+  match name {
+    JsxAttributeName::Identifier(id, _) => {
+      // Convert JSX attribute names to React props (e.g., class -> className)
+      if id == "class" {
+        "className"
+      } else if id == "for" {
+        "htmlFor"
+      } else {
+        id
+      }
+    }
+    JsxAttributeName::NamespacedName(ns, n, _) => {
+      "\"" + ns + ":" + n + "\""
+    }
+  }
+}
+
+///|
+/// Emit JSX attribute value
+fn emit_jsx_attribute_value(value : JsxAttributeValue, ctx : EmitterContext) -> String {
+  match value {
+    JsxAttributeValue::StringLiteral(s, _) => "\"" + escape_string(s) + "\""
+    JsxAttributeValue::Expression(expr, _) => emit(expr, ctx)
+    JsxAttributeValue::Element(elem, _) => emit(elem, ctx)
+  }
+}
+
+///|
+/// Emit JSX child
+fn emit_jsx_child(child : JsxChild, ctx : EmitterContext) -> String {
+  match child {
+    JsxChild::Text(text, _) => {
+      // Skip whitespace-only text nodes
+      if is_whitespace_only(text) {
+        ""
+      } else {
+        "\"" + escape_jsx_text(text) + "\""
+      }
+    }
+    JsxChild::Expression(jsx_expr) => emit_jsx_expression(jsx_expr, ctx)
+    JsxChild::Element(elem, _) => emit(elem, ctx)
+    JsxChild::Fragment(frag, _) => emit(frag, ctx)
+  }
+}
+
+///|
+/// Check if a string contains only whitespace characters
+fn is_whitespace_only(s : String) -> Bool {
+  for i = 0; i < s.length(); i = i + 1 {
+    let c = s[i]
+    if c != ' ' && c != '\t' && c != '\n' && c != '\r' {
+      return false
+    }
+  }
+  true
+}
+
+///|
+/// Escape text for JSX string output
+fn escape_jsx_text(s : String) -> String {
+  s
+    .replace(old="\\", new="\\\\")
+    .replace(old="\"", new="\\\"")
+    .replace(old="\n", new="\\n")
+    .replace(old="\r", new="\\r")
+    .replace(old="\t", new="\\t")
 }
