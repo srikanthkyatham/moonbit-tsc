@@ -773,6 +773,7 @@ fn emit_decl_export(
       }
       output = output + " }"
     }
+    Some(NamespaceExport(ns_name, _)) => output = output + "* as " + ns_name
     None => output = output + "*"
   }
 

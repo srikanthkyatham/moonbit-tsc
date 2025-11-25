@@ -701,6 +701,11 @@ fn bind_export_declaration(
       match export_decl.export_clause {
         Some(NamedExports::NamedExports(specifiers, _)) =>
           bind_export_specifiers(binder, specifiers, export_decl.is_type_only)
+        Some(NamedExports::NamespaceExport(ns_name, _)) => {
+          // export * as ns from 'mod' - create a symbol for the namespace
+          let symbol = Symbol::new(ns_name, SymbolKind::ExportValue, binder.next_symbol_id)
+          declare_symbol(binder, ns_name, symbol)
+        }
         None => binder
       }
     None => binder // Local export - no new bindings needed
@@ -1654,14 +1659,16 @@ fn extract_import_info(import_decl : ImportDeclaration) -> ImportInfo {
 ///|
 /// Extract export info from export declaration
 fn extract_export_decl_info(export_decl : ExportDeclaration) -> ExportInfo {
-  let kind = match export_decl.export_clause {
-    Some(_) => ExportKind::Named
-    None => ExportKind::Namespace
+  let (kind, name) = match export_decl.export_clause {
+    Some(NamedExports::NamedExports(_, _)) => (ExportKind::Named, None)
+    Some(NamedExports::NamespaceExport(ns_name, _)) =>
+      (ExportKind::NamespaceAs, Some(ns_name))
+    None => (ExportKind::Namespace, None)
   }
 
   {
     kind,
-    name: None,
+    name,
     is_type_only: export_decl.is_type_only,
     module_specifier: export_decl.module_specifier,
     location: export_decl.location,

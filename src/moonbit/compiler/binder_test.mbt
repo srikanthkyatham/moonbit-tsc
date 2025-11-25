@@ -864,6 +864,27 @@ test "bind multiple re-exports from module" {
 }
 
 ///|
+test "bind namespace export as creates ExportValue" {
+  let result = parse_and_bind("export * as ns from 'module';")
+  match result {
+    Ok(bound) => {
+      // Namespace export should be in global scope as ExportValue
+      assert_true(bound.global_scope.symbols.contains("ns"))
+      match bound.global_scope.symbols.get("ns") {
+        Some(sym) => {
+          match sym.kind {
+            ExportValue => ()
+            _ => assert_true(false)
+          }
+        }
+        None => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
 test "bind renamed re-export from module" {
   let result = parse_and_bind("export { foo as bar } from 'module';")
   match result {

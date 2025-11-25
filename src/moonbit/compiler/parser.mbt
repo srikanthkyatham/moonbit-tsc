@@ -5433,10 +5433,49 @@ fn parse_export_declaration(parser : Parser) -> Result[(Node, Parser), Parser] {
       }
     }
 
-    // export * from 'module'
+    // export * from 'module' OR export * as ns from 'module'
     Star(_) => {
+      let star_loc = current_token(parser).location()
       let parser = advance_parser(parser)
       match current_token(parser) {
+        // export * as ns from 'module'
+        KeywordAs(_) => {
+          let parser = advance_parser(parser) // consume 'as'
+          match current_token(parser) {
+            Identifier(ns_name, _) => {
+              let parser = advance_parser(parser) // consume namespace name
+              match current_token(parser) {
+                KeywordFrom(_) => {
+                  let parser = advance_parser(parser) // consume 'from'
+                  match current_token(parser) {
+                    StringLiteral(module_specifier, _) => {
+                      let parser = advance_parser(parser)
+                      // Consume optional semicolon
+                      let parser = match current_token(parser) {
+                        Semicolon(_) => advance_parser(parser)
+                        _ => parser
+                      }
+                      let end_loc = current_token(parser).location()
+                      Ok((
+                        Node::ExportDeclaration(ExportDeclaration::{
+                          export_clause: Some(NamedExports::NamespaceExport(ns_name, star_loc)),
+                          module_specifier: Some(module_specifier),
+                          is_type_only: false,
+                          location: SourceLocation::new(start_loc.file_path, start_loc.start, end_loc.end)
+                        }),
+                        parser
+                      ))
+                    }
+                    _ => Err(add_error(parser, "Expected module specifier after 'from'", current_token(parser).location()))
+                  }
+                }
+                _ => Err(add_error(parser, "Expected 'from' after namespace export", current_token(parser).location()))
+              }
+            }
+            _ => Err(add_error(parser, "Expected namespace name after 'as'", current_token(parser).location()))
+          }
+        }
+        // export * from 'module'
         KeywordFrom(_) => {
           let parser = advance_parser(parser)
           match current_token(parser) {
@@ -5461,7 +5500,7 @@ fn parse_export_declaration(parser : Parser) -> Result[(Node, Parser), Parser] {
             _ => Err(add_error(parser, "Expected module specifier after 'from'", current_token(parser).location()))
           }
         }
-        _ => Err(add_error(parser, "Expected 'from' after 'export *'", current_token(parser).location()))
+        _ => Err(add_error(parser, "Expected 'from' or 'as' after 'export *'", current_token(parser).location()))
       }
     }
 

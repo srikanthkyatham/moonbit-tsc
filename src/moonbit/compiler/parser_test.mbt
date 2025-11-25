@@ -448,6 +448,31 @@ test "parse export all" {
 }
 
 ///|
+test "parse export namespace as" {
+  let tokens = tokens_from_source("export * as ns from 'module';")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        ExportDeclaration(exp) => {
+          match exp.export_clause {
+            Some(NamespaceExport(ns_name, _)) => assert_eq(ns_name, "ns")
+            _ => assert_true(false)
+          }
+          match exp.module_specifier {
+            Some(module_spec) => assert_eq(module_spec, "module")
+            None => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
 test "parse export default" {
   let tokens = tokens_from_source("export default 42;")
   let result = parse_source_file(tokens, "test.ts")

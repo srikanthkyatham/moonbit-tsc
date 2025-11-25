@@ -284,6 +284,7 @@ pub struct ExportDeclaration {
 ///|
 pub enum NamedExports {
   NamedExports(Array[ExportSpecifier], SourceLocation)
+  NamespaceExport(String, SourceLocation) // export * as ns from 'mod'
 } derive(Show)
 
 ///|
