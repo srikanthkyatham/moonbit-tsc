@@ -124,6 +124,11 @@ fn bind_statement(binder : Binder, node : Node) -> Binder {
       bind_type_alias_declaration(binder, type_alias)
     }
 
+    // Module/namespace declaration
+    ModuleDeclaration(mod_decl) => {
+      bind_module_declaration(binder, mod_decl)
+    }
+
     // Import declaration
     ImportDeclaration(import_decl) => {
       bind_import_declaration(binder, import_decl)
@@ -593,6 +598,29 @@ fn bind_type_alias_declaration(
 
   // Bind type parameters (generics)
   let binder = bind_type_parameters(binder, type_alias.type_parameters)
+
+  // Pop scope
+  pop_scope(binder)
+}
+
+///|
+/// Bind module/namespace declaration
+fn bind_module_declaration(
+  binder : Binder,
+  mod_decl : ModuleDeclaration,
+) -> Binder {
+  let symbol = Symbol::new(mod_decl.name, SymbolKind::Module, binder.next_symbol_id)
+  let symbol = symbol.add_declaration(Node::ModuleDeclaration(mod_decl))
+  let binder = declare_symbol(binder, mod_decl.name, symbol)
+
+  // Push scope for module body
+  let binder = push_scope(binder)
+
+  // Bind module body if present
+  let binder = match mod_decl.body {
+    Some(body) => bind_statement(binder, body)
+    None => binder
+  }
 
   // Pop scope
   pop_scope(binder)

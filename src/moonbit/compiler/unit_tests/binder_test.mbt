@@ -217,6 +217,25 @@ test "bind type alias declaration" {
   }
 }
 
+///|
+test "bind namespace declaration" {
+  let source = "namespace MyNamespace { export const x = 1; }"
+  match parse_and_bind(source) {
+    Ok(bound_file) => {
+      let symbol = bound_file.global_scope.symbols.get("MyNamespace")
+      assert_true(symbol.is_some())
+      match symbol {
+        Some(s) => {
+          assert_true(is_module_kind(s.kind))
+          assert_eq(s.name, "MyNamespace")
+        }
+        None => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
 // ============================================================================
 // Module Detection Tests
 // ============================================================================
