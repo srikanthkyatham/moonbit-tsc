@@ -224,7 +224,6 @@ pub fn emit(node : Node, ctx : EmitterContext) -> String {
     JsxOpeningElement(_) => ""  // TODO: Implement JSX to JS transformation
     JsxClosingElement(_) => ""  // TODO: Implement JSX to JS transformation
     JsxExpression(_) => ""  // TODO: Implement JSX to JS transformation
-    JsxText(_) => ""  // TODO: Implement JSX to JS transformation
 
     // JSDoc - preserved as comments or stripped
     JSDocComment(jsdoc) => emit_jsdoc_comment(jsdoc)

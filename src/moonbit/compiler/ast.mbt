@@ -115,7 +115,6 @@ pub enum Node {
   JsxOpeningElement(JsxOpeningElement)
   JsxClosingElement(JsxClosingElement)
   JsxExpression(JsxExpression)
-  JsxText(JsxText)
 
   // JSDoc
   JSDocComment(JSDocComment)
@@ -1074,13 +1073,6 @@ pub struct JsxExpression {
 } derive(Show)
 
 ///|
-/// JSX text content between tags
-pub struct JsxText {
-  text : String
-  location : SourceLocation
-} derive(Show)
-
-///|
 /// JSX tag name types
 pub enum JsxTagName {
   /// Simple identifier: div, span, MyComponent
@@ -1479,7 +1471,6 @@ pub fn get_location(node : Node) -> SourceLocation {
     JsxOpeningElement(j) => j.location
     JsxClosingElement(j) => j.location
     JsxExpression(j) => j.location
-    JsxText(j) => j.location
     JSDocComment(j) => j.location
   }
 }

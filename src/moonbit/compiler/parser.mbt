@@ -6935,13 +6935,27 @@ fn parse_jsx_children(parser : Parser) -> (Array[JsxChild], Parser) {
     let loc = current_token(parser).location()
 
     match current_token(parser) {
-      // Nested element: <child>...</child>
+      // Nested element or fragment: <child>...</child> or <>...</>
       LessThan(_) => {
         // Check if it's closing tag
         let next = peek_token(parser)
         match next {
           Slash(_) => break  // Closing tag, stop parsing children
+          GreaterThan(_) => {
+            // Fragment: <>...</>
+            match parse_jsx_element_or_fragment(parser) {
+              Ok((fragment, p)) => {
+                parser = p
+                children.push(JsxChild::Fragment(fragment, loc))
+              }
+              Err(p) => {
+                parser = p
+                break
+              }
+            }
+          }
           _ => {
+            // Regular element: <tag>...</tag>
             match parse_jsx_element_or_fragment(parser) {
               Ok((element, p)) => {
                 parser = p
@@ -6988,10 +7002,22 @@ fn parse_jsx_children(parser : Parser) -> (Array[JsxChild], Parser) {
           }
         }
       }
-      // Text content - for now, skip non-element, non-expression tokens
-      // A full implementation would need special scanner support for JSX text
+      // Text content - handle identifiers and string literals as JSX text
+      Identifier(text, _) => {
+        children.push(JsxChild::Text(text, loc))
+        parser = advance_parser(parser)
+      }
+      StringLiteral(text, _) => {
+        children.push(JsxChild::Text(text, loc))
+        parser = advance_parser(parser)
+      }
+      // Other tokens that could be text content
       _ => {
-        // Skip this token as JSX text handling requires scanner support
+        // For other tokens, try to extract text representation
+        let text = token_to_jsx_text(current_token(parser))
+        if text.length() > 0 {
+          children.push(JsxChild::Text(text, loc))
+        }
         parser = advance_parser(parser)
       }
     }
@@ -7115,6 +7141,20 @@ fn parse_jsx_fragment(
     closing_fragment: closing_loc,
     location: SourceLocation::span(start_loc, closing_loc),
   }), parser))
+}
+
+///|
+/// Convert a token to JSX text representation
+fn token_to_jsx_text(token : Token) -> String {
+  match token {
+    Identifier(text, _) => text
+    StringLiteral(text, _) => text
+    NumericLiteral(text, _) => text
+    // Keywords that might appear as text
+    KeywordNull(_) => "null"
+    // Skip whitespace and punctuation that shouldn't be text
+    _ => ""
+  }
 }
 
 // ============================================================================

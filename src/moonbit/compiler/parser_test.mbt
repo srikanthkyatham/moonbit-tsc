@@ -2037,6 +2037,107 @@ test "parse JSX member expression tag" {
   }
 }
 
+///|
+test "parse JSX with text child" {
+  let tokens = tokens_from_source("const x = <div>Hello</div>;")
+  let result = parse_source_file(tokens, "test.tsx")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        VariableStatement(var_stmt) => {
+          match var_stmt.declarations[0].initializer {
+            Some(JsxElement(jsx)) => {
+              assert_eq(jsx.children.length(), 1)
+              match jsx.children[0] {
+                JsxChild::Text(text, _) => {
+                  assert_eq(text, "Hello")
+                }
+                _ => assert_true(false)
+              }
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse JSX with nested fragment child" {
+  let tokens = tokens_from_source("const x = <div><>content</></div>;")
+  let result = parse_source_file(tokens, "test.tsx")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        VariableStatement(var_stmt) => {
+          match var_stmt.declarations[0].initializer {
+            Some(JsxElement(jsx)) => {
+              assert_eq(jsx.children.length(), 1)
+              match jsx.children[0] {
+                JsxChild::Fragment(node, _) => {
+                  match node {
+                    JsxFragment(frag) => {
+                      assert_eq(frag.children.length(), 1)
+                    }
+                    _ => assert_true(false)
+                  }
+                }
+                _ => assert_true(false)
+              }
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse JSX with mixed children" {
+  let tokens = tokens_from_source("const x = <div>Hello{value}World</div>;")
+  let result = parse_source_file(tokens, "test.tsx")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        VariableStatement(var_stmt) => {
+          match var_stmt.declarations[0].initializer {
+            Some(JsxElement(jsx)) => {
+              assert_eq(jsx.children.length(), 3)
+              // First child: Text "Hello"
+              match jsx.children[0] {
+                JsxChild::Text(text, _) => assert_eq(text, "Hello")
+                _ => assert_true(false)
+              }
+              // Second child: Expression {value}
+              match jsx.children[1] {
+                JsxChild::Expression(_) => ()
+                _ => assert_true(false)
+              }
+              // Third child: Text "World"
+              match jsx.children[2] {
+                JsxChild::Text(text, _) => assert_eq(text, "World")
+                _ => assert_true(false)
+              }
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
 // ============================================================================
 // Parser Context Tests
 // ============================================================================

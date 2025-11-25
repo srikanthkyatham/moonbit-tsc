@@ -221,7 +221,6 @@ pub fn transform(node : Node, ctx : TransformerContext) -> Node {
     JsxOpeningElement(jsx) => JsxOpeningElement(jsx)
     JsxClosingElement(jsx) => JsxClosingElement(jsx)
     JsxExpression(jsx) => JsxExpression(jsx)
-    JsxText(jsx) => JsxText(jsx)
 
     // JSDoc - pass through unchanged
     JSDocComment(jsdoc) => JSDocComment(jsdoc)
