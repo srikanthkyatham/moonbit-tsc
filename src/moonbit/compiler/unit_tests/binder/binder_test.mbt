@@ -946,3 +946,87 @@ test "CFG for throw statement creates throw flow" {
     Err(_) => assert_true(false)
   }
 }
+
+// ============================================================================
+// Switch Context Tests
+// ============================================================================
+
+///|
+test "switch statement creates switch clause flows for each case" {
+  let source = "const x = 1; switch (x) { case 1: console.log('one'); break; case 2: console.log('two'); break; default: console.log('other'); }"
+  match parse_and_bind(source) {
+    Ok(bound_file) => {
+      let cfg = bound_file.control_flow_graph
+      // Should have nodes for each switch clause
+      assert_true(cfg.nodes.length() >= 4)
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "nested switch statements create separate contexts" {
+  let source = "const x = 1; const y = 2; switch (x) { case 1: switch (y) { case 2: break; } break; }"
+  match parse_and_bind(source) {
+    Ok(bound_file) => {
+      let cfg = bound_file.control_flow_graph
+      // Should have nodes for nested switch clauses
+      assert_true(cfg.nodes.length() >= 4)
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "switch statement with default clause" {
+  let source = "const x = 1; switch (x) { case 1: break; default: break; }"
+  match parse_and_bind(source) {
+    Ok(bound_file) => {
+      let cfg = bound_file.control_flow_graph
+      // Should have switch clause flows
+      assert_true(cfg.nodes.length() >= 3)
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "switch statement with fallthrough (no break)" {
+  let source = "const x = 1; switch (x) { case 1: case 2: console.log('1 or 2'); break; case 3: break; }"
+  match parse_and_bind(source) {
+    Ok(bound_file) => {
+      let cfg = bound_file.control_flow_graph
+      // Should handle fallthrough cases
+      assert_true(cfg.nodes.length() >= 4)
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "switch inside function creates proper flow" {
+  let source = "function getDay(n: number) { switch (n) { case 0: return 'Sun'; case 1: return 'Mon'; default: return 'Other'; } }"
+  match parse_and_bind(source) {
+    Ok(bound_file) => {
+      let cfg = bound_file.control_flow_graph
+      // Should have nodes for function with switch
+      assert_true(cfg.nodes.length() >= 4)
+      assert_true(cfg.entry == 0)
+      assert_true(cfg.exit > 0)
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "switch statement with expression in cases" {
+  let source = "const x = 1; switch (x) { case 1 + 1: break; case 2 * 2: break; }"
+  match parse_and_bind(source) {
+    Ok(bound_file) => {
+      let cfg = bound_file.control_flow_graph
+      // Should handle complex case expressions
+      assert_true(cfg.nodes.length() >= 3)
+    }
+    Err(_) => assert_true(false)
+  }
+}

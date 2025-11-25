@@ -218,7 +218,16 @@ fn bind_statement(binder : Binder, node : Node) -> Binder {
     // Switch statement
     SwitchStatement(switch_stmt) => {
       let binder = bind_expression(binder, switch_stmt.expression)
-      bind_case_clauses(binder, node, switch_stmt.cases)
+      // Create a break label for the switch
+      let break_label_id = binder.cfg_builder.next_id
+      // Push switch context
+      let cfg_builder = binder.cfg_builder.push_switch(break_label_id)
+      let binder = { ..binder, cfg_builder }
+      // Bind case clauses
+      let binder = bind_case_clauses(binder, node, switch_stmt.cases)
+      // Pop switch context
+      let cfg_builder = binder.cfg_builder.pop_switch()
+      { ..binder, cfg_builder }
     }
 
     // Return statement
@@ -816,6 +825,11 @@ fn bind_case_clauses_aux(
       index,
       cases.length(),
     )
+
+    // Add this clause's flow ID to the switch context
+    let clause_flow_id = binder.cfg_builder.current_flow
+    let cfg_builder = binder.cfg_builder.add_clause_flow(clause_flow_id)
+    let binder = { ..binder, cfg_builder }
 
     // Bind case expression if present
     let binder = match case_clause.expression {

@@ -692,6 +692,51 @@ pub fn CFGBuilder::current_loop(self : CFGBuilder) -> LoopContext? {
 }
 
 ///|
+/// Push a switch context for tracking switch statement flow
+pub fn CFGBuilder::push_switch(self : CFGBuilder, break_label : Int) -> CFGBuilder {
+  let switch_stack = self.switch_stack
+  switch_stack.push(SwitchContext::{ break_label, clause_flows: [] })
+  { ..self, switch_stack }
+}
+
+///|
+/// Pop the current switch context
+pub fn CFGBuilder::pop_switch(self : CFGBuilder) -> CFGBuilder {
+  let switch_stack = self.switch_stack
+  let _ = switch_stack.pop()
+  { ..self, switch_stack }
+}
+
+///|
+/// Get current switch context
+pub fn CFGBuilder::current_switch(self : CFGBuilder) -> SwitchContext? {
+  if self.switch_stack.length() > 0 {
+    Some(self.switch_stack[self.switch_stack.length() - 1])
+  } else {
+    None
+  }
+}
+
+///|
+/// Add a clause flow to the current switch context
+pub fn CFGBuilder::add_clause_flow(self : CFGBuilder, flow_id : Int) -> CFGBuilder {
+  if self.switch_stack.length() > 0 {
+    let current = self.switch_stack[self.switch_stack.length() - 1]
+    current.clause_flows.push(flow_id)
+  }
+  self
+}
+
+///|
+/// Get the break label for the current switch context
+pub fn CFGBuilder::get_switch_break_label(self : CFGBuilder) -> Int? {
+  match self.current_switch() {
+    Some(ctx) => Some(ctx.break_label)
+    None => None
+  }
+}
+
+///|
 /// Create an empty ControlFlowGraph
 pub fn ControlFlowGraph::empty() -> ControlFlowGraph {
   let start_node = FlowNode::Start(FlowStart::{ id: 0 })
