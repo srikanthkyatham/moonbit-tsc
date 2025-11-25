@@ -261,6 +261,17 @@ fn has_default_modifier(modifiers : Array[Modifier]) -> Bool {
 }
 
 ///|
+/// Check if modifiers array has Declare modifier
+fn has_declare_modifier(modifiers : Array[Modifier]) -> Bool {
+  for modifier in modifiers {
+    if modifier == Modifier::Declare {
+      return true
+    }
+  }
+  false
+}
+
+///|
 /// Get export prefix based on modifiers (export, export default, or empty)
 fn get_export_prefix(modifiers : Array[Modifier]) -> String {
   if has_export_modifier(modifiers) {
@@ -275,6 +286,11 @@ fn get_export_prefix(modifiers : Array[Modifier]) -> String {
 }
 
 fn emit_variable_statement(vs : VariableStatement, ctx : EmitterContext) -> String {
+  // Skip declare statements - they don't produce JavaScript output
+  if has_declare_modifier(vs.modifiers) {
+    return ""
+  }
+
   // Add source mapping at the start of the statement
   ctx.add_mapping(vs.location.start.line, vs.location.start.column, None)
 
@@ -318,6 +334,11 @@ fn emit_variable_statement(vs : VariableStatement, ctx : EmitterContext) -> Stri
 ///|
 /// Emit function declaration
 fn emit_function_declaration(fd : FunctionDeclaration, ctx : EmitterContext) -> String {
+  // Skip declare statements - they don't produce JavaScript output
+  if has_declare_modifier(fd.modifiers) {
+    return ""
+  }
+
   // Add source mapping at the start of the function declaration
   ctx.add_mapping(fd.location.start.line, fd.location.start.column, None)
 
@@ -404,6 +425,11 @@ fn emit_parameter(p : Parameter, ctx : EmitterContext) -> String {
 ///|
 /// Emit class declaration
 fn emit_class_declaration(cd : ClassDeclaration, ctx : EmitterContext) -> String {
+  // Skip declare statements - they don't produce JavaScript output
+  if has_declare_modifier(cd.modifiers) {
+    return ""
+  }
+
   // Add source mapping at the start of the class declaration
   ctx.add_mapping(cd.location.start.line, cd.location.start.column, None)
 

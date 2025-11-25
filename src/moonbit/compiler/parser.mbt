@@ -188,6 +188,9 @@ fn parse_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
     // Export declaration
     KeywordExport(_) => parse_export_declaration(parser)
 
+    // Declare (ambient) declaration
+    KeywordDeclare(_) => parse_declare_declaration(parser)
+
     // Control flow
     KeywordIf(_) => parse_if_statement(parser)
     KeywordSwitch(_) => parse_switch_statement(parser)
@@ -5292,6 +5295,116 @@ fn add_export_default_modifiers(node : Node) -> Node {
         decorators: cd.decorators,
         modifiers: new_modifiers,
         location: cd.location,
+      })
+    }
+    _ => node // For other nodes, return as-is
+  }
+}
+
+///|
+/// Parse declare (ambient) declaration
+fn parse_declare_declaration(parser : Parser) -> Result[(Node, Parser), Parser] {
+  // declare const/let/var/function/class/enum/module/namespace
+  let parser = advance_parser(parser) // consume 'declare'
+
+  match parse_statement(parser) {
+    Ok((stmt, parser)) => {
+      // Add Declare modifier to the declaration
+      let stmt_with_declare = add_declare_modifier(stmt)
+      Ok((stmt_with_declare, parser))
+    }
+    Err(p) => Err(p)
+  }
+}
+
+///|
+/// Helper: Add Declare modifier to a declaration
+fn add_declare_modifier(node : Node) -> Node {
+  match node {
+    VariableStatement(vs) => {
+      let new_modifiers : Array[Modifier] = [Modifier::Declare]
+      for m in vs.modifiers {
+        new_modifiers.push(m)
+      }
+      Node::VariableStatement(VariableStatement::{
+        declarations: vs.declarations,
+        is_const: vs.is_const,
+        is_let: vs.is_let,
+        modifiers: new_modifiers,
+        location: vs.location,
+      })
+    }
+    FunctionDeclaration(fd) => {
+      let new_modifiers : Array[Modifier] = [Modifier::Declare]
+      for m in fd.modifiers {
+        new_modifiers.push(m)
+      }
+      Node::FunctionDeclaration(FunctionDeclaration::{
+        name: fd.name,
+        type_parameters: fd.type_parameters,
+        parameters: fd.parameters,
+        return_type: fd.return_type,
+        body: fd.body,
+        is_async: fd.is_async,
+        is_generator: fd.is_generator,
+        modifiers: new_modifiers,
+        location: fd.location,
+      })
+    }
+    ClassDeclaration(cd) => {
+      let new_modifiers : Array[Modifier] = [Modifier::Declare]
+      for m in cd.modifiers {
+        new_modifiers.push(m)
+      }
+      Node::ClassDeclaration(ClassDeclaration::{
+        name: cd.name,
+        type_parameters: cd.type_parameters,
+        heritage_clauses: cd.heritage_clauses,
+        members: cd.members,
+        is_abstract: cd.is_abstract,
+        decorators: cd.decorators,
+        modifiers: new_modifiers,
+        location: cd.location,
+      })
+    }
+    InterfaceDeclaration(id) => {
+      let new_modifiers : Array[Modifier] = [Modifier::Declare]
+      for m in id.modifiers {
+        new_modifiers.push(m)
+      }
+      Node::InterfaceDeclaration(InterfaceDeclaration::{
+        name: id.name,
+        type_parameters: id.type_parameters,
+        heritage_clauses: id.heritage_clauses,
+        members: id.members,
+        modifiers: new_modifiers,
+        location: id.location,
+      })
+    }
+    TypeAliasDeclaration(ta) => {
+      let new_modifiers : Array[Modifier] = [Modifier::Declare]
+      for m in ta.modifiers {
+        new_modifiers.push(m)
+      }
+      Node::TypeAliasDeclaration(TypeAliasDeclaration::{
+        name: ta.name,
+        type_parameters: ta.type_parameters,
+        type_node: ta.type_node,
+        modifiers: new_modifiers,
+        location: ta.location,
+      })
+    }
+    EnumDeclaration(ed) => {
+      let new_modifiers : Array[Modifier] = [Modifier::Declare]
+      for m in ed.modifiers {
+        new_modifiers.push(m)
+      }
+      Node::EnumDeclaration(EnumDeclaration::{
+        name: ed.name,
+        members: ed.members,
+        is_const: ed.is_const,
+        modifiers: new_modifiers,
+        location: ed.location,
       })
     }
     _ => node // For other nodes, return as-is

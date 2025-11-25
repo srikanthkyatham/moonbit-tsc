@@ -603,3 +603,34 @@ test "emit export default async function" {
   let js = compile_to_js("export default async function load() { return 1; }")
   assert_true(js.contains("export default async function load()"))
 }
+
+///|
+/// Test: Declare const produces no output
+test "emit declare const produces no output" {
+  let js = compile_to_js("declare const x: number;")
+  // Declare statements should not produce JavaScript output
+  assert_true(not(js.contains("const x")))
+}
+
+///|
+/// Test: Declare function produces no output
+test "emit declare function produces no output" {
+  let js = compile_to_js("declare function foo(): void;")
+  // Declare statements should not produce JavaScript output
+  assert_true(not(js.contains("function foo")))
+}
+
+///|
+/// Test: Declare class produces no output
+test "emit declare class produces no output" {
+  let js = compile_to_js("declare class Foo { bar(): void; }")
+  // Declare statements should not produce JavaScript output
+  assert_true(not(js.contains("class Foo")))
+}
+
+///|
+/// Test: Regular const still produces output
+test "emit regular const still works" {
+  let js = compile_to_js("const x = 1;")
+  assert_true(js.contains("const x = 1;"))
+}

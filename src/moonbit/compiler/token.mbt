@@ -65,6 +65,7 @@ pub enum Token {
   KeywordAbstract(SourceLocation)
   KeywordAsync(SourceLocation)
   KeywordAwait(SourceLocation)
+  KeywordDeclare(SourceLocation)
 
   // Other Keywords
   KeywordNew(SourceLocation)
@@ -247,6 +248,7 @@ pub fn Token::location(self : Token) -> SourceLocation {
     | KeywordAbstract(loc)
     | KeywordAsync(loc)
     | KeywordAwait(loc)
+    | KeywordDeclare(loc)
     | KeywordNew(loc)
     | KeywordThis(loc)
     | KeywordSuper(loc)
@@ -381,6 +383,7 @@ pub fn Token::is_keyword(self : Token) -> Bool {
     | KeywordAbstract(_)
     | KeywordAsync(_)
     | KeywordAwait(_)
+    | KeywordDeclare(_)
     | KeywordNew(_)
     | KeywordThis(_)
     | KeywordSuper(_)
