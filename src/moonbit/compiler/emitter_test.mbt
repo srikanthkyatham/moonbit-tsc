@@ -547,3 +547,38 @@ test "emit async method" {
   let js = compile_to_js("class Api { async fetch() { return 1; } }")
   assert_true(js.contains("async fetch()"))
 }
+
+///|
+/// Test: Emit export const
+test "emit export const" {
+  let js = compile_to_js("export const x = 1;")
+  assert_true(js.contains("export const x = 1;"))
+}
+
+///|
+/// Test: Emit export function
+test "emit export function" {
+  let js = compile_to_js("export function hello() { return 1; }")
+  assert_true(js.contains("export function hello()"))
+}
+
+///|
+/// Test: Emit export class
+test "emit export class" {
+  let js = compile_to_js("export class Person { name = ''; }")
+  assert_true(js.contains("export class Person"))
+}
+
+///|
+/// Test: Emit export async function
+test "emit export async function" {
+  let js = compile_to_js("export async function fetch() { return 1; }")
+  assert_true(js.contains("export async function fetch()"))
+}
+
+///|
+/// Test: Emit export let
+test "emit export let" {
+  let js = compile_to_js("export let value = 'test';")
+  assert_true(js.contains("export let value = "))
+}

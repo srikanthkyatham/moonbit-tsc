@@ -123,6 +123,7 @@ pub struct VariableStatement {
   declarations : Array[VariableDeclaration]
   is_const : Bool
   is_let : Bool
+  modifiers : Array[Modifier]
   location : SourceLocation
 } derive(Show)
 
@@ -144,6 +145,7 @@ pub struct FunctionDeclaration {
   body : Node? // BlockStatement
   is_async : Bool
   is_generator : Bool
+  modifiers : Array[Modifier]
   location : SourceLocation
 } derive(Show)
 
@@ -165,6 +167,7 @@ pub struct ClassDeclaration {
   members : Array[Node]
   is_abstract : Bool
   decorators : Array[Node]
+  modifiers : Array[Modifier]
   location : SourceLocation
 } derive(Show)
 
@@ -189,6 +192,7 @@ pub struct InterfaceDeclaration {
   type_parameters : Array[TypeParameter]
   heritage_clauses : Array[HeritageClause]
   members : Array[Node]
+  modifiers : Array[Modifier]
   location : SourceLocation
 } derive(Show)
 
@@ -198,6 +202,7 @@ pub struct TypeAliasDeclaration {
   name : String
   type_parameters : Array[TypeParameter]
   type_node : Node
+  modifiers : Array[Modifier]
   location : SourceLocation
 } derive(Show)
 
@@ -207,6 +212,7 @@ pub struct EnumDeclaration {
   name : String
   members : Array[EnumMember]
   is_const : Bool
+  modifiers : Array[Modifier]
   location : SourceLocation
 } derive(Show)
 

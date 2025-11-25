@@ -238,9 +238,22 @@ fn emit_source_file(sf : SourceFile, ctx : EmitterContext) -> String {
 
 ///|
 /// Emit variable statement
+///|
+/// Check if modifiers array has Export modifier
+fn has_export_modifier(modifiers : Array[Modifier]) -> Bool {
+  for modifier in modifiers {
+    if modifier == Modifier::Export {
+      return true
+    }
+  }
+  false
+}
+
 fn emit_variable_statement(vs : VariableStatement, ctx : EmitterContext) -> String {
   // Add source mapping at the start of the statement
   ctx.add_mapping(vs.location.start.line, vs.location.start.column, None)
+
+  let export_prefix = if has_export_modifier(vs.modifiers) { "export " } else { "" }
 
   let keyword = if vs.is_const {
     "const"
@@ -274,7 +287,7 @@ fn emit_variable_statement(vs : VariableStatement, ctx : EmitterContext) -> Stri
     }
   }
 
-  ctx.get_indent() + keyword + " " + decls + ";"
+  ctx.get_indent() + export_prefix + keyword + " " + decls + ";"
 }
 
 ///|
@@ -284,6 +297,10 @@ fn emit_function_declaration(fd : FunctionDeclaration, ctx : EmitterContext) -> 
   ctx.add_mapping(fd.location.start.line, fd.location.start.column, None)
 
   let mut result = ctx.get_indent()
+
+  if has_export_modifier(fd.modifiers) {
+    result = result + "export "
+  }
 
   if fd.is_async {
     result = result + "async "
@@ -367,7 +384,8 @@ fn emit_class_declaration(cd : ClassDeclaration, ctx : EmitterContext) -> String
   // Add source mapping at the start of the class declaration
   ctx.add_mapping(cd.location.start.line, cd.location.start.column, None)
 
-  let mut result = ctx.get_indent() + "class "
+  let export_prefix = if has_export_modifier(cd.modifiers) { "export " } else { "" }
+  let mut result = ctx.get_indent() + export_prefix + "class "
 
   match cd.name {
     Some(Identifier(id)) => {

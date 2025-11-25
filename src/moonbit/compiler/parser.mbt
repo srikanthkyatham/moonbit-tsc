@@ -310,6 +310,7 @@ fn parse_variable_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
             declarations,
             is_const,
             is_let,
+            modifiers: [],
             location,
           }),
           parser,
@@ -699,6 +700,7 @@ fn parse_function_declaration(
         body,
         is_async,
         is_generator,
+        modifiers: [],
         location: start_loc,
       }),
       parser,
@@ -3673,6 +3675,7 @@ fn parse_class_declaration_with_decorators(parser : Parser, is_abstract : Bool, 
               members,
               is_abstract,
               decorators,
+              modifiers: [],
               location: SourceLocation::new(start_loc.file_path, start_loc.start, loc.end)
             }),
             parser
@@ -4323,6 +4326,7 @@ fn parse_interface_declaration(
                 type_parameters,
                 heritage_clauses,
                 members,
+                modifiers: [],
                 location: SourceLocation::new(start_loc.file_path, start_loc.start, loc.end)
               }),
               parser
@@ -4714,6 +4718,7 @@ fn parse_type_alias_declaration(
       name,
       type_parameters,
       type_node,
+      modifiers: [],
       location: SourceLocation::new(start_loc.file_path, start_loc.start, end_loc.end)
     }),
     parser
@@ -4745,6 +4750,7 @@ fn parse_enum_declaration(parser : Parser, is_const : Bool) -> Result[(Node, Par
               name,
               members,
               is_const,
+              modifiers: [],
               location: SourceLocation::new(start_loc.file_path, start_loc.start, loc.end)
             }),
             parser
@@ -5151,16 +5157,110 @@ fn parse_export_declaration(parser : Parser) -> Result[(Node, Parser), Parser] {
 
     // export declaration (const, let, var, function, class, etc.)
     _ => {
-      // Parse the declaration and wrap it
+      // Parse the declaration and add Export modifier
       match parse_statement(parser) {
         Ok((stmt, parser)) => {
-          // For now, just return the statement itself
-          // In a full implementation, we'd wrap this in an ExportDeclaration node
-          Ok((stmt, parser))
+          // Add Export modifier to the declaration
+          let stmt_with_export = add_export_modifier(stmt)
+          Ok((stmt_with_export, parser))
         }
         Err(p) => Err(p)
       }
     }
+  }
+}
+
+///|
+/// Helper: Add Export modifier to a declaration
+fn add_export_modifier(node : Node) -> Node {
+  match node {
+    VariableStatement(vs) => {
+      let new_modifiers : Array[Modifier] = [Modifier::Export]
+      for m in vs.modifiers {
+        new_modifiers.push(m)
+      }
+      Node::VariableStatement(VariableStatement::{
+        declarations: vs.declarations,
+        is_const: vs.is_const,
+        is_let: vs.is_let,
+        modifiers: new_modifiers,
+        location: vs.location,
+      })
+    }
+    FunctionDeclaration(fd) => {
+      let new_modifiers : Array[Modifier] = [Modifier::Export]
+      for m in fd.modifiers {
+        new_modifiers.push(m)
+      }
+      Node::FunctionDeclaration(FunctionDeclaration::{
+        name: fd.name,
+        type_parameters: fd.type_parameters,
+        parameters: fd.parameters,
+        return_type: fd.return_type,
+        body: fd.body,
+        is_async: fd.is_async,
+        is_generator: fd.is_generator,
+        modifiers: new_modifiers,
+        location: fd.location,
+      })
+    }
+    ClassDeclaration(cd) => {
+      let new_modifiers : Array[Modifier] = [Modifier::Export]
+      for m in cd.modifiers {
+        new_modifiers.push(m)
+      }
+      Node::ClassDeclaration(ClassDeclaration::{
+        name: cd.name,
+        type_parameters: cd.type_parameters,
+        heritage_clauses: cd.heritage_clauses,
+        members: cd.members,
+        is_abstract: cd.is_abstract,
+        decorators: cd.decorators,
+        modifiers: new_modifiers,
+        location: cd.location,
+      })
+    }
+    InterfaceDeclaration(id) => {
+      let new_modifiers : Array[Modifier] = [Modifier::Export]
+      for m in id.modifiers {
+        new_modifiers.push(m)
+      }
+      Node::InterfaceDeclaration(InterfaceDeclaration::{
+        name: id.name,
+        type_parameters: id.type_parameters,
+        heritage_clauses: id.heritage_clauses,
+        members: id.members,
+        modifiers: new_modifiers,
+        location: id.location,
+      })
+    }
+    TypeAliasDeclaration(ta) => {
+      let new_modifiers : Array[Modifier] = [Modifier::Export]
+      for m in ta.modifiers {
+        new_modifiers.push(m)
+      }
+      Node::TypeAliasDeclaration(TypeAliasDeclaration::{
+        name: ta.name,
+        type_parameters: ta.type_parameters,
+        type_node: ta.type_node,
+        modifiers: new_modifiers,
+        location: ta.location,
+      })
+    }
+    EnumDeclaration(ed) => {
+      let new_modifiers : Array[Modifier] = [Modifier::Export]
+      for m in ed.modifiers {
+        new_modifiers.push(m)
+      }
+      Node::EnumDeclaration(EnumDeclaration::{
+        name: ed.name,
+        members: ed.members,
+        is_const: ed.is_const,
+        modifiers: new_modifiers,
+        location: ed.location,
+      })
+    }
+    _ => node // For other nodes, return as-is
   }
 }
 
@@ -5354,6 +5454,7 @@ fn parse_for_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
             declarations,
             is_const,
             is_let,
+            modifiers: [],
             location,
           })
           (Some(stmt), p)

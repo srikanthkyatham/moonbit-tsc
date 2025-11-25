@@ -262,6 +262,7 @@ fn transform_variable_statement(
     declarations: transformed_decls,
     is_const,
     is_let,
+    modifiers: vs.modifiers,
     location: vs.location,
   })
 }
@@ -286,6 +287,7 @@ fn transform_function_declaration(
     },
     is_async: fd.is_async,
     is_generator: fd.is_generator,
+    modifiers: fd.modifiers,
     location: fd.location,
   })
 }
@@ -311,6 +313,7 @@ fn transform_class_declaration(
     members: transformed_members,
     is_abstract: cd.is_abstract,
     decorators: cd.decorators,
+    modifiers: cd.modifiers,
     location: cd.location,
   })
 }
@@ -382,6 +385,7 @@ fn transform_enum_declaration(
     ],
     is_const: true,
     is_let: false,
+    modifiers: ed.modifiers,
     location: ed.location,
   })
 }
