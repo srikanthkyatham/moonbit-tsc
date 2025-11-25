@@ -391,6 +391,692 @@ pub fn error_type(checker : TypeChecker) -> (Type, TypeChecker) {
 }
 
 // ============================================================================
+// Literal Types
+// ============================================================================
+
+///|
+/// Create a number literal type
+pub fn number_literal_type(
+  checker : TypeChecker,
+  value : Double,
+) -> (Type, TypeChecker) {
+  let (info, checker) = create_type_info(checker)
+  (NumberLiteral(value, info), checker)
+}
+
+///|
+/// Create a string literal type
+pub fn string_literal_type(
+  checker : TypeChecker,
+  value : String,
+) -> (Type, TypeChecker) {
+  let (info, checker) = create_type_info(checker)
+  (StringLiteral(value, info), checker)
+}
+
+///|
+/// Create a boolean literal type
+pub fn boolean_literal_type(
+  checker : TypeChecker,
+  value : Bool,
+) -> (Type, TypeChecker) {
+  let (info, checker) = create_type_info(checker)
+  (BooleanLiteral(value, info), checker)
+}
+
+// ============================================================================
+// Type Reference Resolution
+// ============================================================================
+
+///|
+/// Create a type reference
+pub fn type_reference_type(
+  checker : TypeChecker,
+  name : String,
+  type_arguments : Array[Type],
+) -> (Type, TypeChecker) {
+  let (info, checker) = create_type_info(checker)
+  (TypeReference({ name, type_arguments, info }), checker)
+}
+
+///|
+/// Resolve a type reference to its actual type
+pub fn resolve_type_reference(
+  checker : TypeChecker,
+  type_ref : TypeReferenceType,
+) -> (Type, TypeChecker) {
+  // Look up the type name in the type cache or scope
+  match checker.type_cache.get(type_ref.name) {
+    Some(resolved) => {
+      // If the type has type arguments, instantiate it
+      if type_ref.type_arguments.length() > 0 {
+        instantiate_generic_type(checker, resolved, type_ref.type_arguments)
+      } else {
+        (resolved, checker)
+      }
+    }
+    None => {
+      // Look up in scope for interface/class/type alias
+      match lookup_symbol(checker, type_ref.name) {
+        Some(symbol) =>
+          match symbol.kind {
+            Interface => {
+              let (resolved, checker) = resolve_interface_type(checker, symbol)
+              match resolved {
+                Some(t) => (t, checker)
+                None =>
+                  // Return the type reference as-is
+                  (TypeReference(type_ref), checker)
+              }
+            }
+            Class =>
+              // Return type reference for class types
+              (TypeReference(type_ref), checker)
+            Type =>
+              // Would need type alias resolution
+              (TypeReference(type_ref), checker)
+            _ =>
+              // Return type reference as-is
+              (TypeReference(type_ref), checker)
+          }
+        None =>
+          // Unknown type reference
+          (TypeReference(type_ref), checker)
+      }
+    }
+  }
+}
+
+///|
+/// Instantiate a generic type with type arguments
+fn instantiate_generic_type(
+  checker : TypeChecker,
+  generic_type : Type,
+  _type_args : Array[Type],
+) -> (Type, TypeChecker) {
+  match generic_type {
+    Type::Function(func_type) => {
+      // Substitute type parameters in function type
+      // TODO: Full implementation would substitute type params with type args
+      (Type::Function(func_type), checker)
+    }
+    Object(obj) => {
+      // Substitute type parameters in object type properties
+      // TODO: Full implementation would substitute type params with type args
+      (Object(obj), checker)
+    }
+    _ => (generic_type, checker)
+  }
+}
+
+// ============================================================================
+// Intersection Type Support
+// ============================================================================
+
+///|
+/// Create an intersection type
+pub fn intersection_type(
+  checker : TypeChecker,
+  types : Array[Type],
+) -> (Type, TypeChecker) {
+  // Flatten nested intersections
+  let flattened : Array[Type] = []
+  for i = 0; i < types.length(); i = i + 1 {
+    match types[i] {
+      Intersection(inner) =>
+        for j = 0; j < inner.types.length(); j = j + 1 {
+          flattened.push(inner.types[j])
+        }
+      other => flattened.push(other)
+    }
+  }
+  // Single type doesn't need intersection
+  if flattened.length() == 1 {
+    return (flattened[0], checker)
+  }
+  let (info, checker) = create_type_info(checker)
+  (Intersection({ types: flattened, info }), checker)
+}
+
+///|
+/// Merge intersection types into a combined object type
+pub fn merge_intersection(
+  checker : TypeChecker,
+  intersection : CheckerIntersectionType,
+) -> (Type, TypeChecker) {
+  let merged_props : Map[String, PropertySignature] = Map::new()
+  let merged_call_sigs : Array[CheckerSignature] = []
+  let merged_construct_sigs : Array[CheckerSignature] = []
+  let merged_index_sigs : Array[IndexSignature] = []
+  // Merge all object types in the intersection
+  for i = 0; i < intersection.types.length(); i = i + 1 {
+    match intersection.types[i] {
+      Object(obj) => {
+        // Merge properties
+        let props_iter = obj.properties.iter()
+        for entry in props_iter {
+          let (name, prop) = entry
+          merged_props.set(name, prop)
+        }
+        // Merge call signatures
+        for j = 0; j < obj.call_signatures.length(); j = j + 1 {
+          merged_call_sigs.push(obj.call_signatures[j])
+        }
+        // Merge construct signatures
+        for j = 0; j < obj.construct_signatures.length(); j = j + 1 {
+          merged_construct_sigs.push(obj.construct_signatures[j])
+        }
+        // Merge index signatures
+        for j = 0; j < obj.index_signatures.length(); j = j + 1 {
+          merged_index_sigs.push(obj.index_signatures[j])
+        }
+      }
+      _ => () // Non-object types remain in the intersection
+    }
+  }
+  let (info, checker) = create_type_info(checker)
+  (
+    Object({
+      properties: merged_props,
+      call_signatures: merged_call_sigs,
+      construct_signatures: merged_construct_sigs,
+      index_signatures: merged_index_sigs,
+      info,
+    }),
+    checker,
+  )
+}
+
+// ============================================================================
+// Tuple Type Support
+// ============================================================================
+
+///|
+/// Create a tuple type
+pub fn tuple_type(
+  checker : TypeChecker,
+  elements : Array[TupleElement],
+) -> (Type, TypeChecker) {
+  let (info, checker) = create_type_info(checker)
+  (Tuple({ element_types: elements, info }), checker)
+}
+
+///|
+/// Create a tuple element
+pub fn tuple_element(
+  element_type : Type,
+  is_optional : Bool,
+  is_rest : Bool,
+  label : String?,
+) -> TupleElement {
+  { element_type, is_optional, is_rest, label }
+}
+
+///|
+/// Get the element type at a specific index in a tuple
+pub fn get_tuple_element_type(tuple : CheckerTupleType, index : Int) -> Type? {
+  if index >= 0 && index < tuple.element_types.length() {
+    Some(tuple.element_types[index].element_type)
+  } else {
+    // Check for rest element
+    for i = 0; i < tuple.element_types.length(); i = i + 1 {
+      if tuple.element_types[i].is_rest {
+        return Some(tuple.element_types[i].element_type)
+      }
+    }
+    None
+  }
+}
+
+// ============================================================================
+// Conditional Type Support
+// ============================================================================
+
+///|
+/// Create a conditional type
+pub fn conditional_type(
+  checker : TypeChecker,
+  check_type : Type,
+  extends_type : Type,
+  true_type : Type,
+  false_type : Type,
+) -> (Type, TypeChecker) {
+  let (info, checker) = create_type_info(checker)
+  (
+    Conditional({ check_type, extends_type, true_type, false_type, info }),
+    checker,
+  )
+}
+
+///|
+/// Evaluate a conditional type
+pub fn evaluate_conditional_type(
+  checker : TypeChecker,
+  cond : CheckerConditionalType,
+) -> (Type, TypeChecker) {
+  // Check if check_type extends extends_type
+  if is_assignable(cond.check_type, cond.extends_type) {
+    (cond.true_type, checker)
+  } else {
+    // Check for distributive conditional types over unions
+    match cond.check_type {
+      Union(union) => {
+        // Distribute over union members
+        let result_types : Array[Type] = []
+        for i = 0; i < union.types.length(); i = i + 1 {
+          let union_member = union.types[i]
+          if is_assignable(union_member, cond.extends_type) {
+            result_types.push(cond.true_type)
+          } else {
+            result_types.push(cond.false_type)
+          }
+        }
+        // Create union of results
+        union_type(checker, result_types)
+      }
+      _ => (cond.false_type, checker)
+    }
+  }
+}
+
+// ============================================================================
+// Mapped Type Support
+// ============================================================================
+
+///|
+/// Create a mapped type
+pub fn mapped_type(
+  checker : TypeChecker,
+  type_parameter : CheckerTypeParameter,
+  name_type : Type?,
+  template_type : Type,
+  readonly_modifier : MappedModifier,
+  optional_modifier : MappedModifier,
+) -> (Type, TypeChecker) {
+  let (info, checker) = create_type_info(checker)
+  (
+    Mapped({
+      type_parameter,
+      name_type,
+      template_type,
+      readonly_modifier,
+      optional_modifier,
+      info,
+    }),
+    checker,
+  )
+}
+
+///|
+/// Evaluate a mapped type over a source object type
+pub fn evaluate_mapped_type(
+  checker : TypeChecker,
+  mapped : CheckerMappedType,
+  source_type : Type,
+) -> (Type, TypeChecker) {
+  match source_type {
+    Object(obj) => {
+      // Map over each property in the source
+      let result_props : Map[String, PropertySignature] = Map::new()
+      let props_iter = obj.properties.iter()
+      for entry in props_iter {
+        let (name, prop) = entry
+        // Apply readonly modifier
+        let is_readonly = match mapped.readonly_modifier {
+          Add => true
+          Remove => false
+          Unchanged => prop.is_readonly
+        }
+        // Apply optional modifier
+        let is_optional = match mapped.optional_modifier {
+          Add => true
+          Remove => false
+          Unchanged => prop.is_optional
+        }
+        // Apply template type (simplified - would need type substitution)
+        result_props.set(name, {
+          name,
+          prop_type: mapped.template_type,
+          is_optional,
+          is_readonly,
+        })
+      }
+      let (info, checker) = create_type_info(checker)
+      (
+        Object({
+          properties: result_props,
+          call_signatures: [],
+          construct_signatures: [],
+          index_signatures: [],
+          info,
+        }),
+        checker,
+      )
+    }
+    _ =>
+      // Can't evaluate mapped type over non-object
+      (Mapped(mapped), checker)
+  }
+}
+
+// ============================================================================
+// Template Literal Type Support
+// ============================================================================
+
+///|
+/// Create a template literal type
+pub fn template_literal_type(
+  checker : TypeChecker,
+  texts : Array[String],
+  types : Array[Type],
+) -> (Type, TypeChecker) {
+  let (info, checker) = create_type_info(checker)
+  (TemplateLiteral({ texts, types, info }), checker)
+}
+
+///|
+/// Check if a string matches a template literal pattern
+pub fn matches_template_literal(
+  value : String,
+  template : CheckerTemplateLiteralType,
+) -> Bool {
+  // Simple implementation: check if string starts with first text
+  if template.texts.length() == 0 {
+    return true
+  }
+  let first_text = template.texts[0]
+  if not(value.has_prefix(first_text)) {
+    return false
+  }
+  // For full implementation, would need regex-like matching
+  // For now, accept if starts correctly
+  true
+}
+
+///|
+/// Evaluate a template literal type to possible string values
+pub fn evaluate_template_literal(
+  _checker : TypeChecker,
+  template : CheckerTemplateLiteralType,
+) -> Array[String] {
+  // Simplified: just return the static parts concatenated
+  let mut result = ""
+  for i = 0; i < template.texts.length(); i = i + 1 {
+    result = result + template.texts[i]
+    if i < template.types.length() {
+      // Add placeholder for interpolated types
+      result = result + "*"
+    }
+  }
+  [result]
+}
+
+// ============================================================================
+// Index Access Type Support
+// ============================================================================
+
+///|
+/// Create an index access type
+pub fn index_access_type(
+  checker : TypeChecker,
+  object_type : Type,
+  index_type : Type,
+) -> (Type, TypeChecker) {
+  let (info, checker) = create_type_info(checker)
+  (IndexAccess({ object_type, index_type, info }), checker)
+}
+
+///|
+/// Resolve an index access type to its result type
+pub fn resolve_index_access(
+  checker : TypeChecker,
+  index_access : CheckerIndexAccessType,
+) -> (Type, TypeChecker) {
+  match index_access.object_type {
+    Object(obj) =>
+      // Access by string literal
+      match index_access.index_type {
+        StringLiteral(key, _) =>
+          match obj.properties.get(key) {
+            Some(prop) => (prop.prop_type, checker)
+            None =>
+              // Check index signatures
+              resolve_via_index_signature(checker, obj.index_signatures)
+          }
+        Number(_) =>
+          // Numeric index - check index signatures
+          resolve_via_index_signature(checker, obj.index_signatures)
+        _ =>
+          // Unknown index type
+          any_type(checker)
+      }
+    Type::Array(arr) =>
+      // Array access returns element type
+      match index_access.index_type {
+        Number(_) | NumberLiteral(_, _) => (arr.element_type, checker)
+        _ => any_type(checker)
+      }
+    Tuple(tuple) =>
+      // Tuple access by literal number
+      match index_access.index_type {
+        NumberLiteral(idx, _) => {
+          let index = idx.to_int()
+          match get_tuple_element_type(tuple, index) {
+            Some(t) => (t, checker)
+            None => any_type(checker)
+          }
+        }
+        Number(_) => {
+          // Union of all tuple element types
+          let elem_types : Array[Type] = []
+          for i = 0; i < tuple.element_types.length(); i = i + 1 {
+            elem_types.push(tuple.element_types[i].element_type)
+          }
+          union_type(checker, elem_types)
+        }
+        _ => any_type(checker)
+      }
+    _ =>
+      // Can't resolve index access on this type
+      any_type(checker)
+  }
+}
+
+///|
+/// Resolve type via index signature
+fn resolve_via_index_signature(
+  checker : TypeChecker,
+  index_sigs : Array[IndexSignature],
+) -> (Type, TypeChecker) {
+  if index_sigs.length() > 0 {
+    // Return first matching index signature's return type
+    (index_sigs[0].return_type, checker)
+  } else {
+    any_type(checker)
+  }
+}
+
+// ============================================================================
+// Infer Type Support
+// ============================================================================
+
+///|
+/// Create an infer type placeholder
+pub fn infer_type_placeholder(
+  checker : TypeChecker,
+  name : String,
+) -> (Type, TypeChecker) {
+  let (info, checker) = create_type_info(checker)
+  (Infer({ type_parameter_name: name, info }), checker)
+}
+
+///|
+/// Infer type parameters from conditional type matching
+pub fn infer_type_parameters(
+  checker : TypeChecker,
+  check_type : Type,
+  extends_type : Type,
+) -> (Map[String, Type], TypeChecker) {
+  let inferred : Map[String, Type] = Map::new()
+  let checker = infer_type_parameters_recursive(
+    checker,
+    check_type,
+    extends_type,
+    inferred,
+  )
+  (inferred, checker)
+}
+
+///|
+/// Recursively infer type parameters
+fn infer_type_parameters_recursive(
+  checker : TypeChecker,
+  source : Type,
+  target : Type,
+  inferred : Map[String, Type],
+) -> TypeChecker {
+  match target {
+    Infer(inf) => {
+      // Found an infer placeholder - record the inferred type
+      inferred.set(inf.type_parameter_name, source)
+      checker
+    }
+    Type::Array(target_arr) =>
+      match source {
+        Type::Array(source_arr) =>
+          infer_type_parameters_recursive(
+            checker,
+            source_arr.element_type,
+            target_arr.element_type,
+            inferred,
+          )
+        _ => checker
+      }
+    Tuple(target_tuple) =>
+      match source {
+        Tuple(source_tuple) => {
+          let mut checker = checker
+          let min_len = if source_tuple.element_types.length() <
+            target_tuple.element_types.length() {
+            source_tuple.element_types.length()
+          } else {
+            target_tuple.element_types.length()
+          }
+          for i = 0; i < min_len; i = i + 1 {
+            checker = infer_type_parameters_recursive(
+              checker,
+              source_tuple.element_types[i].element_type,
+              target_tuple.element_types[i].element_type,
+              inferred,
+            )
+          }
+          checker
+        }
+        _ => checker
+      }
+    Type::Function(target_fn) =>
+      match source {
+        Type::Function(source_fn) => {
+          // Infer from return type
+          let checker = infer_type_parameters_recursive(
+            checker,
+            source_fn.return_type,
+            target_fn.return_type,
+            inferred,
+          )
+          // Infer from parameters
+          let mut checker = checker
+          let min_len = if source_fn.parameters.length() <
+            target_fn.parameters.length() {
+            source_fn.parameters.length()
+          } else {
+            target_fn.parameters.length()
+          }
+          for i = 0; i < min_len; i = i + 1 {
+            checker = infer_type_parameters_recursive(
+              checker,
+              source_fn.parameters[i].param_type,
+              target_fn.parameters[i].param_type,
+              inferred,
+            )
+          }
+          checker
+        }
+        _ => checker
+      }
+    _ => checker
+  }
+}
+
+// ============================================================================
+// Union Type Helper
+// ============================================================================
+
+///|
+/// Create a union type from an array of types
+pub fn union_type(checker : TypeChecker, types : Array[Type]) -> (Type, TypeChecker) {
+  // Flatten nested unions and remove duplicates
+  let flattened : Array[Type] = []
+  for i = 0; i < types.length(); i = i + 1 {
+    match types[i] {
+      Union(inner) =>
+        for j = 0; j < inner.types.length(); j = j + 1 {
+          if not(contains_type(flattened, inner.types[j])) {
+            flattened.push(inner.types[j])
+          }
+        }
+      other =>
+        if not(contains_type(flattened, other)) {
+          flattened.push(other)
+        }
+    }
+  }
+  // Single type doesn't need union
+  if flattened.length() == 1 {
+    return (flattened[0], checker)
+  }
+  // Empty union is never
+  if flattened.length() == 0 {
+    return never_type(checker)
+  }
+  let (info, checker) = create_type_info(checker)
+  (Union({ types: flattened, info }), checker)
+}
+
+///|
+/// Check if array contains a type (by structure)
+fn contains_type(types : Array[Type], target : Type) -> Bool {
+  for i = 0; i < types.length(); i = i + 1 {
+    if types_equal(types[i], target) {
+      return true
+    }
+  }
+  false
+}
+
+///|
+/// Check if two types are structurally equal
+fn types_equal(a : Type, b : Type) -> Bool {
+  match (a, b) {
+    (Number(_), Number(_)) => true
+    (String(_), String(_)) => true
+    (Boolean(_), Boolean(_)) => true
+    (Void(_), Void(_)) => true
+    (Undefined(_), Undefined(_)) => true
+    (Null(_), Null(_)) => true
+    (Any(_), Any(_)) => true
+    (Unknown(_), Unknown(_)) => true
+    (Never(_), Never(_)) => true
+    (Symbol(_), Symbol(_)) => true
+    (NumberLiteral(v1, _), NumberLiteral(v2, _)) => v1 == v2
+    (StringLiteral(v1, _), StringLiteral(v2, _)) => v1 == v2
+    (BooleanLiteral(v1, _), BooleanLiteral(v2, _)) => v1 == v2
+    (TypeReference(r1), TypeReference(r2)) => r1.name == r2.name
+    _ => false
+  }
+}
+
+// ============================================================================
 // Type Checking Entry Point
 // ============================================================================
 
@@ -2291,11 +2977,13 @@ fn is_assignable(source : Type, target : Type) -> Bool {
     (_, Any(_)) => true
     // Never is assignable to everything
     (Never(_), _) => true
-    // Unknown is only assignable to unknown or any
+    // Nothing is assignable to never (except never) - handled by the above case
+    // Unknown is only assignable to unknown or any (any handled above)
     (Unknown(_), Unknown(_)) => true
-    (Unknown(_), Any(_)) => true
     // Any type is assignable to unknown (unknown is a safe top type)
     (_, Unknown(_)) => true
+    // Nothing (except any/never/unknown) is assignable to never
+    (_, Never(_)) => false
     // Same primitive types
     (Number(_), Number(_)) => true
     (String(_), String(_)) => true
@@ -2303,7 +2991,8 @@ fn is_assignable(source : Type, target : Type) -> Bool {
     (Void(_), Void(_)) => true
     (Undefined(_), Undefined(_)) => true
     (Null(_), Null(_)) => true
-    // Undefined and null are assignable to most types (like TypeScript)
+    (Symbol(_), Symbol(_)) => true
+    // Undefined and null are assignable to most types (like TypeScript without strictNullChecks)
     (Undefined(_), Void(_)) => true
     (Undefined(_), Number(_)) => true
     (Undefined(_), String(_)) => true
@@ -2321,6 +3010,16 @@ fn is_assignable(source : Type, target : Type) -> Bool {
     (NumberLiteral(_, _), Number(_)) => true
     (StringLiteral(_, _), String(_)) => true
     (BooleanLiteral(_, _), Boolean(_)) => true
+    // Same literal types (exact value match)
+    (NumberLiteral(v1, _), NumberLiteral(v2, _)) => v1 == v2
+    (StringLiteral(v1, _), StringLiteral(v2, _)) => v1 == v2
+    (BooleanLiteral(v1, _), BooleanLiteral(v2, _)) => v1 == v2
+    // String literal assignable to template literal if it matches
+    (StringLiteral(value, _), TemplateLiteral(template)) =>
+      matches_template_literal(value, template)
+    // Type references - check by name (simplified)
+    (TypeReference(ref1), TypeReference(ref2)) =>
+      is_type_reference_assignable(ref1, ref2)
     // Union type assignability - source is assignable to union if assignable to any member
     (source, Union(union)) => is_assignable_to_union(source, union)
     // Union source is assignable to target if all members are assignable
@@ -2346,8 +3045,122 @@ fn is_assignable(source : Type, target : Type) -> Bool {
     // Tuple is assignable to array if all elements are assignable to element type
     (Tuple(source_tuple), Array(target_arr)) =>
       is_tuple_assignable_to_array(source_tuple, target_arr)
+    // Array is assignable to tuple if length matches and elements are compatible
+    (Array(source_arr), Tuple(target_tuple)) =>
+      is_array_assignable_to_tuple(source_arr, target_tuple)
+    // Index access types - need resolution
+    (IndexAccess(ia1), IndexAccess(ia2)) =>
+      is_assignable(ia1.object_type, ia2.object_type) &&
+        is_assignable(ia1.index_type, ia2.index_type)
+    // Conditional types - compare structure
+    (Conditional(c1), Conditional(c2)) =>
+      is_conditional_assignable(c1, c2)
+    // Mapped types
+    (Mapped(m1), Mapped(m2)) => is_mapped_assignable(m1, m2)
+    // Template literal types
+    (TemplateLiteral(t1), TemplateLiteral(t2)) =>
+      is_template_literal_assignable(t1, t2)
+    // Template literal is assignable to string
+    (TemplateLiteral(_), String(_)) => true
+    // Infer types - they're placeholders, typically handled during inference
+    (Infer(_), _) => true
+    (_, Infer(_)) => true
+    // Error type assignable to anything (to prevent cascading errors)
+    (Error(_), _) => true
+    (_, Error(_)) => true
     _ => false
   }
+}
+
+///|
+/// Check if type reference is assignable
+fn is_type_reference_assignable(
+  source : TypeReferenceType,
+  target : TypeReferenceType,
+) -> Bool {
+  // Same type name required
+  if source.name != target.name {
+    return false
+  }
+  // Check type arguments
+  if source.type_arguments.length() != target.type_arguments.length() {
+    return false
+  }
+  for i = 0; i < source.type_arguments.length(); i = i + 1 {
+    if not(is_assignable(source.type_arguments[i], target.type_arguments[i])) {
+      return false
+    }
+  }
+  true
+}
+
+///|
+/// Check if array is assignable to tuple
+fn is_array_assignable_to_tuple(
+  arr : CheckerArrayType,
+  tuple : CheckerTupleType,
+) -> Bool {
+  // Array can be assigned to tuple if all tuple elements accept the array element type
+  for i = 0; i < tuple.element_types.length(); i = i + 1 {
+    let elem = tuple.element_types[i]
+    if not(elem.is_optional) && not(elem.is_rest) {
+      // Required element - check if array element type is compatible
+      if not(is_assignable(arr.element_type, elem.element_type)) {
+        return false
+      }
+    }
+  }
+  true
+}
+
+///|
+/// Check if conditional types are assignable
+fn is_conditional_assignable(
+  source : CheckerConditionalType,
+  target : CheckerConditionalType,
+) -> Bool {
+  // Simplified: same structure check
+  is_assignable(source.check_type, target.check_type) &&
+    is_assignable(source.extends_type, target.extends_type) &&
+    is_assignable(source.true_type, target.true_type) &&
+    is_assignable(source.false_type, target.false_type)
+}
+
+///|
+/// Check if mapped types are assignable
+fn is_mapped_assignable(
+  source : CheckerMappedType,
+  target : CheckerMappedType,
+) -> Bool {
+  // Simplified: check template types
+  is_assignable(source.template_type, target.template_type)
+}
+
+///|
+/// Check if template literal types are assignable
+fn is_template_literal_assignable(
+  source : CheckerTemplateLiteralType,
+  target : CheckerTemplateLiteralType,
+) -> Bool {
+  // Simplified: check if static parts match
+  if source.texts.length() != target.texts.length() {
+    return false
+  }
+  for i = 0; i < source.texts.length(); i = i + 1 {
+    if source.texts[i] != target.texts[i] {
+      return false
+    }
+  }
+  // Check interpolated types
+  if source.types.length() != target.types.length() {
+    return false
+  }
+  for i = 0; i < source.types.length(); i = i + 1 {
+    if not(is_assignable(source.types[i], target.types[i])) {
+      return false
+    }
+  }
+  true
 }
 
 ///|
