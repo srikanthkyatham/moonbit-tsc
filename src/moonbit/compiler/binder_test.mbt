@@ -740,3 +740,65 @@ test "bind class with getter and method" {
     Err(_) => assert_true(false)
   }
 }
+
+// ============================================================================
+// SetAccessor Tests
+// ============================================================================
+
+///|
+test "bind class with setter accessor" {
+  let result = parse_and_bind("class Person { set name(value: string) { } }")
+  match result {
+    Ok(bound) => {
+      // Class should be in global scope
+      assert_true(bound.global_scope.symbols.contains("Person"))
+      // Setter name should not be in global scope (it's in class scope)
+      assert_false(bound.global_scope.symbols.contains("name"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "bind class with multiple setter accessors" {
+  let result = parse_and_bind("class Rectangle { set width(w: number) { } set height(h: number) { } }")
+  match result {
+    Ok(bound) => {
+      // Class should be in global scope
+      assert_true(bound.global_scope.symbols.contains("Rectangle"))
+      // Setters should not be in global scope
+      assert_false(bound.global_scope.symbols.contains("width"))
+      assert_false(bound.global_scope.symbols.contains("height"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "bind class with getter and setter pair" {
+  let result = parse_and_bind("class Circle { get radius() { return 1; } set radius(value: number) { } }")
+  match result {
+    Ok(bound) => {
+      // Class should be in global scope
+      assert_true(bound.global_scope.symbols.contains("Circle"))
+      // Getter/setter pair should not be in global scope
+      assert_false(bound.global_scope.symbols.contains("radius"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "bind class with setter and method" {
+  let result = parse_and_bind("class Counter { set value(v: number) { } reset() { } }")
+  match result {
+    Ok(bound) => {
+      // Class should be in global scope
+      assert_true(bound.global_scope.symbols.contains("Counter"))
+      // Members should not be in global scope
+      assert_false(bound.global_scope.symbols.contains("value"))
+      assert_false(bound.global_scope.symbols.contains("reset"))
+    }
+    Err(_) => assert_true(false)
+  }
+}

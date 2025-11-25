@@ -454,6 +454,21 @@ fn bind_class_members_aux(
           None => binder
         }
       }
+      SetAccessor(setter) => {
+        let symbol = Symbol::new(setter.name, SymbolKind::SetAccessor, binder.next_symbol_id)
+        let binder = declare_symbol(binder, setter.name, symbol)
+        // Bind setter body
+        match setter.body {
+          Some(body) => {
+            let binder = push_scope(binder)
+            // Bind setter parameter
+            let binder = bind_parameters(binder, [setter.parameter])
+            let binder = bind_statement(binder, body)
+            pop_scope(binder)
+          }
+          None => binder
+        }
+      }
       _ => binder
     }
     bind_class_members_aux(binder, members, index + 1)
@@ -953,8 +968,11 @@ fn declare_symbol(binder : Binder, name : String, symbol : Symbol) -> Binder {
       // Allow function/method overloads (multiple declarations with same name)
       let is_function_overload = existing_symbol.kind == SymbolKind::Function && symbol.kind == SymbolKind::Function
       let is_method_overload = existing_symbol.kind == SymbolKind::Method && symbol.kind == SymbolKind::Method
-      if is_function_overload || is_method_overload {
-        // Overload - allow it without error
+      // Allow getter/setter pairs with the same name
+      let is_getter_setter_pair = (existing_symbol.kind == SymbolKind::GetAccessor && symbol.kind == SymbolKind::SetAccessor) ||
+        (existing_symbol.kind == SymbolKind::SetAccessor && symbol.kind == SymbolKind::GetAccessor)
+      if is_function_overload || is_method_overload || is_getter_setter_pair {
+        // Overload or getter/setter pair - allow it without error
         binder
       } else {
         // Duplicate declaration - add diagnostic
