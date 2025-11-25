@@ -441,6 +441,19 @@ fn bind_class_members_aux(
           None => binder
         }
       }
+      GetAccessor(getter) => {
+        let symbol = Symbol::new(getter.name, SymbolKind::GetAccessor, binder.next_symbol_id)
+        let binder = declare_symbol(binder, getter.name, symbol)
+        // Bind getter body
+        match getter.body {
+          Some(body) => {
+            let binder = push_scope(binder)
+            let binder = bind_statement(binder, body)
+            pop_scope(binder)
+          }
+          None => binder
+        }
+      }
       _ => binder
     }
     bind_class_members_aux(binder, members, index + 1)

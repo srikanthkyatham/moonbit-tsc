@@ -692,3 +692,51 @@ test "bind generic type alias with multiple type parameters" {
     Err(_) => assert_true(false)
   }
 }
+
+// ============================================================================
+// GetAccessor Tests
+// ============================================================================
+
+///|
+test "bind class with getter accessor" {
+  let result = parse_and_bind("class Person { get name() { return 'John'; } }")
+  match result {
+    Ok(bound) => {
+      // Class should be in global scope
+      assert_true(bound.global_scope.symbols.contains("Person"))
+      // Getter name should not be in global scope (it's in class scope)
+      assert_false(bound.global_scope.symbols.contains("name"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "bind class with multiple getter accessors" {
+  let result = parse_and_bind("class Rectangle { get width() { return 10; } get height() { return 20; } }")
+  match result {
+    Ok(bound) => {
+      // Class should be in global scope
+      assert_true(bound.global_scope.symbols.contains("Rectangle"))
+      // Getters should not be in global scope
+      assert_false(bound.global_scope.symbols.contains("width"))
+      assert_false(bound.global_scope.symbols.contains("height"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "bind class with getter and method" {
+  let result = parse_and_bind("class Counter { get value() { return 0; } increment() { } }")
+  match result {
+    Ok(bound) => {
+      // Class should be in global scope
+      assert_true(bound.global_scope.symbols.contains("Counter"))
+      // Members should not be in global scope
+      assert_false(bound.global_scope.symbols.contains("value"))
+      assert_false(bound.global_scope.symbols.contains("increment"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
