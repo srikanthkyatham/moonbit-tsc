@@ -265,6 +265,7 @@ pub struct TypeChecker {
   diagnostics : Array[Diagnostic]
   file_path : String
   global_scope : Scope? // Global scope for symbol lookup
+  current_this_type : Type? // Type of 'this' in current scope (for class methods/constructors)
 } derive(Show)
 
 ///|
@@ -295,6 +296,7 @@ pub fn TypeChecker::new(
     diagnostics: [],
     file_path,
     global_scope,
+    current_this_type: None,
   }
 }
 
@@ -1627,22 +1629,50 @@ fn infer_binary_expression_type(
     | BitwiseXorAssign => {
       // Check if trying to assign to a const variable using check_const_assignment
       // Also remove any type narrowing for the variable being assigned
-      let checker = match bin_expr.left {
+      // For identifiers, we need to get the declared type (not narrowed type) for assignment checking
+      let (checker, target_type) = match bin_expr.left {
         Identifier(id) => {
-          let checker = match lookup_symbol(checker, id.name) {
-            Some(symbol) =>
-              check_const_assignment(
+          let (checker, declared_type_opt) = match lookup_symbol(checker, id.name) {
+            Some(symbol) => {
+              let c = check_const_assignment(
                 checker,
                 id.name,
                 symbol,
                 get_node_location(BinaryExpression(bin_expr)),
               )
-            None => checker
+              // Get the declared type (not narrowed) for assignment checking
+              match get_symbol_type(c, symbol) {
+                (Some(t), c2) => (c2, Some(t))
+                (None, c2) => (c2, None)
+              }
+            }
+            None => (checker, None) // Can't find symbol, skip type check
           }
           // Assignment invalidates type narrowing for this variable
-          remove_narrowed_type(checker, id.name)
+          let checker = remove_narrowed_type(checker, id.name)
+          // Use declared type if available, otherwise use any (to skip check)
+          let target = match declared_type_opt {
+            Some(t) => t
+            None => {
+              let (any, _) = any_type(checker)
+              any
+            }
+          }
+          (checker, target)
         }
-        _ => checker
+        _ => (checker, left_type)
+      }
+      // Check type compatibility for assignments (using declared type for identifiers, inferred type for others)
+      // Only check if we have a valid target type (not any type for undeclared identifiers)
+      let checker = match target_type {
+        Any(_) => checker // Skip check for any type (undeclared variables, unresolved parameters)
+        _ =>
+          check_assignment_compatibility(
+            checker,
+            right_type,
+            target_type,
+            get_node_location(BinaryExpression(bin_expr)),
+          )
       }
       (right_type, checker)
     }
@@ -2788,8 +2818,10 @@ fn infer_template_expression_type(
 ///|
 /// Infer this keyword type
 fn infer_this_type(checker : TypeChecker) -> (Type, TypeChecker) {
-  // TODO: Look up this type from context
-  any_type(checker)
+  match checker.current_this_type {
+    Some(this_type) => (this_type, checker)
+    None => any_type(checker)
+  }
 }
 
 ///|
@@ -3735,8 +3767,14 @@ fn check_class_declaration(
   checker : TypeChecker,
   class_decl : ClassDeclaration,
 ) -> TypeChecker {
+  // Build the class type so we can set current_this_type
+  let (class_type, checker) = build_class_type_for_this(checker, class_decl)
+
+  // Save previous this type and set current_this_type to class type
+  let prev_this_type = checker.current_this_type
+  let mut checker = { ..checker, current_this_type: Some(class_type) }
+
   // Check class members (constructors, methods, properties)
-  let mut checker = checker
   for i = 0; i < class_decl.members.length(); i = i + 1 {
     checker = match class_decl.members[i] {
       ConstructorDeclaration(ctor) =>
@@ -3760,7 +3798,66 @@ fn check_class_declaration(
       _ => checker
     }
   }
-  checker
+
+  // Restore previous this type
+  { ..checker, current_this_type: prev_this_type }
+}
+
+///|
+/// Build class type for 'this' context (without symbol caching)
+fn build_class_type_for_this(
+  checker : TypeChecker,
+  class_decl : ClassDeclaration,
+) -> (Type, TypeChecker) {
+  // Build object type for the class instance
+  let properties : Map[String, PropertySignature] = Map::new()
+  let mut checker = checker
+  for class_member in class_decl.members {
+    match class_member {
+      PropertyDeclaration(prop) => {
+        let (prop_type, c) = match prop.type_annotation {
+          Some(type_node) =>
+            match get_type_from_type_node(checker, type_node) {
+              (Some(t), c2) => (t, c2)
+              (None, c2) => any_type(c2)
+            }
+          None =>
+            match prop.initializer {
+              Some(init) => infer_type(checker, init)
+              None => any_type(checker)
+            }
+        }
+        checker = c
+        let has_readonly = has_modifier(prop.modifiers, Modifier::Readonly)
+        properties.set(prop.name, {
+          name: prop.name,
+          prop_type,
+          is_optional: false,
+          is_readonly: has_readonly,
+        })
+      }
+      MethodDeclaration(method_decl) => {
+        let (method_type, c) = infer_method_type(checker, method_decl)
+        checker = c
+        properties.set(method_decl.name, {
+          name: method_decl.name,
+          prop_type: method_type,
+          is_optional: false,
+          is_readonly: false,
+        })
+      }
+      _ => ()
+    }
+  }
+  let (info, checker) = create_type_info(checker)
+  let class_type = Type::Object({
+    properties,
+    call_signatures: [],
+    construct_signatures: [],
+    index_signatures: [],
+    info,
+  })
+  (class_type, checker)
 }
 
 ///|

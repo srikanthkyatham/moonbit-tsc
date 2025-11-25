@@ -4139,3 +4139,26 @@ test "check const declaration" {
     Err(_) => assert_true(false)
   }
 }
+
+// ============================================================================
+// Type Error Tests - Assignment Type Mismatch
+// ============================================================================
+
+///|
+test "check class property assignment type mismatch with literal should error" {
+  // age property is declared as string, but constructor assigns a number literal
+  let result = parse_bind_and_check(
+    "class Person { age: string; constructor() { this.age = 42; } }",
+  )
+  match result {
+    Ok(_) => {
+      // This should have produced an error
+      assert_true(false)
+    }
+    Err(diagnostics) => {
+      // Expected: type error for assigning number to string
+      assert_true(diagnostics.length() > 0)
+      assert_true(diagnostics[0].message.contains("not assignable"))
+    }
+  }
+}
