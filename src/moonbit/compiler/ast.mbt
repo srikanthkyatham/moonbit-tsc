@@ -858,9 +858,19 @@ pub enum TypeKeyword {
 } derive(Show, Eq)
 
 ///|
+/// Modifier for mapped types (+, -, or unchanged)
+pub enum MappedTypeModifier {
+  Unchanged // No modifier
+  Plus      // +readonly, +?
+  Minus     // -readonly, -?
+} derive(Show, Eq)
+
+///|
 pub struct MappedType {
   type_parameter : TypeParameter
   type_node : Node?
+  readonly_modifier : MappedTypeModifier
+  optional_modifier : MappedTypeModifier
   location : SourceLocation
 } derive(Show)
 
