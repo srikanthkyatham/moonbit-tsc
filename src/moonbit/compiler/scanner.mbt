@@ -757,6 +757,7 @@ fn scan_identifier_or_keyword(
     "number" => KeywordNumber(loc)
     "string" => KeywordString(loc)
     "symbol" => KeywordSymbol(loc)
+    "object" => KeywordObject(loc)
     "void" => KeywordVoid(loc)
     "unknown" => KeywordUnknown(loc)
     "never" => KeywordNever(loc)

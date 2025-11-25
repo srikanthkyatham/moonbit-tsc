@@ -3542,3 +3542,40 @@ test "check public static readonly" {
     Err(_) => assert_true(false)
   }
 }
+
+// ============================================================================
+// Object Type Keyword Tests
+// ============================================================================
+
+///|
+test "check object type annotation" {
+  let result = parse_bind_and_check("const obj: object = {};")
+  match result {
+    Ok(typed) => {
+      assert_eq(typed.file_path, "test.ts")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "check object type in function parameter" {
+  let result = parse_bind_and_check("function process(data: object): void {}")
+  match result {
+    Ok(typed) => {
+      assert_eq(typed.file_path, "test.ts")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "check object type in union" {
+  let result = parse_bind_and_check("type Mixed = string | object;")
+  match result {
+    Ok(typed) => {
+      assert_eq(typed.file_path, "test.ts")
+    }
+    Err(_) => assert_true(false)
+  }
+}

@@ -2845,6 +2845,16 @@ fn parse_primary_type_with_readonly(parser : Parser, is_readonly : Bool) -> Resu
           advance_parser(parser),
         ),
       )
+    KeywordObject(_) =>
+      Ok(
+        (
+          Node::KeywordType(KeywordType::{
+            kind: TypeKeyword::Object,
+            location: loc,
+          }),
+          advance_parser(parser),
+        ),
+      )
     Identifier(name, _) if name == "true" || name == "false" => {
       // Boolean literal types
       let value = name == "true"
