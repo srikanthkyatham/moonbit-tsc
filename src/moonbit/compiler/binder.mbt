@@ -167,10 +167,29 @@ fn bind_statement(binder : Binder, node : Node) -> Binder {
       let binder = bind_expression(binder, if_stmt.condition)
       // Create condition flow node for the if condition
       let binder = create_condition_flow(binder, if_stmt.condition)
+      let condition_id = get_current_flow_id(binder)
+
+      // Create true branch flow and bind then statement
+      let binder = create_true_condition_flow(binder, condition_id)
       let binder = bind_statement(binder, if_stmt.then_statement)
+      let then_flow_id = get_current_flow_id(binder)
+
+      // Handle else branch if present
       match if_stmt.else_statement {
-        Some(else_stmt) => bind_statement(binder, else_stmt)
-        None => binder
+        Some(else_stmt) => {
+          // Create false branch flow and bind else statement
+          let binder = create_false_condition_flow(binder, condition_id)
+          let binder = bind_statement(binder, else_stmt)
+          let else_flow_id = get_current_flow_id(binder)
+          // Merge both branches
+          create_reducer_flow(binder, [then_flow_id, else_flow_id])
+        }
+        None => {
+          // No else branch - merge then branch with false condition
+          let binder = create_false_condition_flow(binder, condition_id)
+          let false_flow_id = get_current_flow_id(binder)
+          create_reducer_flow(binder, [then_flow_id, false_flow_id])
+        }
       }
     }
 
@@ -178,41 +197,140 @@ fn bind_statement(binder : Binder, node : Node) -> Binder {
     ForStatement(for_stmt) => {
       let binder = push_scope(binder)
       let binder = push_container(binder, ContainerKind::ForStatement)
+
+      // Bind initializer
       let binder = match for_stmt.initializer {
         Some(init) => bind_statement(binder, init)
         None => binder
       }
-      let binder = match for_stmt.condition {
+
+      // Create loop label for break/continue targets
+      let break_label_id = binder.cfg_builder.next_id
+      let continue_label_id = break_label_id + 1
+      let binder = create_loop_label_flow(binder, Some(break_label_id), Some(continue_label_id))
+
+      // Push loop context for break/continue handling
+      let cfg_builder = binder.cfg_builder.push_loop(break_label_id, continue_label_id, None)
+      let binder = { ..binder, cfg_builder }
+
+      // Bind condition
+      let (binder, condition_id) = match for_stmt.condition {
         Some(cond) => {
           let binder = bind_expression(binder, cond)
-          // Create condition flow node for the for condition
-          create_condition_flow(binder, cond)
+          let binder = create_condition_flow(binder, cond)
+          (binder, Some(get_current_flow_id(binder)))
         }
+        None => (binder, None)
+      }
+
+      // Create true branch for loop body
+      let binder = match condition_id {
+        Some(cid) => create_true_condition_flow(binder, cid)
         None => binder
       }
+
+      // Bind loop body
+      let binder = bind_statement(binder, for_stmt.statement)
+
+      // Create branch label for continue target
+      let binder = create_branch_label_flow(binder, None)
+
+      // Bind incrementor
       let binder = match for_stmt.incrementor {
         Some(inc) => bind_expression(binder, inc)
         None => binder
       }
-      let binder = bind_statement(binder, for_stmt.statement)
+
+      // Pop loop context
+      let cfg_builder = binder.cfg_builder.pop_loop()
+      let binder = { ..binder, cfg_builder }
+
+      // Create false branch for loop exit (when condition is false)
+      let binder = match condition_id {
+        Some(cid) => {
+          let body_end_flow = get_current_flow_id(binder)
+          let binder = create_false_condition_flow(binder, cid)
+          let exit_flow = get_current_flow_id(binder)
+          // Merge body continuation with exit
+          create_reducer_flow(binder, [body_end_flow, exit_flow])
+        }
+        None => binder
+      }
+
       let binder = pop_container(binder)
       pop_scope(binder)
     }
 
     // While statement
     WhileStatement(while_stmt) => {
+      // Create loop label for break/continue targets
+      let break_label_id = binder.cfg_builder.next_id
+      let continue_label_id = break_label_id + 1
+      let binder = create_loop_label_flow(binder, Some(break_label_id), Some(continue_label_id))
+
+      // Push loop context for break/continue handling
+      let cfg_builder = binder.cfg_builder.push_loop(break_label_id, continue_label_id, None)
+      let binder = { ..binder, cfg_builder }
+
+      // Bind and create condition flow
       let binder = bind_expression(binder, while_stmt.condition)
-      // Create condition flow node for the while condition
       let binder = create_condition_flow(binder, while_stmt.condition)
-      bind_statement(binder, while_stmt.statement)
+      let condition_id = get_current_flow_id(binder)
+
+      // Create true branch for loop body
+      let binder = create_true_condition_flow(binder, condition_id)
+
+      // Bind loop body
+      let binder = bind_statement(binder, while_stmt.statement)
+      let body_end_flow = get_current_flow_id(binder)
+
+      // Pop loop context
+      let cfg_builder = binder.cfg_builder.pop_loop()
+      let binder = { ..binder, cfg_builder }
+
+      // Create false branch for loop exit
+      let binder = create_false_condition_flow(binder, condition_id)
+      let exit_flow = get_current_flow_id(binder)
+
+      // Merge body continuation with exit
+      create_reducer_flow(binder, [body_end_flow, exit_flow])
     }
 
     // Do-while statement
     DoWhileStatement(do_stmt) => {
+      // Create loop label for break/continue targets
+      let break_label_id = binder.cfg_builder.next_id
+      let continue_label_id = break_label_id + 1
+      let binder = create_loop_label_flow(binder, Some(break_label_id), Some(continue_label_id))
+
+      // Push loop context for break/continue handling
+      let cfg_builder = binder.cfg_builder.push_loop(break_label_id, continue_label_id, None)
+      let binder = { ..binder, cfg_builder }
+
+      // Bind loop body first (do-while executes body before checking condition)
       let binder = bind_statement(binder, do_stmt.statement)
+
+      // Create branch label for continue target
+      let binder = create_branch_label_flow(binder, None)
+
+      // Bind and create condition flow
       let binder = bind_expression(binder, do_stmt.condition)
-      // Create condition flow node for the do-while condition
-      create_condition_flow(binder, do_stmt.condition)
+      let binder = create_condition_flow(binder, do_stmt.condition)
+      let condition_id = get_current_flow_id(binder)
+
+      // Pop loop context
+      let cfg_builder = binder.cfg_builder.pop_loop()
+      let binder = { ..binder, cfg_builder }
+
+      // Create true branch (loops back) and false branch (exits)
+      let binder = create_true_condition_flow(binder, condition_id)
+      let loop_back_flow = get_current_flow_id(binder)
+
+      let binder = create_false_condition_flow(binder, condition_id)
+      let exit_flow = get_current_flow_id(binder)
+
+      // Merge loop back with exit
+      create_reducer_flow(binder, [loop_back_flow, exit_flow])
     }
 
     // Switch statement
@@ -286,13 +404,17 @@ fn bind_statement(binder : Binder, node : Node) -> Binder {
     }
 
     // Break statement
-    BreakStatement(_) => {
+    BreakStatement(break_stmt) => {
+      // Create branch label flow for the break target
+      let binder = create_branch_label_flow(binder, break_stmt.label)
       // After break, code is unreachable
       create_unreachable_flow(binder)
     }
 
     // Continue statement
-    ContinueStatement(_) => {
+    ContinueStatement(continue_stmt) => {
+      // Create branch label flow for the continue target
+      let binder = create_branch_label_flow(binder, continue_stmt.label)
       // After continue, code is unreachable
       create_unreachable_flow(binder)
     }
@@ -1001,8 +1123,10 @@ fn create_unreachable_flow(binder : Binder) -> Binder {
 }
 
 ///|
-/// Create a FlowEnd node and update the binder's current flow
-fn create_end_flow(binder : Binder) -> Binder {
+/// Create a FlowEnd node and update the binder's current flow.
+/// This can be used for creating intermediate end nodes in complex control flow.
+/// Note: CFGBuilder::build() automatically creates the final end node.
+pub fn create_end_flow(binder : Binder) -> Binder {
   let id = binder.cfg_builder.next_id
   let antecedent = binder.cfg_builder.current_flow
   let flow_end = FlowEnd::{ antecedent, id }
@@ -1087,8 +1211,11 @@ fn create_throw_flow(binder : Binder, node : Node) -> Binder {
 }
 
 ///|
-/// Create a FlowNarrowing node for type narrowing
-fn create_narrowing_flow(
+/// Create a FlowNarrowing node for type narrowing.
+/// This is used during type checking to record type narrowing at specific
+/// control flow points (e.g., after typeof checks, instanceof checks, etc.).
+/// The checker should call this when it determines a type guard narrows a type.
+pub fn create_narrowing_flow(
   binder : Binder,
   expression : Node,
   narrowed_symbol : Int,

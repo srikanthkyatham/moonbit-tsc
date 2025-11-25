@@ -1030,3 +1030,408 @@ test "switch statement with expression in cases" {
     Err(_) => assert_true(false)
   }
 }
+
+// ============================================================================
+// Control Flow Branch Tests (True/False Condition Flows)
+// ============================================================================
+
+///|
+test "if statement creates true and false branch flows" {
+  let source = "function test(x: boolean) { if (x) { return 1; } else { return 2; } }"
+  match parse_and_bind(source) {
+    Ok(bound_file) => {
+      let cfg = bound_file.control_flow_graph
+      // Should have: start, condition, true branch, false branch, returns, reducer, end
+      // At minimum we need condition + branches + end
+      assert_true(cfg.nodes.length() >= 5)
+
+      // Check that we have TrueCondition and FalseCondition nodes
+      let mut has_true_condition = false
+      let mut has_false_condition = false
+      for i = 0; i < cfg.nodes.length(); i = i + 1 {
+        match cfg.nodes[i] {
+          TrueCondition(_) => has_true_condition = true
+          FalseCondition(_) => has_false_condition = true
+          _ => ()
+        }
+      }
+      assert_true(has_true_condition)
+      assert_true(has_false_condition)
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "if statement without else creates branches" {
+  let source = "function test(x: boolean) { if (x) { console.log('yes'); } return 0; }"
+  match parse_and_bind(source) {
+    Ok(bound_file) => {
+      let cfg = bound_file.control_flow_graph
+      // Should have condition and branches even without else
+      assert_true(cfg.nodes.length() >= 4)
+
+      // Should have both true and false condition nodes
+      let mut has_true_condition = false
+      let mut has_false_condition = false
+      for i = 0; i < cfg.nodes.length(); i = i + 1 {
+        match cfg.nodes[i] {
+          TrueCondition(_) => has_true_condition = true
+          FalseCondition(_) => has_false_condition = true
+          _ => ()
+        }
+      }
+      assert_true(has_true_condition)
+      assert_true(has_false_condition)
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "nested if statements create multiple branch flows" {
+  let source = "function test(a: boolean, b: boolean) { if (a) { if (b) { return 1; } return 2; } return 3; }"
+  match parse_and_bind(source) {
+    Ok(bound_file) => {
+      let cfg = bound_file.control_flow_graph
+      // Should have multiple condition and branch nodes
+      assert_true(cfg.nodes.length() >= 6)
+
+      // Count TrueCondition nodes - should have at least 2 (one for each if)
+      let mut true_count = 0
+      for i = 0; i < cfg.nodes.length(); i = i + 1 {
+        match cfg.nodes[i] {
+          TrueCondition(_) => true_count = true_count + 1
+          _ => ()
+        }
+      }
+      assert_true(true_count >= 2)
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+// ============================================================================
+// Loop Control Flow Tests (Loop Labels and Branch Labels)
+// ============================================================================
+
+///|
+test "for loop creates loop label flow" {
+  let source = "for (let i = 0; i < 10; i++) { console.log(i); }"
+  match parse_and_bind(source) {
+    Ok(bound_file) => {
+      let cfg = bound_file.control_flow_graph
+      // Should have loop-related flow nodes
+      assert_true(cfg.nodes.length() >= 4)
+
+      // Check for LoopLabel node
+      let mut has_loop_label = false
+      for i = 0; i < cfg.nodes.length(); i = i + 1 {
+        match cfg.nodes[i] {
+          LoopLabel(_) => has_loop_label = true
+          _ => ()
+        }
+      }
+      assert_true(has_loop_label)
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "while loop creates loop label flow" {
+  let source = "let i = 0; while (i < 10) { i++; }"
+  match parse_and_bind(source) {
+    Ok(bound_file) => {
+      let cfg = bound_file.control_flow_graph
+      // Should have loop-related flow nodes
+      assert_true(cfg.nodes.length() >= 4)
+
+      // Check for LoopLabel node
+      let mut has_loop_label = false
+      for i = 0; i < cfg.nodes.length(); i = i + 1 {
+        match cfg.nodes[i] {
+          LoopLabel(_) => has_loop_label = true
+          _ => ()
+        }
+      }
+      assert_true(has_loop_label)
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "do-while loop creates loop label flow" {
+  let source = "let i = 0; do { i++; } while (i < 10);"
+  match parse_and_bind(source) {
+    Ok(bound_file) => {
+      let cfg = bound_file.control_flow_graph
+      // Should have loop-related flow nodes
+      assert_true(cfg.nodes.length() >= 4)
+
+      // Check for LoopLabel node
+      let mut has_loop_label = false
+      for i = 0; i < cfg.nodes.length(); i = i + 1 {
+        match cfg.nodes[i] {
+          LoopLabel(_) => has_loop_label = true
+          _ => ()
+        }
+      }
+      assert_true(has_loop_label)
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "break statement creates branch label flow" {
+  let source = "for (let i = 0; i < 10; i++) { if (i === 5) break; }"
+  match parse_and_bind(source) {
+    Ok(bound_file) => {
+      let cfg = bound_file.control_flow_graph
+      // Should have branch label for break
+      assert_true(cfg.nodes.length() >= 5)
+
+      // Check for BranchLabel node
+      let mut has_branch_label = false
+      for i = 0; i < cfg.nodes.length(); i = i + 1 {
+        match cfg.nodes[i] {
+          BranchLabel(_) => has_branch_label = true
+          _ => ()
+        }
+      }
+      assert_true(has_branch_label)
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "continue statement creates branch label flow" {
+  let source = "for (let i = 0; i < 10; i++) { if (i === 5) continue; console.log(i); }"
+  match parse_and_bind(source) {
+    Ok(bound_file) => {
+      let cfg = bound_file.control_flow_graph
+      // Should have branch label for continue
+      assert_true(cfg.nodes.length() >= 5)
+
+      // Check for BranchLabel node
+      let mut has_branch_label = false
+      for i = 0; i < cfg.nodes.length(); i = i + 1 {
+        match cfg.nodes[i] {
+          BranchLabel(_) => has_branch_label = true
+          _ => ()
+        }
+      }
+      assert_true(has_branch_label)
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "labeled break statement creates branch label with name" {
+  let source = "outer: for (let i = 0; i < 10; i++) { for (let j = 0; j < 10; j++) { if (i * j > 25) break outer; } }"
+  match parse_and_bind(source) {
+    Ok(bound_file) => {
+      let cfg = bound_file.control_flow_graph
+      // Should have labeled branch flows
+      assert_true(cfg.nodes.length() >= 6)
+
+      // Check for Label and BranchLabel nodes
+      let mut has_label = false
+      let mut has_branch_label = false
+      for i = 0; i < cfg.nodes.length(); i = i + 1 {
+        match cfg.nodes[i] {
+          Label(_) => has_label = true
+          BranchLabel(_) => has_branch_label = true
+          _ => ()
+        }
+      }
+      assert_true(has_label)
+      assert_true(has_branch_label)
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+// ============================================================================
+// Reducer Flow Tests (Merging Control Flow Paths)
+// ============================================================================
+
+///|
+test "if-else creates reducer flow to merge branches" {
+  let source = "function test(x: boolean) { let result: number; if (x) { result = 1; } else { result = 2; } return result; }"
+  match parse_and_bind(source) {
+    Ok(bound_file) => {
+      let cfg = bound_file.control_flow_graph
+      // Should have reducer node to merge branches
+      assert_true(cfg.nodes.length() >= 6)
+
+      // Check for Reducer node
+      let mut has_reducer = false
+      for i = 0; i < cfg.nodes.length(); i = i + 1 {
+        match cfg.nodes[i] {
+          Reducer(_) => has_reducer = true
+          _ => ()
+        }
+      }
+      assert_true(has_reducer)
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "for loop creates reducer flow for loop exit" {
+  let source = "for (let i = 0; i < 10; i++) { console.log(i); } console.log('done');"
+  match parse_and_bind(source) {
+    Ok(bound_file) => {
+      let cfg = bound_file.control_flow_graph
+      // Should have reducer for merging loop body with exit
+      assert_true(cfg.nodes.length() >= 5)
+
+      // Check for Reducer node
+      let mut has_reducer = false
+      for i = 0; i < cfg.nodes.length(); i = i + 1 {
+        match cfg.nodes[i] {
+          Reducer(_) => has_reducer = true
+          _ => ()
+        }
+      }
+      assert_true(has_reducer)
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "while loop creates reducer flow" {
+  let source = "let i = 0; while (i < 10) { i++; } console.log(i);"
+  match parse_and_bind(source) {
+    Ok(bound_file) => {
+      let cfg = bound_file.control_flow_graph
+      // Should have reducer for while loop
+      assert_true(cfg.nodes.length() >= 5)
+
+      // Check for Reducer node
+      let mut has_reducer = false
+      for i = 0; i < cfg.nodes.length(); i = i + 1 {
+        match cfg.nodes[i] {
+          Reducer(_) => has_reducer = true
+          _ => ()
+        }
+      }
+      assert_true(has_reducer)
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "do-while loop creates reducer flow" {
+  let source = "let i = 0; do { i++; } while (i < 10); console.log(i);"
+  match parse_and_bind(source) {
+    Ok(bound_file) => {
+      let cfg = bound_file.control_flow_graph
+      // Should have reducer for do-while loop
+      assert_true(cfg.nodes.length() >= 5)
+
+      // Check for Reducer node
+      let mut has_reducer = false
+      for i = 0; i < cfg.nodes.length(); i = i + 1 {
+        match cfg.nodes[i] {
+          Reducer(_) => has_reducer = true
+          _ => ()
+        }
+      }
+      assert_true(has_reducer)
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+// ============================================================================
+// Complex Control Flow Tests
+// ============================================================================
+
+///|
+test "multiple loops with break/continue create proper flow" {
+  let source = "for (let i = 0; i < 5; i++) { for (let j = 0; j < 5; j++) { if (j === 2) continue; if (i * j > 10) break; } }"
+  match parse_and_bind(source) {
+    Ok(bound_file) => {
+      let cfg = bound_file.control_flow_graph
+      // Should have multiple loop labels, branch labels, and conditions
+      assert_true(cfg.nodes.length() >= 8)
+
+      // Count LoopLabel nodes - should have 2 (one for each for loop)
+      let mut loop_count = 0
+      for i = 0; i < cfg.nodes.length(); i = i + 1 {
+        match cfg.nodes[i] {
+          LoopLabel(_) => loop_count = loop_count + 1
+          _ => ()
+        }
+      }
+      assert_true(loop_count >= 2)
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "ternary expression creates condition flow" {
+  let source = "function test(x: boolean) { return x ? 1 : 2; }"
+  match parse_and_bind(source) {
+    Ok(bound_file) => {
+      let cfg = bound_file.control_flow_graph
+      // Should have condition flow for ternary
+      assert_true(cfg.nodes.length() >= 3)
+
+      // Check for Condition node
+      let mut has_condition = false
+      for i = 0; i < cfg.nodes.length(); i = i + 1 {
+        match cfg.nodes[i] {
+          Condition(_) => has_condition = true
+          _ => ()
+        }
+      }
+      assert_true(has_condition)
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "complex function with all control flow constructs" {
+  let source = "function complex(n: number) { let sum = 0; for (let i = 0; i < n; i++) { if (i % 2 === 0) { sum += i; } else { continue; } if (sum > 100) { break; } } while (sum > 50) { sum -= 10; } return sum; }"
+  match parse_and_bind(source) {
+    Ok(bound_file) => {
+      let cfg = bound_file.control_flow_graph
+      // Should have comprehensive flow graph
+      assert_true(cfg.nodes.length() >= 10)
+
+      // Verify multiple flow node types exist
+      let mut has_condition = false
+      let mut has_loop_label = false
+      let mut has_branch_label = false
+      let mut has_reducer = false
+
+      for i = 0; i < cfg.nodes.length(); i = i + 1 {
+        match cfg.nodes[i] {
+          Condition(_) => has_condition = true
+          LoopLabel(_) => has_loop_label = true
+          BranchLabel(_) => has_branch_label = true
+          Reducer(_) => has_reducer = true
+          _ => ()
+        }
+      }
+
+      assert_true(has_condition)
+      assert_true(has_loop_label)
+      assert_true(has_branch_label)
+      assert_true(has_reducer)
+    }
+    Err(_) => assert_true(false)
+  }
+}
