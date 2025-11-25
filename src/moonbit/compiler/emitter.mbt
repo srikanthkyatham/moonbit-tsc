@@ -225,6 +225,9 @@ pub fn emit(node : Node, ctx : EmitterContext) -> String {
     JsxClosingElement(_) => ""  // TODO: Implement JSX to JS transformation
     JsxExpression(_) => ""  // TODO: Implement JSX to JS transformation
     JsxText(_) => ""  // TODO: Implement JSX to JS transformation
+
+    // JSDoc - preserved as comments or stripped
+    JSDocComment(jsdoc) => emit_jsdoc_comment(jsdoc)
   }
 }
 
@@ -1423,4 +1426,11 @@ fn escape_string(s : String) -> String {
     .replace(old="\n", new="\\n")
     .replace(old="\r", new="\\r")
     .replace(old="\t", new="\\t")
+}
+
+///|
+/// Emit JSDoc comment - preserve as multi-line comment
+fn emit_jsdoc_comment(jsdoc : JSDocComment) -> String {
+  // Preserve JSDoc comments in output for documentation tools
+  "/**" + jsdoc.comment + "*/"
 }

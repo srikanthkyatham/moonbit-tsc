@@ -175,6 +175,9 @@ pub enum Token {
   // Decorator
   At(SourceLocation) // @
 
+  // JSDoc
+  JSDocComment(String, SourceLocation) // /** ... */
+
   // Special
   EOF(SourceLocation)
   Unknown(String, SourceLocation)
@@ -334,6 +337,7 @@ pub fn Token::location(self : Token) -> SourceLocation {
     | LessThanSlash(loc)
     | SlashGreaterThan(loc)
     | At(loc)
+    | JSDocComment(_, loc)
     | EOF(loc)
     | Unknown(_, loc) => loc
   }

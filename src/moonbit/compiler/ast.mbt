@@ -116,6 +116,9 @@ pub enum Node {
   JsxClosingElement(JsxClosingElement)
   JsxExpression(JsxExpression)
   JsxText(JsxText)
+
+  // JSDoc
+  JSDocComment(JSDocComment)
 } derive(Show)
 
 ///|
@@ -1138,6 +1141,231 @@ pub enum JsxChild {
 } derive(Show)
 
 ///|
+/// JSDoc comment block
+pub struct JSDocComment {
+  comment : String                     // Full comment text
+  tags : Array[JSDocTag]               // Parsed tags
+  location : SourceLocation
+} derive(Show)
+
+///|
+/// JSDoc tag types
+pub enum JSDocTag {
+  /// @param {type} name description
+  Param(JSDocParam)
+  /// @returns {type} description
+  Returns(JSDocReturns)
+  /// @type {type}
+  Type(JSDocTypeTag)
+  /// @typedef {type} name
+  TypeDef(JSDocTypeDef)
+  /// @property {type} name description
+  Property(JSDocProperty)
+  /// @callback name
+  Callback(JSDocCallback)
+  /// @template T
+  Template(JSDocTemplate)
+  /// @deprecated description
+  Deprecated(JSDocDeprecated)
+  /// @example description
+  Example(JSDocExample)
+  /// @see reference
+  See(JSDocSee)
+  /// @throws {type} description
+  Throws(JSDocThrows)
+  /// @author name
+  Author(JSDocAuthor)
+  /// @since version
+  Since(JSDocSince)
+  /// @default value
+  Default(JSDocDefault)
+  /// @readonly
+  Readonly(SourceLocation)
+  /// @override
+  Override(SourceLocation)
+  /// @public
+  Public(SourceLocation)
+  /// @private
+  Private(SourceLocation)
+  /// @protected
+  Protected(SourceLocation)
+  /// Generic/unknown tag
+  Unknown(String, String, SourceLocation)  // tag name, content, location
+} derive(Show)
+
+///|
+/// JSDoc @param tag
+pub struct JSDocParam {
+  name : String
+  type_annotation : Option[String]
+  description : String
+  is_optional : Bool
+  location : SourceLocation
+} derive(Show)
+
+///|
+/// JSDoc @returns tag
+pub struct JSDocReturns {
+  type_annotation : Option[String]
+  description : String
+  location : SourceLocation
+} derive(Show)
+
+///|
+/// JSDoc @type tag
+pub struct JSDocTypeTag {
+  type_annotation : String
+  location : SourceLocation
+} derive(Show)
+
+///|
+/// JSDoc @typedef tag
+pub struct JSDocTypeDef {
+  name : String
+  type_annotation : String
+  description : String
+  location : SourceLocation
+} derive(Show)
+
+///|
+/// JSDoc @property tag
+pub struct JSDocProperty {
+  name : String
+  type_annotation : Option[String]
+  description : String
+  is_optional : Bool
+  location : SourceLocation
+} derive(Show)
+
+///|
+/// JSDoc @callback tag
+pub struct JSDocCallback {
+  name : String
+  params : Array[JSDocParam]
+  returns : Option[JSDocReturns]
+  location : SourceLocation
+} derive(Show)
+
+///|
+/// JSDoc @template tag
+pub struct JSDocTemplate {
+  type_params : Array[String]
+  constraint : Option[String]
+  location : SourceLocation
+} derive(Show)
+
+///|
+/// JSDoc @deprecated tag
+pub struct JSDocDeprecated {
+  description : String
+  location : SourceLocation
+} derive(Show)
+
+///|
+/// JSDoc @example tag
+pub struct JSDocExample {
+  content : String
+  location : SourceLocation
+} derive(Show)
+
+///|
+/// JSDoc @see tag
+pub struct JSDocSee {
+  reference : String
+  location : SourceLocation
+} derive(Show)
+
+///|
+/// JSDoc @throws tag
+pub struct JSDocThrows {
+  type_annotation : Option[String]
+  description : String
+  location : SourceLocation
+} derive(Show)
+
+///|
+/// JSDoc @author tag
+pub struct JSDocAuthor {
+  name : String
+  location : SourceLocation
+} derive(Show)
+
+///|
+/// JSDoc @since tag
+pub struct JSDocSince {
+  version : String
+  location : SourceLocation
+} derive(Show)
+
+///|
+/// JSDoc @default tag
+pub struct JSDocDefault {
+  value : String
+  location : SourceLocation
+} derive(Show)
+
+// ============================================================================
+// Incremental Parsing Support
+// ============================================================================
+
+///|
+/// Represents a change range in the source text
+pub struct TextChangeRange {
+  span : TextSpan                   // The span of text that was changed
+  new_length : Int                  // Length of the new text that replaced the span
+} derive(Show)
+
+///|
+/// Represents a span of text in the source
+pub struct TextSpan {
+  start : Int                       // Start position (character offset)
+  length : Int                      // Length of the span
+} derive(Show)
+
+///|
+/// Create a new TextSpan
+pub fn TextSpan::new(start : Int, length : Int) -> TextSpan {
+  { start, length }
+}
+
+///|
+/// Get the end position of a TextSpan
+pub fn TextSpan::end(self : TextSpan) -> Int {
+  self.start + self.length
+}
+
+///|
+/// Check if a position is within this span
+pub fn TextSpan::contains(self : TextSpan, position : Int) -> Bool {
+  position >= self.start && position < self.end()
+}
+
+///|
+/// Check if two spans overlap
+pub fn TextSpan::overlaps(self : TextSpan, other : TextSpan) -> Bool {
+  self.start < other.end() && other.start < self.end()
+}
+
+///|
+/// Create a new TextChangeRange
+pub fn TextChangeRange::new(span : TextSpan, new_length : Int) -> TextChangeRange {
+  { span, new_length }
+}
+
+///|
+/// Get the change delta (difference between new and old length)
+pub fn TextChangeRange::delta(self : TextChangeRange) -> Int {
+  self.new_length - self.span.length
+}
+
+///|
+/// Incremental parse result containing both the AST and change tracking info
+pub struct IncrementalParseResult {
+  source_file : Node                // The parsed source file
+  affected_range : TextSpan?        // The range that was re-parsed (None if full reparse)
+} derive(Show)
+
+///|
 /// Modifiers
 #valtype
 pub enum Modifier {
@@ -1251,5 +1479,6 @@ pub fn get_location(node : Node) -> SourceLocation {
     JsxClosingElement(j) => j.location
     JsxExpression(j) => j.location
     JsxText(j) => j.location
+    JSDocComment(j) => j.location
   }
 }

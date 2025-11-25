@@ -7341,3 +7341,1009 @@ fn matches_arrow(token : Token) -> Bool {
     _ => false
   }
 }
+
+// ============================================================================
+// JSON Parsing
+// ============================================================================
+
+///|
+/// Parsing mode for different file types
+pub enum ParserMode {
+  TypeScript   // Full TypeScript/JavaScript
+  JSON         // JSON only (strict)
+  JSONC        // JSON with comments
+} derive(Show, Eq)
+
+///|
+/// Parse a JSON file
+pub fn parse_json(
+  tokens : Array[Token],
+  file_path : String,
+) -> ParseResult[Node] {
+  let parser = Parser::new(tokens)
+  match parse_json_value(parser) {
+    Ok((node, parser)) => {
+      // Check for trailing content
+      if not(is_at_end(parser)) {
+        let loc = current_token(parser).location()
+        let parser = add_error(parser, "Unexpected content after JSON value", loc)
+        Err(parser.diagnostics)
+      } else if parser.diagnostics.length() > 0 {
+        Err(parser.diagnostics)
+      } else {
+        Ok(node)
+      }
+    }
+    Err(parser) => Err(parser.diagnostics)
+  }
+}
+
+///|
+/// Parse a JSONC file (JSON with comments)
+pub fn parse_jsonc(
+  tokens : Array[Token],
+  file_path : String,
+) -> ParseResult[Node] {
+  // JSONC is the same as JSON but the scanner should have already stripped comments
+  parse_json(tokens, file_path)
+}
+
+///|
+/// Parse a JSON value (object, array, string, number, boolean, null)
+fn parse_json_value(parser : Parser) -> Result[(Node, Parser), Parser] {
+  let token = current_token(parser)
+  let loc = token.location()
+
+  match token {
+    // Object: { }
+    OpenBrace(_) => parse_json_object(parser)
+
+    // Array: [ ]
+    OpenBracket(_) => parse_json_array(parser)
+
+    // String
+    StringLiteral(value, _) => {
+      let parser = advance_parser(parser)
+      Ok((Node::StringLiteral(StringLiteral::{ value, location: loc }), parser))
+    }
+
+    // Number
+    NumericLiteral(value, _) => {
+      let parser = advance_parser(parser)
+      Ok((Node::NumericLiteral(NumericLiteral::{ value, location: loc }), parser))
+    }
+
+    // Negative number
+    Minus(_) => {
+      let parser = advance_parser(parser)
+      match current_token(parser) {
+        NumericLiteral(value, _) => {
+          let parser = advance_parser(parser)
+          // Store as negative number by prepending "-" to the string value
+          Ok((Node::NumericLiteral(NumericLiteral::{ value: "-" + value, location: loc }), parser))
+        }
+        _ => Err(add_error(parser, "Expected number after '-' in JSON", loc))
+      }
+    }
+
+    // Null
+    KeywordNull(_) => {
+      let parser = advance_parser(parser)
+      Ok((Node::NullLiteral(NullLiteral::{ location: loc }), parser))
+    }
+
+    // Boolean and null as identifiers (true, false, null)
+    Identifier(name, _) => {
+      match name {
+        "true" => {
+          let parser = advance_parser(parser)
+          Ok((Node::BooleanLiteral(BooleanLiteral::{ value: true, location: loc }), parser))
+        }
+        "false" => {
+          let parser = advance_parser(parser)
+          Ok((Node::BooleanLiteral(BooleanLiteral::{ value: false, location: loc }), parser))
+        }
+        "null" => {
+          let parser = advance_parser(parser)
+          Ok((Node::NullLiteral(NullLiteral::{ location: loc }), parser))
+        }
+        _ => Err(add_error(parser, "Unexpected identifier in JSON: " + name, loc))
+      }
+    }
+
+    EOF(_) => Err(add_error(parser, "Unexpected end of file, expected JSON value", loc))
+
+    _ => Err(add_error(parser, "Expected JSON value", loc))
+  }
+}
+
+///|
+/// Parse a JSON object: { "key": value, ... }
+fn parse_json_object(parser : Parser) -> Result[(Node, Parser), Parser] {
+  let start_loc = current_token(parser).location()
+  let parser = advance_parser(parser)  // Skip {
+
+  let properties : Array[ObjectProperty] = []
+  let mut parser = parser
+
+  // Handle empty object
+  if matches_close_brace(current_token(parser)) {
+    let parser = advance_parser(parser)
+    return Ok((Node::ObjectLiteralExpression(ObjectLiteralExpression::{
+      properties,
+      location: start_loc,
+    }), parser))
+  }
+
+  while not(is_at_end(parser)) {
+    // Property name must be a string
+    match current_token(parser) {
+      StringLiteral(name, name_loc) => {
+        parser = advance_parser(parser)
+
+        // Expect :
+        match current_token(parser) {
+          Colon(_) => parser = advance_parser(parser)
+          _ => {
+            let loc = current_token(parser).location()
+            return Err(add_error(parser, "Expected ':' after property name in JSON object", loc))
+          }
+        }
+
+        // Parse value
+        match parse_json_value(parser) {
+          Ok((value, p)) => {
+            parser = p
+            properties.push(ObjectProperty::PropertyAssignment(name, value, name_loc))
+          }
+          Err(p) => return Err(p)
+        }
+
+        // Check for comma or closing brace
+        match current_token(parser) {
+          Comma(_) => {
+            parser = advance_parser(parser)
+            // Check for trailing comma (not allowed in strict JSON)
+            if matches_close_brace(current_token(parser)) {
+              let loc = current_token(parser).location()
+              let parser = add_error(parser, "Trailing comma not allowed in JSON", loc)
+              // Continue anyway to be lenient
+              let parser = advance_parser(parser)
+              return Ok((Node::ObjectLiteralExpression(ObjectLiteralExpression::{
+                properties,
+                location: start_loc,
+              }), parser))
+            }
+          }
+          CloseBrace(_) => {
+            let parser = advance_parser(parser)
+            return Ok((Node::ObjectLiteralExpression(ObjectLiteralExpression::{
+              properties,
+              location: start_loc,
+            }), parser))
+          }
+          _ => {
+            let loc = current_token(parser).location()
+            return Err(add_error(parser, "Expected ',' or '}' in JSON object", loc))
+          }
+        }
+      }
+      CloseBrace(_) => {
+        // Empty object or trailing comma handled
+        let parser = advance_parser(parser)
+        return Ok((Node::ObjectLiteralExpression(ObjectLiteralExpression::{
+          properties,
+          location: start_loc,
+        }), parser))
+      }
+      _ => {
+        let loc = current_token(parser).location()
+        return Err(add_error(parser, "Expected string property name in JSON object", loc))
+      }
+    }
+  }
+
+  Err(add_error(parser, "Unexpected end of file in JSON object", start_loc))
+}
+
+///|
+/// Parse a JSON array: [ value, ... ]
+fn parse_json_array(parser : Parser) -> Result[(Node, Parser), Parser] {
+  let start_loc = current_token(parser).location()
+  let parser = advance_parser(parser)  // Skip [
+
+  let elements : Array[Node?] = []
+  let mut parser = parser
+
+  // Handle empty array
+  if matches_close_bracket(current_token(parser)) {
+    let parser = advance_parser(parser)
+    return Ok((Node::ArrayLiteralExpression(ArrayLiteralExpression::{
+      elements,
+      location: start_loc,
+    }), parser))
+  }
+
+  while not(is_at_end(parser)) {
+    // Parse value
+    match parse_json_value(parser) {
+      Ok((value, p)) => {
+        parser = p
+        elements.push(Some(value))
+      }
+      Err(p) => return Err(p)
+    }
+
+    // Check for comma or closing bracket
+    match current_token(parser) {
+      Comma(_) => {
+        parser = advance_parser(parser)
+        // Check for trailing comma (not allowed in strict JSON)
+        if matches_close_bracket(current_token(parser)) {
+          let loc = current_token(parser).location()
+          let parser = add_error(parser, "Trailing comma not allowed in JSON", loc)
+          // Continue anyway to be lenient
+          let parser = advance_parser(parser)
+          return Ok((Node::ArrayLiteralExpression(ArrayLiteralExpression::{
+            elements,
+            location: start_loc,
+          }), parser))
+        }
+      }
+      CloseBracket(_) => {
+        let parser = advance_parser(parser)
+        return Ok((Node::ArrayLiteralExpression(ArrayLiteralExpression::{
+          elements,
+          location: start_loc,
+        }), parser))
+      }
+      _ => {
+        let loc = current_token(parser).location()
+        return Err(add_error(parser, "Expected ',' or ']' in JSON array", loc))
+      }
+    }
+  }
+
+  Err(add_error(parser, "Unexpected end of file in JSON array", start_loc))
+}
+
+// ============================================================================
+// JSDoc Parsing
+// ============================================================================
+
+///|
+/// Parse a JSDoc comment into structured tags
+fn parse_jsdoc_comment(content : String, loc : SourceLocation) -> JSDocComment {
+  let tags : Array[JSDocTag] = []
+  let lines = split_jsdoc_lines(content)
+
+  let mut i = 0
+  while i < lines.length() {
+    let line = lines[i]
+    let trimmed = trim_jsdoc_line(line)
+
+    // Check for tag at start
+    if trimmed.has_prefix("@") {
+      match parse_jsdoc_tag(trimmed, loc) {
+        Some(tag) => tags.push(tag)
+        None => ()
+      }
+    }
+    i = i + 1
+  }
+
+  JSDocComment::{ comment: content, tags, location: loc }
+}
+
+///|
+/// Split JSDoc content into lines
+fn split_jsdoc_lines(content : String) -> Array[String] {
+  let lines : Array[String] = []
+  let mut current = ""
+  let mut i = 0
+  while i < content.length() {
+    match content.get(i) {
+      Some(ch) => {
+        let c = Char::from_int(ch)
+        if c == '\n' {
+          lines.push(current)
+          current = ""
+        } else {
+          current = current + Char::to_string(c)
+        }
+      }
+      None => ()
+    }
+    i = i + 1
+  }
+  if current.length() > 0 {
+    lines.push(current)
+  }
+  lines
+}
+
+///|
+/// Trim leading/trailing whitespace and leading * from JSDoc line
+fn trim_jsdoc_line(line : String) -> String {
+  let mut result = ""
+  let mut started = false
+  let mut past_star = false
+  let mut i = 0
+
+  while i < line.length() {
+    match line.get(i) {
+      Some(ch) => {
+        let c = Char::from_int(ch)
+        if not(started) {
+          if c == ' ' || c == '\t' || c == '\r' {
+            // skip leading whitespace
+            ()
+          } else if c == '*' && not(past_star) {
+            past_star = true
+          } else {
+            started = true
+            result = result + Char::to_string(c)
+          }
+        } else {
+          result = result + Char::to_string(c)
+        }
+      }
+      None => ()
+    }
+    i = i + 1
+  }
+
+  // Trim trailing whitespace
+  trim_trailing_whitespace(result)
+}
+
+///|
+/// Trim trailing whitespace from string
+fn trim_trailing_whitespace(s : String) -> String {
+  let mut end = s.length()
+  while end > 0 {
+    match s.get(end - 1) {
+      Some(ch) => {
+        let c = Char::from_int(ch)
+        if c == ' ' || c == '\t' || c == '\r' {
+          end = end - 1
+        } else {
+          break
+        }
+      }
+      None => break
+    }
+  }
+  s.substring(start=0, end=end)
+}
+
+///|
+/// Parse a single JSDoc tag
+fn parse_jsdoc_tag(line : String, loc : SourceLocation) -> JSDocTag? {
+  // Extract tag name (after @)
+  let tag_end = find_whitespace_or_end(line, 1)
+  let tag_name = line.substring(start=1, end=tag_end)
+  let rest = if tag_end < line.length() {
+    trim_leading_whitespace(line.substring(start=tag_end, end=line.length()))
+  } else {
+    ""
+  }
+
+  match tag_name {
+    "param" | "arg" | "argument" => Some(parse_jsdoc_param_tag(rest, loc))
+    "returns" | "return" => Some(parse_jsdoc_returns_tag(rest, loc))
+    "type" => Some(parse_jsdoc_type_tag(rest, loc))
+    "typedef" => Some(parse_jsdoc_typedef_tag(rest, loc))
+    "property" | "prop" => Some(parse_jsdoc_property_tag(rest, loc))
+    "template" => Some(parse_jsdoc_template_tag(rest, loc))
+    "deprecated" => Some(JSDocTag::Deprecated(JSDocDeprecated::{ description: rest, location: loc }))
+    "example" => Some(JSDocTag::Example(JSDocExample::{ content: rest, location: loc }))
+    "see" => Some(JSDocTag::See(JSDocSee::{ reference: rest, location: loc }))
+    "throws" | "exception" => Some(parse_jsdoc_throws_tag(rest, loc))
+    "author" => Some(JSDocTag::Author(JSDocAuthor::{ name: rest, location: loc }))
+    "since" => Some(JSDocTag::Since(JSDocSince::{ version: rest, location: loc }))
+    "default" | "defaultvalue" => Some(JSDocTag::Default(JSDocDefault::{ value: rest, location: loc }))
+    "readonly" => Some(JSDocTag::Readonly(loc))
+    "override" => Some(JSDocTag::Override(loc))
+    "public" => Some(JSDocTag::Public(loc))
+    "private" => Some(JSDocTag::Private(loc))
+    "protected" => Some(JSDocTag::Protected(loc))
+    _ => Some(JSDocTag::Unknown(tag_name, rest, loc))
+  }
+}
+
+///|
+/// Parse @param tag
+fn parse_jsdoc_param_tag(content : String, loc : SourceLocation) -> JSDocTag {
+  let (type_annotation, rest) = extract_jsdoc_type(content)
+  let (name, is_optional, description) = extract_jsdoc_param_name(rest)
+
+  JSDocTag::Param(JSDocParam::{
+    name,
+    type_annotation,
+    description,
+    is_optional,
+    location: loc,
+  })
+}
+
+///|
+/// Parse @returns tag
+fn parse_jsdoc_returns_tag(content : String, loc : SourceLocation) -> JSDocTag {
+  let (type_annotation, description) = extract_jsdoc_type(content)
+
+  JSDocTag::Returns(JSDocReturns::{
+    type_annotation,
+    description: trim_leading_whitespace(description),
+    location: loc,
+  })
+}
+
+///|
+/// Parse @type tag
+fn parse_jsdoc_type_tag(content : String, loc : SourceLocation) -> JSDocTag {
+  let (type_annotation, _) = extract_jsdoc_type(content)
+
+  JSDocTag::Type(JSDocTypeTag::{
+    type_annotation: type_annotation.or(""),
+    location: loc,
+  })
+}
+
+///|
+/// Parse @typedef tag
+fn parse_jsdoc_typedef_tag(content : String, loc : SourceLocation) -> JSDocTag {
+  let (type_annotation, rest) = extract_jsdoc_type(content)
+  let name_end = find_whitespace_or_end(rest, 0)
+  let name = rest.substring(start=0, end=name_end)
+  let description = if name_end < rest.length() {
+    trim_leading_whitespace(rest.substring(start=name_end, end=rest.length()))
+  } else {
+    ""
+  }
+
+  JSDocTag::TypeDef(JSDocTypeDef::{
+    name,
+    type_annotation: type_annotation.or(""),
+    description,
+    location: loc,
+  })
+}
+
+///|
+/// Parse @property tag
+fn parse_jsdoc_property_tag(content : String, loc : SourceLocation) -> JSDocTag {
+  let (type_annotation, rest) = extract_jsdoc_type(content)
+  let (name, is_optional, description) = extract_jsdoc_param_name(rest)
+
+  JSDocTag::Property(JSDocProperty::{
+    name,
+    type_annotation,
+    description,
+    is_optional,
+    location: loc,
+  })
+}
+
+///|
+/// Parse @template tag
+fn parse_jsdoc_template_tag(content : String, loc : SourceLocation) -> JSDocTag {
+  // Parse type params: T, U, V or {constraint} T
+  let type_params : Array[String] = []
+  let mut constraint : String? = None
+
+  let (maybe_constraint, rest) = extract_jsdoc_type(content)
+  constraint = maybe_constraint
+
+  // Split rest by comma
+  let params_str = if constraint.is_empty() { content } else { rest }
+  let parts = split_by_comma(params_str)
+  for part in parts {
+    let trimmed = trim_leading_whitespace(part)
+    if trimmed.length() > 0 {
+      type_params.push(trimmed)
+    }
+  }
+
+  JSDocTag::Template(JSDocTemplate::{
+    type_params,
+    constraint,
+    location: loc,
+  })
+}
+
+///|
+/// Parse @throws tag
+fn parse_jsdoc_throws_tag(content : String, loc : SourceLocation) -> JSDocTag {
+  let (type_annotation, description) = extract_jsdoc_type(content)
+
+  JSDocTag::Throws(JSDocThrows::{
+    type_annotation,
+    description: trim_leading_whitespace(description),
+    location: loc,
+  })
+}
+
+///|
+/// Extract type annotation from JSDoc: {type} rest
+fn extract_jsdoc_type(content : String) -> (String?, String) {
+  let trimmed = trim_leading_whitespace(content)
+  if trimmed.has_prefix("{") {
+    // Find matching }
+    let mut depth = 0
+    let mut end = 0
+    let mut i = 0
+    while i < trimmed.length() {
+      match trimmed.get(i) {
+        Some(ch) => {
+          let c = Char::from_int(ch)
+          if c == '{' {
+            depth = depth + 1
+          } else if c == '}' {
+            depth = depth - 1
+            if depth == 0 {
+              end = i
+              break
+            }
+          }
+        }
+        None => ()
+      }
+      i = i + 1
+    }
+    if end > 1 {
+      let type_str = trimmed.substring(start=1, end=end)
+      let rest = trimmed.substring(start=end + 1, end=trimmed.length())
+      (Some(type_str), trim_leading_whitespace(rest))
+    } else {
+      (None, content)
+    }
+  } else {
+    (None, content)
+  }
+}
+
+///|
+/// Extract param name, checking for [name] optional syntax
+fn extract_jsdoc_param_name(content : String) -> (String, Bool, String) {
+  let trimmed = trim_leading_whitespace(content)
+
+  if trimmed.has_prefix("[") {
+    // Optional param: [name] or [name=default]
+    let bracket_end = find_char(trimmed, ']', 1)
+    if bracket_end > 1 {
+      let name_part = trimmed.substring(start=1, end=bracket_end)
+      // Check for default value
+      let equals_pos = find_char(name_part, '=', 0)
+      let name = if equals_pos > 0 {
+        name_part.substring(start=0, end=equals_pos)
+      } else {
+        name_part
+      }
+      let rest = trimmed.substring(start=bracket_end + 1, end=trimmed.length())
+      return (name, true, trim_leading_whitespace(rest))
+    }
+  }
+
+  // Regular param name
+  let name_end = find_whitespace_or_end(trimmed, 0)
+  let name = trimmed.substring(start=0, end=name_end)
+  let description = if name_end < trimmed.length() {
+    trim_leading_whitespace(trimmed.substring(start=name_end, end=trimmed.length()))
+  } else {
+    ""
+  }
+  (name, false, description)
+}
+
+///|
+/// Find first whitespace character or end of string
+fn find_whitespace_or_end(s : String, start : Int) -> Int {
+  let mut i = start
+  while i < s.length() {
+    match s.get(i) {
+      Some(ch) => {
+        let c = Char::from_int(ch)
+        if c == ' ' || c == '\t' || c == '\r' || c == '\n' {
+          return i
+        }
+      }
+      None => return i
+    }
+    i = i + 1
+  }
+  i
+}
+
+///|
+/// Trim leading whitespace
+fn trim_leading_whitespace(s : String) -> String {
+  let mut start = 0
+  while start < s.length() {
+    match s.get(start) {
+      Some(ch) => {
+        let c = Char::from_int(ch)
+        if c == ' ' || c == '\t' || c == '\r' {
+          start = start + 1
+        } else {
+          break
+        }
+      }
+      None => break
+    }
+  }
+  s.substring(start=start, end=s.length())
+}
+
+///|
+/// Find character in string
+fn find_char(s : String, target : Char, start : Int) -> Int {
+  let mut i = start
+  while i < s.length() {
+    match s.get(i) {
+      Some(ch) => {
+        if Char::from_int(ch) == target {
+          return i
+        }
+      }
+      None => ()
+    }
+    i = i + 1
+  }
+  -1
+}
+
+///|
+/// Split string by comma
+fn split_by_comma(s : String) -> Array[String] {
+  let parts : Array[String] = []
+  let mut current = ""
+  let mut i = 0
+  while i < s.length() {
+    match s.get(i) {
+      Some(ch) => {
+        let c = Char::from_int(ch)
+        if c == ',' {
+          parts.push(current)
+          current = ""
+        } else {
+          current = current + Char::to_string(c)
+        }
+      }
+      None => ()
+    }
+    i = i + 1
+  }
+  if current.length() > 0 {
+    parts.push(current)
+  }
+  parts
+}
+
+///|
+/// Check if optional is empty
+fn Option::is_empty[T](self : T?) -> Bool {
+  match self {
+    Some(_) => false
+    None => true
+  }
+}
+
+///|
+/// Parse JSDoc token into JSDocComment node
+pub fn parse_jsdoc_token(parser : Parser) -> (Node, Parser) {
+  match current_token(parser) {
+    JSDocComment(content, loc) => {
+      let jsdoc = parse_jsdoc_comment(content, loc)
+      let parser = advance_parser(parser)
+      (Node::JSDocComment(jsdoc), parser)
+    }
+    _ => {
+      // Should not happen, but handle gracefully
+      let loc = current_token(parser).location()
+      let empty_jsdoc = JSDocComment::{
+        comment: "",
+        tags: [],
+        location: loc,
+      }
+      (Node::JSDocComment(empty_jsdoc), parser)
+    }
+  }
+}
+
+// ============================================================================
+// Incremental Parsing
+// ============================================================================
+
+///|
+/// Helper function to parse source string to AST
+fn parse_from_source(source : String, file_path : String) -> Node? {
+  let scanner = Scanner::new(source, file_path)
+  let tokens = scan_all(scanner)
+  match parse_source_file(tokens, file_path) {
+    Ok(sf) => Some(Node::SourceFile(sf))
+    Err(_) => None
+  }
+}
+
+///|
+/// Parse source file with incremental update support
+/// If old_source_file is provided, attempts to reuse unchanged portions
+pub fn parse_incremental(
+  new_source : String,
+  file_path : String,
+  change_range : TextChangeRange?,
+  old_source_file : Node?
+) -> IncrementalParseResult {
+  // If no change range or no old source file, do a full parse
+  match (change_range, old_source_file) {
+    (None, _) | (_, None) => {
+      let result = parse_from_source(new_source, file_path)
+      match result {
+        Some(sf) => IncrementalParseResult::{
+          source_file: sf,
+          affected_range: None,
+        }
+        None => {
+          // Create empty source file on parse error
+          let eof_loc = SourceLocation::new(
+            file_path,
+            Position::new(1, 0, 0),
+            Position::new(1, 0, 0),
+          )
+          let empty_sf = SourceFile::{
+            statements: [],
+            file_path,
+            end_of_file_token: EOF(eof_loc),
+            has_no_default_lib: false,
+          }
+          IncrementalParseResult::{
+            source_file: Node::SourceFile(empty_sf),
+            affected_range: None,
+          }
+        }
+      }
+    }
+    (Some(change), Some(_old_sf)) => {
+      // Try incremental parsing
+      try_incremental_parse(new_source, file_path, change)
+    }
+  }
+}
+
+///|
+/// Attempt incremental parsing based on change range
+fn try_incremental_parse(
+  new_source : String,
+  file_path : String,
+  change_range : TextChangeRange
+) -> IncrementalParseResult {
+  // Calculate the affected range - expand to statement boundaries
+  let affected_start = find_statement_start(new_source, change_range.span.start)
+  let change_end = change_range.span.start + change_range.new_length
+  let affected_end = find_statement_end(new_source, change_end)
+
+  let affected_span = TextSpan::new(affected_start, affected_end - affected_start)
+
+  // For simplicity in this implementation, if the change is large (>20% of file),
+  // just do a full reparse
+  if affected_span.length > new_source.length() / 5 {
+    let result = parse_from_source(new_source, file_path)
+    return match result {
+      Some(sf) => IncrementalParseResult::{
+        source_file: sf,
+        affected_range: None,
+      }
+      None => {
+        let eof_loc = SourceLocation::new(
+          file_path,
+          Position::new(1, 0, 0),
+          Position::new(1, 0, 0),
+        )
+        let empty_sf = SourceFile::{
+          statements: [],
+          file_path,
+          end_of_file_token: EOF(eof_loc),
+          has_no_default_lib: false,
+        }
+        IncrementalParseResult::{
+          source_file: Node::SourceFile(empty_sf),
+          affected_range: None,
+        }
+      }
+    }
+  }
+
+  // Otherwise, parse the full file but record the affected range
+  // A more sophisticated implementation would actually reuse unchanged nodes
+  let result = parse_from_source(new_source, file_path)
+  match result {
+    Some(sf) => IncrementalParseResult::{
+      source_file: sf,
+      affected_range: Some(affected_span),
+    }
+    None => {
+      let eof_loc = SourceLocation::new(
+        file_path,
+        Position::new(1, 0, 0),
+        Position::new(1, 0, 0),
+      )
+      let empty_sf = SourceFile::{
+        statements: [],
+        file_path,
+        end_of_file_token: EOF(eof_loc),
+        has_no_default_lib: false,
+      }
+      IncrementalParseResult::{
+        source_file: Node::SourceFile(empty_sf),
+        affected_range: Some(affected_span),
+      }
+    }
+  }
+}
+
+///|
+/// Find the start of the statement containing the given position
+fn find_statement_start(source : String, position : Int) -> Int {
+  // Search backwards for a statement boundary
+  let mut pos = position
+  let mut brace_depth = 0
+  let mut paren_depth = 0
+
+  while pos > 0 {
+    match source.get(pos - 1) {
+      Some(ch) => {
+        let c = Char::from_int(ch)
+        match c {
+          '}' => brace_depth = brace_depth + 1
+          '{' => {
+            if brace_depth > 0 {
+              brace_depth = brace_depth - 1
+            } else {
+              // Found an unmatched { - go back before it
+              pos = pos - 1
+              break
+            }
+          }
+          ')' => paren_depth = paren_depth + 1
+          '(' => {
+            if paren_depth > 0 {
+              paren_depth = paren_depth - 1
+            }
+          }
+          ';' | '\n' => {
+            if brace_depth == 0 && paren_depth == 0 {
+              // Found statement boundary
+              break
+            }
+          }
+          _ => ()
+        }
+        pos = pos - 1
+      }
+      None => break
+    }
+  }
+  pos
+}
+
+///|
+/// Find the end of the statement containing the given position
+fn find_statement_end(source : String, position : Int) -> Int {
+  // Search forward for a statement boundary
+  let mut pos = position
+  let mut brace_depth = 0
+  let mut paren_depth = 0
+  let len = source.length()
+
+  while pos < len {
+    match source.get(pos) {
+      Some(ch) => {
+        let c = Char::from_int(ch)
+        match c {
+          '{' => brace_depth = brace_depth + 1
+          '}' => {
+            if brace_depth > 0 {
+              brace_depth = brace_depth - 1
+            } else {
+              // Found an unmatched } - include it
+              pos = pos + 1
+              break
+            }
+          }
+          '(' => paren_depth = paren_depth + 1
+          ')' => {
+            if paren_depth > 0 {
+              paren_depth = paren_depth - 1
+            }
+          }
+          ';' | '\n' => {
+            if brace_depth == 0 && paren_depth == 0 {
+              // Found statement boundary - include the semicolon/newline
+              pos = pos + 1
+              break
+            }
+          }
+          _ => ()
+        }
+        pos = pos + 1
+      }
+      None => break
+    }
+  }
+  pos
+}
+
+///|
+/// Apply a text change to source and get the new source
+pub fn apply_text_change(
+  old_source : String,
+  change_range : TextChangeRange,
+  new_text : String
+) -> String {
+  let span = change_range.span
+  let prefix = if span.start > 0 {
+    old_source.substring(start=0, end=span.start)
+  } else {
+    ""
+  }
+  let suffix = if span.end() < old_source.length() {
+    old_source.substring(start=span.end(), end=old_source.length())
+  } else {
+    ""
+  }
+  prefix + new_text + suffix
+}
+
+///|
+/// Create a change range for an insertion at a position
+pub fn create_insertion_change(position : Int, length : Int) -> TextChangeRange {
+  TextChangeRange::new(TextSpan::new(position, 0), length)
+}
+
+///|
+/// Create a change range for a deletion
+pub fn create_deletion_change(start : Int, length : Int) -> TextChangeRange {
+  TextChangeRange::new(TextSpan::new(start, length), 0)
+}
+
+///|
+/// Create a change range for a replacement
+pub fn create_replacement_change(start : Int, old_length : Int, new_length : Int) -> TextChangeRange {
+  TextChangeRange::new(TextSpan::new(start, old_length), new_length)
+}
+
+///|
+/// Combine multiple change ranges into a single range that covers all changes
+pub fn collapse_text_change_ranges(changes : Array[TextChangeRange]) -> TextChangeRange? {
+  if changes.length() == 0 {
+    return None
+  }
+
+  if changes.length() == 1 {
+    return Some(changes[0])
+  }
+
+  // Find the encompassing range
+  let mut start = changes[0].span.start
+  let mut end = changes[0].span.end()
+  let mut total_delta = 0
+
+  for change in changes {
+    // Apply previous deltas to get actual positions
+    let adjusted_start = change.span.start + total_delta
+    let adjusted_end = change.span.end() + total_delta
+
+    if adjusted_start < start {
+      start = adjusted_start
+    }
+    if adjusted_end > end {
+      end = adjusted_end
+    }
+
+    total_delta = total_delta + change.delta()
+  }
+
+  let final_length = (end - start) + total_delta
+  Some(TextChangeRange::new(TextSpan::new(start, end - start), final_length))
+}

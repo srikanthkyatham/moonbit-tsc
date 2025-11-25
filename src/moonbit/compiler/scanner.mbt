@@ -72,6 +72,11 @@ pub fn scan_token_with_context(scanner : Scanner, prev_token : Token?) -> (Token
     return (EOF(loc), scanner)
   }
 
+  // Check for JSDoc comment
+  if is_jsdoc_comment_start(scanner) {
+    return scan_jsdoc_comment(scanner)
+  }
+
   let start_pos = scanner.position
   let start_line = scanner.line
   let start_col = scanner.column
@@ -137,6 +142,12 @@ pub fn scan_token(scanner : Scanner) -> (Token, Scanner) {
   if scanner.position >= scanner.length {
     return (EOF(current_location(scanner)), scanner)
   }
+
+  // Check for JSDoc comment
+  if is_jsdoc_comment_start(scanner) {
+    return scan_jsdoc_comment(scanner)
+  }
+
   let ch = peek_char(scanner)
   let start_pos = scanner.position
   let start_line = scanner.line
@@ -1537,9 +1548,14 @@ fn skip_trivia(scanner : Scanner) -> Scanner {
             Some('/') =>
               // Single-line comment
               scanner = skip_single_line_comment(scanner)
-            Some('*') =>
-              // Multi-line comment
+            Some('*') => {
+              // Check if it's a JSDoc comment - don't skip those
+              if is_jsdoc_comment_start(scanner) {
+                break
+              }
+              // Regular multi-line comment
               scanner = skip_multi_line_comment(scanner)
+            }
             _ => break
           }
         } else {
@@ -1595,6 +1611,65 @@ fn skip_multi_line_comment(scanner : Scanner) -> Scanner {
     }
   }
   scanner
+}
+
+///|
+/// Check if at JSDoc comment start (/** but not /**/)
+fn is_jsdoc_comment_start(scanner : Scanner) -> Bool {
+  if scanner.position + 3 < scanner.length {
+    let c0 = scanner.source.get(scanner.position)
+    let c1 = scanner.source.get(scanner.position + 1)
+    let c2 = scanner.source.get(scanner.position + 2)
+    let c3 = scanner.source.get(scanner.position + 3)
+    // Check for /** followed by non-/ (to exclude /**/)
+    c0 == Some('/'.to_int()) &&
+    c1 == Some('*'.to_int()) &&
+    c2 == Some('*'.to_int()) &&
+    c3 != Some('/'.to_int())
+  } else {
+    false
+  }
+}
+
+///|
+/// Scan JSDoc comment and return token
+fn scan_jsdoc_comment(scanner : Scanner) -> (Token, Scanner) {
+  let start_line = scanner.line
+  let start_col = scanner.column
+  let start_pos = scanner.position
+  let mut scanner = scanner
+  let mut content = ""
+
+  // Skip "/**"
+  scanner = advance(scanner)
+  scanner = advance(scanner)
+  scanner = advance(scanner)
+
+  // Collect content until "*/"
+  while scanner.position < scanner.length {
+    let ch = peek_char(scanner)
+    if ch == '*' && scanner.position + 1 < scanner.length {
+      let next = scanner.source.get(scanner.position + 1)
+      if next == Some('/'.to_int()) {
+        scanner = advance(scanner) // Skip '*'
+        scanner = advance(scanner) // Skip '/'
+        break
+      }
+    }
+    content = content + Char::to_string(ch)
+    if ch == '\n' {
+      scanner = advance_line(scanner)
+    } else {
+      scanner = advance(scanner)
+    }
+  }
+
+  let loc = SourceLocation::new(
+    scanner.file_path,
+    Position::new(start_line, start_col, start_pos),
+    Position::new(scanner.line, scanner.column, scanner.position),
+  )
+  (JSDocComment(content, loc), scanner)
 }
 
 ///|
