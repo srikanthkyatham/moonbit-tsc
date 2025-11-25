@@ -3579,3 +3579,51 @@ test "check object type in union" {
     Err(_) => assert_true(false)
   }
 }
+
+// ============================================================================
+// Type Operator Tests (typeof, readonly)
+// ============================================================================
+
+///|
+test "check typeof type operator" {
+  let result = parse_bind_and_check("const x = 42; type T = typeof x;")
+  match result {
+    Ok(typed) => {
+      assert_eq(typed.file_path, "test.ts")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "check typeof with object" {
+  let result = parse_bind_and_check("const config = { port: 3000 }; type Config = typeof config;")
+  match result {
+    Ok(typed) => {
+      assert_eq(typed.file_path, "test.ts")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "check readonly type operator" {
+  let result = parse_bind_and_check("type ReadonlyArray = readonly number[];")
+  match result {
+    Ok(typed) => {
+      assert_eq(typed.file_path, "test.ts")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "check readonly tuple" {
+  let result = parse_bind_and_check("type Point = readonly [number, number];")
+  match result {
+    Ok(typed) => {
+      assert_eq(typed.file_path, "test.ts")
+    }
+    Err(_) => assert_true(false)
+  }
+}

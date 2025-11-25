@@ -2855,6 +2855,39 @@ fn parse_primary_type_with_readonly(parser : Parser, is_readonly : Bool) -> Resu
           advance_parser(parser),
         ),
       )
+    // typeof in type position: typeof variable
+    KeywordTypeOf(_) => {
+      let parser = advance_parser(parser)
+      match current_token(parser) {
+        Identifier(id_name, id_loc) => {
+          let parser = advance_parser(parser)
+          Ok((
+            Node::TypeOperator(TypeOperator::{
+              operator: TypeOperatorKind::TypeOf,
+              type_node: Node::Identifier(Identifier::{ name: id_name, location: id_loc }),
+              location: loc,
+            }),
+            parser
+          ))
+        }
+        _ => Err(add_error(parser, "Expected identifier after 'typeof' in type position", current_token(parser).location()))
+      }
+    }
+    // readonly in type position: readonly T[]
+    KeywordReadonly(_) => {
+      let parser = advance_parser(parser)
+      match parse_primary_type(parser) {
+        Ok((operand_type, p)) => Ok((
+          Node::TypeOperator(TypeOperator::{
+            operator: TypeOperatorKind::Readonly,
+            type_node: operand_type,
+            location: loc,
+          }),
+          p
+        ))
+        Err(p) => Err(p)
+      }
+    }
     Identifier(name, _) if name == "true" || name == "false" => {
       // Boolean literal types
       let value = name == "true"
@@ -2944,6 +2977,38 @@ fn parse_primary_type_with_readonly(parser : Parser, is_readonly : Bool) -> Resu
               parser
             ))
           }
+        }
+      } else if name == "typeof" {
+        // typeof in type position: typeof variable
+        let parser = advance_parser(parser)
+        // Parse the expression/identifier being typeof'd
+        match current_token(parser) {
+          Identifier(id_name, id_loc) => {
+            let parser = advance_parser(parser)
+            Ok((
+              Node::TypeOperator(TypeOperator::{
+                operator: TypeOperatorKind::TypeOf,
+                type_node: Node::Identifier(Identifier::{ name: id_name, location: id_loc }),
+                location: loc,
+              }),
+              parser
+            ))
+          }
+          _ => Err(add_error(parser, "Expected identifier after 'typeof' in type position", current_token(parser).location()))
+        }
+      } else if name == "readonly" {
+        // readonly type operator: readonly T[]
+        let parser = advance_parser(parser)
+        match parse_primary_type(parser) {
+          Ok((operand_type, p)) => Ok((
+            Node::TypeOperator(TypeOperator::{
+              operator: TypeOperatorKind::Readonly,
+              type_node: operand_type,
+              location: loc,
+            }),
+            p
+          ))
+          Err(p) => Err(p)
         }
       } else {
         let parser = advance_parser(parser)
