@@ -155,6 +155,8 @@ fn bind_statement(binder : Binder, node : Node) -> Binder {
     // If statement
     IfStatement(if_stmt) => {
       let binder = bind_expression(binder, if_stmt.condition)
+      // Create condition flow node for the if condition
+      let binder = create_condition_flow(binder, if_stmt.condition)
       let binder = bind_statement(binder, if_stmt.then_statement)
       match if_stmt.else_statement {
         Some(else_stmt) => bind_statement(binder, else_stmt)
@@ -170,7 +172,11 @@ fn bind_statement(binder : Binder, node : Node) -> Binder {
         None => binder
       }
       let binder = match for_stmt.condition {
-        Some(cond) => bind_expression(binder, cond)
+        Some(cond) => {
+          let binder = bind_expression(binder, cond)
+          // Create condition flow node for the for condition
+          create_condition_flow(binder, cond)
+        }
         None => binder
       }
       let binder = match for_stmt.incrementor {
@@ -184,13 +190,17 @@ fn bind_statement(binder : Binder, node : Node) -> Binder {
     // While statement
     WhileStatement(while_stmt) => {
       let binder = bind_expression(binder, while_stmt.condition)
+      // Create condition flow node for the while condition
+      let binder = create_condition_flow(binder, while_stmt.condition)
       bind_statement(binder, while_stmt.statement)
     }
 
     // Do-while statement
     DoWhileStatement(do_stmt) => {
       let binder = bind_statement(binder, do_stmt.statement)
-      bind_expression(binder, do_stmt.condition)
+      let binder = bind_expression(binder, do_stmt.condition)
+      // Create condition flow node for the do-while condition
+      create_condition_flow(binder, do_stmt.condition)
     }
 
     // Switch statement
@@ -842,6 +852,23 @@ fn create_call_flow(binder : Binder, node : Node) -> Binder {
 }
 
 ///|
+/// Create a FlowCondition node and update the binder's current flow
+fn create_condition_flow(binder : Binder, expression : Node) -> Binder {
+  let flow_id = binder.next_flow_id + 1
+  let antecedent = get_current_flow_id(binder)
+  let flow_condition = FlowCondition::{
+    expression,
+    antecedent,
+    id: flow_id,
+  }
+  {
+    ..binder,
+    next_flow_id: flow_id,
+    current_flow: Some(FlowNode::Condition(flow_condition)),
+  }
+}
+
+///|
 /// Bind an expression (simplified - just walks the tree)
 fn bind_expression(binder : Binder, node : Node) -> Binder {
   match node {
@@ -908,6 +935,8 @@ fn bind_expression(binder : Binder, node : Node) -> Binder {
     // Conditional expression
     ConditionalExpression(cond_expr) => {
       let binder = bind_expression(binder, cond_expr.condition)
+      // Create condition flow node for the ternary condition
+      let binder = create_condition_flow(binder, cond_expr.condition)
       let binder = bind_expression(binder, cond_expr.when_true)
       bind_expression(binder, cond_expr.when_false)
     }

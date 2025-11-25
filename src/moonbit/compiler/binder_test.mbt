@@ -1085,3 +1085,93 @@ test "bind nested function calls creates flow nodes" {
     Err(_) => assert_true(false)
   }
 }
+
+// ============================================================================
+// FlowNode Condition Tests
+// ============================================================================
+
+///|
+test "bind if statement creates condition flow node" {
+  let result = parse_and_bind("const x = true; if (x) { const y = 1; }")
+  match result {
+    Ok(bound) => {
+      // Variable should be in global scope
+      assert_true(bound.global_scope.symbols.contains("x"))
+      // Inner variable should not be in global scope
+      assert_false(bound.global_scope.symbols.contains("y"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "bind if-else statement creates condition flow node" {
+  let result = parse_and_bind("const x = true; if (x) { const a = 1; } else { const b = 2; }")
+  match result {
+    Ok(bound) => {
+      assert_true(bound.global_scope.symbols.contains("x"))
+      assert_false(bound.global_scope.symbols.contains("a"))
+      assert_false(bound.global_scope.symbols.contains("b"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "bind while statement creates condition flow node" {
+  let result = parse_and_bind("let x = 0; while (x < 10) { x = x + 1; }")
+  match result {
+    Ok(bound) => {
+      assert_true(bound.global_scope.symbols.contains("x"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "bind do-while statement creates condition flow node" {
+  let result = parse_and_bind("let x = 0; do { x = x + 1; } while (x < 10);")
+  match result {
+    Ok(bound) => {
+      assert_true(bound.global_scope.symbols.contains("x"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "bind for statement with condition creates condition flow node" {
+  let result = parse_and_bind("for (let i = 0; i < 10; i++) { const x = i; }")
+  match result {
+    Ok(bound) => {
+      // Loop variable should not be in global scope
+      assert_false(bound.global_scope.symbols.contains("i"))
+      assert_false(bound.global_scope.symbols.contains("x"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "bind ternary expression creates condition flow node" {
+  let result = parse_and_bind("const x = true; const y = x ? 1 : 2;")
+  match result {
+    Ok(bound) => {
+      assert_true(bound.global_scope.symbols.contains("x"))
+      assert_true(bound.global_scope.symbols.contains("y"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "bind nested conditions creates multiple condition flow nodes" {
+  let result = parse_and_bind("const a = true; const b = false; if (a) { if (b) { } }")
+  match result {
+    Ok(bound) => {
+      assert_true(bound.global_scope.symbols.contains("a"))
+      assert_true(bound.global_scope.symbols.contains("b"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
