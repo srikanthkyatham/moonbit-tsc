@@ -2732,20 +2732,216 @@ fn check_return_type_consistency(
 }
 
 ///|
+/// Look up a property in a type, handling various type kinds
+fn lookup_property_in_type(
+  checker : TypeChecker,
+  t : Type,
+  prop_name : String,
+) -> (Type?, TypeChecker) {
+  match t {
+    Object(obj_type) =>
+      match obj_type.properties.get(prop_name) {
+        Some(property) => (Some(property.prop_type), checker)
+        None =>
+          // Check index signatures for string indexer
+          match find_string_index_signature(obj_type.index_signatures) {
+            Some(sig) => (Some(sig.return_type), checker)
+            None => (None, checker)
+          }
+      }
+    TypeReference(type_ref) => {
+      // Resolve the type reference and look up property in resolved type
+      let (resolved, checker) = resolve_type_reference(checker, type_ref)
+      match resolved {
+        TypeReference(_) =>
+          // Could not resolve further, check if it's a class with properties
+          match lookup_symbol(checker, type_ref.name) {
+            Some(symbol) =>
+              match get_class_property_type(checker, symbol, prop_name) {
+                (Some(prop_type), checker) => (Some(prop_type), checker)
+                (None, checker) => (None, checker)
+              }
+            None => (None, checker)
+          }
+        _ => lookup_property_in_type(checker, resolved, prop_name)
+      }
+    }
+    Union(ut) => {
+      // Property must exist in all union members
+      // Return union of property types from all members
+      let mut checker = checker
+      let prop_types : Array[Type] = []
+      let mut all_have_property = true
+      for i = 0; i < ut.types.length(); i = i + 1 {
+        let (prop_type_opt, c) = lookup_property_in_type(
+          checker, ut.types[i], prop_name,
+        )
+        checker = c
+        match prop_type_opt {
+          Some(prop_type) => prop_types.push(prop_type)
+          None => {
+            all_have_property = false
+            break
+          }
+        }
+      }
+      if all_have_property && prop_types.length() > 0 {
+        if prop_types.length() == 1 {
+          (Some(prop_types[0]), checker)
+        } else {
+          // Create union of property types
+          let (union_prop_type, checker) = union_type(
+            checker, prop_types,
+          )
+          (Some(union_prop_type), checker)
+        }
+      } else {
+        (None, checker)
+      }
+    }
+    Intersection(intersection_type) => {
+      // Property can be from any intersection member
+      let mut checker = checker
+      for i = 0; i < intersection_type.types.length(); i = i + 1 {
+        let (prop_type_opt, c) = lookup_property_in_type(
+          checker, intersection_type.types[i], prop_name,
+        )
+        checker = c
+        match prop_type_opt {
+          Some(prop_type) => return (Some(prop_type), checker)
+          None => continue
+        }
+      }
+      (None, checker)
+    }
+    Array(_) =>
+      // Handle built-in array properties
+      match prop_name {
+        "length" => {
+          let (num_type, checker) = number_type(checker)
+          (Some(num_type), checker)
+        }
+        _ => (None, checker)
+      }
+    String(_) =>
+      // Handle built-in string properties
+      match prop_name {
+        "length" => {
+          let (num_type, checker) = number_type(checker)
+          (Some(num_type), checker)
+        }
+        _ => (None, checker)
+      }
+    Function(_) =>
+      // Handle built-in function properties
+      match prop_name {
+        "length" => {
+          let (num_type, checker) = number_type(checker)
+          (Some(num_type), checker)
+        }
+        "name" => {
+          let (str_type, checker) = string_type(checker)
+          (Some(str_type), checker)
+        }
+        _ => (None, checker)
+      }
+    Any(_) => {
+      // Any type has any property
+      let (any_t, checker) = any_type(checker)
+      (Some(any_t), checker)
+    }
+    _ => (None, checker)
+  }
+}
+
+///|
+/// Find a string index signature in an array of index signatures
+fn find_string_index_signature(
+  signatures : Array[IndexSignature]
+) -> IndexSignature? {
+  for i = 0; i < signatures.length(); i = i + 1 {
+    match signatures[i].parameter_type {
+      String(_) => return Some(signatures[i])
+      _ => continue
+    }
+  }
+  None
+}
+
+///|
+/// Get property type from a class symbol
+fn get_class_property_type(
+  checker : TypeChecker,
+  class_symbol : Symbol,
+  prop_name : String,
+) -> (Type?, TypeChecker) {
+  match class_symbol.value_declaration {
+    Some(ClassDeclaration(class_decl)) => {
+      let mut checker = checker
+      for i = 0; i < class_decl.members.length(); i = i + 1 {
+        match class_decl.members[i] {
+          PropertyDeclaration(prop) =>
+            if prop.name == prop_name {
+              match prop.type_annotation {
+                Some(type_node) =>
+                  match get_type_from_type_node(checker, type_node) {
+                    (Some(t), c) => return (Some(t), c)
+                    (None, c) => {
+                      checker = c
+                      // No explicit type, try initializer
+                      match prop.initializer {
+                        Some(init) => {
+                          let (init_type, c) = infer_type(checker, init)
+                          return (Some(init_type), c)
+                        }
+                        None => {
+                          let (any_t, c) = any_type(checker)
+                          return (Some(any_t), c)
+                        }
+                      }
+                    }
+                  }
+                None =>
+                  match prop.initializer {
+                    Some(init) => {
+                      let (init_type, c) = infer_type(checker, init)
+                      return (Some(init_type), c)
+                    }
+                    None => {
+                      let (any_t, c) = any_type(checker)
+                      return (Some(any_t), c)
+                    }
+                  }
+              }
+            }
+          MethodDeclaration(method_decl) =>
+            if method_decl.name == prop_name {
+              // Return function type for method
+              let (func_type, c) = infer_method_type(checker, method_decl)
+              return (Some(func_type), c)
+            }
+          _ => continue
+        }
+      }
+      (None, checker)
+    }
+    _ => (None, checker)
+  }
+}
+
+///|
 /// Infer property access type
 fn infer_property_access_type(
   checker : TypeChecker,
   prop : PropertyAccessExpression,
 ) -> (Type, TypeChecker) {
   let (object_type, checker) = infer_type(checker, prop.expression)
-  // TODO: Look up property in object type
-  match object_type {
-    Object(obj_type) =>
-      match obj_type.properties.get(prop.name) {
-        Some(property) => (property.prop_type, checker)
-        None => any_type(checker)
-      }
-    _ => any_type(checker)
+  let (prop_type_opt, checker) = lookup_property_in_type(
+    checker, object_type, prop.name,
+  )
+  match prop_type_opt {
+    Some(prop_type) => (prop_type, checker)
+    None => any_type(checker)
   }
 }
 

@@ -4162,3 +4162,234 @@ test "check class property assignment type mismatch with literal should error" {
     }
   }
 }
+
+// ============================================================================
+// Property Lookup in Object Types Tests
+// ============================================================================
+
+///|
+test "check property access on object literal" {
+  let result = parse_bind_and_check(
+    "const obj = { name: \"Alice\", age: 30 }; const n = obj.name; const a = obj.age;",
+  )
+  match result {
+    Ok(typed) => {
+      assert_eq(typed.file_path, "test.ts")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "check property access on interface type" {
+  let source =
+    #|interface Person { name: string; age: number; }
+    #|function greet(p: Person): string {
+    #|  return p.name;
+    #|}
+  let result = parse_bind_and_check(source)
+  match result {
+    Ok(typed) => {
+      assert_eq(typed.file_path, "test.ts")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "check property access on class instance" {
+  let source =
+    #|class Person {
+    #|  name: string;
+    #|  age: number;
+    #|  constructor(name: string, age: number) {
+    #|    this.name = name;
+    #|    this.age = age;
+    #|  }
+    #|}
+    #|const p = new Person("Alice", 30);
+    #|const n = p.name;
+  let result = parse_bind_and_check(source)
+  match result {
+    Ok(typed) => {
+      assert_eq(typed.file_path, "test.ts")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "check method access on class instance" {
+  let source =
+    #|class Calculator {
+    #|  add(a: number, b: number): number {
+    #|    return a + b;
+    #|  }
+    #|}
+    #|const calc = new Calculator();
+    #|const result = calc.add(1, 2);
+  let result = parse_bind_and_check(source)
+  match result {
+    Ok(typed) => {
+      assert_eq(typed.file_path, "test.ts")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "check array length property" {
+  let result = parse_bind_and_check(
+    "const arr = [1, 2, 3]; const len = arr.length;",
+  )
+  match result {
+    Ok(typed) => {
+      assert_eq(typed.file_path, "test.ts")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "check string length property" {
+  let result = parse_bind_and_check(
+    "const str = \"hello\"; const len = str.length;",
+  )
+  match result {
+    Ok(typed) => {
+      assert_eq(typed.file_path, "test.ts")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "check function length property" {
+  let result = parse_bind_and_check(
+    "function add(a: number, b: number): number { return a + b; } const len = add.length;",
+  )
+  match result {
+    Ok(typed) => {
+      assert_eq(typed.file_path, "test.ts")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "check function name property" {
+  let result = parse_bind_and_check(
+    "function myFunc() {} const name = myFunc.name;",
+  )
+  match result {
+    Ok(typed) => {
+      assert_eq(typed.file_path, "test.ts")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "check property access on union type with common property" {
+  let source =
+    #|interface Cat { name: string; meow(): void; }
+    #|interface Dog { name: string; bark(): void; }
+    #|function getName(pet: Cat | Dog): string {
+    #|  return pet.name;
+    #|}
+  let result = parse_bind_and_check(source)
+  match result {
+    Ok(typed) => {
+      assert_eq(typed.file_path, "test.ts")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "check property access on intersection type" {
+  let source =
+    #|interface Named { name: string; }
+    #|interface Aged { age: number; }
+    #|function getInfo(obj: Named & Aged): string {
+    #|  const n = obj.name;
+    #|  const a = obj.age;
+    #|  return n;
+    #|}
+  let result = parse_bind_and_check(source)
+  match result {
+    Ok(typed) => {
+      assert_eq(typed.file_path, "test.ts")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "check property access on any type" {
+  let result = parse_bind_and_check(
+    "const x: any = {}; const y = x.someProperty;",
+  )
+  match result {
+    Ok(typed) => {
+      assert_eq(typed.file_path, "test.ts")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "check nested property access on interface" {
+  let source =
+    #|interface Address { city: string; zip: string; }
+    #|interface Person { name: string; address: Address; }
+    #|function getCity(p: Person): string {
+    #|  return p.address.city;
+    #|}
+  let result = parse_bind_and_check(source)
+  match result {
+    Ok(typed) => {
+      assert_eq(typed.file_path, "test.ts")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "check property access with index signature" {
+  let source =
+    #|interface StringMap { [key: string]: number; }
+    #|function getValue(map: StringMap): number {
+    #|  return map.anyKey;
+    #|}
+  let result = parse_bind_and_check(source)
+  match result {
+    Ok(typed) => {
+      assert_eq(typed.file_path, "test.ts")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "check chained method calls" {
+  let source =
+    #|class Builder {
+    #|  value: string = "";
+    #|  append(s: string): Builder {
+    #|    this.value = this.value + s;
+    #|    return this;
+    #|  }
+    #|  build(): string {
+    #|    return this.value;
+    #|  }
+    #|}
+    #|const result = new Builder().append("hello").append(" ").append("world").build();
+  let result = parse_bind_and_check(source)
+  match result {
+    Ok(typed) => {
+      assert_eq(typed.file_path, "test.ts")
+    }
+    Err(_) => assert_true(false)
+  }
+}
