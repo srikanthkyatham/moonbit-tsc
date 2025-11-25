@@ -4393,3 +4393,341 @@ test "check chained method calls" {
     Err(_) => assert_true(false)
   }
 }
+
+// ============================================================================
+// Element Access (Bracket Notation) Type Inference Tests
+// ============================================================================
+
+///|
+/// Test: String literal index on object looks up property by name
+test "check element access with string literal on object" {
+  let source =
+    #|interface Person {
+    #|  name: string;
+    #|  age: number;
+    #|}
+    #|declare const person: Person;
+    #|const name = person["name"];
+    #|const age = person["age"];
+  let result = parse_bind_and_check(source)
+  match result {
+    Ok(typed) => {
+      assert_eq(typed.file_path, "test.ts")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+/// Test: Number index on array returns element type
+test "check element access with number index on array" {
+  let source =
+    #|const numbers: number[] = [1, 2, 3];
+    #|const first = numbers[0];
+    #|const second = numbers[1];
+  let result = parse_bind_and_check(source)
+  match result {
+    Ok(typed) => {
+      assert_eq(typed.file_path, "test.ts")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+/// Test: String index signature returns signature type
+test "check element access with string index signature" {
+  let source =
+    #|interface StringMap {
+    #|  [key: string]: number;
+    #|}
+    #|declare const map: StringMap;
+    #|const value = map["anyKey"];
+  let result = parse_bind_and_check(source)
+  match result {
+    Ok(typed) => {
+      assert_eq(typed.file_path, "test.ts")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+/// Test: Number index signature returns signature type
+test "check element access with number index signature" {
+  let source =
+    #|interface NumberIndexed {
+    #|  [index: number]: string;
+    #|}
+    #|declare const arr: NumberIndexed;
+    #|const value = arr[0];
+  let result = parse_bind_and_check(source)
+  match result {
+    Ok(typed) => {
+      assert_eq(typed.file_path, "test.ts")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+/// Test: Dynamic string variable index uses string index signature
+test "check element access with dynamic string index" {
+  let source =
+    #|interface StringMap {
+    #|  [key: string]: boolean;
+    #|}
+    #|declare const map: StringMap;
+    #|const key: string = "someKey";
+    #|const value = map[key];
+  let result = parse_bind_and_check(source)
+  match result {
+    Ok(typed) => {
+      assert_eq(typed.file_path, "test.ts")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+/// Test: Dynamic number variable index uses number index signature
+test "check element access with dynamic number index" {
+  let source =
+    #|interface NumberIndexed {
+    #|  [index: number]: string;
+    #|}
+    #|declare const arr: NumberIndexed;
+    #|const idx: number = 5;
+    #|const value = arr[idx];
+  let result = parse_bind_and_check(source)
+  match result {
+    Ok(typed) => {
+      assert_eq(typed.file_path, "test.ts")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+/// Test: Object with both properties and index signature
+test "check element access on object with properties and index signature" {
+  let source =
+    #|interface Config {
+    #|  name: string;
+    #|  [key: string]: string | number;
+    #|}
+    #|declare const config: Config;
+    #|const name = config["name"];
+    #|const other = config["unknownKey"];
+  let result = parse_bind_and_check(source)
+  match result {
+    Ok(typed) => {
+      assert_eq(typed.file_path, "test.ts")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+/// Test: Element access on union type
+test "check element access on union type" {
+  let source =
+    #|interface A {
+    #|  x: number;
+    #|}
+    #|interface B {
+    #|  x: string;
+    #|}
+    #|declare const obj: A | B;
+    #|const value = obj["x"];
+  let result = parse_bind_and_check(source)
+  match result {
+    Ok(typed) => {
+      assert_eq(typed.file_path, "test.ts")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+/// Test: Element access on intersection type
+test "check element access on intersection type" {
+  let source =
+    #|interface A {
+    #|  x: number;
+    #|}
+    #|interface B {
+    #|  y: string;
+    #|}
+    #|declare const obj: A & B;
+    #|const xVal = obj["x"];
+    #|const yVal = obj["y"];
+  let result = parse_bind_and_check(source)
+  match result {
+    Ok(typed) => {
+      assert_eq(typed.file_path, "test.ts")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+/// Test: Nested element access
+test "check nested element access" {
+  let source =
+    #|interface Nested {
+    #|  data: {
+    #|    items: string[];
+    #|  };
+    #|}
+    #|declare const obj: Nested;
+    #|const items = obj["data"]["items"];
+    #|const first = obj["data"]["items"][0];
+  let result = parse_bind_and_check(source)
+  match result {
+    Ok(typed) => {
+      assert_eq(typed.file_path, "test.ts")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+/// Test: Element access on type reference
+test "check element access on type reference" {
+  let source =
+    #|type Person = {
+    #|  name: string;
+    #|  age: number;
+    #|};
+    #|declare const person: Person;
+    #|const name = person["name"];
+  let result = parse_bind_and_check(source)
+  match result {
+    Ok(typed) => {
+      assert_eq(typed.file_path, "test.ts")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+/// Test: Element access with computed property
+test "check element access with computed expression" {
+  let source =
+    #|interface StringMap {
+    #|  [key: string]: number;
+    #|}
+    #|declare const map: StringMap;
+    #|const prefix = "key";
+    #|const value = map[prefix + "1"];
+  let result = parse_bind_and_check(source)
+  match result {
+    Ok(typed) => {
+      assert_eq(typed.file_path, "test.ts")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+/// Test: Element access on array with variable index
+test "check element access on array with variable index" {
+  let source =
+    #|const items: string[] = ["a", "b", "c"];
+    #|const index = 1;
+    #|const item = items[index];
+  let result = parse_bind_and_check(source)
+  match result {
+    Ok(typed) => {
+      assert_eq(typed.file_path, "test.ts")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+/// Test: Element access on object literal
+test "check element access on object literal" {
+  let source =
+    #|const obj = { a: 1, b: 2, c: 3 };
+    #|const value = obj["a"];
+  let result = parse_bind_and_check(source)
+  match result {
+    Ok(typed) => {
+      assert_eq(typed.file_path, "test.ts")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+/// Test: Element access fallback to any for unknown properties
+test "check element access fallback to any" {
+  let source =
+    #|const obj = { known: 1 };
+    #|const value = obj["unknown"];
+  let result = parse_bind_and_check(source)
+  match result {
+    Ok(typed) => {
+      assert_eq(typed.file_path, "test.ts")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+/// Test: Element access on any type
+test "check element access on any type" {
+  let source =
+    #|declare const anyVal: any;
+    #|const value = anyVal["anything"];
+    #|const num = anyVal[0];
+  let result = parse_bind_and_check(source)
+  match result {
+    Ok(typed) => {
+      assert_eq(typed.file_path, "test.ts")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+/// Test: Element access with both number and string index signatures
+test "check element access with both index signatures" {
+  let source =
+    #|interface ArrayLike {
+    #|  [index: number]: string;
+    #|  [key: string]: string | number;
+    #|  length: number;
+    #|}
+    #|declare const arr: ArrayLike;
+    #|const byNum = arr[0];
+    #|const byStr = arr["key"];
+    #|const len = arr["length"];
+  let result = parse_bind_and_check(source)
+  match result {
+    Ok(typed) => {
+      assert_eq(typed.file_path, "test.ts")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+/// Test: Chained element and property access
+test "check chained element and property access" {
+  let source =
+    #|interface Item {
+    #|  value: number;
+    #|}
+    #|const items: Item[] = [{ value: 1 }, { value: 2 }];
+    #|const val = items[0].value;
+  let result = parse_bind_and_check(source)
+  match result {
+    Ok(typed) => {
+      assert_eq(typed.file_path, "test.ts")
+    }
+    Err(_) => assert_true(false)
+  }
+}

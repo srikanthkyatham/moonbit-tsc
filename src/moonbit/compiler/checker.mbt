@@ -2952,11 +2952,180 @@ fn infer_element_access_type(
   elem : ElementAccessExpression,
 ) -> (Type, TypeChecker) {
   let (object_type, checker) = infer_type(checker, elem.expression)
-  let (_, checker) = infer_type(checker, elem.argument_expression)
+  let (index_type, checker) = infer_type(checker, elem.argument_expression)
   match object_type {
     Array(arr_type) => (arr_type.element_type, checker)
-    Object(_) => any_type(checker) // TODO: Better object property lookup
+    Object(obj_type) =>
+      // Handle object element access based on argument type
+      match elem.argument_expression {
+        // String literal index: obj["prop"] - look up property by name
+        StringLiteral(str_lit) =>
+          match obj_type.properties.get(str_lit.value) {
+            Some(property) => (property.prop_type, checker)
+            None =>
+              // Check string index signature
+              match find_string_index_signature(obj_type.index_signatures) {
+                Some(sig) => (sig.return_type, checker)
+                None => any_type(checker)
+              }
+          }
+        _ =>
+          // Dynamic index: check based on index type
+          match index_type {
+            Number(_) | NumberLiteral(_, _) =>
+              // Number index: look for number index signature
+              match find_number_index_signature(obj_type.index_signatures) {
+                Some(sig) => (sig.return_type, checker)
+                None =>
+                  // Fall back to string index signature
+                  match find_string_index_signature(obj_type.index_signatures) {
+                    Some(sig) => (sig.return_type, checker)
+                    None => any_type(checker)
+                  }
+              }
+            String(_) | StringLiteral(_, _) =>
+              // String index: look for string index signature
+              match find_string_index_signature(obj_type.index_signatures) {
+                Some(sig) => (sig.return_type, checker)
+                None => any_type(checker)
+              }
+            _ =>
+              // Unknown index type: try string index signature, then any
+              match find_string_index_signature(obj_type.index_signatures) {
+                Some(sig) => (sig.return_type, checker)
+                None => any_type(checker)
+              }
+          }
+      }
+    // Handle type references that might resolve to objects
+    TypeReference(_) => {
+      let (prop_type_opt, checker) = lookup_element_access_in_type(
+        checker, object_type, index_type, elem.argument_expression,
+      )
+      match prop_type_opt {
+        Some(prop_type) => (prop_type, checker)
+        None => any_type(checker)
+      }
+    }
+    // Handle union types - element must be accessible in all members
+    Union(ut) => {
+      let mut checker = checker
+      let element_types : Array[Type] = []
+      let mut all_accessible = true
+      for i = 0; i < ut.types.length(); i = i + 1 {
+        let (elem_type_opt, c) = lookup_element_access_in_type(
+          checker, ut.types[i], index_type, elem.argument_expression,
+        )
+        checker = c
+        match elem_type_opt {
+          Some(elem_type) => element_types.push(elem_type)
+          None => {
+            all_accessible = false
+            break
+          }
+        }
+      }
+      if all_accessible && element_types.length() > 0 {
+        if element_types.length() == 1 {
+          (element_types[0], checker)
+        } else {
+          let (union_elem_type, checker) = union_type(checker, element_types)
+          (union_elem_type, checker)
+        }
+      } else {
+        any_type(checker)
+      }
+    }
+    // Handle intersection types - element can be from any member
+    Intersection(intersection_type) => {
+      let mut checker = checker
+      for i = 0; i < intersection_type.types.length(); i = i + 1 {
+        let (elem_type_opt, c) = lookup_element_access_in_type(
+          checker, intersection_type.types[i], index_type, elem.argument_expression,
+        )
+        checker = c
+        match elem_type_opt {
+          Some(elem_type) => return (elem_type, checker)
+          None => continue
+        }
+      }
+      any_type(checker)
+    }
+    Any(_) => any_type(checker)
     _ => any_type(checker)
+  }
+}
+
+///|
+/// Find a number index signature in an array of index signatures
+fn find_number_index_signature(
+  signatures : Array[IndexSignature]
+) -> IndexSignature? {
+  for i = 0; i < signatures.length(); i = i + 1 {
+    match signatures[i].parameter_type {
+      Number(_) => return Some(signatures[i])
+      _ => continue
+    }
+  }
+  None
+}
+
+///|
+/// Look up element access type in a type (helper for element access)
+fn lookup_element_access_in_type(
+  checker : TypeChecker,
+  t : Type,
+  index_type : Type,
+  argument_expr : Node,
+) -> (Type?, TypeChecker) {
+  match t {
+    Array(arr_type) => (Some(arr_type.element_type), checker)
+    Object(obj_type) =>
+      match argument_expr {
+        StringLiteral(str_lit) =>
+          match obj_type.properties.get(str_lit.value) {
+            Some(property) => (Some(property.prop_type), checker)
+            None =>
+              match find_string_index_signature(obj_type.index_signatures) {
+                Some(sig) => (Some(sig.return_type), checker)
+                None => (None, checker)
+              }
+          }
+        _ =>
+          match index_type {
+            Number(_) | NumberLiteral(_, _) =>
+              match find_number_index_signature(obj_type.index_signatures) {
+                Some(sig) => (Some(sig.return_type), checker)
+                None =>
+                  match find_string_index_signature(obj_type.index_signatures) {
+                    Some(sig) => (Some(sig.return_type), checker)
+                    None => (None, checker)
+                  }
+              }
+            String(_) | StringLiteral(_, _) =>
+              match find_string_index_signature(obj_type.index_signatures) {
+                Some(sig) => (Some(sig.return_type), checker)
+                None => (None, checker)
+              }
+            _ =>
+              match find_string_index_signature(obj_type.index_signatures) {
+                Some(sig) => (Some(sig.return_type), checker)
+                None => (None, checker)
+              }
+          }
+      }
+    TypeReference(type_ref) => {
+      let (resolved, checker) = resolve_type_reference(checker, type_ref)
+      match resolved {
+        TypeReference(_) => (None, checker)
+        _ => lookup_element_access_in_type(checker, resolved, index_type, argument_expr)
+      }
+    }
+    Any(_) => {
+      let (any_t, checker) = any_type(checker)
+      (Some(any_t), checker)
+    }
+    _ => (None, checker)
   }
 }
 
