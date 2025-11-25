@@ -778,6 +778,70 @@ fn bind_type_parameters_aux(
 }
 
 ///|
+/// Check if a binary operator is an assignment operator
+fn is_assignment_operator(op : BinaryOperator) -> Bool {
+  match op {
+    Assign | AddAssign | SubtractAssign | MultiplyAssign | DivideAssign |
+    RemainderAssign | BitwiseAndAssign | BitwiseOrAssign | BitwiseXorAssign |
+    ExponentiateAssign | LeftShiftAssign | RightShiftAssign |
+    UnsignedRightShiftAssign | LogicalAndAssign | LogicalOrAssign |
+    NullishCoalescingAssign => true
+    _ => false
+  }
+}
+
+///|
+/// Get the ID of the current flow node
+fn get_current_flow_id(binder : Binder) -> Int {
+  match binder.current_flow {
+    Some(FlowNode::Start(start)) => start.id
+    Some(FlowNode::Assignment(assign)) => assign.id
+    Some(FlowNode::Call(call)) => call.id
+    Some(FlowNode::Condition(cond)) => cond.id
+    Some(FlowNode::SwitchClause(clause)) => clause.id
+    Some(FlowNode::Label(label)) => label.id
+    Some(FlowNode::ArrayMutation(mutation)) => mutation.id
+    Some(FlowNode::Return(ret)) => ret.id
+    Some(FlowNode::Unreachable(unreach)) => unreach.id
+    None => 0
+  }
+}
+
+///|
+/// Create a FlowAssignment node and update the binder's current flow
+fn create_assignment_flow(binder : Binder, node : Node) -> Binder {
+  let flow_id = binder.next_flow_id + 1
+  let antecedent = get_current_flow_id(binder)
+  let flow_assignment = FlowAssignment::{
+    node,
+    antecedent,
+    id: flow_id,
+  }
+  {
+    ..binder,
+    next_flow_id: flow_id,
+    current_flow: Some(FlowNode::Assignment(flow_assignment)),
+  }
+}
+
+///|
+/// Create a FlowCall node and update the binder's current flow
+fn create_call_flow(binder : Binder, node : Node) -> Binder {
+  let flow_id = binder.next_flow_id + 1
+  let antecedent = get_current_flow_id(binder)
+  let flow_call = FlowCall::{
+    node,
+    antecedent,
+    id: flow_id,
+  }
+  {
+    ..binder,
+    next_flow_id: flow_id,
+    current_flow: Some(FlowNode::Call(flow_call)),
+  }
+}
+
+///|
 /// Bind an expression (simplified - just walks the tree)
 fn bind_expression(binder : Binder, node : Node) -> Binder {
   match node {
@@ -790,7 +854,13 @@ fn bind_expression(binder : Binder, node : Node) -> Binder {
     // Binary expression
     BinaryExpression(bin_expr) => {
       let binder = bind_expression(binder, bin_expr.left)
-      bind_expression(binder, bin_expr.right)
+      let binder = bind_expression(binder, bin_expr.right)
+      // Create flow assignment node for assignment operators
+      if is_assignment_operator(bin_expr.operator) {
+        create_assignment_flow(binder, node)
+      } else {
+        binder
+      }
     }
 
     // Unary expression
@@ -801,7 +871,9 @@ fn bind_expression(binder : Binder, node : Node) -> Binder {
     // Call expression
     CallExpression(call_expr) => {
       let binder = bind_expression(binder, call_expr.expression)
-      bind_expressions(binder, call_expr.arguments)
+      let binder = bind_expressions(binder, call_expr.arguments)
+      // Create flow call node for control flow analysis
+      create_call_flow(binder, node)
     }
 
     // Property access

@@ -950,3 +950,138 @@ test "bind renamed type-only re-export from module" {
     Err(_) => assert_true(false)
   }
 }
+
+// ============================================================================
+// FlowNode Assignment Tests
+// ============================================================================
+
+///|
+test "bind simple assignment creates flow node" {
+  let result = parse_and_bind("let x = 1; x = 2;")
+  match result {
+    Ok(bound) => {
+      // Variable should be in global scope
+      assert_true(bound.global_scope.symbols.contains("x"))
+      assert_eq(bound.file_path, "test.ts")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "bind compound assignment creates flow node" {
+  let result = parse_and_bind("let x = 1; x += 2;")
+  match result {
+    Ok(bound) => {
+      // Variable should be in global scope
+      assert_true(bound.global_scope.symbols.contains("x"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "bind multiple assignments creates flow nodes" {
+  let result = parse_and_bind("let x = 1; let y = 2; x = y; y = x;")
+  match result {
+    Ok(bound) => {
+      // Both variables should be in global scope
+      assert_true(bound.global_scope.symbols.contains("x"))
+      assert_true(bound.global_scope.symbols.contains("y"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "bind assignment in function creates flow node" {
+  let result = parse_and_bind("function f() { let x = 1; x = 2; return x; }")
+  match result {
+    Ok(bound) => {
+      // Function should be in global scope
+      assert_true(bound.global_scope.symbols.contains("f"))
+      // Local variable should not be in global scope
+      assert_false(bound.global_scope.symbols.contains("x"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "bind all assignment operators" {
+  let result = parse_and_bind(
+    "let x = 1; x = 1; x += 1; x -= 1; x *= 1; x /= 1; x %= 1; x **= 1; x &= 1; x |= 1; x ^= 1; x <<= 1; x >>= 1; x >>>= 1; x &&= 1; x ||= 1; x ??= 1;",
+  )
+  match result {
+    Ok(bound) => {
+      assert_true(bound.global_scope.symbols.contains("x"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+// ============================================================================
+// FlowNode Call Tests
+// ============================================================================
+
+///|
+test "bind simple function call creates flow node" {
+  let result = parse_and_bind("function foo() {} foo();")
+  match result {
+    Ok(bound) => {
+      // Function should be in global scope
+      assert_true(bound.global_scope.symbols.contains("foo"))
+      assert_eq(bound.file_path, "test.ts")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "bind function call with arguments creates flow node" {
+  let result = parse_and_bind("function add(a, b) { return a + b; } add(1, 2);")
+  match result {
+    Ok(bound) => {
+      // Function should be in global scope
+      assert_true(bound.global_scope.symbols.contains("add"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "bind method call creates flow node" {
+  let result = parse_and_bind("const arr = [1, 2, 3]; arr.push(4);")
+  match result {
+    Ok(bound) => {
+      // Variable should be in global scope
+      assert_true(bound.global_scope.symbols.contains("arr"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "bind chained calls creates flow nodes" {
+  let result = parse_and_bind("const s = 'hello'; s.trim().toUpperCase();")
+  match result {
+    Ok(bound) => {
+      // Variable should be in global scope
+      assert_true(bound.global_scope.symbols.contains("s"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "bind nested function calls creates flow nodes" {
+  let result = parse_and_bind("function f(x) { return x; } function g(x) { return x; } f(g(1));")
+  match result {
+    Ok(bound) => {
+      // Both functions should be in global scope
+      assert_true(bound.global_scope.symbols.contains("f"))
+      assert_true(bound.global_scope.symbols.contains("g"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
