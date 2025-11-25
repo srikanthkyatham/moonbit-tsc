@@ -154,9 +154,9 @@ test "check type mismatch error" {
     }
     Err(diagnostics) => {
       assert_true(diagnostics.length() > 0)
-      // Check that diagnostic mentions type mismatch
+      // Check that diagnostic mentions type assignment error
       match diagnostics[0] {
-        diag => assert_true(diag.message.contains("mismatch"))
+        diag => assert_true(diag.message.contains("not assignable"))
       }
     }
   }

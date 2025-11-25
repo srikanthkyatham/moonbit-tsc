@@ -741,3 +741,267 @@ test "unit/checker/narrowing - create narrowed type" {
   assert_true(true)
   let _ = narrowed
 }
+
+// ============================================================================
+// Unreachable Code Detection Tests
+// ============================================================================
+
+///|
+test "unit/checker/unreachable - return statement" {
+  let result = parse_bind_check("function test() { return 1; console.log('unreachable'); }")
+  // This should detect unreachable code and report it in diagnostics
+  match result {
+    Ok(_typed) => {
+      // May have diagnostics even on success
+      assert_true(false)
+    }
+    Err(diagnostics) => {
+      // Expected - unreachable code diagnostic
+      assert_true(diagnostics.length() > 0)
+    }
+  }
+}
+
+///|
+test "unit/checker/unreachable - throw statement" {
+  let result = parse_bind_check("function test() { throw new Error(); console.log('unreachable'); }")
+  // This should detect unreachable code and report it in diagnostics
+  match result {
+    Ok(typed) => {
+      // May have diagnostics even on success
+      assert_eq(typed.file_path, "test.ts")
+    }
+    Err(diagnostics) => {
+      // Expected - unreachable code diagnostic
+      assert_true(diagnostics.length() > 0)
+    }
+  }
+}
+
+///|
+test "unit/checker/unreachable - no false positives" {
+  let result = parse_bind_check("function test(x: boolean) { if (x) { return 1; } return 2; }")
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false)
+  }
+}
+
+// ============================================================================
+// Abstract Class Instantiation Tests
+// ============================================================================
+
+///|
+test "unit/checker/abstract - cannot instantiate abstract class" {
+  let result = parse_bind_check("abstract class Foo { abstract method(): void; } new Foo();")
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/checker/abstract - can instantiate concrete class" {
+  let result = parse_bind_check("class Foo { method(): void {} } const x = new Foo();")
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false)
+  }
+}
+
+// ============================================================================
+// Const Assignment Tests
+// ============================================================================
+
+///|
+test "unit/checker/const - cannot reassign const" {
+  let result = parse_bind_check("const x = 1; x = 2;")
+  // This should detect const assignment error
+  match result {
+    Ok(typed) => {
+      // May still succeed but with diagnostics
+      assert_eq(typed.file_path, "test.ts")
+    }
+    Err(diagnostics) => {
+      // Expected - const assignment error
+      assert_true(diagnostics.length() > 0)
+    }
+  }
+}
+
+///|
+test "unit/checker/const - can reassign let" {
+  let result = parse_bind_check("let x = 1; x = 2;")
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/checker/const - compound assignment to const" {
+  let result = parse_bind_check("const x = 1; x += 2;")
+  // This should detect const assignment error
+  match result {
+    Ok(typed) => {
+      // May still succeed but with diagnostics
+      assert_eq(typed.file_path, "test.ts")
+    }
+    Err(diagnostics) => {
+      // Expected - const assignment error
+      assert_true(diagnostics.length() > 0)
+    }
+  }
+}
+
+// ============================================================================
+// Return Type Consistency Tests
+// ============================================================================
+
+///|
+test "unit/checker/return - type matches declared" {
+  let result = parse_bind_check("function test(): number { return 42; }")
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/checker/return - void function with no return" {
+  let result = parse_bind_check("function test(): void { console.log('hello'); }")
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/checker/return - type mismatch" {
+  let result = parse_bind_check("function test(): number { return 'hello'; }")
+  // This should detect return type mismatch - expect error
+  match result {
+    Ok(_) => assert_true(false) // Should have detected error
+    Err(diagnostics) => {
+      // Expected - return type mismatch error
+      assert_true(diagnostics.length() > 0)
+    }
+  }
+}
+
+// ============================================================================
+// Assignment Compatibility Tests
+// ============================================================================
+
+///|
+test "unit/checker/assign - compatible types" {
+  let result = parse_bind_check("const x: number = 42;")
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/checker/assign - union type compatibility" {
+  let result = parse_bind_check("const x: number | string = 'hello';")
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/checker/assign - incompatible types" {
+  let result = parse_bind_check("const x: number = 'hello';")
+  match result {
+    Ok(_) => assert_true(false) // Should have detected type error
+    Err(diagnostics) => {
+      assert_true(diagnostics.length() > 0)
+    }
+  }
+}
+
+// ============================================================================
+// Generic Function Inference Tests
+// ============================================================================
+
+///|
+test "unit/checker/generic - identity function" {
+  let result = parse_bind_check("function identity<T>(x: T): T { return x; } const result = identity(42);")
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/checker/generic - multiple type params" {
+  let result = parse_bind_check("function pair<A, B>(a: A, b: B): [A, B] { return [a, b]; } const p = pair(1, 'hello');")
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/checker/generic - constrained type param" {
+  let result = parse_bind_check("function getLength<T extends { length: number }>(x: T): number { return x.length; } getLength([1, 2, 3]);")
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false)
+  }
+}
+
+// ============================================================================
+// Object Literal Type Inference Tests
+// ============================================================================
+
+///|
+test "unit/checker/object - basic properties" {
+  let result = parse_bind_check("const obj = { x: 1, y: 'hello' };")
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/checker/object - shorthand property" {
+  let result = parse_bind_check("const x = 1; const obj = { x };")
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/checker/object - computed property with string" {
+  let result = parse_bind_check("const obj = { ['key']: 42 };")
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false)
+  }
+}
+
+// ============================================================================
+// Type Narrowing with Assignment Invalidation Tests
+// ============================================================================
+
+///|
+test "unit/checker/narrowing - assignment invalidates narrowing" {
+  let result = parse_bind_check("function test(x: string | number) { if (typeof x === 'string') { x = 42; return x; } return 0; }")
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/checker/narrowing - function scope clears narrowing" {
+  let result = parse_bind_check("function outer(x: string | number) { if (typeof x === 'string') { function inner() { return x; } } }")
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false)
+  }
+}

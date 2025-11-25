@@ -493,19 +493,25 @@ pub fn resolve_type_reference(
 fn instantiate_generic_type(
   checker : TypeChecker,
   generic_type : Type,
-  _type_args : Array[Type],
+  type_args : Array[Type],
 ) -> (Type, TypeChecker) {
-  match generic_type {
-    Type::Function(func_type) =>
-      // Substitute type parameters in function type
-      // TODO: Full implementation would substitute type params with type args
-      (Type::Function(func_type), checker)
-    Object(obj) =>
-      // Substitute type parameters in object type properties
-      // TODO: Full implementation would substitute type params with type args
-      (Object(obj), checker)
-    _ => (generic_type, checker)
+  // Get type parameters from the generic type (if available)
+  // For now, we'll create placeholder type parameters based on common conventions
+  let type_params = get_type_parameters_from_type(generic_type)
+  if type_params.is_empty() {
+    return (generic_type, checker)
   }
+
+  // Use substitute_type_parameters to perform the actual substitution
+  substitute_type_parameters(checker, generic_type, type_params, type_args)
+}
+
+///|
+/// Extract type parameters from a type (helper for instantiation)
+fn get_type_parameters_from_type(t : Type) -> Array[CheckerTypeParameter] {
+  // For now, return empty - full implementation would track type parameters
+  // on function/class/interface types
+  []
 }
 
 // ============================================================================
@@ -1176,19 +1182,10 @@ fn check_variable_declaration(
     None => (None, checker)
   }
 
-  // Check compatibility if both are present
+  // Check compatibility if both are present using check_assignment_compatibility
   let checker = match (declared_type, init_type) {
     (Some(decl_t), Some(init_t)) =>
-      if is_assignable(init_t, decl_t) {
-        checker
-      } else {
-        add_diagnostic(
-          checker,
-          "Type mismatch in variable declaration",
-          decl.location,
-          2322,
-        )
-      }
+      check_assignment_compatibility(checker, init_t, decl_t, decl.location)
     _ => checker
   }
   checker
@@ -1256,20 +1253,25 @@ fn infer_identifier_type(
   checker : TypeChecker,
   id : Identifier,
 ) -> (Type, TypeChecker) {
-  // Look up symbol in scope chain
-  match lookup_symbol(checker, id.name) {
-    Some(symbol) =>
-      // Get type from symbol
-      match get_symbol_type(checker, symbol) {
-        (Some(t), c) => (t, c)
-        (None, c) =>
-          // Symbol exists but type not yet computed - infer from declaration
-          infer_symbol_type(c, symbol)
-      }
+  // First check for narrowed type (from type guards in if statements)
+  match get_narrowed_type(checker, id.name) {
+    Some(narrowed) => (narrowed, checker)
     None =>
-      // Undeclared identifier - return any type without error
-      // (error would be too strict for current implementation)
-      any_type(checker)
+      // Look up symbol in scope chain
+      match lookup_symbol(checker, id.name) {
+        Some(symbol) =>
+          // Get type from symbol
+          match get_symbol_type(checker, symbol) {
+            (Some(t), c) => (t, c)
+            (None, c) =>
+              // Symbol exists but type not yet computed - infer from declaration
+              infer_symbol_type(c, symbol)
+          }
+        None =>
+          // Undeclared identifier - return any type without error
+          // (error would be too strict for current implementation)
+          any_type(checker)
+      }
   }
 }
 
@@ -1623,23 +1625,23 @@ fn infer_binary_expression_type(
     | BitwiseAndAssign
     | BitwiseOrAssign
     | BitwiseXorAssign => {
-      // Check if trying to assign to a const variable
+      // Check if trying to assign to a const variable using check_const_assignment
+      // Also remove any type narrowing for the variable being assigned
       let checker = match bin_expr.left {
-        Identifier(id) =>
-          match lookup_symbol(checker, id.name) {
+        Identifier(id) => {
+          let checker = match lookup_symbol(checker, id.name) {
             Some(symbol) =>
-              if symbol.flags.is_const {
-                add_diagnostic(
-                  checker,
-                  "Cannot assign to '\{id.name}' because it is a constant",
-                  get_node_location(BinaryExpression(bin_expr)),
-                  2588,
-                )
-              } else {
-                checker
-              }
+              check_const_assignment(
+                checker,
+                id.name,
+                symbol,
+                get_node_location(BinaryExpression(bin_expr)),
+              )
             None => checker
           }
+          // Assignment invalidates type narrowing for this variable
+          remove_narrowed_type(checker, id.name)
+        }
         _ => checker
       }
       (right_type, checker)
@@ -1789,19 +1791,69 @@ fn try_signature(
     return None
   }
 
+  // If the signature has type parameters, infer them from arguments
+  let (effective_params, return_type, checker) = if signature.type_parameters.length() >
+    0 {
+    // Infer type arguments from actual arguments
+    let param_types : Array[Type] = []
+    for param in signature.parameters {
+      param_types.push(param.param_type)
+    }
+    let (inferred_type_args, checker) = infer_type_arguments(
+      checker,
+      signature.type_parameters,
+      param_types,
+      arg_types,
+    )
+    // Check type arguments against constraints
+    let checker = check_type_arguments(
+      checker,
+      signature.type_parameters,
+      inferred_type_args,
+      { file_path: "", start: { line: 0, column: 0, offset: 0 }, end: { line: 0, column: 0, offset: 0 } },
+    )
+    // Substitute type parameters in parameter types and return type
+    let mut checker = checker
+    let new_params : Array[CheckerParameter] = []
+    for param in signature.parameters {
+      let (subst_type, c) = substitute_type_parameters(
+        checker,
+        param.param_type,
+        signature.type_parameters,
+        inferred_type_args,
+      )
+      checker = c
+      new_params.push({
+        name: param.name,
+        param_type: subst_type,
+        is_optional: param.is_optional,
+        is_rest: param.is_rest,
+      })
+    }
+    let (subst_return, checker) = substitute_type_parameters(
+      checker,
+      signature.return_type,
+      signature.type_parameters,
+      inferred_type_args,
+    )
+    (new_params, subst_return, checker)
+  } else {
+    (signature.parameters, signature.return_type, checker)
+  }
+
   // Check each argument against corresponding parameter type
   for i = 0; i < arg_types.length(); i = i + 1 {
-    let param_idx = if i < signature.parameters.length() {
+    let param_idx = if i < effective_params.length() {
       i
     } else {
-      signature.parameters.length() - 1
+      effective_params.length() - 1
     }
-    let param_type = signature.parameters[param_idx].param_type
+    let param_type = effective_params[param_idx].param_type
     if not(is_assignable(arg_types[i], param_type)) {
       return None
     }
   }
-  Some((signature.return_type, checker))
+  Some((return_type, checker))
 }
 
 ///|
@@ -2398,7 +2450,34 @@ fn apply_type_narrowing(
     type_guard_info.type_when_false
   }
   match narrowed_type {
-    Some(t) => t
+    Some(t) =>
+      // If original is a union type and narrowed type is specified,
+      // use narrow_union to exclude non-matching types
+      match original_type {
+        Union(union) =>
+          // For the true branch, keep only types matching the narrowed type
+          // For the false branch, exclude the narrowed type from the union
+          if is_true_branch {
+            // Keep only types that are assignable to the narrowed type
+            let kept_types : Array[Type] = []
+            for union_member in union.types {
+              if types_are_identical(union_member, t) || is_assignable(union_member, t) {
+                kept_types.push(union_member)
+              }
+            }
+            if kept_types.length() == 1 {
+              kept_types[0]
+            } else if kept_types.is_empty() {
+              t // Fall back to the narrowed type
+            } else {
+              Union({ types: kept_types, info: union.info })
+            }
+          } else {
+            // Exclude the type from the union
+            narrow_union(union, [t])
+          }
+        _ => t
+      }
     None => original_type // No narrowing available
   }
 }
@@ -2410,18 +2489,24 @@ fn apply_narrowing_to_checker(
   type_guard_info : TypeGuardInfo,
   is_true_branch : Bool,
 ) -> TypeChecker {
-  let narrowed_type = if is_true_branch {
-    type_guard_info.type_when_true
-  } else {
-    type_guard_info.type_when_false
+  // Get original type from symbol lookup or any type as fallback
+  let (original, checker) = match lookup_symbol(checker, type_guard_info.parameter_name) {
+    Some(symbol) =>
+      match checker.symbol_types.get(symbol.id) {
+        Some(t) => (t, checker)
+        None => any_type(checker)
+      }
+    None => any_type(checker)
   }
-  match narrowed_type {
-    Some(t) => {
-      // Get original type from type cache or create a placeholder
-      let (original, checker) = any_type(checker)
-      add_narrowed_type(checker, type_guard_info.parameter_name, original, t)
-    }
-    None => checker
+
+  // Apply type narrowing using the apply_type_narrowing function
+  let narrowed = apply_type_narrowing(original, type_guard_info, is_true_branch)
+
+  // Check if narrowing was effective (different from original)
+  if not(types_are_identical(original, narrowed)) {
+    add_narrowed_type(checker, type_guard_info.parameter_name, original, narrowed)
+  } else {
+    checker
   }
 }
 
@@ -2656,6 +2741,16 @@ fn infer_new_expression_type(
   new_expr : NewExpression,
 ) -> (Type, TypeChecker) {
   let (expr_type, checker) = infer_type(checker, new_expr.expression)
+
+  // Check if trying to instantiate an abstract class
+  let checker = match new_expr.expression {
+    Identifier(id) =>
+      match lookup_symbol(checker, id.name) {
+        Some(class_symbol) => check_abstract_instantiation(checker, new_expr, class_symbol)
+        None => checker
+      }
+    _ => checker
+  }
 
   // Check arguments if present
   let mut checker = checker
@@ -2918,13 +3013,31 @@ fn infer_object_literal_type(
         checker = c
       }
       ComputedPropertyAssignment(name_expr, value, _) => {
-        // For computed properties, we infer the types but use a dynamic key
+        // For computed properties, try to get the property name from string/identifier
+        let key = get_property_name(name_expr)
+        let key = if key == "" { "[computed]" } else { key }
         let (_, c) = infer_type(checker, name_expr)
         let (prop_type, c) = infer_type(c, value)
-        // Use a computed key placeholder - actual key depends on runtime value
-        let key = "[computed]"
         properties.set(key, {
           name: key,
+          prop_type,
+          is_optional: false,
+          is_readonly: false,
+        })
+        checker = c
+      }
+      ShorthandProperty(name, _) => {
+        // Shorthand property - get type from identifier in scope
+        let (prop_type, c) = match lookup_symbol(checker, name) {
+          Some(symbol) =>
+            match checker.symbol_types.get(symbol.id) {
+              Some(t) => (t, checker)
+              None => any_type(checker)
+            }
+          None => any_type(checker)
+        }
+        properties.set(name, {
+          name,
           prop_type,
           is_optional: false,
           is_readonly: false,
@@ -3462,12 +3575,29 @@ fn check_function_declaration(
   checker : TypeChecker,
   func : FunctionDeclaration,
 ) -> TypeChecker {
+  // Check return type consistency if a return type is declared
+  let checker = match func.return_type {
+    Some(return_type_node) =>
+      match get_type_from_type_node(checker, return_type_node) {
+        (Some(declared_return), checker) =>
+          check_return_type_consistency(checker, func, declared_return)
+        (None, checker) => checker
+      }
+    None => checker
+  }
+
+  // Clear any narrowed types from outer scope before entering function body
+  let saved_narrowed_types = checker.narrowed_types
+  let checker = clear_narrowed_types(checker)
+
   // Check function body
   let checker = match func.body {
     Some(body) => check_statement(checker, body)
     None => checker
   }
-  checker
+
+  // Restore narrowed types after exiting function
+  { ..checker, narrowed_types: saved_narrowed_types }
 }
 
 // ============================================================================
@@ -3593,6 +3723,9 @@ fn check_block_statement(
   checker : TypeChecker,
   block : BlockStatement,
 ) -> TypeChecker {
+  // Check for unreachable code first
+  let checker = check_unreachable_code(checker, block.statements)
+  // Then check all statements
   check_statements(checker, block.statements)
 }
 
