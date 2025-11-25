@@ -352,6 +352,9 @@ fn bind_function_declaration(
   // Create new scope for function body
   let binder = push_scope(binder)
 
+  // Bind type parameters (generics)
+  let binder = bind_type_parameters(binder, func.type_parameters)
+
   // Bind parameters
   let binder = bind_parameters(binder, func.parameters)
 
@@ -379,6 +382,9 @@ fn bind_class_declaration(binder : Binder, class_decl : ClassDeclaration) -> Bin
 
   // Create new scope for class body
   let binder = push_scope(binder)
+
+  // Bind type parameters (generics)
+  let binder = bind_type_parameters(binder, class_decl.type_parameters)
 
   // Bind class members
   let binder = bind_class_members(binder, class_decl.members)
@@ -450,6 +456,12 @@ fn bind_interface_declaration(
   // Create members symbol table for interface properties
   let members : SymbolTable = Map::new()
 
+  // Create scope for interface to bind type parameters
+  let binder = push_scope(binder)
+
+  // Bind type parameters (generics)
+  let binder = bind_type_parameters(binder, interface.type_parameters)
+
   // Bind each interface member (property signature)
   for i = 0; i < interface.members.length(); i = i + 1 {
     match interface.members[i] {
@@ -460,6 +472,8 @@ fn bind_interface_declaration(
       _ => () // Skip other member types for now
     }
   }
+
+  let binder = pop_scope(binder)
 
   let mut symbol = Symbol::new(interface.name, SymbolKind::Interface, binder.next_symbol_id)
   let interface_node = Node::InterfaceDeclaration(interface)
@@ -521,7 +535,16 @@ fn bind_type_alias_declaration(
 ) -> Binder {
   let symbol = Symbol::new(type_alias.name, SymbolKind::Type, binder.next_symbol_id)
   let symbol = symbol.add_declaration(Node::TypeAliasDeclaration(type_alias))
-  declare_symbol(binder, type_alias.name, symbol)
+  let binder = declare_symbol(binder, type_alias.name, symbol)
+
+  // Push scope for type parameters
+  let binder = push_scope(binder)
+
+  // Bind type parameters (generics)
+  let binder = bind_type_parameters(binder, type_alias.type_parameters)
+
+  // Pop scope
+  pop_scope(binder)
 }
 
 ///|
@@ -660,6 +683,28 @@ fn bind_parameters_aux(
       _ => binder
     }
     bind_parameters_aux(binder, parameters, index + 1)
+  }
+}
+
+///|
+/// Bind type parameters (generics like <T, U extends V>)
+fn bind_type_parameters(binder : Binder, type_params : Array[TypeParameter]) -> Binder {
+  bind_type_parameters_aux(binder, type_params, 0)
+}
+
+///|
+fn bind_type_parameters_aux(
+  binder : Binder,
+  type_params : Array[TypeParameter],
+  index : Int,
+) -> Binder {
+  if index >= type_params.length() {
+    binder
+  } else {
+    let tp = type_params[index]
+    let symbol = Symbol::new(tp.name, SymbolKind::TypeParameter, binder.next_symbol_id)
+    let binder = declare_symbol(binder, tp.name, symbol)
+    bind_type_parameters_aux(binder, type_params, index + 1)
   }
 }
 

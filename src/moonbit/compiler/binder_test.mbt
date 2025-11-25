@@ -587,3 +587,108 @@ test "bind empty source" {
     Err(_) => assert_true(false)
   }
 }
+
+// ============================================================================
+// Type Parameter Tests
+// ============================================================================
+
+///|
+test "bind generic function type parameters" {
+  let result = parse_and_bind("function identity<T>(x: T): T { return x; }")
+  match result {
+    Ok(bound) => {
+      // Function should be in global scope
+      assert_true(bound.global_scope.symbols.contains("identity"))
+      // Type parameter T should not be in global scope (it's in function scope)
+      assert_false(bound.global_scope.symbols.contains("T"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "bind generic function with multiple type parameters" {
+  let result = parse_and_bind("function map<T, U>(arr: T[], f: (x: T) => U): U[] { return []; }")
+  match result {
+    Ok(bound) => {
+      // Function should be in global scope
+      assert_true(bound.global_scope.symbols.contains("map"))
+      // Type parameters should not be in global scope
+      assert_false(bound.global_scope.symbols.contains("T"))
+      assert_false(bound.global_scope.symbols.contains("U"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "bind generic class type parameters" {
+  let result = parse_and_bind("class Box<T> { value: T; }")
+  match result {
+    Ok(bound) => {
+      // Class should be in global scope
+      assert_true(bound.global_scope.symbols.contains("Box"))
+      // Type parameter T should not be in global scope
+      assert_false(bound.global_scope.symbols.contains("T"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "bind generic class with multiple type parameters" {
+  let result = parse_and_bind("class Pair<K, V> { key: K; value: V; }")
+  match result {
+    Ok(bound) => {
+      // Class should be in global scope
+      assert_true(bound.global_scope.symbols.contains("Pair"))
+      // Type parameters should not be in global scope
+      assert_false(bound.global_scope.symbols.contains("K"))
+      assert_false(bound.global_scope.symbols.contains("V"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "bind generic interface type parameters" {
+  let result = parse_and_bind("interface Container<T> { value: T; }")
+  match result {
+    Ok(bound) => {
+      // Interface should be in global scope
+      assert_true(bound.global_scope.symbols.contains("Container"))
+      // Type parameter T should not be in global scope
+      assert_false(bound.global_scope.symbols.contains("T"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "bind generic type alias type parameters" {
+  let result = parse_and_bind("type Nullable<T> = T | null;")
+  match result {
+    Ok(bound) => {
+      // Type alias should be in global scope
+      assert_true(bound.global_scope.symbols.contains("Nullable"))
+      // Type parameter T should not be in global scope
+      assert_false(bound.global_scope.symbols.contains("T"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "bind generic type alias with multiple type parameters" {
+  let result = parse_and_bind("type Result<T, E> = { ok: T } | { error: E };")
+  match result {
+    Ok(bound) => {
+      // Type alias should be in global scope
+      assert_true(bound.global_scope.symbols.contains("Result"))
+      // Type parameters should not be in global scope
+      assert_false(bound.global_scope.symbols.contains("T"))
+      assert_false(bound.global_scope.symbols.contains("E"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
