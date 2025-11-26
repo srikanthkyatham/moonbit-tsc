@@ -311,6 +311,37 @@ fn parse_optional_function_name(parser : Parser) -> (String?, Parser) {
 }
 
 ///|
+/// Parse property value after colon (expects parser positioned at ':')
+/// Returns PropertyAssignment on success
+fn parse_colon_property_value(
+  parser : Parser,
+  name : String,
+  start_loc : SourceLocation,
+  error_context : String,
+) -> Result[(ObjectProperty, Parser), Parser] {
+  match current_token(parser) {
+    Colon(_) => {
+      let parser = advance_parser(parser) // consume :
+      match parse_assignment_expression(parser) {
+        Ok((value, parser)) =>
+          Ok(
+            (ObjectProperty::PropertyAssignment(name, value, start_loc), parser),
+          )
+        Err(parser) => Err(parser)
+      }
+    }
+    _ =>
+      Err(
+        add_error(
+          parser,
+          "Expected ':' after " + error_context,
+          current_token(parser).location(),
+        ),
+      )
+  }
+}
+
+///|
 /// Parse function expression body (parameters, optional return type, block)
 /// Used for both regular and async function expressions
 fn parse_function_expression_body(

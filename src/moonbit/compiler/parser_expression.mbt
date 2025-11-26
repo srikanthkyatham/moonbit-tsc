@@ -1169,56 +1169,16 @@ fn parse_object_property(
     StringLiteral(name, _) => {
       // String literal property name: "name": value or 'name': value
       let parser = advance_parser(parser) // consume string literal
-      match current_token(parser) {
-        Colon(_) => {
-          let parser = advance_parser(parser) // consume :
-          match parse_assignment_expression(parser) {
-            Ok((value, parser)) =>
-              Ok(
-                (
-                  ObjectProperty::PropertyAssignment(name, value, start_loc),
-                  parser,
-                ),
-              )
-            Err(parser) => Err(parser)
-          }
-        }
-        _ =>
-          Err(
-            add_error(
-              parser,
-              "Expected ':' after string property name",
-              current_token(parser).location(),
-            ),
-          )
-      }
+      parse_colon_property_value(
+        parser, name, start_loc, "string property name",
+      )
     }
     NumericLiteral(name, _) => {
       // Numeric literal property name: 0: value, 1: value
       let parser = advance_parser(parser) // consume numeric literal
-      match current_token(parser) {
-        Colon(_) => {
-          let parser = advance_parser(parser) // consume :
-          match parse_assignment_expression(parser) {
-            Ok((value, parser)) =>
-              Ok(
-                (
-                  ObjectProperty::PropertyAssignment(name, value, start_loc),
-                  parser,
-                ),
-              )
-            Err(parser) => Err(parser)
-          }
-        }
-        _ =>
-          Err(
-            add_error(
-              parser,
-              "Expected ':' after numeric property name",
-              current_token(parser).location(),
-            ),
-          )
-      }
+      parse_colon_property_value(
+        parser, name, start_loc, "numeric property name",
+      )
     }
     _ =>
       // Parse property name as identifier
