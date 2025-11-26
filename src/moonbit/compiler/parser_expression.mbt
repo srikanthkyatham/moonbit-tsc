@@ -29,55 +29,36 @@ fn try_parse_arrow_function(parser : Parser) -> Result[(Node, Parser), Parser] {
 
   // Parse parameters
   let (params, parser) = parse_parameter_list(parser)
-  let mut parser = parser
 
-  // Parse optional return type annotation
-  let (return_type, p) = match current_token(parser) {
+  // Parse optional return type annotation (with backtrack on error)
+  let (return_type, parser) = match current_token(parser) {
     Colon(_) => {
-      parser = advance_parser(parser)
-      match parse_type(parser) {
+      let p = advance_parser(parser)
+      match parse_type(p) {
         Ok((ty, p)) => (Some(ty), p)
         Err(_) => return Err(original_parser)
       }
     }
     _ => (None, parser)
   }
-  parser = p
 
   // Expect arrow =>
-  parser = match current_token(parser) {
+  let parser = match current_token(parser) {
     Arrow(_) => advance_parser(parser)
     _ => return Err(original_parser)
   }
 
-  // Parse body (expression or block)
-  let (body, parser) = match current_token(parser) {
-    OpenBrace(_) =>
-      // Block body
-      match parse_block_statement(parser) {
-        Ok((block, p)) => (block, p)
-        Err(p) => return Err(p)
-      }
-    _ =>
-      // Expression body
-      match parse_assignment_expression(parser) {
-        Ok((expr, p)) => (expr, p)
-        Err(p) => return Err(p)
-      }
+  // Parse body and create arrow function node
+  match parse_arrow_body(parser) {
+    Ok((body, parser)) =>
+      Ok(
+        (
+          make_arrow_function(params, return_type, body, false, start_loc),
+          parser,
+        ),
+      )
+    Err(p) => Err(p)
   }
-  Ok(
-    (
-      Node::ArrowFunction(ArrowFunction::{
-        type_parameters: [],
-        parameters: params,
-        return_type,
-        body,
-        is_async: false,
-        location: start_loc,
-      }),
-      parser,
-    ),
-  )
 }
 
 ///|
@@ -100,45 +81,21 @@ fn try_parse_single_param_arrow_function(
     _ => return Err(original_parser)
   }
 
-  // Parse body (expression or block)
-  let (body, parser) = match current_token(parser) {
-    OpenBrace(_) =>
-      // Block body
-      match parse_block_statement(parser) {
-        Ok((block, p)) => (block, p)
-        Err(p) => return Err(p)
-      }
-    _ =>
-      // Expression body
-      match parse_assignment_expression(parser) {
-        Ok((expr, p)) => (expr, p)
-        Err(p) => return Err(p)
-      }
+  // Create parameter and parse body
+  let param = Node::Parameter(Parameter::{
+    name: Node::Identifier(id),
+    type_annotation: None,
+    initializer: None,
+    is_optional: false,
+    is_rest: false,
+    modifiers: [],
+    location: id.location,
+  })
+  match parse_arrow_body(parser) {
+    Ok((body, parser)) =>
+      Ok((make_arrow_function([param], None, body, false, start_loc), parser))
+    Err(p) => Err(p)
   }
-  let params = [
-    Node::Parameter(Parameter::{
-      name: Node::Identifier(id),
-      type_annotation: None,
-      initializer: None,
-      is_optional: false,
-      is_rest: false,
-      modifiers: [],
-      location: id.location,
-    }),
-  ]
-  Ok(
-    (
-      Node::ArrowFunction(ArrowFunction::{
-        type_parameters: [],
-        parameters: params,
-        return_type: None,
-        body,
-        is_async: false,
-        location: start_loc,
-      }),
-      parser,
-    ),
-  )
 }
 
 ///|
@@ -763,7 +720,6 @@ fn parse_primary_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
       let template_spans : Array[TemplateSpan] = []
       while true {
         // Parse the interpolated expression
-        let expr_start = current_token(parser).location()
         match parse_expression(parser) {
           Ok((expr, p)) => {
             parser = p
@@ -1283,18 +1239,7 @@ fn parse_object_property(
               // Method declaration: greet() { ... }
               let parser = advance_parser(parser) // consume (
               let (parameters, parser) = parse_parameter_list(parser)
-
-              // Optional return type
-              let (return_type, parser) = match current_token(parser) {
-                Colon(_) => {
-                  let parser = advance_parser(parser)
-                  match parse_type(parser) {
-                    Ok((ty, p)) => (Some(ty), p)
-                    Err(p) => (None, p)
-                  }
-                }
-                _ => (None, parser)
-              }
+              let (return_type, parser) = parse_optional_return_type(parser)
 
               // Parse method body
               match parse_block_statement(parser) {
@@ -1360,8 +1305,8 @@ fn parse_arrow_function_single_param(
   let start_loc = current_token(parser).location()
 
   // Parse parameter
-  let (param, parser) = match parse_identifier(parser) {
-    Ok((id, p)) => (id, p)
+  let (id, parser) = match parse_identifier(parser) {
+    Ok((i, p)) => (i, p)
     Err(p) => return Err(p)
   }
 
@@ -1369,24 +1314,8 @@ fn parse_arrow_function_single_param(
   match expect(parser, fn(t) { matches_arrow(t) }) {
     Ok(parser) => {
       let parser = advance_parser(parser)
-
-      // Parse body
-      let (body, parser) = match current_token(parser) {
-        OpenBrace(_) =>
-          // Block body
-          match parse_block_statement(parser) {
-            Ok((block, p)) => (block, p)
-            Err(p) => return Err(p)
-          }
-        _ =>
-          // Expression body
-          match parse_assignment_expression(parser) {
-            Ok((expr, p)) => (expr, p)
-            Err(p) => return Err(p)
-          }
-      }
       let param_node = Node::Parameter(Parameter::{
-        name: Node::Identifier(param),
+        name: Node::Identifier(id),
         type_annotation: None,
         initializer: None,
         is_optional: false,
@@ -1394,19 +1323,16 @@ fn parse_arrow_function_single_param(
         modifiers: [],
         location: start_loc,
       })
-      Ok(
-        (
-          Node::ArrowFunction(ArrowFunction::{
-            type_parameters: [],
-            parameters: [param_node],
-            return_type: None,
-            body,
-            is_async: false,
-            location: start_loc,
-          }),
-          parser,
-        ),
-      )
+      match parse_arrow_body(parser) {
+        Ok((body, parser)) =>
+          Ok(
+            (
+              make_arrow_function([param_node], None, body, false, start_loc),
+              parser,
+            ),
+          )
+        Err(p) => Err(p)
+      }
     }
     Err(parser) => Err(parser)
   }
