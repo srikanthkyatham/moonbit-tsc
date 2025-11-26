@@ -1,11 +1,19 @@
 # packages
 .mooncakes
 target
+
 # claude settings
 .claude
+
 # backup files
 *.*.bak*
 *.sh
 *.*.original
 *.*.before_stub
 *.*.backup
+
+# generated FFI library
+ffi_lib/lib/
+*.dylib
+*.so
+*.a

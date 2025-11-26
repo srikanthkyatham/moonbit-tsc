@@ -1,1 +1,8 @@
+# Test files
 recursive_bug_repro
+
+# Build output
+target/
+
+# Claude settings
+.claude/
