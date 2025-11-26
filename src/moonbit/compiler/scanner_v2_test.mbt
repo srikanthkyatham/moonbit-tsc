@@ -675,3 +675,81 @@ test "scanner_v2 simple template (no interpolation)" {
     }
   }
 }
+
+///|
+test "scanner_v2 regex literal after operator" {
+  // After = operator, / should be scanned as regex
+  let tokens = @compiler.scan_all_v2("x = /abc/gi", "test.ts")
+  // Expected: Identifier("x") Equals RegExpLiteral("/abc/gi") EOF
+  assert_eq(tokens.length(), 4)
+  match tokens[0] {
+    Identifier(value, _) => assert_eq(value, "x")
+    _ => assert_true(false)
+  }
+  match tokens[1] {
+    Equals(_) => ()
+    _ => assert_true(false)
+  }
+  match tokens[2] {
+    RegExpLiteral(value, _) => assert_eq(value, "/abc/gi")
+    _ => {
+      println("Expected RegExpLiteral, got: \{tokens[2]}")
+      assert_true(false)
+    }
+  }
+}
+
+///|
+test "scanner_v2 division not regex" {
+  // After identifier, / should be division not regex
+  let tokens = @compiler.scan_all_v2("x / y", "test.ts")
+  // Expected: Identifier("x") Slash Identifier("y") EOF
+  assert_eq(tokens.length(), 4)
+  match tokens[0] {
+    Identifier(value, _) => assert_eq(value, "x")
+    _ => assert_true(false)
+  }
+  match tokens[1] {
+    Slash(_) => ()
+    _ => {
+      println("Expected Slash, got: \{tokens[1]}")
+      assert_true(false)
+    }
+  }
+  match tokens[2] {
+    Identifier(value, _) => assert_eq(value, "y")
+    _ => assert_true(false)
+  }
+}
+
+///|
+test "scanner_v2 regex with character class" {
+  // Regex with character class containing /
+  let tokens = @compiler.scan_all_v2("x = /[a/b]/", "test.ts")
+  assert_eq(tokens.length(), 4)
+  match tokens[2] {
+    RegExpLiteral(value, _) => assert_eq(value, "/[a/b]/")
+    _ => {
+      println("Expected RegExpLiteral, got: \{tokens[2]}")
+      assert_true(false)
+    }
+  }
+}
+
+///|
+test "scanner_v2 regex after return keyword" {
+  let tokens = @compiler.scan_all_v2("return /test/", "test.ts")
+  // Expected: KeywordReturn RegExpLiteral EOF
+  assert_eq(tokens.length(), 3)
+  match tokens[0] {
+    KeywordReturn(_) => ()
+    _ => assert_true(false)
+  }
+  match tokens[1] {
+    RegExpLiteral(value, _) => assert_eq(value, "/test/")
+    _ => {
+      println("Expected RegExpLiteral, got: \{tokens[1]}")
+      assert_true(false)
+    }
+  }
+}

@@ -20,8 +20,9 @@ pub fn tokenize_v2_simple(source : String, file_path : String) -> Array[Token] {
 }
 
 ///|
-/// Tokenize with proper template interpolation handling
+/// Tokenize with proper template interpolation and regex handling
 /// Produces TemplateHead, TemplateMiddle, TemplateTail for templates with ${...}
+/// Produces RegExpLiteral when / follows an operator or keyword (vs division)
 fn tokenize_with_template_tracking(
   source : String,
   file_path : String,
@@ -31,6 +32,7 @@ fn tokenize_with_template_tracking(
   let mut template_depth = 0
   let mut scan_continuation = false
   let mut code : StringView = source[:]
+  let mut prev_token : Token? = None
 
   fn make_loc(
     start_line : Int,
@@ -56,13 +58,17 @@ fn tokenize_with_template_tracking(
       match result {
         TemplateScanResultV2::Complete(rest) => {
           let loc = make_loc(start_line, start_col, start_offset)
-          tokens.push(TemplateTail(content.to_string(), loc))
+          let token = TemplateTail(content.to_string(), loc)
+          tokens.push(token)
+          prev_token = Some(token)
           template_depth -= 1
           code = rest
         }
         TemplateScanResultV2::Middle(rest) => {
           let loc = make_loc(start_line, start_col, start_offset)
-          tokens.push(TemplateMiddle(content.to_string(), loc))
+          let token = TemplateMiddle(content.to_string(), loc)
+          tokens.push(token)
+          prev_token = Some(token)
           code = rest
         }
         TemplateScanResultV2::Head(_) => {
@@ -73,8 +79,13 @@ fn tokenize_with_template_tracking(
       continue
     }
 
-    // Scan single token
-    let (token, rest) = scan_single_token_v2(code, state, file_path)
+    // Scan single token with context for regex disambiguation
+    let (token, rest) = scan_single_token_with_context_v2(
+      code,
+      state,
+      file_path,
+      prev_token,
+    )
     tokens.push(token)
     code = rest
 
@@ -86,6 +97,8 @@ fn tokenize_with_template_tracking(
       EOF(_) => break
       _ => ()
     }
+
+    prev_token = Some(token)
   }
   tokens
 }
@@ -778,6 +791,89 @@ fn scan_single_token_v2(
 }
 
 ///|
+/// Scan a single token with context for regex vs division disambiguation
+fn scan_single_token_with_context_v2(
+  code : StringView,
+  state : ScanState,
+  file_path : String,
+  prev_token : Token?,
+) -> (Token, StringView) {
+  // Skip whitespace first to check what's next
+  let code_after_ws = skip_whitespace_v2(code, state)
+
+  // Check if we might be at a regex literal
+  match code_after_ws {
+    ['/', ..] if allows_regex_v2(prev_token) => {
+      // Could be regex - try to scan it
+      let start_line = state.line
+      let start_col = state.col
+      let start_offset = state.offset
+      // Skip the opening /
+      state.col += 1
+      state.offset += 1
+      match code_after_ws {
+        ['/', .. rest_after_slash] =>
+          match scan_regex_pattern_v2(rest_after_slash, state) {
+            Some((pattern, flags, rest)) => {
+              let full_regex = "/" + pattern + "/" + flags
+              let loc = SourceLocation::new(
+                file_path,
+                Position::new(start_line, start_col, start_offset),
+                Position::new(state.line, state.col, state.offset),
+              )
+              (RegExpLiteral(full_regex, loc), rest)
+            }
+            None => {
+              // Failed to parse as regex, restore state and scan as slash
+              state.line = start_line
+              state.col = start_col
+              state.offset = start_offset
+              scan_single_token_v2(code, state, file_path)
+            }
+          }
+        _ => scan_single_token_v2(code, state, file_path)
+      }
+    }
+    _ => scan_single_token_v2(code, state, file_path)
+  }
+}
+
+///|
+/// Skip whitespace and comments, returning remaining code
+fn skip_whitespace_v2(code : StringView, state : ScanState) -> StringView {
+  loop code {
+    [' ' | '\t', .. rest] => {
+      state.col += 1
+      state.offset += 1
+      continue rest
+    }
+    ['\r', .. rest] => {
+      state.offset += 1
+      continue rest
+    }
+    ['\n', .. rest] => {
+      state.line += 1
+      state.col = 1
+      state.offset += 1
+      continue rest
+    }
+    [.. "//", .. rest] => {
+      state.col += 2
+      state.offset += 2
+      let rest2 = skip_line_comment(rest, state)
+      continue rest2
+    }
+    [.. "/*", .. rest] => {
+      state.col += 2
+      state.offset += 2
+      let rest2 = skip_block_comment(rest, state)
+      continue rest2
+    }
+    remaining => remaining
+  }
+}
+
+///|
 /// Internal state for tracking position in the scanner
 priv struct ScanState {
   mut line : Int
@@ -1072,6 +1168,138 @@ fn scan_template_continuation_v2(
       state.offset += 1
       continue rest
     }
+  }
+}
+
+///|
+/// Scan regex literal pattern (after opening /)
+/// Returns (pattern, flags, remaining_code) or None if invalid
+fn scan_regex_pattern_v2(
+  code : StringView,
+  state : ScanState,
+) -> (String, String, StringView)? {
+  let pattern = StringBuilder::new()
+  let mut in_char_class = false
+
+  // Scan pattern
+  let rest = loop code {
+    [] => return None // Unterminated regex
+    ['\n' | '\r', ..] => return None // Newline in regex is invalid
+    ['/', .. rest] if not(in_char_class) => {
+      state.col += 1
+      state.offset += 1
+      rest // Found closing /
+    }
+    ['[', .. rest] => {
+      in_char_class = true
+      pattern.write_char('[')
+      state.col += 1
+      state.offset += 1
+      continue rest
+    }
+    [']', .. rest] => {
+      in_char_class = false
+      pattern.write_char(']')
+      state.col += 1
+      state.offset += 1
+      continue rest
+    }
+    ['\\', ch, .. rest] => {
+      // Escape sequence - include both backslash and next char
+      pattern.write_char('\\')
+      pattern.write_char(ch)
+      state.col += 2
+      state.offset += 2
+      continue rest
+    }
+    ['\\'] => return None // Backslash at end
+    [ch, .. rest] => {
+      pattern.write_char(ch)
+      state.col += 1
+      state.offset += 1
+      continue rest
+    }
+  }
+
+  // Scan flags (g, i, m, s, u, y, d, v)
+  let flags = StringBuilder::new()
+  let rest2 = loop rest {
+    ['g' | 'i' | 'm' | 's' | 'u' | 'y' | 'd' | 'v' as ch, .. rest3] => {
+      flags.write_char(ch)
+      state.col += 1
+      state.offset += 1
+      continue rest3
+    }
+    remaining => remaining
+  }
+
+  Some((pattern.to_string(), flags.to_string(), rest2))
+}
+
+///|
+/// Check if previous token allows regex literal (vs division)
+fn allows_regex_v2(prev_token : Token?) -> Bool {
+  match prev_token {
+    None => true // Start of file
+    Some(token) =>
+      match token {
+        // Assignment operators that can precede a regex
+        Equals(_)
+        | PlusEquals(_)
+        | MinusEquals(_)
+        | StarEquals(_)
+        | SlashEquals(_)
+        | PercentEquals(_)
+        | AmpersandEquals(_)
+        | BarEquals(_)
+        | CaretEquals(_)
+        | StarStarEquals(_)
+        | LessThanLessThanEquals(_)
+        | GreaterThanGreaterThanEquals(_)
+        | GreaterThanGreaterThanGreaterThanEquals(_)
+        | AmpersandAmpersandEquals(_)
+        | BarBarEquals(_)
+        | QuestionQuestionEquals(_) => true
+        // Comparison/logical operators
+        EqualsEquals(_)
+        | ExclamationEquals(_)
+        | EqualsEqualsEquals(_)
+        | ExclamationEqualsEquals(_)
+        | LessThan(_)
+        | GreaterThan(_)
+        | LessThanEquals(_)
+        | GreaterThanEquals(_)
+        | AmpersandAmpersand(_)
+        | BarBar(_)
+        | QuestionQuestion(_) => true
+        // Arithmetic operators (but not + or - which could be unary)
+        Star(_) | Slash(_) | Percent(_) | StarStar(_) => true
+        // Bitwise operators
+        Ampersand(_)
+        | Bar(_)
+        | Caret(_)
+        | Tilde(_)
+        | LessThanLessThan(_)
+        | GreaterThanGreaterThan(_)
+        | GreaterThanGreaterThanGreaterThan(_) => true
+        // Other operators
+        Exclamation(_) | Question(_) | Colon(_) | Arrow(_) | Comma(_) => true
+        // Opening brackets/parens
+        OpenParen(_) | OpenBracket(_) | OpenBrace(_) => true
+        // Semicolon (statement boundary)
+        Semicolon(_) => true
+        // Keywords that precede expressions
+        KeywordReturn(_)
+        | KeywordThrow(_)
+        | KeywordCase(_)
+        | KeywordIn(_)
+        | KeywordTypeOf(_)
+        | KeywordDelete(_)
+        | KeywordNew(_)
+        | KeywordAwait(_)
+        | KeywordYield(_) => true
+        _ => false
+      }
   }
 }
 
