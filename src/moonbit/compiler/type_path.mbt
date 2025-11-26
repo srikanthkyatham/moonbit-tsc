@@ -54,7 +54,11 @@ pub fn TypePath::to_string(self : TypePath) -> String {
     }
     PParameter(parent, i, name) => {
       let p = parent.to_string()
-      let suffix = " (parameter '" + name + "' at position " + i.to_string() + ")"
+      let suffix = " (parameter '" +
+        name +
+        "' at position " +
+        i.to_string() +
+        ")"
       if p.is_empty() {
         suffix
       } else {
@@ -63,8 +67,11 @@ pub fn TypePath::to_string(self : TypePath) -> String {
     }
     PTypeArg(parent, name, i) => {
       let p = parent.to_string()
-      let suffix =
-        " (type argument '" + name + "' at position " + i.to_string() + ")"
+      let suffix = " (type argument '" +
+        name +
+        "' at position " +
+        i.to_string() +
+        ")"
       if p.is_empty() {
         suffix
       } else {
@@ -234,7 +241,7 @@ pub fn TypePath::return_type(self : TypePath) -> TypePath {
 pub fn TypePath::parameter(
   self : TypePath,
   index : Int,
-  name : String
+  name : String,
 ) -> TypePath {
   PParameter(self, index, name)
 }
@@ -244,7 +251,7 @@ pub fn TypePath::parameter(
 pub fn TypePath::type_arg(
   self : TypePath,
   name : String,
-  index : Int
+  index : Int,
 ) -> TypePath {
   PTypeArg(self, name, index)
 }
@@ -272,7 +279,7 @@ pub fn TypePath::constraint(self : TypePath, param_name : String) -> TypePath {
 pub fn TypePath::tuple_element(
   self : TypePath,
   index : Int,
-  label : String?
+  label : String?,
 ) -> TypePath {
   PTupleElement(self, index, label)
 }

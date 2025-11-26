@@ -45,9 +45,7 @@ fn Binder::new(file_path : String) -> Binder {
 
 ///|
 /// Main entry point: bind a source file
-pub fn bind_source_file(
-  source_file : SourceFile,
-) -> BindResult {
+pub fn bind_source_file(source_file : SourceFile) -> BindResult {
   let binder = Binder::new(source_file.file_path)
   let binder = bind_statements(binder, source_file.statements)
 
@@ -61,7 +59,6 @@ pub fn bind_source_file(
 
   // Build the control flow graph
   let control_flow_graph = binder.cfg_builder.build()
-
   if binder.diagnostics.length() > 0 {
     Err(binder.diagnostics)
   } else {
@@ -104,54 +101,44 @@ fn bind_statements_aux(
 fn bind_statement(binder : Binder, node : Node) -> Binder {
   match node {
     // Variable declarations
-    VariableStatement(var_stmt) => {
-      bind_variable_declarations(binder, var_stmt.declarations, var_stmt.is_const)
-    }
+    VariableStatement(var_stmt) =>
+      bind_variable_declarations(
+        binder,
+        var_stmt.declarations,
+        var_stmt.is_const,
+      )
 
     // Function declaration
-    FunctionDeclaration(func) => {
-      bind_function_declaration(binder, func)
-    }
+    FunctionDeclaration(func) => bind_function_declaration(binder, func)
 
     // Class declaration
-    ClassDeclaration(class_decl) => {
-      bind_class_declaration(binder, class_decl)
-    }
+    ClassDeclaration(class_decl) => bind_class_declaration(binder, class_decl)
 
     // Interface declaration
-    InterfaceDeclaration(interface) => {
+    InterfaceDeclaration(interface) =>
       bind_interface_declaration(binder, interface)
-    }
 
     // Enum declaration
-    EnumDeclaration(enum_decl) => {
-      bind_enum_declaration(binder, enum_decl)
-    }
+    EnumDeclaration(enum_decl) => bind_enum_declaration(binder, enum_decl)
 
     // Type alias
-    TypeAliasDeclaration(type_alias) => {
+    TypeAliasDeclaration(type_alias) =>
       bind_type_alias_declaration(binder, type_alias)
-    }
 
     // Module/namespace declaration
-    ModuleDeclaration(mod_decl) => {
-      bind_module_declaration(binder, mod_decl)
-    }
+    ModuleDeclaration(mod_decl) => bind_module_declaration(binder, mod_decl)
 
     // Import declaration
-    ImportDeclaration(import_decl) => {
+    ImportDeclaration(import_decl) =>
       bind_import_declaration(binder, import_decl)
-    }
 
     // Export declaration
-    ExportDeclaration(export_decl) => {
+    ExportDeclaration(export_decl) =>
       bind_export_declaration(binder, export_decl)
-    }
 
     // Export assignment
-    ExportAssignment(export_assign) => {
+    ExportAssignment(export_assign) =>
       bind_export_assignment(binder, export_assign)
-    }
 
     // Block statement
     BlockStatement(block) => {
@@ -207,11 +194,19 @@ fn bind_statement(binder : Binder, node : Node) -> Binder {
       // Create loop label for break/continue targets
       let break_label_id = binder.cfg_builder.next_id
       let continue_label_id = break_label_id + 1
-      let binder = create_loop_label_flow(binder, Some(break_label_id), Some(continue_label_id))
+      let binder = create_loop_label_flow(
+        binder,
+        Some(break_label_id),
+        Some(continue_label_id),
+      )
 
       // Push loop context for break/continue handling
-      let cfg_builder = binder.cfg_builder.push_loop(break_label_id, continue_label_id, None)
-      let binder = { ..binder, cfg_builder }
+      let cfg_builder = binder.cfg_builder.push_loop(
+        break_label_id,
+        continue_label_id,
+        None,
+      )
+      let binder = { ..binder, cfg_builder, }
 
       // Bind condition
       let (binder, condition_id) = match for_stmt.condition {
@@ -243,7 +238,7 @@ fn bind_statement(binder : Binder, node : Node) -> Binder {
 
       // Pop loop context
       let cfg_builder = binder.cfg_builder.pop_loop()
-      let binder = { ..binder, cfg_builder }
+      let binder = { ..binder, cfg_builder, }
 
       // Create false branch for loop exit (when condition is false)
       let binder = match condition_id {
@@ -256,7 +251,6 @@ fn bind_statement(binder : Binder, node : Node) -> Binder {
         }
         None => binder
       }
-
       let binder = pop_container(binder)
       pop_scope(binder)
     }
@@ -266,11 +260,19 @@ fn bind_statement(binder : Binder, node : Node) -> Binder {
       // Create loop label for break/continue targets
       let break_label_id = binder.cfg_builder.next_id
       let continue_label_id = break_label_id + 1
-      let binder = create_loop_label_flow(binder, Some(break_label_id), Some(continue_label_id))
+      let binder = create_loop_label_flow(
+        binder,
+        Some(break_label_id),
+        Some(continue_label_id),
+      )
 
       // Push loop context for break/continue handling
-      let cfg_builder = binder.cfg_builder.push_loop(break_label_id, continue_label_id, None)
-      let binder = { ..binder, cfg_builder }
+      let cfg_builder = binder.cfg_builder.push_loop(
+        break_label_id,
+        continue_label_id,
+        None,
+      )
+      let binder = { ..binder, cfg_builder, }
 
       // Bind and create condition flow
       let binder = bind_expression(binder, while_stmt.condition)
@@ -286,7 +288,7 @@ fn bind_statement(binder : Binder, node : Node) -> Binder {
 
       // Pop loop context
       let cfg_builder = binder.cfg_builder.pop_loop()
-      let binder = { ..binder, cfg_builder }
+      let binder = { ..binder, cfg_builder, }
 
       // Create false branch for loop exit
       let binder = create_false_condition_flow(binder, condition_id)
@@ -301,11 +303,19 @@ fn bind_statement(binder : Binder, node : Node) -> Binder {
       // Create loop label for break/continue targets
       let break_label_id = binder.cfg_builder.next_id
       let continue_label_id = break_label_id + 1
-      let binder = create_loop_label_flow(binder, Some(break_label_id), Some(continue_label_id))
+      let binder = create_loop_label_flow(
+        binder,
+        Some(break_label_id),
+        Some(continue_label_id),
+      )
 
       // Push loop context for break/continue handling
-      let cfg_builder = binder.cfg_builder.push_loop(break_label_id, continue_label_id, None)
-      let binder = { ..binder, cfg_builder }
+      let cfg_builder = binder.cfg_builder.push_loop(
+        break_label_id,
+        continue_label_id,
+        None,
+      )
+      let binder = { ..binder, cfg_builder, }
 
       // Bind loop body first (do-while executes body before checking condition)
       let binder = bind_statement(binder, do_stmt.statement)
@@ -320,12 +330,11 @@ fn bind_statement(binder : Binder, node : Node) -> Binder {
 
       // Pop loop context
       let cfg_builder = binder.cfg_builder.pop_loop()
-      let binder = { ..binder, cfg_builder }
+      let binder = { ..binder, cfg_builder, }
 
       // Create true branch (loops back) and false branch (exits)
       let binder = create_true_condition_flow(binder, condition_id)
       let loop_back_flow = get_current_flow_id(binder)
-
       let binder = create_false_condition_flow(binder, condition_id)
       let exit_flow = get_current_flow_id(binder)
 
@@ -340,12 +349,12 @@ fn bind_statement(binder : Binder, node : Node) -> Binder {
       let break_label_id = binder.cfg_builder.next_id
       // Push switch context
       let cfg_builder = binder.cfg_builder.push_switch(break_label_id)
-      let binder = { ..binder, cfg_builder }
+      let binder = { ..binder, cfg_builder, }
       // Bind case clauses
       let binder = bind_case_clauses(binder, node, switch_stmt.cases)
       // Pop switch context
       let cfg_builder = binder.cfg_builder.pop_switch()
-      { ..binder, cfg_builder }
+      { ..binder, cfg_builder, }
     }
 
     // Return statement
@@ -392,9 +401,8 @@ fn bind_statement(binder : Binder, node : Node) -> Binder {
     }
 
     // Expression statement
-    ExpressionStatement(expr_stmt) => {
+    ExpressionStatement(expr_stmt) =>
       bind_expression(binder, expr_stmt.expression)
-    }
 
     // Labeled statement
     LabeledStatement(labeled) => {
@@ -475,22 +483,24 @@ fn bind_binding_pattern(
 ) -> Binder {
   match pattern {
     Identifier(id) => {
-      let mut symbol = Symbol::new(id.name, SymbolKind::Variable, binder.next_symbol_id)
+      let mut symbol = Symbol::new(
+        id.name,
+        SymbolKind::Variable,
+        binder.next_symbol_id,
+      )
 
       // Set const flag on symbol
       if is_const {
         symbol = { ..symbol, flags: { ..symbol.flags, is_const: true } }
       }
-
       declare_symbol(binder, id.name, symbol)
     }
     ArrayBindingPattern(array_pattern) => {
       let mut binder = binder
       for i = 0; i < array_pattern.elements.length(); i = i + 1 {
         match array_pattern.elements[i] {
-          Some(element) => {
+          Some(element) =>
             binder = bind_binding_pattern(binder, element, is_const)
-          }
           None => () // Hole in pattern
         }
       }
@@ -519,9 +529,7 @@ fn bind_function_declaration(
     Some(Identifier(id)) => id.name
     _ => return binder // Anonymous function
   }
-
   let symbol = Symbol::new(name, SymbolKind::Function, binder.next_symbol_id)
-
   let binder = declare_symbol(binder, name, symbol)
 
   // Create new scope and container for function body
@@ -539,22 +547,22 @@ fn bind_function_declaration(
     Some(body) => bind_statement(binder, body)
     None => binder
   }
-
   let binder = pop_container(binder)
   pop_scope(binder)
 }
 
 ///|
 /// Bind class declaration
-fn bind_class_declaration(binder : Binder, class_decl : ClassDeclaration) -> Binder {
+fn bind_class_declaration(
+  binder : Binder,
+  class_decl : ClassDeclaration,
+) -> Binder {
   let name = match class_decl.name {
     Some(Node::Identifier(id)) => id.name
     _ => return binder // Anonymous class
   }
-
   let symbol = Symbol::new(name, SymbolKind::Class, binder.next_symbol_id)
   let symbol = symbol.add_declaration(Node::ClassDeclaration(class_decl))
-
   let binder = declare_symbol(binder, name, symbol)
 
   // Create new scope and container for class body
@@ -566,7 +574,6 @@ fn bind_class_declaration(binder : Binder, class_decl : ClassDeclaration) -> Bin
 
   // Bind class members
   let binder = bind_class_members(binder, class_decl.members)
-
   let binder = pop_container(binder)
   pop_scope(binder)
 }
@@ -589,11 +596,19 @@ fn bind_class_members_aux(
     let mem = members[index]
     let binder = match mem {
       PropertyDeclaration(prop) => {
-        let symbol = Symbol::new(prop.name, SymbolKind::Property, binder.next_symbol_id)
+        let symbol = Symbol::new(
+          prop.name,
+          SymbolKind::Property,
+          binder.next_symbol_id,
+        )
         declare_symbol(binder, prop.name, symbol)
       }
       MethodDeclaration(meth) => {
-        let symbol = Symbol::new(meth.name, SymbolKind::Method, binder.next_symbol_id)
+        let symbol = Symbol::new(
+          meth.name,
+          SymbolKind::Method,
+          binder.next_symbol_id,
+        )
         let binder = declare_symbol(binder, meth.name, symbol)
         // Bind method body
         match meth.body {
@@ -609,7 +624,11 @@ fn bind_class_members_aux(
         }
       }
       ConstructorDeclaration(ctor) => {
-        let symbol = Symbol::new("constructor", SymbolKind::Method, binder.next_symbol_id)
+        let symbol = Symbol::new(
+          "constructor",
+          SymbolKind::Method,
+          binder.next_symbol_id,
+        )
         let binder = declare_symbol(binder, "constructor", symbol)
         // Bind constructor body
         match ctor.body {
@@ -625,7 +644,11 @@ fn bind_class_members_aux(
         }
       }
       GetAccessor(getter) => {
-        let symbol = Symbol::new(getter.name, SymbolKind::GetAccessor, binder.next_symbol_id)
+        let symbol = Symbol::new(
+          getter.name,
+          SymbolKind::GetAccessor,
+          binder.next_symbol_id,
+        )
         let binder = declare_symbol(binder, getter.name, symbol)
         // Bind getter body
         match getter.body {
@@ -640,7 +663,11 @@ fn bind_class_members_aux(
         }
       }
       SetAccessor(setter) => {
-        let symbol = Symbol::new(setter.name, SymbolKind::SetAccessor, binder.next_symbol_id)
+        let symbol = Symbol::new(
+          setter.name,
+          SymbolKind::SetAccessor,
+          binder.next_symbol_id,
+        )
         let binder = declare_symbol(binder, setter.name, symbol)
         // Bind setter body
         match setter.body {
@@ -682,40 +709,55 @@ fn bind_interface_declaration(
   for i = 0; i < interface.members.length(); i = i + 1 {
     match interface.members[i] {
       PropertyDeclaration(prop) => {
-        let prop_symbol = Symbol::new(prop.name, SymbolKind::Property, binder.next_symbol_id)
+        let prop_symbol = Symbol::new(
+          prop.name,
+          SymbolKind::Property,
+          binder.next_symbol_id,
+        )
         members.set(prop.name, prop_symbol)
       }
       IndexSignatureDeclaration(idx_sig) => {
         // Index signatures don't have a name per se, but we bind them with their parameter name
         // This helps with type checking when accessing properties dynamically
-        let idx_symbol = Symbol::new(idx_sig.parameter_name, SymbolKind::Property, binder.next_symbol_id)
+        let idx_symbol = Symbol::new(
+          idx_sig.parameter_name,
+          SymbolKind::Property,
+          binder.next_symbol_id,
+        )
         members.set("__index_" + idx_sig.parameter_name, idx_symbol)
       }
       _ => () // Skip other member types for now
     }
   }
-
   let binder = pop_container(binder)
   let binder = pop_scope(binder)
-
-  let mut symbol = Symbol::new(interface.name, SymbolKind::Interface, binder.next_symbol_id)
+  let mut symbol = Symbol::new(
+    interface.name,
+    SymbolKind::Interface,
+    binder.next_symbol_id,
+  )
   let interface_node = Node::InterfaceDeclaration(interface)
   symbol = symbol.add_declaration(interface_node)
   symbol = {
     ..symbol,
     members: Some(members),
-    value_declaration: Some(interface_node)
+    value_declaration: Some(interface_node),
   }
-
   declare_symbol(binder, interface.name, symbol)
 }
 
 ///|
 /// Bind enum declaration
-fn bind_enum_declaration(binder : Binder, enum_decl : EnumDeclaration) -> Binder {
-  let symbol = Symbol::new(enum_decl.name, SymbolKind::Enum, binder.next_symbol_id)
+fn bind_enum_declaration(
+  binder : Binder,
+  enum_decl : EnumDeclaration,
+) -> Binder {
+  let symbol = Symbol::new(
+    enum_decl.name,
+    SymbolKind::Enum,
+    binder.next_symbol_id,
+  )
   let symbol = symbol.add_declaration(Node::EnumDeclaration(enum_decl))
-
   let binder = declare_symbol(binder, enum_decl.name, symbol)
 
   // Push container for enum body
@@ -743,7 +785,11 @@ fn bind_enum_members_aux(
     binder
   } else {
     let mem = members[index]
-    let symbol = Symbol::new(mem.name, SymbolKind::EnumMember, binder.next_symbol_id)
+    let symbol = Symbol::new(
+      mem.name,
+      SymbolKind::EnumMember,
+      binder.next_symbol_id,
+    )
     let binder = declare_symbol(binder, mem.name, symbol)
 
     // Bind initializer if present
@@ -751,7 +797,6 @@ fn bind_enum_members_aux(
       Some(init) => bind_expression(binder, init)
       None => binder
     }
-
     bind_enum_members_aux(binder, members, index + 1)
   }
 }
@@ -762,7 +807,11 @@ fn bind_type_alias_declaration(
   binder : Binder,
   type_alias : TypeAliasDeclaration,
 ) -> Binder {
-  let symbol = Symbol::new(type_alias.name, SymbolKind::Type, binder.next_symbol_id)
+  let symbol = Symbol::new(
+    type_alias.name,
+    SymbolKind::Type,
+    binder.next_symbol_id,
+  )
   let symbol = symbol.add_declaration(Node::TypeAliasDeclaration(type_alias))
   let binder = declare_symbol(binder, type_alias.name, symbol)
 
@@ -782,7 +831,11 @@ fn bind_module_declaration(
   binder : Binder,
   mod_decl : ModuleDeclaration,
 ) -> Binder {
-  let symbol = Symbol::new(mod_decl.name, SymbolKind::Module, binder.next_symbol_id)
+  let symbol = Symbol::new(
+    mod_decl.name,
+    SymbolKind::Module,
+    binder.next_symbol_id,
+  )
   let symbol = symbol.add_declaration(Node::ModuleDeclaration(mod_decl))
   let binder = declare_symbol(binder, mod_decl.name, symbol)
 
@@ -812,7 +865,11 @@ fn bind_import_declaration(
       // Bind default import
       let binder = match clause.name {
         Some(name) => {
-          let symbol = Symbol::new(name, SymbolKind::Alias, binder.next_symbol_id)
+          let symbol = Symbol::new(
+            name,
+            SymbolKind::Alias,
+            binder.next_symbol_id,
+          )
           declare_symbol(binder, name, symbol)
         }
         None => binder
@@ -821,12 +878,15 @@ fn bind_import_declaration(
       // Bind named imports
       match clause.named_bindings {
         Some(NamedImports::NamespaceImport(name, _)) => {
-          let symbol = Symbol::new(name, SymbolKind::Module, binder.next_symbol_id)
+          let symbol = Symbol::new(
+            name,
+            SymbolKind::Module,
+            binder.next_symbol_id,
+          )
           declare_symbol(binder, name, symbol)
         }
-        Some(NamedImports::NamedImports(specifiers, _)) => {
+        Some(NamedImports::NamedImports(specifiers, _)) =>
           bind_import_specifiers(binder, specifiers)
-        }
         None => binder
       }
     }
@@ -853,7 +913,11 @@ fn bind_import_specifiers_aux(
   } else {
     let spec = specifiers[index]
     let local_name = spec.name
-    let symbol = Symbol::new(local_name, SymbolKind::Alias, binder.next_symbol_id)
+    let symbol = Symbol::new(
+      local_name,
+      SymbolKind::Alias,
+      binder.next_symbol_id,
+    )
     let binder = declare_symbol(binder, local_name, symbol)
     bind_import_specifiers_aux(binder, specifiers, index + 1)
   }
@@ -877,7 +941,11 @@ fn bind_export_declaration(
           bind_export_specifiers(binder, specifiers, export_decl.is_type_only)
         Some(NamedExports::NamespaceExport(ns_name, _)) => {
           // export * as ns from 'mod' - create a symbol for the namespace
-          let symbol = Symbol::new(ns_name, SymbolKind::ExportValue, binder.next_symbol_id)
+          let symbol = Symbol::new(
+            ns_name,
+            SymbolKind::ExportValue,
+            binder.next_symbol_id,
+          )
           declare_symbol(binder, ns_name, symbol)
         }
         None => binder
@@ -908,7 +976,11 @@ fn bind_export_specifiers_aux(
   } else {
     let spec = specifiers[index]
     // Use ExportType for type-only exports, ExportValue otherwise
-    let kind = if is_type_only { SymbolKind::ExportType } else { SymbolKind::ExportValue }
+    let kind = if is_type_only {
+      SymbolKind::ExportType
+    } else {
+      SymbolKind::ExportValue
+    }
     let symbol = Symbol::new(spec.name, kind, binder.next_symbol_id)
     let binder = declare_symbol(binder, spec.name, symbol)
     bind_export_specifiers_aux(binder, specifiers, is_type_only, index + 1)
@@ -957,7 +1029,7 @@ fn bind_case_clauses_aux(
     // Add this clause's flow ID to the switch context
     let clause_flow_id = binder.cfg_builder.current_flow
     let cfg_builder = binder.cfg_builder.add_clause_flow(clause_flow_id)
-    let binder = { ..binder, cfg_builder }
+    let binder = { ..binder, cfg_builder, }
 
     // Bind case expression if present
     let binder = match case_clause.expression {
@@ -967,7 +1039,6 @@ fn bind_case_clauses_aux(
 
     // Bind case statements
     let binder = bind_statements(binder, case_clause.statements)
-
     bind_case_clauses_aux(binder, switch_statement, cases, index + 1)
   }
 }
@@ -977,13 +1048,16 @@ fn bind_case_clauses_aux(
 fn bind_catch_variable(binder : Binder, var_decl : Node) -> Binder {
   match var_decl {
     Identifier(id) => {
-      let symbol = Symbol::new(id.name, SymbolKind::Variable, binder.next_symbol_id)
+      let symbol = Symbol::new(
+        id.name,
+        SymbolKind::Variable,
+        binder.next_symbol_id,
+      )
       declare_symbol(binder, id.name, symbol)
     }
     // Handle binding patterns like `catch ({ message })` or `catch ([first, second])`
-    ArrayBindingPattern(_) | ObjectBindingPattern(_) => {
+    ArrayBindingPattern(_) | ObjectBindingPattern(_) =>
       bind_binding_pattern(binder, var_decl, false)
-    }
     _ => binder
   }
 }
@@ -1011,7 +1085,11 @@ fn bind_parameters_aux(
           Identifier(id) => id.name
           _ => return binder // Binding pattern not supported
         }
-        let symbol = Symbol::new(param_name, SymbolKind::Parameter, binder.next_symbol_id)
+        let symbol = Symbol::new(
+          param_name,
+          SymbolKind::Parameter,
+          binder.next_symbol_id,
+        )
         declare_symbol(binder, param_name, symbol)
       }
       _ => binder
@@ -1022,7 +1100,10 @@ fn bind_parameters_aux(
 
 ///|
 /// Bind type parameters (generics like <T, U extends V>)
-fn bind_type_parameters(binder : Binder, type_params : Array[TypeParameter]) -> Binder {
+fn bind_type_parameters(
+  binder : Binder,
+  type_params : Array[TypeParameter],
+) -> Binder {
   bind_type_parameters_aux(binder, type_params, 0)
 }
 
@@ -1036,7 +1117,11 @@ fn bind_type_parameters_aux(
     binder
   } else {
     let tp = type_params[index]
-    let symbol = Symbol::new(tp.name, SymbolKind::TypeParameter, binder.next_symbol_id)
+    let symbol = Symbol::new(
+      tp.name,
+      SymbolKind::TypeParameter,
+      binder.next_symbol_id,
+    )
     let binder = declare_symbol(binder, tp.name, symbol)
     bind_type_parameters_aux(binder, type_params, index + 1)
   }
@@ -1046,11 +1131,22 @@ fn bind_type_parameters_aux(
 /// Check if a binary operator is an assignment operator
 fn is_assignment_operator(op : BinaryOperator) -> Bool {
   match op {
-    Assign | AddAssign | SubtractAssign | MultiplyAssign | DivideAssign |
-    RemainderAssign | BitwiseAndAssign | BitwiseOrAssign | BitwiseXorAssign |
-    ExponentiateAssign | LeftShiftAssign | RightShiftAssign |
-    UnsignedRightShiftAssign | LogicalAndAssign | LogicalOrAssign |
-    NullishCoalescingAssign => true
+    Assign
+    | AddAssign
+    | SubtractAssign
+    | MultiplyAssign
+    | DivideAssign
+    | RemainderAssign
+    | BitwiseAndAssign
+    | BitwiseOrAssign
+    | BitwiseXorAssign
+    | ExponentiateAssign
+    | LeftShiftAssign
+    | RightShiftAssign
+    | UnsignedRightShiftAssign
+    | LogicalAndAssign
+    | LogicalOrAssign
+    | NullishCoalescingAssign => true
     _ => false
   }
 }
@@ -1065,21 +1161,21 @@ fn get_current_flow_id(binder : Binder) -> Int {
 /// Create a FlowAssignment node and update the binder's current flow
 fn create_assignment_flow(binder : Binder, node : Node) -> Binder {
   let cfg_builder = binder.cfg_builder.add_assignment(node)
-  { ..binder, cfg_builder }
+  { ..binder, cfg_builder, }
 }
 
 ///|
 /// Create a FlowCall node and update the binder's current flow
 fn create_call_flow(binder : Binder, node : Node) -> Binder {
   let cfg_builder = binder.cfg_builder.add_call(node)
-  { ..binder, cfg_builder }
+  { ..binder, cfg_builder, }
 }
 
 ///|
 /// Create a FlowCondition node and update the binder's current flow
 fn create_condition_flow(binder : Binder, expression : Node) -> Binder {
   let cfg_builder = binder.cfg_builder.add_condition(expression)
-  { ..binder, cfg_builder }
+  { ..binder, cfg_builder, }
 }
 
 ///|
@@ -1089,8 +1185,10 @@ fn create_switch_clause_flow(
   clause_start : Int,
   clause_end : Int,
 ) -> Binder {
-  let cfg_builder = binder.cfg_builder.add_switch_clause(switch_statement, clause_start, clause_end)
-  { ..binder, cfg_builder }
+  let cfg_builder = binder.cfg_builder.add_switch_clause(
+    switch_statement, clause_start, clause_end,
+  )
+  { ..binder, cfg_builder, }
 }
 
 ///|
@@ -1101,25 +1199,25 @@ fn create_label_flow(binder : Binder) -> Binder {
   let nodes = binder.cfg_builder.nodes
   nodes.push(FlowNode::Label(flow_label))
   let cfg_builder = { ..binder.cfg_builder, next_id: id + 1, current_flow: id }
-  { ..binder, cfg_builder }
+  { ..binder, cfg_builder, }
 }
 
 ///|
 fn create_array_mutation_flow(binder : Binder, node : Node) -> Binder {
   let cfg_builder = binder.cfg_builder.add_array_mutation(node)
-  { ..binder, cfg_builder }
+  { ..binder, cfg_builder, }
 }
 
 ///|
 fn create_return_flow(binder : Binder, node : Node) -> Binder {
   let cfg_builder = binder.cfg_builder.add_return(node)
-  { ..binder, cfg_builder }
+  { ..binder, cfg_builder, }
 }
 
 ///|
 fn create_unreachable_flow(binder : Binder) -> Binder {
   let cfg_builder = binder.cfg_builder.add_unreachable()
-  { ..binder, cfg_builder }
+  { ..binder, cfg_builder, }
 }
 
 ///|
@@ -1133,7 +1231,7 @@ pub fn create_end_flow(binder : Binder) -> Binder {
   let nodes = binder.cfg_builder.nodes
   nodes.push(FlowNode::End(flow_end))
   let cfg_builder = { ..binder.cfg_builder, next_id: id + 1, current_flow: id }
-  { ..binder, cfg_builder }
+  { ..binder, cfg_builder, }
 }
 
 ///|
@@ -1148,7 +1246,7 @@ fn create_true_condition_flow(binder : Binder, condition_id : Int) -> Binder {
   let nodes = binder.cfg_builder.nodes
   nodes.push(FlowNode::TrueCondition(flow_branch))
   let cfg_builder = { ..binder.cfg_builder, next_id: id + 1, current_flow: id }
-  { ..binder, cfg_builder }
+  { ..binder, cfg_builder, }
 }
 
 ///|
@@ -1163,7 +1261,7 @@ fn create_false_condition_flow(binder : Binder, condition_id : Int) -> Binder {
   let nodes = binder.cfg_builder.nodes
   nodes.push(FlowNode::FalseCondition(flow_branch))
   let cfg_builder = { ..binder.cfg_builder, next_id: id + 1, current_flow: id }
-  { ..binder, cfg_builder }
+  { ..binder, cfg_builder, }
 }
 
 ///|
@@ -1184,7 +1282,7 @@ fn create_loop_label_flow(
   let nodes = binder.cfg_builder.nodes
   nodes.push(FlowNode::LoopLabel(flow_loop))
   let cfg_builder = { ..binder.cfg_builder, next_id: id + 1, current_flow: id }
-  { ..binder, cfg_builder }
+  { ..binder, cfg_builder, }
 }
 
 ///|
@@ -1200,14 +1298,14 @@ fn create_branch_label_flow(binder : Binder, name : String?) -> Binder {
   let nodes = binder.cfg_builder.nodes
   nodes.push(FlowNode::BranchLabel(flow_branch_label))
   let cfg_builder = { ..binder.cfg_builder, next_id: id + 1, current_flow: id }
-  { ..binder, cfg_builder }
+  { ..binder, cfg_builder, }
 }
 
 ///|
 /// Create a FlowThrow node and update the binder's current flow
 fn create_throw_flow(binder : Binder, node : Node) -> Binder {
   let cfg_builder = binder.cfg_builder.add_throw(node)
-  { ..binder, cfg_builder }
+  { ..binder, cfg_builder, }
 }
 
 ///|
@@ -1233,7 +1331,7 @@ pub fn create_narrowing_flow(
   let nodes = binder.cfg_builder.nodes
   nodes.push(FlowNode::Narrowing(flow_narrowing))
   let cfg_builder = { ..binder.cfg_builder, next_id: id + 1, current_flow: id }
-  { ..binder, cfg_builder }
+  { ..binder, cfg_builder, }
 }
 
 ///|
@@ -1244,7 +1342,7 @@ fn create_reducer_flow(binder : Binder, antecedents : Array[Int]) -> Binder {
   let nodes = binder.cfg_builder.nodes
   nodes.push(FlowNode::Reducer(flow_reducer))
   let cfg_builder = { ..binder.cfg_builder, next_id: id + 1, current_flow: id }
-  { ..binder, cfg_builder }
+  { ..binder, cfg_builder, }
 }
 
 ///|
@@ -1252,7 +1350,8 @@ fn create_reducer_flow(binder : Binder, antecedents : Array[Int]) -> Binder {
 fn bind_expression(binder : Binder, node : Node) -> Binder {
   match node {
     // Literal expressions - no binding needed
-    NumericLiteral(_) | StringLiteral(_) | BooleanLiteral(_) | NullLiteral(_) => binder
+    NumericLiteral(_) | StringLiteral(_) | BooleanLiteral(_) | NullLiteral(_) =>
+      binder
 
     // Identifier - would need to resolve, but that's for the checker
     Identifier(_) => binder
@@ -1274,9 +1373,7 @@ fn bind_expression(binder : Binder, node : Node) -> Binder {
     }
 
     // Unary expression
-    UnaryExpression(unary_expr) => {
-      bind_expression(binder, unary_expr.operand)
-    }
+    UnaryExpression(unary_expr) => bind_expression(binder, unary_expr.operand)
 
     // Call expression
     CallExpression(call_expr) => {
@@ -1287,9 +1384,8 @@ fn bind_expression(binder : Binder, node : Node) -> Binder {
     }
 
     // Property access
-    PropertyAccessExpression(prop_access) => {
+    PropertyAccessExpression(prop_access) =>
       bind_expression(binder, prop_access.expression)
-    }
 
     // Element access
     ElementAccessExpression(elem_access) => {
@@ -1298,14 +1394,12 @@ fn bind_expression(binder : Binder, node : Node) -> Binder {
     }
 
     // Array literal (elements can be None for holes)
-    ArrayLiteralExpression(array_lit) => {
+    ArrayLiteralExpression(array_lit) =>
       bind_array_elements(binder, array_lit.elements)
-    }
 
     // Object literal
-    ObjectLiteralExpression(obj_lit) => {
+    ObjectLiteralExpression(obj_lit) =>
       bind_object_properties(binder, obj_lit.properties)
-    }
 
     // Arrow function
     ArrowFunction(arrow) => {
@@ -1340,12 +1434,11 @@ fn bind_expression(binder : Binder, node : Node) -> Binder {
     AwaitExpression(ae) => bind_expression(binder, ae.expression)
 
     // Yield expression
-    YieldExpression(ye) => {
+    YieldExpression(ye) =>
       match ye.expression {
         Some(expr) => bind_expression(binder, expr)
         None => binder
       }
-    }
 
     // As expression (type assertion)
     AsExpression(as_expr) => bind_expression(binder, as_expr.expression)
@@ -1419,7 +1512,10 @@ fn bind_array_elements_aux(
 
 ///|
 /// Bind object properties
-fn bind_object_properties(binder : Binder, properties : Array[ObjectProperty]) -> Binder {
+fn bind_object_properties(
+  binder : Binder,
+  properties : Array[ObjectProperty],
+) -> Binder {
   bind_object_properties_aux(binder, properties, 0)
 }
 
@@ -1453,7 +1549,10 @@ fn bind_object_properties_aux(
 ///|
 /// Push a new scope onto the scope stack
 fn push_scope(binder : Binder) -> Binder {
-  let new_scope = Scope::new(Some(binder.current_scope_id), binder.next_scope_id)
+  let new_scope = Scope::new(
+    Some(binder.current_scope_id),
+    binder.next_scope_id,
+  )
   let new_scopes = binder.scopes
   new_scopes.push(new_scope)
   {
@@ -1472,10 +1571,8 @@ fn pop_scope(binder : Binder) -> Binder {
     Some(id) => id
     None => 0 // Should not happen
   }
-
   let new_scopes = binder.scopes
   let _ = new_scopes.pop()
-
   { ..binder, scopes: new_scopes, current_scope_id: parent_id }
 }
 
@@ -1492,7 +1589,11 @@ fn current_scope(binder : Binder) -> Scope {
 ///|
 /// Push a new container onto the container stack
 fn push_container(binder : Binder, kind : ContainerKind) -> Binder {
-  let new_container = Container::new(kind, Some(binder.current_container_id), binder.next_container_id)
+  let new_container = Container::new(
+    kind,
+    Some(binder.current_container_id),
+    binder.next_container_id,
+  )
   let new_containers = binder.containers
   new_containers.push(new_container)
   {
@@ -1511,10 +1612,8 @@ fn pop_container(binder : Binder) -> Binder {
     Some(id) => id
     None => 0 // Should not happen (SourceFile is always at the bottom)
   }
-
   let new_containers = binder.containers
   let _ = new_containers.pop()
-
   { ..binder, containers: new_containers, current_container_id: parent_id }
 }
 
@@ -1531,7 +1630,8 @@ pub fn get_enclosing_function_container(binder : Binder) -> Container? {
   while i >= 0 {
     let container = binder.containers[i]
     match container.kind {
-      ContainerKind::Function | ContainerKind::SourceFile => return Some(container)
+      ContainerKind::Function | ContainerKind::SourceFile =>
+        return Some(container)
       _ => i = i - 1
     }
   }
@@ -1545,8 +1645,11 @@ pub fn get_enclosing_block_container(binder : Binder) -> Container? {
   while i >= 0 {
     let container = binder.containers[i]
     match container.kind {
-      ContainerKind::Block | ContainerKind::ForStatement | ContainerKind::CatchBlock |
-      ContainerKind::Function | ContainerKind::SourceFile => return Some(container)
+      ContainerKind::Block
+      | ContainerKind::ForStatement
+      | ContainerKind::CatchBlock
+      | ContainerKind::Function
+      | ContainerKind::SourceFile => return Some(container)
       _ => i = i - 1
     }
   }
@@ -1572,7 +1675,7 @@ pub fn is_in_class(binder : Binder) -> Bool {
 /// Check if we're at the top level of a source file
 pub fn is_top_level(binder : Binder) -> Bool {
   binder.containers.length() == 1 &&
-    binder.containers[0].kind == ContainerKind::SourceFile
+  binder.containers[0].kind == ContainerKind::SourceFile
 }
 
 ///|
@@ -1585,22 +1688,45 @@ fn declare_symbol(binder : Binder, name : String, symbol : Symbol) -> Binder {
   match existing {
     Some(existing_symbol) => {
       // Allow function/method overloads (multiple declarations with same name)
-      let is_function_overload = existing_symbol.kind == SymbolKind::Function && symbol.kind == SymbolKind::Function
-      let is_method_overload = existing_symbol.kind == SymbolKind::Method && symbol.kind == SymbolKind::Method
+      let is_function_overload = existing_symbol.kind == SymbolKind::Function &&
+        symbol.kind == SymbolKind::Function
+      let is_method_overload = existing_symbol.kind == SymbolKind::Method &&
+        symbol.kind == SymbolKind::Method
       // Allow getter/setter pairs with the same name
-      let is_getter_setter_pair = (existing_symbol.kind == SymbolKind::GetAccessor && symbol.kind == SymbolKind::SetAccessor) ||
-        (existing_symbol.kind == SymbolKind::SetAccessor && symbol.kind == SymbolKind::GetAccessor)
+      let is_getter_setter_pair = (
+          existing_symbol.kind == SymbolKind::GetAccessor &&
+          symbol.kind == SymbolKind::SetAccessor
+        ) ||
+        (
+          existing_symbol.kind == SymbolKind::SetAccessor &&
+          symbol.kind == SymbolKind::GetAccessor
+        )
       // Allow interface merging
-      let is_interface_merge = existing_symbol.kind == SymbolKind::Interface && symbol.kind == SymbolKind::Interface
+      let is_interface_merge = existing_symbol.kind == SymbolKind::Interface &&
+        symbol.kind == SymbolKind::Interface
       // Allow namespace merging
-      let is_namespace_merge = existing_symbol.kind == SymbolKind::Module && symbol.kind == SymbolKind::Module
+      let is_namespace_merge = existing_symbol.kind == SymbolKind::Module &&
+        symbol.kind == SymbolKind::Module
       // Allow interface + namespace merging
-      let is_interface_namespace_merge = (existing_symbol.kind == SymbolKind::Interface && symbol.kind == SymbolKind::Module) ||
-        (existing_symbol.kind == SymbolKind::Module && symbol.kind == SymbolKind::Interface)
-      if is_function_overload || is_method_overload || is_getter_setter_pair || is_interface_merge || is_namespace_merge || is_interface_namespace_merge {
+      let is_interface_namespace_merge = (
+          existing_symbol.kind == SymbolKind::Interface &&
+          symbol.kind == SymbolKind::Module
+        ) ||
+        (
+          existing_symbol.kind == SymbolKind::Module &&
+          symbol.kind == SymbolKind::Interface
+        )
+      if is_function_overload ||
+        is_method_overload ||
+        is_getter_setter_pair ||
+        is_interface_merge ||
+        is_namespace_merge ||
+        is_interface_namespace_merge {
         // Overload, getter/setter pair, or mergeable declaration - allow it
         // For interface/namespace merging, merge the symbols
-        if is_interface_merge || is_namespace_merge || is_interface_namespace_merge {
+        if is_interface_merge ||
+          is_namespace_merge ||
+          is_interface_namespace_merge {
           let merged_symbol = merge_symbols(existing_symbol, symbol)
           let new_symbols = scope.symbols
           new_symbols.set(name, merged_symbol)
@@ -1616,7 +1742,11 @@ fn declare_symbol(binder : Binder, name : String, symbol : Symbol) -> Binder {
         // Duplicate declaration - add diagnostic
         let diagnostic = Diagnostic::error(
           "Duplicate identifier '" + name + "'",
-          SourceLocation::new(binder.file_path, Position::{ line: 0, column: 0, offset: 0 }, Position::{ line: 0, column: 0, offset: 0 }),
+          SourceLocation::new(
+            binder.file_path,
+            Position::{ line: 0, column: 0, offset: 0 },
+            Position::{ line: 0, column: 0, offset: 0 },
+          ),
           2300,
         )
         let new_diagnostics = binder.diagnostics
@@ -1634,7 +1764,6 @@ fn declare_symbol(binder : Binder, name : String, symbol : Symbol) -> Binder {
       let scope_index = binder.scopes.length() - 1
       let new_scopes = binder.scopes
       new_scopes[scope_index] = updated_scope
-
       {
         ..binder,
         scopes: new_scopes,
@@ -1656,7 +1785,6 @@ pub fn detect_module_status(source_file : SourceFile) -> ModuleInfo {
   let mut is_strict_mode = false
   let imports : Array[ImportInfo] = []
   let exports : Array[ExportInfo] = []
-
   for i = 0; i < source_file.statements.length(); i = i + 1 {
     let stmt = source_file.statements[i]
     match stmt {
@@ -1673,7 +1801,7 @@ pub fn detect_module_status(source_file : SourceFile) -> ModuleInfo {
       }
 
       // Export assignment could be CommonJS
-      ExportAssignment(export_assign) => {
+      ExportAssignment(export_assign) =>
         if export_assign.is_export_equals {
           is_commonjs_module = true
           exports.push(ExportInfo::{
@@ -1693,22 +1821,19 @@ pub fn detect_module_status(source_file : SourceFile) -> ModuleInfo {
             location: export_assign.location,
           })
         }
-      }
 
       // Check for "use strict"
-      ExpressionStatement(expr_stmt) => {
+      ExpressionStatement(expr_stmt) =>
         match expr_stmt.expression {
-          StringLiteral(s) => {
+          StringLiteral(s) =>
             if s.value == "use strict" {
               is_strict_mode = true
             }
-          }
           _ => ()
         }
-      }
 
       // Export modifiers on declarations
-      FunctionDeclaration(func) => {
+      FunctionDeclaration(func) =>
         if binder_has_export_modifier(func.modifiers) {
           is_external_module = true
           let is_default = binder_has_default_modifier(func.modifiers)
@@ -1717,16 +1842,18 @@ pub fn detect_module_status(source_file : SourceFile) -> ModuleInfo {
             _ => None
           }
           exports.push(ExportInfo::{
-            kind: if is_default { ExportKind::Default } else { ExportKind::Declaration },
+            kind: if is_default {
+              ExportKind::Default
+            } else {
+              ExportKind::Declaration
+            },
             name,
             is_type_only: false,
             module_specifier: None,
             location: func.location,
           })
         }
-      }
-
-      ClassDeclaration(class_decl) => {
+      ClassDeclaration(class_decl) =>
         if binder_has_export_modifier(class_decl.modifiers) {
           is_external_module = true
           let is_default = binder_has_default_modifier(class_decl.modifiers)
@@ -1735,16 +1862,18 @@ pub fn detect_module_status(source_file : SourceFile) -> ModuleInfo {
             _ => None
           }
           exports.push(ExportInfo::{
-            kind: if is_default { ExportKind::Default } else { ExportKind::Declaration },
+            kind: if is_default {
+              ExportKind::Default
+            } else {
+              ExportKind::Declaration
+            },
             name,
             is_type_only: false,
             module_specifier: None,
             location: class_decl.location,
           })
         }
-      }
-
-      VariableStatement(var_stmt) => {
+      VariableStatement(var_stmt) =>
         if binder_has_export_modifier(var_stmt.modifiers) {
           is_external_module = true
           for j = 0; j < var_stmt.declarations.length(); j = j + 1 {
@@ -1759,9 +1888,7 @@ pub fn detect_module_status(source_file : SourceFile) -> ModuleInfo {
             })
           }
         }
-      }
-
-      InterfaceDeclaration(interface) => {
+      InterfaceDeclaration(interface) =>
         if binder_has_export_modifier(interface.modifiers) {
           is_external_module = true
           exports.push(ExportInfo::{
@@ -1772,9 +1899,7 @@ pub fn detect_module_status(source_file : SourceFile) -> ModuleInfo {
             location: interface.location,
           })
         }
-      }
-
-      TypeAliasDeclaration(type_alias) => {
+      TypeAliasDeclaration(type_alias) =>
         if binder_has_export_modifier(type_alias.modifiers) {
           is_external_module = true
           exports.push(ExportInfo::{
@@ -1785,9 +1910,7 @@ pub fn detect_module_status(source_file : SourceFile) -> ModuleInfo {
             location: type_alias.location,
           })
         }
-      }
-
-      EnumDeclaration(enum_decl) => {
+      EnumDeclaration(enum_decl) =>
         if binder_has_export_modifier(enum_decl.modifiers) {
           is_external_module = true
           exports.push(ExportInfo::{
@@ -1798,12 +1921,9 @@ pub fn detect_module_status(source_file : SourceFile) -> ModuleInfo {
             location: enum_decl.location,
           })
         }
-      }
-
       _ => ()
     }
   }
-
   {
     is_external_module,
     is_commonjs_module,
@@ -1821,7 +1941,6 @@ fn extract_import_info(import_decl : ImportDeclaration) -> ImportInfo {
   let mut default_import : String? = None
   let mut namespace_import : String? = None
   let named_imports : Array[(String, String)] = []
-
   match import_decl.import_clause {
     Some(clause) => {
       // Default import
@@ -1829,10 +1948,9 @@ fn extract_import_info(import_decl : ImportDeclaration) -> ImportInfo {
 
       // Named bindings
       match clause.named_bindings {
-        Some(NamedImports::NamespaceImport(name, _)) => {
+        Some(NamedImports::NamespaceImport(name, _)) =>
           namespace_import = Some(name)
-        }
-        Some(NamedImports::NamedImports(specifiers, _)) => {
+        Some(NamedImports::NamedImports(specifiers, _)) =>
           for i = 0; i < specifiers.length(); i = i + 1 {
             let spec = specifiers[i]
             let property_name = match spec.property_name {
@@ -1841,13 +1959,11 @@ fn extract_import_info(import_decl : ImportDeclaration) -> ImportInfo {
             }
             named_imports.push((property_name, spec.name))
           }
-        }
         None => ()
       }
     }
     None => ()
   }
-
   {
     module_specifier: import_decl.module_specifier,
     is_type_only: false, // ImportDeclaration doesn't have this field yet
@@ -1867,7 +1983,6 @@ fn extract_export_decl_info(export_decl : ExportDeclaration) -> ExportInfo {
       (ExportKind::NamespaceAs, Some(ns_name))
     None => (ExportKind::Namespace, None)
   }
-
   {
     kind,
     name,
@@ -1941,7 +2056,6 @@ pub fn can_merge_symbols(a : Symbol, b : Symbol) -> Bool {
 
     // Variables can't merge
     (Variable, _) | (_, Variable) => false
-
     _ => false
   }
 }
@@ -1964,12 +2078,11 @@ pub fn merge_symbols(a : Symbol, b : Symbol) -> Symbol {
       // Add b_members, merging if necessary
       b_members.each(fn(name, symbol) {
         match merged.get(name) {
-          Some(existing) => {
+          Some(existing) =>
             if can_merge_symbols(existing, symbol) {
               merged.set(name, merge_symbols(existing, symbol))
             }
-            // Otherwise skip (error already reported)
-          }
+          // Otherwise skip (error already reported)
           None => merged.set(name, symbol)
         }
       })
@@ -2011,14 +2124,7 @@ pub fn merge_symbols(a : Symbol, b : Symbol) -> Symbol {
     is_abstract: a.flags.is_abstract,
     is_async: a.flags.is_async,
   }
-
-  {
-    ..a,
-    declarations,
-    members,
-    exports,
-    flags,
-  }
+  { ..a, declarations, members, exports, flags }
 }
 
 ///|
@@ -2028,30 +2134,27 @@ pub fn merge_global_declarations(
 ) -> (SymbolTable, Array[Diagnostic]) {
   let global_symbols : SymbolTable = Map::new()
   let diagnostics : Array[Diagnostic] = []
-
   for i = 0; i < files.length(); i = i + 1 {
     let file = files[i]
     file.global_scope.symbols.each(fn(name, symbol) {
       match global_symbols.get(name) {
-        Some(existing) => {
+        Some(existing) =>
           if can_merge_symbols(existing, symbol) {
             global_symbols.set(name, merge_symbols(existing, symbol))
           } else {
             // Can't merge - report duplicate
-            diagnostics.push(Diagnostic::error(
-              "Duplicate identifier '" + name + "'",
-              get_symbol_location(symbol),
-              2300,
-            ))
+            diagnostics.push(
+              Diagnostic::error(
+                "Duplicate identifier '" + name + "'",
+                get_symbol_location(symbol),
+                2300,
+              ),
+            )
           }
-        }
-        None => {
-          global_symbols.set(name, symbol)
-        }
+        None => global_symbols.set(name, symbol)
       }
     })
   }
-
   (global_symbols, diagnostics)
 }
 
@@ -2060,17 +2163,16 @@ pub fn merge_global_declarations(
 fn get_symbol_location(symbol : Symbol) -> SourceLocation {
   match symbol.value_declaration {
     Some(node) => binder_get_node_location(node)
-    None => {
+    None =>
       if symbol.declarations.length() > 0 {
         binder_get_node_location(symbol.declarations[0])
       } else {
-        SourceLocation::new(
-          "",
-          Position::{ line: 0, column: 0, offset: 0 },
-          Position::{ line: 0, column: 0, offset: 0 },
-        )
+        SourceLocation::new("", Position::{ line: 0, column: 0, offset: 0 }, Position::{
+          line: 0,
+          column: 0,
+          offset: 0,
+        })
       }
-    }
   }
 }
 
@@ -2085,11 +2187,11 @@ fn binder_get_node_location(node : Node) -> SourceLocation {
     TypeAliasDeclaration(t) => t.location
     EnumDeclaration(e) => e.location
     _ =>
-      SourceLocation::new(
-        "",
-        Position::{ line: 0, column: 0, offset: 0 },
-        Position::{ line: 0, column: 0, offset: 0 },
-      )
+      SourceLocation::new("", Position::{ line: 0, column: 0, offset: 0 }, Position::{
+        line: 0,
+        column: 0,
+        offset: 0,
+      })
   }
 }
 
@@ -2114,26 +2216,22 @@ pub fn bind_program(
         bound_files.push(bound_file)
         module_map.set(source_file.file_path, bound_file)
       }
-      Err(diagnostics) => {
+      Err(diagnostics) =>
         for j = 0; j < diagnostics.length(); j = j + 1 {
           all_diagnostics.push(diagnostics[j])
         }
-      }
     }
   }
 
   // Second pass: merge declarations
-  let (global_symbols, merge_diagnostics) = merge_global_declarations(bound_files)
+  let (global_symbols, merge_diagnostics) = merge_global_declarations(
+    bound_files,
+  )
   for i = 0; i < merge_diagnostics.length(); i = i + 1 {
     all_diagnostics.push(merge_diagnostics[i])
   }
-
   if all_diagnostics.is_empty() {
-    Ok({
-      source_files: bound_files,
-      global_symbols,
-      module_map,
-    })
+    Ok({ source_files: bound_files, global_symbols, module_map })
   } else {
     Err(all_diagnostics)
   }
@@ -2145,34 +2243,25 @@ pub fn bind_program(
 
 ///|
 /// Find symbol in scope chain
-pub fn find_symbol_in_scope_chain(
-  binder : Binder,
-  name : String,
-) -> Symbol? {
+pub fn find_symbol_in_scope_chain(binder : Binder, name : String) -> Symbol? {
   let mut scope_id = binder.current_scope_id
-
   while scope_id >= 0 {
     let scope = binder.scopes[scope_id]
     match scope.symbols.get(name) {
       Some(symbol) => return Some(symbol)
-      None => {
+      None =>
         match scope.parent {
           Some(parent_id) => scope_id = parent_id
           None => return None
         }
-      }
     }
   }
-
   None
 }
 
 ///|
 /// Get all symbols of a specific kind from a scope
-pub fn get_symbols_of_kind(
-  scope : Scope,
-  kind : SymbolKind,
-) -> Array[Symbol] {
+pub fn get_symbols_of_kind(scope : Scope, kind : SymbolKind) -> Array[Symbol] {
   let result : Array[Symbol] = []
   scope.symbols.each(fn(_name, symbol) {
     if symbol.kind == kind {

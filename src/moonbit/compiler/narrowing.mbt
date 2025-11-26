@@ -117,12 +117,7 @@ pub fn intersect_types(current : TypeV2, narrowed : TypeV2) -> TypeV2 {
     (TFunction(f), TFunction(_)) => TFunction(f)
 
     // Default: if compatible, keep current; otherwise never
-    _ =>
-      if is_type_assignable_to(current, narrowed) {
-        current
-      } else {
-        TNever
-      }
+    _ => if is_type_assignable_to(current, narrowed) { current } else { TNever }
   }
 }
 
@@ -131,17 +126,10 @@ pub fn intersect_types(current : TypeV2, narrowed : TypeV2) -> TypeV2 {
 pub fn exclude_type(current : TypeV2, excluded : TypeV2) -> TypeV2 {
   match current {
     TUnion(types) => {
-      let filtered = types.filter(fn(t) {
-        not(types_v2_equal(t, excluded))
-      })
+      let filtered = types.filter(fn(t) { not(types_v2_equal(t, excluded)) })
       simplify_union(filtered)
     }
-    t =>
-      if types_v2_equal(t, excluded) {
-        TNever
-      } else {
-        t
-      }
+    t => if types_v2_equal(t, excluded) { TNever } else { t }
   }
 }
 
@@ -206,12 +194,7 @@ pub fn apply_has_property_narrowing(ty : TypeV2, prop : String) -> TypeV2 {
       })
       simplify_union(filtered)
     }
-    TObject(obj) =>
-      if obj.fields.contains(prop) {
-        ty
-      } else {
-        TNever
-      }
+    TObject(obj) => if obj.fields.contains(prop) { ty } else { TNever }
     _ => ty // Can't narrow non-objects
   }
 }
@@ -251,14 +234,12 @@ fn is_type_assignable_to(source : TypeV2, target : TypeV2) -> Bool {
     (TLiteralBool(a), TLiteralBool(b)) => a == b
 
     // Union: source assignable to at least one target member
-    (source, TUnion(targets)) => targets.iter().any(fn(t) {
-      is_type_assignable_to(source, t)
-    })
+    (source, TUnion(targets)) =>
+      targets.iter().any(fn(t) { is_type_assignable_to(source, t) })
 
     // Union source: all members must be assignable
-    (TUnion(sources), target) => sources.iter().all(fn(s) {
-      is_type_assignable_to(s, target)
-    })
+    (TUnion(sources), target) =>
+      sources.iter().all(fn(s) { is_type_assignable_to(s, target) })
 
     // Arrays
     (TArray(s), TArray(t)) => is_type_assignable_to(s, t)
@@ -272,7 +253,6 @@ fn is_type_assignable_to(source : TypeV2, target : TypeV2) -> Bool {
 
     // Generic instances (simplified)
     (TGenericInstance(a, _), TGenericInstance(b, _)) => a == b
-
     _ => false
   }
 }
@@ -286,7 +266,7 @@ fn is_type_assignable_to(source : TypeV2, target : TypeV2) -> Bool {
 pub fn is_typeof_binary_check(
   op : BinaryOperator,
   left : Node,
-  right : Node
+  right : Node,
 ) -> (String, String)? {
   match op {
     StrictEquals | StrictNotEquals | Equals | NotEquals => ()
@@ -323,20 +303,22 @@ pub fn is_typeof_binary_check(
 pub fn is_null_check(
   op : BinaryOperator,
   left : Node,
-  right : Node
+  right : Node,
 ) -> (String, Bool)? {
   // Returns (variable_name, is_equals) where is_equals means === null
   match op {
-    StrictEquals | Equals => match (left, right) {
-      (Identifier(id), NullLiteral(_)) | (NullLiteral(_), Identifier(id)) =>
-        Some((id.name, true))
-      _ => None
-    }
-    StrictNotEquals | NotEquals => match (left, right) {
-      (Identifier(id), NullLiteral(_)) | (NullLiteral(_), Identifier(id)) =>
-        Some((id.name, false))
-      _ => None
-    }
+    StrictEquals | Equals =>
+      match (left, right) {
+        (Identifier(id), NullLiteral(_)) | (NullLiteral(_), Identifier(id)) =>
+          Some((id.name, true))
+        _ => None
+      }
+    StrictNotEquals | NotEquals =>
+      match (left, right) {
+        (Identifier(id), NullLiteral(_)) | (NullLiteral(_), Identifier(id)) =>
+          Some((id.name, false))
+        _ => None
+      }
     _ => None
   }
 }
@@ -346,23 +328,25 @@ pub fn is_null_check(
 pub fn is_undefined_check(
   op : BinaryOperator,
   left : Node,
-  right : Node
+  right : Node,
 ) -> (String, Bool)? {
   match op {
-    StrictEquals | Equals => match (left, right) {
-      (Identifier(id), Identifier(undef)) if undef.name == "undefined" =>
-        Some((id.name, true))
-      (Identifier(undef), Identifier(id)) if undef.name == "undefined" =>
-        Some((id.name, true))
-      _ => None
-    }
-    StrictNotEquals | NotEquals => match (left, right) {
-      (Identifier(id), Identifier(undef)) if undef.name == "undefined" =>
-        Some((id.name, false))
-      (Identifier(undef), Identifier(id)) if undef.name == "undefined" =>
-        Some((id.name, false))
-      _ => None
-    }
+    StrictEquals | Equals =>
+      match (left, right) {
+        (Identifier(id), Identifier(undef)) if undef.name == "undefined" =>
+          Some((id.name, true))
+        (Identifier(undef), Identifier(id)) if undef.name == "undefined" =>
+          Some((id.name, true))
+        _ => None
+      }
+    StrictNotEquals | NotEquals =>
+      match (left, right) {
+        (Identifier(id), Identifier(undef)) if undef.name == "undefined" =>
+          Some((id.name, false))
+        (Identifier(undef), Identifier(id)) if undef.name == "undefined" =>
+          Some((id.name, false))
+        _ => None
+      }
     _ => None
   }
 }

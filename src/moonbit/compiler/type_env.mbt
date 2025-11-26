@@ -81,7 +81,10 @@ pub fn TypeEnv::lookup_base(self : TypeEnv, name : String) -> TypeV2? {
 
 ///|
 /// Look up a type alias
-pub fn TypeEnv::lookup_type_alias(self : TypeEnv, name : String) -> TypeAliasInfoV2? {
+pub fn TypeEnv::lookup_type_alias(
+  self : TypeEnv,
+  name : String,
+) -> TypeAliasInfoV2? {
   match self.type_aliases.get(name) {
     Some(type_alias) => Some(type_alias)
     None =>
@@ -94,7 +97,10 @@ pub fn TypeEnv::lookup_type_alias(self : TypeEnv, name : String) -> TypeAliasInf
 
 ///|
 /// Look up an interface/object type
-pub fn TypeEnv::lookup_interface(self : TypeEnv, name : String) -> ObjectTypeV2? {
+pub fn TypeEnv::lookup_interface(
+  self : TypeEnv,
+  name : String,
+) -> ObjectTypeV2? {
   match self.interfaces.get(name) {
     Some(obj) => Some(obj)
     None =>
@@ -109,7 +115,7 @@ pub fn TypeEnv::lookup_interface(self : TypeEnv, name : String) -> ObjectTypeV2?
 /// Look up a type parameter
 pub fn TypeEnv::lookup_type_param(
   self : TypeEnv,
-  name : String
+  name : String,
 ) -> TypeParamV2? {
   match self.type_params.get(name) {
     Some(param) => Some(param)
@@ -126,7 +132,7 @@ pub fn TypeEnv::lookup_type_param(
 pub fn TypeEnv::with_variable(
   self : TypeEnv,
   name : String,
-  ty : TypeV2
+  ty : TypeV2,
 ) -> TypeEnv {
   let new_vars = self.variables
   new_vars.set(name, ty)
@@ -144,7 +150,7 @@ pub fn TypeEnv::with_variable(
 /// Add multiple variable bindings
 pub fn TypeEnv::with_variables(
   self : TypeEnv,
-  bindings : Array[(String, TypeV2)]
+  bindings : Array[(String, TypeV2)],
 ) -> TypeEnv {
   let new_vars = self.variables
   for binding in bindings {
@@ -165,7 +171,7 @@ pub fn TypeEnv::with_variables(
 pub fn TypeEnv::with_type_alias(
   self : TypeEnv,
   name : String,
-  type_alias_info : TypeAliasInfoV2
+  type_alias_info : TypeAliasInfoV2,
 ) -> TypeEnv {
   let new_aliases = self.type_aliases
   new_aliases.set(name, type_alias_info)
@@ -184,7 +190,7 @@ pub fn TypeEnv::with_type_alias(
 pub fn TypeEnv::with_interface(
   self : TypeEnv,
   name : String,
-  obj : ObjectTypeV2
+  obj : ObjectTypeV2,
 ) -> TypeEnv {
   let new_interfaces = self.interfaces
   new_interfaces.set(name, obj)
@@ -202,7 +208,7 @@ pub fn TypeEnv::with_interface(
 /// Add type parameters to scope
 pub fn TypeEnv::with_type_params(
   self : TypeEnv,
-  params : Array[TypeParamV2]
+  params : Array[TypeParamV2],
 ) -> TypeEnv {
   let new_params = self.type_params
   for param in params {
@@ -223,7 +229,7 @@ pub fn TypeEnv::with_type_params(
 pub fn TypeEnv::with_narrowing(
   self : TypeEnv,
   name : String,
-  ty : TypeV2
+  ty : TypeV2,
 ) -> TypeEnv {
   let new_narrowings = self.narrowings
   new_narrowings.set(name, ty)
@@ -241,7 +247,7 @@ pub fn TypeEnv::with_narrowing(
 /// Add multiple narrowings
 pub fn TypeEnv::with_narrowings(
   self : TypeEnv,
-  narrows : Array[(String, TypeV2)]
+  narrows : Array[(String, TypeV2)],
 ) -> TypeEnv {
   let new_narrowings = self.narrowings
   for narrow in narrows {
@@ -275,18 +281,23 @@ pub fn TypeEnv::clear_narrowings(self : TypeEnv) -> TypeEnv {
 pub fn TypeEnv::resolve_type_alias(
   self : TypeEnv,
   name : String,
-  args : Array[TypeV2]
+  args : Array[TypeV2],
 ) -> TypeV2? {
   match self.lookup_type_alias(name) {
     None => None
-    Some(type_alias_info) => {
+    Some(type_alias_info) =>
       if type_alias_info.type_params.is_empty() {
         Some(type_alias_info.body)
       } else {
         // Substitute type arguments
-        Some(substitute_type_params_v2(type_alias_info.body, type_alias_info.type_params, args))
+        Some(
+          substitute_type_params_v2(
+            type_alias_info.body,
+            type_alias_info.type_params,
+            args,
+          ),
+        )
       }
-    }
   }
 }
 
@@ -294,7 +305,7 @@ pub fn TypeEnv::resolve_type_alias(
 /// Apply narrowing to a variable's type
 pub fn TypeEnv::apply_narrowing(
   self : TypeEnv,
-  narrowing : Narrowing
+  narrowing : Narrowing,
 ) -> TypeEnv {
   match narrowing {
     NNone => self
@@ -396,7 +407,7 @@ pub fn TypeEnv::apply_narrowing(
 fn substitute_type_params_v2(
   ty : TypeV2,
   params : Array[TypeParamV2],
-  args : Array[TypeV2]
+  args : Array[TypeV2],
 ) -> TypeV2 {
   // Build substitution map
   let subst : Map[String, TypeV2] = Map::new()
@@ -424,40 +435,36 @@ fn subst_in_type_v2(ty : TypeV2, subst : Map[String, TypeV2]) -> TypeV2 {
         None => ty
       }
     TUnion(types) => TUnion(types.map(fn(t) { subst_in_type_v2(t, subst) }))
-    TIntersection(types) => TIntersection(
-      types.map(fn(t) { subst_in_type_v2(t, subst) }),
-    )
+    TIntersection(types) =>
+      TIntersection(types.map(fn(t) { subst_in_type_v2(t, subst) }))
     TArray(elem) => TArray(subst_in_type_v2(elem, subst))
-    TTuple(elems) => TTuple(
-      elems.map(fn(e) {
-        {
-          ty: subst_in_type_v2(e.ty, subst),
-          optional: e.optional,
-          is_rest: e.is_rest,
-          label: e.label,
-        }
-      }),
-    )
+    TTuple(elems) =>
+      TTuple(
+        elems.map(fn(e) {
+          {
+            ty: subst_in_type_v2(e.ty, subst),
+            optional: e.optional,
+            is_rest: e.is_rest,
+            label: e.label,
+          }
+        }),
+      )
     TObject(obj) => TObject(subst_in_object_v2(obj, subst))
     TFunction(f) => TFunction(subst_in_function_v2(f, subst))
-    TGenericInstance(name, args) => TGenericInstance(
-      name,
-      args.map(fn(t) { subst_in_type_v2(t, subst) }),
-    )
-    TConditional(c) => TConditional(
-      {
+    TGenericInstance(name, args) =>
+      TGenericInstance(name, args.map(fn(t) { subst_in_type_v2(t, subst) }))
+    TConditional(c) =>
+      TConditional({
         check_type: subst_in_type_v2(c.check_type, subst),
         extends_type: subst_in_type_v2(c.extends_type, subst),
         true_type: subst_in_type_v2(c.true_type, subst),
         false_type: subst_in_type_v2(c.false_type, subst),
-      },
-    )
-    TIndexAccess(ia) => TIndexAccess(
-      {
+      })
+    TIndexAccess(ia) =>
+      TIndexAccess({
         object_type: subst_in_type_v2(ia.object_type, subst),
         index_type: subst_in_type_v2(ia.index_type, subst),
-      },
-    )
+      })
     // Primitives and literals don't change
     _ => ty
   }
@@ -467,18 +474,15 @@ fn subst_in_type_v2(ty : TypeV2, subst : Map[String, TypeV2]) -> TypeV2 {
 /// Apply substitution to object type
 fn subst_in_object_v2(
   obj : ObjectTypeV2,
-  subst : Map[String, TypeV2]
+  subst : Map[String, TypeV2],
 ) -> ObjectTypeV2 {
   let new_fields : Map[String, FieldInfoV2] = Map::new()
   for kv in obj.fields {
-    new_fields.set(
-      kv.0,
-      {
-        ty: subst_in_type_v2(kv.1.ty, subst),
-        optional: kv.1.optional,
-        is_readonly: kv.1.is_readonly,
-      },
-    )
+    new_fields.set(kv.0, {
+      ty: subst_in_type_v2(kv.1.ty, subst),
+      optional: kv.1.optional,
+      is_readonly: kv.1.is_readonly,
+    })
   }
   {
     fields: new_fields,
@@ -491,13 +495,11 @@ fn subst_in_object_v2(
     index_signature: match obj.index_signature {
       None => None
       Some(sig) =>
-        Some(
-          {
-            key_type: subst_in_type_v2(sig.key_type, subst),
-            value_type: subst_in_type_v2(sig.value_type, subst),
-            is_readonly: sig.is_readonly,
-          },
-        )
+        Some({
+          key_type: subst_in_type_v2(sig.key_type, subst),
+          value_type: subst_in_type_v2(sig.value_type, subst),
+          is_readonly: sig.is_readonly,
+        })
     },
     is_class: obj.is_class,
     class_name: obj.class_name,
@@ -508,7 +510,7 @@ fn subst_in_object_v2(
 /// Apply substitution to function type
 fn subst_in_function_v2(
   f : FunctionTypeV2,
-  subst : Map[String, TypeV2]
+  subst : Map[String, TypeV2],
 ) -> FunctionTypeV2 {
   {
     type_params: f.type_params, // Don't substitute bound type params
@@ -523,14 +525,12 @@ fn subst_in_function_v2(
     rest_param: match f.rest_param {
       None => None
       Some(r) =>
-        Some(
-          {
-            name: r.name,
-            ty: subst_in_type_v2(r.ty, subst),
-            optional: r.optional,
-            is_rest: r.is_rest,
-          },
-        )
+        Some({
+          name: r.name,
+          ty: subst_in_type_v2(r.ty, subst),
+          optional: r.optional,
+          is_rest: r.is_rest,
+        })
     },
     return_type: subst_in_type_v2(f.return_type, subst),
   }
@@ -542,7 +542,7 @@ fn subst_in_function_v2(
 fn merge_narrowing_envs(
   base : TypeEnv,
   env_a : TypeEnv,
-  env_b : TypeEnv
+  env_b : TypeEnv,
 ) -> TypeEnv {
   let merged_narrowings : Map[String, TypeV2] = Map::new()
 
@@ -559,7 +559,6 @@ fn merge_narrowing_envs(
       None => () // Only A narrows, don't include
     }
   }
-
   {
     variables: base.variables,
     type_aliases: base.type_aliases,
@@ -580,45 +579,32 @@ pub fn TypeEnv::with_builtins() -> TypeEnv {
   let env = TypeEnv::new()
 
   // Add built-in type aliases
-  let env = env.with_type_alias(
-    "Array",
-    { type_params: [TypeParamV2::simple("T")], body: TArray(TTypeParam("T", None)) },
-  )
-
-  let env = env.with_type_alias(
-    "ReadonlyArray",
-    { type_params: [TypeParamV2::simple("T")], body: TArray(TTypeParam("T", None)) },
-  )
+  let env = env.with_type_alias("Array", {
+    type_params: [TypeParamV2::simple("T")],
+    body: TArray(TTypeParam("T", None)),
+  })
+  let env = env.with_type_alias("ReadonlyArray", {
+    type_params: [TypeParamV2::simple("T")],
+    body: TArray(TTypeParam("T", None)),
+  })
 
   // Add Promise type
-  let env = env.with_type_alias(
-    "Promise",
-    {
-      type_params: [TypeParamV2::simple("T")],
-      body: TGenericInstance("Promise", [TTypeParam("T", None)]),
-    },
-  )
+  let env = env.with_type_alias("Promise", {
+    type_params: [TypeParamV2::simple("T")],
+    body: TGenericInstance("Promise", [TTypeParam("T", None)]),
+  })
 
   // Add Map type
-  let env = env.with_type_alias(
-    "Map",
-    {
-      type_params: [TypeParamV2::simple("K"), TypeParamV2::simple("V")],
-      body: TGenericInstance(
-        "Map",
-        [TTypeParam("K", None), TTypeParam("V", None)],
-      ),
-    },
-  )
+  let env = env.with_type_alias("Map", {
+    type_params: [TypeParamV2::simple("K"), TypeParamV2::simple("V")],
+    body: TGenericInstance("Map", [TTypeParam("K", None), TTypeParam("V", None)]),
+  })
 
   // Add Set type
-  let env = env.with_type_alias(
-    "Set",
-    {
-      type_params: [TypeParamV2::simple("T")],
-      body: TGenericInstance("Set", [TTypeParam("T", None)]),
-    },
-  )
+  let env = env.with_type_alias("Set", {
+    type_params: [TypeParamV2::simple("T")],
+    body: TGenericInstance("Set", [TTypeParam("T", None)]),
+  })
 
   // Add common global variables
   let env = env.with_variable("undefined", TUndefined)
@@ -630,51 +616,43 @@ pub fn TypeEnv::with_builtins() -> TypeEnv {
   console_fields.set(
     "log",
     FieldInfoV2::required(
-      TFunction(
-        {
-          type_params: [],
-          params: [],
-          rest_param: Some(ParamInfoV2::rest("args", TAny)),
-          return_type: TVoid,
-        },
-      ),
+      TFunction({
+        type_params: [],
+        params: [],
+        rest_param: Some(ParamInfoV2::rest("args", TAny)),
+        return_type: TVoid,
+      }),
     ),
   )
   console_fields.set(
     "error",
     FieldInfoV2::required(
-      TFunction(
-        {
-          type_params: [],
-          params: [],
-          rest_param: Some(ParamInfoV2::rest("args", TAny)),
-          return_type: TVoid,
-        },
-      ),
+      TFunction({
+        type_params: [],
+        params: [],
+        rest_param: Some(ParamInfoV2::rest("args", TAny)),
+        return_type: TVoid,
+      }),
     ),
   )
   console_fields.set(
     "warn",
     FieldInfoV2::required(
-      TFunction(
-        {
-          type_params: [],
-          params: [],
-          rest_param: Some(ParamInfoV2::rest("args", TAny)),
-          return_type: TVoid,
-        },
-      ),
+      TFunction({
+        type_params: [],
+        params: [],
+        rest_param: Some(ParamInfoV2::rest("args", TAny)),
+        return_type: TVoid,
+      }),
     ),
   )
-  let console_type = TObject(
-    {
-      fields: console_fields,
-      call_signatures: [],
-      construct_signatures: [],
-      index_signature: None,
-      is_class: false,
-      class_name: None,
-    },
-  )
+  let console_type = TObject({
+    fields: console_fields,
+    call_signatures: [],
+    construct_signatures: [],
+    index_signature: None,
+    is_class: false,
+    class_name: None,
+  })
   env.with_variable("console", console_type)
 }

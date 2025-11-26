@@ -20,7 +20,7 @@ pub fn CheckResultV2::ok(ty : TypeV2) -> CheckResultV2 {
 /// Create a check result with narrowing info
 pub fn CheckResultV2::with_narrowing(
   ty : TypeV2,
-  narrowing : Narrowing
+  narrowing : Narrowing,
 ) -> CheckResultV2 {
   { ty, narrowing, errors: [] }
 }
@@ -29,7 +29,7 @@ pub fn CheckResultV2::with_narrowing(
 /// Create an error result
 pub fn CheckResultV2::error(
   ty : TypeV2,
-  err : TypeMismatchError
+  err : TypeMismatchError,
 ) -> CheckResultV2 {
   { ty, narrowing: NNone, errors: [err] }
 }
@@ -38,7 +38,7 @@ pub fn CheckResultV2::error(
 /// Create result with multiple errors
 pub fn CheckResultV2::errors(
   ty : TypeV2,
-  errs : Array[TypeMismatchError]
+  errs : Array[TypeMismatchError],
 ) -> CheckResultV2 {
   { ty, narrowing: NNone, errors: errs }
 }
@@ -53,7 +53,7 @@ pub fn CheckResultV2::has_errors(self : CheckResultV2) -> Bool {
 /// Combine errors from two results
 pub fn CheckResultV2::combine_errors(
   self : CheckResultV2,
-  other : CheckResultV2
+  other : CheckResultV2,
 ) -> CheckResultV2 {
   let combined : Array[TypeMismatchError] = []
   combined.append(self.errors)
@@ -72,7 +72,7 @@ pub fn CheckResultV2::combine_errors(
 pub fn check_expr_v2(
   env : TypeEnv,
   node : Node,
-  dir : Direction
+  dir : Direction,
 ) -> CheckResultV2 {
   match dir {
     Infer => infer_expr_v2(env, node)
@@ -102,7 +102,8 @@ pub fn infer_expr_v2(env : TypeEnv, node : Node) -> CheckResultV2 {
       }
 
     // Array literal
-    ArrayLiteralExpression(arr) => infer_array_literal_elements_v2(env, arr.elements)
+    ArrayLiteralExpression(arr) =>
+      infer_array_literal_elements_v2(env, arr.elements)
 
     // Object literal
     ObjectLiteralExpression(obj) => infer_object_literal_v2(env, obj.properties)
@@ -166,7 +167,7 @@ pub fn infer_expr_v2(env : TypeEnv, node : Node) -> CheckResultV2 {
 pub fn check_against_v2(
   env : TypeEnv,
   node : Node,
-  expected : TypeV2
+  expected : TypeV2,
 ) -> CheckResultV2 {
   // First try to use the expected type to guide checking
   match node {
@@ -205,7 +206,6 @@ pub fn check_against_v2(
           check_assignable_v2(inferred.ty, expected, PRoot)
         }
       }
-
     ArrowFunction(arrow) =>
       match expected {
         TFunction(func_ty) => check_arrow_v2(env, arrow, func_ty)
@@ -235,15 +235,13 @@ pub fn check_against_v2(
 /// Infer type of array literal from Node? elements
 fn infer_array_literal_elements_v2(
   env : TypeEnv,
-  elements : Array[Node?]
+  elements : Array[Node?],
 ) -> CheckResultV2 {
   if elements.is_empty() {
     return CheckResultV2::ok(TArray(TAny))
   }
-
   let elem_types : Array[TypeV2] = []
   let all_errors : Array[TypeMismatchError] = []
-
   for elem in elements {
     match elem {
       Some(expr) => {
@@ -256,7 +254,11 @@ fn infer_array_literal_elements_v2(
   }
 
   // Find common type (simplified - just union all)
-  let unified = if elem_types.is_empty() { TAny } else { make_union(elem_types) }
+  let unified = if elem_types.is_empty() {
+    TAny
+  } else {
+    make_union(elem_types)
+  }
   { ty: TArray(unified), narrowing: NNone, errors: all_errors }
 }
 
@@ -265,33 +267,29 @@ fn infer_array_literal_elements_v2(
 fn check_array_literal_v2(
   env : TypeEnv,
   elements : Array[Node?],
-  expected_elem : TypeV2
+  expected_elem : TypeV2,
 ) -> CheckResultV2 {
   let all_errors : Array[TypeMismatchError] = []
-
   for i, elem in elements {
     match elem {
       Some(expr) => {
         let result = check_against_v2(env, expr, expected_elem)
         if result.has_errors() {
           for err in result.errors {
-            all_errors.push(
-              TypeMismatchError::{
-                path: PIndex(err.path, i),
-                expected: err.expected,
-                actual: err.actual,
-                reason: err.reason,
-                children: err.children,
-                suggestions: err.suggestions,
-              },
-            )
+            all_errors.push(TypeMismatchError::{
+              path: PIndex(err.path, i),
+              expected: err.expected,
+              actual: err.actual,
+              reason: err.reason,
+              children: err.children,
+              suggestions: err.suggestions,
+            })
           }
         }
       }
       None => () // Hole in array
     }
   }
-
   { ty: TArray(expected_elem), narrowing: NNone, errors: all_errors }
 }
 
@@ -299,11 +297,10 @@ fn check_array_literal_v2(
 /// Infer type of object literal
 fn infer_object_literal_v2(
   env : TypeEnv,
-  properties : Array[ObjectProperty]
+  properties : Array[ObjectProperty],
 ) -> CheckResultV2 {
   let fields : Map[String, FieldInfoV2] = Map::new()
   let all_errors : Array[TypeMismatchError] = []
-
   for prop in properties {
     match prop {
       PropertyAssignment(name, value, _) => {
@@ -341,10 +338,9 @@ fn infer_object_literal_v2(
           _ => fields.set(name, FieldInfoV2::required(TAny))
         }
       }
-      SetAccessor(name, _, _) => {
+      SetAccessor(name, _, _) =>
         // Setter has void return, we infer any for the property
         fields.set(name, FieldInfoV2::required(TAny))
-      }
       ComputedPropertyAssignment(_, value, _) => {
         // For computed properties, we can't statically know the key
         let result = infer_expr_v2(env, value)
@@ -352,7 +348,6 @@ fn infer_object_literal_v2(
       }
     }
   }
-
   let obj_ty = ObjectTypeV2::{
     fields,
     call_signatures: [],
@@ -369,12 +364,11 @@ fn infer_object_literal_v2(
 fn check_object_literal_v2(
   env : TypeEnv,
   properties : Array[ObjectProperty],
-  expected : ObjectTypeV2
+  expected : ObjectTypeV2,
 ) -> CheckResultV2 {
   let fields : Map[String, FieldInfoV2] = Map::new()
   let all_errors : Array[TypeMismatchError] = []
   let provided_props : Array[String] = []
-
   for prop in properties {
     match prop {
       PropertyAssignment(name, value, _) => {
@@ -393,9 +387,7 @@ fn check_object_literal_v2(
             // Excess property check
             let result = infer_expr_v2(env, value)
             fields.set(name, FieldInfoV2::required(result.ty))
-            all_errors.push(
-              excess_property_error(PProperty(PRoot, name), name),
-            )
+            all_errors.push(excess_property_error(PProperty(PRoot, name), name))
           }
         }
       }
@@ -452,9 +444,7 @@ fn check_object_literal_v2(
           None => {
             let result = infer_function_v2(env, func_expr)
             fields.set(name, FieldInfoV2::required(result.ty))
-            all_errors.push(
-              excess_property_error(PProperty(PRoot, name), name),
-            )
+            all_errors.push(excess_property_error(PProperty(PRoot, name), name))
           }
         }
       }
@@ -492,7 +482,6 @@ fn check_object_literal_v2(
       )
     }
   }
-
   let obj_ty = ObjectTypeV2::{
     fields,
     call_signatures: [],
@@ -520,7 +509,6 @@ fn infer_function_v2(env : TypeEnv, func : FunctionExpression) -> CheckResultV2 
 
   // Infer return type from body
   let return_ty = infer_block_return_v2(child_env, func.body)
-
   let func_ty = FunctionTypeV2::{
     type_params: [],
     params,
@@ -535,7 +523,7 @@ fn infer_function_v2(env : TypeEnv, func : FunctionExpression) -> CheckResultV2 
 fn check_function_v2(
   env : TypeEnv,
   func : FunctionExpression,
-  expected : FunctionTypeV2
+  expected : FunctionTypeV2,
 ) -> CheckResultV2 {
   let mut child_env = env.child()
   let all_errors : Array[TypeMismatchError] = []
@@ -552,9 +540,12 @@ fn check_function_v2(
   }
 
   // Check body against expected return type
-  let body_result = check_block_return_v2(child_env, func.body, expected.return_type)
+  let body_result = check_block_return_v2(
+    child_env,
+    func.body,
+    expected.return_type,
+  )
   all_errors.append(body_result.errors)
-
   { ty: TFunction(expected), narrowing: NNone, errors: all_errors }
 }
 
@@ -563,22 +554,20 @@ fn check_function_v2(
 fn infer_arrow_v2(env : TypeEnv, arrow : ArrowFunction) -> CheckResultV2 {
   let params : Array[ParamInfoV2] = []
   let mut child_env = env.child()
-
   for param in arrow.parameters {
     let param_name = get_param_name_v2(param)
     let param_ty = TAny
     params.push(ParamInfoV2::required(param_name, param_ty))
     child_env = child_env.with_variable(param_name, param_ty)
   }
-
   let return_ty = match arrow.body {
-    BlockStatement(block) => infer_block_return_from_stmts_v2(child_env, block.statements)
+    BlockStatement(block) =>
+      infer_block_return_from_stmts_v2(child_env, block.statements)
     expr => {
       let result = infer_expr_v2(child_env, expr)
       result.ty
     }
   }
-
   let func_ty = FunctionTypeV2::{
     type_params: [],
     params,
@@ -593,11 +582,10 @@ fn infer_arrow_v2(env : TypeEnv, arrow : ArrowFunction) -> CheckResultV2 {
 fn check_arrow_v2(
   env : TypeEnv,
   arrow : ArrowFunction,
-  expected : FunctionTypeV2
+  expected : FunctionTypeV2,
 ) -> CheckResultV2 {
   let mut child_env = env.child()
   let all_errors : Array[TypeMismatchError] = []
-
   for i, param in arrow.parameters {
     let param_name = get_param_name_v2(param)
     let param_ty = if i < expected.params.length() {
@@ -607,7 +595,6 @@ fn check_arrow_v2(
     }
     child_env = child_env.with_variable(param_name, param_ty)
   }
-
   match arrow.body {
     BlockStatement(block) => {
       let body_result = check_block_return_from_stmts_v2(
@@ -622,7 +609,6 @@ fn check_arrow_v2(
       all_errors.append(result.errors)
     }
   }
-
   { ty: TFunction(expected), narrowing: NNone, errors: all_errors }
 }
 
@@ -630,34 +616,29 @@ fn check_arrow_v2(
 /// Infer call expression type
 fn infer_call_v2(env : TypeEnv, call : CallExpression) -> CheckResultV2 {
   let callee_result = infer_expr_v2(env, call.expression)
-
   match callee_result.ty {
     TFunction(func) => {
       // Check arguments against parameters
       let all_errors : Array[TypeMismatchError] = []
       all_errors.append(callee_result.errors)
-
       for i, arg in call.arguments {
         if i < func.params.length() {
           let expected_param = func.params[i]
           let arg_result = check_against_v2(env, arg, expected_param.ty)
           if arg_result.has_errors() {
             for err in arg_result.errors {
-              all_errors.push(
-                TypeMismatchError::{
-                  path: PParameter(err.path, i, expected_param.name),
-                  expected: err.expected,
-                  actual: err.actual,
-                  reason: err.reason,
-                  children: err.children,
-                  suggestions: err.suggestions,
-                },
-              )
+              all_errors.push(TypeMismatchError::{
+                path: PParameter(err.path, i, expected_param.name),
+                expected: err.expected,
+                actual: err.actual,
+                reason: err.reason,
+                children: err.children,
+                suggestions: err.suggestions,
+              })
             }
           }
         }
       }
-
       { ty: func.return_type, narrowing: NNone, errors: all_errors }
     }
     TObject(obj) =>
@@ -678,11 +659,10 @@ fn infer_call_v2(env : TypeEnv, call : CallExpression) -> CheckResultV2 {
 /// Infer property access type
 fn infer_property_access_v2(
   env : TypeEnv,
-  prop : PropertyAccessExpression
+  prop : PropertyAccessExpression,
 ) -> CheckResultV2 {
   let obj_result = infer_expr_v2(env, prop.expression)
   let prop_name = prop.name
-
   infer_member_type_v2(obj_result.ty, prop_name, obj_result.errors)
 }
 
@@ -690,11 +670,10 @@ fn infer_property_access_v2(
 /// Infer element access type
 fn infer_element_access_v2(
   env : TypeEnv,
-  elem : ElementAccessExpression
+  elem : ElementAccessExpression,
 ) -> CheckResultV2 {
   let obj_result = infer_expr_v2(env, elem.expression)
   let _ = infer_expr_v2(env, elem.argument_expression)
-
   match obj_result.ty {
     TArray(elem_ty) => CheckResultV2::ok(elem_ty)
     TString => CheckResultV2::ok(TString)
@@ -712,7 +691,7 @@ fn infer_element_access_v2(
 fn infer_member_type_v2(
   obj_ty : TypeV2,
   prop_name : String,
-  base_errors : Array[TypeMismatchError]
+  base_errors : Array[TypeMismatchError],
 ) -> CheckResultV2 {
   match obj_ty {
     TObject(obj) =>
@@ -720,7 +699,8 @@ fn infer_member_type_v2(
         Some(field) => { ty: field.ty, narrowing: NNone, errors: base_errors }
         None =>
           match obj.index_signature {
-            Some(sig) => { ty: sig.value_type, narrowing: NNone, errors: base_errors }
+            Some(sig) =>
+              { ty: sig.value_type, narrowing: NNone, errors: base_errors }
             None => {
               let available : Array[String] = []
               for kv in obj.fields {
@@ -762,7 +742,6 @@ fn infer_binary_v2(env : TypeEnv, bin : BinaryExpression) -> CheckResultV2 {
 
   // Extract narrowing information from comparison
   let narrowing = extract_narrowing_v2(bin)
-
   let result_ty = match bin.operator {
     // Arithmetic operators
     Add =>
@@ -771,8 +750,7 @@ fn infer_binary_v2(env : TypeEnv, bin : BinaryExpression) -> CheckResultV2 {
         (TLiteralString(_), _) | (_, TLiteralString(_)) => TString
         _ => TNumber
       }
-    Subtract | Multiply | Divide | Remainder | Exponentiate =>
-      TNumber
+    Subtract | Multiply | Divide | Remainder | Exponentiate => TNumber
 
     // Comparison operators -> boolean
     LessThan | LessThanEquals | GreaterThan | GreaterThanEquals => TBoolean
@@ -781,39 +759,38 @@ fn infer_binary_v2(env : TypeEnv, bin : BinaryExpression) -> CheckResultV2 {
     StrictEquals | StrictNotEquals | Equals | NotEquals => TBoolean
 
     // Logical operators
-    LogicalAnd => {
+    LogicalAnd =>
       match left_result.ty {
         TLiteralBool(false) | TNull | TUndefined => left_result.ty
         _ => right_result.ty
       }
-    }
-    LogicalOr => {
+    LogicalOr =>
       match left_result.ty {
         TLiteralBool(true) => left_result.ty
         TNull | TUndefined | TLiteralBool(false) => right_result.ty
         _ => make_union([left_result.ty, right_result.ty])
       }
-    }
     NullishCoalescing =>
       make_union([get_non_null_type(left_result.ty), right_result.ty])
 
     // Bitwise operators
-    BitwiseAnd | BitwiseOr | BitwiseXor | LeftShift | RightShift |
-    UnsignedRightShift => TNumber
+    BitwiseAnd
+    | BitwiseOr
+    | BitwiseXor
+    | LeftShift
+    | RightShift
+    | UnsignedRightShift => TNumber
 
     // In operator
     In => TBoolean
 
     // Instanceof
     InstanceOf => TBoolean
-
     _ => TAny
   }
-
   let all_errors : Array[TypeMismatchError] = []
   all_errors.append(left_result.errors)
   all_errors.append(right_result.errors)
-
   { ty: result_ty, narrowing, errors: all_errors }
 }
 
@@ -865,7 +842,6 @@ fn extract_narrowing_v2(bin : BinaryExpression) -> Narrowing {
       }
     _ => ()
   }
-
   NNone
 }
 
@@ -873,7 +849,6 @@ fn extract_narrowing_v2(bin : BinaryExpression) -> Narrowing {
 /// Infer unary expression type
 fn infer_unary_v2(env : TypeEnv, un : UnaryExpression) -> CheckResultV2 {
   let operand_result = infer_expr_v2(env, un.operand)
-
   let result_ty = match un.operator {
     LogicalNot => TBoolean
     BitwiseNot => TNumber
@@ -894,7 +869,6 @@ fn infer_unary_v2(env : TypeEnv, un : UnaryExpression) -> CheckResultV2 {
       }
     _ => NNone
   }
-
   { ty: result_ty, narrowing, errors: operand_result.errors }
 }
 
@@ -902,24 +876,20 @@ fn infer_unary_v2(env : TypeEnv, un : UnaryExpression) -> CheckResultV2 {
 /// Infer conditional expression type
 fn infer_conditional_v2(
   env : TypeEnv,
-  cond : ConditionalExpression
+  cond : ConditionalExpression,
 ) -> CheckResultV2 {
   let cond_result = infer_expr_v2(env, cond.condition)
 
   // Apply narrowing to when_true and when_false branches
   let true_env = env.apply_narrowing(cond_result.narrowing)
   let false_env = env.apply_narrowing(invert_narrowing(cond_result.narrowing))
-
   let true_result = infer_expr_v2(true_env, cond.when_true)
   let false_result = infer_expr_v2(false_env, cond.when_false)
-
   let result_ty = make_union([true_result.ty, false_result.ty])
-
   let all_errors : Array[TypeMismatchError] = []
   all_errors.append(cond_result.errors)
   all_errors.append(true_result.errors)
   all_errors.append(false_result.errors)
-
   { ty: result_ty, narrowing: NNone, errors: all_errors }
 }
 
@@ -927,7 +897,6 @@ fn infer_conditional_v2(
 /// Infer new expression type
 fn infer_new_v2(env : TypeEnv, new_expr : NewExpression) -> CheckResultV2 {
   let callee_result = infer_expr_v2(env, new_expr.expression)
-
   match callee_result.ty {
     TObject(obj) =>
       if obj.construct_signatures.is_empty() {
@@ -951,7 +920,7 @@ fn infer_new_v2(env : TypeEnv, new_expr : NewExpression) -> CheckResultV2 {
 pub fn check_assignable_v2(
   source : TypeV2,
   target : TypeV2,
-  path : TypePath
+  path : TypePath,
 ) -> CheckResultV2 {
   // Same type
   if types_v2_equal(source, target) {
@@ -1067,14 +1036,12 @@ pub fn check_assignable_v2(
 fn check_object_assignable_v2(
   source : ObjectTypeV2,
   target : ObjectTypeV2,
-  path : TypePath
+  path : TypePath,
 ) -> CheckResultV2 {
   let all_errors : Array[TypeMismatchError] = []
-
   for kv in target.fields {
     let name = kv.0
     let t_field = kv.1
-
     match source.fields.get(name) {
       Some(s_field) => {
         let result = check_assignable_v2(
@@ -1100,7 +1067,6 @@ fn check_object_assignable_v2(
         }
     }
   }
-
   if all_errors.is_empty() {
     CheckResultV2::ok(TObject(source))
   } else {
@@ -1113,7 +1079,7 @@ fn check_object_assignable_v2(
 fn check_function_assignable_v2(
   source : FunctionTypeV2,
   target : FunctionTypeV2,
-  path : TypePath
+  path : TypePath,
 ) -> CheckResultV2 {
   let all_errors : Array[TypeMismatchError] = []
 
@@ -1136,7 +1102,6 @@ fn check_function_assignable_v2(
     path.return_type(),
   )
   all_errors.append(ret_result.errors)
-
   if all_errors.is_empty() {
     CheckResultV2::ok(TFunction(source))
   } else {
@@ -1166,7 +1131,8 @@ fn get_param_name_v2(node : Node) -> String {
 /// Infer return type from block body
 fn infer_block_return_v2(env : TypeEnv, body : Node) -> TypeV2 {
   match body {
-    BlockStatement(block) => infer_block_return_from_stmts_v2(env, block.statements)
+    BlockStatement(block) =>
+      infer_block_return_from_stmts_v2(env, block.statements)
     _ => TVoid
   }
 }
@@ -1176,7 +1142,7 @@ fn infer_block_return_v2(env : TypeEnv, body : Node) -> TypeV2 {
 fn check_block_return_v2(
   env : TypeEnv,
   body : Node,
-  expected : TypeV2
+  expected : TypeV2,
 ) -> CheckResultV2 {
   match body {
     BlockStatement(block) =>
@@ -1189,10 +1155,9 @@ fn check_block_return_v2(
 /// Infer return type from statements
 fn infer_block_return_from_stmts_v2(
   env : TypeEnv,
-  statements : Array[Node]
+  statements : Array[Node],
 ) -> TypeV2 {
   let return_types : Array[TypeV2] = []
-
   for stmt in statements {
     match stmt {
       ReturnStatement(ret) =>
@@ -1206,7 +1171,6 @@ fn infer_block_return_from_stmts_v2(
       _ => ()
     }
   }
-
   if return_types.is_empty() {
     TVoid
   } else {
@@ -1219,10 +1183,9 @@ fn infer_block_return_from_stmts_v2(
 fn check_block_return_from_stmts_v2(
   env : TypeEnv,
   statements : Array[Node],
-  expected : TypeV2
+  expected : TypeV2,
 ) -> CheckResultV2 {
   let all_errors : Array[TypeMismatchError] = []
-
   for stmt in statements {
     match stmt {
       ReturnStatement(ret) =>
@@ -1241,6 +1204,5 @@ fn check_block_return_from_stmts_v2(
       _ => ()
     }
   }
-
   { ty: expected, narrowing: NNone, errors: all_errors }
 }

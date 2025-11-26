@@ -7,7 +7,9 @@
 
 ///|
 /// Helper function to parse and bind source code
-fn parse_and_bind(source : String) -> Result[@compiler.BoundSourceFile, Array[@compiler.Diagnostic]] {
+fn parse_and_bind(
+  source : String,
+) -> Result[@compiler.BoundSourceFile, Array[@compiler.Diagnostic]] {
   let scanner = @compiler.Scanner::new(source, "test.ts")
   let tokens = @compiler.scan_all(scanner)
   match @compiler.parse_source_file(tokens, "test.ts") {
@@ -268,9 +270,7 @@ test "detect ES module with export" {
 test "detect strict mode" {
   let source = "\"use strict\";\nconst x = 1;"
   match parse_and_bind(source) {
-    Ok(bound_file) => {
-      assert_eq(bound_file.module_info.is_strict_mode, true)
-    }
+    Ok(bound_file) => assert_eq(bound_file.module_info.is_strict_mode, true)
     Err(_) => assert_true(false)
   }
 }
@@ -311,9 +311,7 @@ test "cannot merge variables from parsed source" {
   let source = "const x = 1;\nconst x = 2;"
   match parse_and_bind(source) {
     Ok(_) => assert_true(false) // Should have errors
-    Err(diagnostics) => {
-      assert_true(diagnostics.length() > 0)
-    }
+    Err(diagnostics) => assert_true(diagnostics.length() > 0)
   }
 }
 
@@ -323,9 +321,7 @@ test "cannot merge type aliases from parsed source" {
   let source = "type T = string;\ntype T = number;"
   match parse_and_bind(source) {
     Ok(_) => assert_true(false) // Should have errors
-    Err(diagnostics) => {
-      assert_true(diagnostics.length() > 0)
-    }
+    Err(diagnostics) => assert_true(diagnostics.length() > 0)
   }
 }
 
@@ -1416,7 +1412,6 @@ test "complex function with all control flow constructs" {
       let mut has_loop_label = false
       let mut has_branch_label = false
       let mut has_reducer = false
-
       for i = 0; i < cfg.nodes.length(); i = i + 1 {
         match cfg.nodes[i] {
           Condition(_) => has_condition = true
@@ -1426,7 +1421,6 @@ test "complex function with all control flow constructs" {
           _ => ()
         }
       }
-
       assert_true(has_condition)
       assert_true(has_loop_label)
       assert_true(has_branch_label)

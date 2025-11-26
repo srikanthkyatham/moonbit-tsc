@@ -22,7 +22,7 @@ pub fn type_check(source : String, file_path : String) -> CheckResult {
 /// (including warnings) even on success
 pub fn type_check_with_all_diagnostics(
   source : String,
-  file_path : String
+  file_path : String,
 ) -> (TypedFile?, Array[Diagnostic]) {
   let scanner = Scanner::new(source, file_path)
   let tokens = scan_all(scanner)

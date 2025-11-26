@@ -28,7 +28,10 @@ fn parse_bind_check_errors(source : String) -> @compiler.CheckResult {
 
 ///|
 /// Helper to check if any diagnostic contains a specific message substring
-fn has_diagnostic_containing(diagnostics : Array[@compiler.Diagnostic], substring : String) -> Bool {
+fn has_diagnostic_containing(
+  diagnostics : Array[@compiler.Diagnostic],
+  substring : String,
+) -> Bool {
   for i = 0; i < diagnostics.length(); i = i + 1 {
     if diagnostics[i].message.contains(substring) {
       return true
@@ -39,7 +42,10 @@ fn has_diagnostic_containing(diagnostics : Array[@compiler.Diagnostic], substrin
 
 ///|
 /// Helper to check if any diagnostic has a specific error code
-fn has_diagnostic_code(diagnostics : Array[@compiler.Diagnostic], code : Int) -> Bool {
+fn has_diagnostic_code(
+  diagnostics : Array[@compiler.Diagnostic],
+  code : Int,
+) -> Bool {
   for i = 0; i < diagnostics.length(); i = i + 1 {
     if diagnostics[i].code == code {
       return true
@@ -53,7 +59,7 @@ fn has_diagnostic_code(diagnostics : Array[@compiler.Diagnostic], code : Int) ->
 fn has_diagnostic_with_code_and_message(
   diagnostics : Array[@compiler.Diagnostic],
   code : Int,
-  substring : String
+  substring : String,
 ) -> Bool {
   for i = 0; i < diagnostics.length(); i = i + 1 {
     if diagnostics[i].code == code && diagnostics[i].message.contains(substring) {
@@ -89,7 +95,11 @@ test "unit/checker/error/TS2322 - boolean to number assignment" {
     Err(diagnostics) => {
       assert_true(diagnostics.length() > 0)
       // Verify error code TS2322 with message
-      assert_true(has_diagnostic_with_code_and_message(diagnostics, 2322, "not assignable"))
+      assert_true(
+        has_diagnostic_with_code_and_message(
+          diagnostics, 2322, "not assignable",
+        ),
+      )
     }
   }
 }
@@ -101,7 +111,11 @@ test "unit/checker/error/TS2322 - number to string assignment" {
     Ok(_) => assert_true(false)
     Err(diagnostics) => {
       assert_true(diagnostics.length() > 0)
-      assert_true(has_diagnostic_with_code_and_message(diagnostics, 2322, "not assignable"))
+      assert_true(
+        has_diagnostic_with_code_and_message(
+          diagnostics, 2322, "not assignable",
+        ),
+      )
     }
   }
 }
@@ -110,10 +124,9 @@ test "unit/checker/error/TS2322 - number to string assignment" {
 test "unit/checker/error/TS2322 - null to non-nullable" {
   let result = parse_bind_check_errors("const x: number = null;")
   match result {
-    Ok(typed) => {
+    Ok(typed) =>
       // May succeed if strict null checks not implemented
       assert_eq(typed.file_path, "test.ts")
-    }
     Err(diagnostics) => {
       assert_true(diagnostics.length() > 0)
       assert_true(has_diagnostic_containing(diagnostics, "not assignable"))
@@ -123,29 +136,27 @@ test "unit/checker/error/TS2322 - null to non-nullable" {
 
 ///|
 test "unit/checker/error/TS2322 - object literal missing property" {
-  let result = parse_bind_check_errors("interface Person { name: string; age: number; } const p: Person = { name: \"John\" };")
+  let result = parse_bind_check_errors(
+    "interface Person { name: string; age: number; } const p: Person = { name: \"John\" };",
+  )
   match result {
-    Ok(typed) => {
+    Ok(typed) =>
       // May succeed if checker doesn't enforce required properties yet
       assert_eq(typed.file_path, "test.ts")
-    }
-    Err(diagnostics) => {
-      assert_true(diagnostics.length() > 0)
-    }
+    Err(diagnostics) => assert_true(diagnostics.length() > 0)
   }
 }
 
 ///|
 test "unit/checker/error/TS2322 - array element type mismatch" {
-  let result = parse_bind_check_errors("const arr: number[] = [1, 2, \"three\"];")
+  let result = parse_bind_check_errors(
+    "const arr: number[] = [1, 2, \"three\"];",
+  )
   match result {
-    Ok(typed) => {
+    Ok(typed) =>
       // May succeed depending on array type checking implementation
       assert_eq(typed.file_path, "test.ts")
-    }
-    Err(diagnostics) => {
-      assert_true(diagnostics.length() > 0)
-    }
+    Err(diagnostics) => assert_true(diagnostics.length() > 0)
   }
 }
 
@@ -156,7 +167,11 @@ test "unit/checker/error/TS2322 - union type mismatch" {
     Ok(_) => assert_true(false)
     Err(diagnostics) => {
       assert_true(diagnostics.length() > 0)
-      assert_true(has_diagnostic_with_code_and_message(diagnostics, 2322, "not assignable"))
+      assert_true(
+        has_diagnostic_with_code_and_message(
+          diagnostics, 2322, "not assignable",
+        ),
+      )
     }
   }
 }
@@ -187,7 +202,9 @@ test "unit/checker/error/TS2363 - boolean multiplication" {
     Err(diagnostics) => {
       assert_true(diagnostics.length() > 0)
       // Verify error code TS2363 with message
-      assert_true(has_diagnostic_with_code_and_message(diagnostics, 2363, "number"))
+      assert_true(
+        has_diagnostic_with_code_and_message(diagnostics, 2363, "number"),
+      )
     }
   }
 }
@@ -199,7 +216,9 @@ test "unit/checker/error/TS2363 - string division" {
     Ok(_) => assert_true(false)
     Err(diagnostics) => {
       assert_true(diagnostics.length() > 0)
-      assert_true(has_diagnostic_with_code_and_message(diagnostics, 2363, "number"))
+      assert_true(
+        has_diagnostic_with_code_and_message(diagnostics, 2363, "number"),
+      )
     }
   }
 }
@@ -208,13 +227,10 @@ test "unit/checker/error/TS2363 - string division" {
 test "unit/checker/error/TS2363 - null arithmetic" {
   let result = parse_bind_check_errors("const x = null + 5;")
   match result {
-    Ok(typed) => {
+    Ok(typed) =>
       // null + number might be allowed in some contexts
       assert_eq(typed.file_path, "test.ts")
-    }
-    Err(diagnostics) => {
-      assert_true(diagnostics.length() > 0)
-    }
+    Err(diagnostics) => assert_true(diagnostics.length() > 0)
   }
 }
 
@@ -225,7 +241,9 @@ test "unit/checker/error/TS2363 - unary minus on string" {
     Ok(_) => assert_true(false)
     Err(diagnostics) => {
       assert_true(diagnostics.length() > 0)
-      assert_true(has_diagnostic_with_code_and_message(diagnostics, 2363, "number"))
+      assert_true(
+        has_diagnostic_with_code_and_message(diagnostics, 2363, "number"),
+      )
     }
   }
 }
@@ -234,13 +252,10 @@ test "unit/checker/error/TS2363 - unary minus on string" {
 test "unit/checker/error/TS2363 - increment on boolean" {
   let result = parse_bind_check_errors("let x = true; x++;")
   match result {
-    Ok(typed) => {
+    Ok(typed) =>
       // May succeed depending on implementation
       assert_eq(typed.file_path, "test.ts")
-    }
-    Err(diagnostics) => {
-      assert_true(diagnostics.length() > 0)
-    }
+    Err(diagnostics) => assert_true(diagnostics.length() > 0)
   }
 }
 
@@ -252,10 +267,9 @@ test "unit/checker/error/TS2363 - increment on boolean" {
 test "unit/checker/error/TS2588 - reassign const variable" {
   let result = parse_bind_check_errors("const x = 1; x = 2;")
   match result {
-    Ok(typed) => {
+    Ok(typed) =>
       // May succeed but with diagnostics
       assert_eq(typed.file_path, "test.ts")
-    }
     Err(diagnostics) => {
       assert_true(diagnostics.length() > 0)
       assert_true(has_diagnostic_containing(diagnostics, "constant"))
@@ -269,13 +283,14 @@ test "unit/checker/error/TS2588 - reassign const variable" {
 test "unit/checker/error/TS2588 - compound assignment to const" {
   let result = parse_bind_check_errors("const x = 1; x += 2;")
   match result {
-    Ok(typed) => {
+    Ok(typed) =>
       // May succeed but with diagnostics
       assert_eq(typed.file_path, "test.ts")
-    }
     Err(diagnostics) => {
       assert_true(diagnostics.length() > 0)
-      assert_true(has_diagnostic_with_code_and_message(diagnostics, 2588, "constant"))
+      assert_true(
+        has_diagnostic_with_code_and_message(diagnostics, 2588, "constant"),
+      )
     }
   }
 }
@@ -284,13 +299,10 @@ test "unit/checker/error/TS2588 - compound assignment to const" {
 test "unit/checker/error/TS2588 - increment const" {
   let result = parse_bind_check_errors("const x = 1; x++;")
   match result {
-    Ok(typed) => {
+    Ok(typed) =>
       // May succeed but with diagnostics
       assert_eq(typed.file_path, "test.ts")
-    }
-    Err(diagnostics) => {
-      assert_true(diagnostics.length() > 0)
-    }
+    Err(diagnostics) => assert_true(diagnostics.length() > 0)
   }
 }
 
@@ -298,13 +310,10 @@ test "unit/checker/error/TS2588 - increment const" {
 test "unit/checker/error/TS2588 - decrement const" {
   let result = parse_bind_check_errors("const x = 1; --x;")
   match result {
-    Ok(typed) => {
+    Ok(typed) =>
       // May succeed but with diagnostics
       assert_eq(typed.file_path, "test.ts")
-    }
-    Err(diagnostics) => {
-      assert_true(diagnostics.length() > 0)
-    }
+    Err(diagnostics) => assert_true(diagnostics.length() > 0)
   }
 }
 
@@ -323,7 +332,9 @@ test "unit/checker/error/TS2588 - let reassignment is valid" {
 
 ///|
 test "unit/checker/error/TS7027 - code after return" {
-  let result = parse_bind_check_errors("function test() { return 1; const x = 2; }")
+  let result = parse_bind_check_errors(
+    "function test() { return 1; const x = 2; }",
+  )
   match result {
     Ok(_) => assert_true(false)
     Err(diagnostics) => {
@@ -337,33 +348,38 @@ test "unit/checker/error/TS7027 - code after return" {
 
 ///|
 test "unit/checker/error/TS7027 - code after throw" {
-  let result = parse_bind_check_errors("function test() { throw new Error(); const x = 2; }")
+  let result = parse_bind_check_errors(
+    "function test() { throw new Error(); const x = 2; }",
+  )
   match result {
-    Ok(typed) => {
+    Ok(typed) =>
       // May succeed depending on unreachable code check implementation
       assert_eq(typed.file_path, "test.ts")
-    }
-    Err(diagnostics) => {
-      assert_true(diagnostics.length() > 0)
-    }
+    Err(diagnostics) => assert_true(diagnostics.length() > 0)
   }
 }
 
 ///|
 test "unit/checker/error/TS7027 - multiple statements after return" {
-  let result = parse_bind_check_errors("function test() { return 1; console.log('a'); console.log('b'); }")
+  let result = parse_bind_check_errors(
+    "function test() { return 1; console.log('a'); console.log('b'); }",
+  )
   match result {
     Ok(_) => assert_true(false)
     Err(diagnostics) => {
       assert_true(diagnostics.length() > 0)
-      assert_true(has_diagnostic_with_code_and_message(diagnostics, 7027, "Unreachable"))
+      assert_true(
+        has_diagnostic_with_code_and_message(diagnostics, 7027, "Unreachable"),
+      )
     }
   }
 }
 
 ///|
 test "unit/checker/error/TS7027 - no false positive with if" {
-  let result = parse_bind_check_errors("function test(x: boolean) { if (x) { return 1; } return 2; }")
+  let result = parse_bind_check_errors(
+    "function test(x: boolean) { if (x) { return 1; } return 2; }",
+  )
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(_) => assert_true(false)
@@ -376,12 +392,13 @@ test "unit/checker/error/TS7027 - no false positive with if" {
 
 ///|
 test "unit/checker/error/TS2511 - instantiate abstract class" {
-  let result = parse_bind_check_errors("abstract class Foo { abstract method(): void; } new Foo();")
+  let result = parse_bind_check_errors(
+    "abstract class Foo { abstract method(): void; } new Foo();",
+  )
   match result {
-    Ok(typed) => {
+    Ok(typed) =>
       // May succeed if abstract check not fully implemented
       assert_eq(typed.file_path, "test.ts")
-    }
     Err(diagnostics) => {
       assert_true(diagnostics.length() > 0)
       assert_true(has_diagnostic_containing(diagnostics, "abstract"))
@@ -393,7 +410,9 @@ test "unit/checker/error/TS2511 - instantiate abstract class" {
 
 ///|
 test "unit/checker/error/TS2511 - concrete class instantiation is valid" {
-  let result = parse_bind_check_errors("class Foo { method(): void {} } const x = new Foo();")
+  let result = parse_bind_check_errors(
+    "class Foo { method(): void {} } const x = new Foo();",
+  )
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(_) => assert_true(false)
@@ -402,15 +421,14 @@ test "unit/checker/error/TS2511 - concrete class instantiation is valid" {
 
 ///|
 test "unit/checker/error/TS2511 - abstract class with constructor" {
-  let result = parse_bind_check_errors("abstract class Base { constructor(public name: string) {} } new Base(\"test\");")
+  let result = parse_bind_check_errors(
+    "abstract class Base { constructor(public name: string) {} } new Base(\"test\");",
+  )
   match result {
-    Ok(typed) => {
+    Ok(typed) =>
       // May succeed if abstract check not fully implemented
       assert_eq(typed.file_path, "test.ts")
-    }
-    Err(diagnostics) => {
-      assert_true(diagnostics.length() > 0)
-    }
+    Err(diagnostics) => assert_true(diagnostics.length() > 0)
   }
 }
 
@@ -420,12 +438,17 @@ test "unit/checker/error/TS2511 - abstract class with constructor" {
 
 ///|
 test "unit/checker/error/TS2322 - return type mismatch" {
-  let result = parse_bind_check_errors("function test(): number { return \"hello\"; }")
+  let result = parse_bind_check_errors(
+    "function test(): number { return \"hello\"; }",
+  )
   match result {
     Ok(_) => assert_true(false)
     Err(diagnostics) => {
       assert_true(diagnostics.length() > 0)
-      assert_true(has_diagnostic_containing(diagnostics, "not assignable") || has_diagnostic_containing(diagnostics, "return"))
+      assert_true(
+        has_diagnostic_containing(diagnostics, "not assignable") ||
+        has_diagnostic_containing(diagnostics, "return"),
+      )
       // Verify error code TS2322
       assert_true(has_diagnostic_code(diagnostics, 2322))
     }
@@ -439,7 +462,10 @@ test "unit/checker/error/TS2355 - non-void must return value" {
     Ok(_) => assert_true(false)
     Err(diagnostics) => {
       assert_true(diagnostics.length() > 0)
-      assert_true(has_diagnostic_containing(diagnostics, "return a value") || has_diagnostic_containing(diagnostics, "not assignable"))
+      assert_true(
+        has_diagnostic_containing(diagnostics, "return a value") ||
+        has_diagnostic_containing(diagnostics, "not assignable"),
+      )
       // Verify error code TS2355
       assert_true(has_diagnostic_code(diagnostics, 2355))
     }
@@ -448,21 +474,22 @@ test "unit/checker/error/TS2355 - non-void must return value" {
 
 ///|
 test "unit/checker/error/TS2322 - arrow function return mismatch" {
-  let result = parse_bind_check_errors("const fn: () => number = () => \"hello\";")
+  let result = parse_bind_check_errors(
+    "const fn: () => number = () => \"hello\";",
+  )
   match result {
-    Ok(typed) => {
+    Ok(typed) =>
       // May succeed depending on arrow function type checking
       assert_eq(typed.file_path, "test.ts")
-    }
-    Err(diagnostics) => {
-      assert_true(diagnostics.length() > 0)
-    }
+    Err(diagnostics) => assert_true(diagnostics.length() > 0)
   }
 }
 
 ///|
 test "unit/checker/error - void function with no return is valid" {
-  let result = parse_bind_check_errors("function test(): void { console.log('hello'); }")
+  let result = parse_bind_check_errors(
+    "function test(): void { console.log('hello'); }",
+  )
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(_) => assert_true(false)
@@ -484,49 +511,48 @@ test "unit/checker/error - void function with empty return is valid" {
 
 ///|
 test "unit/checker/error/TS2314 - generic requires type arguments" {
-  let result = parse_bind_check_errors("interface Box<T> { value: T; } const b: Box = { value: 1 };")
+  let result = parse_bind_check_errors(
+    "interface Box<T> { value: T; } const b: Box = { value: 1 };",
+  )
   match result {
-    Ok(typed) => {
+    Ok(typed) =>
       // May succeed if generic check not fully implemented
       assert_eq(typed.file_path, "test.ts")
-    }
-    Err(diagnostics) => {
-      assert_true(diagnostics.length() > 0)
-    }
+    Err(diagnostics) => assert_true(diagnostics.length() > 0)
   }
 }
 
 ///|
 test "unit/checker/error/TS2558 - too many type arguments" {
-  let result = parse_bind_check_errors("function identity<T>(x: T): T { return x; } identity<number, string>(42);")
+  let result = parse_bind_check_errors(
+    "function identity<T>(x: T): T { return x; } identity<number, string>(42);",
+  )
   match result {
-    Ok(typed) => {
+    Ok(typed) =>
       // May succeed if generic check not fully implemented
       assert_eq(typed.file_path, "test.ts")
-    }
-    Err(diagnostics) => {
-      assert_true(diagnostics.length() > 0)
-    }
+    Err(diagnostics) => assert_true(diagnostics.length() > 0)
   }
 }
 
 ///|
 test "unit/checker/error/TS2344 - type constraint violation" {
-  let result = parse_bind_check_errors("function process<T extends number>(value: T): T { return value; } process(\"hello\");")
+  let result = parse_bind_check_errors(
+    "function process<T extends number>(value: T): T { return value; } process(\"hello\");",
+  )
   match result {
-    Ok(typed) => {
+    Ok(typed) =>
       // May succeed if constraint check not fully implemented
       assert_eq(typed.file_path, "test.ts")
-    }
-    Err(diagnostics) => {
-      assert_true(diagnostics.length() > 0)
-    }
+    Err(diagnostics) => assert_true(diagnostics.length() > 0)
   }
 }
 
 ///|
 test "unit/checker/error - valid generic usage" {
-  let result = parse_bind_check_errors("function identity<T>(x: T): T { return x; } const result = identity<number>(42);")
+  let result = parse_bind_check_errors(
+    "function identity<T>(x: T): T { return x; } const result = identity<number>(42);",
+  )
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(_) => assert_true(false)
@@ -541,13 +567,10 @@ test "unit/checker/error - valid generic usage" {
 test "unit/checker/error - property access on primitive" {
   let result = parse_bind_check_errors("const x = 42; const y = x.foo;")
   match result {
-    Ok(typed) => {
+    Ok(typed) =>
       // May succeed with any type fallback
       assert_eq(typed.file_path, "test.ts")
-    }
-    Err(diagnostics) => {
-      assert_true(diagnostics.length() > 0)
-    }
+    Err(diagnostics) => assert_true(diagnostics.length() > 0)
   }
 }
 
@@ -555,13 +578,10 @@ test "unit/checker/error - property access on primitive" {
 test "unit/checker/error - method call on undefined" {
   let result = parse_bind_check_errors("const x = undefined; x.toString();")
   match result {
-    Ok(typed) => {
+    Ok(typed) =>
       // May succeed with any type fallback
       assert_eq(typed.file_path, "test.ts")
-    }
-    Err(diagnostics) => {
-      assert_true(diagnostics.length() > 0)
-    }
+    Err(diagnostics) => assert_true(diagnostics.length() > 0)
   }
 }
 
@@ -573,13 +593,10 @@ test "unit/checker/error - method call on undefined" {
 test "unit/checker/error - duplicate declaration" {
   let result = parse_bind_check_errors("const x = 1; const x = 2;")
   match result {
-    Ok(typed) => {
+    Ok(typed) =>
       // May succeed if duplicate check not fully implemented
       assert_eq(typed.file_path, "test.ts")
-    }
-    Err(diagnostics) => {
-      assert_true(diagnostics.length() > 0)
-    }
+    Err(diagnostics) => assert_true(diagnostics.length() > 0)
   }
 }
 
@@ -587,13 +604,10 @@ test "unit/checker/error - duplicate declaration" {
 test "unit/checker/error - use before declaration" {
   let result = parse_bind_check_errors("console.log(x); const x = 1;")
   match result {
-    Ok(typed) => {
+    Ok(typed) =>
       // May succeed if TDZ check not fully implemented
       assert_eq(typed.file_path, "test.ts")
-    }
-    Err(diagnostics) => {
-      assert_true(diagnostics.length() > 0)
-    }
+    Err(diagnostics) => assert_true(diagnostics.length() > 0)
   }
 }
 
@@ -603,43 +617,40 @@ test "unit/checker/error - use before declaration" {
 
 ///|
 test "unit/checker/error - wrong number of arguments" {
-  let result = parse_bind_check_errors("function add(a: number, b: number): number { return a + b; } add(1);")
+  let result = parse_bind_check_errors(
+    "function add(a: number, b: number): number { return a + b; } add(1);",
+  )
   match result {
-    Ok(typed) => {
+    Ok(typed) =>
       // May succeed if arity check not fully implemented
       assert_eq(typed.file_path, "test.ts")
-    }
-    Err(diagnostics) => {
-      assert_true(diagnostics.length() > 0)
-    }
+    Err(diagnostics) => assert_true(diagnostics.length() > 0)
   }
 }
 
 ///|
 test "unit/checker/error - argument type mismatch" {
-  let result = parse_bind_check_errors("function greet(name: string): string { return \"Hello \" + name; } greet(42);")
+  let result = parse_bind_check_errors(
+    "function greet(name: string): string { return \"Hello \" + name; } greet(42);",
+  )
   match result {
-    Ok(typed) => {
+    Ok(typed) =>
       // May succeed if argument type check not fully implemented
       assert_eq(typed.file_path, "test.ts")
-    }
-    Err(diagnostics) => {
-      assert_true(diagnostics.length() > 0)
-    }
+    Err(diagnostics) => assert_true(diagnostics.length() > 0)
   }
 }
 
 ///|
 test "unit/checker/error - too many arguments" {
-  let result = parse_bind_check_errors("function single(x: number): number { return x; } single(1, 2, 3);")
+  let result = parse_bind_check_errors(
+    "function single(x: number): number { return x; } single(1, 2, 3);",
+  )
   match result {
-    Ok(typed) => {
+    Ok(typed) =>
       // May succeed if arity check not fully implemented
       assert_eq(typed.file_path, "test.ts")
-    }
-    Err(diagnostics) => {
-      assert_true(diagnostics.length() > 0)
-    }
+    Err(diagnostics) => assert_true(diagnostics.length() > 0)
   }
 }
 
@@ -649,29 +660,27 @@ test "unit/checker/error - too many arguments" {
 
 ///|
 test "unit/checker/error - missing abstract implementation" {
-  let result = parse_bind_check_errors("abstract class Base { abstract method(): void; } class Derived extends Base { }")
+  let result = parse_bind_check_errors(
+    "abstract class Base { abstract method(): void; } class Derived extends Base { }",
+  )
   match result {
-    Ok(typed) => {
+    Ok(typed) =>
       // May succeed if abstract implementation check not fully implemented
       assert_eq(typed.file_path, "test.ts")
-    }
-    Err(diagnostics) => {
-      assert_true(diagnostics.length() > 0)
-    }
+    Err(diagnostics) => assert_true(diagnostics.length() > 0)
   }
 }
 
 ///|
 test "unit/checker/error - private member access" {
-  let result = parse_bind_check_errors("class Foo { private x: number = 1; } const f = new Foo(); f.x;")
+  let result = parse_bind_check_errors(
+    "class Foo { private x: number = 1; } const f = new Foo(); f.x;",
+  )
   match result {
-    Ok(typed) => {
+    Ok(typed) =>
       // May succeed if visibility check not fully implemented
       assert_eq(typed.file_path, "test.ts")
-    }
-    Err(diagnostics) => {
-      assert_true(diagnostics.length() > 0)
-    }
+    Err(diagnostics) => assert_true(diagnostics.length() > 0)
   }
 }
 
@@ -681,29 +690,27 @@ test "unit/checker/error - private member access" {
 
 ///|
 test "unit/checker/error - interface property type mismatch" {
-  let result = parse_bind_check_errors("interface Point { x: number; y: number; } const p: Point = { x: \"hello\", y: 2 };")
+  let result = parse_bind_check_errors(
+    "interface Point { x: number; y: number; } const p: Point = { x: \"hello\", y: 2 };",
+  )
   match result {
-    Ok(typed) => {
+    Ok(typed) =>
       // May succeed if structural type check not fully implemented
       assert_eq(typed.file_path, "test.ts")
-    }
-    Err(diagnostics) => {
-      assert_true(diagnostics.length() > 0)
-    }
+    Err(diagnostics) => assert_true(diagnostics.length() > 0)
   }
 }
 
 ///|
 test "unit/checker/error - readonly property assignment" {
-  let result = parse_bind_check_errors("interface Point { readonly x: number; } const p: Point = { x: 1 }; p.x = 2;")
+  let result = parse_bind_check_errors(
+    "interface Point { readonly x: number; } const p: Point = { x: 1 }; p.x = 2;",
+  )
   match result {
-    Ok(typed) => {
+    Ok(typed) =>
       // May succeed if readonly check not fully implemented
       assert_eq(typed.file_path, "test.ts")
-    }
-    Err(diagnostics) => {
-      assert_true(diagnostics.length() > 0)
-    }
+    Err(diagnostics) => assert_true(diagnostics.length() > 0)
   }
 }
 
@@ -713,21 +720,22 @@ test "unit/checker/error - readonly property assignment" {
 
 ///|
 test "unit/checker/error - enum member type mismatch" {
-  let result = parse_bind_check_errors("enum Color { Red, Green, Blue } const c: Color = \"Red\";")
+  let result = parse_bind_check_errors(
+    "enum Color { Red, Green, Blue } const c: Color = \"Red\";",
+  )
   match result {
-    Ok(typed) => {
+    Ok(typed) =>
       // May succeed if enum type check not fully implemented
       assert_eq(typed.file_path, "test.ts")
-    }
-    Err(diagnostics) => {
-      assert_true(diagnostics.length() > 0)
-    }
+    Err(diagnostics) => assert_true(diagnostics.length() > 0)
   }
 }
 
 ///|
 test "unit/checker/error - enum with numeric initializers" {
-  let result = parse_bind_check_errors("enum Status { Active = 1, Inactive = 0, Pending = 2 }")
+  let result = parse_bind_check_errors(
+    "enum Status { Active = 1, Inactive = 0, Pending = 2 }",
+  )
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(_) => assert_true(false)
@@ -736,7 +744,9 @@ test "unit/checker/error - enum with numeric initializers" {
 
 ///|
 test "unit/checker/error - enum with string initializers" {
-  let result = parse_bind_check_errors("enum Direction { Up = \"UP\", Down = \"DOWN\", Left = \"LEFT\", Right = \"RIGHT\" }")
+  let result = parse_bind_check_errors(
+    "enum Direction { Up = \"UP\", Down = \"DOWN\", Left = \"LEFT\", Right = \"RIGHT\" }",
+  )
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(_) => assert_true(false)
@@ -754,7 +764,9 @@ test "unit/checker/error - enum with mixed auto and explicit values" {
 
 ///|
 test "unit/checker/error - const enum with literals" {
-  let result = parse_bind_check_errors("const enum Flags { None = 0, Read = 1, Write = 2 }")
+  let result = parse_bind_check_errors(
+    "const enum Flags { None = 0, Read = 1, Write = 2 }",
+  )
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(_) => assert_true(false)
@@ -763,7 +775,9 @@ test "unit/checker/error - const enum with literals" {
 
 ///|
 test "unit/checker/error - const enum with computed value from other members" {
-  let result = parse_bind_check_errors("const enum Bits { A = 1, B = 2, C = A + B }")
+  let result = parse_bind_check_errors(
+    "const enum Bits { A = 1, B = 2, C = A + B }",
+  )
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(_) => assert_true(false)
@@ -772,7 +786,9 @@ test "unit/checker/error - const enum with computed value from other members" {
 
 ///|
 test "unit/checker/error - enum with negative values" {
-  let result = parse_bind_check_errors("enum Temperature { Cold = -10, Freezing = -20, Hot = 30 }")
+  let result = parse_bind_check_errors(
+    "enum Temperature { Cold = -10, Freezing = -20, Hot = 30 }",
+  )
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(_) => assert_true(false)
@@ -783,10 +799,9 @@ test "unit/checker/error - enum with negative values" {
 test "unit/checker/error - enum with invalid initializer type" {
   let result = parse_bind_check_errors("enum Bad { A = true }")
   match result {
-    Ok(typed) => {
+    Ok(typed) =>
       // May succeed if enum initializer type check not fully implemented
       assert_eq(typed.file_path, "test.ts")
-    }
     Err(diagnostics) => {
       assert_true(diagnostics.length() > 0)
       assert_true(has_diagnostic_code(diagnostics, 2322))
@@ -798,13 +813,10 @@ test "unit/checker/error - enum with invalid initializer type" {
 test "unit/checker/error - enum with object initializer" {
   let result = parse_bind_check_errors("enum Bad { A = {} }")
   match result {
-    Ok(typed) => {
+    Ok(typed) =>
       // May succeed if enum initializer type check not fully implemented
       assert_eq(typed.file_path, "test.ts")
-    }
-    Err(diagnostics) => {
-      assert_true(diagnostics.length() > 0)
-    }
+    Err(diagnostics) => assert_true(diagnostics.length() > 0)
   }
 }
 
@@ -812,13 +824,10 @@ test "unit/checker/error - enum with object initializer" {
 test "unit/checker/error - enum with array initializer" {
   let result = parse_bind_check_errors("enum Bad { A = [1, 2, 3] }")
   match result {
-    Ok(typed) => {
+    Ok(typed) =>
       // May succeed if enum initializer type check not fully implemented
       assert_eq(typed.file_path, "test.ts")
-    }
-    Err(diagnostics) => {
-      assert_true(diagnostics.length() > 0)
-    }
+    Err(diagnostics) => assert_true(diagnostics.length() > 0)
   }
 }
 
@@ -833,7 +842,9 @@ test "unit/checker/error - empty enum" {
 
 ///|
 test "unit/checker/error - enum with bitwise operations" {
-  let result = parse_bind_check_errors("enum Flags { None = 0, Read = 1 << 0, Write = 1 << 1, Execute = 1 << 2 }")
+  let result = parse_bind_check_errors(
+    "enum Flags { None = 0, Read = 1 << 0, Write = 1 << 1, Execute = 1 << 2 }",
+  )
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(_) => assert_true(false)
@@ -842,7 +853,9 @@ test "unit/checker/error - enum with bitwise operations" {
 
 ///|
 test "unit/checker/error - exported enum" {
-  let result = parse_bind_check_errors("export enum PublicStatus { Active, Inactive }")
+  let result = parse_bind_check_errors(
+    "export enum PublicStatus { Active, Inactive }",
+  )
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(_) => assert_true(false)
@@ -855,15 +868,14 @@ test "unit/checker/error - exported enum" {
 
 ///|
 test "unit/checker/error - tuple element type mismatch" {
-  let result = parse_bind_check_errors("const t: [number, string] = [\"hello\", 42];")
+  let result = parse_bind_check_errors(
+    "const t: [number, string] = [\"hello\", 42];",
+  )
   match result {
-    Ok(typed) => {
+    Ok(typed) =>
       // May succeed if tuple type check not fully implemented
       assert_eq(typed.file_path, "test.ts")
-    }
-    Err(diagnostics) => {
-      assert_true(diagnostics.length() > 0)
-    }
+    Err(diagnostics) => assert_true(diagnostics.length() > 0)
   }
 }
 
@@ -871,13 +883,10 @@ test "unit/checker/error - tuple element type mismatch" {
 test "unit/checker/error - tuple length mismatch" {
   let result = parse_bind_check_errors("const t: [number, string] = [1];")
   match result {
-    Ok(typed) => {
+    Ok(typed) =>
       // May succeed if tuple length check not fully implemented
       assert_eq(typed.file_path, "test.ts")
-    }
-    Err(diagnostics) => {
-      assert_true(diagnostics.length() > 0)
-    }
+    Err(diagnostics) => assert_true(diagnostics.length() > 0)
   }
 }
 
@@ -894,10 +903,9 @@ test "unit/checker/error - multiple errors in one file" {
   let result = parse_bind_check_errors(source)
   match result {
     Ok(_) => assert_true(false)
-    Err(diagnostics) => {
+    Err(diagnostics) =>
       // Should have multiple errors
       assert_true(diagnostics.length() >= 1)
-    }
   }
 }
 
@@ -912,13 +920,10 @@ test "unit/checker/error - nested function return mismatch" {
     #|}
   let result = parse_bind_check_errors(source)
   match result {
-    Ok(typed) => {
+    Ok(typed) =>
       // May succeed if nested function check not fully implemented
       assert_eq(typed.file_path, "test.ts")
-    }
-    Err(diagnostics) => {
-      assert_true(diagnostics.length() > 0)
-    }
+    Err(diagnostics) => assert_true(diagnostics.length() > 0)
   }
 }
 
@@ -929,13 +934,10 @@ test "unit/checker/error - callback type mismatch" {
     #|const cb: Callback = (x: string) => x.length;
   let result = parse_bind_check_errors(source)
   match result {
-    Ok(typed) => {
+    Ok(typed) =>
       // May succeed if function type check not fully implemented
       assert_eq(typed.file_path, "test.ts")
-    }
-    Err(diagnostics) => {
-      assert_true(diagnostics.length() > 0)
-    }
+    Err(diagnostics) => assert_true(diagnostics.length() > 0)
   }
 }
 
@@ -945,7 +947,9 @@ test "unit/checker/error - callback type mismatch" {
 
 ///|
 test "unit/checker/error - valid number operations" {
-  let result = parse_bind_check_errors("const x = 1 + 2; const y = x * 3; const z = y / 2;")
+  let result = parse_bind_check_errors(
+    "const x = 1 + 2; const y = x * 3; const z = y / 2;",
+  )
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(_) => assert_true(false)
@@ -954,7 +958,9 @@ test "unit/checker/error - valid number operations" {
 
 ///|
 test "unit/checker/error - valid string operations" {
-  let result = parse_bind_check_errors("const x = \"hello\" + \" \" + \"world\";")
+  let result = parse_bind_check_errors(
+    "const x = \"hello\" + \" \" + \"world\";",
+  )
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(_) => assert_true(false)
@@ -963,7 +969,9 @@ test "unit/checker/error - valid string operations" {
 
 ///|
 test "unit/checker/error - valid type annotations" {
-  let result = parse_bind_check_errors("const x: number = 42; const y: string = \"hello\"; const z: boolean = true;")
+  let result = parse_bind_check_errors(
+    "const x: number = 42; const y: string = \"hello\"; const z: boolean = true;",
+  )
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(_) => assert_true(false)
@@ -972,7 +980,9 @@ test "unit/checker/error - valid type annotations" {
 
 ///|
 test "unit/checker/error - valid union type" {
-  let result = parse_bind_check_errors("const x: string | number = 42; const y: string | number = \"hello\";")
+  let result = parse_bind_check_errors(
+    "const x: string | number = 42; const y: string | number = \"hello\";",
+  )
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(_) => assert_true(false)
@@ -981,7 +991,9 @@ test "unit/checker/error - valid union type" {
 
 ///|
 test "unit/checker/error - valid function with types" {
-  let result = parse_bind_check_errors("function add(a: number, b: number): number { return a + b; } const sum = add(1, 2);")
+  let result = parse_bind_check_errors(
+    "function add(a: number, b: number): number { return a + b; } const sum = add(1, 2);",
+  )
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(_) => assert_true(false)
@@ -990,7 +1002,9 @@ test "unit/checker/error - valid function with types" {
 
 ///|
 test "unit/checker/error - valid interface implementation" {
-  let result = parse_bind_check_errors("interface Point { x: number; y: number; } const p: Point = { x: 1, y: 2 };")
+  let result = parse_bind_check_errors(
+    "interface Point { x: number; y: number; } const p: Point = { x: 1, y: 2 };",
+  )
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(_) => assert_true(false)
@@ -999,7 +1013,9 @@ test "unit/checker/error - valid interface implementation" {
 
 ///|
 test "unit/checker/error - valid class instantiation" {
-  let result = parse_bind_check_errors("class Greeter { greeting: string; greet() { return this.greeting; } } const g = new Greeter();")
+  let result = parse_bind_check_errors(
+    "class Greeter { greeting: string; greet() { return this.greeting; } } const g = new Greeter();",
+  )
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(_) => assert_true(false)
@@ -1008,7 +1024,9 @@ test "unit/checker/error - valid class instantiation" {
 
 ///|
 test "unit/checker/error - valid generic function" {
-  let result = parse_bind_check_errors("function identity<T>(arg: T): T { return arg; } const num = identity(42); const str = identity(\"hello\");")
+  let result = parse_bind_check_errors(
+    "function identity<T>(arg: T): T { return arg; } const num = identity(42); const str = identity(\"hello\");",
+  )
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(_) => assert_true(false)
@@ -1017,7 +1035,9 @@ test "unit/checker/error - valid generic function" {
 
 ///|
 test "unit/checker/error - valid tuple" {
-  let result = parse_bind_check_errors("const t: [number, string] = [1, \"hello\"];")
+  let result = parse_bind_check_errors(
+    "const t: [number, string] = [1, \"hello\"];",
+  )
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(_) => assert_true(false)
@@ -1026,7 +1046,9 @@ test "unit/checker/error - valid tuple" {
 
 ///|
 test "unit/checker/error - valid enum usage" {
-  let result = parse_bind_check_errors("enum Color { Red, Green, Blue } const c: Color = Color.Red;")
+  let result = parse_bind_check_errors(
+    "enum Color { Red, Green, Blue } const c: Color = Color.Red;",
+  )
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(_) => assert_true(false)
@@ -1039,33 +1061,35 @@ test "unit/checker/error - valid enum usage" {
 
 ///|
 test "unit/checker/error - any type bypasses checks" {
-  let result = parse_bind_check_errors("const x: any = \"hello\"; const y: number = x;")
+  let result = parse_bind_check_errors(
+    "const x: any = \"hello\"; const y: number = x;",
+  )
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
-    Err(_) => {
+    Err(_) =>
       // May fail if any type is not fully implemented
       assert_true(true)
-    }
   }
 }
 
 ///|
 test "unit/checker/error - unknown type requires assertion" {
-  let result = parse_bind_check_errors("const x: unknown = \"hello\"; const y: number = x;")
+  let result = parse_bind_check_errors(
+    "const x: unknown = \"hello\"; const y: number = x;",
+  )
   match result {
-    Ok(typed) => {
+    Ok(typed) =>
       // May succeed if unknown type check not fully implemented
       assert_eq(typed.file_path, "test.ts")
-    }
-    Err(diagnostics) => {
-      assert_true(diagnostics.length() > 0)
-    }
+    Err(diagnostics) => assert_true(diagnostics.length() > 0)
   }
 }
 
 ///|
 test "unit/checker/error - never type assignability" {
-  let result = parse_bind_check_errors("function fail(): never { throw new Error(); } const x: number = fail();")
+  let result = parse_bind_check_errors(
+    "function fail(): never { throw new Error(); } const x: number = fail();",
+  )
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(_) => assert_true(false)
@@ -1074,7 +1098,9 @@ test "unit/checker/error - never type assignability" {
 
 ///|
 test "unit/checker/error - optional parameter handling" {
-  let result = parse_bind_check_errors("function greet(name?: string): string { return \"Hello \" + (name || \"World\"); } greet(); greet(\"John\");")
+  let result = parse_bind_check_errors(
+    "function greet(name?: string): string { return \"Hello \" + (name || \"World\"); } greet(); greet(\"John\");",
+  )
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(_) => assert_true(false)
@@ -1083,7 +1109,9 @@ test "unit/checker/error - optional parameter handling" {
 
 ///|
 test "unit/checker/error - rest parameters" {
-  let result = parse_bind_check_errors("function sum(...nums: number[]): number { return nums.reduce((a, b) => a + b, 0); } sum(1, 2, 3);")
+  let result = parse_bind_check_errors(
+    "function sum(...nums: number[]): number { return nums.reduce((a, b) => a + b, 0); } sum(1, 2, 3);",
+  )
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(_) => assert_true(false)
@@ -1092,7 +1120,9 @@ test "unit/checker/error - rest parameters" {
 
 ///|
 test "unit/checker/error - default parameter" {
-  let result = parse_bind_check_errors("function greet(name: string = \"World\"): string { return \"Hello \" + name; } greet();")
+  let result = parse_bind_check_errors(
+    "function greet(name: string = \"World\"): string { return \"Hello \" + name; } greet();",
+  )
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(_) => assert_true(false)

@@ -43,31 +43,35 @@ test "scan comment directive - ts-check" {
 
 ///|
 test "scan comment directive - ts-ignore with message" {
-  let scanner = @compiler.Scanner::new("// @ts-ignore This is intentional\n", "test.ts")
+  let scanner = @compiler.Scanner::new(
+    "// @ts-ignore This is intentional\n", "test.ts",
+  )
   let (directive, _) = @compiler.scan_comment_directive(scanner)
   match directive {
-    Some(@compiler.CommentDirective(@compiler.TsIgnore, arg, _)) => {
+    Some(@compiler.CommentDirective(@compiler.TsIgnore, arg, _)) =>
       assert_true(arg.contains("This is intentional"))
-    }
     _ => assert_true(false)
   }
 }
 
 ///|
 test "scan comment directive - ts-expect-error with error code" {
-  let scanner = @compiler.Scanner::new("// @ts-expect-error TS2322: Type mismatch\n", "test.ts")
+  let scanner = @compiler.Scanner::new(
+    "// @ts-expect-error TS2322: Type mismatch\n", "test.ts",
+  )
   let (directive, _) = @compiler.scan_comment_directive(scanner)
   match directive {
-    Some(@compiler.CommentDirective(@compiler.TsExpectError, arg, _)) => {
+    Some(@compiler.CommentDirective(@compiler.TsExpectError, arg, _)) =>
       assert_true(arg.contains("TS2322"))
-    }
     _ => assert_true(false)
   }
 }
 
 ///|
 test "scan comment directive - triple slash reference" {
-  let scanner = @compiler.Scanner::new("/// <reference path=\"./types.d.ts\" />\n", "test.ts")
+  let scanner = @compiler.Scanner::new(
+    "/// <reference path=\"./types.d.ts\" />\n", "test.ts",
+  )
   let (directive, _) = @compiler.scan_comment_directive(scanner)
   match directive {
     Some(@compiler.CommentDirective(@compiler.TripleSlashRef, content, _)) => {
@@ -80,7 +84,9 @@ test "scan comment directive - triple slash reference" {
 
 ///|
 test "scan comment directive - triple slash types reference" {
-  let scanner = @compiler.Scanner::new("/// <reference types=\"node\" />\n", "test.ts")
+  let scanner = @compiler.Scanner::new(
+    "/// <reference types=\"node\" />\n", "test.ts",
+  )
   let (directive, _) = @compiler.scan_comment_directive(scanner)
   match directive {
     Some(@compiler.CommentDirective(@compiler.TripleSlashRef, content, _)) => {
@@ -93,7 +99,9 @@ test "scan comment directive - triple slash types reference" {
 
 ///|
 test "scan comment directive - triple slash lib reference" {
-  let scanner = @compiler.Scanner::new("/// <reference lib=\"es2020\" />\n", "test.ts")
+  let scanner = @compiler.Scanner::new(
+    "/// <reference lib=\"es2020\" />\n", "test.ts",
+  )
   let (directive, _) = @compiler.scan_comment_directive(scanner)
   match directive {
     Some(@compiler.CommentDirective(@compiler.TripleSlashRef, content, _)) => {
@@ -106,7 +114,9 @@ test "scan comment directive - triple slash lib reference" {
 
 ///|
 test "scan comment directive - not a directive (regular comment)" {
-  let scanner = @compiler.Scanner::new("// This is a regular comment\n", "test.ts")
+  let scanner = @compiler.Scanner::new(
+    "// This is a regular comment\n", "test.ts",
+  )
   let (directive, _) = @compiler.scan_comment_directive(scanner)
   match directive {
     None => ()

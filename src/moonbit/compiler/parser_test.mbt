@@ -736,17 +736,15 @@ test "parse string literal type" {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
       match source_file.statements[0] {
-        TypeAliasDeclaration(type_alias) => {
+        TypeAliasDeclaration(type_alias) =>
           match type_alias.type_node {
-            LiteralType(literal) => {
+            LiteralType(literal) =>
               match literal.literal {
                 StringLiteral(_) => ()
                 _ => assert_true(false)
               }
-            }
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
     }
@@ -762,17 +760,15 @@ test "parse numeric literal type" {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
       match source_file.statements[0] {
-        TypeAliasDeclaration(type_alias) => {
+        TypeAliasDeclaration(type_alias) =>
           match type_alias.type_node {
-            LiteralType(literal) => {
+            LiteralType(literal) =>
               match literal.literal {
                 NumericLiteral(_) => ()
                 _ => assert_true(false)
               }
-            }
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
     }
@@ -788,17 +784,15 @@ test "parse boolean literal type true" {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
       match source_file.statements[0] {
-        TypeAliasDeclaration(type_alias) => {
+        TypeAliasDeclaration(type_alias) =>
           match type_alias.type_node {
-            LiteralType(literal) => {
+            LiteralType(literal) =>
               match literal.literal {
                 BooleanLiteral(bool) => assert_eq(bool.value, true)
                 _ => assert_true(false)
               }
-            }
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
     }
@@ -814,17 +808,15 @@ test "parse boolean literal type false" {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
       match source_file.statements[0] {
-        TypeAliasDeclaration(type_alias) => {
+        TypeAliasDeclaration(type_alias) =>
           match type_alias.type_node {
-            LiteralType(literal) => {
+            LiteralType(literal) =>
               match literal.literal {
                 BooleanLiteral(bool) => assert_eq(bool.value, false)
                 _ => assert_true(false)
               }
-            }
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
     }
@@ -834,32 +826,32 @@ test "parse boolean literal type false" {
 
 ///|
 test "parse string literal union type" {
-  let tokens = tokens_from_source("type Status = \"active\" | \"inactive\" | \"pending\";")
+  let tokens = tokens_from_source(
+    "type Status = \"active\" | \"inactive\" | \"pending\";",
+  )
   let result = parse_source_file(tokens, "test.ts")
   match result {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
       match source_file.statements[0] {
-        TypeAliasDeclaration(type_alias) => {
+        TypeAliasDeclaration(type_alias) =>
           match type_alias.type_node {
             UnionType(union) => {
               assert_eq(union.types.length(), 3)
               // Check that all are literal types
               for i = 0; i < union.types.length(); i = i + 1 {
                 match union.types[i] {
-                  LiteralType(literal) => {
+                  LiteralType(literal) =>
                     match literal.literal {
                       StringLiteral(_) => ()
                       _ => assert_true(false)
                     }
-                  }
                   _ => assert_true(false)
                 }
               }
             }
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
     }
@@ -869,7 +861,9 @@ test "parse string literal union type" {
 
 ///|
 test "parse generic interface" {
-  let tokens = tokens_from_source("interface Result<T, E> { value: T; error: E; }")
+  let tokens = tokens_from_source(
+    "interface Result<T, E> { value: T; error: E; }",
+  )
   let result = parse_source_file(tokens, "test.ts")
   match result {
     Ok(source_file) => {
@@ -903,12 +897,11 @@ test "parse arrow function type" {
               assert_eq(func_type.parameters.length(), 1)
               // Verify it's a function type with void return
               match func_type.return_type {
-                KeywordType(keyword) => {
+                KeywordType(keyword) =>
                   match keyword.kind {
                     Void => ()
                     _ => assert_true(false)
                   }
-                }
                 _ => assert_true(false)
               }
             }
@@ -924,7 +917,9 @@ test "parse arrow function type" {
 
 ///|
 test "parse const enum" {
-  let tokens = tokens_from_source("const enum Direction { Up, Down, Left, Right }")
+  let tokens = tokens_from_source(
+    "const enum Direction { Up, Down, Left, Right }",
+  )
   let result = parse_source_file(tokens, "test.ts")
   match result {
     Ok(source_file) => {
@@ -944,7 +939,9 @@ test "parse const enum" {
 
 ///|
 test "parse arrow function with return type annotation" {
-  let tokens = tokens_from_source("const square = (x: number): number => x * x;")
+  let tokens = tokens_from_source(
+    "const square = (x: number): number => x * x;",
+  )
   let result = parse_source_file(tokens, "test.ts")
   match result {
     Ok(source_file) => {
@@ -983,10 +980,9 @@ test "parse method call callback with arrow function" {
   let tokens = tokens_from_source("const doubled = numbers.map(x => x * 2);")
   let result = parse_source_file(tokens, "test.ts")
   match result {
-    Ok(_) => {
+    Ok(_) =>
       // Just verify it parses successfully
       assert_true(true)
-    }
     Err(diagnostics) => {
       println("Parse error:")
       for i = 0; i < diagnostics.length(); i = i + 1 {
@@ -1051,7 +1047,9 @@ test "parse switch with default" {
 
 ///|
 test "parse switch with multiple cases" {
-  let tokens = tokens_from_source("switch (x) { case 1: return a; case 2: return b; default: return c; }")
+  let tokens = tokens_from_source(
+    "switch (x) { case 1: return a; case 2: return b; default: return c; }",
+  )
   let result = parse_source_file(tokens, "test.ts")
   match result {
     Ok(source_file) => {
@@ -1075,12 +1073,11 @@ test "parse indexed access type" {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
       match source_file.statements[0] {
-        TypeAliasDeclaration(decl) => {
+        TypeAliasDeclaration(decl) =>
           match decl.type_node {
             IndexedAccessType(_) => ()
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
     }
@@ -1096,12 +1093,11 @@ test "parse indexed access with generic type" {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
       match source_file.statements[0] {
-        TypeAliasDeclaration(decl) => {
+        TypeAliasDeclaration(decl) =>
           match decl.type_node {
             IndexedAccessType(_) => ()
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
     }
@@ -1111,18 +1107,19 @@ test "parse indexed access with generic type" {
 
 ///|
 test "parse conditional type" {
-  let tokens = tokens_from_source("type IsString<T> = T extends string ? string : number;")
+  let tokens = tokens_from_source(
+    "type IsString<T> = T extends string ? string : number;",
+  )
   let result = parse_source_file(tokens, "test.ts")
   match result {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
       match source_file.statements[0] {
-        TypeAliasDeclaration(decl) => {
+        TypeAliasDeclaration(decl) =>
           match decl.type_node {
             ConditionalType(_) => ()
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
     }
@@ -1132,18 +1129,19 @@ test "parse conditional type" {
 
 ///|
 test "parse conditional type with complex extends" {
-  let tokens = tokens_from_source("type NonNullable<T> = T extends number ? string : T;")
+  let tokens = tokens_from_source(
+    "type NonNullable<T> = T extends number ? string : T;",
+  )
   let result = parse_source_file(tokens, "test.ts")
   match result {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
       match source_file.statements[0] {
-        TypeAliasDeclaration(decl) => {
+        TypeAliasDeclaration(decl) =>
           match decl.type_node {
             ConditionalType(_) => ()
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
     }
@@ -1159,12 +1157,11 @@ test "parse mapped type" {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
       match source_file.statements[0] {
-        TypeAliasDeclaration(decl) => {
+        TypeAliasDeclaration(decl) =>
           match decl.type_node {
             MappedType(_) => ()
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
     }
@@ -1180,12 +1177,11 @@ test "parse mapped type with simple constraint" {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
       match source_file.statements[0] {
-        TypeAliasDeclaration(decl) => {
+        TypeAliasDeclaration(decl) =>
           match decl.type_node {
             MappedType(_) => ()
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
     }
@@ -1203,12 +1199,11 @@ test "parse non-null assertion" {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
       match source_file.statements[0] {
-        VariableStatement(stmt) => {
+        VariableStatement(stmt) =>
           match stmt.declarations[0].initializer {
             Some(NonNullExpression(_)) => ()
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
     }
@@ -1224,12 +1219,11 @@ test "parse non-null assertion on property access" {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
       match source_file.statements[0] {
-        VariableStatement(stmt) => {
+        VariableStatement(stmt) =>
           match stmt.declarations[0].initializer {
             Some(NonNullExpression(_)) => ()
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
     }
@@ -1245,12 +1239,11 @@ test "parse as expression" {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
       match source_file.statements[0] {
-        VariableStatement(stmt) => {
+        VariableStatement(stmt) =>
           match stmt.declarations[0].initializer {
             Some(AsExpression(_)) => ()
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
     }
@@ -1266,12 +1259,11 @@ test "parse as expression with complex type" {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
       match source_file.statements[0] {
-        VariableStatement(stmt) => {
+        VariableStatement(stmt) =>
           match stmt.declarations[0].initializer {
             Some(AsExpression(_)) => ()
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
     }
@@ -1287,12 +1279,11 @@ test "parse type assertion with angle brackets" {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
       match source_file.statements[0] {
-        VariableStatement(stmt) => {
+        VariableStatement(stmt) =>
           match stmt.declarations[0].initializer {
             Some(TypeAssertionExpression(_)) => ()
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
     }
@@ -1308,12 +1299,11 @@ test "parse type assertion with complex type" {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
       match source_file.statements[0] {
-        VariableStatement(stmt) => {
+        VariableStatement(stmt) =>
           match stmt.declarations[0].initializer {
             Some(TypeAssertionExpression(_)) => ()
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
     }
@@ -1325,18 +1315,19 @@ test "parse type assertion with complex type" {
 test "parse type assertion with deeply nested generics" {
   // 4 levels of Array nesting + 1 outer type assertion = 5 closing >
   // Scanner tokenizes >>>>> as >>> followed by >>
-  let tokens = tokens_from_source("const x = <Array<Array<Array<Array<string>>>>>getValue();")
+  let tokens = tokens_from_source(
+    "const x = <Array<Array<Array<Array<string>>>>>getValue();",
+  )
   let result = parse_source_file(tokens, "test.ts")
   match result {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
       match source_file.statements[0] {
-        VariableStatement(stmt) => {
+        VariableStatement(stmt) =>
           match stmt.declarations[0].initializer {
             Some(TypeAssertionExpression(_)) => ()
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
     }
@@ -1352,12 +1343,11 @@ test "parse chained type assertions" {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
       match source_file.statements[0] {
-        VariableStatement(stmt) => {
+        VariableStatement(stmt) =>
           match stmt.declarations[0].initializer {
             Some(AsExpression(_)) => ()
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
     }
@@ -1373,17 +1363,15 @@ test "parse combined non-null and as assertion" {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
       match source_file.statements[0] {
-        VariableStatement(stmt) => {
+        VariableStatement(stmt) =>
           match stmt.declarations[0].initializer {
-            Some(AsExpression(ae)) => {
+            Some(AsExpression(ae)) =>
               match ae.expression {
                 NonNullExpression(_) => ()
                 _ => assert_true(false)
               }
-            }
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
     }
@@ -1405,17 +1393,15 @@ test "parse unknown type annotation" {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
       match source_file.statements[0] {
-        VariableStatement(stmt) => {
+        VariableStatement(stmt) =>
           match stmt.declarations[0].type_annotation {
-            Some(KeywordType(kt)) => {
+            Some(KeywordType(kt)) =>
               match kt.kind {
                 TypeKeyword::Unknown => ()
                 _ => assert_true(false)
               }
-            }
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
     }
@@ -1425,23 +1411,23 @@ test "parse unknown type annotation" {
 
 ///|
 test "parse never type annotation" {
-  let tokens = tokens_from_source("function fail(): never { throw new Error(); }")
+  let tokens = tokens_from_source(
+    "function fail(): never { throw new Error(); }",
+  )
   let result = parse_source_file(tokens, "test.ts")
   match result {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
       match source_file.statements[0] {
-        FunctionDeclaration(func) => {
+        FunctionDeclaration(func) =>
           match func.return_type {
-            Some(KeywordType(kt)) => {
+            Some(KeywordType(kt)) =>
               match kt.kind {
                 TypeKeyword::Never => ()
                 _ => assert_true(false)
               }
-            }
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
     }
@@ -1459,12 +1445,11 @@ test "parse optional property access" {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
       match source_file.statements[0] {
-        VariableStatement(stmt) => {
+        VariableStatement(stmt) =>
           match stmt.declarations[0].initializer {
             Some(OptionalChain(_)) => ()
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
     }
@@ -1480,12 +1465,11 @@ test "parse optional call expression" {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
       match source_file.statements[0] {
-        VariableStatement(stmt) => {
+        VariableStatement(stmt) =>
           match stmt.declarations[0].initializer {
             Some(OptionalChain(_)) => ()
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
     }
@@ -1501,12 +1485,11 @@ test "parse optional element access" {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
       match source_file.statements[0] {
-        VariableStatement(stmt) => {
+        VariableStatement(stmt) =>
           match stmt.declarations[0].initializer {
             Some(OptionalChain(_)) => ()
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
     }
@@ -1524,9 +1507,7 @@ test "parse abstract class declaration" {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
       match source_file.statements[0] {
-        ClassDeclaration(cls) => {
-          assert_true(cls.is_abstract)
-        }
+        ClassDeclaration(cls) => assert_true(cls.is_abstract)
         _ => assert_true(false)
       }
     }
@@ -1542,9 +1523,7 @@ test "parse non-abstract class declaration" {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
       match source_file.statements[0] {
-        ClassDeclaration(cls) => {
-          assert_true(not(cls.is_abstract))
-        }
+        ClassDeclaration(cls) => assert_true(not(cls.is_abstract))
         _ => assert_true(false)
       }
     }
@@ -1556,7 +1535,9 @@ test "parse non-abstract class declaration" {
 
 ///|
 test "parse await expression" {
-  let tokens = tokens_from_source("async function fetch() { const data = await getData(); }")
+  let tokens = tokens_from_source(
+    "async function fetch() { const data = await getData(); }",
+  )
   let result = parse_source_file(tokens, "test.ts")
   match result {
     Ok(source_file) => {
@@ -1568,12 +1549,11 @@ test "parse await expression" {
             Some(BlockStatement(block)) => {
               assert_eq(block.statements.length(), 1)
               match block.statements[0] {
-                VariableStatement(stmt) => {
+                VariableStatement(stmt) =>
                   match stmt.declarations[0].initializer {
                     Some(AwaitExpression(_)) => ()
                     _ => assert_true(false)
                   }
-                }
                 _ => assert_true(false)
               }
             }
@@ -1603,14 +1583,11 @@ test "parse yield expression" {
             Some(BlockStatement(block)) => {
               assert_eq(block.statements.length(), 1)
               match block.statements[0] {
-                ExpressionStatement(stmt) => {
+                ExpressionStatement(stmt) =>
                   match stmt.expression {
-                    YieldExpression(ye) => {
-                      assert_true(not(ye.is_delegate))
-                    }
+                    YieldExpression(ye) => assert_true(not(ye.is_delegate))
                     _ => assert_true(false)
                   }
-                }
                 _ => assert_true(false)
               }
             }
@@ -1635,19 +1612,15 @@ test "parse yield delegate expression" {
         FunctionDeclaration(func) => {
           assert_true(func.is_generator)
           match func.body {
-            Some(BlockStatement(block)) => {
+            Some(BlockStatement(block)) =>
               match block.statements[0] {
-                ExpressionStatement(stmt) => {
+                ExpressionStatement(stmt) =>
                   match stmt.expression {
-                    YieldExpression(ye) => {
-                      assert_true(ye.is_delegate)
-                    }
+                    YieldExpression(ye) => assert_true(ye.is_delegate)
                     _ => assert_true(false)
                   }
-                }
                 _ => assert_true(false)
               }
-            }
             _ => assert_true(false)
           }
         }
@@ -1668,9 +1641,7 @@ test "parse generator function declaration" {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
       match source_file.statements[0] {
-        FunctionDeclaration(func) => {
-          assert_true(func.is_generator)
-        }
+        FunctionDeclaration(func) => assert_true(func.is_generator)
         _ => assert_true(false)
       }
     }
@@ -1710,9 +1681,7 @@ test "parse class with decorator factory" {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
       match source_file.statements[0] {
-        ClassDeclaration(cls) => {
-          assert_eq(cls.decorators.length(), 1)
-        }
+        ClassDeclaration(cls) => assert_eq(cls.decorators.length(), 1)
         _ => assert_true(false)
       }
     }
@@ -1728,9 +1697,7 @@ test "parse class with multiple decorators" {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
       match source_file.statements[0] {
-        ClassDeclaration(cls) => {
-          assert_eq(cls.decorators.length(), 2)
-        }
+        ClassDeclaration(cls) => assert_eq(cls.decorators.length(), 2)
         _ => assert_true(false)
       }
     }
@@ -1748,9 +1715,7 @@ test "parse namespace declaration" {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
       match source_file.statements[0] {
-        ModuleDeclaration(mod_decl) => {
-          assert_eq(mod_decl.name, "MyNamespace")
-        }
+        ModuleDeclaration(mod_decl) => assert_eq(mod_decl.name, "MyNamespace")
         _ => assert_true(false)
       }
     }
@@ -1766,9 +1731,7 @@ test "parse module declaration" {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
       match source_file.statements[0] {
-        ModuleDeclaration(mod_decl) => {
-          assert_eq(mod_decl.name, "MyModule")
-        }
+        ModuleDeclaration(mod_decl) => assert_eq(mod_decl.name, "MyModule")
         _ => assert_true(false)
       }
     }
@@ -1787,9 +1750,8 @@ test "parse namespace with content" {
         ModuleDeclaration(mod_decl) => {
           assert_eq(mod_decl.name, "Utils")
           match mod_decl.body {
-            Some(BlockStatement(block)) => {
+            Some(BlockStatement(block)) =>
               assert_eq(block.statements.length(), 1)
-            }
             _ => assert_true(false)
           }
         }
@@ -1812,17 +1774,15 @@ test "parse JSX self-closing element" {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
       match source_file.statements[0] {
-        VariableStatement(var_stmt) => {
+        VariableStatement(var_stmt) =>
           match var_stmt.declarations[0].initializer {
-            Some(JsxSelfClosingElement(jsx)) => {
+            Some(JsxSelfClosingElement(jsx)) =>
               match jsx.tag_name {
                 JsxTagName::Identifier(name, _) => assert_eq(name, "div")
                 _ => assert_true(false)
               }
-            }
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
     }
@@ -1838,12 +1798,11 @@ test "parse JSX element with children" {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
       match source_file.statements[0] {
-        VariableStatement(var_stmt) => {
+        VariableStatement(var_stmt) =>
           match var_stmt.declarations[0].initializer {
             Some(JsxElement(_)) => ()
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
     }
@@ -1853,20 +1812,20 @@ test "parse JSX element with children" {
 
 ///|
 test "parse JSX element with attributes" {
-  let tokens = tokens_from_source("const x = <button disabled onClick={handler} />;")
+  let tokens = tokens_from_source(
+    "const x = <button disabled onClick={handler} />;",
+  )
   let result = parse_source_file(tokens, "test.tsx")
   match result {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
       match source_file.statements[0] {
-        VariableStatement(var_stmt) => {
+        VariableStatement(var_stmt) =>
           match var_stmt.declarations[0].initializer {
-            Some(JsxSelfClosingElement(jsx)) => {
+            Some(JsxSelfClosingElement(jsx)) =>
               assert_eq(jsx.attributes.length(), 2)
-            }
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
     }
@@ -1884,23 +1843,22 @@ test "parse JSX element with string attribute" {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
       match source_file.statements[0] {
-        VariableStatement(var_stmt) => {
+        VariableStatement(var_stmt) =>
           match var_stmt.declarations[0].initializer {
             Some(JsxSelfClosingElement(jsx)) => {
               assert_eq(jsx.attributes.length(), 1)
               match jsx.attributes[0] {
-                JsxAttribute::Attribute(attr) => {
+                JsxAttribute::Attribute(attr) =>
                   match attr.name {
-                    JsxAttributeName::Identifier(name, _) => assert_eq(name, "value")
+                    JsxAttributeName::Identifier(name, _) =>
+                      assert_eq(name, "value")
                     _ => assert_true(false)
                   }
-                }
                 _ => assert_true(false)
               }
             }
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
     }
@@ -1916,12 +1874,11 @@ test "parse JSX fragment" {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
       match source_file.statements[0] {
-        VariableStatement(var_stmt) => {
+        VariableStatement(var_stmt) =>
           match var_stmt.declarations[0].initializer {
             Some(JsxFragment(_)) => ()
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
     }
@@ -1937,14 +1894,11 @@ test "parse JSX nested elements" {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
       match source_file.statements[0] {
-        VariableStatement(var_stmt) => {
+        VariableStatement(var_stmt) =>
           match var_stmt.declarations[0].initializer {
-            Some(JsxElement(jsx)) => {
-              assert_eq(jsx.children.length(), 1)
-            }
+            Some(JsxElement(jsx)) => assert_eq(jsx.children.length(), 1)
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
     }
@@ -1960,23 +1914,21 @@ test "parse JSX with expression child" {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
       match source_file.statements[0] {
-        VariableStatement(var_stmt) => {
+        VariableStatement(var_stmt) =>
           match var_stmt.declarations[0].initializer {
             Some(JsxElement(jsx)) => {
               assert_eq(jsx.children.length(), 1)
               match jsx.children[0] {
-                JsxChild::Expression(expr) => {
+                JsxChild::Expression(expr) =>
                   match expr.expression {
                     Some(_) => ()
                     None => assert_true(false)
                   }
-                }
                 _ => assert_true(false)
               }
             }
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
     }
@@ -1992,7 +1944,7 @@ test "parse JSX with spread attribute" {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
       match source_file.statements[0] {
-        VariableStatement(var_stmt) => {
+        VariableStatement(var_stmt) =>
           match var_stmt.declarations[0].initializer {
             Some(JsxSelfClosingElement(jsx)) => {
               assert_eq(jsx.attributes.length(), 1)
@@ -2003,7 +1955,6 @@ test "parse JSX with spread attribute" {
             }
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
     }
@@ -2019,17 +1970,15 @@ test "parse JSX member expression tag" {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
       match source_file.statements[0] {
-        VariableStatement(var_stmt) => {
+        VariableStatement(var_stmt) =>
           match var_stmt.declarations[0].initializer {
-            Some(JsxSelfClosingElement(jsx)) => {
+            Some(JsxSelfClosingElement(jsx)) =>
               match jsx.tag_name {
                 JsxTagName::PropertyAccess(_, _, _) => ()
                 _ => assert_true(false)
               }
-            }
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
     }
@@ -2045,20 +1994,17 @@ test "parse JSX with text child" {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
       match source_file.statements[0] {
-        VariableStatement(var_stmt) => {
+        VariableStatement(var_stmt) =>
           match var_stmt.declarations[0].initializer {
             Some(JsxElement(jsx)) => {
               assert_eq(jsx.children.length(), 1)
               match jsx.children[0] {
-                JsxChild::Text(text, _) => {
-                  assert_eq(text, "Hello")
-                }
+                JsxChild::Text(text, _) => assert_eq(text, "Hello")
                 _ => assert_true(false)
               }
             }
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
     }
@@ -2074,25 +2020,21 @@ test "parse JSX with nested fragment child" {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
       match source_file.statements[0] {
-        VariableStatement(var_stmt) => {
+        VariableStatement(var_stmt) =>
           match var_stmt.declarations[0].initializer {
             Some(JsxElement(jsx)) => {
               assert_eq(jsx.children.length(), 1)
               match jsx.children[0] {
-                JsxChild::Fragment(node, _) => {
+                JsxChild::Fragment(node, _) =>
                   match node {
-                    JsxFragment(frag) => {
-                      assert_eq(frag.children.length(), 1)
-                    }
+                    JsxFragment(frag) => assert_eq(frag.children.length(), 1)
                     _ => assert_true(false)
                   }
-                }
                 _ => assert_true(false)
               }
             }
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
     }
@@ -2108,7 +2050,7 @@ test "parse JSX with mixed children" {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
       match source_file.statements[0] {
-        VariableStatement(var_stmt) => {
+        VariableStatement(var_stmt) =>
           match var_stmt.declarations[0].initializer {
             Some(JsxElement(jsx)) => {
               assert_eq(jsx.children.length(), 3)
@@ -2130,7 +2072,6 @@ test "parse JSX with mixed children" {
             }
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
     }
@@ -2165,17 +2106,15 @@ test "parse addition assignment" {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
       match source_file.statements[0] {
-        ExpressionStatement(stmt) => {
+        ExpressionStatement(stmt) =>
           match stmt.expression {
-            BinaryExpression(bin) => {
+            BinaryExpression(bin) =>
               match bin.operator {
                 AddAssign => ()
                 _ => assert_true(false)
               }
-            }
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
     }
@@ -2191,17 +2130,15 @@ test "parse subtraction assignment" {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
       match source_file.statements[0] {
-        ExpressionStatement(stmt) => {
+        ExpressionStatement(stmt) =>
           match stmt.expression {
-            BinaryExpression(bin) => {
+            BinaryExpression(bin) =>
               match bin.operator {
                 SubtractAssign => ()
                 _ => assert_true(false)
               }
-            }
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
     }
@@ -2217,17 +2154,15 @@ test "parse multiplication assignment" {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
       match source_file.statements[0] {
-        ExpressionStatement(stmt) => {
+        ExpressionStatement(stmt) =>
           match stmt.expression {
-            BinaryExpression(bin) => {
+            BinaryExpression(bin) =>
               match bin.operator {
                 MultiplyAssign => ()
                 _ => assert_true(false)
               }
-            }
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
     }
@@ -2243,17 +2178,15 @@ test "parse division assignment" {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
       match source_file.statements[0] {
-        ExpressionStatement(stmt) => {
+        ExpressionStatement(stmt) =>
           match stmt.expression {
-            BinaryExpression(bin) => {
+            BinaryExpression(bin) =>
               match bin.operator {
                 DivideAssign => ()
                 _ => assert_true(false)
               }
-            }
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
     }
@@ -2269,17 +2202,15 @@ test "parse remainder assignment" {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
       match source_file.statements[0] {
-        ExpressionStatement(stmt) => {
+        ExpressionStatement(stmt) =>
           match stmt.expression {
-            BinaryExpression(bin) => {
+            BinaryExpression(bin) =>
               match bin.operator {
                 RemainderAssign => ()
                 _ => assert_true(false)
               }
-            }
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
     }
@@ -2295,17 +2226,15 @@ test "parse exponentiation assignment" {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
       match source_file.statements[0] {
-        ExpressionStatement(stmt) => {
+        ExpressionStatement(stmt) =>
           match stmt.expression {
-            BinaryExpression(bin) => {
+            BinaryExpression(bin) =>
               match bin.operator {
                 ExponentiateAssign => ()
                 _ => assert_true(false)
               }
-            }
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
     }
@@ -2321,17 +2250,15 @@ test "parse bitwise AND assignment" {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
       match source_file.statements[0] {
-        ExpressionStatement(stmt) => {
+        ExpressionStatement(stmt) =>
           match stmt.expression {
-            BinaryExpression(bin) => {
+            BinaryExpression(bin) =>
               match bin.operator {
                 BitwiseAndAssign => ()
                 _ => assert_true(false)
               }
-            }
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
     }
@@ -2347,17 +2274,15 @@ test "parse bitwise OR assignment" {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
       match source_file.statements[0] {
-        ExpressionStatement(stmt) => {
+        ExpressionStatement(stmt) =>
           match stmt.expression {
-            BinaryExpression(bin) => {
+            BinaryExpression(bin) =>
               match bin.operator {
                 BitwiseOrAssign => ()
                 _ => assert_true(false)
               }
-            }
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
     }
@@ -2373,17 +2298,15 @@ test "parse bitwise XOR assignment" {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
       match source_file.statements[0] {
-        ExpressionStatement(stmt) => {
+        ExpressionStatement(stmt) =>
           match stmt.expression {
-            BinaryExpression(bin) => {
+            BinaryExpression(bin) =>
               match bin.operator {
                 BitwiseXorAssign => ()
                 _ => assert_true(false)
               }
-            }
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
     }
@@ -2399,17 +2322,15 @@ test "parse left shift assignment" {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
       match source_file.statements[0] {
-        ExpressionStatement(stmt) => {
+        ExpressionStatement(stmt) =>
           match stmt.expression {
-            BinaryExpression(bin) => {
+            BinaryExpression(bin) =>
               match bin.operator {
                 LeftShiftAssign => ()
                 _ => assert_true(false)
               }
-            }
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
     }
@@ -2425,17 +2346,15 @@ test "parse right shift assignment" {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
       match source_file.statements[0] {
-        ExpressionStatement(stmt) => {
+        ExpressionStatement(stmt) =>
           match stmt.expression {
-            BinaryExpression(bin) => {
+            BinaryExpression(bin) =>
               match bin.operator {
                 RightShiftAssign => ()
                 _ => assert_true(false)
               }
-            }
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
     }
@@ -2451,17 +2370,15 @@ test "parse unsigned right shift assignment" {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
       match source_file.statements[0] {
-        ExpressionStatement(stmt) => {
+        ExpressionStatement(stmt) =>
           match stmt.expression {
-            BinaryExpression(bin) => {
+            BinaryExpression(bin) =>
               match bin.operator {
                 UnsignedRightShiftAssign => ()
                 _ => assert_true(false)
               }
-            }
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
     }
@@ -2477,17 +2394,15 @@ test "parse logical AND assignment" {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
       match source_file.statements[0] {
-        ExpressionStatement(stmt) => {
+        ExpressionStatement(stmt) =>
           match stmt.expression {
-            BinaryExpression(bin) => {
+            BinaryExpression(bin) =>
               match bin.operator {
                 LogicalAndAssign => ()
                 _ => assert_true(false)
               }
-            }
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
     }
@@ -2503,17 +2418,15 @@ test "parse logical OR assignment" {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
       match source_file.statements[0] {
-        ExpressionStatement(stmt) => {
+        ExpressionStatement(stmt) =>
           match stmt.expression {
-            BinaryExpression(bin) => {
+            BinaryExpression(bin) =>
               match bin.operator {
                 LogicalOrAssign => ()
                 _ => assert_true(false)
               }
-            }
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
     }
@@ -2529,17 +2442,15 @@ test "parse nullish coalescing assignment" {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
       match source_file.statements[0] {
-        ExpressionStatement(stmt) => {
+        ExpressionStatement(stmt) =>
           match stmt.expression {
-            BinaryExpression(bin) => {
+            BinaryExpression(bin) =>
               match bin.operator {
                 NullishCoalescingAssign => ()
                 _ => assert_true(false)
               }
-            }
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
     }
@@ -2555,7 +2466,7 @@ test "parse compound assignment with property access" {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
       match source_file.statements[0] {
-        ExpressionStatement(stmt) => {
+        ExpressionStatement(stmt) =>
           match stmt.expression {
             BinaryExpression(bin) => {
               match bin.operator {
@@ -2569,7 +2480,6 @@ test "parse compound assignment with property access" {
             }
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
     }
@@ -2585,7 +2495,7 @@ test "parse compound assignment with element access" {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
       match source_file.statements[0] {
-        ExpressionStatement(stmt) => {
+        ExpressionStatement(stmt) =>
           match stmt.expression {
             BinaryExpression(bin) => {
               match bin.operator {
@@ -2599,7 +2509,6 @@ test "parse compound assignment with element access" {
             }
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
     }
@@ -2615,7 +2524,7 @@ test "parse compound assignment with expression on right side" {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
       match source_file.statements[0] {
-        ExpressionStatement(stmt) => {
+        ExpressionStatement(stmt) =>
           match stmt.expression {
             BinaryExpression(bin) => {
               match bin.operator {
@@ -2623,18 +2532,16 @@ test "parse compound assignment with expression on right side" {
                 _ => assert_true(false)
               }
               match bin.right {
-                BinaryExpression(right_bin) => {
+                BinaryExpression(right_bin) =>
                   match right_bin.operator {
                     Multiply => ()
                     _ => assert_true(false)
                   }
-                }
                 _ => assert_true(false)
               }
             }
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
     }
@@ -2651,47 +2558,41 @@ test "parse multiple compound assignments" {
       assert_eq(source_file.statements.length(), 3)
       // First statement: x += 1
       match source_file.statements[0] {
-        ExpressionStatement(stmt) => {
+        ExpressionStatement(stmt) =>
           match stmt.expression {
-            BinaryExpression(bin) => {
+            BinaryExpression(bin) =>
               match bin.operator {
                 AddAssign => ()
                 _ => assert_true(false)
               }
-            }
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
       // Second statement: y -= 2
       match source_file.statements[1] {
-        ExpressionStatement(stmt) => {
+        ExpressionStatement(stmt) =>
           match stmt.expression {
-            BinaryExpression(bin) => {
+            BinaryExpression(bin) =>
               match bin.operator {
                 SubtractAssign => ()
                 _ => assert_true(false)
               }
-            }
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
       // Third statement: z *= 3
       match source_file.statements[2] {
-        ExpressionStatement(stmt) => {
+        ExpressionStatement(stmt) =>
           match stmt.expression {
-            BinaryExpression(bin) => {
+            BinaryExpression(bin) =>
               match bin.operator {
                 MultiplyAssign => ()
                 _ => assert_true(false)
               }
-            }
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
     }
@@ -2701,34 +2602,33 @@ test "parse multiple compound assignments" {
 
 ///|
 test "parse compound assignment in function body" {
-  let tokens = tokens_from_source("function increment(x: number) { x += 1; return x; }")
+  let tokens = tokens_from_source(
+    "function increment(x: number) { x += 1; return x; }",
+  )
   let result = parse_source_file(tokens, "test.ts")
   match result {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
       match source_file.statements[0] {
-        FunctionDeclaration(func) => {
+        FunctionDeclaration(func) =>
           match func.body {
             Some(BlockStatement(block)) => {
               assert_eq(block.statements.length(), 2)
               match block.statements[0] {
-                ExpressionStatement(stmt) => {
+                ExpressionStatement(stmt) =>
                   match stmt.expression {
-                    BinaryExpression(bin) => {
+                    BinaryExpression(bin) =>
                       match bin.operator {
                         AddAssign => ()
                         _ => assert_true(false)
                       }
-                    }
                     _ => assert_true(false)
                   }
-                }
                 _ => assert_true(false)
               }
             }
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
     }
@@ -2748,227 +2648,197 @@ test "parse all compound assignment operators in sequence" {
       // Verify each operator type using pattern matching
       // Statement 0: a += 1
       match source_file.statements[0] {
-        ExpressionStatement(stmt) => {
+        ExpressionStatement(stmt) =>
           match stmt.expression {
-            BinaryExpression(bin) => {
+            BinaryExpression(bin) =>
               match bin.operator {
                 AddAssign => ()
                 _ => assert_true(false)
               }
-            }
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
       // Statement 1: b -= 1
       match source_file.statements[1] {
-        ExpressionStatement(stmt) => {
+        ExpressionStatement(stmt) =>
           match stmt.expression {
-            BinaryExpression(bin) => {
+            BinaryExpression(bin) =>
               match bin.operator {
                 SubtractAssign => ()
                 _ => assert_true(false)
               }
-            }
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
       // Statement 2: c *= 1
       match source_file.statements[2] {
-        ExpressionStatement(stmt) => {
+        ExpressionStatement(stmt) =>
           match stmt.expression {
-            BinaryExpression(bin) => {
+            BinaryExpression(bin) =>
               match bin.operator {
                 MultiplyAssign => ()
                 _ => assert_true(false)
               }
-            }
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
       // Statement 3: d /= 1
       match source_file.statements[3] {
-        ExpressionStatement(stmt) => {
+        ExpressionStatement(stmt) =>
           match stmt.expression {
-            BinaryExpression(bin) => {
+            BinaryExpression(bin) =>
               match bin.operator {
                 DivideAssign => ()
                 _ => assert_true(false)
               }
-            }
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
       // Statement 4: e %= 1
       match source_file.statements[4] {
-        ExpressionStatement(stmt) => {
+        ExpressionStatement(stmt) =>
           match stmt.expression {
-            BinaryExpression(bin) => {
+            BinaryExpression(bin) =>
               match bin.operator {
                 RemainderAssign => ()
                 _ => assert_true(false)
               }
-            }
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
       // Statement 5: f **= 1
       match source_file.statements[5] {
-        ExpressionStatement(stmt) => {
+        ExpressionStatement(stmt) =>
           match stmt.expression {
-            BinaryExpression(bin) => {
+            BinaryExpression(bin) =>
               match bin.operator {
                 ExponentiateAssign => ()
                 _ => assert_true(false)
               }
-            }
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
       // Statement 6: g &= 1
       match source_file.statements[6] {
-        ExpressionStatement(stmt) => {
+        ExpressionStatement(stmt) =>
           match stmt.expression {
-            BinaryExpression(bin) => {
+            BinaryExpression(bin) =>
               match bin.operator {
                 BitwiseAndAssign => ()
                 _ => assert_true(false)
               }
-            }
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
       // Statement 7: h |= 1
       match source_file.statements[7] {
-        ExpressionStatement(stmt) => {
+        ExpressionStatement(stmt) =>
           match stmt.expression {
-            BinaryExpression(bin) => {
+            BinaryExpression(bin) =>
               match bin.operator {
                 BitwiseOrAssign => ()
                 _ => assert_true(false)
               }
-            }
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
       // Statement 8: i ^= 1
       match source_file.statements[8] {
-        ExpressionStatement(stmt) => {
+        ExpressionStatement(stmt) =>
           match stmt.expression {
-            BinaryExpression(bin) => {
+            BinaryExpression(bin) =>
               match bin.operator {
                 BitwiseXorAssign => ()
                 _ => assert_true(false)
               }
-            }
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
       // Statement 9: j <<= 1
       match source_file.statements[9] {
-        ExpressionStatement(stmt) => {
+        ExpressionStatement(stmt) =>
           match stmt.expression {
-            BinaryExpression(bin) => {
+            BinaryExpression(bin) =>
               match bin.operator {
                 LeftShiftAssign => ()
                 _ => assert_true(false)
               }
-            }
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
       // Statement 10: k >>= 1
       match source_file.statements[10] {
-        ExpressionStatement(stmt) => {
+        ExpressionStatement(stmt) =>
           match stmt.expression {
-            BinaryExpression(bin) => {
+            BinaryExpression(bin) =>
               match bin.operator {
                 RightShiftAssign => ()
                 _ => assert_true(false)
               }
-            }
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
       // Statement 11: l >>>= 1
       match source_file.statements[11] {
-        ExpressionStatement(stmt) => {
+        ExpressionStatement(stmt) =>
           match stmt.expression {
-            BinaryExpression(bin) => {
+            BinaryExpression(bin) =>
               match bin.operator {
                 UnsignedRightShiftAssign => ()
                 _ => assert_true(false)
               }
-            }
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
       // Statement 12: m &&= true
       match source_file.statements[12] {
-        ExpressionStatement(stmt) => {
+        ExpressionStatement(stmt) =>
           match stmt.expression {
-            BinaryExpression(bin) => {
+            BinaryExpression(bin) =>
               match bin.operator {
                 LogicalAndAssign => ()
                 _ => assert_true(false)
               }
-            }
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
       // Statement 13: n ||= false
       match source_file.statements[13] {
-        ExpressionStatement(stmt) => {
+        ExpressionStatement(stmt) =>
           match stmt.expression {
-            BinaryExpression(bin) => {
+            BinaryExpression(bin) =>
               match bin.operator {
                 LogicalOrAssign => ()
                 _ => assert_true(false)
               }
-            }
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
       // Statement 14: o ??= null
       match source_file.statements[14] {
-        ExpressionStatement(stmt) => {
+        ExpressionStatement(stmt) =>
           match stmt.expression {
-            BinaryExpression(bin) => {
+            BinaryExpression(bin) =>
               match bin.operator {
                 NullishCoalescingAssign => ()
                 _ => assert_true(false)
               }
-            }
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
     }

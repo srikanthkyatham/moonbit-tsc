@@ -101,9 +101,7 @@ test "bind function declaration" {
 test "bind function with parameters" {
   let result = parse_and_bind("function add(a, b) { return a + b; }")
   match result {
-    Ok(bound) => {
-      assert_true(bound.global_scope.symbols.contains("add"))
-    }
+    Ok(bound) => assert_true(bound.global_scope.symbols.contains("add"))
     Err(_) => assert_true(false)
   }
 }
@@ -137,9 +135,7 @@ test "bind class declaration" {
 test "bind class with methods" {
   let result = parse_and_bind("class Foo { bar() {} }")
   match result {
-    Ok(bound) => {
-      assert_true(bound.global_scope.symbols.contains("Foo"))
-    }
+    Ok(bound) => assert_true(bound.global_scope.symbols.contains("Foo"))
     Err(_) => assert_true(false)
   }
 }
@@ -285,10 +281,9 @@ test "bind namespace import" {
 test "bind block creates new scope" {
   let result = parse_and_bind("{ const x = 1; }")
   match result {
-    Ok(bound) => {
+    Ok(bound) =>
       // Variable x should not be in global scope
       assert_false(bound.global_scope.symbols.contains("x"))
-    }
     Err(_) => assert_true(false)
   }
 }
@@ -315,10 +310,9 @@ test "bind function creates new scope" {
 test "bind variable shadowing in nested blocks allowed" {
   let result = parse_and_bind("const x = 1; { const x = 2; }")
   match result {
-    Ok(bound) => {
+    Ok(bound) =>
       // Outer x should be in global scope
       assert_true(bound.global_scope.symbols.contains("x"))
-    }
     Err(_) => assert_true(false)
   }
 }
@@ -356,9 +350,7 @@ test "bind let vs const duplicate error" {
   let result = parse_and_bind("let x = 1; const x = 2;")
   match result {
     Ok(_) => assert_true(false) // Should have error
-    Err(diagnostics) => {
-      assert_true(diagnostics.length() > 0)
-    }
+    Err(diagnostics) => assert_true(diagnostics.length() > 0)
   }
 }
 
@@ -368,7 +360,9 @@ test "bind let vs const duplicate error" {
 
 ///|
 test "bind nested block scopes" {
-  let result = parse_and_bind("{ const x = 1; { const y = 2; { const z = 3; } } }")
+  let result = parse_and_bind(
+    "{ const x = 1; { const y = 2; { const z = 3; } } }",
+  )
   match result {
     Ok(bound) => {
       // None of the variables should be in global scope
@@ -384,10 +378,9 @@ test "bind nested block scopes" {
 test "bind if statement creates block scope" {
   let result = parse_and_bind("if (true) { const x = 1; }")
   match result {
-    Ok(bound) => {
+    Ok(bound) =>
       // x should not be in global scope
       assert_false(bound.global_scope.symbols.contains("x"))
-    }
     Err(_) => assert_true(false)
   }
 }
@@ -409,10 +402,9 @@ test "bind for loop creates block scope" {
 test "bind while loop creates block scope" {
   let result = parse_and_bind("while (true) { const x = 1; }")
   match result {
-    Ok(bound) => {
+    Ok(bound) =>
       // x should not be in global scope
       assert_false(bound.global_scope.symbols.contains("x"))
-    }
     Err(_) => assert_true(false)
   }
 }
@@ -484,10 +476,9 @@ test "bind catch parameter creates scope" {
 test "bind catch parameter shadowing allowed" {
   let result = parse_and_bind("const e = 1; try { } catch (e) { }")
   match result {
-    Ok(bound) => {
+    Ok(bound) =>
       // Outer e should be in global scope
       assert_true(bound.global_scope.symbols.contains("e"))
-    }
     Err(_) => assert_true(false)
   }
 }
@@ -507,7 +498,9 @@ test "bind try-catch without catch variable" {
 
 ///|
 test "bind try-catch-finally" {
-  let result = parse_and_bind("try { const a = 1; } catch (e) { const b = 2; } finally { const c = 3; }")
+  let result = parse_and_bind(
+    "try { const a = 1; } catch (e) { const b = 2; } finally { const c = 3; }",
+  )
   match result {
     Ok(bound) => {
       // None of the variables should be in global scope
@@ -535,7 +528,9 @@ test "bind try-finally without catch" {
 
 ///|
 test "bind catch with object destructuring pattern" {
-  let result = parse_and_bind("try { } catch ({ message, name }) { console.log(message); }")
+  let result = parse_and_bind(
+    "try { } catch ({ message, name }) { console.log(message); }",
+  )
   match result {
     Ok(bound) => {
       // Destructured variables should not be in global scope
@@ -548,7 +543,9 @@ test "bind catch with object destructuring pattern" {
 
 ///|
 test "bind catch with array destructuring pattern" {
-  let result = parse_and_bind("try { } catch ([first, second]) { console.log(first); }")
+  let result = parse_and_bind(
+    "try { } catch ([first, second]) { console.log(first); }",
+  )
   match result {
     Ok(bound) => {
       // Destructured variables should not be in global scope
@@ -561,7 +558,9 @@ test "bind catch with array destructuring pattern" {
 
 ///|
 test "bind catch variable used in catch block" {
-  let result = parse_and_bind("try { throw new Error('test'); } catch (err) { const msg = err.message; }")
+  let result = parse_and_bind(
+    "try { throw new Error('test'); } catch (err) { const msg = err.message; }",
+  )
   match result {
     Ok(bound) => {
       // err and msg should not be in global scope
@@ -574,7 +573,9 @@ test "bind catch variable used in catch block" {
 
 ///|
 test "bind nested try-catch" {
-  let result = parse_and_bind("try { try { } catch (inner) { } } catch (outer) { }")
+  let result = parse_and_bind(
+    "try { try { } catch (inner) { } } catch (outer) { }",
+  )
   match result {
     Ok(bound) => {
       // Both catch variables should not be in global scope
@@ -621,9 +622,7 @@ test "bind class and variable same name error" {
   let result = parse_and_bind("const Foo = 1; class Foo {}")
   match result {
     Ok(_) => assert_true(false) // Should have error
-    Err(diagnostics) => {
-      assert_true(diagnostics.length() > 0)
-    }
+    Err(diagnostics) => assert_true(diagnostics.length() > 0)
   }
 }
 
@@ -632,9 +631,7 @@ test "bind interface and class same name error" {
   let result = parse_and_bind("interface Foo {} class Foo {}")
   match result {
     Ok(_) => assert_true(false) // Should have error
-    Err(diagnostics) => {
-      assert_true(diagnostics.length() > 0)
-    }
+    Err(diagnostics) => assert_true(diagnostics.length() > 0)
   }
 }
 
@@ -647,9 +644,7 @@ test "bind import shadowing local variable error" {
   let result = parse_and_bind("const foo = 1; import foo from 'module';")
   match result {
     Ok(_) => assert_true(false) // Should have error
-    Err(diagnostics) => {
-      assert_true(diagnostics.length() > 0)
-    }
+    Err(diagnostics) => assert_true(diagnostics.length() > 0)
   }
 }
 
@@ -714,7 +709,9 @@ test "bind generic function type parameters" {
 
 ///|
 test "bind generic function with multiple type parameters" {
-  let result = parse_and_bind("function map<T, U>(arr: T[], f: (x: T) => U): U[] { return []; }")
+  let result = parse_and_bind(
+    "function map<T, U>(arr: T[], f: (x: T) => U): U[] { return []; }",
+  )
   match result {
     Ok(bound) => {
       // Function should be in global scope
@@ -819,7 +816,9 @@ test "bind class with getter accessor" {
 
 ///|
 test "bind class with multiple getter accessors" {
-  let result = parse_and_bind("class Rectangle { get width() { return 10; } get height() { return 20; } }")
+  let result = parse_and_bind(
+    "class Rectangle { get width() { return 10; } get height() { return 20; } }",
+  )
   match result {
     Ok(bound) => {
       // Class should be in global scope
@@ -834,7 +833,9 @@ test "bind class with multiple getter accessors" {
 
 ///|
 test "bind class with getter and method" {
-  let result = parse_and_bind("class Counter { get value() { return 0; } increment() { } }")
+  let result = parse_and_bind(
+    "class Counter { get value() { return 0; } increment() { } }",
+  )
   match result {
     Ok(bound) => {
       // Class should be in global scope
@@ -867,7 +868,9 @@ test "bind class with setter accessor" {
 
 ///|
 test "bind class with multiple setter accessors" {
-  let result = parse_and_bind("class Rectangle { set width(w: number) { } set height(h: number) { } }")
+  let result = parse_and_bind(
+    "class Rectangle { set width(w: number) { } set height(h: number) { } }",
+  )
   match result {
     Ok(bound) => {
       // Class should be in global scope
@@ -882,7 +885,9 @@ test "bind class with multiple setter accessors" {
 
 ///|
 test "bind class with getter and setter pair" {
-  let result = parse_and_bind("class Circle { get radius() { return 1; } set radius(value: number) { } }")
+  let result = parse_and_bind(
+    "class Circle { get radius() { return 1; } set radius(value: number) { } }",
+  )
   match result {
     Ok(bound) => {
       // Class should be in global scope
@@ -896,7 +901,9 @@ test "bind class with getter and setter pair" {
 
 ///|
 test "bind class with setter and method" {
-  let result = parse_and_bind("class Counter { set value(v: number) { } reset() { } }")
+  let result = parse_and_bind(
+    "class Counter { set value(v: number) { } reset() { } }",
+  )
   match result {
     Ok(bound) => {
       // Class should be in global scope
@@ -922,12 +929,11 @@ test "bind named export does not create new symbol" {
       assert_true(bound.global_scope.symbols.contains("foo"))
       // Check that the symbol is a Variable, not ExportValue
       match bound.global_scope.symbols.get("foo") {
-        Some(sym) => {
+        Some(sym) =>
           match sym.kind {
             Variable => ()
             _ => assert_true(false)
           }
-        }
         None => assert_true(false)
       }
     }
@@ -943,12 +949,11 @@ test "bind re-export from module creates ExportValue" {
       // Re-exported name should be in global scope as ExportValue
       assert_true(bound.global_scope.symbols.contains("foo"))
       match bound.global_scope.symbols.get("foo") {
-        Some(sym) => {
+        Some(sym) =>
           match sym.kind {
             ExportValue => ()
             _ => assert_true(false)
           }
-        }
         None => assert_true(false)
       }
     }
@@ -977,12 +982,11 @@ test "bind namespace export as creates ExportValue" {
       // Namespace export should be in global scope as ExportValue
       assert_true(bound.global_scope.symbols.contains("ns"))
       match bound.global_scope.symbols.get("ns") {
-        Some(sym) => {
+        Some(sym) =>
           match sym.kind {
             ExportValue => ()
             _ => assert_true(false)
           }
-        }
         None => assert_true(false)
       }
     }
@@ -1017,12 +1021,11 @@ test "bind local type-only export does not create new symbol" {
       assert_true(bound.global_scope.symbols.contains("Foo"))
       // Check that the symbol is a Type, not ExportType
       match bound.global_scope.symbols.get("Foo") {
-        Some(sym) => {
+        Some(sym) =>
           match sym.kind {
             Type => ()
             _ => assert_true(false)
           }
-        }
         None => assert_true(false)
       }
     }
@@ -1038,12 +1041,11 @@ test "bind type-only re-export from module creates ExportType" {
       // Re-exported type should be in global scope as ExportType
       assert_true(bound.global_scope.symbols.contains("Foo"))
       match bound.global_scope.symbols.get("Foo") {
-        Some(sym) => {
+        Some(sym) =>
           match sym.kind {
             ExportType => ()
             _ => assert_true(false)
           }
-        }
         None => assert_true(false)
       }
     }
@@ -1099,10 +1101,9 @@ test "bind simple assignment creates flow node" {
 test "bind compound assignment creates flow node" {
   let result = parse_and_bind("let x = 1; x += 2;")
   match result {
-    Ok(bound) => {
+    Ok(bound) =>
       // Variable should be in global scope
       assert_true(bound.global_scope.symbols.contains("x"))
-    }
     Err(_) => assert_true(false)
   }
 }
@@ -1140,9 +1141,7 @@ test "bind all assignment operators" {
     "let x = 1; x = 1; x += 1; x -= 1; x *= 1; x /= 1; x %= 1; x **= 1; x &= 1; x |= 1; x ^= 1; x <<= 1; x >>= 1; x >>>= 1; x &&= 1; x ||= 1; x ??= 1;",
   )
   match result {
-    Ok(bound) => {
-      assert_true(bound.global_scope.symbols.contains("x"))
-    }
+    Ok(bound) => assert_true(bound.global_scope.symbols.contains("x"))
     Err(_) => assert_true(false)
   }
 }
@@ -1168,10 +1167,9 @@ test "bind simple function call creates flow node" {
 test "bind function call with arguments creates flow node" {
   let result = parse_and_bind("function add(a, b) { return a + b; } add(1, 2);")
   match result {
-    Ok(bound) => {
+    Ok(bound) =>
       // Function should be in global scope
       assert_true(bound.global_scope.symbols.contains("add"))
-    }
     Err(_) => assert_true(false)
   }
 }
@@ -1180,10 +1178,9 @@ test "bind function call with arguments creates flow node" {
 test "bind method call creates flow node" {
   let result = parse_and_bind("const arr = [1, 2, 3]; arr.push(4);")
   match result {
-    Ok(bound) => {
+    Ok(bound) =>
       // Variable should be in global scope
       assert_true(bound.global_scope.symbols.contains("arr"))
-    }
     Err(_) => assert_true(false)
   }
 }
@@ -1192,17 +1189,18 @@ test "bind method call creates flow node" {
 test "bind chained calls creates flow nodes" {
   let result = parse_and_bind("const s = 'hello'; s.trim().toUpperCase();")
   match result {
-    Ok(bound) => {
+    Ok(bound) =>
       // Variable should be in global scope
       assert_true(bound.global_scope.symbols.contains("s"))
-    }
     Err(_) => assert_true(false)
   }
 }
 
 ///|
 test "bind nested function calls creates flow nodes" {
-  let result = parse_and_bind("function f(x) { return x; } function g(x) { return x; } f(g(1));")
+  let result = parse_and_bind(
+    "function f(x) { return x; } function g(x) { return x; } f(g(1));",
+  )
   match result {
     Ok(bound) => {
       // Both functions should be in global scope
@@ -1233,7 +1231,9 @@ test "bind if statement creates condition flow node" {
 
 ///|
 test "bind if-else statement creates condition flow node" {
-  let result = parse_and_bind("const x = true; if (x) { const a = 1; } else { const b = 2; }")
+  let result = parse_and_bind(
+    "const x = true; if (x) { const a = 1; } else { const b = 2; }",
+  )
   match result {
     Ok(bound) => {
       assert_true(bound.global_scope.symbols.contains("x"))
@@ -1248,9 +1248,7 @@ test "bind if-else statement creates condition flow node" {
 test "bind while statement creates condition flow node" {
   let result = parse_and_bind("let x = 0; while (x < 10) { x = x + 1; }")
   match result {
-    Ok(bound) => {
-      assert_true(bound.global_scope.symbols.contains("x"))
-    }
+    Ok(bound) => assert_true(bound.global_scope.symbols.contains("x"))
     Err(_) => assert_true(false)
   }
 }
@@ -1259,9 +1257,7 @@ test "bind while statement creates condition flow node" {
 test "bind do-while statement creates condition flow node" {
   let result = parse_and_bind("let x = 0; do { x = x + 1; } while (x < 10);")
   match result {
-    Ok(bound) => {
-      assert_true(bound.global_scope.symbols.contains("x"))
-    }
+    Ok(bound) => assert_true(bound.global_scope.symbols.contains("x"))
     Err(_) => assert_true(false)
   }
 }
@@ -1293,7 +1289,9 @@ test "bind ternary expression creates condition flow node" {
 
 ///|
 test "bind nested conditions creates multiple condition flow nodes" {
-  let result = parse_and_bind("const a = true; const b = false; if (a) { if (b) { } }")
+  let result = parse_and_bind(
+    "const a = true; const b = false; if (a) { if (b) { } }",
+  )
   match result {
     Ok(bound) => {
       assert_true(bound.global_scope.symbols.contains("a"))
@@ -1309,40 +1307,42 @@ test "bind nested conditions creates multiple condition flow nodes" {
 
 ///|
 test "bind switch statement creates switch clause flow nodes" {
-  let result = parse_and_bind("const x = 1; switch (x) { case 1: break; case 2: break; }")
+  let result = parse_and_bind(
+    "const x = 1; switch (x) { case 1: break; case 2: break; }",
+  )
   match result {
-    Ok(bound) => {
-      assert_true(bound.global_scope.symbols.contains("x"))
-    }
+    Ok(bound) => assert_true(bound.global_scope.symbols.contains("x"))
     Err(_) => assert_true(false)
   }
 }
 
 ///|
 test "bind switch statement with default clause" {
-  let result = parse_and_bind("const x = 1; switch (x) { case 1: break; default: break; }")
+  let result = parse_and_bind(
+    "const x = 1; switch (x) { case 1: break; default: break; }",
+  )
   match result {
-    Ok(bound) => {
-      assert_true(bound.global_scope.symbols.contains("x"))
-    }
+    Ok(bound) => assert_true(bound.global_scope.symbols.contains("x"))
     Err(_) => assert_true(false)
   }
 }
 
 ///|
 test "bind switch statement with multiple cases" {
-  let result = parse_and_bind("const x = 1; switch (x) { case 1: case 2: case 3: break; default: break; }")
+  let result = parse_and_bind(
+    "const x = 1; switch (x) { case 1: case 2: case 3: break; default: break; }",
+  )
   match result {
-    Ok(bound) => {
-      assert_true(bound.global_scope.symbols.contains("x"))
-    }
+    Ok(bound) => assert_true(bound.global_scope.symbols.contains("x"))
     Err(_) => assert_true(false)
   }
 }
 
 ///|
 test "bind switch statement with block scoped variables" {
-  let result = parse_and_bind("const x = 1; switch (x) { case 1: { const a = 1; break; } case 2: { const b = 2; break; } }")
+  let result = parse_and_bind(
+    "const x = 1; switch (x) { case 1: { const a = 1; break; } case 2: { const b = 2; break; } }",
+  )
   match result {
     Ok(bound) => {
       assert_true(bound.global_scope.symbols.contains("x"))
@@ -1356,7 +1356,9 @@ test "bind switch statement with block scoped variables" {
 
 ///|
 test "bind switch statement with expression" {
-  let result = parse_and_bind("const x = 1; const y = 2; switch (x + y) { case 3: break; }")
+  let result = parse_and_bind(
+    "const x = 1; const y = 2; switch (x + y) { case 3: break; }",
+  )
   match result {
     Ok(bound) => {
       assert_true(bound.global_scope.symbols.contains("x"))
@@ -1368,11 +1370,11 @@ test "bind switch statement with expression" {
 
 ///|
 test "bind nested switch statements" {
-  let result = parse_and_bind("const x = 1; switch (x) { case 1: switch (x) { case 1: break; } break; }")
+  let result = parse_and_bind(
+    "const x = 1; switch (x) { case 1: switch (x) { case 1: break; } break; }",
+  )
   match result {
-    Ok(bound) => {
-      assert_true(bound.global_scope.symbols.contains("x"))
-    }
+    Ok(bound) => assert_true(bound.global_scope.symbols.contains("x"))
     Err(_) => assert_true(false)
   }
 }
@@ -1383,7 +1385,9 @@ test "bind nested switch statements" {
 
 ///|
 test "bind labeled statement creates label flow node" {
-  let result = parse_and_bind("outer: for (let i = 0; i < 10; i++) { break outer; }")
+  let result = parse_and_bind(
+    "outer: for (let i = 0; i < 10; i++) { break outer; }",
+  )
   match result {
     Ok(_) => assert_true(true)
     Err(_) => assert_true(false)
@@ -1410,7 +1414,9 @@ test "bind labeled block statement" {
 
 ///|
 test "bind nested labeled statements" {
-  let result = parse_and_bind("outer: for (let i = 0; i < 5; i++) { inner: for (let j = 0; j < 5; j++) { break outer; } }")
+  let result = parse_and_bind(
+    "outer: for (let i = 0; i < 5; i++) { inner: for (let j = 0; j < 5; j++) { break outer; } }",
+  )
   match result {
     Ok(_) => assert_true(true)
     Err(_) => assert_true(false)
@@ -1419,7 +1425,9 @@ test "bind nested labeled statements" {
 
 ///|
 test "bind labeled statement with continue" {
-  let result = parse_and_bind("loop: for (let i = 0; i < 10; i++) { continue loop; }")
+  let result = parse_and_bind(
+    "loop: for (let i = 0; i < 10; i++) { continue loop; }",
+  )
   match result {
     Ok(_) => assert_true(true)
     Err(_) => assert_true(false)
@@ -1434,9 +1442,7 @@ test "bind labeled statement with continue" {
 test "bind array element assignment creates array mutation flow" {
   let result = parse_and_bind("const arr = [1, 2, 3]; arr[0] = 10;")
   match result {
-    Ok(bound) => {
-      assert_true(bound.global_scope.symbols.contains("arr"))
-    }
+    Ok(bound) => assert_true(bound.global_scope.symbols.contains("arr"))
     Err(_) => assert_true(false)
   }
 }
@@ -1445,27 +1451,27 @@ test "bind array element assignment creates array mutation flow" {
 test "bind array element compound assignment" {
   let result = parse_and_bind("const arr = [1, 2, 3]; arr[0] += 5;")
   match result {
-    Ok(bound) => {
-      assert_true(bound.global_scope.symbols.contains("arr"))
-    }
+    Ok(bound) => assert_true(bound.global_scope.symbols.contains("arr"))
     Err(_) => assert_true(false)
   }
 }
 
 ///|
 test "bind nested array element assignment" {
-  let result = parse_and_bind("const matrix = [[1, 2], [3, 4]]; matrix[0][1] = 10;")
+  let result = parse_and_bind(
+    "const matrix = [[1, 2], [3, 4]]; matrix[0][1] = 10;",
+  )
   match result {
-    Ok(bound) => {
-      assert_true(bound.global_scope.symbols.contains("matrix"))
-    }
+    Ok(bound) => assert_true(bound.global_scope.symbols.contains("matrix"))
     Err(_) => assert_true(false)
   }
 }
 
 ///|
 test "bind array element assignment with expression index" {
-  let result = parse_and_bind("const arr = [1, 2, 3]; const i = 0; arr[i] = 10;")
+  let result = parse_and_bind(
+    "const arr = [1, 2, 3]; const i = 0; arr[i] = 10;",
+  )
   match result {
     Ok(bound) => {
       assert_true(bound.global_scope.symbols.contains("arr"))
@@ -1477,11 +1483,11 @@ test "bind array element assignment with expression index" {
 
 ///|
 test "bind multiple array mutations" {
-  let result = parse_and_bind("const arr = [1, 2, 3]; arr[0] = 10; arr[1] = 20; arr[2] = 30;")
+  let result = parse_and_bind(
+    "const arr = [1, 2, 3]; arr[0] = 10; arr[1] = 20; arr[2] = 30;",
+  )
   match result {
-    Ok(bound) => {
-      assert_true(bound.global_scope.symbols.contains("arr"))
-    }
+    Ok(bound) => assert_true(bound.global_scope.symbols.contains("arr"))
     Err(_) => assert_true(false)
   }
 }
@@ -1490,9 +1496,7 @@ test "bind multiple array mutations" {
 test "bind object property assignment is not array mutation" {
   let result = parse_and_bind("const obj = { x: 1 }; obj.x = 10;")
   match result {
-    Ok(bound) => {
-      assert_true(bound.global_scope.symbols.contains("obj"))
-    }
+    Ok(bound) => assert_true(bound.global_scope.symbols.contains("obj"))
     Err(_) => assert_true(false)
   }
 }
@@ -1505,9 +1509,7 @@ test "bind object property assignment is not array mutation" {
 test "bind return statement creates return flow node" {
   let result = parse_and_bind("function f() { return 42; }")
   match result {
-    Ok(bound) => {
-      assert_true(bound.global_scope.symbols.contains("f"))
-    }
+    Ok(bound) => assert_true(bound.global_scope.symbols.contains("f"))
     Err(_) => assert_true(false)
   }
 }
@@ -1516,9 +1518,7 @@ test "bind return statement creates return flow node" {
 test "bind return statement without expression" {
   let result = parse_and_bind("function f() { return; }")
   match result {
-    Ok(bound) => {
-      assert_true(bound.global_scope.symbols.contains("f"))
-    }
+    Ok(bound) => assert_true(bound.global_scope.symbols.contains("f"))
     Err(_) => assert_true(false)
   }
 }
@@ -1527,20 +1527,18 @@ test "bind return statement without expression" {
 test "bind return with expression" {
   let result = parse_and_bind("function add(a, b) { return a + b; }")
   match result {
-    Ok(bound) => {
-      assert_true(bound.global_scope.symbols.contains("add"))
-    }
+    Ok(bound) => assert_true(bound.global_scope.symbols.contains("add"))
     Err(_) => assert_true(false)
   }
 }
 
 ///|
 test "bind multiple return statements" {
-  let result = parse_and_bind("function abs(x) { if (x < 0) { return -x; } return x; }")
+  let result = parse_and_bind(
+    "function abs(x) { if (x < 0) { return -x; } return x; }",
+  )
   match result {
-    Ok(bound) => {
-      assert_true(bound.global_scope.symbols.contains("abs"))
-    }
+    Ok(bound) => assert_true(bound.global_scope.symbols.contains("abs"))
     Err(_) => assert_true(false)
   }
 }
@@ -1549,20 +1547,18 @@ test "bind multiple return statements" {
 test "bind return in arrow function" {
   let result = parse_and_bind("const f = (x) => { return x * 2; };")
   match result {
-    Ok(bound) => {
-      assert_true(bound.global_scope.symbols.contains("f"))
-    }
+    Ok(bound) => assert_true(bound.global_scope.symbols.contains("f"))
     Err(_) => assert_true(false)
   }
 }
 
 ///|
 test "bind early return pattern" {
-  let result = parse_and_bind("function validate(x) { if (!x) { return false; } return true; }")
+  let result = parse_and_bind(
+    "function validate(x) { if (!x) { return false; } return true; }",
+  )
   match result {
-    Ok(bound) => {
-      assert_true(bound.global_scope.symbols.contains("validate"))
-    }
+    Ok(bound) => assert_true(bound.global_scope.symbols.contains("validate"))
     Err(_) => assert_true(false)
   }
 }
@@ -1575,20 +1571,18 @@ test "bind early return pattern" {
 test "bind return makes code unreachable" {
   let result = parse_and_bind("function f() { return 1; const x = 2; }")
   match result {
-    Ok(bound) => {
-      assert_true(bound.global_scope.symbols.contains("f"))
-    }
+    Ok(bound) => assert_true(bound.global_scope.symbols.contains("f"))
     Err(_) => assert_true(false)
   }
 }
 
 ///|
 test "bind throw makes code unreachable" {
-  let result = parse_and_bind("function f() { throw new Error('error'); const x = 2; }")
+  let result = parse_and_bind(
+    "function f() { throw new Error('error'); const x = 2; }",
+  )
   match result {
-    Ok(bound) => {
-      assert_true(bound.global_scope.symbols.contains("f"))
-    }
+    Ok(bound) => assert_true(bound.global_scope.symbols.contains("f"))
     Err(_) => assert_true(false)
   }
 }
@@ -1613,7 +1607,9 @@ test "bind continue makes code unreachable" {
 
 ///|
 test "bind labeled break makes code unreachable" {
-  let result = parse_and_bind("outer: while (true) { break outer; const x = 1; }")
+  let result = parse_and_bind(
+    "outer: while (true) { break outer; const x = 1; }",
+  )
   match result {
     Ok(_) => assert_true(true)
     Err(_) => assert_true(false)
@@ -1622,11 +1618,11 @@ test "bind labeled break makes code unreachable" {
 
 ///|
 test "bind unreachable after throw in if branch" {
-  let result = parse_and_bind("function f(x) { if (x) { throw new Error(); } return x; }")
+  let result = parse_and_bind(
+    "function f(x) { if (x) { throw new Error(); } return x; }",
+  )
   match result {
-    Ok(bound) => {
-      assert_true(bound.global_scope.symbols.contains("f"))
-    }
+    Ok(bound) => assert_true(bound.global_scope.symbols.contains("f"))
     Err(_) => assert_true(false)
   }
 }

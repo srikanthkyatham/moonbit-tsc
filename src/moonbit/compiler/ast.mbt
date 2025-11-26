@@ -692,9 +692,9 @@ pub struct OptionalChain {
 ///|
 /// Kind of optional chain
 pub enum OptionalChainKind {
-  Property(String)       // obj?.prop
-  Call(Array[Node])      // func?.()
-  Element(Node)          // arr?.[0]
+  Property(String) // obj?.prop
+  Call(Array[Node]) // func?.()
+  Element(Node) // arr?.[0]
 } derive(Show)
 
 ///|
@@ -708,7 +708,7 @@ pub struct AwaitExpression {
 /// Yield expression (yield expr, yield* expr)
 pub struct YieldExpression {
   expression : Node?
-  is_delegate : Bool  // true for yield*
+  is_delegate : Bool // true for yield*
   location : SourceLocation
 } derive(Show)
 
@@ -772,7 +772,7 @@ pub struct NullLiteral {
 
 ///|
 pub struct RegExpLiteral {
-  pattern : String  // Full regex including /pattern/flags
+  pattern : String // Full regex including /pattern/flags
   location : SourceLocation
 } derive(Show)
 
@@ -854,15 +854,15 @@ pub enum TypeKeyword {
   String
   Symbol
   Object
-  Const  // For "as const" assertions
+  Const // For "as const" assertions
 } derive(Show, Eq)
 
 ///|
 /// Modifier for mapped types (+, -, or unchanged)
 pub enum MappedTypeModifier {
   Unchanged // No modifier
-  Plus      // +readonly, +?
-  Minus     // -readonly, -?
+  Plus // +readonly, +?
+  Minus // -readonly, -?
 } derive(Show, Eq)
 
 ///|
@@ -908,8 +908,8 @@ pub struct RestType {
 /// Type predicate for type guards: x is string, asserts x is string
 pub struct TypePredicate {
   parameter_name : String
-  type_node : Node?  // The type in "x is type" - None for "asserts x"
-  is_asserts : Bool  // True for "asserts x" or "asserts x is type"
+  type_node : Node? // The type in "x is type" - None for "asserts x"
+  is_asserts : Bool // True for "asserts x" or "asserts x is type"
   location : SourceLocation
 } derive(Show)
 
@@ -918,7 +918,7 @@ pub struct TypePredicate {
 pub enum TypeOperatorKind {
   KeyOf
   TypeOf
-  Unique  // For "unique symbol"
+  Unique // For "unique symbol"
   Readonly
 } derive(Show, Eq)
 
@@ -940,16 +940,16 @@ pub struct InferType {
 ///|
 /// Template literal type: `on${string}`, `color-${Color}`
 pub struct TemplateLiteralType {
-  head : String  // Text before first interpolation
-  spans : Array[TemplateLiteralTypeSpan]  // Interpolated types and tail text
+  head : String // Text before first interpolation
+  spans : Array[TemplateLiteralTypeSpan] // Interpolated types and tail text
   location : SourceLocation
 } derive(Show)
 
 ///|
 /// Span in a template literal type
 pub struct TemplateLiteralTypeSpan {
-  type_node : Node  // The interpolated type
-  literal : String  // Text after the interpolation
+  type_node : Node // The interpolated type
+  literal : String // Text after the interpolation
 } derive(Show)
 
 ///|
@@ -1024,7 +1024,7 @@ pub struct SetAccessor {
 ///|
 /// Decorator (@decorator or @decorator(args))
 pub struct Decorator {
-  expression : Node  // The decorator expression (identifier or call expression)
+  expression : Node // The decorator expression (identifier or call expression)
   location : SourceLocation
 } derive(Show)
 
@@ -1035,9 +1035,9 @@ pub struct Decorator {
 ///|
 /// JSX element: <tag>...</tag>
 pub struct JsxElement {
-  opening_element : Node  // JsxOpeningElement
+  opening_element : Node // JsxOpeningElement
   children : Array[JsxChild]
-  closing_element : Node?  // JsxClosingElement
+  closing_element : Node? // JsxClosingElement
   location : SourceLocation
 } derive(Show)
 
@@ -1078,7 +1078,7 @@ pub struct JsxClosingElement {
 ///|
 /// JSX expression container: {expression}
 pub struct JsxExpression {
-  expression : Node?  // None for empty expression {}
+  expression : Node? // None for empty expression {}
   location : SourceLocation
 } derive(Show)
 
@@ -1106,7 +1106,7 @@ pub enum JsxAttribute {
 /// JSX attribute node
 pub struct JsxAttributeNode {
   name : JsxAttributeName
-  initializer : JsxAttributeValue?  // None for boolean attributes like "disabled"
+  initializer : JsxAttributeValue? // None for boolean attributes like "disabled"
   location : SourceLocation
 } derive(Show)
 
@@ -1146,8 +1146,8 @@ pub enum JsxChild {
 ///|
 /// JSDoc comment block
 pub struct JSDocComment {
-  comment : String                     // Full comment text
-  tags : Array[JSDocTag]               // Parsed tags
+  comment : String // Full comment text
+  tags : Array[JSDocTag] // Parsed tags
   location : SourceLocation
 } derive(Show)
 
@@ -1193,14 +1193,14 @@ pub enum JSDocTag {
   /// @protected
   Protected(SourceLocation)
   /// Generic/unknown tag
-  Unknown(String, String, SourceLocation)  // tag name, content, location
+  Unknown(String, String, SourceLocation) // tag name, content, location
 } derive(Show)
 
 ///|
 /// JSDoc @param tag
 pub struct JSDocParam {
   name : String
-  type_annotation : Option[String]
+  type_annotation : String?
   description : String
   is_optional : Bool
   location : SourceLocation
@@ -1209,7 +1209,7 @@ pub struct JSDocParam {
 ///|
 /// JSDoc @returns tag
 pub struct JSDocReturns {
-  type_annotation : Option[String]
+  type_annotation : String?
   description : String
   location : SourceLocation
 } derive(Show)
@@ -1234,7 +1234,7 @@ pub struct JSDocTypeDef {
 /// JSDoc @property tag
 pub struct JSDocProperty {
   name : String
-  type_annotation : Option[String]
+  type_annotation : String?
   description : String
   is_optional : Bool
   location : SourceLocation
@@ -1245,7 +1245,7 @@ pub struct JSDocProperty {
 pub struct JSDocCallback {
   name : String
   params : Array[JSDocParam]
-  returns : Option[JSDocReturns]
+  returns : JSDocReturns?
   location : SourceLocation
 } derive(Show)
 
@@ -1253,7 +1253,7 @@ pub struct JSDocCallback {
 /// JSDoc @template tag
 pub struct JSDocTemplate {
   type_params : Array[String]
-  constraint : Option[String]
+  constraint : String?
   location : SourceLocation
 } derive(Show)
 
@@ -1281,7 +1281,7 @@ pub struct JSDocSee {
 ///|
 /// JSDoc @throws tag
 pub struct JSDocThrows {
-  type_annotation : Option[String]
+  type_annotation : String?
   description : String
   location : SourceLocation
 } derive(Show)
@@ -1314,15 +1314,15 @@ pub struct JSDocDefault {
 ///|
 /// Represents a change range in the source text
 pub struct TextChangeRange {
-  span : TextSpan                   // The span of text that was changed
-  new_length : Int                  // Length of the new text that replaced the span
+  span : TextSpan // The span of text that was changed
+  new_length : Int // Length of the new text that replaced the span
 } derive(Show)
 
 ///|
 /// Represents a span of text in the source
 pub struct TextSpan {
-  start : Int                       // Start position (character offset)
-  length : Int                      // Length of the span
+  start : Int // Start position (character offset)
+  length : Int // Length of the span
 } derive(Show)
 
 ///|
@@ -1351,7 +1351,10 @@ pub fn TextSpan::overlaps(self : TextSpan, other : TextSpan) -> Bool {
 
 ///|
 /// Create a new TextChangeRange
-pub fn TextChangeRange::new(span : TextSpan, new_length : Int) -> TextChangeRange {
+pub fn TextChangeRange::new(
+  span : TextSpan,
+  new_length : Int,
+) -> TextChangeRange {
   { span, new_length }
 }
 
@@ -1364,8 +1367,8 @@ pub fn TextChangeRange::delta(self : TextChangeRange) -> Int {
 ///|
 /// Incremental parse result containing both the AST and change tracking info
 pub struct IncrementalParseResult {
-  source_file : Node                // The parsed source file
-  affected_range : TextSpan?        // The range that was re-parsed (None if full reparse)
+  source_file : Node // The parsed source file
+  affected_range : TextSpan? // The range that was re-parsed (None if full reparse)
 } derive(Show)
 
 ///|

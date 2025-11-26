@@ -1632,7 +1632,8 @@ fn infer_binary_expression_type(
       // For identifiers, we need to get the declared type (not narrowed type) for assignment checking
       let (checker, target_type) = match bin_expr.left {
         Identifier(id) => {
-          let (checker, declared_type_opt) = match lookup_symbol(checker, id.name) {
+          let (checker, declared_type_opt) = match
+            lookup_symbol(checker, id.name) {
             Some(symbol) => {
               let c = check_const_assignment(
                 checker,
@@ -1840,7 +1841,11 @@ fn try_signature(
       checker,
       signature.type_parameters,
       inferred_type_args,
-      { file_path: "", start: { line: 0, column: 0, offset: 0 }, end: { line: 0, column: 0, offset: 0 } },
+      {
+        file_path: "",
+        start: { line: 0, column: 0, offset: 0 },
+        end: { line: 0, column: 0, offset: 0 },
+      },
     )
     // Substitute type parameters in parameter types and return type
     let mut checker = checker
@@ -2064,7 +2069,10 @@ fn check_type_constraint(
 ) -> TypeChecker {
   if not(is_assignable(type_arg, constraint)) {
     add_diagnostic_with_code(
-      checker, "Type does not satisfy the constraint", location, DiagnosticCode::TS2344,
+      checker,
+      "Type does not satisfy the constraint",
+      location,
+      DiagnosticCode::TS2344,
     )
   } else {
     checker
@@ -2085,12 +2093,18 @@ fn check_type_arguments(
   let min_required = count_required_type_params(type_params)
   if type_args.length() < min_required {
     checker = add_diagnostic_with_code(
-      checker, "Generic type requires more type arguments", location, DiagnosticCode::TS2314,
+      checker,
+      "Generic type requires more type arguments",
+      location,
+      DiagnosticCode::TS2314,
     )
   }
   if type_args.length() > type_params.length() {
     checker = add_diagnostic_with_code(
-      checker, "Too many type arguments provided", location, DiagnosticCode::TS2558,
+      checker,
+      "Too many type arguments provided",
+      location,
+      DiagnosticCode::TS2558,
     )
   }
 
@@ -2426,7 +2440,10 @@ fn typeof_string_to_type(checker : TypeChecker, s : String) -> Type? {
 
 ///|
 /// Create a NarrowedType from original and narrowed types
-pub fn create_narrowed_type(original_type : Type, narrowed_type : Type) -> NarrowedType {
+pub fn create_narrowed_type(
+  original_type : Type,
+  narrowed_type : Type,
+) -> NarrowedType {
   { original_type, narrowed_type }
 }
 
@@ -2455,7 +2472,10 @@ fn get_narrowed_type(checker : TypeChecker, variable_name : String) -> Type? {
 
 ///|
 /// Remove narrowing for a variable (restore original type)
-fn remove_narrowed_type(checker : TypeChecker, variable_name : String) -> TypeChecker {
+fn remove_narrowed_type(
+  checker : TypeChecker,
+  variable_name : String,
+) -> TypeChecker {
   let new_narrowed_types = checker.narrowed_types
   new_narrowed_types.remove(variable_name)
   { ..checker, narrowed_types: new_narrowed_types }
@@ -2491,7 +2511,8 @@ fn apply_type_narrowing(
             // Keep only types that are assignable to the narrowed type
             let kept_types : Array[Type] = []
             for union_member in union.types {
-              if types_are_identical(union_member, t) || is_assignable(union_member, t) {
+              if types_are_identical(union_member, t) ||
+                is_assignable(union_member, t) {
                 kept_types.push(union_member)
               }
             }
@@ -2520,7 +2541,8 @@ fn apply_narrowing_to_checker(
   is_true_branch : Bool,
 ) -> TypeChecker {
   // Get original type from symbol lookup or any type as fallback
-  let (original, checker) = match lookup_symbol(checker, type_guard_info.parameter_name) {
+  let (original, checker) = match
+    lookup_symbol(checker, type_guard_info.parameter_name) {
     Some(symbol) =>
       match checker.symbol_types.get(symbol.id) {
         Some(t) => (t, checker)
@@ -2534,7 +2556,12 @@ fn apply_narrowing_to_checker(
 
   // Check if narrowing was effective (different from original)
   if not(types_are_identical(original, narrowed)) {
-    add_narrowed_type(checker, type_guard_info.parameter_name, original, narrowed)
+    add_narrowed_type(
+      checker,
+      type_guard_info.parameter_name,
+      original,
+      narrowed,
+    )
   } else {
     checker
   }
@@ -2774,7 +2801,9 @@ fn lookup_property_in_type(
       let mut all_have_property = true
       for i = 0; i < ut.types.length(); i = i + 1 {
         let (prop_type_opt, c) = lookup_property_in_type(
-          checker, ut.types[i], prop_name,
+          checker,
+          ut.types[i],
+          prop_name,
         )
         checker = c
         match prop_type_opt {
@@ -2790,9 +2819,7 @@ fn lookup_property_in_type(
           (Some(prop_types[0]), checker)
         } else {
           // Create union of property types
-          let (union_prop_type, checker) = union_type(
-            checker, prop_types,
-          )
+          let (union_prop_type, checker) = union_type(checker, prop_types)
           (Some(union_prop_type), checker)
         }
       } else {
@@ -2804,7 +2831,9 @@ fn lookup_property_in_type(
       let mut checker = checker
       for i = 0; i < intersection_type.types.length(); i = i + 1 {
         let (prop_type_opt, c) = lookup_property_in_type(
-          checker, intersection_type.types[i], prop_name,
+          checker,
+          intersection_type.types[i],
+          prop_name,
         )
         checker = c
         match prop_type_opt {
@@ -2857,7 +2886,7 @@ fn lookup_property_in_type(
 ///|
 /// Find a string index signature in an array of index signatures
 fn find_string_index_signature(
-  signatures : Array[IndexSignature]
+  signatures : Array[IndexSignature],
 ) -> IndexSignature? {
   for i = 0; i < signatures.length(); i = i + 1 {
     match signatures[i].parameter_type {
@@ -2937,7 +2966,9 @@ fn infer_property_access_type(
 ) -> (Type, TypeChecker) {
   let (object_type, checker) = infer_type(checker, prop.expression)
   let (prop_type_opt, checker) = lookup_property_in_type(
-    checker, object_type, prop.name,
+    checker,
+    object_type,
+    prop.name,
   )
   match prop_type_opt {
     Some(prop_type) => (prop_type, checker)
@@ -3000,7 +3031,10 @@ fn infer_element_access_type(
     // Handle type references that might resolve to objects
     TypeReference(_) => {
       let (prop_type_opt, checker) = lookup_element_access_in_type(
-        checker, object_type, index_type, elem.argument_expression,
+        checker,
+        object_type,
+        index_type,
+        elem.argument_expression,
       )
       match prop_type_opt {
         Some(prop_type) => (prop_type, checker)
@@ -3014,7 +3048,10 @@ fn infer_element_access_type(
       let mut all_accessible = true
       for i = 0; i < ut.types.length(); i = i + 1 {
         let (elem_type_opt, c) = lookup_element_access_in_type(
-          checker, ut.types[i], index_type, elem.argument_expression,
+          checker,
+          ut.types[i],
+          index_type,
+          elem.argument_expression,
         )
         checker = c
         match elem_type_opt {
@@ -3041,7 +3078,10 @@ fn infer_element_access_type(
       let mut checker = checker
       for i = 0; i < intersection_type.types.length(); i = i + 1 {
         let (elem_type_opt, c) = lookup_element_access_in_type(
-          checker, intersection_type.types[i], index_type, elem.argument_expression,
+          checker,
+          intersection_type.types[i],
+          index_type,
+          elem.argument_expression,
         )
         checker = c
         match elem_type_opt {
@@ -3059,7 +3099,7 @@ fn infer_element_access_type(
 ///|
 /// Find a number index signature in an array of index signatures
 fn find_number_index_signature(
-  signatures : Array[IndexSignature]
+  signatures : Array[IndexSignature],
 ) -> IndexSignature? {
   for i = 0; i < signatures.length(); i = i + 1 {
     match signatures[i].parameter_type {
@@ -3118,7 +3158,10 @@ fn lookup_element_access_in_type(
       let (resolved, checker) = resolve_type_reference(checker, type_ref)
       match resolved {
         TypeReference(_) => (None, checker)
-        _ => lookup_element_access_in_type(checker, resolved, index_type, argument_expr)
+        _ =>
+          lookup_element_access_in_type(
+            checker, resolved, index_type, argument_expr,
+          )
       }
     }
     Any(_) => {
@@ -3141,7 +3184,8 @@ fn infer_new_expression_type(
   let checker = match new_expr.expression {
     Identifier(id) =>
       match lookup_symbol(checker, id.name) {
-        Some(class_symbol) => check_abstract_instantiation(checker, new_expr, class_symbol)
+        Some(class_symbol) =>
+          check_abstract_instantiation(checker, new_expr, class_symbol)
         None => checker
       }
     _ => checker
@@ -3908,14 +3952,20 @@ fn check_numeric_operands(
 ) -> TypeChecker {
   let checker = if !is_numeric_type(left) {
     add_diagnostic_with_code(
-      checker, "Left operand must be of type 'number'", location, TS2363,
+      checker,
+      "Left operand must be of type 'number'",
+      location,
+      TS2363,
     )
   } else {
     checker
   }
   if !is_numeric_type(right) {
     add_diagnostic_with_code(
-      checker, "Right operand must be of type 'number'", location, TS2363,
+      checker,
+      "Right operand must be of type 'number'",
+      location,
+      TS2363,
     )
   } else {
     checker
@@ -3932,7 +3982,10 @@ fn check_numeric_operand(
 ) -> TypeChecker {
   if !is_numeric_type(operand) {
     add_diagnostic_with_code(
-      checker, "Operand must be of type 'number'", location, TS2363,
+      checker,
+      "Operand must be of type 'number'",
+      location,
+      TS2363,
     )
   } else {
     checker
@@ -4267,7 +4320,13 @@ fn check_enum_member(
       // Infer the type of the initializer
       let (init_type, checker) = infer_type(checker, init)
       // Validate the initializer type
-      validate_enum_initializer(checker, init_type, init, member.location, is_const)
+      validate_enum_initializer(
+        checker,
+        init_type,
+        init,
+        member.location,
+        is_const,
+      )
     }
     None => checker // No initializer is valid (auto-incremented)
   }
@@ -4332,20 +4391,20 @@ fn is_const_enum_initializer(expr : Node) -> Bool {
   match expr {
     NumericLiteral(_) => true
     StringLiteral(_) => true
-    UnaryExpression(un) => {
+    UnaryExpression(un) =>
       // Allow unary minus on numeric literals (e.g., -1)
       match un.operator {
         Minus | Plus => is_const_enum_initializer(un.operand)
         _ => false
       }
-    }
     PropertyAccessExpression(_) => true // Allow references to other enum members
     Identifier(_) => true // Allow references to other enum members
-    BinaryExpression(bin) => {
+    BinaryExpression(bin) =>
       // Allow binary expressions with literals (e.g., 1 + 2, 1 << 2)
-      is_const_enum_initializer(bin.left) && is_const_enum_initializer(bin.right)
-    }
-    ParenthesizedExpression(paren) => is_const_enum_initializer(paren.expression)
+      is_const_enum_initializer(bin.left) &&
+      is_const_enum_initializer(bin.right)
+    ParenthesizedExpression(paren) =>
+      is_const_enum_initializer(paren.expression)
     _ => false
   }
 }
@@ -4849,7 +4908,6 @@ fn type_env_from_checker(checker : TypeChecker) -> TypeEnv {
     let type_v2 = type_to_v2(narrowed.narrowed_type)
     env = env.with_narrowing(var_name, type_v2)
   }
-
   env
 }
 
@@ -4858,7 +4916,7 @@ fn type_env_from_checker(checker : TypeChecker) -> TypeEnv {
 /// This provides richer error messages and control flow narrowing
 pub fn infer_type_v2_integrated(
   checker : TypeChecker,
-  expr : Node
+  expr : Node,
 ) -> (Type, TypeChecker, Array[TypeMismatchError]) {
   // Create TypeEnv from checker state
   let env = type_env_from_checker(checker)
@@ -4870,7 +4928,6 @@ pub fn infer_type_v2_integrated(
   let convert_result = v2_to_type(checker, result.ty)
   let old_type = convert_result.0
   let updated_checker = convert_result.1
-
   (old_type, updated_checker, result.errors)
 }
 
@@ -4879,7 +4936,7 @@ pub fn infer_type_v2_integrated(
 pub fn check_type_v2_integrated(
   checker : TypeChecker,
   expr : Node,
-  expected : Type
+  expected : Type,
 ) -> (Type, TypeChecker, Array[TypeMismatchError]) {
   // Create TypeEnv from checker state
   let env = type_env_from_checker(checker)
@@ -4894,6 +4951,5 @@ pub fn check_type_v2_integrated(
   let convert_result = v2_to_type(checker, result.ty)
   let old_type = convert_result.0
   let updated_checker = convert_result.1
-
   (old_type, updated_checker, result.errors)
 }

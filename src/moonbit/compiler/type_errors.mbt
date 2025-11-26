@@ -62,7 +62,7 @@ pub enum MismatchReason {
 pub fn type_mismatch(
   path : TypePath,
   actual : TypeV2,
-  expected : TypeV2
+  expected : TypeV2,
 ) -> TypeMismatchError {
   {
     path,
@@ -80,7 +80,7 @@ pub fn type_mismatch_with_reason(
   path : TypePath,
   actual : TypeV2,
   expected : TypeV2,
-  reason : MismatchReason
+  reason : MismatchReason,
 ) -> TypeMismatchError {
   {
     path,
@@ -97,7 +97,7 @@ pub fn type_mismatch_with_reason(
 pub fn missing_property_error(
   path : TypePath,
   prop_name : String,
-  suggestions : Array[String]
+  suggestions : Array[String],
 ) -> TypeMismatchError {
   {
     path,
@@ -113,7 +113,7 @@ pub fn missing_property_error(
 /// Create an excess property error
 pub fn excess_property_error(
   path : TypePath,
-  prop_name : String
+  prop_name : String,
 ) -> TypeMismatchError {
   {
     path,
@@ -122,8 +122,7 @@ pub fn excess_property_error(
     reason: ExcessProperty(prop_name),
     children: [],
     suggestions: [
-      "Object literal may only specify known properties",
-      "Consider using a type assertion or adding an index signature",
+      "Object literal may only specify known properties", "Consider using a type assertion or adding an index signature",
     ],
   }
 }
@@ -132,7 +131,7 @@ pub fn excess_property_error(
 /// Create a property type mismatch error
 pub fn property_mismatch_error(
   prop_name : String,
-  child_error : TypeMismatchError
+  child_error : TypeMismatchError,
 ) -> TypeMismatchError {
   {
     path: child_error.path,
@@ -149,7 +148,7 @@ pub fn property_mismatch_error(
 pub fn param_count_mismatch(
   path : TypePath,
   expected : Int,
-  actual : Int
+  actual : Int,
 ) -> TypeMismatchError {
   {
     path,
@@ -173,7 +172,7 @@ pub fn param_type_mismatch_error(
   index : Int,
   name : String,
   actual : TypeV2,
-  expected : TypeV2
+  expected : TypeV2,
 ) -> TypeMismatchError {
   {
     path,
@@ -190,7 +189,7 @@ pub fn param_type_mismatch_error(
 pub fn return_type_mismatch_error(
   path : TypePath,
   actual : TypeV2,
-  expected : TypeV2
+  expected : TypeV2,
 ) -> TypeMismatchError {
   {
     path,
@@ -207,7 +206,7 @@ pub fn return_type_mismatch_error(
 pub fn literal_mismatch_error(
   path : TypePath,
   expected_literal : String,
-  actual_literal : String
+  actual_literal : String,
 ) -> TypeMismatchError {
   {
     path,
@@ -224,7 +223,7 @@ pub fn literal_mismatch_error(
 pub fn no_union_member_matches_error(
   path : TypePath,
   actual : TypeV2,
-  members : Array[TypeV2]
+  members : Array[TypeV2],
 ) -> TypeMismatchError {
   {
     path,
@@ -266,7 +265,7 @@ pub fn unbound_type_error(name : String) -> TypeMismatchError {
 /// Create a not callable error
 pub fn not_callable_error(
   path : TypePath,
-  actual : TypeV2
+  actual : TypeV2,
 ) -> TypeMismatchError {
   {
     path,
@@ -284,7 +283,7 @@ pub fn aggregate_errors(
   path : TypePath,
   actual : TypeV2,
   expected : TypeV2,
-  errors : Array[TypeMismatchError]
+  errors : Array[TypeMismatchError],
 ) -> TypeMismatchError {
   let reason = if errors.length() > 0 {
     errors[0].reason
@@ -305,8 +304,7 @@ pub fn format_type_error(error : TypeMismatchError, depth : Int) -> String {
   let mut output = ""
 
   // Main error message
-  output =
-    output +
+  output = output +
     indent +
     "Type '" +
     format_type_v2(error.actual) +
@@ -322,8 +320,7 @@ pub fn format_type_error(error : TypeMismatchError, depth : Int) -> String {
   // Specific reason
   match error.reason {
     MissingProperty(name) =>
-      output =
-        output +
+      output = output +
         indent +
         "  Property '" +
         name +
@@ -331,8 +328,7 @@ pub fn format_type_error(error : TypeMismatchError, depth : Int) -> String {
         format_type_v2(error.actual) +
         "'\n"
     ExcessProperty(name) =>
-      output =
-        output +
+      output = output +
         indent +
         "  Object literal may only specify known properties, and '" +
         name +
@@ -340,15 +336,13 @@ pub fn format_type_error(error : TypeMismatchError, depth : Int) -> String {
         format_type_v2(error.expected) +
         "'\n"
     PropertyTypeMismatch(name) =>
-      output =
-        output +
+      output = output +
         indent +
         "  Types of property '" +
         name +
         "' are incompatible:\n"
     ParamCountMismatch(expected, actual) =>
-      output =
-        output +
+      output = output +
         indent +
         "  Target signature has " +
         expected.to_string() +
@@ -356,8 +350,7 @@ pub fn format_type_error(error : TypeMismatchError, depth : Int) -> String {
         actual.to_string() +
         "\n"
     ParamTypeMismatch(index, name) =>
-      output =
-        output +
+      output = output +
         indent +
         "  Type of parameter '" +
         name +
@@ -367,13 +360,11 @@ pub fn format_type_error(error : TypeMismatchError, depth : Int) -> String {
     ReturnTypeMismatch =>
       output = output + indent + "  Return types are incompatible:\n"
     NoUnionMemberMatches =>
-      output =
-        output +
+      output = output +
         indent +
         "  Type is not assignable to any member of the union\n"
     TypeArgMismatch(param_name, index) =>
-      output =
-        output +
+      output = output +
         indent +
         "  Type argument '" +
         param_name +
@@ -381,8 +372,7 @@ pub fn format_type_error(error : TypeMismatchError, depth : Int) -> String {
         index.to_string() +
         ") is incompatible:\n"
     ConstraintNotSatisfied(param_name, constraint) =>
-      output =
-        output +
+      output = output +
         indent +
         "  Type '" +
         format_type_v2(error.actual) +
@@ -392,30 +382,24 @@ pub fn format_type_error(error : TypeMismatchError, depth : Int) -> String {
         param_name +
         "'\n"
     OptionalToRequired(name) =>
-      output =
-        output +
+      output = output +
         indent +
         "  Property '" +
         name +
         "' is optional in source but required in target\n"
     ReadonlyMutation(name) =>
-      output =
-        output +
+      output = output +
         indent +
         "  Cannot assign to '" +
         name +
         "' because it is a read-only property\n"
-    NotCallable =>
-      output = output + indent + "  This type is not callable\n"
+    NotCallable => output = output + indent + "  This type is not callable\n"
     UnboundVariable(name) =>
-      output =
-        output + indent + "  Cannot find name '" + name + "' in scope\n"
+      output = output + indent + "  Cannot find name '" + name + "' in scope\n"
     UnboundType(name) =>
-      output =
-        output + indent + "  Cannot find type '" + name + "' in scope\n"
+      output = output + indent + "  Cannot find type '" + name + "' in scope\n"
     LiteralMismatch(expected, actual) =>
-      output =
-        output +
+      output = output +
         indent +
         "  Literal '" +
         actual +
@@ -436,7 +420,6 @@ pub fn format_type_error(error : TypeMismatchError, depth : Int) -> String {
   for suggestion in error.suggestions {
     output = output + indent + "  [Suggestion] " + suggestion + "\n"
   }
-
   output
 }
 
@@ -458,7 +441,6 @@ fn make_indent(depth : Int) -> String {
 /// Generate suggestions based on type mismatch
 fn generate_suggestions(actual : TypeV2, expected : TypeV2) -> Array[String] {
   let suggestions : Array[String] = []
-
   match (actual, expected) {
     // String vs string literal
     (TString, TLiteralString(s)) =>
@@ -480,7 +462,9 @@ fn generate_suggestions(actual : TypeV2, expected : TypeV2) -> Array[String] {
         )
       }
     (TUnion(types), _) =>
-      if types.iter().any(fn(t) {
+      if types
+        .iter()
+        .any(fn(t) {
           match t {
             TNull | TUndefined => true
             _ => false
@@ -499,21 +483,22 @@ fn generate_suggestions(actual : TypeV2, expected : TypeV2) -> Array[String] {
       }
 
     // Array vs element
-    (TArray(_), _) => suggestions.push(
-      "Did you mean to access an array element? Try [0] or use array methods",
-    )
-    (_, TArray(_)) => suggestions.push(
-      "Expected an array but got a single value. Wrap in array: [value]",
-    )
+    (TArray(_), _) =>
+      suggestions.push(
+        "Did you mean to access an array element? Try [0] or use array methods",
+      )
+    (_, TArray(_)) =>
+      suggestions.push(
+        "Expected an array but got a single value. Wrap in array: [value]",
+      )
 
     // Object vs function
-    (TObject(_), TFunction(_)) => suggestions.push(
-      "Object is not callable. Did you mean to access a method?",
-    )
-
+    (TObject(_), TFunction(_)) =>
+      suggestions.push(
+        "Object is not callable. Did you mean to access a method?",
+      )
     _ => ()
   }
-
   suggestions
 }
 
@@ -521,14 +506,16 @@ fn generate_suggestions(actual : TypeV2, expected : TypeV2) -> Array[String] {
 /// Find the closest matching union member to suggest
 fn find_closest_union_member(
   actual : TypeV2,
-  members : Array[TypeV2]
+  members : Array[TypeV2],
 ) -> Array[String] {
   let suggestions : Array[String] = []
 
   // Simple heuristic: if actual is one of the primitive types, suggest similar
   match actual {
     TNumber | TLiteralNumber(_) =>
-      if members.iter().any(fn(m) {
+      if members
+        .iter()
+        .any(fn(m) {
           match m {
             TString | TLiteralString(_) => true
             _ => false
@@ -537,7 +524,9 @@ fn find_closest_union_member(
         suggestions.push("Did you mean to convert to string? Use .toString()")
       }
     TString | TLiteralString(_) =>
-      if members.iter().any(fn(m) {
+      if members
+        .iter()
+        .any(fn(m) {
           match m {
             TNumber | TLiteralNumber(_) => true
             _ => false
@@ -549,7 +538,6 @@ fn find_closest_union_member(
       }
     _ => ()
   }
-
   suggestions
 }
 
@@ -557,10 +545,9 @@ fn find_closest_union_member(
 /// Find similar property names for "did you mean" suggestions
 pub fn find_similar_properties(
   target : String,
-  available : Array[String]
+  available : Array[String],
 ) -> Array[String] {
   let similar : Array[String] = []
-
   for prop in available {
     let dist = levenshtein_distance(prop, target)
     if dist <= 2 {
@@ -570,7 +557,6 @@ pub fn find_similar_properties(
       break
     }
   }
-
   if similar.is_empty() {
     []
   } else {
@@ -593,7 +579,6 @@ fn min_int(a : Int, b : Int) -> Int {
 fn levenshtein_distance(a : String, b : String) -> Int {
   let m = a.length()
   let n = b.length()
-
   if m == 0 {
     return n
   }
@@ -627,6 +612,5 @@ fn levenshtein_distance(a : String, b : String) -> Int {
       curr[k] = tmp
     }
   }
-
   prev[n]
 }

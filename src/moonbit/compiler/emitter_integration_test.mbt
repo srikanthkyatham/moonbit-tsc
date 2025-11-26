@@ -1,11 +1,13 @@
 // Integration tests for end-to-end source map generation
 
+///|
 /// Helper to parse source and get tokens for source map tests
 fn get_tokens_for_sourcemap(source : String) -> Array[Token] {
   let scanner = Scanner::new(source, "test.ts")
   scan_all(scanner)
 }
 
+///|
 /// Helper to compile TypeScript to JavaScript with source map support
 fn compile_with_sourcemap(source : String) -> (String, SourceMap) {
   let tokens = get_tokens_for_sourcemap(source)
@@ -34,13 +36,13 @@ fn compile_with_sourcemap(source : String) -> (String, SourceMap) {
         Some(b) => b.build(Some("test.js"))
         None => abort("Expected source_map_builder to exist")
       }
-
       (result, sourcemap)
     }
     Err(_) => abort("Failed to parse source")
   }
 }
 
+///|
 /// Test generating source maps for simple variable declaration
 test "generate source map for variable declaration" {
   let source = "const x = 5;"
@@ -63,6 +65,7 @@ test "generate source map for variable declaration" {
   assert_true(sourcemap.names.contains("x"))
 }
 
+///|
 /// Test generating source maps for function declaration
 test "generate source map for function declaration" {
   let source = "function foo() { return 42; }"
@@ -83,6 +86,7 @@ test "generate source map for function declaration" {
   assert_true(sourcemap.mappings.length() > 0)
 }
 
+///|
 /// Test source map position tracking across multiple statements
 test "track positions across multiple statements" {
   let source = "const x = 1;\nconst y = 10;"
@@ -105,6 +109,7 @@ test "track positions across multiple statements" {
   assert_true(sourcemap.mappings.length() > 0)
 }
 
+///|
 /// Test generating source map with call expressions
 test "generate source map with call expressions" {
   let source = "console.log(x);"
@@ -120,6 +125,7 @@ test "generate source map with call expressions" {
   assert_true(sourcemap.names.contains("log"))
 }
 
+///|
 /// Test generating source map with if statement
 test "generate source map with if statement" {
   let source = "if (x > 0) { return x; }"
@@ -133,6 +139,7 @@ test "generate source map with if statement" {
   assert_true(sourcemap.mappings.length() > 0)
 }
 
+///|
 /// Test generating source map with for loop
 test "generate source map with for loop" {
   let source = "for (let i = 0; i < 10; i++) { sum += i; }"
@@ -148,6 +155,7 @@ test "generate source map with for loop" {
   assert_true(sourcemap.mappings.length() > 0)
 }
 
+///|
 /// Test JSON serialization of source map
 test "serialize source map to JSON" {
   let source = "const greeting = \"hello\";"

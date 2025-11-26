@@ -7,7 +7,7 @@ pub struct DeclarationEmitterContext {
   indent_level : Int
   indent_string : String
   emit_comments : Bool
-  strip_internal : Bool  // Strip declarations marked as @internal
+  strip_internal : Bool // Strip declarations marked as @internal
 }
 
 ///|
@@ -17,7 +17,7 @@ pub fn DeclarationEmitterContext::default() -> DeclarationEmitterContext {
     indent_level: 0,
     indent_string: "  ",
     emit_comments: true,
-    strip_internal: true
+    strip_internal: true,
   }
 }
 
@@ -25,46 +25,45 @@ pub fn DeclarationEmitterContext::default() -> DeclarationEmitterContext {
 /// Create custom declaration emitter context
 pub fn DeclarationEmitterContext::new(
   emit_comments : Bool,
-  strip_internal : Bool
+  strip_internal : Bool,
 ) -> DeclarationEmitterContext {
-  {
-    indent_level: 0,
-    indent_string: "  ",
-    emit_comments,
-    strip_internal
-  }
+  { indent_level: 0, indent_string: "  ", emit_comments, strip_internal }
 }
 
 ///|
 /// Increase indentation level
 pub fn DeclarationEmitterContext::indent(
-  self : DeclarationEmitterContext
+  self : DeclarationEmitterContext,
 ) -> DeclarationEmitterContext {
   {
     indent_level: self.indent_level + 1,
     indent_string: self.indent_string,
     emit_comments: self.emit_comments,
-    strip_internal: self.strip_internal
+    strip_internal: self.strip_internal,
   }
 }
 
 ///|
 /// Decrease indentation level
 pub fn DeclarationEmitterContext::dedent(
-  self : DeclarationEmitterContext
+  self : DeclarationEmitterContext,
 ) -> DeclarationEmitterContext {
   {
-    indent_level: if self.indent_level > 0 { self.indent_level - 1 } else { 0 },
+    indent_level: if self.indent_level > 0 {
+      self.indent_level - 1
+    } else {
+      0
+    },
     indent_string: self.indent_string,
     emit_comments: self.emit_comments,
-    strip_internal: self.strip_internal
+    strip_internal: self.strip_internal,
   }
 }
 
 ///|
 /// Get current indentation string
 fn DeclarationEmitterContext::get_indent(
-  self : DeclarationEmitterContext
+  self : DeclarationEmitterContext,
 ) -> String {
   let mut result = ""
   for i = 0; i < self.indent_level; i = i + 1 {
@@ -99,7 +98,7 @@ fn type_keyword_to_string(keyword : TypeKeyword) -> String {
     String => "string"
     Symbol => "symbol"
     Object => "object"
-    Const => "const"  // For "as const" assertions
+    Const => "const" // For "as const" assertions
   }
 }
 
@@ -107,7 +106,7 @@ fn type_keyword_to_string(keyword : TypeKeyword) -> String {
 /// Emit a source file as a declaration file
 pub fn emit_declaration_file(
   source_file : SourceFile,
-  ctx : DeclarationEmitterContext
+  ctx : DeclarationEmitterContext,
 ) -> String {
   let mut output = ""
 
@@ -123,22 +122,19 @@ pub fn emit_declaration_file(
       None => () // Skip non-declaration statements
     }
   }
-
   output
 }
 
 ///|
 /// Emit a statement as a declaration (returns None for non-declaration statements)
-fn emit_decl_statement(
-  node : Node,
-  ctx : DeclarationEmitterContext
-) -> String? {
+fn emit_decl_statement(node : Node, ctx : DeclarationEmitterContext) -> String? {
   match node {
     // Declarations that should be emitted
     FunctionDeclaration(func) => Some(emit_decl_function(func, ctx, true))
     ClassDeclaration(cls) => Some(emit_decl_class(cls, ctx, true))
     InterfaceDeclaration(iface) => Some(emit_decl_interface(iface, ctx))
-    TypeAliasDeclaration(type_alias) => Some(emit_decl_type_alias(type_alias, ctx))
+    TypeAliasDeclaration(type_alias) =>
+      Some(emit_decl_type_alias(type_alias, ctx))
     EnumDeclaration(enum_decl) => Some(emit_decl_enum(enum_decl, ctx))
     ModuleDeclaration(mod_decl) => Some(emit_decl_module(mod_decl, ctx))
     ImportDeclaration(imp) => Some(emit_decl_import(imp, ctx))
@@ -146,7 +142,8 @@ fn emit_decl_statement(
     ExportAssignment(assign) => Some(emit_decl_export_assignment(assign, ctx))
 
     // Variable statements - emit as declarations
-    VariableStatement(var_stmt) => Some(emit_decl_variable_statement(var_stmt, ctx))
+    VariableStatement(var_stmt) =>
+      Some(emit_decl_variable_statement(var_stmt, ctx))
 
     // Skip all other statement types (they don't belong in .d.ts files)
     _ => None
@@ -157,14 +154,13 @@ fn emit_decl_statement(
 /// Emit a variable statement as a declaration
 fn emit_decl_variable_statement(
   var_stmt : VariableStatement,
-  ctx : DeclarationEmitterContext
+  ctx : DeclarationEmitterContext,
 ) -> String {
   let indent = ctx.get_indent()
   let mut output = indent
 
   // Use declare keyword for top-level variables
   output = output + "declare "
-
   if var_stmt.is_const {
     output = output + "const "
   } else if var_stmt.is_let {
@@ -181,21 +177,23 @@ fn emit_decl_variable_statement(
     let decl = var_stmt.declarations[i]
     output = output + emit_decl_variable_declarator(decl, ctx)
   }
-
   output + ";"
 }
 
 ///|
 /// Emit a variable declarator
-fn emit_decl_variable_declarator(decl : VariableDeclaration, ctx : DeclarationEmitterContext) -> String {
+fn emit_decl_variable_declarator(
+  decl : VariableDeclaration,
+  ctx : DeclarationEmitterContext,
+) -> String {
   let mut output = emit_decl_binding_name(decl.name)
 
   // Add type annotation
   match decl.type_annotation {
-    Some(type_node) => output = output + ": " + emit_decl_type_node(type_node, ctx)
-    None => output = output + ": any"  // Default to any if no type annotation
+    Some(type_node) =>
+      output = output + ": " + emit_decl_type_node(type_node, ctx)
+    None => output = output + ": any" // Default to any if no type annotation
   }
-
   output
 }
 
@@ -204,14 +202,15 @@ fn emit_decl_variable_declarator(decl : VariableDeclaration, ctx : DeclarationEm
 fn emit_decl_binding_name(node : Node) -> String {
   match node {
     Identifier(id) => id.name
-    ArrayBindingPattern(_) => "[]"  // Simplified
-    ObjectBindingPattern(_) => "{}"  // Simplified
+    ArrayBindingPattern(_) => "[]" // Simplified
+    ObjectBindingPattern(_) => "{}" // Simplified
     _ => "unknown"
   }
 }
 
 ///|
 /// Emit a function declaration
+
 ///|
 /// Check if modifiers have Export modifier
 fn has_export_mod(modifiers : Array[Modifier]) -> Bool {
@@ -234,10 +233,11 @@ fn has_default_mod(modifiers : Array[Modifier]) -> Bool {
   false
 }
 
+///|
 fn emit_decl_function(
   func : FunctionDeclaration,
   ctx : DeclarationEmitterContext,
-  is_top_level : Bool
+  is_top_level : Bool,
 ) -> String {
   let indent = ctx.get_indent()
   let mut output = indent
@@ -245,7 +245,6 @@ fn emit_decl_function(
   // Handle export modifiers
   let is_exported = has_export_mod(func.modifiers)
   let is_default = has_default_mod(func.modifiers)
-
   if is_exported && is_default {
     output = output + "export default "
   } else if is_exported {
@@ -288,10 +287,10 @@ fn emit_decl_function(
 
   // Return type
   match func.return_type {
-    Some(return_type) => output = output + ": " + emit_decl_type_node(return_type, ctx)
+    Some(return_type) =>
+      output = output + ": " + emit_decl_type_node(return_type, ctx)
     None => output = output + ": void"
   }
-
   output + ";"
 }
 
@@ -300,7 +299,7 @@ fn emit_decl_function(
 fn emit_decl_class(
   cls : ClassDeclaration,
   ctx : DeclarationEmitterContext,
-  is_top_level : Bool
+  is_top_level : Bool,
 ) -> String {
   let indent = ctx.get_indent()
   let mut output = indent
@@ -308,7 +307,6 @@ fn emit_decl_class(
   // Handle export modifiers
   let is_exported = has_export_mod(cls.modifiers)
   let is_default = has_default_mod(cls.modifiers)
-
   if is_exported && is_default {
     output = output + "export default "
   } else if is_exported {
@@ -322,7 +320,6 @@ fn emit_decl_class(
   if cls.is_abstract {
     output = output + "abstract "
   }
-
   output = output + "class "
 
   // Class name
@@ -338,9 +335,10 @@ fn emit_decl_class(
 
   // Heritage clauses (extends/implements)
   for i = 0; i < cls.heritage_clauses.length(); i = i + 1 {
-    output = output + " " + emit_decl_heritage_clause(cls.heritage_clauses[i], ctx)
+    output = output +
+      " " +
+      emit_decl_heritage_clause(cls.heritage_clauses[i], ctx)
   }
-
   output = output + " {\n"
 
   // Emit members
@@ -351,13 +349,15 @@ fn emit_decl_class(
       None => ()
     }
   }
-
   output + indent + "}"
 }
 
 ///|
 /// Emit a class member
-fn emit_decl_class_member(node : Node, ctx : DeclarationEmitterContext) -> String? {
+fn emit_decl_class_member(
+  node : Node,
+  ctx : DeclarationEmitterContext,
+) -> String? {
   match node {
     PropertyDeclaration(prop) => Some(emit_decl_property(prop, ctx))
     MethodDeclaration(meth) => Some(emit_decl_method(meth, ctx))
@@ -370,7 +370,10 @@ fn emit_decl_class_member(node : Node, ctx : DeclarationEmitterContext) -> Strin
 
 ///|
 /// Emit a property declaration
-fn emit_decl_property(prop : PropertyDeclaration, ctx : DeclarationEmitterContext) -> String {
+fn emit_decl_property(
+  prop : PropertyDeclaration,
+  ctx : DeclarationEmitterContext,
+) -> String {
   let indent = ctx.get_indent()
   let mut output = indent
 
@@ -387,16 +390,19 @@ fn emit_decl_property(prop : PropertyDeclaration, ctx : DeclarationEmitterContex
 
   // Type annotation
   match prop.type_annotation {
-    Some(type_node) => output = output + ": " + emit_decl_type_node(type_node, ctx)
+    Some(type_node) =>
+      output = output + ": " + emit_decl_type_node(type_node, ctx)
     None => output = output + ": any"
   }
-
   output + ";"
 }
 
 ///|
 /// Emit a method declaration
-fn emit_decl_method(meth : MethodDeclaration, ctx : DeclarationEmitterContext) -> String {
+fn emit_decl_method(
+  meth : MethodDeclaration,
+  ctx : DeclarationEmitterContext,
+) -> String {
   let indent = ctx.get_indent()
   let mut output = indent
 
@@ -431,10 +437,10 @@ fn emit_decl_method(meth : MethodDeclaration, ctx : DeclarationEmitterContext) -
 
   // Return type
   match meth.return_type {
-    Some(return_type) => output = output + ": " + emit_decl_type_node(return_type, ctx)
+    Some(return_type) =>
+      output = output + ": " + emit_decl_type_node(return_type, ctx)
     None => output = output + ": void"
   }
-
   output + ";"
 }
 
@@ -442,7 +448,7 @@ fn emit_decl_method(meth : MethodDeclaration, ctx : DeclarationEmitterContext) -
 /// Emit a constructor declaration
 fn emit_decl_constructor(
   ctor : ConstructorDeclaration,
-  ctx : DeclarationEmitterContext
+  ctx : DeclarationEmitterContext,
 ) -> String {
   let indent = ctx.get_indent()
   let mut output = indent + "constructor("
@@ -454,41 +460,42 @@ fn emit_decl_constructor(
     }
     output = output + emit_decl_parameter(ctor.parameters[i], ctx)
   }
-
   output + ");"
 }
 
 ///|
 /// Emit a get accessor
-fn emit_decl_get_accessor(getter : GetAccessor, ctx : DeclarationEmitterContext) -> String {
+fn emit_decl_get_accessor(
+  getter : GetAccessor,
+  ctx : DeclarationEmitterContext,
+) -> String {
   let indent = ctx.get_indent()
   let mut output = indent
-
   if has_modifier(getter.modifiers, Static) {
     output = output + "static "
   }
-
   output = output + "get " + getter.name + "()"
 
   // Return type
   match getter.return_type {
-    Some(type_node) => output = output + ": " + emit_decl_type_node(type_node, ctx)
+    Some(type_node) =>
+      output = output + ": " + emit_decl_type_node(type_node, ctx)
     None => output = output + ": any"
   }
-
   output + ";"
 }
 
 ///|
 /// Emit a set accessor
-fn emit_decl_set_accessor(setter : SetAccessor, ctx : DeclarationEmitterContext) -> String {
+fn emit_decl_set_accessor(
+  setter : SetAccessor,
+  ctx : DeclarationEmitterContext,
+) -> String {
   let indent = ctx.get_indent()
   let mut output = indent
-
   if has_modifier(setter.modifiers, Static) {
     output = output + "static "
   }
-
   output = output + "set " + setter.name + "("
   output = output + emit_decl_parameter(setter.parameter, ctx)
   output + ");"
@@ -498,7 +505,7 @@ fn emit_decl_set_accessor(setter : SetAccessor, ctx : DeclarationEmitterContext)
 /// Emit an interface declaration
 fn emit_decl_interface(
   iface : InterfaceDeclaration,
-  ctx : DeclarationEmitterContext
+  ctx : DeclarationEmitterContext,
 ) -> String {
   let indent = ctx.get_indent()
   let mut output = indent + "interface " + iface.name
@@ -510,9 +517,10 @@ fn emit_decl_interface(
 
   // Heritage clauses (extends)
   for i = 0; i < iface.heritage_clauses.length(); i = i + 1 {
-    output = output + " " + emit_decl_heritage_clause(iface.heritage_clauses[i], ctx)
+    output = output +
+      " " +
+      emit_decl_heritage_clause(iface.heritage_clauses[i], ctx)
   }
-
   output = output + " {\n"
 
   // Emit members
@@ -523,61 +531,75 @@ fn emit_decl_interface(
       None => ()
     }
   }
-
   output + indent + "}"
 }
 
 ///|
 /// Emit a type element (interface/type literal member)
-fn emit_decl_type_element(node : Node, ctx : DeclarationEmitterContext) -> String? {
+fn emit_decl_type_element(
+  node : Node,
+  ctx : DeclarationEmitterContext,
+) -> String? {
   match node {
     PropertyDeclaration(prop) => Some(emit_decl_property_signature(prop, ctx))
     IndexSignatureDeclaration(idx) => Some(emit_decl_index_signature(idx, ctx))
     MethodDeclaration(meth) => Some(emit_decl_method_signature(meth, ctx))
-    ConstructorDeclaration(ctor) => Some(emit_decl_constructor_signature(ctor, ctx))
+    ConstructorDeclaration(ctor) =>
+      Some(emit_decl_constructor_signature(ctor, ctx))
     _ => None
   }
 }
 
 ///|
 /// Emit a property signature
-fn emit_decl_property_signature(prop : PropertyDeclaration, ctx : DeclarationEmitterContext) -> String {
+fn emit_decl_property_signature(
+  prop : PropertyDeclaration,
+  ctx : DeclarationEmitterContext,
+) -> String {
   let indent = ctx.get_indent()
   let mut output = indent
-
   if has_modifier(prop.modifiers, Readonly) {
     output = output + "readonly "
   }
-
   output = output + prop.name
-
   match prop.type_annotation {
-    Some(type_node) => output = output + ": " + emit_decl_type_node(type_node, ctx)
+    Some(type_node) =>
+      output = output + ": " + emit_decl_type_node(type_node, ctx)
     None => output = output + ": any"
   }
-
   output + ";"
 }
 
 ///|
 /// Emit an index signature
-fn emit_decl_index_signature(idx : IndexSignatureDeclaration, ctx : DeclarationEmitterContext) -> String {
+fn emit_decl_index_signature(
+  idx : IndexSignatureDeclaration,
+  ctx : DeclarationEmitterContext,
+) -> String {
   let indent = ctx.get_indent()
   let param_type = emit_decl_type_node(idx.parameter_type, ctx)
   let return_type = emit_decl_type_node(idx.return_type, ctx)
-  indent + "[" + idx.parameter_name + ": " + param_type + "]: " + return_type + ";"
+  indent +
+  "[" +
+  idx.parameter_name +
+  ": " +
+  param_type +
+  "]: " +
+  return_type +
+  ";"
 }
 
 ///|
 /// Emit a method signature
-fn emit_decl_method_signature(meth : MethodDeclaration, ctx : DeclarationEmitterContext) -> String {
+fn emit_decl_method_signature(
+  meth : MethodDeclaration,
+  ctx : DeclarationEmitterContext,
+) -> String {
   let indent = ctx.get_indent()
   let mut output = indent + meth.name
-
   if meth.type_parameters.length() > 0 {
     output = output + emit_decl_type_parameters(meth.type_parameters, ctx)
   }
-
   output = output + "("
   for i = 0; i < meth.parameters.length(); i = i + 1 {
     if i > 0 {
@@ -586,12 +608,11 @@ fn emit_decl_method_signature(meth : MethodDeclaration, ctx : DeclarationEmitter
     output = output + emit_decl_parameter(meth.parameters[i], ctx)
   }
   output = output + ")"
-
   match meth.return_type {
-    Some(return_type) => output = output + ": " + emit_decl_type_node(return_type, ctx)
+    Some(return_type) =>
+      output = output + ": " + emit_decl_type_node(return_type, ctx)
     None => output = output + ": void"
   }
-
   output + ";"
 }
 
@@ -599,18 +620,16 @@ fn emit_decl_method_signature(meth : MethodDeclaration, ctx : DeclarationEmitter
 /// Emit a constructor signature
 fn emit_decl_constructor_signature(
   ctor : ConstructorDeclaration,
-  ctx : DeclarationEmitterContext
+  ctx : DeclarationEmitterContext,
 ) -> String {
   let indent = ctx.get_indent()
   let mut output = indent + "new ("
-
   for i = 0; i < ctor.parameters.length(); i = i + 1 {
     if i > 0 {
       output = output + ", "
     }
     output = output + emit_decl_parameter(ctor.parameters[i], ctx)
   }
-
   output + ");"
 }
 
@@ -618,15 +637,13 @@ fn emit_decl_constructor_signature(
 /// Emit a type alias declaration
 fn emit_decl_type_alias(
   type_alias : TypeAliasDeclaration,
-  ctx : DeclarationEmitterContext
+  ctx : DeclarationEmitterContext,
 ) -> String {
   let indent = ctx.get_indent()
   let mut output = indent + "type " + type_alias.name
-
   if type_alias.type_parameters.length() > 0 {
     output = output + emit_decl_type_parameters(type_alias.type_parameters, ctx)
   }
-
   output + " = " + emit_decl_type_node(type_alias.type_node, ctx) + ";"
 }
 
@@ -634,20 +651,16 @@ fn emit_decl_type_alias(
 /// Emit an enum declaration
 fn emit_decl_enum(
   enum_decl : EnumDeclaration,
-  ctx : DeclarationEmitterContext
+  ctx : DeclarationEmitterContext,
 ) -> String {
   let indent = ctx.get_indent()
   let mut output = indent
-
   if enum_decl.is_const {
     output = output + "const "
   }
-
   output = output + "enum " + enum_decl.name + " {\n"
-
   let member_ctx = ctx.indent()
   let member_indent = member_ctx.get_indent()
-
   for i = 0; i < enum_decl.members.length(); i = i + 1 {
     let mem = enum_decl.members[i]
     output = output + member_indent + mem.name
@@ -657,13 +670,11 @@ fn emit_decl_enum(
       Some(init) => output = output + " = " + emit_decl_expression(init)
       None => ()
     }
-
     if i < enum_decl.members.length() - 1 {
       output = output + ","
     }
     output = output + "\n"
   }
-
   output + indent + "}"
 }
 
@@ -671,7 +682,7 @@ fn emit_decl_enum(
 /// Emit a module/namespace declaration
 fn emit_decl_module(
   mod_decl : ModuleDeclaration,
-  ctx : DeclarationEmitterContext
+  ctx : DeclarationEmitterContext,
 ) -> String {
   let indent = ctx.get_indent()
   let mut output = indent + "declare namespace " + mod_decl.name + " {\n"
@@ -689,7 +700,6 @@ fn emit_decl_module(
     }
     _ => ()
   }
-
   output + indent + "}"
 }
 
@@ -697,11 +707,10 @@ fn emit_decl_module(
 /// Emit an import declaration
 fn emit_decl_import(
   imp : ImportDeclaration,
-  ctx : DeclarationEmitterContext
+  ctx : DeclarationEmitterContext,
 ) -> String {
   let indent = ctx.get_indent()
   let mut output = indent + "import "
-
   match imp.import_clause {
     Some(clause) => {
       let parts : Array[String] = []
@@ -740,12 +749,10 @@ fn emit_decl_import(
         }
         output = output + parts[i]
       }
-
       output = output + " from "
     }
     None => ()
   }
-
   output + "\"" + imp.module_specifier + "\";"
 }
 
@@ -753,11 +760,10 @@ fn emit_decl_import(
 /// Emit an export declaration
 fn emit_decl_export(
   exp : ExportDeclaration,
-  ctx : DeclarationEmitterContext
+  ctx : DeclarationEmitterContext,
 ) -> String {
   let indent = ctx.get_indent()
   let mut output = indent + "export "
-
   match exp.export_clause {
     Some(NamedExports(specifiers, _)) => {
       output = output + "{ "
@@ -776,12 +782,10 @@ fn emit_decl_export(
     Some(NamespaceExport(ns_name, _)) => output = output + "* as " + ns_name
     None => output = output + "*"
   }
-
   match exp.module_specifier {
     Some(module_spec) => output = output + " from \"" + module_spec + "\""
     None => ()
   }
-
   output + ";"
 }
 
@@ -789,7 +793,7 @@ fn emit_decl_export(
 /// Emit an export assignment
 fn emit_decl_export_assignment(
   assign : ExportAssignment,
-  ctx : DeclarationEmitterContext
+  ctx : DeclarationEmitterContext,
 ) -> String {
   let indent = ctx.get_indent()
   if assign.is_export_equals {
@@ -811,10 +815,12 @@ fn emit_decl_export_assignment(
         let cls_body = cls_decl.substring(start=indent.length())
         indent + "export default " + cls_body
       }
-      _ => {
+      _ =>
         // For expressions, use the original behavior
-        indent + "export default " + emit_decl_expression(assign.expression) + ";"
-      }
+        indent +
+        "export default " +
+        emit_decl_expression(assign.expression) +
+        ";"
     }
   }
 }
@@ -823,10 +829,9 @@ fn emit_decl_export_assignment(
 /// Emit type parameters
 fn emit_decl_type_parameters(
   type_params : Array[TypeParameter],
-  ctx : DeclarationEmitterContext
+  ctx : DeclarationEmitterContext,
 ) -> String {
   let mut output = "<"
-
   for i = 0; i < type_params.length(); i = i + 1 {
     if i > 0 {
       output = output + ", "
@@ -836,17 +841,18 @@ fn emit_decl_type_parameters(
 
     // Constraint
     match param.constraint {
-      Some(constraint) => output = output + " extends " + emit_decl_type_node(constraint, ctx)
+      Some(constraint) =>
+        output = output + " extends " + emit_decl_type_node(constraint, ctx)
       None => ()
     }
 
     // Default
     match param.default {
-      Some(default) => output = output + " = " + emit_decl_type_node(default, ctx)
+      Some(default) =>
+        output = output + " = " + emit_decl_type_node(default, ctx)
       None => ()
     }
   }
-
   output + ">"
 }
 
@@ -867,10 +873,10 @@ fn emit_decl_parameter(node : Node, ctx : DeclarationEmitterContext) -> String {
 
       // Type annotation
       match param.type_annotation {
-        Some(type_node) => output = output + ": " + emit_decl_type_node(type_node, ctx)
+        Some(type_node) =>
+          output = output + ": " + emit_decl_type_node(type_node, ctx)
         None => ()
       }
-
       output
     }
     _ => "unknown"
@@ -879,21 +885,21 @@ fn emit_decl_parameter(node : Node, ctx : DeclarationEmitterContext) -> String {
 
 ///|
 /// Emit a heritage clause (extends/implements)
-fn emit_decl_heritage_clause(clause : HeritageClause, ctx : DeclarationEmitterContext) -> String {
+fn emit_decl_heritage_clause(
+  clause : HeritageClause,
+  ctx : DeclarationEmitterContext,
+) -> String {
   let keyword = match clause.kind {
     Extends => "extends"
     Implements => "implements"
   }
-
   let mut output = keyword + " "
-
   for i = 0; i < clause.types.length(); i = i + 1 {
     if i > 0 {
       output = output + ", "
     }
     output = output + emit_decl_type_node(clause.types[i], ctx)
   }
-
   output
 }
 
@@ -904,7 +910,8 @@ fn emit_decl_type_node(node : Node, ctx : DeclarationEmitterContext) -> String {
     KeywordType(keyword) => type_keyword_to_string(keyword.kind)
     TypeReference(type_ref) => emit_decl_type_reference(type_ref, ctx)
     UnionType(union) => emit_decl_union_type(union, ctx)
-    IntersectionType(intersection) => emit_decl_intersection_type(intersection, ctx)
+    IntersectionType(intersection) =>
+      emit_decl_intersection_type(intersection, ctx)
     FunctionType(func_type) => emit_decl_function_type(func_type, ctx)
     ArrayType(array_type) => emit_decl_array_type(array_type, ctx)
     TupleType(tuple_type) => emit_decl_tuple_type(tuple_type, ctx)
@@ -918,9 +925,11 @@ fn emit_decl_type_node(node : Node, ctx : DeclarationEmitterContext) -> String {
 
 ///|
 /// Emit a type reference
-fn emit_decl_type_reference(type_ref : TypeReference, ctx : DeclarationEmitterContext) -> String {
+fn emit_decl_type_reference(
+  type_ref : TypeReference,
+  ctx : DeclarationEmitterContext,
+) -> String {
   let mut output = type_ref.type_name
-
   if type_ref.type_arguments.length() > 0 {
     output = output + "<"
     for i = 0; i < type_ref.type_arguments.length(); i = i + 1 {
@@ -931,22 +940,22 @@ fn emit_decl_type_reference(type_ref : TypeReference, ctx : DeclarationEmitterCo
     }
     output = output + ">"
   }
-
   output
 }
 
 ///|
 /// Emit a union type
-fn emit_decl_union_type(union : UnionType, ctx : DeclarationEmitterContext) -> String {
+fn emit_decl_union_type(
+  union : UnionType,
+  ctx : DeclarationEmitterContext,
+) -> String {
   let mut output = ""
-
   for i = 0; i < union.types.length(); i = i + 1 {
     if i > 0 {
       output = output + " | "
     }
     output = output + emit_decl_type_node(union.types[i], ctx)
   }
-
   output
 }
 
@@ -954,54 +963,57 @@ fn emit_decl_union_type(union : UnionType, ctx : DeclarationEmitterContext) -> S
 /// Emit an intersection type
 fn emit_decl_intersection_type(
   intersection : IntersectionType,
-  ctx : DeclarationEmitterContext
+  ctx : DeclarationEmitterContext,
 ) -> String {
   let mut output = ""
-
   for i = 0; i < intersection.types.length(); i = i + 1 {
     if i > 0 {
       output = output + " & "
     }
     output = output + emit_decl_type_node(intersection.types[i], ctx)
   }
-
   output
 }
 
 ///|
 /// Emit a function type
-fn emit_decl_function_type(func_type : FunctionType, ctx : DeclarationEmitterContext) -> String {
+fn emit_decl_function_type(
+  func_type : FunctionType,
+  ctx : DeclarationEmitterContext,
+) -> String {
   let mut output = "("
-
   for i = 0; i < func_type.parameters.length(); i = i + 1 {
     if i > 0 {
       output = output + ", "
     }
     output = output + emit_decl_parameter(func_type.parameters[i], ctx)
   }
-
   output = output + ") => " + emit_decl_type_node(func_type.return_type, ctx)
   output
 }
 
 ///|
 /// Emit an array type
-fn emit_decl_array_type(array_type : ArrayType, ctx : DeclarationEmitterContext) -> String {
+fn emit_decl_array_type(
+  array_type : ArrayType,
+  ctx : DeclarationEmitterContext,
+) -> String {
   emit_decl_type_node(array_type.element_type, ctx) + "[]"
 }
 
 ///|
 /// Emit a tuple type
-fn emit_decl_tuple_type(tuple_type : TupleType, ctx : DeclarationEmitterContext) -> String {
+fn emit_decl_tuple_type(
+  tuple_type : TupleType,
+  ctx : DeclarationEmitterContext,
+) -> String {
   let mut output = "["
-
   for i = 0; i < tuple_type.element_types.length(); i = i + 1 {
     if i > 0 {
       output = output + ", "
     }
     output = output + emit_decl_type_node(tuple_type.element_types[i], ctx)
   }
-
   output + "]"
 }
 
@@ -1019,7 +1031,10 @@ fn emit_decl_literal_type(literal : LiteralType) -> String {
 
 ///|
 /// Emit an indexed access type (T[K])
-fn emit_decl_indexed_access_type(indexed : IndexedAccessType, ctx : DeclarationEmitterContext) -> String {
+fn emit_decl_indexed_access_type(
+  indexed : IndexedAccessType,
+  ctx : DeclarationEmitterContext,
+) -> String {
   let object_type = emit_decl_type_node(indexed.object_type, ctx)
   let index_type = emit_decl_type_node(indexed.index_type, ctx)
   object_type + "[" + index_type + "]"
@@ -1027,7 +1042,10 @@ fn emit_decl_indexed_access_type(indexed : IndexedAccessType, ctx : DeclarationE
 
 ///|
 /// Emit a conditional type (T extends U ? X : Y)
-fn emit_decl_conditional_type(cond : ConditionalType, ctx : DeclarationEmitterContext) -> String {
+fn emit_decl_conditional_type(
+  cond : ConditionalType,
+  ctx : DeclarationEmitterContext,
+) -> String {
   let check = emit_decl_type_node(cond.check_type, ctx)
   let extends = emit_decl_type_node(cond.extends_type, ctx)
   let true_type = emit_decl_type_node(cond.true_type, ctx)
@@ -1037,29 +1055,21 @@ fn emit_decl_conditional_type(cond : ConditionalType, ctx : DeclarationEmitterCo
 
 ///|
 /// Emit a mapped type ({ [P in keyof T]: T[P] })
-fn emit_decl_mapped_type(mapped : MappedType, ctx : DeclarationEmitterContext) -> String {
+fn emit_decl_mapped_type(
+  mapped : MappedType,
+  ctx : DeclarationEmitterContext,
+) -> String {
   let mut output = "{ [" + mapped.type_parameter.name + " in "
-
   match mapped.type_parameter.constraint {
-    Some(constraint) => {
-      output = output + emit_decl_type_node(constraint, ctx)
-    }
-    None => {
-      output = output + "any"
-    }
+    Some(constraint) => output = output + emit_decl_type_node(constraint, ctx)
+    None => output = output + "any"
   }
-
   output = output + "]"
-
   match mapped.type_node {
-    Some(type_node) => {
+    Some(type_node) =>
       output = output + ": " + emit_decl_type_node(type_node, ctx)
-    }
-    None => {
-      output = output + ": any"
-    }
+    None => output = output + ": any"
   }
-
   output + " }"
 }
 

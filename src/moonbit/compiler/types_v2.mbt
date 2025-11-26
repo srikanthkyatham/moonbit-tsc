@@ -109,19 +109,14 @@ pub struct FunctionTypeV2 {
 ///|
 /// Default function type (any => any)
 pub fn FunctionTypeV2::any() -> FunctionTypeV2 {
-  {
-    type_params: [],
-    params: [],
-    rest_param: None,
-    return_type: TAny,
-  }
+  { type_params: [], params: [], rest_param: None, return_type: TAny }
 }
 
 ///|
 /// Create a simple function type
 pub fn FunctionTypeV2::simple(
   params : Array[TypeV2],
-  return_type : TypeV2
+  return_type : TypeV2,
 ) -> FunctionTypeV2 {
   {
     type_params: [],
@@ -176,7 +171,10 @@ pub fn TypeParamV2::simple(name : String) -> TypeParamV2 {
 
 ///|
 /// Create a constrained type parameter
-pub fn TypeParamV2::constrained(name : String, constraint : TypeV2) -> TypeParamV2 {
+pub fn TypeParamV2::constrained(
+  name : String,
+  constraint : TypeV2,
+) -> TypeParamV2 {
   { name, constraint: Some(constraint), default_type: None }
 }
 
@@ -379,7 +377,9 @@ pub fn is_nullable(ty : TypeV2) -> Bool {
   match ty {
     TNull | TUndefined => true
     TUnion(types) =>
-      types.iter().any(fn(t) {
+      types
+      .iter()
+      .any(fn(t) {
         match t {
           TNull | TUndefined => true
           _ => false
@@ -496,9 +496,7 @@ fn format_object_type(obj : ObjectTypeV2) -> String {
     obj.construct_signatures.is_empty() {
     return "{}"
   }
-
   let parts : Array[String] = []
-
   for kv in obj.fields {
     let k = kv.0
     let v = kv.1
@@ -506,7 +504,6 @@ fn format_object_type(obj : ObjectTypeV2) -> String {
     let ro = if v.is_readonly { "readonly " } else { "" }
     parts.push(ro + k + opt + ": " + format_type_v2(v.ty))
   }
-
   "{ " + parts.join("; ") + " }"
 }
 

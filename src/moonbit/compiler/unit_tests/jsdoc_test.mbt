@@ -20,9 +20,7 @@ test "scan JSDoc comment token" {
   let mut found = false
   for token in tokens {
     match token {
-      @compiler.Token::JSDocComment(_, _) => {
-        found = true
-      }
+      @compiler.Token::JSDocComment(_, _) => found = true
       _ => ()
     }
   }
@@ -36,9 +34,7 @@ test "scan multiline JSDoc comment" {
   let mut found = false
   for token in tokens {
     match token {
-      @compiler.Token::JSDocComment(_, _) => {
-        found = true
-      }
+      @compiler.Token::JSDocComment(_, _) => found = true
       _ => ()
     }
   }
@@ -52,9 +48,7 @@ test "distinguish JSDoc from regular multiline comment" {
   let mut jsdoc_found = false
   for token in tokens {
     match token {
-      @compiler.Token::JSDocComment(_, _) => {
-        jsdoc_found = true
-      }
+      @compiler.Token::JSDocComment(_, _) => jsdoc_found = true
       _ => ()
     }
   }
@@ -211,7 +205,8 @@ test "JSDoc with multiple tags" {
     match token {
       @compiler.Token::JSDocComment(content, _) => {
         found_jsdoc = true
-        has_all_tags = content.contains("@param") && content.contains("@returns")
+        has_all_tags = content.contains("@param") &&
+          content.contains("@returns")
       }
       _ => ()
     }
@@ -231,9 +226,7 @@ test "JSDoc empty comment" {
   let mut found_jsdoc = false
   for token in tokens {
     match token {
-      @compiler.Token::JSDocComment(_, _) => {
-        found_jsdoc = true
-      }
+      @compiler.Token::JSDocComment(_, _) => found_jsdoc = true
       _ => ()
     }
   }

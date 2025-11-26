@@ -31,7 +31,7 @@ pub fn scan_all(scanner : Scanner) -> Array[Token] {
   let tokens : Array[Token] = []
   let mut current_scanner = scanner
   let mut prev_token : Token? = None
-  let mut template_depth = 0  // Track nested template interpolations
+  let mut template_depth = 0 // Track nested template interpolations
   let mut should_continue = true
 
   // Check for hashbang at file start
@@ -44,19 +44,18 @@ pub fn scan_all(scanner : Scanner) -> Array[Token] {
     }
     None => ()
   }
-
   while should_continue {
     // After CloseBrace inside a template interpolation, scan template continuation
     let (token, next_scanner) = match prev_token {
-      Some(CloseBrace(_)) if template_depth > 0 => {
+      Some(CloseBrace(_)) if template_depth > 0 =>
         scan_template_continuation(current_scanner)
-      }
       _ => scan_token_with_context(current_scanner, prev_token)
     }
     tokens.push(token)
     // Track template depth
     match token {
-      TemplateHead(_, _) | TemplateMiddle(_, _) => template_depth = template_depth + 1
+      TemplateHead(_, _) | TemplateMiddle(_, _) =>
+        template_depth = template_depth + 1
       TemplateTail(_, _) => template_depth = template_depth - 1
       EOF(_) => should_continue = false
       _ => ()
@@ -74,7 +73,10 @@ pub fn scan_all(scanner : Scanner) -> Array[Token] {
 
 ///|
 /// Scan a single token with context (for regex disambiguation)
-pub fn scan_token_with_context(scanner : Scanner, prev_token : Token?) -> (Token, Scanner) {
+pub fn scan_token_with_context(
+  scanner : Scanner,
+  prev_token : Token?,
+) -> (Token, Scanner) {
   // Skip whitespace and comments
   let scanner = skip_trivia(scanner)
 
@@ -96,7 +98,6 @@ pub fn scan_token_with_context(scanner : Scanner, prev_token : Token?) -> (Token
       (None, _) => ()
     }
   }
-
   let start_pos = scanner.position
   let start_line = scanner.line
   let start_col = scanner.column
@@ -128,25 +129,44 @@ pub fn scan_token_with_context(scanner : Scanner, prev_token : Token?) -> (Token
     // Check for /= and />
     if next_ch == '=' {
       let scanner = advance(scanner_after_slash)
-      return (SlashEquals(make_location(scanner, start_pos, start_line, start_col)), scanner)
+      return (
+        SlashEquals(make_location(scanner, start_pos, start_line, start_col)),
+        scanner,
+      )
     }
     if next_ch == '>' {
       let scanner = advance(scanner_after_slash)
-      return (SlashGreaterThan(make_location(scanner, start_pos, start_line, start_col)), scanner)
+      return (
+        SlashGreaterThan(
+          make_location(scanner, start_pos, start_line, start_col),
+        ),
+        scanner,
+      )
     }
     // Check if previous token allows regex
     if allows_regex(prev_token) {
       // Try to scan as regex
       match scan_regex(scanner_after_slash, start_pos, start_line, start_col) {
         Some(result) => return result
-        None => {
+        None =>
           // Fall back to division
-          return (Slash(make_location(scanner_after_slash, start_pos, start_line, start_col)), scanner_after_slash)
-        }
+          return (
+            Slash(
+              make_location(
+                scanner_after_slash, start_pos, start_line, start_col,
+              ),
+            ),
+            scanner_after_slash,
+          )
       }
     } else {
-      // Division operator
-      return (Slash(make_location(scanner_after_slash, start_pos, start_line, start_col)), scanner_after_slash)
+      return (
+        // Division operator
+        Slash(
+          make_location(scanner_after_slash, start_pos, start_line, start_col),
+        ),
+        scanner_after_slash,
+      )
     }
   }
 
@@ -175,7 +195,6 @@ pub fn scan_token(scanner : Scanner) -> (Token, Scanner) {
       (None, _) => ()
     }
   }
-
   let ch = peek_char(scanner)
   let start_pos = scanner.position
   let start_line = scanner.line
@@ -269,13 +288,17 @@ pub fn scan_token(scanner : Scanner) -> (Token, Scanner) {
             '=' => {
               let scanner = advance(scanner)
               (
-                StarStarEquals(make_location(scanner, start_pos, start_line, start_col)),
+                StarStarEquals(
+                  make_location(scanner, start_pos, start_line, start_col),
+                ),
                 scanner,
               )
             }
             _ =>
               (
-                StarStar(make_location(scanner, start_pos, start_line, start_col)),
+                StarStar(
+                  make_location(scanner, start_pos, start_line, start_col),
+                ),
                 scanner,
               )
           }
@@ -582,7 +605,9 @@ pub fn scan_token(scanner : Scanner) -> (Token, Scanner) {
             '=' => {
               let scanner = advance(scanner)
               (
-                BarBarEquals(make_location(scanner, start_pos, start_line, start_col)),
+                BarBarEquals(
+                  make_location(scanner, start_pos, start_line, start_col),
+                ),
                 scanner,
               )
             }
@@ -762,19 +787,24 @@ pub fn scan_token(scanner : Scanner) -> (Token, Scanner) {
       (At(make_location(scanner, start_pos, start_line, start_col)), scanner)
     }
     '#' => scan_private_identifier(scanner, start_pos, start_line, start_col)
-    _ => {
+    _ =>
       // Check if it's a Unicode identifier start
       if is_identifier_start(ch) {
         scan_identifier_or_keyword(scanner, start_pos, start_line, start_col)
       } else {
         let scanner = advance(scanner)
-        let text = scanner.source.substring(start=start_pos, end=scanner.position)
+        let text = scanner.source.substring(
+          start=start_pos,
+          end=scanner.position,
+        )
         (
-          Unknown(text, make_location(scanner, start_pos, start_line, start_col)),
+          Unknown(
+            text,
+            make_location(scanner, start_pos, start_line, start_col),
+          ),
           scanner,
         )
       }
-    }
   }
 }
 
@@ -889,9 +919,18 @@ fn scan_number(
     if scanner_after_zero.position < scanner_after_zero.length {
       let second_char = peek_char(scanner_after_zero)
       match second_char {
-        'x' | 'X' => return scan_hex_number(scanner_after_zero, start_pos, start_line, start_col)
-        'o' | 'O' => return scan_octal_number(scanner_after_zero, start_pos, start_line, start_col)
-        'b' | 'B' => return scan_binary_number(scanner_after_zero, start_pos, start_line, start_col)
+        'x' | 'X' =>
+          return scan_hex_number(
+            scanner_after_zero, start_pos, start_line, start_col,
+          )
+        'o' | 'O' =>
+          return scan_octal_number(
+            scanner_after_zero, start_pos, start_line, start_col,
+          )
+        'b' | 'B' =>
+          return scan_binary_number(
+            scanner_after_zero, start_pos, start_line, start_col,
+          )
         _ => ()
       }
     }
@@ -911,7 +950,6 @@ fn scan_hex_number(
 ) -> (Token, Scanner) {
   let mut scanner = advance(scanner) // Skip x/X
   let mut text = "0x"
-
   while scanner.position < scanner.length {
     let ch = peek_char(scanner)
     match ch {
@@ -919,10 +957,9 @@ fn scan_hex_number(
         text = text + Char::to_string(ch)
         scanner = advance(scanner)
       }
-      '_' => {
+      '_' =>
         // Numeric separator - skip but don't include
         scanner = advance(scanner)
-      }
       _ => break
     }
   }
@@ -933,13 +970,11 @@ fn scan_hex_number(
     text = text + "n"
     scanner = advance(scanner)
   }
-
   let loc = SourceLocation::new(
     scanner.file_path,
     Position::new(start_line, start_col, start_pos),
     Position::new(scanner.line, scanner.column, scanner.position),
   )
-
   if is_bigint {
     (BigIntLiteral(text, loc), scanner)
   } else {
@@ -957,7 +992,6 @@ fn scan_octal_number(
 ) -> (Token, Scanner) {
   let mut scanner = advance(scanner) // Skip o/O
   let mut text = "0o"
-
   while scanner.position < scanner.length {
     let ch = peek_char(scanner)
     match ch {
@@ -965,9 +999,7 @@ fn scan_octal_number(
         text = text + Char::to_string(ch)
         scanner = advance(scanner)
       }
-      '_' => {
-        scanner = advance(scanner)
-      }
+      '_' => scanner = advance(scanner)
       _ => break
     }
   }
@@ -978,13 +1010,11 @@ fn scan_octal_number(
     text = text + "n"
     scanner = advance(scanner)
   }
-
   let loc = SourceLocation::new(
     scanner.file_path,
     Position::new(start_line, start_col, start_pos),
     Position::new(scanner.line, scanner.column, scanner.position),
   )
-
   if is_bigint {
     (BigIntLiteral(text, loc), scanner)
   } else {
@@ -1002,7 +1032,6 @@ fn scan_binary_number(
 ) -> (Token, Scanner) {
   let mut scanner = advance(scanner) // Skip b/B
   let mut text = "0b"
-
   while scanner.position < scanner.length {
     let ch = peek_char(scanner)
     match ch {
@@ -1010,9 +1039,7 @@ fn scan_binary_number(
         text = text + Char::to_string(ch)
         scanner = advance(scanner)
       }
-      '_' => {
-        scanner = advance(scanner)
-      }
+      '_' => scanner = advance(scanner)
       _ => break
     }
   }
@@ -1023,13 +1050,11 @@ fn scan_binary_number(
     text = text + "n"
     scanner = advance(scanner)
   }
-
   let loc = SourceLocation::new(
     scanner.file_path,
     Position::new(start_line, start_col, start_pos),
     Position::new(scanner.line, scanner.column, scanner.position),
   )
-
   if is_bigint {
     (BigIntLiteral(text, loc), scanner)
   } else {
@@ -1058,10 +1083,9 @@ fn scan_decimal_number(
         text = text + Char::to_string(ch)
         scanner = advance(scanner)
       }
-      '_' => {
+      '_' =>
         // Numeric separator - skip
         scanner = advance(scanner)
-      }
       _ => break
     }
   }
@@ -1074,7 +1098,6 @@ fn scan_decimal_number(
       has_dot = true
       text = text + "."
       scanner = next_scanner
-
       while scanner.position < scanner.length {
         let ch = peek_char(scanner)
         match ch {
@@ -1082,9 +1105,7 @@ fn scan_decimal_number(
             text = text + Char::to_string(ch)
             scanner = advance(scanner)
           }
-          '_' => {
-            scanner = advance(scanner)
-          }
+          '_' => scanner = advance(scanner)
           _ => break
         }
       }
@@ -1113,9 +1134,7 @@ fn scan_decimal_number(
           text = text + Char::to_string(ch)
           scanner = advance(scanner)
         }
-        '_' => {
-          scanner = advance(scanner)
-        }
+        '_' => scanner = advance(scanner)
         _ => break
       }
     }
@@ -1127,13 +1146,11 @@ fn scan_decimal_number(
     text = text + "n"
     scanner = advance(scanner)
   }
-
   let loc = SourceLocation::new(
     scanner.file_path,
     Position::new(start_line, start_col, start_pos),
     Position::new(scanner.line, scanner.column, scanner.position),
   )
-
   if is_bigint {
     (BigIntLiteral(text, loc), scanner)
   } else {
@@ -1170,11 +1187,11 @@ fn scan_private_identifier(
   while scanner.position < scanner.length {
     let ch = peek_char(scanner)
     match ch {
-      'a'..='z' | 'A'..='Z' | '0'..='9' | '_' | '$' => scanner = advance(scanner)
+      'a'..='z' | 'A'..='Z' | '0'..='9' | '_' | '$' =>
+        scanner = advance(scanner)
       _ => break
     }
   }
-
   let text = scanner.source.substring(start=start_pos, end=scanner.position)
   let loc = SourceLocation::new(
     scanner.file_path,
@@ -1246,7 +1263,7 @@ fn scan_string(
             text = text + "\""
             scanner = advance(scanner)
           }
-          'u' => {
+          'u' =>
             match parse_unicode_escape(scanner) {
               Some((code_point, new_scanner)) => {
                 text = text + code_point_to_string(code_point)
@@ -1257,8 +1274,7 @@ fn scan_string(
                 scanner = advance(scanner)
               }
             }
-          }
-          'x' => {
+          'x' =>
             match parse_hex_escape(scanner) {
               Some((value, new_scanner)) => {
                 text = text + code_point_to_string(value)
@@ -1269,11 +1285,9 @@ fn scan_string(
                 scanner = advance(scanner)
               }
             }
-          }
-          '\n' => {
+          '\n' =>
             // Line continuation - skip the newline
             scanner = advance_line(scanner)
-          }
           '\r' => {
             // Line continuation - skip CR and possibly LF
             scanner = advance(scanner)
@@ -1328,7 +1342,8 @@ fn scan_template(
     }
     if ch == '$' {
       let next_scanner = advance(scanner)
-      if next_scanner.position < next_scanner.length && peek_char(next_scanner) == '{' {
+      if next_scanner.position < next_scanner.length &&
+        peek_char(next_scanner) == '{' {
         // Start of interpolation - return TemplateHead
         scanner = advance(next_scanner) // Skip ${
         let loc = SourceLocation::new(
@@ -1385,7 +1400,7 @@ fn scan_template(
             text = text + "$"
             scanner = advance(scanner)
           }
-          'u' => {
+          'u' =>
             match parse_unicode_escape(scanner) {
               Some((code_point, new_scanner)) => {
                 text = text + code_point_to_string(code_point)
@@ -1396,8 +1411,7 @@ fn scan_template(
                 scanner = advance(scanner)
               }
             }
-          }
-          'x' => {
+          'x' =>
             match parse_hex_escape(scanner) {
               Some((value, new_scanner)) => {
                 text = text + code_point_to_string(value)
@@ -1408,7 +1422,6 @@ fn scan_template(
                 scanner = advance(scanner)
               }
             }
-          }
           _ => {
             text = text + "\\"
             text = text + Char::to_string(escaped)
@@ -1457,7 +1470,8 @@ pub fn scan_template_continuation(scanner : Scanner) -> (Token, Scanner) {
     }
     if ch == '$' {
       let next_scanner = advance(scanner)
-      if next_scanner.position < next_scanner.length && peek_char(next_scanner) == '{' {
+      if next_scanner.position < next_scanner.length &&
+        peek_char(next_scanner) == '{' {
         // Another interpolation - return TemplateMiddle
         scanner = advance(next_scanner) // Skip ${
         let loc = SourceLocation::new(
@@ -1514,7 +1528,7 @@ pub fn scan_template_continuation(scanner : Scanner) -> (Token, Scanner) {
             text = text + "$"
             scanner = advance(scanner)
           }
-          'u' => {
+          'u' =>
             match parse_unicode_escape(scanner) {
               Some((code_point, new_scanner)) => {
                 text = text + code_point_to_string(code_point)
@@ -1525,8 +1539,7 @@ pub fn scan_template_continuation(scanner : Scanner) -> (Token, Scanner) {
                 scanner = advance(scanner)
               }
             }
-          }
-          'x' => {
+          'x' =>
             match parse_hex_escape(scanner) {
               Some((value, new_scanner)) => {
                 text = text + code_point_to_string(value)
@@ -1537,7 +1550,6 @@ pub fn scan_template_continuation(scanner : Scanner) -> (Token, Scanner) {
                 scanner = advance(scanner)
               }
             }
-          }
           _ => {
             text = text + "\\"
             text = text + Char::to_string(escaped)
@@ -1701,7 +1713,6 @@ fn scan_jsdoc_comment(scanner : Scanner) -> (Token, Scanner) {
       scanner = advance(scanner)
     }
   }
-
   let loc = SourceLocation::new(
     scanner.file_path,
     Position::new(start_line, start_col, start_pos),
@@ -1792,13 +1803,11 @@ fn code_point_to_string(code_point : Int) -> String {
 /// Scanner should be positioned at 'u' (after the backslash)
 fn parse_unicode_escape(scanner : Scanner) -> (Int, Scanner)? {
   let mut scanner = advance(scanner) // Skip 'u'
-
   if peek_char(scanner) == '{' {
     // Variable-length: \u{XXXXX}
     scanner = advance(scanner) // Skip {
     let mut code_point = 0
     let mut digit_count = 0
-
     while scanner.position < scanner.length {
       let ch = peek_char(scanner)
       if ch == '}' {
@@ -1811,7 +1820,6 @@ fn parse_unicode_escape(scanner : Scanner) -> (Int, Scanner)? {
         }
         return Some((code_point, scanner))
       }
-
       match hex_digit_value(ch) {
         Some(value) => {
           code_point = code_point * 16 + value
@@ -1910,10 +1918,9 @@ fn scan_regex(
           scanner = advance(scanner)
         }
       }
-      '\n' | '\r' => {
+      '\n' | '\r' =>
         // Invalid - newline in regex
         return None
-      }
       _ => {
         pattern = pattern + Char::to_string(ch)
         scanner = advance(scanner)
@@ -1938,7 +1945,6 @@ fn scan_regex(
       _ => break
     }
   }
-
   let full_regex = "/" + pattern + "/" + flags
   let loc = SourceLocation::new(
     scanner.file_path,
@@ -1952,37 +1958,66 @@ fn scan_regex(
 /// Check if previous token allows regex literal
 fn allows_regex(prev_token : Token?) -> Bool {
   match prev_token {
-    None => true  // Start of file
-    Some(token) => match token {
-      // Operators that can precede a regex
-      Equals(_) | PlusEquals(_) | MinusEquals(_) | StarEquals(_) | SlashEquals(_)
-      | PercentEquals(_) | AmpersandEquals(_) | BarEquals(_) | CaretEquals(_)
-      | StarStarEquals(_) | LessThanLessThanEquals(_) | GreaterThanGreaterThanEquals(_)
-      | GreaterThanGreaterThanGreaterThanEquals(_) | AmpersandAmpersandEquals(_)
-      | BarBarEquals(_) | QuestionQuestionEquals(_) => true
-      // Comparison/logical operators
-      EqualsEquals(_) | ExclamationEquals(_) | EqualsEqualsEquals(_)
-      | ExclamationEqualsEquals(_) | LessThan(_) | GreaterThan(_)
-      | LessThanEquals(_) | GreaterThanEquals(_) | AmpersandAmpersand(_)
-      | BarBar(_) | QuestionQuestion(_) => true
-      // Arithmetic operators (but not + or - which could be unary)
-      Star(_) | Slash(_) | Percent(_) | StarStar(_) => true
-      // Bitwise operators
-      Ampersand(_) | Bar(_) | Caret(_) | Tilde(_)
-      | LessThanLessThan(_) | GreaterThanGreaterThan(_)
-      | GreaterThanGreaterThanGreaterThan(_) => true
-      // Other operators
-      Exclamation(_) | Question(_) | Colon(_) | Arrow(_) | Comma(_) => true
-      // Opening brackets/parens
-      OpenParen(_) | OpenBracket(_) | OpenBrace(_) => true
-      // Semicolon (statement boundary)
-      Semicolon(_) => true
-      // Keywords that precede expressions
-      KeywordReturn(_) | KeywordThrow(_) | KeywordCase(_) | KeywordIn(_)
-      | KeywordTypeOf(_) | KeywordDelete(_) | KeywordNew(_) | KeywordAwait(_)
-      | KeywordYield(_) => true
-      _ => false
-    }
+    None => true // Start of file
+    Some(token) =>
+      match token {
+        // Operators that can precede a regex
+        Equals(_)
+        | PlusEquals(_)
+        | MinusEquals(_)
+        | StarEquals(_)
+        | SlashEquals(_)
+        | PercentEquals(_)
+        | AmpersandEquals(_)
+        | BarEquals(_)
+        | CaretEquals(_)
+        | StarStarEquals(_)
+        | LessThanLessThanEquals(_)
+        | GreaterThanGreaterThanEquals(_)
+        | GreaterThanGreaterThanGreaterThanEquals(_)
+        | AmpersandAmpersandEquals(_)
+        | BarBarEquals(_)
+        | QuestionQuestionEquals(_) => true
+        // Comparison/logical operators
+        EqualsEquals(_)
+        | ExclamationEquals(_)
+        | EqualsEqualsEquals(_)
+        | ExclamationEqualsEquals(_)
+        | LessThan(_)
+        | GreaterThan(_)
+        | LessThanEquals(_)
+        | GreaterThanEquals(_)
+        | AmpersandAmpersand(_)
+        | BarBar(_)
+        | QuestionQuestion(_) => true
+        // Arithmetic operators (but not + or - which could be unary)
+        Star(_) | Slash(_) | Percent(_) | StarStar(_) => true
+        // Bitwise operators
+        Ampersand(_)
+        | Bar(_)
+        | Caret(_)
+        | Tilde(_)
+        | LessThanLessThan(_)
+        | GreaterThanGreaterThan(_)
+        | GreaterThanGreaterThanGreaterThan(_) => true
+        // Other operators
+        Exclamation(_) | Question(_) | Colon(_) | Arrow(_) | Comma(_) => true
+        // Opening brackets/parens
+        OpenParen(_) | OpenBracket(_) | OpenBrace(_) => true
+        // Semicolon (statement boundary)
+        Semicolon(_) => true
+        // Keywords that precede expressions
+        KeywordReturn(_)
+        | KeywordThrow(_)
+        | KeywordCase(_)
+        | KeywordIn(_)
+        | KeywordTypeOf(_)
+        | KeywordDelete(_)
+        | KeywordNew(_)
+        | KeywordAwait(_)
+        | KeywordYield(_) => true
+        _ => false
+      }
   }
 }
 
@@ -2008,8 +2043,8 @@ fn is_identifier_part(ch : Char) -> Bool {
       is_unicode_letter(code) ||
       is_unicode_digit(code) ||
       is_unicode_combining_mark(code) ||
-      code == 0x200C ||  // ZWNJ
-      code == 0x200D     // ZWJ
+      code == 0x200C || // ZWNJ
+      code == 0x200D // ZWJ
     }
   }
 }
@@ -2087,7 +2122,6 @@ pub fn scan_hashbang(scanner : Scanner) -> (Token?, Scanner) {
   if peek_char(scanner) != '#' {
     return (None, scanner)
   }
-
   let next = advance(scanner)
   if peek_char(next) != '!' {
     return (None, scanner)
@@ -2097,9 +2131,8 @@ pub fn scan_hashbang(scanner : Scanner) -> (Token?, Scanner) {
   let start_pos = scanner.position
   let start_line = scanner.line
   let start_col = scanner.column
-  let mut scanner = advance(next)  // Skip #!
+  let mut scanner = advance(next) // Skip #!
   let mut text = "#!"
-
   while scanner.position < scanner.length {
     let ch = peek_char(scanner)
     if ch == '\n' {
@@ -2108,7 +2141,6 @@ pub fn scan_hashbang(scanner : Scanner) -> (Token?, Scanner) {
     text = text + Char::to_string(ch)
     scanner = advance(scanner)
   }
-
   let loc = SourceLocation::new(
     scanner.file_path,
     Position::new(start_line, start_col, start_pos),
@@ -2119,7 +2151,6 @@ pub fn scan_hashbang(scanner : Scanner) -> (Token?, Scanner) {
   if scanner.position < scanner.length && peek_char(scanner) == '\n' {
     scanner = advance_line(scanner)
   }
-
   (Some(Hashbang(text, loc)), scanner)
 }
 
@@ -2138,7 +2169,7 @@ fn is_comment_directive_start(scanner : Scanner) -> Bool {
       // Check for /// <reference (triple-slash directive)
       if scanner.position + 2 < scanner.length {
         match scanner.source.get(scanner.position + 2) {
-          Some('/') => {
+          Some('/') =>
             // Triple-slash, check if it's a reference directive
             if scanner.position + 5 < scanner.length {
               // Look for "/ <" pattern after ///
@@ -2147,11 +2178,9 @@ fn is_comment_directive_start(scanner : Scanner) -> Bool {
                 _ => ()
               }
             }
-          }
-          Some(' ') | Some('@') => {
+          Some(' ') | Some('@') =>
             // Check for @ts- directive
             return is_ts_directive(scanner, scanner.position + 2)
-          }
           _ => ()
         }
       }
@@ -2177,7 +2206,13 @@ fn is_ts_directive(scanner : Scanner, pos : Int) -> Bool {
   if p + 4 >= scanner.length {
     return false
   }
-  match (scanner.source.get(p), scanner.source.get(p + 1), scanner.source.get(p + 2), scanner.source.get(p + 3)) {
+  match
+    (
+      scanner.source.get(p),
+      scanner.source.get(p + 1),
+      scanner.source.get(p + 2),
+      scanner.source.get(p + 3),
+    ) {
     (Some('@'), Some('t'), Some('s'), Some('-')) => true
     _ => false
   }
@@ -2189,7 +2224,6 @@ pub fn scan_comment_directive(scanner : Scanner) -> (Token?, Scanner) {
   if not(is_comment_directive_start(scanner)) {
     return (None, scanner)
   }
-
   let start_pos = scanner.position
   let start_line = scanner.line
   let start_col = scanner.column
@@ -2211,13 +2245,11 @@ pub fn scan_comment_directive(scanner : Scanner) -> (Token?, Scanner) {
       text = text + Char::to_string(ch)
       scanner = advance(scanner)
     }
-
     let loc = SourceLocation::new(
       scanner.file_path,
       Position::new(start_line, start_col, start_pos),
       Position::new(scanner.line, scanner.column, scanner.position),
     )
-
     return (Some(CommentDirective(TripleSlashRef, text, loc)), scanner)
   }
 
@@ -2260,7 +2292,6 @@ pub fn scan_comment_directive(scanner : Scanner) -> (Token?, Scanner) {
     arg = arg + Char::to_string(ch)
     scanner = advance(scanner)
   }
-
   let loc = SourceLocation::new(
     scanner.file_path,
     Position::new(start_line, start_col, start_pos),
@@ -2275,7 +2306,6 @@ pub fn scan_comment_directive(scanner : Scanner) -> (Token?, Scanner) {
     "ts-check" => TsCheck
     _ => TsIgnore // Default for unknown directives
   }
-
   (Some(CommentDirective(kind, arg, loc)), scanner)
 }
 
@@ -2286,10 +2316,10 @@ pub fn scan_comment_directive(scanner : Scanner) -> (Token?, Scanner) {
 ///|
 /// Scanner mode for context-sensitive scanning
 pub enum ScannerMode {
-  Standard      // Normal TypeScript/JavaScript
-  JSX           // Inside JSX element (after <tag)
+  Standard // Normal TypeScript/JavaScript
+  JSX // Inside JSX element (after <tag)
   JSXExpression // Inside JSX expression {expr}
-  JSXText       // JSX text content (between tags)
+  JSXText // JSX text content (between tags)
 } derive(Show, Eq)
 
 ///|
@@ -2303,11 +2333,7 @@ pub struct ScannerState {
 ///|
 /// Create a new scanner state
 pub fn ScannerState::new(source : String, file_path : String) -> ScannerState {
-  {
-    scanner: Scanner::new(source, file_path),
-    mode: Standard,
-    mode_stack: [],
-  }
+  { scanner: Scanner::new(source, file_path), mode: Standard, mode_stack: [] }
 }
 
 ///|
@@ -2341,11 +2367,10 @@ fn scan_jsx_text(state : ScannerState) -> (Token, ScannerState) {
   let start_col = scanner.column
   let mut scanner = scanner
   let mut text = ""
-
   while scanner.position < scanner.length {
     let ch = peek_char(scanner)
     match ch {
-      '<' | '{' => break  // End of text content
+      '<' | '{' => break // End of text content
       _ => {
         text = text + Char::to_string(ch)
         if ch == '\n' {
@@ -2356,14 +2381,12 @@ fn scan_jsx_text(state : ScannerState) -> (Token, ScannerState) {
       }
     }
   }
-
   let loc = SourceLocation::new(
     scanner.file_path,
     Position::new(start_line, start_col, start_pos),
     Position::new(scanner.line, scanner.column, scanner.position),
   )
-
-  (JsxText(text, loc), { ..state, scanner })
+  (JsxText(text, loc), { ..state, scanner, })
 }
 
 ///|
@@ -2385,7 +2408,6 @@ fn scan_jsx_tag_open(state : ScannerState) -> (Token, ScannerState) {
     )
     return (LessThanSlash(loc), { ..state, scanner, mode: JSX })
   }
-
   let loc = SourceLocation::new(
     scanner.file_path,
     Position::new(start_line, start_col, start_pos),
@@ -2398,18 +2420,15 @@ fn scan_jsx_tag_open(state : ScannerState) -> (Token, ScannerState) {
 /// Scan token in JSX mode (inside tag, scanning attributes)
 fn scan_jsx_tag_token(state : ScannerState) -> (Token, ScannerState) {
   let scanner = skip_trivia(state.scanner)
-  let state = { ..state, scanner }
-
+  let state = { ..state, scanner, }
   if scanner.position >= scanner.length {
     let loc = current_location(scanner)
     return (EOF(loc), state)
   }
-
   let start_pos = scanner.position
   let start_line = scanner.line
   let start_col = scanner.column
   let ch = peek_char(scanner)
-
   match ch {
     '>' => {
       let scanner = advance(scanner)
@@ -2431,14 +2450,14 @@ fn scan_jsx_tag_token(state : ScannerState) -> (Token, ScannerState) {
           Position::new(scanner.line, scanner.column, scanner.position),
         )
         // Self-closing tag, pop mode
-        (SlashGreaterThan(loc), pop_mode({ ..state, scanner }))
+        (SlashGreaterThan(loc), pop_mode({ ..state, scanner, }))
       } else {
         let loc = SourceLocation::new(
           scanner.file_path,
           Position::new(start_line, start_col, start_pos),
           Position::new(scanner.line, scanner.column, scanner.position),
         )
-        (Slash(loc), { ..state, scanner })
+        (Slash(loc), { ..state, scanner, })
       }
     }
     '{' => {
@@ -2449,7 +2468,7 @@ fn scan_jsx_tag_token(state : ScannerState) -> (Token, ScannerState) {
         Position::new(scanner.line, scanner.column, scanner.position),
       )
       // Push JSXExpression mode
-      (JsxExpressionStart(loc), push_mode({ ..state, scanner }, JSXExpression))
+      (JsxExpressionStart(loc), push_mode({ ..state, scanner, }, JSXExpression))
     }
     '=' => {
       let scanner = advance(scanner)
@@ -2458,29 +2477,35 @@ fn scan_jsx_tag_token(state : ScannerState) -> (Token, ScannerState) {
         Position::new(start_line, start_col, start_pos),
         Position::new(scanner.line, scanner.column, scanner.position),
       )
-      (Equals(loc), { ..state, scanner })
+      (Equals(loc), { ..state, scanner, })
     }
     '"' | '\'' => {
       // Scan string attribute value
-      let (token, scanner) = scan_string(scanner, start_pos, start_line, start_col)
-      (token, { ..state, scanner })
+      let (token, scanner) = scan_string(
+        scanner, start_pos, start_line, start_col,
+      )
+      (token, { ..state, scanner, })
     }
-    _ => {
+    _ =>
       // Scan identifier (tag name or attribute name)
       if is_identifier_start(ch) {
-        let (token, scanner) = scan_identifier_or_keyword(scanner, start_pos, start_line, start_col)
-        (token, { ..state, scanner })
+        let (token, scanner) = scan_identifier_or_keyword(
+          scanner, start_pos, start_line, start_col,
+        )
+        (token, { ..state, scanner, })
       } else {
         let scanner = advance(scanner)
-        let text = scanner.source.substring(start=start_pos, end=scanner.position)
+        let text = scanner.source.substring(
+          start=start_pos,
+          end=scanner.position,
+        )
         let loc = SourceLocation::new(
           scanner.file_path,
           Position::new(start_line, start_col, start_pos),
           Position::new(scanner.line, scanner.column, scanner.position),
         )
-        (Unknown(text, loc), { ..state, scanner })
+        (Unknown(text, loc), { ..state, scanner, })
       }
-    }
   }
 }
 
@@ -2488,13 +2513,11 @@ fn scan_jsx_tag_token(state : ScannerState) -> (Token, ScannerState) {
 /// Scan token in JSX expression mode (inside {})
 fn scan_jsx_expression_token(state : ScannerState) -> (Token, ScannerState) {
   let scanner = skip_trivia(state.scanner)
-  let state = { ..state, scanner }
-
+  let state = { ..state, scanner, }
   if scanner.position >= scanner.length {
     let loc = current_location(scanner)
     return (EOF(loc), state)
   }
-
   let ch = peek_char(scanner)
   if ch == '}' {
     let start_pos = scanner.position
@@ -2507,12 +2530,12 @@ fn scan_jsx_expression_token(state : ScannerState) -> (Token, ScannerState) {
       Position::new(scanner.line, scanner.column, scanner.position),
     )
     // Pop back to previous mode
-    return (JsxExpressionEnd(loc), pop_mode({ ..state, scanner }))
+    return (JsxExpressionEnd(loc), pop_mode({ ..state, scanner, }))
   }
 
   // Use standard token scanning
   let (token, scanner) = scan_token(scanner)
-  (token, { ..state, scanner })
+  (token, { ..state, scanner, })
 }
 
 ///|
@@ -2522,8 +2545,7 @@ pub fn scan_jsx_token(state : ScannerState) -> (Token, ScannerState) {
     Standard => {
       // In standard mode, check for JSX start (<)
       let scanner = skip_trivia(state.scanner)
-      let state = { ..state, scanner }
-
+      let state = { ..state, scanner, }
       if scanner.position < scanner.length {
         let ch = peek_char(scanner)
         if ch == '<' {
@@ -2534,7 +2556,7 @@ pub fn scan_jsx_token(state : ScannerState) -> (Token, ScannerState) {
 
       // Otherwise use regular scanning
       let (token, scanner) = scan_token(state.scanner)
-      (token, { ..state, scanner })
+      (token, { ..state, scanner, })
     }
     JSXText => {
       let scanner = state.scanner
@@ -2542,7 +2564,6 @@ pub fn scan_jsx_token(state : ScannerState) -> (Token, ScannerState) {
         let loc = current_location(scanner)
         return (EOF(loc), state)
       }
-
       let ch = peek_char(scanner)
       match ch {
         '<' => scan_jsx_tag_open(state)
@@ -2556,7 +2577,10 @@ pub fn scan_jsx_token(state : ScannerState) -> (Token, ScannerState) {
             Position::new(start_line, start_col, start_pos),
             Position::new(scanner.line, scanner.column, scanner.position),
           )
-          (JsxExpressionStart(loc), push_mode({ ..state, scanner }, JSXExpression))
+          (
+            JsxExpressionStart(loc),
+            push_mode({ ..state, scanner, }, JSXExpression),
+          )
         }
         _ => scan_jsx_text(state)
       }
@@ -2582,7 +2606,6 @@ pub fn scan_all_jsx(source : String, file_path : String) -> Array[Token] {
     }
     None => ()
   }
-
   while should_continue {
     let (token, new_state) = scan_jsx_token(state)
     tokens.push(token)
@@ -2591,7 +2614,6 @@ pub fn scan_all_jsx(source : String, file_path : String) -> Array[Token] {
       _ => state = new_state
     }
   }
-
   tokens
 }
 
@@ -2608,24 +2630,24 @@ pub fn enter_jsx_mode(state : ScannerState) -> ScannerState {
 ///|
 /// Parsed JSDoc tag types (scanner-level, distinct from AST types)
 pub enum ParsedJSDocTag {
-  Param(ParsedJSDocParam)       // @param {type} name description
-  Returns(ParsedJSDocType)      // @returns {type} description
-  Type(ParsedJSDocType)         // @type {type}
-  TypeDef(ParsedJSDocTypeDef)   // @typedef {type} name
-  Template(Array[String])       // @template T, U
-  Deprecated(String?)           // @deprecated [reason]
-  Example(String)               // @example
-  See(String)                   // @see reference
-  Author(String)                // @author name
-  Since(String)                 // @since version
-  Throws(ParsedJSDocType)       // @throws {type} description
-  Private                       // @private
-  Public                        // @public
-  Protected                     // @protected
-  Readonly                      // @readonly
-  Override                      // @override
-  Abstract                      // @abstract
-  Other(String, String)         // Unknown tag
+  Param(ParsedJSDocParam) // @param {type} name description
+  Returns(ParsedJSDocType) // @returns {type} description
+  Type(ParsedJSDocType) // @type {type}
+  TypeDef(ParsedJSDocTypeDef) // @typedef {type} name
+  Template(Array[String]) // @template T, U
+  Deprecated(String?) // @deprecated [reason]
+  Example(String) // @example
+  See(String) // @see reference
+  Author(String) // @author name
+  Since(String) // @since version
+  Throws(ParsedJSDocType) // @throws {type} description
+  Private // @private
+  Public // @public
+  Protected // @protected
+  Readonly // @readonly
+  Override // @override
+  Abstract // @abstract
+  Other(String, String) // Unknown tag
 } derive(Show, Eq)
 
 ///|
@@ -2668,7 +2690,6 @@ pub fn parse_jsdoc(content : String) -> ParsedJSDoc {
   let mut in_description = true
   let mut current_tag_lines : Array[String] = []
   let mut current_tag_name = ""
-
   for line in lines {
     let trimmed = trim_jsdoc_line_scanner(line)
 
@@ -2676,7 +2697,10 @@ pub fn parse_jsdoc(content : String) -> ParsedJSDoc {
     if trimmed.length() > 0 && starts_with_char(trimmed, '@') {
       // Process previous tag if any
       if current_tag_name.length() > 0 {
-        let tag = parse_jsdoc_tag_scanner(current_tag_name, join_lines(current_tag_lines))
+        let tag = parse_jsdoc_tag_scanner(
+          current_tag_name,
+          join_lines(current_tag_lines),
+        )
         tags.push(tag)
       }
 
@@ -2699,10 +2723,12 @@ pub fn parse_jsdoc(content : String) -> ParsedJSDoc {
 
   // Process last tag if any
   if current_tag_name.length() > 0 {
-    let tag = parse_jsdoc_tag_scanner(current_tag_name, join_lines(current_tag_lines))
+    let tag = parse_jsdoc_tag_scanner(
+      current_tag_name,
+      join_lines(current_tag_lines),
+    )
     tags.push(tag)
   }
-
   { description: description.trim_space(), tags }
 }
 
@@ -2711,7 +2737,6 @@ pub fn parse_jsdoc(content : String) -> ParsedJSDoc {
 fn split_lines(content : String) -> Array[String] {
   let lines : Array[String] = []
   let mut current = ""
-
   for i = 0; i < content.length(); i = i + 1 {
     match content.get(i) {
       Some(code) => {
@@ -2755,7 +2780,7 @@ fn trim_jsdoc_line_scanner(line : String) -> String {
   // Skip leading *
   if start < line.length() {
     match line.get(start) {
-      Some(code) => {
+      Some(code) =>
         if code.unsafe_to_char() == '*' {
           start = start + 1
           // Skip whitespace after *
@@ -2773,12 +2798,10 @@ fn trim_jsdoc_line_scanner(line : String) -> String {
             }
           }
         }
-      }
       None => ()
     }
   }
-
-  line.substring(start=start, end=line.length())
+  line.substring(start~, end=line.length())
 }
 
 ///|
@@ -2794,7 +2817,6 @@ fn starts_with_char(s : String, ch : Char) -> Bool {
 /// Extract tag name from line starting with @
 fn extract_tag_name_scanner(line : String) -> (String, String) {
   let mut end = 1 // Start after @
-
   while end < line.length() {
     match line.get(end) {
       Some(code) => {
@@ -2807,8 +2829,7 @@ fn extract_tag_name_scanner(line : String) -> (String, String) {
       None => break
     }
   }
-
-  let tag_name = line.substring(start=1, end=end) // Skip @
+  let tag_name = line.substring(start=1, end~) // Skip @
   let rest = if end < line.length() {
     line.substring(start=end, end=line.length()).trim_space()
   } else {
@@ -2832,14 +2853,24 @@ fn join_lines(lines : Array[String]) -> String {
 
 ///|
 /// Parse a single JSDoc tag
-fn parse_jsdoc_tag_scanner(tag_name : String, content : String) -> ParsedJSDocTag {
+fn parse_jsdoc_tag_scanner(
+  tag_name : String,
+  content : String,
+) -> ParsedJSDocTag {
   match tag_name {
     "param" | "arg" | "argument" => parse_param_tag(content)
     "returns" | "return" => parse_type_tag_as_returns(content)
     "type" => parse_type_tag_as_type(content)
     "typedef" => parse_typedef_tag(content)
     "template" => parse_template_tag(content)
-    "deprecated" => ParsedJSDocTag::Deprecated(if content.length() > 0 { Some(content) } else { None })
+    "deprecated" =>
+      ParsedJSDocTag::Deprecated(
+        if content.length() > 0 {
+          Some(content)
+        } else {
+          None
+        },
+      )
     "example" => ParsedJSDocTag::Example(content)
     "see" => ParsedJSDocTag::See(content)
     "author" => ParsedJSDocTag::Author(content)
@@ -2860,13 +2891,7 @@ fn parse_jsdoc_tag_scanner(tag_name : String, content : String) -> ParsedJSDocTa
 fn parse_param_tag(content : String) -> ParsedJSDocTag {
   let (type_annotation, rest) = extract_type_annotation(content)
   let (name, is_optional, description) = extract_param_name(rest)
-
-  ParsedJSDocTag::Param({
-    name,
-    type_annotation,
-    description,
-    is_optional,
-  })
+  ParsedJSDocTag::Param({ name, type_annotation, description, is_optional })
 }
 
 ///|
@@ -2895,12 +2920,7 @@ fn parse_type_tag_as_throws(content : String) -> ParsedJSDocTag {
 fn parse_typedef_tag(content : String) -> ParsedJSDocTag {
   let (type_annotation, rest) = extract_type_annotation(content)
   let (name, description) = extract_first_word(rest)
-
-  ParsedJSDocTag::TypeDef({
-    name,
-    type_annotation,
-    description,
-  })
+  ParsedJSDocTag::TypeDef({ name, type_annotation, description })
 }
 
 ///|
@@ -2908,18 +2928,16 @@ fn parse_typedef_tag(content : String) -> ParsedJSDocTag {
 fn parse_template_tag(content : String) -> ParsedJSDocTag {
   let params : Array[String] = []
   let mut current = ""
-
   for i = 0; i < content.length(); i = i + 1 {
     match content.get(i) {
       Some(code) => {
         let ch = code.unsafe_to_char()
         match ch {
-          ',' | ' ' => {
+          ',' | ' ' =>
             if current.length() > 0 {
               params.push(current.trim_space())
               current = ""
             }
-          }
           _ => current = current + Char::to_string(ch)
         }
       }
@@ -2929,7 +2947,6 @@ fn parse_template_tag(content : String) -> ParsedJSDocTag {
   if current.length() > 0 {
     params.push(current.trim_space())
   }
-
   ParsedJSDocTag::Template(params)
 }
 
@@ -2937,7 +2954,6 @@ fn parse_template_tag(content : String) -> ParsedJSDocTag {
 /// Extract type annotation from {type} prefix
 fn extract_type_annotation(content : String) -> (String?, String) {
   let trimmed = content.trim_space()
-
   if not(starts_with_char(trimmed, '{')) {
     return (None, trimmed)
   }
@@ -2945,7 +2961,6 @@ fn extract_type_annotation(content : String) -> (String?, String) {
   // Find matching }
   let mut depth = 0
   let mut end = 0
-
   for i = 0; i < trimmed.length(); i = i + 1 {
     match trimmed.get(i) {
       Some(code) => {
@@ -2963,14 +2978,11 @@ fn extract_type_annotation(content : String) -> (String?, String) {
       None => ()
     }
   }
-
   if end == 0 {
     return (None, trimmed)
   }
-
-  let type_str = trimmed.substring(start=1, end=end) // Skip { and }
+  let type_str = trimmed.substring(start=1, end~) // Skip { and }
   let rest = trimmed.substring(start=end + 1, end=trimmed.length()).trim_space()
-
   (Some(type_str), rest)
 }
 
@@ -2993,12 +3005,12 @@ fn extract_param_name(content : String) -> (String, Bool, String) {
         None => break
       }
     }
-
-    let name_part = trimmed.substring(start=1, end=end)
+    let name_part = trimmed.substring(start=1, end~)
     // Handle [name=default]
     let name = extract_before_equals(name_part)
-    let description = trimmed.substring(start=end + 1, end=trimmed.length()).trim_space()
-
+    let description = trimmed
+      .substring(start=end + 1, end=trimmed.length())
+      .trim_space()
     return (name, true, description)
   }
 
@@ -3022,7 +3034,7 @@ fn extract_before_equals(s : String) -> String {
       None => break
     }
   }
-  s.substring(start=0, end=end).trim_space()
+  s.substring(start=0, end~).trim_space()
 }
 
 ///|
@@ -3030,7 +3042,6 @@ fn extract_before_equals(s : String) -> String {
 fn extract_first_word(s : String) -> (String, String) {
   let trimmed = s.trim_space()
   let mut end = 0
-
   while end < trimmed.length() {
     match trimmed.get(end) {
       Some(code) => {
@@ -3043,8 +3054,7 @@ fn extract_first_word(s : String) -> (String, String) {
       None => break
     }
   }
-
-  let word = trimmed.substring(start=0, end=end)
+  let word = trimmed.substring(start=0, end~)
   let rest = trimmed.substring(start=end, end=trimmed.length()).trim_space()
 
   // Remove leading - from description
@@ -3053,7 +3063,6 @@ fn extract_first_word(s : String) -> (String, String) {
   } else {
     rest
   }
-
   (word, rest)
 }
 
@@ -3092,6 +3101,5 @@ fn String::trim_space(self : String) -> String {
       None => break
     }
   }
-
-  self.substring(start=start, end=end)
+  self.substring(start~, end~)
 }

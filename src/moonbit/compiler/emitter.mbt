@@ -7,10 +7,10 @@ pub struct EmitterContext {
   indent_level : Int
   indent_string : String
   newline_at_rules : Bool
-  source_map_builder : SourceMapBuilder?  // Optional source map builder
-  source_file : String?                    // Source file name for mappings
-  mut generated_line : Int                 // Current generated line (0-based)
-  mut generated_column : Int               // Current generated column (0-based)
+  source_map_builder : SourceMapBuilder? // Optional source map builder
+  source_file : String? // Source file name for mappings
+  mut generated_line : Int // Current generated line (0-based)
+  mut generated_column : Int // Current generated column (0-based)
 }
 
 ///|
@@ -23,7 +23,7 @@ pub fn EmitterContext::default() -> EmitterContext {
     source_map_builder: None,
     source_file: None,
     generated_line: 0,
-    generated_column: 0
+    generated_column: 0,
   }
 }
 
@@ -31,7 +31,7 @@ pub fn EmitterContext::default() -> EmitterContext {
 /// Create emitter context with source map support
 pub fn EmitterContext::with_source_map(
   builder : SourceMapBuilder,
-  source_file : String
+  source_file : String,
 ) -> EmitterContext {
   {
     indent_level: 0,
@@ -40,7 +40,7 @@ pub fn EmitterContext::with_source_map(
     source_map_builder: Some(builder),
     source_file: Some(source_file),
     generated_line: 0,
-    generated_column: 0
+    generated_column: 0,
   }
 }
 
@@ -54,7 +54,7 @@ pub fn EmitterContext::indent(self : EmitterContext) -> EmitterContext {
     source_map_builder: self.source_map_builder,
     source_file: self.source_file,
     generated_line: self.generated_line,
-    generated_column: self.generated_column
+    generated_column: self.generated_column,
   }
 }
 
@@ -88,19 +88,18 @@ pub fn EmitterContext::add_mapping(
   self : EmitterContext,
   original_line : Int,
   original_column : Int,
-  name : String?
+  name : String?,
 ) -> Unit {
   match (self.source_map_builder, self.source_file) {
-    (Some(builder), Some(source)) => {
+    (Some(builder), Some(source)) =>
       builder.add_mapping(
         self.generated_line,
         self.generated_column,
         source,
         original_line,
         original_column,
-        name
+        name,
       )
-    }
     _ => ()
   }
 }
@@ -116,9 +115,9 @@ pub fn emit(node : Node, ctx : EmitterContext) -> String {
     VariableStatement(vs) => emit_variable_statement(vs, ctx)
     FunctionDeclaration(fd) => emit_function_declaration(fd, ctx)
     ClassDeclaration(cd) => emit_class_declaration(cd, ctx)
-    InterfaceDeclaration(_) => ""  // Removed by transformer
-    TypeAliasDeclaration(_) => ""  // Removed by transformer
-    EnumDeclaration(_) => ""  // Transformed to VariableStatement
+    InterfaceDeclaration(_) => "" // Removed by transformer
+    TypeAliasDeclaration(_) => "" // Removed by transformer
+    EnumDeclaration(_) => "" // Transformed to VariableStatement
     ImportDeclaration(id) => emit_import_declaration(id, ctx)
     ExportDeclaration(ed) => emit_export_declaration(ed, ctx)
     ExportAssignment(ea) => emit_export_assignment(ea, ctx)
@@ -159,10 +158,10 @@ pub fn emit(node : Node, ctx : EmitterContext) -> String {
     ObjectLiteralExpression(ole) => emit_object_literal_expression(ole, ctx)
     ParenthesizedExpression(pe) => emit_parenthesized_expression(pe, ctx)
     TemplateExpression(te) => emit_template_expression(te, ctx)
-    AsExpression(ae) => emit(ae.expression, ctx)  // Unwrap type assertion
-    TypeAssertionExpression(tae) => emit(tae.expression, ctx)  // Unwrap
-    NonNullExpression(nne) => emit(nne.expression, ctx)  // Unwrap
-    SatisfiesExpression(se) => emit(se.expression, ctx)  // Unwrap satisfies
+    AsExpression(ae) => emit(ae.expression, ctx) // Unwrap type assertion
+    TypeAssertionExpression(tae) => emit(tae.expression, ctx) // Unwrap
+    NonNullExpression(nne) => emit(nne.expression, ctx) // Unwrap
+    SatisfiesExpression(se) => emit(se.expression, ctx) // Unwrap satisfies
     SpreadExpression(se) => emit_spread_expression(se, ctx)
     OptionalChain(oc) => emit_optional_chain(oc, ctx)
     AwaitExpression(ae) => emit_await_expression(ae, ctx)
@@ -175,7 +174,11 @@ pub fn emit(node : Node, ctx : EmitterContext) -> String {
     // Primary Expressions
     Identifier(id) => {
       // Add mapping for identifier reference
-      ctx.add_mapping(id.location.start.line, id.location.start.column, Some(id.name))
+      ctx.add_mapping(
+        id.location.start.line,
+        id.location.start.column,
+        Some(id.name),
+      )
       id.name
     }
     NumericLiteral(nl) => nl.value
@@ -209,12 +212,12 @@ pub fn emit(node : Node, ctx : EmitterContext) -> String {
     // Other
     Parameter(p) => emit_parameter(p, ctx)
     PropertyDeclaration(pd) => emit_property_declaration(pd, ctx)
-    IndexSignatureDeclaration(_) => ""  // Type-only, no JS emission
+    IndexSignatureDeclaration(_) => "" // Type-only, no JS emission
     MethodDeclaration(md) => emit_method_declaration(md, ctx)
     ConstructorDeclaration(cd) => emit_constructor_declaration(cd, ctx)
     GetAccessor(ga) => emit_get_accessor(ga, ctx)
     SetAccessor(sa) => emit_set_accessor(sa, ctx)
-    Decorator(_) => ""  // Decorators are handled separately
+    Decorator(_) => "" // Decorators are handled separately
     ModuleDeclaration(md) => emit_module_declaration(md, ctx)
 
     // JSX - transform to React.createElement calls
@@ -222,7 +225,7 @@ pub fn emit(node : Node, ctx : EmitterContext) -> String {
     JsxSelfClosingElement(jsce) => emit_jsx_self_closing_element(jsce, ctx)
     JsxFragment(jf) => emit_jsx_fragment(jf, ctx)
     JsxOpeningElement(joe) => emit_jsx_opening_element(joe, ctx)
-    JsxClosingElement(_) => ""  // Closing elements are handled by JsxElement
+    JsxClosingElement(_) => "" // Closing elements are handled by JsxElement
     JsxExpression(je) => emit_jsx_expression(je, ctx)
 
     // JSDoc - preserved as comments or stripped
@@ -250,6 +253,7 @@ fn emit_source_file(sf : SourceFile, ctx : EmitterContext) -> String {
 
 ///|
 /// Emit variable statement
+
 ///|
 /// Check if modifiers array has Export modifier
 fn has_export_modifier(modifiers : Array[Modifier]) -> Bool {
@@ -297,7 +301,11 @@ fn get_export_prefix(modifiers : Array[Modifier]) -> String {
   }
 }
 
-fn emit_variable_statement(vs : VariableStatement, ctx : EmitterContext) -> String {
+///|
+fn emit_variable_statement(
+  vs : VariableStatement,
+  ctx : EmitterContext,
+) -> String {
   // Skip declare statements - they don't produce JavaScript output
   if has_declare_modifier(vs.modifiers) {
     return ""
@@ -305,9 +313,7 @@ fn emit_variable_statement(vs : VariableStatement, ctx : EmitterContext) -> Stri
 
   // Add source mapping at the start of the statement
   ctx.add_mapping(vs.location.start.line, vs.location.start.column, None)
-
   let export_prefix = get_export_prefix(vs.modifiers)
-
   let keyword = if vs.is_const {
     "const"
   } else if vs.is_let {
@@ -315,37 +321,39 @@ fn emit_variable_statement(vs : VariableStatement, ctx : EmitterContext) -> Stri
   } else {
     "var"
   }
-
   let mut decls = ""
   for i = 0; i < vs.declarations.length(); i = i + 1 {
     let decl = vs.declarations[i]
     let name = match decl.name {
       Identifier(id) => {
         // Add mapping for identifier
-        ctx.add_mapping(id.location.start.line, id.location.start.column, Some(id.name))
+        ctx.add_mapping(
+          id.location.start.line,
+          id.location.start.column,
+          Some(id.name),
+        )
         id.name
       }
-      _ => emit(decl.name, ctx)  // For binding patterns
+      _ => emit(decl.name, ctx) // For binding patterns
     }
-
     decls = decls + name
-
     match decl.initializer {
       Some(init) => decls = decls + " = " + emit(init, ctx)
       None => ()
     }
-
     if i < vs.declarations.length() - 1 {
       decls = decls + ", "
     }
   }
-
   ctx.get_indent() + export_prefix + keyword + " " + decls + ";"
 }
 
 ///|
 /// Emit function declaration
-fn emit_function_declaration(fd : FunctionDeclaration, ctx : EmitterContext) -> String {
+fn emit_function_declaration(
+  fd : FunctionDeclaration,
+  ctx : EmitterContext,
+) -> String {
   // Skip declare statements - they don't produce JavaScript output
   if has_declare_modifier(fd.modifiers) {
     return ""
@@ -353,41 +361,37 @@ fn emit_function_declaration(fd : FunctionDeclaration, ctx : EmitterContext) -> 
 
   // Add source mapping at the start of the function declaration
   ctx.add_mapping(fd.location.start.line, fd.location.start.column, None)
-
   let mut result = ctx.get_indent()
-
   result = result + get_export_prefix(fd.modifiers)
-
   if fd.is_async {
     result = result + "async "
   }
-
   result = result + "function"
-
   if fd.is_generator {
     result = result + "*"
   }
-
   match fd.name {
     Some(Identifier(id)) => {
       // Add mapping for function name
-      ctx.add_mapping(id.location.start.line, id.location.start.column, Some(id.name))
+      ctx.add_mapping(
+        id.location.start.line,
+        id.location.start.column,
+        Some(id.name),
+      )
       result = result + " " + id.name
     }
     _ => ()
   }
-
   result = result + "("
   result = result + emit_parameters(fd.parameters, ctx)
   result = result + ")"
-
   match fd.body {
     Some(body) => {
       result = result + " "
-      result = result + emit(body, ctx)    }
+      result = result + emit(body, ctx)
+    }
     None => result = result + ";"
   }
-
   result
 }
 
@@ -402,7 +406,6 @@ fn emit_parameters(params : Array[Node], ctx : EmitterContext) -> String {
           Identifier(id) => result = result + id.name
           _ => result = result + emit(p.name, ctx)
         }
-
         match p.initializer {
           Some(init) => result = result + " = " + emit(init, ctx)
           None => ()
@@ -410,7 +413,6 @@ fn emit_parameters(params : Array[Node], ctx : EmitterContext) -> String {
       }
       _ => result = result + emit(params[i], ctx)
     }
-
     if i < params.length() - 1 {
       result = result + ", "
     }
@@ -425,18 +427,19 @@ fn emit_parameter(p : Parameter, ctx : EmitterContext) -> String {
     Identifier(id) => id.name
     _ => emit(p.name, ctx)
   }
-
   match p.initializer {
     Some(init) => result = result + " = " + emit(init, ctx)
     None => ()
   }
-
   result
 }
 
 ///|
 /// Emit class declaration
-fn emit_class_declaration(cd : ClassDeclaration, ctx : EmitterContext) -> String {
+fn emit_class_declaration(
+  cd : ClassDeclaration,
+  ctx : EmitterContext,
+) -> String {
   // Skip declare statements - they don't produce JavaScript output
   if has_declare_modifier(cd.modifiers) {
     return ""
@@ -444,14 +447,16 @@ fn emit_class_declaration(cd : ClassDeclaration, ctx : EmitterContext) -> String
 
   // Add source mapping at the start of the class declaration
   ctx.add_mapping(cd.location.start.line, cd.location.start.column, None)
-
   let export_prefix = get_export_prefix(cd.modifiers)
   let mut result = ctx.get_indent() + export_prefix + "class "
-
   match cd.name {
     Some(Identifier(id)) => {
       // Add mapping for class name
-      ctx.add_mapping(id.location.start.line, id.location.start.column, Some(id.name))
+      ctx.add_mapping(
+        id.location.start.line,
+        id.location.start.column,
+        Some(id.name),
+      )
       result = result + id.name
     }
     _ => ()
@@ -469,9 +474,7 @@ fn emit_class_declaration(cd : ClassDeclaration, ctx : EmitterContext) -> String
       }
     }
   }
-
   result = result + " {\n"
-
   let inner_ctx = ctx.indent()
   for class_member in cd.members {
     let member_str = emit(class_member, inner_ctx)
@@ -479,7 +482,6 @@ fn emit_class_declaration(cd : ClassDeclaration, ctx : EmitterContext) -> String
       result = result + member_str + "\n"
     }
   }
-
   result = result + ctx.get_indent() + "}"
   result
 }
@@ -489,7 +491,10 @@ fn emit_class_declaration(cd : ClassDeclaration, ctx : EmitterContext) -> String
 /// TypeScript modules/namespaces compile to IIFEs:
 /// module Foo { export const x = 1; }
 /// -> var Foo; (function(Foo) { Foo.x = 1; })(Foo || (Foo = {}));
-fn emit_module_declaration(md : ModuleDeclaration, ctx : EmitterContext) -> String {
+fn emit_module_declaration(
+  md : ModuleDeclaration,
+  ctx : EmitterContext,
+) -> String {
   let name = md.name
   let mut result = ctx.get_indent()
 
@@ -504,37 +509,42 @@ fn emit_module_declaration(md : ModuleDeclaration, ctx : EmitterContext) -> Stri
     Some(body) => {
       let inner_ctx = ctx.indent()
       match body {
-        BlockStatement(bs) => {
+        BlockStatement(bs) =>
           for stmt in bs.statements {
             let stmt_str = emit_module_member(stmt, name, inner_ctx)
             if stmt_str.length() > 0 {
               result = result + stmt_str + "\n"
             }
           }
-        }
-        ModuleDeclaration(nested) => {
+        ModuleDeclaration(nested) =>
           // Nested module declaration
           result = result + emit_module_declaration(nested, inner_ctx) + "\n"
-        }
-        _ => {
-          result = result + emit(body, inner_ctx) + "\n"
-        }
+        _ => result = result + emit(body, inner_ctx) + "\n"
       }
     }
     None => ()
   }
 
   // Close the IIFE
-  result = result + ctx.get_indent() + "})(" + name + " || (" + name + " = {}));"
-
+  result = result +
+    ctx.get_indent() +
+    "})(" +
+    name +
+    " || (" +
+    name +
+    " = {}));"
   result
 }
 
 ///|
 /// Emit module member with namespace prefix for exports
-fn emit_module_member(node : Node, ns_name : String, ctx : EmitterContext) -> String {
+fn emit_module_member(
+  node : Node,
+  ns_name : String,
+  ctx : EmitterContext,
+) -> String {
   match node {
-    VariableStatement(vs) => {
+    VariableStatement(vs) =>
       if has_export_modifier(vs.modifiers) {
         // Exported variable: add to namespace
         let mut result = ""
@@ -554,8 +564,7 @@ fn emit_module_member(node : Node, ns_name : String, ctx : EmitterContext) -> St
       } else {
         emit_variable_statement(vs, ctx)
       }
-    }
-    FunctionDeclaration(fd) => {
+    FunctionDeclaration(fd) =>
       if has_export_modifier(fd.modifiers) {
         // Exported function: assign to namespace
         let func_name = match fd.name {
@@ -581,8 +590,7 @@ fn emit_module_member(node : Node, ns_name : String, ctx : EmitterContext) -> St
       } else {
         emit_function_declaration(fd, ctx)
       }
-    }
-    ClassDeclaration(cd) => {
+    ClassDeclaration(cd) =>
       if has_export_modifier(cd.modifiers) {
         // Exported class: assign to namespace
         let class_name = match cd.name {
@@ -595,20 +603,19 @@ fn emit_module_member(node : Node, ns_name : String, ctx : EmitterContext) -> St
       } else {
         emit_class_declaration(cd, ctx)
       }
-    }
     _ => emit(node, ctx)
   }
 }
 
 ///|
 /// Emit class declaration without export prefix (for module members)
-fn emit_class_declaration_inner(cd : ClassDeclaration, ctx : EmitterContext) -> String {
+fn emit_class_declaration_inner(
+  cd : ClassDeclaration,
+  ctx : EmitterContext,
+) -> String {
   let mut result = "class "
-
   match cd.name {
-    Some(Identifier(id)) => {
-      result = result + id.name
-    }
+    Some(Identifier(id)) => result = result + id.name
     _ => ()
   }
 
@@ -624,9 +631,7 @@ fn emit_class_declaration_inner(cd : ClassDeclaration, ctx : EmitterContext) -> 
       }
     }
   }
-
   result = result + " {\n"
-
   let inner_ctx = ctx.indent()
   for class_member in cd.members {
     let member_str = emit(class_member, inner_ctx)
@@ -634,14 +639,16 @@ fn emit_class_declaration_inner(cd : ClassDeclaration, ctx : EmitterContext) -> 
       result = result + member_str + "\n"
     }
   }
-
   result = result + ctx.get_indent() + "}"
   result
 }
 
 ///|
 /// Emit property declaration
-fn emit_property_declaration(pd : PropertyDeclaration, ctx : EmitterContext) -> String {
+fn emit_property_declaration(
+  pd : PropertyDeclaration,
+  ctx : EmitterContext,
+) -> String {
   let mut result = ctx.get_indent()
 
   // Check if Static modifier is present
@@ -651,25 +658,24 @@ fn emit_property_declaration(pd : PropertyDeclaration, ctx : EmitterContext) -> 
       is_static = true
     }
   }
-
   if is_static {
     result = result + "static "
   }
-
   result = result + pd.name
-
   match pd.initializer {
     Some(init) => result = result + " = " + emit(init, ctx)
     None => ()
   }
-
   result = result + ";"
   result
 }
 
 ///|
 /// Emit method declaration
-fn emit_method_declaration(md : MethodDeclaration, ctx : EmitterContext) -> String {
+fn emit_method_declaration(
+  md : MethodDeclaration,
+  ctx : EmitterContext,
+) -> String {
   let mut result = ctx.get_indent()
 
   // Check if Static modifier is present
@@ -679,49 +685,45 @@ fn emit_method_declaration(md : MethodDeclaration, ctx : EmitterContext) -> Stri
       is_static = true
     }
   }
-
   if is_static {
     result = result + "static "
   }
-
   if md.is_async {
     result = result + "async "
   }
-
   if md.is_generator {
     result = result + "*"
   }
-
   result = result + md.name
-
   result = result + "("
   result = result + emit_parameters(md.parameters, ctx)
   result = result + ")"
-
   match md.body {
     Some(body) => {
       result = result + " "
-      result = result + emit(body, ctx)    }
+      result = result + emit(body, ctx)
+    }
     None => result = result + ";"
   }
-
   result
 }
 
 ///|
 /// Emit constructor declaration
-fn emit_constructor_declaration(cd : ConstructorDeclaration, ctx : EmitterContext) -> String {
+fn emit_constructor_declaration(
+  cd : ConstructorDeclaration,
+  ctx : EmitterContext,
+) -> String {
   let mut result = ctx.get_indent() + "constructor("
   result = result + emit_parameters(cd.parameters, ctx)
   result = result + ")"
-
   match cd.body {
     Some(body) => {
       result = result + " "
-      result = result + emit(body, ctx)    }
+      result = result + emit(body, ctx)
+    }
     None => result = result + ";"
   }
-
   result
 }
 
@@ -737,22 +739,19 @@ fn emit_get_accessor(ga : GetAccessor, ctx : EmitterContext) -> String {
       is_static = true
     }
   }
-
   if is_static {
     result = result + "static "
   }
-
   result = result + "get "
   result = result + ga.name
   result = result + "()"
-
   match ga.body {
     Some(body) => {
       result = result + " "
-      result = result + emit(body, ctx)    }
+      result = result + emit(body, ctx)
+    }
     None => result = result + ";"
   }
-
   result
 }
 
@@ -768,32 +767,31 @@ fn emit_set_accessor(sa : SetAccessor, ctx : EmitterContext) -> String {
       is_static = true
     }
   }
-
   if is_static {
     result = result + "static "
   }
-
   result = result + "set "
   result = result + sa.name
   result = result + "("
   result = result + emit(sa.parameter, ctx)
   result = result + ")"
-
   match sa.body {
     Some(body) => {
       result = result + " "
-      result = result + emit(body, ctx)    }
+      result = result + emit(body, ctx)
+    }
     None => result = result + ";"
   }
-
   result
 }
 
 ///|
 /// Emit import declaration
-fn emit_import_declaration(id : ImportDeclaration, ctx : EmitterContext) -> String {
+fn emit_import_declaration(
+  id : ImportDeclaration,
+  ctx : EmitterContext,
+) -> String {
   let mut result = ctx.get_indent() + "import "
-
   match id.import_clause {
     Some(clause) => {
       let mut has_bindings = false
@@ -814,24 +812,21 @@ fn emit_import_declaration(id : ImportDeclaration, ctx : EmitterContext) -> Stri
             result = result + ", "
           }
           match bindings {
-            NamespaceImport(name, _) => {
+            NamespaceImport(name, _) =>
               // import * as name from 'mod'
               result = result + "* as " + name
-            }
             NamedImports(specifiers, _) => {
               // import { a, b, c as d } from 'mod'
               result = result + "{ "
               for i = 0; i < specifiers.length(); i = i + 1 {
                 let spec = specifiers[i]
                 match spec.property_name {
-                  Some(prop_name) => {
+                  Some(prop_name) =>
                     // import { foo as bar } from 'mod'
                     result = result + prop_name + " as " + spec.name
-                  }
-                  None => {
+                  None =>
                     // import { foo } from 'mod'
                     result = result + spec.name
-                  }
                 }
                 if i < specifiers.length() - 1 {
                   result = result + ", "
@@ -844,14 +839,12 @@ fn emit_import_declaration(id : ImportDeclaration, ctx : EmitterContext) -> Stri
         }
         None => ()
       }
-
       if has_bindings {
         result = result + " from "
       }
     }
     None => ()
   }
-
   result = result + "\"" + id.module_specifier + "\""
   result = result + ";"
   result
@@ -859,11 +852,13 @@ fn emit_import_declaration(id : ImportDeclaration, ctx : EmitterContext) -> Stri
 
 ///|
 /// Emit export declaration
-fn emit_export_declaration(ed : ExportDeclaration, ctx : EmitterContext) -> String {
+fn emit_export_declaration(
+  ed : ExportDeclaration,
+  ctx : EmitterContext,
+) -> String {
   let mut result = ctx.get_indent() + "export "
-
   match ed.export_clause {
-    Some(clause) => {
+    Some(clause) =>
       match clause {
         NamedExports(specifiers, _) => {
           // export { a, b, c as d }
@@ -871,14 +866,12 @@ fn emit_export_declaration(ed : ExportDeclaration, ctx : EmitterContext) -> Stri
           for i = 0; i < specifiers.length(); i = i + 1 {
             let spec = specifiers[i]
             match spec.property_name {
-              Some(prop_name) => {
+              Some(prop_name) =>
                 // export { foo as bar }
                 result = result + prop_name + " as " + spec.name
-              }
-              None => {
+              None =>
                 // export { foo }
                 result = result + spec.name
-              }
             }
             if i < specifiers.length() - 1 {
               result = result + ", "
@@ -886,35 +879,32 @@ fn emit_export_declaration(ed : ExportDeclaration, ctx : EmitterContext) -> Stri
           }
           result = result + " }"
         }
-        NamespaceExport(name, _) => {
+        NamespaceExport(name, _) =>
           // export * as ns from 'mod'
           result = result + "* as " + name
-        }
       }
-    }
     None => result = result + "*"
   }
-
   match ed.module_specifier {
     Some(ms) => result = result + " from \"" + ms + "\""
     None => ()
   }
-
   result = result + ";"
   result
 }
 
 ///|
 /// Emit export assignment
-fn emit_export_assignment(ea : ExportAssignment, ctx : EmitterContext) -> String {
+fn emit_export_assignment(
+  ea : ExportAssignment,
+  ctx : EmitterContext,
+) -> String {
   let mut result = ctx.get_indent() + "export "
-
   if ea.is_export_equals {
     result = result + "= "
   } else {
     result = result + "default "
   }
-
   result = result + emit(ea.expression, ctx) + ";"
   result
 }
@@ -923,22 +913,24 @@ fn emit_export_assignment(ea : ExportAssignment, ctx : EmitterContext) -> String
 /// Emit if statement
 fn emit_if_statement(if_stmt : IfStatement, ctx : EmitterContext) -> String {
   // Add source mapping at the start of the if statement
-  ctx.add_mapping(if_stmt.location.start.line, if_stmt.location.start.column, None)
-
+  ctx.add_mapping(
+    if_stmt.location.start.line,
+    if_stmt.location.start.column,
+    None,
+  )
   let mut result = ctx.get_indent() + "if ("
   result = result + emit(if_stmt.condition, ctx)
   result = result + ") "
-
   let then_str = emit(if_stmt.then_statement, ctx)
   result = result + then_str
   match if_stmt.else_statement {
     Some(else_stmt) => {
       result = result + " else "
       let else_str = emit(else_stmt, ctx)
-      result = result + else_str    }
+      result = result + else_str
+    }
     None => ()
   }
-
   result
 }
 
@@ -948,7 +940,6 @@ fn emit_switch_statement(ss : SwitchStatement, ctx : EmitterContext) -> String {
   let mut result = ctx.get_indent() + "switch ("
   result = result + emit(ss.expression, ctx)
   result = result + ") {\n"
-
   let inner_ctx = ctx.indent()
   for case_clause in ss.cases {
     match case_clause.expression {
@@ -957,7 +948,6 @@ fn emit_switch_statement(ss : SwitchStatement, ctx : EmitterContext) -> String {
         result = result + inner_ctx.get_indent() + "case "
         result = result + emit(expr, ctx)
         result = result + ":\n"
-
         let stmt_ctx = inner_ctx.indent()
         for stmt in case_clause.statements {
           result = result + emit(stmt, stmt_ctx) + "\n"
@@ -966,7 +956,6 @@ fn emit_switch_statement(ss : SwitchStatement, ctx : EmitterContext) -> String {
       None => {
         // Default case
         result = result + inner_ctx.get_indent() + "default:\n"
-
         let stmt_ctx = inner_ctx.indent()
         for stmt in case_clause.statements {
           result = result + emit(stmt, stmt_ctx) + "\n"
@@ -974,7 +963,6 @@ fn emit_switch_statement(ss : SwitchStatement, ctx : EmitterContext) -> String {
       }
     }
   }
-
   result = result + ctx.get_indent() + "}"
   result
 }
@@ -984,7 +972,6 @@ fn emit_switch_statement(ss : SwitchStatement, ctx : EmitterContext) -> String {
 fn emit_for_statement(fs : ForStatement, ctx : EmitterContext) -> String {
   // Add source mapping at the start of the for statement
   ctx.add_mapping(fs.location.start.line, fs.location.start.column, None)
-
   let mut result = ctx.get_indent() + "for ("
 
   // Emit initializer (without trailing semicolon if it's a variable statement)
@@ -997,7 +984,6 @@ fn emit_for_statement(fs : ForStatement, ctx : EmitterContext) -> String {
       } else {
         "var"
       }
-
       let mut decls = ""
       for i = 0; i < vs.declarations.length(); i = i + 1 {
         let decl = vs.declarations[i]
@@ -1019,23 +1005,17 @@ fn emit_for_statement(fs : ForStatement, ctx : EmitterContext) -> String {
     Some(init) => result = result + emit(init, ctx)
     None => ()
   }
-
   result = result + "; "
-
   match fs.condition {
     Some(cond) => result = result + emit(cond, ctx)
     None => ()
   }
-
   result = result + "; "
-
   match fs.incrementor {
     Some(inc) => result = result + emit(inc, ctx)
     None => ()
   }
-
   result = result + ") "
-
   let body_str = emit(fs.statement, ctx)
   result = result + body_str
   result
@@ -1065,14 +1045,11 @@ fn emit_for_in_statement(fis : ForInStatement, ctx : EmitterContext) -> String {
     }
     _ => result = result + emit(fis.initializer, ctx)
   }
-
   result = result + " in "
   result = result + emit(fis.expression, ctx)
   result = result + ") "
-
   let body_str = emit(fis.statement, ctx)
   result = result + body_str
-
   result
 }
 
@@ -1100,11 +1077,9 @@ fn emit_for_of_statement(fos : ForOfStatement, ctx : EmitterContext) -> String {
     }
     _ => result = result + emit(fos.initializer, ctx)
   }
-
   result = result + " of "
   result = result + emit(fos.expression, ctx)
   result = result + ") "
-
   let body_str = emit(fos.statement, ctx)
   result = result + body_str
   result
@@ -1116,7 +1091,6 @@ fn emit_while_statement(ws : WhileStatement, ctx : EmitterContext) -> String {
   let mut result = ctx.get_indent() + "while ("
   result = result + emit(ws.condition, ctx)
   result = result + ") "
-
   let body_str = emit(ws.statement, ctx)
   result = result + body_str
   result
@@ -1124,15 +1098,16 @@ fn emit_while_statement(ws : WhileStatement, ctx : EmitterContext) -> String {
 
 ///|
 /// Emit do-while statement
-fn emit_do_while_statement(dws : DoWhileStatement, ctx : EmitterContext) -> String {
+fn emit_do_while_statement(
+  dws : DoWhileStatement,
+  ctx : EmitterContext,
+) -> String {
   let mut result = ctx.get_indent() + "do "
-
   let body_str = emit(dws.statement, ctx)
   result = result + body_str
   result = result + " while ("
   result = result + emit(dws.condition, ctx)
   result = result + ");"
-
   result
 }
 
@@ -1140,26 +1115,25 @@ fn emit_do_while_statement(dws : DoWhileStatement, ctx : EmitterContext) -> Stri
 /// Emit break statement
 fn emit_break_statement(bs : BreakStatement, ctx : EmitterContext) -> String {
   let mut result = ctx.get_indent() + "break"
-
   match bs.label {
     Some(label) => result = result + " " + label
     None => ()
   }
-
   result = result + ";"
   result
 }
 
 ///|
 /// Emit continue statement
-fn emit_continue_statement(cs : ContinueStatement, ctx : EmitterContext) -> String {
+fn emit_continue_statement(
+  cs : ContinueStatement,
+  ctx : EmitterContext,
+) -> String {
   let mut result = ctx.get_indent() + "continue"
-
   match cs.label {
     Some(label) => result = result + " " + label
     None => ()
   }
-
   result = result + ";"
   result
 }
@@ -1169,14 +1143,11 @@ fn emit_continue_statement(cs : ContinueStatement, ctx : EmitterContext) -> Stri
 fn emit_return_statement(rs : ReturnStatement, ctx : EmitterContext) -> String {
   // Add source mapping at the start of the return statement
   ctx.add_mapping(rs.location.start.line, rs.location.start.column, None)
-
   let mut result = ctx.get_indent() + "return"
-
   match rs.expression {
     Some(expr) => result = result + " " + emit(expr, ctx)
     None => ()
   }
-
   result = result + ";"
   result
 }
@@ -1195,18 +1166,15 @@ fn emit_try_statement(ts : TryStatement, ctx : EmitterContext) -> String {
   match ts.catch_clause {
     Some(catch_clause) => {
       result = result + " catch"
-
       match catch_clause.variable_declaration {
         Some(vd) => result = result + " (" + emit(vd, ctx) + ")"
         None => ()
       }
-
       result = result + " "
       result = result + emit(catch_clause.block, ctx)
     }
     None => ()
   }
-
   match ts.finally_block {
     Some(finally_block) => {
       result = result + " finally "
@@ -1214,7 +1182,6 @@ fn emit_try_statement(ts : TryStatement, ctx : EmitterContext) -> String {
     }
     None => ()
   }
-
   result
 }
 
@@ -1222,7 +1189,6 @@ fn emit_try_statement(ts : TryStatement, ctx : EmitterContext) -> String {
 /// Emit block statement
 fn emit_block_statement(bs : BlockStatement, ctx : EmitterContext) -> String {
   let mut result = ctx.get_indent() + "{\n"
-
   let inner_ctx = ctx.indent()
   for stmt in bs.statements {
     let stmt_str = emit(stmt, inner_ctx)
@@ -1230,20 +1196,25 @@ fn emit_block_statement(bs : BlockStatement, ctx : EmitterContext) -> String {
       result = result + stmt_str + "\n"
     }
   }
-
   result = result + ctx.get_indent() + "}"
   result
 }
 
 ///|
 /// Emit expression statement
-fn emit_expression_statement(es : ExpressionStatement, ctx : EmitterContext) -> String {
+fn emit_expression_statement(
+  es : ExpressionStatement,
+  ctx : EmitterContext,
+) -> String {
   ctx.get_indent() + emit(es.expression, ctx) + ";"
 }
 
 ///|
 /// Emit labeled statement
-fn emit_labeled_statement(ls : LabeledStatement, ctx : EmitterContext) -> String {
+fn emit_labeled_statement(
+  ls : LabeledStatement,
+  ctx : EmitterContext,
+) -> String {
   let mut result = ctx.get_indent()
   result = result + ls.label
   result = result + ": "
@@ -1257,7 +1228,6 @@ fn emit_with_statement(ws : WithStatement, ctx : EmitterContext) -> String {
   let mut result = ctx.get_indent() + "with ("
   result = result + emit(ws.expression, ctx)
   result = result + ") "
-
   let body_str = emit(ws.statement, ctx)
   result = result + body_str
   result
@@ -1265,7 +1235,10 @@ fn emit_with_statement(ws : WithStatement, ctx : EmitterContext) -> String {
 
 ///|
 /// Emit binary expression
-fn emit_binary_expression(be : BinaryExpression, ctx : EmitterContext) -> String {
+fn emit_binary_expression(
+  be : BinaryExpression,
+  ctx : EmitterContext,
+) -> String {
   let left = emit(be.left, ctx)
   let right = emit(be.right, ctx)
   let op = operator_to_string(be.operator)
@@ -1277,7 +1250,6 @@ fn emit_binary_expression(be : BinaryExpression, ctx : EmitterContext) -> String
 fn emit_unary_expression(ue : UnaryExpression, ctx : EmitterContext) -> String {
   let operand = emit(ue.operand, ctx)
   let op = unary_operator_to_string(ue.operator)
-
   if ue.is_prefix {
     op + operand
   } else {
@@ -1287,7 +1259,10 @@ fn emit_unary_expression(ue : UnaryExpression, ctx : EmitterContext) -> String {
 
 ///|
 /// Emit conditional expression
-fn emit_conditional_expression(ce : ConditionalExpression, ctx : EmitterContext) -> String {
+fn emit_conditional_expression(
+  ce : ConditionalExpression,
+  ctx : EmitterContext,
+) -> String {
   let cond = emit(ce.condition, ctx)
   let when_true = emit(ce.when_true, ctx)
   let when_false = emit(ce.when_false, ctx)
@@ -1299,17 +1274,14 @@ fn emit_conditional_expression(ce : ConditionalExpression, ctx : EmitterContext)
 fn emit_call_expression(ce : CallExpression, ctx : EmitterContext) -> String {
   // Add source mapping at the start of the call expression
   ctx.add_mapping(ce.location.start.line, ce.location.start.column, None)
-
   let mut result = emit(ce.expression, ctx)
   result = result + "("
-
   for i = 0; i < ce.arguments.length(); i = i + 1 {
     result = result + emit(ce.arguments[i], ctx)
     if i < ce.arguments.length() - 1 {
       result = result + ", "
     }
   }
-
   result = result + ")"
   result
 }
@@ -1318,7 +1290,6 @@ fn emit_call_expression(ce : CallExpression, ctx : EmitterContext) -> String {
 /// Emit new expression
 fn emit_new_expression(ne : NewExpression, ctx : EmitterContext) -> String {
   let mut result = "new " + emit(ne.expression, ctx)
-
   match ne.arguments {
     Some(args) => {
       result = result + "("
@@ -1332,21 +1303,30 @@ fn emit_new_expression(ne : NewExpression, ctx : EmitterContext) -> String {
     }
     None => ()
   }
-
   result
 }
 
 ///|
 /// Emit property access expression
-fn emit_property_access_expression(pae : PropertyAccessExpression, ctx : EmitterContext) -> String {
+fn emit_property_access_expression(
+  pae : PropertyAccessExpression,
+  ctx : EmitterContext,
+) -> String {
   // Add source mapping at the property access
-  ctx.add_mapping(pae.location.start.line, pae.location.start.column, Some(pae.name))
+  ctx.add_mapping(
+    pae.location.start.line,
+    pae.location.start.column,
+    Some(pae.name),
+  )
   emit(pae.expression, ctx) + "." + pae.name
 }
 
 ///|
 /// Emit element access expression
-fn emit_element_access_expression(eae : ElementAccessExpression, ctx : EmitterContext) -> String {
+fn emit_element_access_expression(
+  eae : ElementAccessExpression,
+  ctx : EmitterContext,
+) -> String {
   emit(eae.expression, ctx) + "[" + emit(eae.argument_expression, ctx) + "]"
 }
 
@@ -1356,114 +1336,112 @@ fn emit_arrow_function(af : ArrowFunction, ctx : EmitterContext) -> String {
   let mut result = "("
   result = result + emit_parameters(af.parameters, ctx)
   result = result + ") => "
-
   match af.body {
     BlockStatement(_) => result = result + emit(af.body, ctx)
     _ => result = result + emit(af.body, ctx)
   }
-
   result
 }
 
 ///|
 /// Emit function expression
-fn emit_function_expression(fe : FunctionExpression, ctx : EmitterContext) -> String {
+fn emit_function_expression(
+  fe : FunctionExpression,
+  ctx : EmitterContext,
+) -> String {
   let mut result = ""
-
   if fe.is_async {
     result = result + "async "
   }
-
   result = result + "function"
-
   if fe.is_generator {
     result = result + "*"
   }
-
   match fe.name {
     Some(name) => result = result + " " + name
     None => ()
   }
-
   result = result + "("
   result = result + emit_parameters(fe.parameters, ctx)
   result = result + ") "
-
   result = result + emit(fe.body, ctx)
   result
 }
 
 ///|
 /// Emit array literal expression
-fn emit_array_literal_expression(ale : ArrayLiteralExpression, ctx : EmitterContext) -> String {
+fn emit_array_literal_expression(
+  ale : ArrayLiteralExpression,
+  ctx : EmitterContext,
+) -> String {
   let mut result = "["
-
   for i = 0; i < ale.elements.length(); i = i + 1 {
     match ale.elements[i] {
       Some(elem) => result = result + emit(elem, ctx)
-      None => ()  // Array hole
+      None => () // Array hole
     }
     if i < ale.elements.length() - 1 {
       result = result + ", "
     }
   }
-
   result = result + "]"
   result
 }
 
 ///|
 /// Emit object literal expression
-fn emit_object_literal_expression(ole : ObjectLiteralExpression, ctx : EmitterContext) -> String {
+fn emit_object_literal_expression(
+  ole : ObjectLiteralExpression,
+  ctx : EmitterContext,
+) -> String {
   if ole.properties.length() == 0 {
     return "{}"
   }
-
   let mut result = "{ "
-
   for i = 0; i < ole.properties.length(); i = i + 1 {
     match ole.properties[i] {
-      PropertyAssignment(name, value, _) => {
+      PropertyAssignment(name, value, _) =>
         result = result + name + ": " + emit(value, ctx)
-      }
-      ShorthandProperty(name, _) => {
-        result = result + name
-      }
-      SpreadAssignment(expr, _) => {
-        result = result + "..." + emit(expr, ctx)
-      }
-      MethodDeclaration(name, func_expr, _) => {
+      ShorthandProperty(name, _) => result = result + name
+      SpreadAssignment(expr, _) => result = result + "..." + emit(expr, ctx)
+      MethodDeclaration(name, func_expr, _) =>
         result = result + name + emit_function_expression(func_expr, ctx)
-      }
-      GetAccessor(name, func_expr, _) => {
-        result = result + "get " + name + emit_function_expression(func_expr, ctx)
-      }
-      SetAccessor(name, func_expr, _) => {
-        result = result + "set " + name + emit_function_expression(func_expr, ctx)
-      }
-      ComputedPropertyAssignment(name_expr, value, _) => {
+      GetAccessor(name, func_expr, _) =>
+        result = result +
+          "get " +
+          name +
+          emit_function_expression(func_expr, ctx)
+      SetAccessor(name, func_expr, _) =>
+        result = result +
+          "set " +
+          name +
+          emit_function_expression(func_expr, ctx)
+      ComputedPropertyAssignment(name_expr, value, _) =>
         result = result + "[" + emit(name_expr, ctx) + "]: " + emit(value, ctx)
-      }
     }
-
     if i < ole.properties.length() - 1 {
       result = result + ", "
     }
   }
-
   result = result + " }"
   result
 }
 
 ///|
 /// Emit parenthesized expression
-fn emit_parenthesized_expression(pe : ParenthesizedExpression, ctx : EmitterContext) -> String {
+fn emit_parenthesized_expression(
+  pe : ParenthesizedExpression,
+  ctx : EmitterContext,
+) -> String {
   "(" + emit(pe.expression, ctx) + ")"
 }
 
 ///|
 /// Emit template expression
-fn emit_template_expression(te : TemplateExpression, ctx : EmitterContext) -> String {
+fn emit_template_expression(
+  te : TemplateExpression,
+  ctx : EmitterContext,
+) -> String {
   let mut result = "`" + te.head
 
   // Build ${ as separate strings to avoid MoonBit->JS compilation issues
@@ -1476,14 +1454,16 @@ fn emit_template_expression(te : TemplateExpression, ctx : EmitterContext) -> St
     result = result + close_brace
     result = result + span.literal
   }
-
   result = result + "`"
   result
 }
 
 ///|
 /// Emit spread expression
-fn emit_spread_expression(se : SpreadExpression, ctx : EmitterContext) -> String {
+fn emit_spread_expression(
+  se : SpreadExpression,
+  ctx : EmitterContext,
+) -> String {
   "..." + emit(se.expression, ctx)
 }
 
@@ -1525,28 +1505,31 @@ fn emit_yield_expression(ye : YieldExpression, ctx : EmitterContext) -> String {
 
 ///|
 /// Emit array binding pattern
-fn emit_array_binding_pattern(abp : ArrayBindingPattern, ctx : EmitterContext) -> String {
+fn emit_array_binding_pattern(
+  abp : ArrayBindingPattern,
+  ctx : EmitterContext,
+) -> String {
   let mut result = "["
-
   for i = 0; i < abp.elements.length(); i = i + 1 {
     match abp.elements[i] {
       Some(elem) => result = result + emit(elem, ctx)
-      None => ()  // Array hole
+      None => () // Array hole
     }
     if i < abp.elements.length() - 1 {
       result = result + ", "
     }
   }
-
   result = result + "]"
   result
 }
 
 ///|
 /// Emit object binding pattern
-fn emit_object_binding_pattern(obp : ObjectBindingPattern, ctx : EmitterContext) -> String {
+fn emit_object_binding_pattern(
+  obp : ObjectBindingPattern,
+  ctx : EmitterContext,
+) -> String {
   let mut result = "{ "
-
   for i = 0; i < obp.properties.length(); i = i + 1 {
     let prop = obp.properties[i]
     result = result + prop.property_name + ": " + emit(prop.name, ctx)
@@ -1554,7 +1537,6 @@ fn emit_object_binding_pattern(obp : ObjectBindingPattern, ctx : EmitterContext)
       result = result + ", "
     }
   }
-
   result = result + " }"
   result
 }
@@ -1629,11 +1611,11 @@ fn unary_operator_to_string(op : UnaryOperator) -> String {
 fn escape_string(s : String) -> String {
   // Re-escape special characters for JavaScript output
   s
-    .replace(old="\\", new="\\\\")
-    .replace(old="\"", new="\\\"")
-    .replace(old="\n", new="\\n")
-    .replace(old="\r", new="\\r")
-    .replace(old="\t", new="\\t")
+  .replace(old="\\", new="\\\\")
+  .replace(old="\"", new="\\\"")
+  .replace(old="\n", new="\\n")
+  .replace(old="\r", new="\\r")
+  .replace(old="\t", new="\\t")
 }
 
 ///|
@@ -1653,9 +1635,8 @@ fn emit_jsx_element(je : JsxElement, ctx : EmitterContext) -> String {
   // Get tag name and attributes from opening element
   let (tag_name, attributes) = match je.opening_element {
     JsxOpeningElement(joe) => (emit_jsx_tag_name(joe.tag_name), joe.attributes)
-    _ => ("\"div\"", [])  // Fallback
+    _ => ("\"div\"", []) // Fallback
   }
-
   let mut result = "React.createElement(" + tag_name
 
   // Emit props
@@ -1668,20 +1649,21 @@ fn emit_jsx_element(je : JsxElement, ctx : EmitterContext) -> String {
       result = result + ", " + child_str
     }
   }
-
   result = result + ")"
   result
 }
 
 ///|
 /// Emit JSX self-closing element: <tag ... /> -> React.createElement(tag, props)
-fn emit_jsx_self_closing_element(jsce : JsxSelfClosingElement, ctx : EmitterContext) -> String {
+fn emit_jsx_self_closing_element(
+  jsce : JsxSelfClosingElement,
+  ctx : EmitterContext,
+) -> String {
   let tag_name = emit_jsx_tag_name(jsce.tag_name)
   let mut result = "React.createElement(" + tag_name
 
   // Emit props
   result = result + ", " + emit_jsx_attributes(jsce.attributes, ctx)
-
   result = result + ")"
   result
 }
@@ -1698,20 +1680,21 @@ fn emit_jsx_fragment(jf : JsxFragment, ctx : EmitterContext) -> String {
       result = result + ", " + child_str
     }
   }
-
   result = result + ")"
   result
 }
 
 ///|
 /// Emit JSX opening element (used when JsxOpeningElement appears standalone)
-fn emit_jsx_opening_element(joe : JsxOpeningElement, ctx : EmitterContext) -> String {
+fn emit_jsx_opening_element(
+  joe : JsxOpeningElement,
+  ctx : EmitterContext,
+) -> String {
   let tag_name = emit_jsx_tag_name(joe.tag_name)
   let mut result = "React.createElement(" + tag_name
 
   // Emit props
   result = result + ", " + emit_jsx_attributes(joe.attributes, ctx)
-
   result = result + ")"
   result
 }
@@ -1729,7 +1712,7 @@ fn emit_jsx_expression(je : JsxExpression, ctx : EmitterContext) -> String {
 /// Emit JSX tag name
 fn emit_jsx_tag_name(tag_name : JsxTagName) -> String {
   match tag_name {
-    JsxTagName::Identifier(name, _) => {
+    JsxTagName::Identifier(name, _) =>
       // If starts with lowercase, it's a string (HTML element)
       // If starts with uppercase, it's a component reference
       if is_lowercase_start(name) {
@@ -1737,17 +1720,13 @@ fn emit_jsx_tag_name(tag_name : JsxTagName) -> String {
       } else {
         name
       }
-    }
-    JsxTagName::NamespacedName(ns, name, _) => {
-      "\"" + ns + ":" + name + "\""
-    }
-    JsxTagName::PropertyAccess(expr, prop, _) => {
+    JsxTagName::NamespacedName(ns, name, _) => "\"" + ns + ":" + name + "\""
+    JsxTagName::PropertyAccess(expr, prop, _) =>
       // For Member.Component, we need to emit the expression
       match expr {
         Identifier(id) => id.name + "." + prop
-        _ => prop  // Fallback
+        _ => prop // Fallback
       }
-    }
   }
 }
 
@@ -1763,14 +1742,15 @@ fn is_lowercase_start(s : String) -> Bool {
 
 ///|
 /// Emit JSX attributes as props object
-fn emit_jsx_attributes(attributes : Array[JsxAttribute], ctx : EmitterContext) -> String {
+fn emit_jsx_attributes(
+  attributes : Array[JsxAttribute],
+  ctx : EmitterContext,
+) -> String {
   if attributes.length() == 0 {
     return "null"
   }
-
   let mut result = "{ "
   let mut first = true
-
   for attr in attributes {
     match attr {
       JsxAttribute::Attribute(attr_node) => {
@@ -1778,13 +1758,11 @@ fn emit_jsx_attributes(attributes : Array[JsxAttribute], ctx : EmitterContext) -
           result = result + ", "
         }
         first = false
-
         let attr_name = emit_jsx_attribute_name(attr_node.name)
         result = result + attr_name + ": "
-
         match attr_node.initializer {
           Some(value) => result = result + emit_jsx_attribute_value(value, ctx)
-          None => result = result + "true"  // Boolean attribute like "disabled"
+          None => result = result + "true" // Boolean attribute like "disabled"
         }
       }
       JsxAttribute::SpreadAttribute(expr, _) => {
@@ -1796,7 +1774,6 @@ fn emit_jsx_attributes(attributes : Array[JsxAttribute], ctx : EmitterContext) -
       }
     }
   }
-
   result = result + " }"
   result
 }
@@ -1805,7 +1782,7 @@ fn emit_jsx_attributes(attributes : Array[JsxAttribute], ctx : EmitterContext) -
 /// Emit JSX attribute name
 fn emit_jsx_attribute_name(name : JsxAttributeName) -> String {
   match name {
-    JsxAttributeName::Identifier(id, _) => {
+    JsxAttributeName::Identifier(id, _) =>
       // Convert JSX attribute names to React props (e.g., class -> className)
       if id == "class" {
         "className"
@@ -1814,16 +1791,16 @@ fn emit_jsx_attribute_name(name : JsxAttributeName) -> String {
       } else {
         id
       }
-    }
-    JsxAttributeName::NamespacedName(ns, n, _) => {
-      "\"" + ns + ":" + n + "\""
-    }
+    JsxAttributeName::NamespacedName(ns, n, _) => "\"" + ns + ":" + n + "\""
   }
 }
 
 ///|
 /// Emit JSX attribute value
-fn emit_jsx_attribute_value(value : JsxAttributeValue, ctx : EmitterContext) -> String {
+fn emit_jsx_attribute_value(
+  value : JsxAttributeValue,
+  ctx : EmitterContext,
+) -> String {
   match value {
     JsxAttributeValue::StringLiteral(s, _) => "\"" + escape_string(s) + "\""
     JsxAttributeValue::Expression(expr, _) => emit(expr, ctx)
@@ -1835,14 +1812,13 @@ fn emit_jsx_attribute_value(value : JsxAttributeValue, ctx : EmitterContext) -> 
 /// Emit JSX child
 fn emit_jsx_child(child : JsxChild, ctx : EmitterContext) -> String {
   match child {
-    JsxChild::Text(text, _) => {
+    JsxChild::Text(text, _) =>
       // Skip whitespace-only text nodes
       if is_whitespace_only(text) {
         ""
       } else {
         "\"" + escape_jsx_text(text) + "\""
       }
-    }
     JsxChild::Expression(jsx_expr) => emit_jsx_expression(jsx_expr, ctx)
     JsxChild::Element(elem, _) => emit(elem, ctx)
     JsxChild::Fragment(frag, _) => emit(frag, ctx)
@@ -1865,9 +1841,9 @@ fn is_whitespace_only(s : String) -> Bool {
 /// Escape text for JSX string output
 fn escape_jsx_text(s : String) -> String {
   s
-    .replace(old="\\", new="\\\\")
-    .replace(old="\"", new="\\\"")
-    .replace(old="\n", new="\\n")
-    .replace(old="\r", new="\\r")
-    .replace(old="\t", new="\\t")
+  .replace(old="\\", new="\\\\")
+  .replace(old="\"", new="\\\"")
+  .replace(old="\n", new="\\n")
+  .replace(old="\r", new="\\r")
+  .replace(old="\t", new="\\t")
 }

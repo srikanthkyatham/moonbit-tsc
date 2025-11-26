@@ -52,7 +52,7 @@ pub struct SymbolFlags {
   is_assignment : Bool
   is_optional : Bool
   is_readonly : Bool
-  is_const : Bool  // Track const vs let/var
+  is_const : Bool // Track const vs let/var
   is_static : Bool
   is_private : Bool
   is_protected : Bool
@@ -73,7 +73,7 @@ pub fn SymbolFlags::default() -> SymbolFlags {
     is_assignment: false,
     is_optional: false,
     is_readonly: false,
-    is_const: false,  // Default is let/var
+    is_const: false, // Default is let/var
     is_static: false,
     is_private: false,
     is_protected: false,
@@ -331,22 +331,22 @@ pub enum DiagnosticCategory {
 /// These codes match the official TypeScript compiler error codes
 pub enum DiagnosticCode {
   // Type Assignment Errors (2300-2399)
-  TS2314  // Generic type requires more type arguments
-  TS2322  // Type 'X' is not assignable to type 'Y'
-  TS2344  // Type 'X' does not satisfy the constraint 'Y'
-  TS2355  // A function whose declared type is neither 'void' nor 'any' must return a value
-  TS2363  // The right-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type
+  TS2314 // Generic type requires more type arguments
+  TS2322 // Type 'X' is not assignable to type 'Y'
+  TS2344 // Type 'X' does not satisfy the constraint 'Y'
+  TS2355 // A function whose declared type is neither 'void' nor 'any' must return a value
+  TS2363 // The right-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type
 
   // Enum Errors (2400-2499)
-  TS2474  // const enum member initializers can only contain literal values and other computed enum values
+  TS2474 // const enum member initializers can only contain literal values and other computed enum values
 
   // Variable/Constant Errors (2500-2599)
-  TS2511  // Cannot create an instance of an abstract class
-  TS2558  // Expected X type arguments, but got Y
-  TS2588  // Cannot assign to 'X' because it is a constant
+  TS2511 // Cannot create an instance of an abstract class
+  TS2558 // Expected X type arguments, but got Y
+  TS2588 // Cannot assign to 'X' because it is a constant
 
   // Unreachable Code (7000-7099)
-  TS7027  // Unreachable code detected
+  TS7027 // Unreachable code detected
 } derive(Show, Eq)
 
 ///|
@@ -419,7 +419,12 @@ pub fn Diagnostic::error_with_code(
   location : SourceLocation,
   code : DiagnosticCode,
 ) -> Diagnostic {
-  { message, location, category: DiagnosticCategory::Error, code: code.to_int() }
+  {
+    message,
+    location,
+    category: DiagnosticCategory::Error,
+    code: code.to_int(),
+  }
 }
 
 ///|
@@ -529,7 +534,11 @@ pub struct Container {
 
 ///|
 /// Create a new container
-pub fn Container::new(kind : ContainerKind, parent : Int?, id : Int) -> Container {
+pub fn Container::new(
+  kind : ContainerKind,
+  parent : Int?,
+  id : Int,
+) -> Container {
   { kind, symbol: None, parent, locals: Map::new(), id }
 }
 
@@ -627,7 +636,10 @@ pub fn CFGBuilder::new() -> CFGBuilder {
 pub fn CFGBuilder::build(self : CFGBuilder) -> ControlFlowGraph {
   // Create the exit node
   let exit_id = self.next_id
-  let exit_node = FlowNode::End(FlowEnd::{ antecedent: self.current_flow, id: exit_id })
+  let exit_node = FlowNode::End(FlowEnd::{
+    antecedent: self.current_flow,
+    id: exit_id,
+  })
   let nodes = self.nodes
   nodes.push(exit_node)
 
@@ -637,7 +649,6 @@ pub fn CFGBuilder::build(self : CFGBuilder) -> ControlFlowGraph {
     let node = nodes[i]
     node_map.set(flow_id(node), node)
   }
-
   {
     nodes,
     entry: 0, // Start node ID is always 0
@@ -650,7 +661,11 @@ pub fn CFGBuilder::build(self : CFGBuilder) -> ControlFlowGraph {
 /// Add an assignment flow node
 pub fn CFGBuilder::add_assignment(self : CFGBuilder, node : Node) -> CFGBuilder {
   let id = self.next_id
-  let flow_node = FlowNode::Assignment(FlowAssignment::{ node, antecedent: self.current_flow, id })
+  let flow_node = FlowNode::Assignment(FlowAssignment::{
+    node,
+    antecedent: self.current_flow,
+    id,
+  })
   let nodes = self.nodes
   nodes.push(flow_node)
   { ..self, next_id: id + 1, current_flow: id }
@@ -660,7 +675,11 @@ pub fn CFGBuilder::add_assignment(self : CFGBuilder, node : Node) -> CFGBuilder 
 /// Add a call flow node
 pub fn CFGBuilder::add_call(self : CFGBuilder, node : Node) -> CFGBuilder {
   let id = self.next_id
-  let flow_node = FlowNode::Call(FlowCall::{ node, antecedent: self.current_flow, id })
+  let flow_node = FlowNode::Call(FlowCall::{
+    node,
+    antecedent: self.current_flow,
+    id,
+  })
   let nodes = self.nodes
   nodes.push(flow_node)
   { ..self, next_id: id + 1, current_flow: id }
@@ -668,9 +687,16 @@ pub fn CFGBuilder::add_call(self : CFGBuilder, node : Node) -> CFGBuilder {
 
 ///|
 /// Add a condition flow node
-pub fn CFGBuilder::add_condition(self : CFGBuilder, expression : Node) -> CFGBuilder {
+pub fn CFGBuilder::add_condition(
+  self : CFGBuilder,
+  expression : Node,
+) -> CFGBuilder {
   let id = self.next_id
-  let flow_node = FlowNode::Condition(FlowCondition::{ expression, antecedent: self.current_flow, id })
+  let flow_node = FlowNode::Condition(FlowCondition::{
+    expression,
+    antecedent: self.current_flow,
+    id,
+  })
   let nodes = self.nodes
   nodes.push(flow_node)
   { ..self, next_id: id + 1, current_flow: id }
@@ -680,7 +706,11 @@ pub fn CFGBuilder::add_condition(self : CFGBuilder, expression : Node) -> CFGBui
 /// Add a return flow node
 pub fn CFGBuilder::add_return(self : CFGBuilder, node : Node) -> CFGBuilder {
   let id = self.next_id
-  let flow_node = FlowNode::Return(FlowReturn::{ node, antecedent: self.current_flow, id })
+  let flow_node = FlowNode::Return(FlowReturn::{
+    node,
+    antecedent: self.current_flow,
+    id,
+  })
   let nodes = self.nodes
   nodes.push(flow_node)
   let return_flows = self.return_flows
@@ -692,7 +722,11 @@ pub fn CFGBuilder::add_return(self : CFGBuilder, node : Node) -> CFGBuilder {
 /// Add a throw flow node
 pub fn CFGBuilder::add_throw(self : CFGBuilder, node : Node) -> CFGBuilder {
   let id = self.next_id
-  let flow_node = FlowNode::Throw(FlowThrow::{ node, antecedent: self.current_flow, id })
+  let flow_node = FlowNode::Throw(FlowThrow::{
+    node,
+    antecedent: self.current_flow,
+    id,
+  })
   let nodes = self.nodes
   nodes.push(flow_node)
   { ..self, next_id: id + 1, current_flow: id }
@@ -702,7 +736,7 @@ pub fn CFGBuilder::add_throw(self : CFGBuilder, node : Node) -> CFGBuilder {
 /// Add an unreachable flow node
 pub fn CFGBuilder::add_unreachable(self : CFGBuilder) -> CFGBuilder {
   let id = self.next_id
-  let flow_node = FlowNode::Unreachable(FlowUnreachable::{ id })
+  let flow_node = FlowNode::Unreachable(FlowUnreachable::{ id, })
   let nodes = self.nodes
   nodes.push(flow_node)
   { ..self, next_id: id + 1, current_flow: id }
@@ -710,9 +744,16 @@ pub fn CFGBuilder::add_unreachable(self : CFGBuilder) -> CFGBuilder {
 
 ///|
 /// Add an array mutation flow node
-pub fn CFGBuilder::add_array_mutation(self : CFGBuilder, node : Node) -> CFGBuilder {
+pub fn CFGBuilder::add_array_mutation(
+  self : CFGBuilder,
+  node : Node,
+) -> CFGBuilder {
   let id = self.next_id
-  let flow_node = FlowNode::ArrayMutation(FlowArrayMutation::{ node, antecedent: self.current_flow, id })
+  let flow_node = FlowNode::ArrayMutation(FlowArrayMutation::{
+    node,
+    antecedent: self.current_flow,
+    id,
+  })
   let nodes = self.nodes
   nodes.push(flow_node)
   { ..self, next_id: id + 1, current_flow: id }
@@ -741,10 +782,15 @@ pub fn CFGBuilder::add_switch_clause(
 
 ///|
 /// Push a loop context
-pub fn CFGBuilder::push_loop(self : CFGBuilder, break_label : Int, continue_label : Int, label_name : String?) -> CFGBuilder {
+pub fn CFGBuilder::push_loop(
+  self : CFGBuilder,
+  break_label : Int,
+  continue_label : Int,
+  label_name : String?,
+) -> CFGBuilder {
   let loop_stack = self.loop_stack
   loop_stack.push(LoopContext::{ break_label, continue_label, label_name })
-  { ..self, loop_stack }
+  { ..self, loop_stack, }
 }
 
 ///|
@@ -752,7 +798,7 @@ pub fn CFGBuilder::push_loop(self : CFGBuilder, break_label : Int, continue_labe
 pub fn CFGBuilder::pop_loop(self : CFGBuilder) -> CFGBuilder {
   let loop_stack = self.loop_stack
   let _ = loop_stack.pop()
-  { ..self, loop_stack }
+  { ..self, loop_stack, }
 }
 
 ///|
@@ -767,10 +813,13 @@ pub fn CFGBuilder::current_loop(self : CFGBuilder) -> LoopContext? {
 
 ///|
 /// Push a switch context for tracking switch statement flow
-pub fn CFGBuilder::push_switch(self : CFGBuilder, break_label : Int) -> CFGBuilder {
+pub fn CFGBuilder::push_switch(
+  self : CFGBuilder,
+  break_label : Int,
+) -> CFGBuilder {
   let switch_stack = self.switch_stack
   switch_stack.push(SwitchContext::{ break_label, clause_flows: [] })
-  { ..self, switch_stack }
+  { ..self, switch_stack, }
 }
 
 ///|
@@ -778,7 +827,7 @@ pub fn CFGBuilder::push_switch(self : CFGBuilder, break_label : Int) -> CFGBuild
 pub fn CFGBuilder::pop_switch(self : CFGBuilder) -> CFGBuilder {
   let switch_stack = self.switch_stack
   let _ = switch_stack.pop()
-  { ..self, switch_stack }
+  { ..self, switch_stack, }
 }
 
 ///|
@@ -793,7 +842,10 @@ pub fn CFGBuilder::current_switch(self : CFGBuilder) -> SwitchContext? {
 
 ///|
 /// Add a clause flow to the current switch context
-pub fn CFGBuilder::add_clause_flow(self : CFGBuilder, flow_id : Int) -> CFGBuilder {
+pub fn CFGBuilder::add_clause_flow(
+  self : CFGBuilder,
+  flow_id : Int,
+) -> CFGBuilder {
   if self.switch_stack.length() > 0 {
     let current = self.switch_stack[self.switch_stack.length() - 1]
     current.clause_flows.push(flow_id)
@@ -818,12 +870,7 @@ pub fn ControlFlowGraph::empty() -> ControlFlowGraph {
   let node_map : Map[Int, FlowNode] = Map::new()
   node_map.set(0, start_node)
   node_map.set(1, end_node)
-  {
-    nodes: [start_node, end_node],
-    entry: 0,
-    exit: 1,
-    node_map,
-  }
+  { nodes: [start_node, end_node], entry: 0, exit: 1, node_map }
 }
 
 // ============================================================================

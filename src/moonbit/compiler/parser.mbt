@@ -59,7 +59,7 @@ pub struct Parser {
   tokens : Array[Token]
   position : Int
   diagnostics : Array[Diagnostic]
-  depth : Int  // Current recursion depth for expression parsing
+  depth : Int // Current recursion depth for expression parsing
   context : ParserContext
   /// Stack of saved contexts for restoration
   context_stack : Array[ParserContext]
@@ -72,7 +72,14 @@ pub type ParseResult[T] = Result[T, Array[Diagnostic]]
 ///|
 /// Create a new parser
 pub fn Parser::new(tokens : Array[Token]) -> Parser {
-  { tokens, position: 0, diagnostics: [], depth: 0, context: ParserContext::default(), context_stack: [] }
+  {
+    tokens,
+    position: 0,
+    diagnostics: [],
+    depth: 0,
+    context: ParserContext::default(),
+    context_stack: [],
+  }
 }
 
 ///|
@@ -91,7 +98,8 @@ fn pop_context(parser : Parser) -> Parser {
   } else {
     let stack = parser.context_stack.copy()
     match stack.pop() {
-      Some(prev_context) => { ..parser, context: prev_context, context_stack: stack }
+      Some(prev_context) =>
+        { ..parser, context: prev_context, context_stack: stack }
       None => parser
     }
   }
@@ -115,12 +123,12 @@ fn add_error_checked(
   code : Int,
 ) -> Parser {
   if parser.diagnostics.length() >= max_errors {
-    parser  // Stop adding errors
+    parser // Stop adding errors
   } else {
     let diagnostic = Diagnostic::error(message, location, code)
     let diagnostics = parser.diagnostics
     diagnostics.push(diagnostic)
-    { ..parser, diagnostics }
+    { ..parser, diagnostics, }
   }
 }
 
@@ -218,12 +226,29 @@ fn add_error_with_code(
 /// Check if token is a statement start (synchronization point)
 fn is_statement_start(token : Token) -> Bool {
   match token {
-    KeywordLet(_) | KeywordConst(_) | KeywordVar(_) | KeywordFunction(_) |
-    KeywordClass(_) | KeywordInterface(_) | KeywordType(_) | KeywordEnum(_) |
-    KeywordIf(_) | KeywordFor(_) | KeywordWhile(_) | KeywordDo(_) |
-    KeywordReturn(_) | KeywordThrow(_) | KeywordTry(_) | KeywordSwitch(_) |
-    KeywordBreak(_) | KeywordContinue(_) | KeywordImport(_) | KeywordExport(_) |
-    OpenBrace(_) | Semicolon(_) | KeywordDebugger(_) => true
+    KeywordLet(_)
+    | KeywordConst(_)
+    | KeywordVar(_)
+    | KeywordFunction(_)
+    | KeywordClass(_)
+    | KeywordInterface(_)
+    | KeywordType(_)
+    | KeywordEnum(_)
+    | KeywordIf(_)
+    | KeywordFor(_)
+    | KeywordWhile(_)
+    | KeywordDo(_)
+    | KeywordReturn(_)
+    | KeywordThrow(_)
+    | KeywordTry(_)
+    | KeywordSwitch(_)
+    | KeywordBreak(_)
+    | KeywordContinue(_)
+    | KeywordImport(_)
+    | KeywordExport(_)
+    | OpenBrace(_)
+    | Semicolon(_)
+    | KeywordDebugger(_) => true
     _ => false
   }
 }
@@ -255,7 +280,6 @@ fn synchronize_to_expression_end(parser : Parser) -> Parser {
   let mut paren_depth = 0
   let mut bracket_depth = 0
   let mut brace_depth = 0
-
   while !is_at_end(parser) {
     match current_token(parser) {
       OpenParen(_) => paren_depth = paren_depth + 1
@@ -279,16 +303,14 @@ fn synchronize_to_expression_end(parser : Parser) -> Parser {
         }
         brace_depth = brace_depth - 1
       }
-      Semicolon(_) | Comma(_) => {
+      Semicolon(_) | Comma(_) =>
         if paren_depth == 0 && bracket_depth == 0 && brace_depth == 0 {
           return parser
         }
-      }
       _ => ()
     }
     parser = advance_parser(parser)
   }
-
   parser
 }
 
@@ -327,7 +349,10 @@ fn parse_statements(parser : Parser) -> (Array[Node], Parser) {
 
 ///|
 /// Tail-recursive helper for parse_statements with accumulator
-fn parse_statements_aux(parser : Parser, acc : Array[Node]) -> (Array[Node], Parser) {
+fn parse_statements_aux(
+  parser : Parser,
+  acc : Array[Node],
+) -> (Array[Node], Parser) {
   if is_at_end(parser) {
     (acc, parser)
   } else {
@@ -364,8 +389,7 @@ fn parse_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
   let token = current_token(parser)
   match token {
     // Variable declarations
-    KeywordLet(_) | KeywordVar(_) =>
-      parse_variable_statement(parser)
+    KeywordLet(_) | KeywordVar(_) => parse_variable_statement(parser)
 
     // Function declaration
     KeywordFunction(_) => parse_function_declaration(parser, false, false)
@@ -383,11 +407,13 @@ fn parse_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
     At(_) => {
       let (decorators, parser) = parse_decorators(parser)
       match current_token(parser) {
-        KeywordClass(_) => parse_class_declaration_with_decorators(parser, false, decorators)
+        KeywordClass(_) =>
+          parse_class_declaration_with_decorators(parser, false, decorators)
         KeywordAbstract(_) => {
           let parser = advance_parser(parser)
           match current_token(parser) {
-            KeywordClass(_) => parse_class_declaration_with_decorators(parser, true, decorators)
+            KeywordClass(_) =>
+              parse_class_declaration_with_decorators(parser, true, decorators)
             _ => {
               let loc = current_token(parser).location()
               Err(add_error(parser, "Expected 'class' after 'abstract'", loc))
@@ -398,28 +424,40 @@ fn parse_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
         KeywordAsync(_) => {
           let parser = advance_parser(parser)
           match current_token(parser) {
-            KeywordFunction(_) => parse_function_declaration(parser, true, false)
+            KeywordFunction(_) =>
+              parse_function_declaration(parser, true, false)
             _ => {
               let loc = current_token(parser).location()
-              Err(add_error(parser, "Expected 'function' after decorators and 'async'", loc))
+              Err(
+                add_error(
+                  parser, "Expected 'function' after decorators and 'async'", loc,
+                ),
+              )
             }
           }
         }
         _ => {
           let loc = current_token(parser).location()
-          Err(add_error(parser, "Expected class or function declaration after decorators", loc))
+          Err(
+            add_error(
+              parser, "Expected class or function declaration after decorators",
+              loc,
+            ),
+          )
         }
       }
     }
 
     // Class declaration
-    KeywordClass(_) => parse_class_declaration_with_decorators(parser, false, [])
+    KeywordClass(_) =>
+      parse_class_declaration_with_decorators(parser, false, [])
 
     // Abstract class declaration
     KeywordAbstract(_) => {
       let parser = advance_parser(parser) // consume 'abstract'
       match current_token(parser) {
-        KeywordClass(_) => parse_class_declaration_with_decorators(parser, true, [])
+        KeywordClass(_) =>
+          parse_class_declaration_with_decorators(parser, true, [])
         _ => {
           let loc = current_token(parser).location()
           Err(add_error(parser, "Expected 'class' after 'abstract'", loc))
@@ -443,10 +481,9 @@ fn parse_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
           let parser = advance_parser(parser) // consume 'const'
           parse_enum_declaration(parser, true) // is_const = true
         }
-        _ => {
+        _ =>
           // Regular const declaration
           parse_variable_statement(parser)
-        }
       }
     }
     KeywordEnum(_) => parse_enum_declaration(parser, false)
@@ -481,7 +518,9 @@ fn parse_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
         Semicolon(_) => advance_parser(parser)
         _ => parser
       }
-      Ok((Node::DebuggerStatement(DebuggerStatement::{ location: loc }), parser))
+      Ok(
+        (Node::DebuggerStatement(DebuggerStatement::{ location: loc }), parser),
+      )
     }
 
     // Block statement
@@ -507,16 +546,17 @@ fn parse_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
           let parser = advance_parser(parser) // consume identifier
           let parser = advance_parser(parser) // consume colon
           match parse_statement(parser) {
-            Ok((stmt, parser)) => Ok(
-              (
-                Node::LabeledStatement(LabeledStatement::{
-                  label: name,
-                  statement: stmt,
-                  location: loc,
-                }),
-                parser,
-              ),
-            )
+            Ok((stmt, parser)) =>
+              Ok(
+                (
+                  Node::LabeledStatement(LabeledStatement::{
+                    label: name,
+                    statement: stmt,
+                    location: loc,
+                  }),
+                  parser,
+                ),
+              )
             Err(parser) => Err(parser)
           }
         }
@@ -535,7 +575,10 @@ fn parse_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
 fn parse_variable_declaration_list(
   parser : Parser,
   consume_keyword : Bool,
-) -> Result[(Array[VariableDeclaration], Bool, Bool, SourceLocation, Parser), Parser] {
+) -> Result[
+  (Array[VariableDeclaration], Bool, Bool, SourceLocation, Parser),
+  Parser,
+] {
   let start_token = current_token(parser)
   let is_const = match start_token {
     KeywordConst(_) => true
@@ -567,7 +610,6 @@ fn parse_variable_declaration_list(
       Err(err_parser) => return Err(err_parser)
     }
   }
-
   let location = start_token.location()
   Ok((declarations, is_const, is_let, location, parser))
 }
@@ -605,30 +647,29 @@ fn parse_variable_declaration(
 
   // Parse name (identifier or binding pattern)
   let (name, parser) = match current_token(parser) {
-    OpenBracket(_) => {
+    OpenBracket(_) =>
       // Array destructuring pattern
       match parse_array_binding_pattern(parser) {
         Ok((pattern, p)) => (pattern, p)
         Err(p) => return Err(p)
       }
-    }
-    OpenBrace(_) => {
+    OpenBrace(_) =>
       // Object destructuring pattern
       match parse_object_binding_pattern(parser) {
         Ok((pattern, p)) => (pattern, p)
         Err(p) => return Err(p)
       }
-    }
-    _ => {
+    _ =>
       // Regular identifier
       match parse_identifier(parser) {
         Ok((id, p)) => (Node::Identifier(id), p)
         Err(p) =>
           return Err(
-            add_error(p, "Expected identifier in variable declaration", start_loc),
+            add_error(
+              p, "Expected identifier in variable declaration", start_loc,
+            ),
           )
       }
-    }
   }
 
   // Optional type annotation
@@ -670,14 +711,12 @@ fn parse_variable_declaration(
 ///|
 /// Parse array binding pattern: [a, b] or [a, , c]
 fn parse_array_binding_pattern(
-  parser : Parser
+  parser : Parser,
 ) -> Result[(Node, Parser), Parser] {
   let start_loc = current_token(parser).location()
   let parser = advance_parser(parser) // consume '['
-
   let elements = []
   let mut parser = parser
-
   while true {
     match current_token(parser) {
       CloseBracket(_) => {
@@ -690,7 +729,9 @@ fn parse_array_binding_pattern(
         parser = advance_parser(parser)
       }
       Identifier(name, loc) => {
-        elements.push(Some(Node::Identifier(Identifier::{ name, location: loc })))
+        elements.push(
+          Some(Node::Identifier(Identifier::{ name, location: loc })),
+        )
         parser = advance_parser(parser)
 
         // Optional comma
@@ -699,13 +740,12 @@ fn parse_array_binding_pattern(
           _ => ()
         }
       }
-      OpenBracket(_) => {
+      OpenBracket(_) =>
         // Nested array pattern
         match parse_array_binding_pattern(parser) {
           Ok((pattern, p)) => {
             elements.push(Some(pattern))
             parser = p
-
             match current_token(parser) {
               Comma(_) => parser = advance_parser(parser)
               _ => ()
@@ -713,14 +753,12 @@ fn parse_array_binding_pattern(
           }
           Err(p) => return Err(p)
         }
-      }
-      OpenBrace(_) => {
+      OpenBrace(_) =>
         // Nested object pattern
         match parse_object_binding_pattern(parser) {
           Ok((pattern, p)) => {
             elements.push(Some(pattern))
             parser = p
-
             match current_token(parser) {
               Comma(_) => parser = advance_parser(parser)
               _ => ()
@@ -728,31 +766,29 @@ fn parse_array_binding_pattern(
           }
           Err(p) => return Err(p)
         }
-      }
       _ => break
     }
   }
-
-  Ok((
-    Node::ArrayBindingPattern(ArrayBindingPattern::{
-      elements,
-      location: start_loc,
-    }),
-    parser,
-  ))
+  Ok(
+    (
+      Node::ArrayBindingPattern(ArrayBindingPattern::{
+        elements,
+        location: start_loc,
+      }),
+      parser,
+    ),
+  )
 }
 
 ///|
 /// Parse object binding pattern: { x, y } or { x: a, y: b }
 fn parse_object_binding_pattern(
-  parser : Parser
+  parser : Parser,
 ) -> Result[(Node, Parser), Parser] {
   let start_loc = current_token(parser).location()
   let parser = advance_parser(parser) // consume '{'
-
   let properties = []
   let mut parser = parser
-
   while true {
     match current_token(parser) {
       CloseBrace(_) => {
@@ -769,31 +805,41 @@ fn parse_object_binding_pattern(
 
             // Parse the binding name (can be identifier or nested pattern)
             match current_token(p2) {
-              Identifier(bind_name, bind_loc) => {
-                (Node::Identifier(Identifier::{ name: bind_name, location: bind_loc }), advance_parser(p2))
-              }
-              OpenBracket(_) => {
+              Identifier(bind_name, bind_loc) =>
+                (
+                  Node::Identifier(Identifier::{
+                    name: bind_name,
+                    location: bind_loc,
+                  }),
+                  advance_parser(p2),
+                )
+              OpenBracket(_) =>
                 match parse_array_binding_pattern(p2) {
                   Ok((pattern, p)) => (pattern, p)
                   Err(p) => return Err(p)
                 }
-              }
-              OpenBrace(_) => {
+              OpenBrace(_) =>
                 match parse_object_binding_pattern(p2) {
                   Ok((pattern, p)) => (pattern, p)
                   Err(p) => return Err(p)
                 }
-              }
-              _ => return Err(add_error(p2, "Expected identifier after colon", prop_loc))
+              _ =>
+                return Err(
+                  add_error(p2, "Expected identifier after colon", prop_loc),
+                )
             }
           }
-          _ => {
+          _ =>
             // Shorthand: { x } means { x: x }
-            (Node::Identifier(Identifier::{ name: prop_name, location: prop_loc }), parser)
-          }
+            (
+              Node::Identifier(Identifier::{
+                name: prop_name,
+                location: prop_loc,
+              }),
+              parser,
+            )
         }
         parser = p2
-
         properties.push(BindingElement::{
           property_name: prop_name,
           name,
@@ -809,14 +855,15 @@ fn parse_object_binding_pattern(
       _ => break
     }
   }
-
-  Ok((
-    Node::ObjectBindingPattern(ObjectBindingPattern::{
-      properties,
-      location: start_loc,
-    }),
-    parser,
-  ))
+  Ok(
+    (
+      Node::ObjectBindingPattern(ObjectBindingPattern::{
+        properties,
+        location: start_loc,
+      }),
+      parser,
+    ),
+  )
 }
 
 ///|
@@ -839,33 +886,44 @@ fn parse_return_type(parser : Parser) -> Result[(Node, Parser), Parser] {
               let parser = advance_parser(parser)
               // Parse the type
               match parse_type(parser) {
-                Ok((type_node, p)) => Ok((
-                  Node::TypePredicate(TypePredicate::{
-                    parameter_name: param_name,
-                    type_node: Some(type_node),
-                    is_asserts: true,
-                    location: start_loc,
-                  }),
-                  p
-                ))
+                Ok((type_node, p)) =>
+                  Ok(
+                    (
+                      Node::TypePredicate(TypePredicate::{
+                        parameter_name: param_name,
+                        type_node: Some(type_node),
+                        is_asserts: true,
+                        location: start_loc,
+                      }),
+                      p,
+                    ),
+                  )
                 Err(p) => Err(p)
               }
             }
-            _ => {
+            _ =>
               // Just "asserts x" without type
-              Ok((
-                Node::TypePredicate(TypePredicate::{
-                  parameter_name: param_name,
-                  type_node: None,
-                  is_asserts: true,
-                  location: start_loc,
-                }),
-                parser
-              ))
-            }
+              Ok(
+                (
+                  Node::TypePredicate(TypePredicate::{
+                    parameter_name: param_name,
+                    type_node: None,
+                    is_asserts: true,
+                    location: start_loc,
+                  }),
+                  parser,
+                ),
+              )
           }
         }
-        _ => return Err(add_error(parser, "Expected parameter name after 'asserts'", current_token(parser).location()))
+        _ =>
+          return Err(
+            add_error(
+              parser,
+              "Expected parameter name after 'asserts'",
+              current_token(parser).location(),
+            ),
+          )
       }
     }
     Identifier(param_name, _) => {
@@ -876,28 +934,29 @@ fn parse_return_type(parser : Parser) -> Result[(Node, Parser), Parser] {
           let parser = advance_parser(parser2)
           // Parse the type
           match parse_type(parser) {
-            Ok((type_node, p)) => Ok((
-              Node::TypePredicate(TypePredicate::{
-                parameter_name: param_name,
-                type_node: Some(type_node),
-                is_asserts: false,
-                location: start_loc,
-              }),
-              p
-            ))
+            Ok((type_node, p)) =>
+              Ok(
+                (
+                  Node::TypePredicate(TypePredicate::{
+                    parameter_name: param_name,
+                    type_node: Some(type_node),
+                    is_asserts: false,
+                    location: start_loc,
+                  }),
+                  p,
+                ),
+              )
             Err(p) => Err(p)
           }
         }
-        _ => {
+        _ =>
           // Not a type predicate, parse as regular type
           parse_type(parser)
-        }
       }
     }
-    _ => {
+    _ =>
       // Regular type
       parse_type(parser)
-    }
   }
 }
 
@@ -919,8 +978,12 @@ fn parse_function_declaration(
 
   // Function name (optional for function expressions and export default)
   let (name, parser) = match current_token(parser) {
-    Identifier(id_name, loc) => (Some(Node::Identifier(Identifier::{ name: id_name, location: loc })), advance_parser(parser))
-    _ => (None, parser)  // Anonymous function - no error, name is optional
+    Identifier(id_name, loc) =>
+      (
+        Some(Node::Identifier(Identifier::{ name: id_name, location: loc })),
+        advance_parser(parser),
+      )
+    _ => (None, parser) // Anonymous function - no error, name is optional
   }
 
   // Type parameters
@@ -959,10 +1022,9 @@ fn parse_function_declaration(
         Ok((block, p)) => (Some(block), p)
         Err(p) => (None, p)
       }
-    Semicolon(_) => {
+    Semicolon(_) =>
       // Function declaration without body (overload signature)
       (None, advance_parser(parser))
-    }
     _ => (None, parser)
   }
   Ok(
@@ -995,7 +1057,10 @@ fn parse_parameter_list(parser : Parser) -> (Array[Node], Parser) {
 
 ///|
 /// Tail-recursive helper for parse_parameter_list with accumulator
-fn parse_parameter_list_aux(parser : Parser, acc : Array[Node]) -> (Array[Node], Parser) {
+fn parse_parameter_list_aux(
+  parser : Parser,
+  acc : Array[Node],
+) -> (Array[Node], Parser) {
   match parse_parameter(parser) {
     Ok((param, next_parser)) => {
       acc.push(param)
@@ -1277,2960 +1342,7 @@ fn parse_expression_statement(
 }
 
 ///|
-/// Parse expression (handles comma operator which is the lowest precedence)
-fn parse_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
-  match parse_assignment_expression(parser) {
-    Ok((first_expr, first_parser)) => {
-      let mut left = first_expr
-      let mut parser = first_parser
-      // Handle comma operator (lowest precedence)
-      while true {
-        match current_token(parser) {
-          Comma(_) => {
-            let start_loc = get_location(left)
-            parser = advance_parser(parser)
-            match parse_assignment_expression(parser) {
-              Ok((right, next_parser)) => {
-                left = Node::BinaryExpression(BinaryExpression::{
-                  operator: BinaryOperator::Comma,
-                  left,
-                  right,
-                  location: start_loc,
-                })
-                parser = next_parser
-              }
-              Err(p) => return Err(p)
-            }
-          }
-          _ => break
-        }
-      }
-      Ok((left, parser))
-    }
-    Err(p) => Err(p)
-  }
-}
-
-///|
-/// Check if we have an arrow function ahead by looking for =>
-fn is_arrow_function_ahead(parser : Parser) -> Bool {
-  match current_token(parser) {
-    // Case 1: (a, b) => expr
-    OpenParen(_) => {
-      // Scan ahead to find matching closing paren
-      let mut depth = 1
-      let mut index = parser.position + 1
-      while index < parser.tokens.length() && depth > 0 {
-        match parser.tokens[index] {
-          OpenParen(_) => depth = depth + 1
-          CloseParen(_) => depth = depth - 1
-          _ => ()
-        }
-        index = index + 1
-      }
-      // Check if token after closing paren is Arrow or Colon (for return type)
-      if index < parser.tokens.length() {
-        match parser.tokens[index] {
-          Arrow(_) => true
-          Colon(_) => {
-            // Return type annotation: (params): type => body
-            // Scan ahead to find Arrow after the type
-            let mut type_index = index + 1
-            while type_index < parser.tokens.length() {
-              match parser.tokens[type_index] {
-                Arrow(_) => return true
-                Semicolon(_) | OpenBrace(_) | CloseBrace(_) | EOF(_) => return false
-                _ => type_index = type_index + 1
-              }
-            }
-            false
-          }
-          _ => false
-        }
-      } else {
-        false
-      }
-    }
-    // Case 2: a => expr
-    Identifier(_) => {
-      if parser.position + 1 < parser.tokens.length() {
-        match parser.tokens[parser.position + 1] {
-          Arrow(_) => true
-          _ => false
-        }
-      } else {
-        false
-      }
-    }
-    _ => false
-  }
-}
-
-///|
-/// Parse assignment expression
-fn parse_assignment_expression(
-  parser : Parser,
-) -> Result[(Node, Parser), Parser] {
-  // Check if this is an arrow function
-  if is_arrow_function_ahead(parser) {
-    match current_token(parser) {
-      OpenParen(_) => {
-        // Try multi-parameter arrow function
-        match try_parse_arrow_function(parser) {
-          Ok((arrow_fn, p)) => return Ok((arrow_fn, p))
-          Err(_) => ()
-        }
-      }
-      Identifier(_) => {
-        // Try single-parameter arrow function
-        match try_parse_single_param_arrow_function(parser) {
-          Ok((arrow_fn, p)) => return Ok((arrow_fn, p))
-          Err(_) => ()
-        }
-      }
-      _ => ()
-    }
-  }
-
-  // Parse left-hand side (conditional expression)
-  let (left, parser) = match parse_conditional_expression(parser) {
-    Ok((expr, p)) => (expr, p)
-    Err(p) => return Err(p)
-  }
-
-  // Check for assignment operators
-  match current_token(parser) {
-    Equals(_) => {
-      let start_loc = get_location(left)
-      let parser = advance_parser(parser)
-      let (right, parser) = match parse_assignment_expression(parser) {
-        Ok((expr, p)) => (expr, p)
-        Err(p) => return Err(p)
-      }
-      Ok((
-        Node::BinaryExpression(BinaryExpression::{
-          left,
-          operator: BinaryOperator::Assign,
-          right,
-          location: start_loc,
-        }),
-        parser,
-      ))
-    }
-    // Compound assignment operators
-    PlusEquals(_) => {
-      let start_loc = get_location(left)
-      let parser = advance_parser(parser)
-      let (right, parser) = match parse_assignment_expression(parser) {
-        Ok((expr, p)) => (expr, p)
-        Err(p) => return Err(p)
-      }
-      Ok((
-        Node::BinaryExpression(BinaryExpression::{
-          left,
-          operator: BinaryOperator::AddAssign,
-          right,
-          location: start_loc,
-        }),
-        parser,
-      ))
-    }
-    MinusEquals(_) => {
-      let start_loc = get_location(left)
-      let parser = advance_parser(parser)
-      let (right, parser) = match parse_assignment_expression(parser) {
-        Ok((expr, p)) => (expr, p)
-        Err(p) => return Err(p)
-      }
-      Ok((
-        Node::BinaryExpression(BinaryExpression::{
-          left,
-          operator: BinaryOperator::SubtractAssign,
-          right,
-          location: start_loc,
-        }),
-        parser,
-      ))
-    }
-    StarEquals(_) => {
-      let start_loc = get_location(left)
-      let parser = advance_parser(parser)
-      let (right, parser) = match parse_assignment_expression(parser) {
-        Ok((expr, p)) => (expr, p)
-        Err(p) => return Err(p)
-      }
-      Ok((
-        Node::BinaryExpression(BinaryExpression::{
-          left,
-          operator: BinaryOperator::MultiplyAssign,
-          right,
-          location: start_loc,
-        }),
-        parser,
-      ))
-    }
-    SlashEquals(_) => {
-      let start_loc = get_location(left)
-      let parser = advance_parser(parser)
-      let (right, parser) = match parse_assignment_expression(parser) {
-        Ok((expr, p)) => (expr, p)
-        Err(p) => return Err(p)
-      }
-      Ok((
-        Node::BinaryExpression(BinaryExpression::{
-          left,
-          operator: BinaryOperator::DivideAssign,
-          right,
-          location: start_loc,
-        }),
-        parser,
-      ))
-    }
-    PercentEquals(_) => {
-      let start_loc = get_location(left)
-      let parser = advance_parser(parser)
-      let (right, parser) = match parse_assignment_expression(parser) {
-        Ok((expr, p)) => (expr, p)
-        Err(p) => return Err(p)
-      }
-      Ok((
-        Node::BinaryExpression(BinaryExpression::{
-          left,
-          operator: BinaryOperator::RemainderAssign,
-          right,
-          location: start_loc,
-        }),
-        parser,
-      ))
-    }
-    StarStarEquals(_) => {
-      let start_loc = get_location(left)
-      let parser = advance_parser(parser)
-      let (right, parser) = match parse_assignment_expression(parser) {
-        Ok((expr, p)) => (expr, p)
-        Err(p) => return Err(p)
-      }
-      Ok((
-        Node::BinaryExpression(BinaryExpression::{
-          left,
-          operator: BinaryOperator::ExponentiateAssign,
-          right,
-          location: start_loc,
-        }),
-        parser,
-      ))
-    }
-    AmpersandEquals(_) => {
-      let start_loc = get_location(left)
-      let parser = advance_parser(parser)
-      let (right, parser) = match parse_assignment_expression(parser) {
-        Ok((expr, p)) => (expr, p)
-        Err(p) => return Err(p)
-      }
-      Ok((
-        Node::BinaryExpression(BinaryExpression::{
-          left,
-          operator: BinaryOperator::BitwiseAndAssign,
-          right,
-          location: start_loc,
-        }),
-        parser,
-      ))
-    }
-    BarEquals(_) => {
-      let start_loc = get_location(left)
-      let parser = advance_parser(parser)
-      let (right, parser) = match parse_assignment_expression(parser) {
-        Ok((expr, p)) => (expr, p)
-        Err(p) => return Err(p)
-      }
-      Ok((
-        Node::BinaryExpression(BinaryExpression::{
-          left,
-          operator: BinaryOperator::BitwiseOrAssign,
-          right,
-          location: start_loc,
-        }),
-        parser,
-      ))
-    }
-    CaretEquals(_) => {
-      let start_loc = get_location(left)
-      let parser = advance_parser(parser)
-      let (right, parser) = match parse_assignment_expression(parser) {
-        Ok((expr, p)) => (expr, p)
-        Err(p) => return Err(p)
-      }
-      Ok((
-        Node::BinaryExpression(BinaryExpression::{
-          left,
-          operator: BinaryOperator::BitwiseXorAssign,
-          right,
-          location: start_loc,
-        }),
-        parser,
-      ))
-    }
-    LessThanLessThanEquals(_) => {
-      let start_loc = get_location(left)
-      let parser = advance_parser(parser)
-      let (right, parser) = match parse_assignment_expression(parser) {
-        Ok((expr, p)) => (expr, p)
-        Err(p) => return Err(p)
-      }
-      Ok((
-        Node::BinaryExpression(BinaryExpression::{
-          left,
-          operator: BinaryOperator::LeftShiftAssign,
-          right,
-          location: start_loc,
-        }),
-        parser,
-      ))
-    }
-    GreaterThanGreaterThanEquals(_) => {
-      let start_loc = get_location(left)
-      let parser = advance_parser(parser)
-      let (right, parser) = match parse_assignment_expression(parser) {
-        Ok((expr, p)) => (expr, p)
-        Err(p) => return Err(p)
-      }
-      Ok((
-        Node::BinaryExpression(BinaryExpression::{
-          left,
-          operator: BinaryOperator::RightShiftAssign,
-          right,
-          location: start_loc,
-        }),
-        parser,
-      ))
-    }
-    GreaterThanGreaterThanGreaterThanEquals(_) => {
-      let start_loc = get_location(left)
-      let parser = advance_parser(parser)
-      let (right, parser) = match parse_assignment_expression(parser) {
-        Ok((expr, p)) => (expr, p)
-        Err(p) => return Err(p)
-      }
-      Ok((
-        Node::BinaryExpression(BinaryExpression::{
-          left,
-          operator: BinaryOperator::UnsignedRightShiftAssign,
-          right,
-          location: start_loc,
-        }),
-        parser,
-      ))
-    }
-    AmpersandAmpersandEquals(_) => {
-      let start_loc = get_location(left)
-      let parser = advance_parser(parser)
-      let (right, parser) = match parse_assignment_expression(parser) {
-        Ok((expr, p)) => (expr, p)
-        Err(p) => return Err(p)
-      }
-      Ok((
-        Node::BinaryExpression(BinaryExpression::{
-          left,
-          operator: BinaryOperator::LogicalAndAssign,
-          right,
-          location: start_loc,
-        }),
-        parser,
-      ))
-    }
-    BarBarEquals(_) => {
-      let start_loc = get_location(left)
-      let parser = advance_parser(parser)
-      let (right, parser) = match parse_assignment_expression(parser) {
-        Ok((expr, p)) => (expr, p)
-        Err(p) => return Err(p)
-      }
-      Ok((
-        Node::BinaryExpression(BinaryExpression::{
-          left,
-          operator: BinaryOperator::LogicalOrAssign,
-          right,
-          location: start_loc,
-        }),
-        parser,
-      ))
-    }
-    QuestionQuestionEquals(_) => {
-      let start_loc = get_location(left)
-      let parser = advance_parser(parser)
-      let (right, parser) = match parse_assignment_expression(parser) {
-        Ok((expr, p)) => (expr, p)
-        Err(p) => return Err(p)
-      }
-      Ok((
-        Node::BinaryExpression(BinaryExpression::{
-          left,
-          operator: BinaryOperator::NullishCoalescingAssign,
-          right,
-          location: start_loc,
-        }),
-        parser,
-      ))
-    }
-    _ => Ok((left, parser))
-  }
-}
-
-///|
-/// Parse conditional (ternary) expression
-fn parse_conditional_expression(
-  parser : Parser,
-) -> Result[(Node, Parser), Parser] {
-  let (left, parser) = match parse_binary_expression(parser, 0) {
-    Ok((expr, p)) => (expr, p)
-    Err(p) => return Err(p)
-  }
-
-  // Check for ternary operator
-  match current_token(parser) {
-    Question(_) => {
-      let start_loc = get_location(left)
-      let parser = advance_parser(parser)
-      let (when_true, parser) = match parse_assignment_expression(parser) {
-        Ok((expr, p)) => (expr, p)
-        Err(p) => return Err(p)
-      }
-      match expect(parser, fn(t) { matches_colon(t) }) {
-        Ok(parser) => {
-          let parser = advance_parser(parser)
-          let (when_false, parser) = match parse_assignment_expression(parser) {
-            Ok((expr, p)) => (expr, p)
-            Err(p) => return Err(p)
-          }
-          Ok(
-            (
-              Node::ConditionalExpression(ConditionalExpression::{
-                condition: left,
-                when_true,
-                when_false,
-                location: start_loc,
-              }),
-              parser,
-            ),
-          )
-        }
-        Err(parser) => Err(parser)
-      }
-    }
-    _ => Ok((left, parser))
-  }
-}
-
-///|
-/// Try to parse arrow function with parenthesized parameters: (a, b) => expr
-fn try_parse_arrow_function(
-  parser : Parser,
-) -> Result[(Node, Parser), Parser] {
-  let start_loc = current_token(parser).location()
-  let original_parser = parser  // Save original state
-
-  // Consume opening paren
-  let parser = match current_token(parser) {
-    OpenParen(_) => advance_parser(parser)
-    _ => return Err(original_parser)
-  }
-
-  // Parse parameters
-  let (params, parser) = parse_parameter_list(parser)
-  let mut parser = parser
-
-  // Parse optional return type annotation
-  let (return_type, p) = match current_token(parser) {
-    Colon(_) => {
-      parser = advance_parser(parser)
-      match parse_type(parser) {
-        Ok((ty, p)) => (Some(ty), p)
-        Err(_) => return Err(original_parser)
-      }
-    }
-    _ => (None, parser)
-  }
-  parser = p
-
-  // Expect arrow =>
-  parser = match current_token(parser) {
-    Arrow(_) => advance_parser(parser)
-    _ => return Err(original_parser)
-  }
-
-  // Parse body (expression or block)
-  let (body, parser) = match current_token(parser) {
-    OpenBrace(_) => {
-      // Block body
-      match parse_block_statement(parser) {
-        Ok((block, p)) => (block, p)
-        Err(p) => return Err(p)
-      }
-    }
-    _ => {
-      // Expression body
-      match parse_assignment_expression(parser) {
-        Ok((expr, p)) => (expr, p)
-        Err(p) => return Err(p)
-      }
-    }
-  }
-
-  Ok(
-    (
-      Node::ArrowFunction(ArrowFunction::{
-        type_parameters: [],
-        parameters: params,
-        return_type,
-        body,
-        is_async: false,
-        location: start_loc,
-      }),
-      parser,
-    ),
-  )
-}
-
-///|
-/// Try to parse single parameter arrow function: a => expr
-fn try_parse_single_param_arrow_function(
-  parser : Parser,
-) -> Result[(Node, Parser), Parser] {
-  let start_loc = current_token(parser).location()
-  let original_parser = parser  // Save original state
-
-  // Parse single parameter (identifier only)
-  let (id, parser) = match parse_identifier(parser) {
-    Ok((i, p)) => (i, p)
-    Err(_) => return Err(original_parser)
-  }
-
-  // Expect arrow =>
-  let parser = match current_token(parser) {
-    Arrow(_) => advance_parser(parser)
-    _ => return Err(original_parser)
-  }
-
-  // Parse body (expression or block)
-  let (body, parser) = match current_token(parser) {
-    OpenBrace(_) => {
-      // Block body
-      match parse_block_statement(parser) {
-        Ok((block, p)) => (block, p)
-        Err(p) => return Err(p)
-      }
-    }
-    _ => {
-      // Expression body
-      match parse_assignment_expression(parser) {
-        Ok((expr, p)) => (expr, p)
-        Err(p) => return Err(p)
-      }
-    }
-  }
-
-  let params = [
-    Node::Parameter(Parameter::{
-      name: Node::Identifier(id),
-      type_annotation: None,
-      initializer: None,
-      is_optional: false,
-      is_rest: false,
-      modifiers: [],
-      location: id.location,
-    }),
-  ]
-
-  Ok(
-    (
-      Node::ArrowFunction(ArrowFunction::{
-        type_parameters: [],
-        parameters: params,
-        return_type: None,
-        body,
-        is_async: false,
-        location: start_loc,
-      }),
-      parser,
-    ),
-  )
-}
-
-///|
-/// Parse binary expression with precedence climbing
-fn parse_binary_expression(
-  parser : Parser,
-  min_precedence : Int,
-) -> Result[(Node, Parser), Parser] {
-  // Check recursion depth to prevent stack overflow
-  let parser = match check_depth(parser) {
-    Ok(p) => p
-    Err(p) => return Err(p)
-  }
-
-  let (left_val, parser_val) = match parse_unary_expression(parser) {
-    Ok((expr, p)) => (expr, p)
-    Err(p) => return Err(p)
-  }
-  let mut left = left_val
-  let mut parser = parser_val
-  let mut should_continue = true
-  while should_continue {
-    let token = current_token(parser)
-    let op = match get_binary_operator(token) {
-      Some(op) => op
-      None => {
-        should_continue = false
-        BinaryOperator::Add // Dummy value, won't be used
-      }
-    }
-    if should_continue {
-      let precedence = get_precedence(op)
-      if precedence < min_precedence {
-        should_continue = false
-      } else {
-        let start_loc = get_location(left)
-        parser = advance_parser(parser)
-        parser = increment_depth(parser)
-        let (right, next_parser) = match
-          parse_binary_expression(parser, precedence + 1) {
-          Ok((expr, p)) => (expr, decrement_depth(p))
-          Err(p) => return Err(decrement_depth(p))
-        }
-        left = Node::BinaryExpression(BinaryExpression::{
-          left,
-          operator: op,
-          right,
-          location: start_loc,
-        })
-        parser = next_parser
-      }
-    }
-  }
-  Ok((left, parser))
-}
-
-///|
-/// Parse unary expression
-fn parse_unary_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
-  // Check recursion depth to prevent stack overflow
-  let parser = match check_depth(parser) {
-    Ok(p) => p
-    Err(p) => return Err(p)
-  }
-
-  let token = current_token(parser)
-
-  // Check for "await" expression
-  match token {
-    KeywordAwait(start_loc) => {
-      let parser = advance_parser(parser)
-      let parser = increment_depth(parser)
-      match parse_unary_expression(parser) {
-        Ok((expr, parser)) => {
-          let parser = decrement_depth(parser)
-          return Ok((Node::AwaitExpression(AwaitExpression::{
-            expression: expr,
-            location: start_loc,
-          }), parser))
-        }
-        Err(parser) => {
-          let parser = decrement_depth(parser)
-          return Err(parser)
-        }
-      }
-    }
-    _ => ()
-  }
-
-  // Check for "yield" expression
-  match token {
-    KeywordYield(start_loc) => {
-      let parser = advance_parser(parser)
-      // Check for yield* (delegate)
-      let (is_delegate, parser) = match current_token(parser) {
-        Star(_) => (true, advance_parser(parser))
-        _ => (false, parser)
-      }
-      // Yield can have an optional expression
-      let parser = increment_depth(parser)
-      // Try to parse expression, but it's optional for yield
-      match current_token(parser) {
-        // These tokens indicate end of yield expression (no argument)
-        Semicolon(_) | CloseParen(_) | CloseBracket(_) | CloseBrace(_) | Comma(_) | Colon(_) => {
-          let parser = decrement_depth(parser)
-          return Ok((Node::YieldExpression(YieldExpression::{
-            expression: None,
-            is_delegate,
-            location: start_loc,
-          }), parser))
-        }
-        _ => {
-          match parse_expression(parser) {
-            Ok((expr, parser)) => {
-              let parser = decrement_depth(parser)
-              return Ok((Node::YieldExpression(YieldExpression::{
-                expression: Some(expr),
-                is_delegate,
-                location: start_loc,
-              }), parser))
-            }
-            Err(_) => {
-              // No expression, that's okay for yield
-              let parser = decrement_depth(parser)
-              return Ok((Node::YieldExpression(YieldExpression::{
-                expression: None,
-                is_delegate,
-                location: start_loc,
-              }), parser))
-            }
-          }
-        }
-      }
-    }
-    _ => ()
-  }
-
-  // Check for "new" expression
-  match token {
-    KeywordNew(start_loc) => {
-      let parser = advance_parser(parser)
-      let parser = increment_depth(parser)
-      // Parse the constructor expression (which might have property/element access)
-      match parse_postfix_expression(parser) {
-        Ok((expr, parser)) => {
-          let parser = decrement_depth(parser)
-          // Check if there are explicit call arguments
-          match current_token(parser) {
-            OpenParen(_) => {
-              // Has explicit arguments
-              let parser = advance_parser(parser)
-              let (arguments, parser) = parse_argument_list(parser)
-              Ok((Node::NewExpression(NewExpression::{
-                expression: expr,
-                type_arguments: [],
-                arguments: Some(arguments),
-                location: start_loc,
-              }), parser))
-            }
-            _ => {
-              // No arguments (e.g., new Date)
-              Ok((Node::NewExpression(NewExpression::{
-                expression: expr,
-                type_arguments: [],
-                arguments: None,
-                location: start_loc,
-              }), parser))
-            }
-          }
-        }
-        Err(parser) => {
-          let parser = decrement_depth(parser)
-          Err(parser)
-        }
-      }
-    }
-    _ => {
-      // Not a new expression, check for other unary operators
-      match get_unary_operator(token) {
-        Some(op) => {
-          let start_loc = token.location()
-          let parser = advance_parser(parser)
-          let parser = increment_depth(parser)
-          match parse_unary_expression(parser) {
-            Ok((operand, parser)) => {
-              let parser = decrement_depth(parser)
-              Ok(
-                (
-                  Node::UnaryExpression(UnaryExpression::{
-                    operator: op,
-                    operand,
-                    is_prefix: true,
-                    location: start_loc,
-                  }),
-                  parser,
-                ),
-              )
-            }
-            Err(parser) => {
-              let parser = decrement_depth(parser)
-              Err(parser)
-            }
-          }
-        }
-        None => parse_postfix_expression(parser)
-      }
-    }
-  }
-}
-
-///|
-/// Parse postfix expression (calls, property access, etc.)
-fn parse_postfix_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
-  let (left_val, parser_val) = match parse_primary_expression(parser) {
-    Ok((expr, p)) => (expr, p)
-    Err(p) => return Err(p)
-  }
-  let mut left = left_val
-  let mut parser = parser_val
-  let mut should_continue = true
-  while should_continue {
-    let token = current_token(parser)
-    match token {
-      // Type arguments for generic calls (e.g., func<T>(...))
-      LessThan(_) => {
-        // Try to parse type arguments - if successful and followed by OpenParen, it's a generic call
-        let saved_parser = parser
-        match parse_type_argument_list(parser) {
-          Ok((type_args, next_parser)) => {
-            match current_token(next_parser) {
-              OpenParen(_) => {
-                // It's a generic function call
-                let start_loc = get_location(left)
-                parser = advance_parser(next_parser)
-                let (arguments, next_parser) = parse_argument_list(parser)
-                parser = next_parser
-                left = Node::CallExpression(CallExpression::{
-                  expression: left,
-                  type_arguments: type_args,
-                  arguments,
-                  location: start_loc,
-                })
-              }
-              _ => {
-                // Not a generic call, backtrack - treat < as comparison
-                parser = saved_parser
-                should_continue = false
-              }
-            }
-          }
-          Err(_) => {
-            // Failed to parse type arguments, treat < as comparison
-            parser = saved_parser
-            should_continue = false
-          }
-        }
-      }
-
-      // Function call
-      OpenParen(_) => {
-        let start_loc = get_location(left)
-        parser = advance_parser(parser)
-        let (arguments, next_parser) = parse_argument_list(parser)
-        parser = next_parser
-        left = Node::CallExpression(CallExpression::{
-          expression: left,
-          type_arguments: [],
-          arguments,
-          location: start_loc,
-        })
-      }
-
-      // Property access
-      Dot(_) => {
-        let start_loc = get_location(left)
-        parser = advance_parser(parser)
-        match parse_identifier(parser) {
-          Ok((id, next_parser)) => {
-            left = Node::PropertyAccessExpression(PropertyAccessExpression::{
-              expression: left,
-              name: id.name,
-              location: start_loc,
-            })
-            parser = next_parser
-          }
-          Err(p) => return Err(p)
-        }
-      }
-
-      // Non-null assertion property access (obj!.property)
-      ExclamationDot(_) => {
-        let start_loc = get_location(left)
-        parser = advance_parser(parser)
-        // First wrap left in NonNullExpression
-        let non_null_expr = Node::NonNullExpression(NonNullExpression::{
-          expression: left,
-          location: start_loc,
-        })
-        // Then parse the property access
-        match parse_identifier(parser) {
-          Ok((id, next_parser)) => {
-            left = Node::PropertyAccessExpression(PropertyAccessExpression::{
-              expression: non_null_expr,
-              name: id.name,
-              location: start_loc,
-            })
-            parser = next_parser
-          }
-          Err(p) => return Err(p)
-        }
-      }
-
-      // Optional chaining - property access, call, or element access
-      QuestionDot(_) => {
-        let start_loc = get_location(left)
-        parser = advance_parser(parser)
-        match current_token(parser) {
-          // Optional element access: obj?.[index]
-          OpenBracket(_) => {
-            parser = advance_parser(parser)
-            parser = increment_depth(parser)
-            match parse_expression(parser) {
-              Ok((index, next_parser)) => {
-                parser = decrement_depth(next_parser)
-                match expect(parser, fn(t) { matches_close_bracket(t) }) {
-                  Ok(p) => {
-                    parser = advance_parser(p)
-                    left = Node::OptionalChain(OptionalChain::{
-                      expression: left,
-                      chain: OptionalChainKind::Element(index),
-                      location: start_loc,
-                    })
-                  }
-                  Err(p) => return Err(p)
-                }
-              }
-              Err(p) => return Err(decrement_depth(p))
-            }
-          }
-          // Optional call: func?.()
-          OpenParen(_) => {
-            parser = advance_parser(parser)
-            let (arguments, next_parser) = parse_argument_list(parser)
-            parser = next_parser
-            left = Node::OptionalChain(OptionalChain::{
-              expression: left,
-              chain: OptionalChainKind::Call(arguments),
-              location: start_loc,
-            })
-          }
-          // Optional property access: obj?.prop
-          _ => {
-            match parse_identifier(parser) {
-              Ok((id, next_parser)) => {
-                left = Node::OptionalChain(OptionalChain::{
-                  expression: left,
-                  chain: OptionalChainKind::Property(id.name),
-                  location: start_loc,
-                })
-                parser = next_parser
-              }
-              Err(p) => return Err(p)
-            }
-          }
-        }
-      }
-
-      // Element access
-      OpenBracket(_) => {
-        let start_loc = get_location(left)
-        parser = advance_parser(parser)
-        parser = increment_depth(parser)
-        match parse_expression(parser) {
-          Ok((index, next_parser)) => {
-            parser = decrement_depth(next_parser)
-            match expect(parser, fn(t) { matches_close_bracket(t) }) {
-              Ok(p) => {
-                parser = advance_parser(p)
-                left = Node::ElementAccessExpression(ElementAccessExpression::{
-                  expression: left,
-                  argument_expression: index,
-                  location: start_loc,
-                })
-              }
-              Err(p) => return Err(p)
-            }
-          }
-          Err(p) => return Err(decrement_depth(p))
-        }
-      }
-
-      // Postfix increment/decrement
-      PlusPlus(_) | MinusMinus(_) => {
-        let start_loc = get_location(left)
-        let operator = match token {
-          PlusPlus(_) => UnaryOperator::Increment
-          MinusMinus(_) => UnaryOperator::Decrement
-          _ => UnaryOperator::Plus // Should never happen
-        }
-        parser = advance_parser(parser)
-        left = Node::UnaryExpression(UnaryExpression::{
-          operator,
-          operand: left,
-          is_prefix: false,
-          location: start_loc,
-        })
-      }
-
-      // Non-null assertion (!)
-      Exclamation(_) => {
-        let start_loc = get_location(left)
-        parser = advance_parser(parser)
-        left = Node::NonNullExpression(NonNullExpression::{
-          expression: left,
-          location: start_loc,
-        })
-      }
-
-      // Type assertion with 'as' keyword (expr as Type) or (expr as const)
-      KeywordAs(_) => {
-        let start_loc = get_location(left)
-        parser = advance_parser(parser)
-        // Check for "as const" assertion
-        match current_token(parser) {
-          KeywordConst(loc) => {
-            parser = advance_parser(parser)
-            let type_node = Node::KeywordType(KeywordType::{
-              kind: TypeKeyword::Const,
-              location: loc,
-            })
-            left = Node::AsExpression(AsExpression::{
-              expression: left,
-              type_node,
-              location: start_loc,
-            })
-          }
-          _ => {
-            match parse_type(parser) {
-              Ok((type_node, next_parser)) => {
-                left = Node::AsExpression(AsExpression::{
-                  expression: left,
-                  type_node,
-                  location: start_loc,
-                })
-                parser = next_parser
-              }
-              Err(p) => return Err(p)
-            }
-          }
-        }
-      }
-
-      // Satisfies expression (expr satisfies Type)
-      KeywordSatisfies(_) => {
-        let start_loc = get_location(left)
-        parser = advance_parser(parser)
-        match parse_type(parser) {
-          Ok((type_node, next_parser)) => {
-            left = Node::SatisfiesExpression(SatisfiesExpression::{
-              expression: left,
-              type_node,
-              location: start_loc,
-            })
-            parser = next_parser
-          }
-          Err(p) => return Err(p)
-        }
-      }
-
-      _ => should_continue = false
-    }
-  }
-  Ok((left, parser))
-}
-
-///|
-/// Parse argument list
-fn parse_argument_list(parser : Parser) -> (Array[Node], Parser) {
-  let arguments : Array[Node] = []
-  let mut parser = parser
-
-  // Check for empty argument list
-  match current_token(parser) {
-    CloseParen(_) => return (arguments, advance_parser(parser))
-    _ =>
-      // Empty - continue to argument parsing
-      ignore(())
-  }
-  let mut should_continue = true
-  while should_continue {
-    match parse_assignment_expression(parser) {
-      Ok((arg, next_parser)) => {
-        arguments.push(arg)
-        parser = next_parser
-        match current_token(parser) {
-          Comma(_) => parser = advance_parser(parser)
-          // Continue loop
-          CloseParen(_) => {
-            parser = advance_parser(parser)
-            should_continue = false
-          }
-          _ => should_continue = false
-        }
-      }
-      Err(_) => should_continue = false
-    }
-  }
-  (arguments, parser)
-}
-
-///|
-/// Parse primary expression
-fn parse_primary_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
-  let token = current_token(parser)
-  match token {
-    // Boolean literals (must come before general Identifier)
-    Identifier(name, loc) if name == "true" || name == "false" => {
-      let value = name == "true"
-      Ok(
-        (
-          Node::BooleanLiteral(BooleanLiteral::{ value, location: loc }),
-          advance_parser(parser),
-        ),
-      )
-    }
-
-    // Arrow function (with single parameter, no parens)
-    // Must check before general Identifier to look ahead for =>
-    Identifier(name, loc) =>
-      // Look ahead for =>
-      if parser.position + 1 < parser.tokens.length() {
-        match parser.tokens.get(parser.position + 1) {
-          Some(Arrow(_)) => parse_arrow_function_single_param(parser)
-          _ =>
-            // Regular identifier
-            Ok(
-              (Node::Identifier(Identifier::{ name, location: loc }), advance_parser(parser)),
-            )
-        }
-      } else {
-        // Regular identifier (at end of tokens)
-        Ok(
-          (Node::Identifier(Identifier::{ name, location: loc }), advance_parser(parser)),
-        )
-      }
-
-    // Numeric literal
-    NumericLiteral(value, loc) =>
-      Ok(
-        (
-          Node::NumericLiteral(NumericLiteral::{ value, location: loc }),
-          advance_parser(parser),
-        ),
-      )
-
-    // BigInt literal
-    BigIntLiteral(value, loc) =>
-      Ok(
-        (
-          Node::BigIntLiteral(BigIntLiteral::{ value, location: loc }),
-          advance_parser(parser),
-        ),
-      )
-
-    // String literal
-    StringLiteral(value, loc) =>
-      Ok(
-        (
-          Node::StringLiteral(StringLiteral::{ value, location: loc }),
-          advance_parser(parser),
-        ),
-      )
-
-    // Template literal (simple - no interpolation)
-    TemplateLiteral(value, loc) =>
-      Ok(
-        (
-          Node::TemplateExpression(TemplateExpression::{
-            head: value,
-            template_spans: [],
-            location: loc,
-          }),
-          advance_parser(parser),
-        ),
-      )
-
-    // Template literal with interpolation
-    TemplateHead(head, loc) => {
-      let mut parser = advance_parser(parser)
-      let template_spans : Array[TemplateSpan] = []
-
-      while true {
-        // Parse the interpolated expression
-        let expr_start = current_token(parser).location()
-        match parse_expression(parser) {
-          Ok((expr, p)) => {
-            parser = p
-            // Expect CloseBrace
-            match current_token(parser) {
-              CloseBrace(_) => {
-                parser = advance_parser(parser)
-                // Check for TemplateTail or TemplateMiddle
-                match current_token(parser) {
-                  TemplateTail(tail_text, span_loc) => {
-                    template_spans.push(TemplateSpan::{ expression: expr, literal: tail_text, location: span_loc })
-                    parser = advance_parser(parser)
-                    break
-                  }
-                  TemplateMiddle(middle_text, span_loc) => {
-                    template_spans.push(TemplateSpan::{ expression: expr, literal: middle_text, location: span_loc })
-                    parser = advance_parser(parser)
-                    // Continue loop to parse next expression
-                  }
-                  _ => return Err(add_error(parser, "Expected template continuation after }", current_token(parser).location()))
-                }
-              }
-              _ => return Err(add_error(parser, "Expected '}' after expression in template literal", current_token(parser).location()))
-            }
-          }
-          Err(p) => return Err(p)
-        }
-      }
-      Ok(
-        (
-          Node::TemplateExpression(TemplateExpression::{
-            head,
-            template_spans,
-            location: loc,
-          }),
-          parser,
-        ),
-      )
-    }
-
-    // null
-    KeywordNull(loc) =>
-      Ok((Node::NullLiteral(NullLiteral::{ location: loc }), advance_parser(parser)))
-
-    // regex literal
-    RegExpLiteral(pattern, loc) =>
-      Ok((Node::RegExpLiteral(RegExpLiteral::{ pattern, location: loc }), advance_parser(parser)))
-
-    // undefined (as expression literal)
-    KeywordUndefined(loc) =>
-      Ok(
-        (
-          Node::Identifier(Identifier::{ name: "undefined", location: loc }),
-          advance_parser(parser),
-        ),
-      )
-
-    // this
-    KeywordThis(loc) =>
-      Ok(
-        (
-          Node::ThisExpression(ThisExpression::{ location: loc }),
-          advance_parser(parser),
-        ),
-      )
-
-    // super
-    KeywordSuper(loc) =>
-      Ok(
-        (
-          Node::SuperExpression(SuperExpression::{ location: loc }),
-          advance_parser(parser),
-        ),
-      )
-
-    // new expression
-    KeywordNew(start_loc) => {
-      let parser = advance_parser(parser) // consume 'new'
-
-      // Parse the constructor identifier (e.g., Foo)
-      match current_token(parser) {
-        Identifier(name, loc) => {
-          let expr = Node::Identifier(Identifier::{ name, location: loc })
-          let parser = advance_parser(parser) // consume identifier
-
-          // Check for optional arguments
-          match current_token(parser) {
-            OpenParen(_) => {
-              let parser = advance_parser(parser) // consume '('
-              let parser = increment_depth(parser)
-
-              // Parse arguments
-              let (args, parser) = parse_argument_list(parser)
-
-              let parser = decrement_depth(parser)
-              match expect(parser, fn(t) { matches_close_paren(t) }) {
-                Ok(parser) =>
-                  Ok(
-                    (
-                      Node::NewExpression(NewExpression::{
-                        expression: expr,
-                        type_arguments: [],
-                        arguments: Some(args),
-                        location: start_loc,
-                      }),
-                      advance_parser(parser),
-                    ),
-                  )
-                Err(parser) => Err(parser)
-              }
-            }
-            _ =>
-              // No arguments
-              Ok(
-                (
-                  Node::NewExpression(NewExpression::{
-                    expression: expr,
-                    type_arguments: [],
-                    arguments: None,
-                    location: start_loc,
-                  }),
-                  parser,
-                ),
-              )
-          }
-        }
-        _ =>
-          Err(add_error(parser, "Expected identifier after 'new'", start_loc))
-      }
-    }
-
-    // Parenthesized expression
-    OpenParen(_) => {
-      let start_loc = token.location()
-      let parser = advance_parser(parser)
-      let parser = increment_depth(parser)
-      match parse_expression(parser) {
-        Ok((expr, parser)) => {
-          let parser = decrement_depth(parser)
-          match expect(parser, fn(t) { matches_close_paren(t) }) {
-            Ok(parser) =>
-              Ok(
-                (
-                  Node::ParenthesizedExpression(ParenthesizedExpression::{
-                    expression: expr,
-                    location: start_loc,
-                  }),
-                  advance_parser(parser),
-                ),
-              )
-            Err(parser) => Err(parser)
-          }
-        }
-        Err(parser) => {
-          let parser = decrement_depth(parser)
-          Err(parser)
-        }
-      }
-    }
-
-    // Array literal
-    OpenBracket(_) => parse_array_literal(parser)
-
-    // Object literal
-    OpenBrace(_) => parse_object_literal(parser)
-
-    // Function expression (e.g., function() {} or function foo() {})
-    KeywordFunction(start_loc) => {
-      let parser = advance_parser(parser) // consume 'function'
-
-      // Optional function name
-      let (name, parser) = match current_token(parser) {
-        Identifier(fname, _) => (Some(fname), advance_parser(parser))
-        _ => (None, parser)
-      }
-
-      // Parse parameters
-      match expect(parser, fn(t) { matches_open_paren(t) }) {
-        Ok(parser) => {
-          let parser = advance_parser(parser) // consume '('
-          let (params, parser) = parse_parameter_list(parser)
-          // Note: parse_parameter_list consumes the closing ')'
-
-          // Parse optional return type
-          let (return_type, parser) = match current_token(parser) {
-            Colon(_) => {
-              let parser = advance_parser(parser)
-              match parse_type(parser) {
-                Ok((ty, p)) => (Some(ty), p)
-                Err(p) => (None, p)
-              }
-            }
-            _ => (None, parser)
-          }
-
-          // Parse function body
-          match parse_block_statement(parser) {
-            Ok((body, parser)) =>
-              Ok((Node::FunctionExpression(FunctionExpression::{
-                name,
-                type_parameters: [],
-                parameters: params,
-                return_type,
-                body,
-                is_async: false,
-                is_generator: false,
-                location: start_loc,
-              }), parser))
-            Err(parser) => Err(parser)
-          }
-        }
-        Err(parser) => Err(parser)
-      }
-    }
-
-    // JSX element or Type assertion with angle brackets (<Type>expr)
-    LessThan(_) => {
-      let start_loc = token.location()
-      let saved_parser = parser
-
-      // First check if it's a JSX element
-      if is_jsx_start(parser) {
-        return parse_jsx_element_or_fragment(parser)
-      }
-
-      // Otherwise try to parse as type assertion
-      let mut parser = advance_parser(parser) // consume '<'
-      match parse_type(parser) {
-        Ok((type_node, next_parser)) => {
-          match current_token(next_parser) {
-            GreaterThan(_) => {
-              parser = advance_parser(next_parser) // consume '>'
-
-              // Parse the expression being asserted
-              match parse_unary_expression(parser) {
-                Ok((expr, next_parser)) => {
-                  Ok((
-                    Node::TypeAssertionExpression(TypeAssertionExpression::{
-                      type_node,
-                      expression: expr,
-                      location: start_loc,
-                    }),
-                    next_parser,
-                  ))
-                }
-                Err(_) => {
-                  // Failed to parse expression, backtrack
-                  Err(saved_parser)
-                }
-              }
-            }
-            _ => {
-              // No closing >, not a type assertion, backtrack
-              Err(saved_parser)
-            }
-          }
-        }
-        Err(_) => {
-          // Failed to parse type, not a type assertion, backtrack
-          Err(saved_parser)
-        }
-      }
-    }
-
-    // Async function expression or async arrow function
-    KeywordAsync(start_loc) => {
-      let parser = advance_parser(parser) // consume 'async'
-      match current_token(parser) {
-        // async function expression
-        KeywordFunction(_) => {
-          let parser = advance_parser(parser) // consume 'function'
-          // Optional function name
-          let (name, parser) = match current_token(parser) {
-            Identifier(fname, _) => (Some(fname), advance_parser(parser))
-            _ => (None, parser)
-          }
-          // Parse parameters
-          match expect(parser, fn(t) { matches_open_paren(t) }) {
-            Ok(parser) => {
-              let parser = advance_parser(parser)
-              let (params, parser) = parse_parameter_list(parser)
-              let (return_type, parser) = match current_token(parser) {
-                Colon(_) => {
-                  let parser = advance_parser(parser)
-                  match parse_type(parser) {
-                    Ok((ty, p)) => (Some(ty), p)
-                    Err(p) => (None, p)
-                  }
-                }
-                _ => (None, parser)
-              }
-              match parse_block_statement(parser) {
-                Ok((body, parser)) =>
-                  Ok((Node::FunctionExpression(FunctionExpression::{
-                    name,
-                    type_parameters: [],
-                    parameters: params,
-                    return_type,
-                    body,
-                    is_async: true,
-                    is_generator: false,
-                    location: start_loc,
-                  }), parser))
-                Err(parser) => Err(parser)
-              }
-            }
-            Err(parser) => Err(parser)
-          }
-        }
-        // async arrow function: async () => ... or async (params) => ...
-        OpenParen(_) => {
-          let parser = advance_parser(parser) // consume '('
-          let (params, parser) = parse_parameter_list(parser)
-          // Optional return type
-          let (return_type, parser) = match current_token(parser) {
-            Colon(_) => {
-              let parser = advance_parser(parser)
-              match parse_type(parser) {
-                Ok((ty, p)) => (Some(ty), p)
-                Err(p) => (None, p)
-              }
-            }
-            _ => (None, parser)
-          }
-          // Expect =>
-          match current_token(parser) {
-            Arrow(_) => {
-              let parser = advance_parser(parser)
-              // Parse body (block or expression)
-              match current_token(parser) {
-                OpenBrace(_) => {
-                  match parse_block_statement(parser) {
-                    Ok((body, parser)) =>
-                      Ok((Node::ArrowFunction(ArrowFunction::{
-                        type_parameters: [],
-                        parameters: params,
-                        return_type,
-                        body,
-                        is_async: true,
-                        location: start_loc,
-                      }), parser))
-                    Err(parser) => Err(parser)
-                  }
-                }
-                _ => {
-                  match parse_assignment_expression(parser) {
-                    Ok((expr, parser)) =>
-                      Ok((Node::ArrowFunction(ArrowFunction::{
-                        type_parameters: [],
-                        parameters: params,
-                        return_type,
-                        body: expr,
-                        is_async: true,
-                        location: start_loc,
-                      }), parser))
-                    Err(parser) => Err(parser)
-                  }
-                }
-              }
-            }
-            _ => Err(add_error(parser, "Expected '=>' after async arrow function parameters", current_token(parser).location()))
-          }
-        }
-        // async identifier => ... (single param arrow function)
-        Identifier(name, loc) => {
-          let parser = advance_parser(parser) // consume identifier
-          match current_token(parser) {
-            Arrow(_) => {
-              let parser = advance_parser(parser) // consume '=>'
-              let param = Node::Parameter(Parameter::{
-                name: Node::Identifier(Identifier::{ name, location: loc }),
-                type_annotation: None,
-                initializer: None,
-                is_optional: false,
-                is_rest: false,
-                modifiers: [],
-                location: loc,
-              })
-              // Parse body
-              match current_token(parser) {
-                OpenBrace(_) => {
-                  match parse_block_statement(parser) {
-                    Ok((body, parser)) =>
-                      Ok((Node::ArrowFunction(ArrowFunction::{
-                        type_parameters: [],
-                        parameters: [param],
-                        return_type: None,
-                        body,
-                        is_async: true,
-                        location: start_loc,
-                      }), parser))
-                    Err(parser) => Err(parser)
-                  }
-                }
-                _ => {
-                  match parse_assignment_expression(parser) {
-                    Ok((expr, parser)) =>
-                      Ok((Node::ArrowFunction(ArrowFunction::{
-                        type_parameters: [],
-                        parameters: [param],
-                        return_type: None,
-                        body: expr,
-                        is_async: true,
-                        location: start_loc,
-                      }), parser))
-                    Err(parser) => Err(parser)
-                  }
-                }
-              }
-            }
-            _ => Err(add_error(parser, "Expected '=>' after async identifier", current_token(parser).location()))
-          }
-        }
-        _ => Err(add_error(parser, "Expected function or arrow function after 'async'", current_token(parser).location()))
-      }
-    }
-
-    _ =>
-      Err(add_error(parser, "Unexpected token in expression", token.location()))
-  }
-}
-
-///|
-/// Parse array literal
-fn parse_array_literal(parser : Parser) -> Result[(Node, Parser), Parser] {
-  let start_loc = current_token(parser).location()
-  let parser = advance_parser(parser) // Skip '['
-  let elements : Array[Node?] = []
-  let mut parser = parser
-  while !matches_close_bracket(current_token(parser)) && !is_at_end(parser) {
-    // Check for hole (elision)
-    match current_token(parser) {
-      Comma(_) => {
-        elements.push(None)
-        parser = advance_parser(parser)
-        continue
-      }
-      _ => ignore(())
-    }
-
-    // Check for spread operator
-    let expr_result = match current_token(parser) {
-      DotDotDot(loc) => {
-        parser = advance_parser(parser) // consume ...
-        match parse_assignment_expression(parser) {
-          Ok((expr, p)) => {
-            let spread_expr = Node::SpreadExpression(SpreadExpression::{
-              expression: expr,
-              location: loc,
-            })
-            Ok((spread_expr, p))
-          }
-          Err(p) => Err(p)
-        }
-      }
-      _ => parse_assignment_expression(parser)
-    }
-
-    match expr_result {
-      Ok((expr, next_parser)) => {
-        elements.push(Some(expr))
-        parser = next_parser
-        match current_token(parser) {
-          Comma(_) => parser = advance_parser(parser)
-          CloseBracket(_) => break
-          _ => break
-        }
-      }
-      Err(p) => return Err(p)
-    }
-  }
-  match expect(parser, fn(t) { matches_close_bracket(t) }) {
-    Ok(parser) =>
-      Ok(
-        (
-          Node::ArrayLiteralExpression(ArrayLiteralExpression::{
-            elements,
-            location: start_loc,
-          }),
-          advance_parser(parser),
-        ),
-      )
-    Err(parser) => Err(parser)
-  }
-}
-
-///|
-/// Parse object literal
-fn parse_object_literal(parser : Parser) -> Result[(Node, Parser), Parser] {
-  let start_loc = current_token(parser).location()
-  let parser = advance_parser(parser) // Skip '{'
-  let properties : Array[ObjectProperty] = []
-  let mut parser = parser
-  while !matches_close_brace(current_token(parser)) && !is_at_end(parser) {
-    match parse_object_property(parser) {
-      Ok((prop, next_parser)) => {
-        properties.push(prop)
-        parser = next_parser
-        match current_token(parser) {
-          Comma(_) => parser = advance_parser(parser)
-          CloseBrace(_) => break
-          _ => break
-        }
-      }
-      Err(p) => return Err(p)
-    }
-  }
-  match expect(parser, fn(t) { matches_close_brace(t) }) {
-    Ok(parser) =>
-      Ok(
-        (
-          Node::ObjectLiteralExpression(ObjectLiteralExpression::{
-            properties,
-            location: start_loc,
-          }),
-          advance_parser(parser),
-        ),
-      )
-    Err(parser) => Err(parser)
-  }
-}
-
-///|
-/// Parse object property
-fn parse_object_property(
-  parser : Parser,
-) -> Result[(ObjectProperty, Parser), Parser] {
-  let start_loc = current_token(parser).location()
-
-  // Check for spread property or computed property
-  match current_token(parser) {
-    DotDotDot(_) => {
-      let parser = advance_parser(parser) // consume ...
-      match parse_assignment_expression(parser) {
-        Ok((expr, parser)) => {
-          Ok((ObjectProperty::SpreadAssignment(expr, start_loc), parser))
-        }
-        Err(parser) => Err(parser)
-      }
-    }
-    OpenBracket(_) => {
-      // Computed property: [expression]: value
-      let parser = advance_parser(parser) // consume [
-      match parse_assignment_expression(parser) {
-        Ok((name_expr, parser)) => {
-          match current_token(parser) {
-            CloseBracket(_) => {
-              let parser = advance_parser(parser) // consume ]
-              match current_token(parser) {
-                Colon(_) => {
-                  let parser = advance_parser(parser) // consume :
-                  match parse_assignment_expression(parser) {
-                    Ok((value, parser)) => {
-                      Ok((ObjectProperty::ComputedPropertyAssignment(name_expr, value, start_loc), parser))
-                    }
-                    Err(parser) => Err(parser)
-                  }
-                }
-                _ => Err(add_error(parser, "Expected ':' after computed property name", current_token(parser).location()))
-              }
-            }
-            _ => Err(add_error(parser, "Expected ']' after computed property name", current_token(parser).location()))
-          }
-        }
-        Err(parser) => Err(parser)
-      }
-    }
-    StringLiteral(name, _) => {
-      // String literal property name: "name": value or 'name': value
-      let parser = advance_parser(parser) // consume string literal
-      match current_token(parser) {
-        Colon(_) => {
-          let parser = advance_parser(parser) // consume :
-          match parse_assignment_expression(parser) {
-            Ok((value, parser)) =>
-              Ok((ObjectProperty::PropertyAssignment(name, value, start_loc), parser))
-            Err(parser) => Err(parser)
-          }
-        }
-        _ => Err(add_error(parser, "Expected ':' after string property name", current_token(parser).location()))
-      }
-    }
-    NumericLiteral(name, _) => {
-      // Numeric literal property name: 0: value, 1: value
-      let parser = advance_parser(parser) // consume numeric literal
-      match current_token(parser) {
-        Colon(_) => {
-          let parser = advance_parser(parser) // consume :
-          match parse_assignment_expression(parser) {
-            Ok((value, parser)) =>
-              Ok((ObjectProperty::PropertyAssignment(name, value, start_loc), parser))
-            Err(parser) => Err(parser)
-          }
-        }
-        _ => Err(add_error(parser, "Expected ':' after numeric property name", current_token(parser).location()))
-      }
-    }
-    _ => {
-      // Parse property name as identifier
-      match parse_identifier(parser) {
-        Ok((id, next_parser)) => {
-          let parser = next_parser
-
-          // Check for method, shorthand, or full property
-          match current_token(parser) {
-            OpenParen(_) => {
-              // Method declaration: greet() { ... }
-              let parser = advance_parser(parser) // consume (
-              let (parameters, parser) = parse_parameter_list(parser)
-
-              // Optional return type
-              let (return_type, parser) = match current_token(parser) {
-                Colon(_) => {
-                  let parser = advance_parser(parser)
-                  match parse_type(parser) {
-                    Ok((ty, p)) => (Some(ty), p)
-                    Err(p) => (None, p)
-                  }
-                }
-                _ => (None, parser)
-              }
-
-              // Parse method body
-              match parse_block_statement(parser) {
-                Ok((body, parser)) => {
-                  let func_expr = FunctionExpression::{
-                    name: None,
-                    type_parameters: [],
-                    parameters,
-                    return_type,
-                    body,
-                    is_async: false,
-                    is_generator: false,
-                    location: start_loc,
-                  }
-                  Ok((ObjectProperty::MethodDeclaration(id.name, func_expr, start_loc), parser))
-                }
-                Err(parser) => Err(parser)
-              }
-            }
-            Colon(_) => {
-              let parser = advance_parser(parser)
-              match parse_assignment_expression(parser) {
-                Ok((value, parser)) =>
-                  Ok(
-                    (
-                      ObjectProperty::PropertyAssignment(id.name, value, start_loc),
-                      parser,
-                    ),
-                  )
-                Err(parser) => Err(parser)
-              }
-            }
-            _ =>
-              // Shorthand property
-              Ok((ObjectProperty::ShorthandProperty(id.name, start_loc), parser))
-          }
-        }
-        Err(parser) => Err(parser)
-      }
-    }
-  }
-}
-
-///|
-/// Parse arrow function with single parameter (no parens)
-fn parse_arrow_function_single_param(
-  parser : Parser,
-) -> Result[(Node, Parser), Parser] {
-  let start_loc = current_token(parser).location()
-
-  // Parse parameter
-  let (param, parser) = match parse_identifier(parser) {
-    Ok((id, p)) => (id, p)
-    Err(p) => return Err(p)
-  }
-
-  // Expect =>
-  match expect(parser, fn(t) { matches_arrow(t) }) {
-    Ok(parser) => {
-      let parser = advance_parser(parser)
-
-      // Parse body
-      let (body, parser) = match current_token(parser) {
-        OpenBrace(_) =>
-          // Block body
-          match parse_block_statement(parser) {
-            Ok((block, p)) => (block, p)
-            Err(p) => return Err(p)
-          }
-        _ =>
-          // Expression body
-          match parse_assignment_expression(parser) {
-            Ok((expr, p)) => (expr, p)
-            Err(p) => return Err(p)
-          }
-      }
-      let param_node = Node::Parameter(Parameter::{
-        name: Node::Identifier(param),
-        type_annotation: None,
-        initializer: None,
-        is_optional: false,
-        is_rest: false,
-        modifiers: [],
-        location: start_loc,
-      })
-      Ok(
-        (
-          Node::ArrowFunction(ArrowFunction::{
-            type_parameters: [],
-            parameters: [param_node],
-            return_type: None,
-            body,
-            is_async: false,
-            location: start_loc,
-          }),
-          parser,
-        ),
-      )
-    }
-    Err(parser) => Err(parser)
-  }
-}
-
-///|
 /// Parse type (enhanced with union support)
-fn parse_type(parser : Parser) -> Result[(Node, Parser), Parser] {
-  // Check for readonly modifier (readonly number[], readonly [T, U])
-  let (is_readonly, parser) = match current_token(parser) {
-    KeywordReadonly(_) => (true, advance_parser(parser))
-    _ => (false, parser)
-  }
-
-  // Parse primary type with readonly context
-  let result = parse_primary_type_with_readonly(parser, is_readonly)
-  match result {
-    Ok((type_node, parser)) => {
-      // Check for array type syntax (type[]) and indexed access (type[K])
-      let (type_node, parser) = parse_array_type_suffix_with_readonly(parser, type_node, is_readonly)
-      // Check for conditional type (T extends U ? X : Y)
-      let result = parse_conditional_type(parser, type_node)
-      match result {
-        Ok((type_node, parser)) => {
-          // Check for union/intersection type (|, &)
-          parse_union_or_intersection_type(parser, type_node)
-        }
-        Err(p) => Err(p)
-      }
-    }
-    Err(p) => Err(p)
-  }
-}
-
-///|
-/// Parse array type suffix and indexed access type (handles type[], Type[K], etc.)
-fn parse_array_type_suffix(parser : Parser, base_type : Node) -> (Node, Parser) {
-  parse_array_type_suffix_with_readonly(parser, base_type, false)
-}
-
-///|
-/// Parse array type suffix with readonly flag
-fn parse_array_type_suffix_with_readonly(parser : Parser, base_type : Node, is_readonly : Bool) -> (Node, Parser) {
-  let mut type_node = base_type
-  let mut parser = parser
-  let mut first_array = true
-
-  while true {
-    match current_token(parser) {
-      OpenBracket(_) => {
-        let start_loc = get_location(type_node)
-        parser = advance_parser(parser)
-        match current_token(parser) {
-          CloseBracket(_) => {
-            // Array type: Type[]
-            parser = advance_parser(parser)
-            // Only first array inherits readonly, nested arrays are not readonly by default
-            let array_readonly = if first_array { is_readonly } else { false }
-            first_array = false
-            type_node = Node::ArrayType(ArrayType::{
-              element_type: type_node,
-              is_readonly: array_readonly,
-              location: start_loc,
-            })
-          }
-          _ => {
-            // Indexed access type: Type[IndexType]
-            match parse_type(parser) {
-              Ok((index_type, p)) => {
-                parser = p
-                match current_token(parser) {
-                  CloseBracket(_) => {
-                    parser = advance_parser(parser)
-                    type_node = Node::IndexedAccessType(IndexedAccessType::{
-                      object_type: type_node,
-                      index_type,
-                      location: start_loc,
-                    })
-                  }
-                  _ => {
-                    // Not a valid indexed access, break
-                    break
-                  }
-                }
-              }
-              Err(_) => break
-            }
-          }
-        }
-      }
-      _ => break
-    }
-  }
-
-  (type_node, parser)
-}
-
-///|
-/// Parse conditional type (T extends U ? X : Y)
-fn parse_conditional_type(parser : Parser, check_type : Node) -> Result[(Node, Parser), Parser] {
-  match current_token(parser) {
-    KeywordExtends(_) => {
-      let start_loc = get_location(check_type)
-      let parser = advance_parser(parser) // consume 'extends'
-
-      // Parse extends type
-      match parse_primary_type(parser) {
-        Ok((extends_type, parser)) => {
-          let (extends_type, parser) = parse_array_type_suffix(parser, extends_type)
-
-          // Expect '?'
-          match current_token(parser) {
-            Question(_) => {
-              let parser = advance_parser(parser)
-
-              // Parse true type
-              match parse_type(parser) {
-                Ok((true_type, parser)) => {
-                  // Expect ':'
-                  match current_token(parser) {
-                    Colon(_) => {
-                      let parser = advance_parser(parser)
-
-                      // Parse false type
-                      match parse_type(parser) {
-                        Ok((false_type, parser)) => {
-                          Ok((
-                            Node::ConditionalType(ConditionalType::{
-                              check_type,
-                              extends_type,
-                              true_type,
-                              false_type,
-                              location: start_loc,
-                            }),
-                            parser,
-                          ))
-                        }
-                        Err(p) => Err(p)
-                      }
-                    }
-                    _ => {
-                      // Not a conditional type, return check_type as-is
-                      Ok((check_type, parser))
-                    }
-                  }
-                }
-                Err(p) => Err(p)
-              }
-            }
-            _ => {
-              // No '?' after extends, not a conditional type
-              // This might be a constraint in a generic type parameter context
-              // Return the check_type as-is
-              Ok((check_type, parser))
-            }
-          }
-        }
-        Err(p) => Err(p)
-      }
-    }
-    _ => Ok((check_type, parser))
-  }
-}
-
-///|
-/// Parse primary type
-fn parse_primary_type(parser : Parser) -> Result[(Node, Parser), Parser] {
-  parse_primary_type_with_readonly(parser, false)
-}
-
-///|
-/// Parse primary type with readonly context for tuples
-fn parse_primary_type_with_readonly(parser : Parser, is_readonly : Bool) -> Result[(Node, Parser), Parser] {
-  let token = current_token(parser)
-  let loc = token.location()
-  match token {
-    KeywordString(_) =>
-      Ok(
-        (
-          Node::KeywordType(KeywordType::{
-            kind: TypeKeyword::String,
-            location: loc,
-          }),
-          advance_parser(parser),
-        ),
-      )
-    KeywordNumber(_) =>
-      Ok(
-        (
-          Node::KeywordType(KeywordType::{
-            kind: TypeKeyword::Number,
-            location: loc,
-          }),
-          advance_parser(parser),
-        ),
-      )
-    KeywordBoolean(_) =>
-      Ok(
-        (
-          Node::KeywordType(KeywordType::{
-            kind: TypeKeyword::Boolean,
-            location: loc,
-          }),
-          advance_parser(parser),
-        ),
-      )
-    KeywordVoid(_) =>
-      Ok(
-        (
-          Node::KeywordType(KeywordType::{
-            kind: TypeKeyword::Void,
-            location: loc,
-          }),
-          advance_parser(parser),
-        ),
-      )
-    KeywordUndefined(_) =>
-      Ok(
-        (
-          Node::KeywordType(KeywordType::{
-            kind: TypeKeyword::Undefined,
-            location: loc,
-          }),
-          advance_parser(parser),
-        ),
-      )
-    KeywordAny(_) =>
-      Ok(
-        (
-          Node::KeywordType(KeywordType::{
-            kind: TypeKeyword::Any,
-            location: loc,
-          }),
-          advance_parser(parser),
-        ),
-      )
-    KeywordNull(_) =>
-      Ok(
-        (
-          Node::KeywordType(KeywordType::{
-            kind: TypeKeyword::Null,
-            location: loc,
-          }),
-          advance_parser(parser),
-        ),
-      )
-    KeywordUnknown(_) =>
-      Ok(
-        (
-          Node::KeywordType(KeywordType::{
-            kind: TypeKeyword::Unknown,
-            location: loc,
-          }),
-          advance_parser(parser),
-        ),
-      )
-    KeywordNever(_) =>
-      Ok(
-        (
-          Node::KeywordType(KeywordType::{
-            kind: TypeKeyword::Never,
-            location: loc,
-          }),
-          advance_parser(parser),
-        ),
-      )
-    KeywordSymbol(_) =>
-      Ok(
-        (
-          Node::KeywordType(KeywordType::{
-            kind: TypeKeyword::Symbol,
-            location: loc,
-          }),
-          advance_parser(parser),
-        ),
-      )
-    KeywordObject(_) =>
-      Ok(
-        (
-          Node::KeywordType(KeywordType::{
-            kind: TypeKeyword::Object,
-            location: loc,
-          }),
-          advance_parser(parser),
-        ),
-      )
-    // typeof in type position: typeof variable
-    KeywordTypeOf(_) => {
-      let parser = advance_parser(parser)
-      match current_token(parser) {
-        Identifier(id_name, id_loc) => {
-          let parser = advance_parser(parser)
-          Ok((
-            Node::TypeOperator(TypeOperator::{
-              operator: TypeOperatorKind::TypeOf,
-              type_node: Node::Identifier(Identifier::{ name: id_name, location: id_loc }),
-              location: loc,
-            }),
-            parser
-          ))
-        }
-        _ => Err(add_error(parser, "Expected identifier after 'typeof' in type position", current_token(parser).location()))
-      }
-    }
-    // readonly in type position: readonly T[]
-    KeywordReadonly(_) => {
-      let parser = advance_parser(parser)
-      match parse_primary_type(parser) {
-        Ok((operand_type, p)) => Ok((
-          Node::TypeOperator(TypeOperator::{
-            operator: TypeOperatorKind::Readonly,
-            type_node: operand_type,
-            location: loc,
-          }),
-          p
-        ))
-        Err(p) => Err(p)
-      }
-    }
-    Identifier(name, _) if name == "true" || name == "false" => {
-      // Boolean literal types
-      let value = name == "true"
-      Ok(
-        (
-          Node::LiteralType(LiteralType::{
-            literal: Node::BooleanLiteral(BooleanLiteral::{ value, location: loc }),
-            location: loc,
-          }),
-          advance_parser(parser),
-        ),
-      )
-    }
-    Identifier(name, _) => {
-      // Check for type operators: keyof, unique, infer
-      if name == "infer" {
-        let parser = advance_parser(parser)
-        // Parse type parameter name
-        match current_token(parser) {
-          Identifier(param_name, _) => {
-            let parser = advance_parser(parser)
-            Ok((
-              Node::InferType(InferType::{
-                type_parameter: param_name,
-                location: loc,
-              }),
-              parser
-            ))
-          }
-          _ => Err(add_error(parser, "Expected type parameter name after 'infer'", current_token(parser).location()))
-        }
-      } else if name == "keyof" {
-        let parser = advance_parser(parser)
-        // Parse operand type
-        match parse_primary_type(parser) {
-          Ok((operand_type, p)) => Ok((
-            Node::TypeOperator(TypeOperator::{
-              operator: TypeOperatorKind::KeyOf,
-              type_node: operand_type,
-              location: loc,
-            }),
-            p
-          ))
-          Err(p) => Err(p)
-        }
-      } else if name == "unique" {
-        // unique symbol
-        let parser = advance_parser(parser)
-        // Expect symbol keyword or identifier "symbol"
-        match current_token(parser) {
-          KeywordSymbol(sym_loc) => {
-            let parser = advance_parser(parser)
-            Ok((
-              Node::TypeOperator(TypeOperator::{
-                operator: TypeOperatorKind::Unique,
-                type_node: Node::KeywordType(KeywordType::{
-                  kind: TypeKeyword::Symbol,
-                  location: sym_loc,
-                }),
-                location: loc,
-              }),
-              parser
-            ))
-          }
-          Identifier(sym_name, sym_loc) if sym_name == "symbol" => {
-            let parser = advance_parser(parser)
-            Ok((
-              Node::TypeOperator(TypeOperator::{
-                operator: TypeOperatorKind::Unique,
-                type_node: Node::KeywordType(KeywordType::{
-                  kind: TypeKeyword::Symbol,
-                  location: sym_loc,
-                }),
-                location: loc,
-              }),
-              parser
-            ))
-          }
-          _ => {
-            // Just "unique" as a type reference
-            Ok((
-              Node::TypeReference(TypeReference::{
-                type_name: name,
-                type_arguments: [],
-                location: loc,
-              }),
-              parser
-            ))
-          }
-        }
-      } else if name == "typeof" {
-        // typeof in type position: typeof variable
-        let parser = advance_parser(parser)
-        // Parse the expression/identifier being typeof'd
-        match current_token(parser) {
-          Identifier(id_name, id_loc) => {
-            let parser = advance_parser(parser)
-            Ok((
-              Node::TypeOperator(TypeOperator::{
-                operator: TypeOperatorKind::TypeOf,
-                type_node: Node::Identifier(Identifier::{ name: id_name, location: id_loc }),
-                location: loc,
-              }),
-              parser
-            ))
-          }
-          _ => Err(add_error(parser, "Expected identifier after 'typeof' in type position", current_token(parser).location()))
-        }
-      } else if name == "readonly" {
-        // readonly type operator: readonly T[]
-        let parser = advance_parser(parser)
-        match parse_primary_type(parser) {
-          Ok((operand_type, p)) => Ok((
-            Node::TypeOperator(TypeOperator::{
-              operator: TypeOperatorKind::Readonly,
-              type_node: operand_type,
-              location: loc,
-            }),
-            p
-          ))
-          Err(p) => Err(p)
-        }
-      } else {
-        let parser = advance_parser(parser)
-        // Check for generic type arguments
-        let (type_arguments, parser) = match current_token(parser) {
-          LessThan(_) => {
-            match parse_type_argument_list(parser) {
-              Ok((args, p)) => (args, p)
-              Err(p) => ([], p)
-            }
-          }
-          _ => ([], parser)
-        }
-        Ok(
-          (
-            Node::TypeReference(TypeReference::{
-              type_name: name,
-              type_arguments,
-              location: loc,
-            }),
-            parser,
-          ),
-        )
-      }
-    }
-    StringLiteral(value, _) =>
-      Ok(
-        (
-          Node::LiteralType(LiteralType::{
-            literal: Node::StringLiteral(StringLiteral::{ value, location: loc }),
-            location: loc,
-          }),
-          advance_parser(parser),
-        ),
-      )
-    NumericLiteral(value, _) =>
-      Ok(
-        (
-          Node::LiteralType(LiteralType::{
-            literal: Node::NumericLiteral(NumericLiteral::{ value, location: loc }),
-            location: loc,
-          }),
-          advance_parser(parser),
-        ),
-      )
-    BigIntLiteral(value, _) =>
-      Ok(
-        (
-          Node::LiteralType(LiteralType::{
-            literal: Node::BigIntLiteral(BigIntLiteral::{ value, location: loc }),
-            location: loc,
-          }),
-          advance_parser(parser),
-        ),
-      )
-    // Template literal type without interpolation: `hello`
-    TemplateLiteral(text, _) =>
-      Ok(
-        (
-          Node::TemplateLiteralType(TemplateLiteralType::{
-            head: text,
-            spans: [],
-            location: loc,
-          }),
-          advance_parser(parser),
-        ),
-      )
-    // Template literal type with interpolation: `on${string}`
-    TemplateHead(head, _) => {
-      let mut parser = advance_parser(parser)
-      let spans : Array[TemplateLiteralTypeSpan] = []
-
-      while true {
-        // Parse the type in the interpolation
-        match parse_type(parser) {
-          Ok((type_node, p)) => {
-            parser = p
-            // Expect CloseBrace
-            match current_token(parser) {
-              CloseBrace(_) => {
-                parser = advance_parser(parser)
-                // Check for TemplateTail or TemplateMiddle
-                match current_token(parser) {
-                  TemplateTail(tail_text, _) => {
-                    spans.push(TemplateLiteralTypeSpan::{ type_node, literal: tail_text })
-                    parser = advance_parser(parser)
-                    break
-                  }
-                  TemplateMiddle(middle_text, _) => {
-                    spans.push(TemplateLiteralTypeSpan::{ type_node, literal: middle_text })
-                    parser = advance_parser(parser)
-                    // Continue loop to parse next type
-                  }
-                  _ => return Err(add_error(parser, "Expected template continuation after }", current_token(parser).location()))
-                }
-              }
-              _ => return Err(add_error(parser, "Expected '}' after type in template literal type", current_token(parser).location()))
-            }
-          }
-          Err(p) => return Err(p)
-        }
-      }
-      Ok(
-        (
-          Node::TemplateLiteralType(TemplateLiteralType::{
-            head,
-            spans,
-            location: loc,
-          }),
-          parser,
-        ),
-      )
-    }
-    OpenBrace(_) => {
-      let parser = advance_parser(parser) // consume {
-
-      // Try to parse as mapped type: { [P in KeyType]: ValueType }
-      // Also handles: { readonly [P in K]: V }, { [P in K]?: V }, { [P in K]-?: V }
-      let mut parser = parser
-      let saved_parser_start = parser
-
-      // Check for readonly modifier: +readonly, -readonly, or readonly
-      let readonly_modifier : MappedTypeModifier = match current_token(parser) {
-        Plus(_) => {
-          parser = advance_parser(parser)
-          match current_token(parser) {
-            KeywordReadonly(_) => {
-              parser = advance_parser(parser)
-              MappedTypeModifier::Plus
-            }
-            _ => MappedTypeModifier::Unchanged  // Just a + without readonly, reset handled later
-          }
-        }
-        Minus(_) => {
-          parser = advance_parser(parser)
-          match current_token(parser) {
-            KeywordReadonly(_) => {
-              parser = advance_parser(parser)
-              MappedTypeModifier::Minus
-            }
-            _ => MappedTypeModifier::Unchanged  // Just a - without readonly
-          }
-        }
-        KeywordReadonly(_) => {
-          parser = advance_parser(parser)
-          MappedTypeModifier::Plus  // readonly without +/- means add
-        }
-        _ => MappedTypeModifier::Unchanged
-      }
-
-      match current_token(parser) {
-        OpenBracket(_) => {
-          let saved_parser = parser
-          parser = advance_parser(parser) // consume [
-
-          // Check for mapped type pattern: identifier followed by 'in'
-          match current_token(parser) {
-            Identifier(param_name, param_loc) => {
-              parser = advance_parser(parser)
-              match current_token(parser) {
-                KeywordIn(_) => {
-                  // This is a mapped type!
-                  parser = advance_parser(parser) // consume 'in'
-
-                  // Parse the constraint type (e.g., keyof T)
-                  match parse_type(parser) {
-                    Ok((constraint_type, p)) => {
-                      parser = p
-                      // Expect ]
-                      match current_token(parser) {
-                        CloseBracket(_) => {
-                          parser = advance_parser(parser)
-
-                          // Check for optional modifier: ?, -?, +?
-                          let optional_modifier : MappedTypeModifier = match current_token(parser) {
-                            Question(_) => {
-                              parser = advance_parser(parser)
-                              MappedTypeModifier::Plus  // ? means add optional
-                            }
-                            Plus(_) => {
-                              parser = advance_parser(parser)
-                              // Expect ? after +
-                              match current_token(parser) {
-                                Question(_) => {
-                                  parser = advance_parser(parser)
-                                  MappedTypeModifier::Plus  // +? adds optional
-                                }
-                                _ => MappedTypeModifier::Unchanged
-                              }
-                            }
-                            Minus(_) => {
-                              parser = advance_parser(parser)
-                              // Expect ? after -
-                              match current_token(parser) {
-                                Question(_) => {
-                                  parser = advance_parser(parser)
-                                  MappedTypeModifier::Minus  // -? removes optional
-                                }
-                                _ => MappedTypeModifier::Unchanged
-                              }
-                            }
-                            _ => MappedTypeModifier::Unchanged
-                          }
-
-                          // Expect :
-                          match current_token(parser) {
-                            Colon(_) => {
-                              parser = advance_parser(parser)
-                              match parse_type(parser) {
-                                Ok((value_type, p)) => {
-                                  let final_parser = p
-                                  // Optional semicolon
-                                  let final_parser = match current_token(final_parser) {
-                                    Semicolon(_) => advance_parser(final_parser)
-                                    _ => final_parser
-                                  }
-                                  // Expect }
-                                  match current_token(final_parser) {
-                                    CloseBrace(_) => {
-                                      let final_parser = advance_parser(final_parser)
-                                      return Ok((
-                                        Node::MappedType(MappedType::{
-                                          type_parameter: TypeParameter::{
-                                            name: param_name,
-                                            constraint: Some(constraint_type),
-                                            default: None,
-                                            location: param_loc,
-                                          },
-                                          type_node: Some(value_type),
-                                          readonly_modifier,
-                                          optional_modifier,
-                                          location: loc,
-                                        }),
-                                        final_parser,
-                                      ))
-                                    }
-                                    _ => {
-                                      // Failed, reset
-                                      parser = saved_parser_start
-                                    }
-                                  }
-                                }
-                                Err(_) => {
-                                  parser = saved_parser_start
-                                }
-                              }
-                            }
-                            _ => {
-                              parser = saved_parser_start
-                            }
-                          }
-                        }
-                        _ => {
-                          parser = saved_parser
-                        }
-                      }
-                    }
-                    Err(_) => {
-                      parser = saved_parser_start
-                    }
-                  }
-                }
-                _ => {
-                  parser = saved_parser_start
-                }
-              }
-            }
-            _ => {
-              parser = saved_parser_start
-            }
-          }
-        }
-        _ => {
-          parser = saved_parser_start
-        }
-      }
-
-      // Parse as regular object type literal: { prop: type, ... }
-      let properties = []
-      let mut parser = parser
-
-      while true {
-        match current_token(parser) {
-          CloseBrace(_) => {
-            parser = advance_parser(parser)
-            break
-          }
-          Identifier(name, _) => {
-            parser = advance_parser(parser)
-            // Check for optional property marker (?)
-            match current_token(parser) {
-              Question(_) => {
-                // Optional property - consume ?
-                parser = advance_parser(parser)
-              }
-              _ => ()
-            }
-            // Expect :
-            match current_token(parser) {
-              Colon(_) => {
-                parser = advance_parser(parser)
-                match parse_type(parser) {
-                  Ok((prop_type, p)) => {
-                    properties.push((name, prop_type))
-                    parser = p
-                    // Optional comma or semicolon
-                    match current_token(parser) {
-                      Comma(_) | Semicolon(_) => parser = advance_parser(parser)
-                      _ => ()
-                    }
-                  }
-                  Err(p) => return Err(p)
-                }
-              }
-              _ => break
-            }
-          }
-          // Handle call signature: (): type
-          OpenParen(_) => {
-            let call_start = current_token(parser).location()
-            parser = advance_parser(parser)
-            let (params, p) = parse_parameter_list(parser)
-            parser = p
-            // Expect :
-            match current_token(parser) {
-              Colon(_) => {
-                parser = advance_parser(parser)
-                match parse_type(parser) {
-                  Ok((return_type, p)) => {
-                    let _ = params
-                    let _ = return_type
-                    let _ = call_start
-                    // For now, just skip call signatures
-                    parser = p
-                    // Optional semicolon
-                    match current_token(parser) {
-                      Semicolon(_) => parser = advance_parser(parser)
-                      _ => ()
-                    }
-                  }
-                  Err(p) => return Err(p)
-                }
-              }
-              _ => break
-            }
-          }
-          // Handle construct signature: new(): type
-          KeywordNew(_) => {
-            parser = advance_parser(parser)
-            match current_token(parser) {
-              OpenParen(_) => {
-                parser = advance_parser(parser)
-                let (params, p) = parse_parameter_list(parser)
-                parser = p
-                // Expect :
-                match current_token(parser) {
-                  Colon(_) => {
-                    parser = advance_parser(parser)
-                    match parse_type(parser) {
-                      Ok((return_type, p)) => {
-                        let _ = params
-                        let _ = return_type
-                        // For now, just skip construct signatures
-                        parser = p
-                        // Optional semicolon
-                        match current_token(parser) {
-                          Semicolon(_) => parser = advance_parser(parser)
-                          _ => ()
-                        }
-                      }
-                      Err(p) => return Err(p)
-                    }
-                  }
-                  _ => break
-                }
-              }
-              _ => break
-            }
-          }
-          _ => break
-        }
-      }
-
-      // For now, return a simple type reference representing the object type
-      // A full implementation would create a proper ObjectType node
-      Ok((
-        Node::TypeReference(TypeReference::{
-          type_name: "object",
-          type_arguments: [],
-          location: loc,
-        }),
-        parser,
-      ))
-    }
-    OpenParen(_) => {
-      // Function type: (param: type, ...) => returnType
-      let parser = advance_parser(parser) // consume '('
-      let (parameters, parser) = parse_parameter_list(parser)
-
-      // Expect =>
-      match current_token(parser) {
-        Arrow(_) => {
-          let parser = advance_parser(parser)
-          match parse_type(parser) {
-            Ok((return_type, parser)) => {
-              Ok((
-                Node::FunctionType(FunctionType::{
-                  type_parameters: [],
-                  parameters,
-                  return_type,
-                  location: loc,
-                }),
-                parser,
-              ))
-            }
-            Err(p) => Err(p)
-          }
-        }
-        _ => Err(add_error(parser, "Expected '=>' in function type", current_token(parser).location()))
-      }
-    }
-    OpenBracket(_) => {
-      // Tuple type: [type1, type2, ...] or [name: type1, name2: type2, ...]
-      // Also supports optional elements (type?) and rest elements (...type[])
-      let parser = advance_parser(parser) // consume '['
-      let element_types = []
-      let mut parser = parser
-
-      while true {
-        match current_token(parser) {
-          CloseBracket(_) => {
-            parser = advance_parser(parser)
-            break
-          }
-          _ => {
-            // Check for rest element: ...type
-            let is_rest = match current_token(parser) {
-              DotDotDot(_) => {
-                parser = advance_parser(parser)
-                true
-              }
-              _ => false
-            }
-
-            // Parse type (ignoring optional name: prefix for now)
-            let (elem_type, new_parser) = match current_token(parser) {
-              Identifier(_, _) => {
-                // Could be "name: type" or just a type reference
-                let saved_parser = parser
-                parser = advance_parser(parser)
-                match current_token(parser) {
-                  Colon(_) => {
-                    // It's a named tuple element, skip the name and parse the type
-                    parser = advance_parser(parser)
-                    match parse_type(parser) {
-                      Ok((t, p)) => (t, p)
-                      Err(p) => return Err(p)
-                    }
-                  }
-                  Question(_) => {
-                    // named?: type - named optional element
-                    parser = advance_parser(parser) // consume ?
-                    match current_token(parser) {
-                      Colon(_) => {
-                        parser = advance_parser(parser)
-                        match parse_type(parser) {
-                          Ok((t, p)) => {
-                            let opt_type = Node::OptionalType(OptionalType::{
-                              element_type: t,
-                              location: get_location(t),
-                            })
-                            (opt_type, p)
-                          }
-                          Err(p) => return Err(p)
-                        }
-                      }
-                      _ => {
-                        // Backtrack - just identifier followed by ?
-                        parser = saved_parser
-                        match parse_type(parser) {
-                          Ok((t, p)) => (t, p)
-                          Err(p) => return Err(p)
-                        }
-                      }
-                    }
-                  }
-                  _ => {
-                    // It's just a type reference, backtrack
-                    parser = saved_parser
-                    match parse_type(parser) {
-                      Ok((t, p)) => (t, p)
-                      Err(p) => return Err(p)
-                    }
-                  }
-                }
-              }
-              _ => {
-                match parse_type(parser) {
-                  Ok((t, p)) => (t, p)
-                  Err(p) => return Err(p)
-                }
-              }
-            }
-            parser = new_parser
-
-            // Check for optional element: type?
-            let elem_type = match current_token(parser) {
-              Question(_) => {
-                parser = advance_parser(parser)
-                Node::OptionalType(OptionalType::{
-                  element_type: elem_type,
-                  location: get_location(elem_type),
-                })
-              }
-              _ => elem_type
-            }
-
-            // Wrap in RestType if is_rest
-            let elem_type = if is_rest {
-              Node::RestType(RestType::{
-                element_type: elem_type,
-                location: get_location(elem_type),
-              })
-            } else {
-              elem_type
-            }
-
-            element_types.push(elem_type)
-
-            // Optional comma
-            match current_token(parser) {
-              Comma(_) => parser = advance_parser(parser)
-              CloseBracket(_) => () // Will be handled in next iteration
-              _ => ()
-            }
-          }
-        }
-      }
-
-      Ok((
-        Node::TupleType(TupleType::{
-          element_types,
-          is_readonly,
-          location: loc,
-        }),
-        parser,
-      ))
-    }
-    _ => Err(add_error(parser, "Expected type", loc))
-  }
-}
-
-///|
-/// Parse union or intersection type
-fn parse_union_or_intersection_type(
-  parser : Parser,
-  first_type : Node
-) -> Result[(Node, Parser), Parser] {
-  let token = current_token(parser)
-  match token {
-    Bar(_) => {
-      // Union type: type1 | type2 | type3
-      let types = [first_type]
-      let mut parser = parser
-      while true {
-        match current_token(parser) {
-          Bar(_) => {
-            parser = advance_parser(parser) // consume |
-            match parse_primary_type(parser) {
-              Ok((type_node, p)) => {
-                types.push(type_node)
-                parser = p
-              }
-              Err(p) => return Err(p)
-            }
-          }
-          _ => break
-        }
-      }
-      let loc = match first_type {
-        Node::KeywordType(kt) => kt.location
-        Node::TypeReference(tr) => tr.location
-        _ => {
-          start: { line: 0, column: 0, offset: 0 },
-          end: { line: 0, column: 0, offset: 0 },
-          file_path: "",
-        }
-      }
-      Ok((Node::UnionType(UnionType::{ types, location: loc }), parser))
-    }
-    Ampersand(_) => {
-      // Intersection type: type1 & type2 & type3
-      let types = [first_type]
-      let mut parser = parser
-      while true {
-        match current_token(parser) {
-          Ampersand(_) => {
-            parser = advance_parser(parser) // consume &
-            match parse_primary_type(parser) {
-              Ok((type_node, p)) => {
-                types.push(type_node)
-                parser = p
-              }
-              Err(p) => return Err(p)
-            }
-          }
-          _ => break
-        }
-      }
-      let loc = match first_type {
-        Node::KeywordType(kt) => kt.location
-        Node::TypeReference(tr) => tr.location
-        _ => {
-          start: { line: 0, column: 0, offset: 0 },
-          end: { line: 0, column: 0, offset: 0 },
-          file_path: "",
-        }
-      }
-      Ok((Node::IntersectionType(IntersectionType::{ types, location: loc }), parser))
-    }
-    _ => Ok((first_type, parser)) // Not a union or intersection, return original type
-  }
-}
 
 ///|
 /// Parse identifier
@@ -4261,10 +1373,12 @@ fn parse_decorators(parser : Parser) -> (Array[Node], Parser) {
         // Parse the decorator expression (can be identifier, property access, or call)
         match parse_expression(parser) {
           Ok((expr, p)) => {
-            decorators.push(Node::Decorator(Decorator::{
-              expression: expr,
-              location: start_loc,
-            }))
+            decorators.push(
+              Node::Decorator(Decorator::{
+                expression: expr,
+                location: start_loc,
+              }),
+            )
             parser = p
           }
           Err(_) => break
@@ -4277,14 +1391,22 @@ fn parse_decorators(parser : Parser) -> (Array[Node], Parser) {
 }
 
 ///|
-fn parse_class_declaration_with_decorators(parser : Parser, is_abstract : Bool, decorators : Array[Node]) -> Result[(Node, Parser), Parser] {
+fn parse_class_declaration_with_decorators(
+  parser : Parser,
+  is_abstract : Bool,
+  decorators : Array[Node],
+) -> Result[(Node, Parser), Parser] {
   // [abstract] class Name [extends Super] [implements I1, I2] { members }
   let start_loc = current_token(parser).location()
   let parser = advance_parser(parser) // consume 'class'
 
   // Parse class name
   let (name, parser) = match current_token(parser) {
-    Identifier(n, loc) => (Some(Node::Identifier(Identifier::{ name: n, location: loc })), advance_parser(parser))
+    Identifier(n, loc) =>
+      (
+        Some(Node::Identifier(Identifier::{ name: n, location: loc })),
+        advance_parser(parser),
+      )
     _ => (None, parser) // Anonymous class allowed in expressions
   }
 
@@ -4305,24 +1427,44 @@ fn parse_class_declaration_with_decorators(parser : Parser, is_abstract : Bool, 
       match current_token(parser) {
         CloseBrace(loc) => {
           let parser = advance_parser(parser)
-          Ok((
-            Node::ClassDeclaration(ClassDeclaration::{
-              name,
-              type_parameters,
-              heritage_clauses,
-              members,
-              is_abstract,
-              decorators,
-              modifiers: [],
-              location: SourceLocation::new(start_loc.file_path, start_loc.start, loc.end)
-            }),
-            parser
-          ))
+          Ok(
+            (
+              Node::ClassDeclaration(ClassDeclaration::{
+                name,
+                type_parameters,
+                heritage_clauses,
+                members,
+                is_abstract,
+                decorators,
+                modifiers: [],
+                location: SourceLocation::new(
+                  start_loc.file_path,
+                  start_loc.start,
+                  loc.end,
+                ),
+              }),
+              parser,
+            ),
+          )
         }
-        _ => Err(add_error(parser, "Expected '}' after class body", current_token(parser).location()))
+        _ =>
+          Err(
+            add_error(
+              parser,
+              "Expected '}' after class body",
+              current_token(parser).location(),
+            ),
+          )
       }
     }
-    _ => Err(add_error(parser, "Expected '{' after class name", current_token(parser).location()))
+    _ =>
+      Err(
+        add_error(
+          parser,
+          "Expected '{' after class name",
+          current_token(parser).location(),
+        ),
+      )
   }
 }
 
@@ -4333,7 +1475,10 @@ fn parse_heritage_clauses(parser : Parser) -> (Array[HeritageClause], Parser) {
 }
 
 ///|
-fn parse_heritage_clauses_aux(parser : Parser, acc : Array[HeritageClause]) -> (Array[HeritageClause], Parser) {
+fn parse_heritage_clauses_aux(
+  parser : Parser,
+  acc : Array[HeritageClause],
+) -> (Array[HeritageClause], Parser) {
   match current_token(parser) {
     KeywordExtends(_) => {
       let start_loc = current_token(parser).location()
@@ -4342,7 +1487,7 @@ fn parse_heritage_clauses_aux(parser : Parser, acc : Array[HeritageClause]) -> (
       acc.push(HeritageClause::{
         kind: HeritageKind::Extends,
         types,
-        location: start_loc
+        location: start_loc,
       })
       parse_heritage_clauses_aux(parser, acc)
     }
@@ -4353,7 +1498,7 @@ fn parse_heritage_clauses_aux(parser : Parser, acc : Array[HeritageClause]) -> (
       acc.push(HeritageClause::{
         kind: HeritageKind::Implements,
         types,
-        location: start_loc
+        location: start_loc,
       })
       parse_heritage_clauses_aux(parser, acc)
     }
@@ -4368,15 +1513,20 @@ fn parse_heritage_types(parser : Parser) -> (Array[Node], Parser) {
 }
 
 ///|
-fn parse_heritage_types_aux(parser : Parser, acc : Array[Node]) -> (Array[Node], Parser) {
+fn parse_heritage_types_aux(
+  parser : Parser,
+  acc : Array[Node],
+) -> (Array[Node], Parser) {
   match current_token(parser) {
     Identifier(name, loc) => {
       // Create TypeReference instead of Identifier for heritage types
-      acc.push(Node::TypeReference(TypeReference::{
-        type_name: name,
-        type_arguments: [],
-        location: loc
-      }))
+      acc.push(
+        Node::TypeReference(TypeReference::{
+          type_name: name,
+          type_arguments: [],
+          location: loc,
+        }),
+      )
       let parser = advance_parser(parser)
       match current_token(parser) {
         Comma(_) => parse_heritage_types_aux(advance_parser(parser), acc)
@@ -4394,7 +1544,10 @@ fn parse_class_members(parser : Parser) -> (Array[Node], Parser) {
 }
 
 ///|
-fn parse_class_members_aux(parser : Parser, acc : Array[Node]) -> (Array[Node], Parser) {
+fn parse_class_members_aux(
+  parser : Parser,
+  acc : Array[Node],
+) -> (Array[Node], Parser) {
   match current_token(parser) {
     CloseBrace(_) | EOF(_) => (acc, parser)
 
@@ -4410,7 +1563,6 @@ fn parse_class_members_aux(parser : Parser, acc : Array[Node]) -> (Array[Node], 
             OpenParen(_) => {
               let parser = advance_parser(parser)
               let (parameters, parser) = parse_parameter_list(parser)
-
               let (return_type, parser) = match current_token(parser) {
                 Colon(_) => {
                   let parser = advance_parser(parser)
@@ -4421,27 +1573,27 @@ fn parse_class_members_aux(parser : Parser, acc : Array[Node]) -> (Array[Node], 
                 }
                 _ => (None, parser)
               }
-
               let (body, parser) = match current_token(parser) {
-                OpenBrace(_) => {
+                OpenBrace(_) =>
                   match parse_block_statement(parser) {
                     Ok((b, p)) => (Some(b), p)
                     Err(p) => (None, p)
                   }
-                }
                 _ => (None, parser)
               }
-              acc.push(Node::MethodDeclaration(MethodDeclaration::{
-                name,
-                type_parameters: [],
-                parameters,
-                return_type,
-                body,
-                modifiers: [Modifier::Static],
-                is_async: false,
-                is_generator: false,
-                location: loc
-              }))
+              acc.push(
+                Node::MethodDeclaration(MethodDeclaration::{
+                  name,
+                  type_parameters: [],
+                  parameters,
+                  return_type,
+                  body,
+                  modifiers: [Modifier::Static],
+                  is_async: false,
+                  is_generator: false,
+                  location: loc,
+                }),
+              )
               parse_class_members_aux(parser, acc)
             }
             // Static property
@@ -4456,7 +1608,6 @@ fn parse_class_members_aux(parser : Parser, acc : Array[Node]) -> (Array[Node], 
                 }
                 _ => (None, parser)
               }
-
               let (initializer, parser) = match current_token(parser) {
                 Equals(_) => {
                   let parser = advance_parser(parser)
@@ -4467,15 +1618,15 @@ fn parse_class_members_aux(parser : Parser, acc : Array[Node]) -> (Array[Node], 
                 }
                 _ => (None, parser)
               }
-
-              acc.push(Node::PropertyDeclaration(PropertyDeclaration::{
-                name,
-                type_annotation,
-                initializer,
-                location: loc,
-                modifiers: [Modifier::Static],
-              }))
-
+              acc.push(
+                Node::PropertyDeclaration(PropertyDeclaration::{
+                  name,
+                  type_annotation,
+                  initializer,
+                  location: loc,
+                  modifiers: [Modifier::Static],
+                }),
+              )
               let parser = match current_token(parser) {
                 Semicolon(_) => advance_parser(parser)
                 _ => parser
@@ -4498,19 +1649,20 @@ fn parse_class_members_aux(parser : Parser, acc : Array[Node]) -> (Array[Node], 
           let (parameters, parser) = parse_parameter_list(parser)
           // Parse body
           let (body, parser) = match current_token(parser) {
-            OpenBrace(_) => {
+            OpenBrace(_) =>
               match parse_block_statement(parser) {
                 Ok((b, p)) => (Some(b), p)
                 Err(p) => (None, p)
               }
-            }
             _ => (None, parser)
           }
-          acc.push(Node::ConstructorDeclaration(ConstructorDeclaration::{
-            parameters,
-            body,
-            location: loc
-          }))
+          acc.push(
+            Node::ConstructorDeclaration(ConstructorDeclaration::{
+              parameters,
+              body,
+              location: loc,
+            }),
+          )
           parse_class_members_aux(parser, acc)
         }
         _ => parse_class_members_aux(parser, acc)
@@ -4544,21 +1696,22 @@ fn parse_class_members_aux(parser : Parser, acc : Array[Node]) -> (Array[Node], 
               }
               // Body
               let (body, parser) = match current_token(parser) {
-                OpenBrace(_) => {
+                OpenBrace(_) =>
                   match parse_block_statement(parser) {
                     Ok((b, p)) => (Some(b), p)
                     Err(p) => (None, p)
                   }
-                }
                 _ => (None, parser)
               }
-              acc.push(Node::GetAccessor(GetAccessor::{
-                name,
-                return_type,
-                body,
-                modifiers: [],
-                location: start_loc
-              }))
+              acc.push(
+                Node::GetAccessor(GetAccessor::{
+                  name,
+                  return_type,
+                  body,
+                  modifiers: [],
+                  location: start_loc,
+                }),
+              )
               parse_class_members_aux(parser, acc)
             }
             // Not a getter, treat "get" as property/method name
@@ -4581,18 +1734,26 @@ fn parse_class_members_aux(parser : Parser, acc : Array[Node]) -> (Array[Node], 
                     _ => (None, parser)
                   }
                   let (body, parser) = match current_token(parser) {
-                    OpenBrace(_) => {
+                    OpenBrace(_) =>
                       match parse_block_statement(parser) {
                         Ok((b, p)) => (Some(b), p)
                         Err(p) => (None, p)
                       }
-                    }
                     _ => (None, parser)
                   }
-                  acc.push(Node::MethodDeclaration(MethodDeclaration::{
-                    name, type_parameters: [], parameters, return_type, body,
-                    modifiers: [], is_async: false, is_generator: false, location: loc
-                  }))
+                  acc.push(
+                    Node::MethodDeclaration(MethodDeclaration::{
+                      name,
+                      type_parameters: [],
+                      parameters,
+                      return_type,
+                      body,
+                      modifiers: [],
+                      is_async: false,
+                      is_generator: false,
+                      location: loc,
+                    }),
+                  )
                   parse_class_members_aux(parser, acc)
                 }
                 _ => parse_class_members_aux(parser, acc)
@@ -4617,7 +1778,14 @@ fn parse_class_members_aux(parser : Parser, acc : Array[Node]) -> (Array[Node], 
               // Parse single parameter
               let (parameter, parser) = match parse_parameter(parser) {
                 Ok((param, p)) => (param, p)
-                Err(p) => (Node::Identifier(Identifier::{ name: "value", location: start_loc }), p)
+                Err(p) =>
+                  (
+                    Node::Identifier(Identifier::{
+                      name: "value",
+                      location: start_loc,
+                    }),
+                    p,
+                  )
               }
               // Consume closing paren
               let parser = match current_token(parser) {
@@ -4637,21 +1805,22 @@ fn parse_class_members_aux(parser : Parser, acc : Array[Node]) -> (Array[Node], 
               }
               // Body
               let (body, parser) = match current_token(parser) {
-                OpenBrace(_) => {
+                OpenBrace(_) =>
                   match parse_block_statement(parser) {
                     Ok((b, p)) => (Some(b), p)
                     Err(p) => (None, p)
                   }
-                }
                 _ => (None, parser)
               }
-              acc.push(Node::SetAccessor(SetAccessor::{
-                name,
-                parameter,
-                body,
-                modifiers: [],
-                location: start_loc
-              }))
+              acc.push(
+                Node::SetAccessor(SetAccessor::{
+                  name,
+                  parameter,
+                  body,
+                  modifiers: [],
+                  location: start_loc,
+                }),
+              )
               parse_class_members_aux(parser, acc)
             }
             _ => parse_class_members_aux(parser, acc)
@@ -4723,27 +1892,27 @@ fn parse_class_members_aux(parser : Parser, acc : Array[Node]) -> (Array[Node], 
             }
             _ => (None, parser)
           }
-
           let (body, parser) = match current_token(parser) {
-            OpenBrace(_) => {
+            OpenBrace(_) =>
               match parse_block_statement(parser) {
                 Ok((b, p)) => (Some(b), p)
                 Err(p) => (None, p)
               }
-            }
             _ => (None, parser)
           }
-          acc.push(Node::MethodDeclaration(MethodDeclaration::{
-            name,
-            type_parameters: [],
-            parameters,
-            return_type,
-            body,
-            modifiers: [],
-            is_async: false,
-            is_generator: false,
-            location: loc
-          }))
+          acc.push(
+            Node::MethodDeclaration(MethodDeclaration::{
+              name,
+              type_parameters: [],
+              parameters,
+              return_type,
+              body,
+              modifiers: [],
+              is_async: false,
+              is_generator: false,
+              location: loc,
+            }),
+          )
           parse_class_members_aux(parser, acc)
         }
 
@@ -4778,14 +1947,15 @@ fn parse_class_members_aux(parser : Parser, acc : Array[Node]) -> (Array[Node], 
             Semicolon(_) => advance_parser(parser)
             _ => parser
           }
-
-          acc.push(Node::PropertyDeclaration(PropertyDeclaration::{
-            name,
-            type_annotation,
-            initializer,
-            modifiers: [],
-            location: loc
-          }))
+          acc.push(
+            Node::PropertyDeclaration(PropertyDeclaration::{
+              name,
+              type_annotation,
+              initializer,
+              modifiers: [],
+              location: loc,
+            }),
+          )
           parse_class_members_aux(parser, acc)
         }
       }
@@ -4798,7 +1968,11 @@ fn parse_class_members_aux(parser : Parser, acc : Array[Node]) -> (Array[Node], 
 
 ///|
 /// Parse class member with modifiers (private/protected/public/static/readonly/abstract/async)
-fn parse_class_member_with_modifiers(parser : Parser, acc : Array[Node], modifiers : Array[Modifier]) -> (Array[Node], Parser) {
+fn parse_class_member_with_modifiers(
+  parser : Parser,
+  acc : Array[Node],
+  modifiers : Array[Modifier],
+) -> (Array[Node], Parser) {
   match current_token(parser) {
     // Handle chained modifiers
     KeywordPublic(_) => {
@@ -4854,12 +2028,11 @@ fn parse_class_member_with_modifiers(parser : Parser, acc : Array[Node], modifie
             _ => (None, parser)
           }
           let (body, parser) = match current_token(parser) {
-            OpenBrace(_) => {
+            OpenBrace(_) =>
               match parse_block_statement(parser) {
                 Ok((b, p)) => (Some(b), p)
                 Err(p) => (None, p)
               }
-            }
             _ => (None, parser)
           }
           // Check if Async modifier is present
@@ -4870,10 +2043,19 @@ fn parse_class_member_with_modifiers(parser : Parser, acc : Array[Node], modifie
               break
             }
           }
-          acc.push(Node::MethodDeclaration(MethodDeclaration::{
-            name, type_parameters: [], parameters, return_type, body,
-            modifiers, is_async, is_generator: false, location: loc
-          }))
+          acc.push(
+            Node::MethodDeclaration(MethodDeclaration::{
+              name,
+              type_parameters: [],
+              parameters,
+              return_type,
+              body,
+              modifiers,
+              is_async,
+              is_generator: false,
+              location: loc,
+            }),
+          )
           parse_class_members_aux(parser, acc)
         }
         // Property
@@ -4902,9 +2084,15 @@ fn parse_class_member_with_modifiers(parser : Parser, acc : Array[Node], modifie
             Semicolon(_) => advance_parser(parser)
             _ => parser
           }
-          acc.push(Node::PropertyDeclaration(PropertyDeclaration::{
-            name, type_annotation, initializer, modifiers, location: loc
-          }))
+          acc.push(
+            Node::PropertyDeclaration(PropertyDeclaration::{
+              name,
+              type_annotation,
+              initializer,
+              modifiers,
+              location: loc,
+            }),
+          )
           parse_class_members_aux(parser, acc)
         }
       }
@@ -4934,7 +2122,14 @@ fn parse_interface_declaration(
   // Parse interface name
   let (name, parser) = match current_token(parser) {
     Identifier(n, _) => (n, advance_parser(parser))
-    _ => return Err(add_error(parser, "Expected interface name", current_token(parser).location()))
+    _ =>
+      return Err(
+        add_error(
+          parser,
+          "Expected interface name",
+          current_token(parser).location(),
+        ),
+      )
   }
 
   // Parse type parameters if present
@@ -4958,17 +2153,23 @@ fn parse_interface_declaration(
         match current_token(parser) {
           CloseBrace(loc) => {
             parser = advance_parser(parser)
-            return Ok((
-              Node::InterfaceDeclaration(InterfaceDeclaration::{
-                name,
-                type_parameters,
-                heritage_clauses,
-                members,
-                modifiers: [],
-                location: SourceLocation::new(start_loc.file_path, start_loc.start, loc.end)
-              }),
-              parser
-            ))
+            return Ok(
+              (
+                Node::InterfaceDeclaration(InterfaceDeclaration::{
+                  name,
+                  type_parameters,
+                  heritage_clauses,
+                  members,
+                  modifiers: [],
+                  location: SourceLocation::new(
+                    start_loc.file_path,
+                    start_loc.start,
+                    loc.end,
+                  ),
+                }),
+                parser,
+              ),
+            )
           }
           // Index signature: [key: string]: value
           OpenBracket(_) => {
@@ -4980,12 +2181,26 @@ fn parse_interface_declaration(
                 parser = advance_parser(parser)
                 n
               }
-              _ => return Err(add_error(parser, "Expected index parameter name", current_token(parser).location()))
+              _ =>
+                return Err(
+                  add_error(
+                    parser,
+                    "Expected index parameter name",
+                    current_token(parser).location(),
+                  ),
+                )
             }
             // Expect colon
             match current_token(parser) {
               Colon(_) => parser = advance_parser(parser)
-              _ => return Err(add_error(parser, "Expected ':' after index parameter", current_token(parser).location()))
+              _ =>
+                return Err(
+                  add_error(
+                    parser,
+                    "Expected ':' after index parameter",
+                    current_token(parser).location(),
+                  ),
+                )
             }
             // Parse index type (string or number)
             let index_type = match parse_type(parser) {
@@ -4998,12 +2213,26 @@ fn parse_interface_declaration(
             // Expect closing bracket
             match current_token(parser) {
               CloseBracket(_) => parser = advance_parser(parser)
-              _ => return Err(add_error(parser, "Expected ']' after index signature", current_token(parser).location()))
+              _ =>
+                return Err(
+                  add_error(
+                    parser,
+                    "Expected ']' after index signature",
+                    current_token(parser).location(),
+                  ),
+                )
             }
             // Expect colon for value type
             match current_token(parser) {
               Colon(_) => parser = advance_parser(parser)
-              _ => return Err(add_error(parser, "Expected ':' after index signature", current_token(parser).location()))
+              _ =>
+                return Err(
+                  add_error(
+                    parser,
+                    "Expected ':' after index signature",
+                    current_token(parser).location(),
+                  ),
+                )
             }
             // Parse value type
             let value_type = match parse_type(parser) {
@@ -5014,13 +2243,15 @@ fn parse_interface_declaration(
               Err(p) => return Err(p)
             }
             // Create index signature
-            members.push(Node::IndexSignatureDeclaration(IndexSignatureDeclaration::{
-              parameter_name: index_name,
-              parameter_type: index_type,
-              return_type: value_type,
-              is_readonly: false,
-              location: bracket_loc,
-            }))
+            members.push(
+              Node::IndexSignatureDeclaration(IndexSignatureDeclaration::{
+                parameter_name: index_name,
+                parameter_type: index_type,
+                return_type: value_type,
+                is_readonly: false,
+                location: bracket_loc,
+              }),
+            )
             // Optional semicolon or comma
             match current_token(parser) {
               Semicolon(_) | Comma(_) => parser = advance_parser(parser)
@@ -5041,12 +2272,26 @@ fn parse_interface_declaration(
                     parser = advance_parser(parser)
                     n
                   }
-                  _ => return Err(add_error(parser, "Expected index parameter name", current_token(parser).location()))
+                  _ =>
+                    return Err(
+                      add_error(
+                        parser,
+                        "Expected index parameter name",
+                        current_token(parser).location(),
+                      ),
+                    )
                 }
                 // Expect colon
                 match current_token(parser) {
                   Colon(_) => parser = advance_parser(parser)
-                  _ => return Err(add_error(parser, "Expected ':' after index parameter", current_token(parser).location()))
+                  _ =>
+                    return Err(
+                      add_error(
+                        parser,
+                        "Expected ':' after index parameter",
+                        current_token(parser).location(),
+                      ),
+                    )
                 }
                 // Parse index type (string or number)
                 let index_type = match parse_type(parser) {
@@ -5059,12 +2304,26 @@ fn parse_interface_declaration(
                 // Expect closing bracket
                 match current_token(parser) {
                   CloseBracket(_) => parser = advance_parser(parser)
-                  _ => return Err(add_error(parser, "Expected ']' after index signature", current_token(parser).location()))
+                  _ =>
+                    return Err(
+                      add_error(
+                        parser,
+                        "Expected ']' after index signature",
+                        current_token(parser).location(),
+                      ),
+                    )
                 }
                 // Expect colon for value type
                 match current_token(parser) {
                   Colon(_) => parser = advance_parser(parser)
-                  _ => return Err(add_error(parser, "Expected ':' after index signature", current_token(parser).location()))
+                  _ =>
+                    return Err(
+                      add_error(
+                        parser,
+                        "Expected ':' after index signature",
+                        current_token(parser).location(),
+                      ),
+                    )
                 }
                 // Parse value type
                 let value_type = match parse_type(parser) {
@@ -5075,13 +2334,15 @@ fn parse_interface_declaration(
                   Err(p) => return Err(p)
                 }
                 // Create readonly index signature
-                members.push(Node::IndexSignatureDeclaration(IndexSignatureDeclaration::{
-                  parameter_name: index_name,
-                  parameter_type: index_type,
-                  return_type: value_type,
-                  is_readonly: true,
-                  location: readonly_loc,
-                }))
+                members.push(
+                  Node::IndexSignatureDeclaration(IndexSignatureDeclaration::{
+                    parameter_name: index_name,
+                    parameter_type: index_type,
+                    return_type: value_type,
+                    is_readonly: true,
+                    location: readonly_loc,
+                  }),
+                )
                 // Optional semicolon or comma
                 match current_token(parser) {
                   Semicolon(_) | Comma(_) => parser = advance_parser(parser)
@@ -5100,25 +2361,42 @@ fn parse_interface_declaration(
                     match parse_type(parser) {
                       Ok((prop_type, p)) => {
                         parser = p
-                        members.push(Node::PropertyDeclaration(PropertyDeclaration::{
-                          name: prop_name,
-                          type_annotation: Some(prop_type),
-                          initializer: None,
-                          location: prop_loc,
-                          modifiers: [Modifier::Readonly],
-                        }))
+                        members.push(
+                          Node::PropertyDeclaration(PropertyDeclaration::{
+                            name: prop_name,
+                            type_annotation: Some(prop_type),
+                            initializer: None,
+                            location: prop_loc,
+                            modifiers: [Modifier::Readonly],
+                          }),
+                        )
                         match current_token(parser) {
-                          Semicolon(_) | Comma(_) => parser = advance_parser(parser)
+                          Semicolon(_) | Comma(_) =>
+                            parser = advance_parser(parser)
                           _ => ()
                         }
                       }
                       Err(p) => return Err(p)
                     }
                   }
-                  _ => return Err(add_error(parser, "Expected ':' after readonly property name", current_token(parser).location()))
+                  _ =>
+                    return Err(
+                      add_error(
+                        parser,
+                        "Expected ':' after readonly property name",
+                        current_token(parser).location(),
+                      ),
+                    )
                 }
               }
-              _ => return Err(add_error(parser, "Expected property name or '[' after readonly", current_token(parser).location()))
+              _ =>
+                return Err(
+                  add_error(
+                    parser,
+                    "Expected property name or '[' after readonly",
+                    current_token(parser).location(),
+                  ),
+                )
             }
           }
           // Call signature: (): returnType
@@ -5146,17 +2424,19 @@ fn parse_interface_declaration(
             }
 
             // Create call signature as a method with empty name (call signature)
-            members.push(Node::MethodDeclaration(MethodDeclaration::{
-              name: "",
-              type_parameters: [],
-              parameters: params,
-              return_type,
-              body: None,
-              location: call_loc,
-              modifiers: [],
-              is_async: false,
-              is_generator: false,
-            }))
+            members.push(
+              Node::MethodDeclaration(MethodDeclaration::{
+                name: "",
+                type_parameters: [],
+                parameters: params,
+                return_type,
+                body: None,
+                location: call_loc,
+                modifiers: [],
+                is_async: false,
+                is_generator: false,
+              }),
+            )
 
             // Optional semicolon or comma
             match current_token(parser) {
@@ -5168,7 +2448,6 @@ fn parse_interface_declaration(
           KeywordNew(_) => {
             let new_loc = current_token(parser).location()
             parser = advance_parser(parser) // consume 'new'
-
             match current_token(parser) {
               OpenParen(_) => {
                 parser = advance_parser(parser)
@@ -5191,17 +2470,19 @@ fn parse_interface_declaration(
                 }
 
                 // Create construct signature as a method with "new" name
-                members.push(Node::MethodDeclaration(MethodDeclaration::{
-                  name: "new",
-                  type_parameters: [],
-                  parameters: params,
-                  return_type,
-                  body: None,
-                  location: new_loc,
-                  modifiers: [],
-                  is_async: false,
-                  is_generator: false,
-                }))
+                members.push(
+                  Node::MethodDeclaration(MethodDeclaration::{
+                    name: "new",
+                    type_parameters: [],
+                    parameters: params,
+                    return_type,
+                    body: None,
+                    location: new_loc,
+                    modifiers: [],
+                    is_async: false,
+                    is_generator: false,
+                  }),
+                )
 
                 // Optional semicolon or comma
                 match current_token(parser) {
@@ -5209,7 +2490,14 @@ fn parse_interface_declaration(
                   _ => ()
                 }
               }
-              _ => return Err(add_error(parser, "Expected '(' after 'new'", current_token(parser).location()))
+              _ =>
+                return Err(
+                  add_error(
+                    parser,
+                    "Expected '(' after 'new'",
+                    current_token(parser).location(),
+                  ),
+                )
             }
           }
           Identifier(prop_name, prop_loc) => {
@@ -5223,7 +2511,8 @@ fn parse_interface_declaration(
 
                 // Skip parameters for now - just find closing paren
                 let mut paren_depth = 1
-                while paren_depth > 0 && parser.position < parser.tokens.length() {
+                while paren_depth > 0 &&
+                      parser.position < parser.tokens.length() {
                   match current_token(parser) {
                     OpenParen(_) => {
                       paren_depth = paren_depth + 1
@@ -5253,17 +2542,19 @@ fn parse_interface_declaration(
                 }
 
                 // Create method declaration
-                members.push(Node::MethodDeclaration(MethodDeclaration::{
-                  name: prop_name,
-                  type_parameters: [],
-                  parameters: [], // Skipped for simplicity
-                  return_type,
-                  body: None,
-                  location: prop_loc,
-                  modifiers: [],
-                  is_async: false,
-                  is_generator: false,
-                }))
+                members.push(
+                  Node::MethodDeclaration(MethodDeclaration::{
+                    name: prop_name,
+                    type_parameters: [],
+                    parameters: [], // Skipped for simplicity
+                    return_type,
+                    body: None,
+                    location: prop_loc,
+                    modifiers: [],
+                    is_async: false,
+                    is_generator: false,
+                  }),
+                )
 
                 // Optional semicolon or comma
                 match current_token(parser) {
@@ -5281,13 +2572,15 @@ fn parse_interface_declaration(
                     parser = p
 
                     // Create property declaration
-                    members.push(Node::PropertyDeclaration(PropertyDeclaration::{
-                      name: prop_name,
-                      type_annotation: Some(prop_type),
-                      initializer: None,
-                      location: prop_loc,
-                      modifiers: [],
-                    }))
+                    members.push(
+                      Node::PropertyDeclaration(PropertyDeclaration::{
+                        name: prop_name,
+                        type_annotation: Some(prop_type),
+                        initializer: None,
+                        location: prop_loc,
+                        modifiers: [],
+                      }),
+                    )
 
                     // Optional semicolon or comma
                     match current_token(parser) {
@@ -5298,16 +2591,33 @@ fn parse_interface_declaration(
                   Err(p) => return Err(p)
                 }
               }
-              _ => return Err(add_error(parser, "Expected ':' or '(' after property name", prop_loc))
+              _ =>
+                return Err(
+                  add_error(
+                    parser, "Expected ':' or '(' after property name", prop_loc,
+                  ),
+                )
             }
           }
           _ => break
         }
       }
-
-      Err(add_error(parser, "Expected '}' after interface body", current_token(parser).location()))
+      Err(
+        add_error(
+          parser,
+          "Expected '}' after interface body",
+          current_token(parser).location(),
+        ),
+      )
     }
-    _ => Err(add_error(parser, "Expected '{' after interface name", current_token(parser).location()))
+    _ =>
+      Err(
+        add_error(
+          parser,
+          "Expected '{' after interface name",
+          current_token(parser).location(),
+        ),
+      )
   }
 }
 
@@ -5322,7 +2632,14 @@ fn parse_type_alias_declaration(
   // Parse type name
   let (name, parser) = match current_token(parser) {
     Identifier(n, _) => (n, advance_parser(parser))
-    _ => return Err(add_error(parser, "Expected type name", current_token(parser).location()))
+    _ =>
+      return Err(
+        add_error(
+          parser,
+          "Expected type name",
+          current_token(parser).location(),
+        ),
+      )
   }
 
   // Optional type parameters
@@ -5334,7 +2651,14 @@ fn parse_type_alias_declaration(
   // Expect '='
   let parser = match current_token(parser) {
     Equals(_) => advance_parser(parser)
-    _ => return Err(add_error(parser, "Expected '=' in type alias", current_token(parser).location()))
+    _ =>
+      return Err(
+        add_error(
+          parser,
+          "Expected '=' in type alias",
+          current_token(parser).location(),
+        ),
+      )
   }
 
   // Parse type
@@ -5342,7 +2666,6 @@ fn parse_type_alias_declaration(
     Ok((t, p)) => (t, p)
     Err(p) => return Err(p)
   }
-
   let end_loc = get_location(type_node)
 
   // Consume optional semicolon
@@ -5350,21 +2673,29 @@ fn parse_type_alias_declaration(
     Semicolon(_) => advance_parser(parser)
     _ => parser
   }
-
-  Ok((
-    Node::TypeAliasDeclaration(TypeAliasDeclaration::{
-      name,
-      type_parameters,
-      type_node,
-      modifiers: [],
-      location: SourceLocation::new(start_loc.file_path, start_loc.start, end_loc.end)
-    }),
-    parser
-  ))
+  Ok(
+    (
+      Node::TypeAliasDeclaration(TypeAliasDeclaration::{
+        name,
+        type_parameters,
+        type_node,
+        modifiers: [],
+        location: SourceLocation::new(
+          start_loc.file_path,
+          start_loc.start,
+          end_loc.end,
+        ),
+      }),
+      parser,
+    ),
+  )
 }
 
 ///|
-fn parse_enum_declaration(parser : Parser, is_const : Bool) -> Result[(Node, Parser), Parser] {
+fn parse_enum_declaration(
+  parser : Parser,
+  is_const : Bool,
+) -> Result[(Node, Parser), Parser] {
   // enum Name { A, B = 1, C } or const enum Name { A, B }
   let start_loc = current_token(parser).location()
   let parser = advance_parser(parser) // consume 'enum'
@@ -5372,7 +2703,14 @@ fn parse_enum_declaration(parser : Parser, is_const : Bool) -> Result[(Node, Par
   // Parse enum name
   let (name, parser) = match current_token(parser) {
     Identifier(n, _) => (n, advance_parser(parser))
-    _ => return Err(add_error(parser, "Expected enum name", current_token(parser).location()))
+    _ =>
+      return Err(
+        add_error(
+          parser,
+          "Expected enum name",
+          current_token(parser).location(),
+        ),
+      )
   }
 
   // Parse enum body
@@ -5383,22 +2721,46 @@ fn parse_enum_declaration(parser : Parser, is_const : Bool) -> Result[(Node, Par
       match current_token(parser) {
         CloseBrace(loc) => {
           let parser = advance_parser(parser)
-          let modifiers : Array[Modifier] = if is_const { [Modifier::Const] } else { [] }
-          Ok((
-            Node::EnumDeclaration(EnumDeclaration::{
-              name,
-              members,
-              is_const,
-              modifiers,
-              location: SourceLocation::new(start_loc.file_path, start_loc.start, loc.end)
-            }),
-            parser
-          ))
+          let modifiers : Array[Modifier] = if is_const {
+            [Modifier::Const]
+          } else {
+            []
+          }
+          Ok(
+            (
+              Node::EnumDeclaration(EnumDeclaration::{
+                name,
+                members,
+                is_const,
+                modifiers,
+                location: SourceLocation::new(
+                  start_loc.file_path,
+                  start_loc.start,
+                  loc.end,
+                ),
+              }),
+              parser,
+            ),
+          )
         }
-        _ => Err(add_error(parser, "Expected '}' after enum body", current_token(parser).location()))
+        _ =>
+          Err(
+            add_error(
+              parser,
+              "Expected '}' after enum body",
+              current_token(parser).location(),
+            ),
+          )
       }
     }
-    _ => Err(add_error(parser, "Expected '{' after enum name", current_token(parser).location()))
+    _ =>
+      Err(
+        add_error(
+          parser,
+          "Expected '{' after enum name",
+          current_token(parser).location(),
+        ),
+      )
   }
 }
 
@@ -5409,7 +2771,10 @@ fn parse_enum_members(parser : Parser) -> (Array[EnumMember], Parser) {
 }
 
 ///|
-fn parse_enum_members_aux(parser : Parser, acc : Array[EnumMember]) -> (Array[EnumMember], Parser) {
+fn parse_enum_members_aux(
+  parser : Parser,
+  acc : Array[EnumMember],
+) -> (Array[EnumMember], Parser) {
   match current_token(parser) {
     CloseBrace(_) | EOF(_) => (acc, parser)
     Identifier(name, loc) => {
@@ -5448,42 +2813,60 @@ fn parse_module_declaration(parser : Parser) -> Result[(Node, Parser), Parser] {
   let (name, parser) = match current_token(parser) {
     Identifier(n, _) => (n, advance_parser(parser))
     StringLiteral(s, _) => (s, advance_parser(parser)) // For ambient modules like declare module "fs"
-    _ => return Err(add_error(parser, "Expected namespace/module name", current_token(parser).location()))
+    _ =>
+      return Err(
+        add_error(
+          parser,
+          "Expected namespace/module name",
+          current_token(parser).location(),
+        ),
+      )
   }
 
   // Parse body
   match current_token(parser) {
-    OpenBrace(_) => {
+    OpenBrace(_) =>
       // Parse block body
       match parse_block_statement(parser) {
         Ok((body, parser)) => {
           let end_loc = get_location(body)
-          Ok((
-            Node::ModuleDeclaration(ModuleDeclaration::{
-              name,
-              body: Some(body),
-              location: SourceLocation::new(start_loc.file_path, start_loc.start, end_loc.end)
-            }),
-            parser
-          ))
+          Ok(
+            (
+              Node::ModuleDeclaration(ModuleDeclaration::{
+                name,
+                body: Some(body),
+                location: SourceLocation::new(
+                  start_loc.file_path,
+                  start_loc.start,
+                  end_loc.end,
+                ),
+              }),
+              parser,
+            ),
+          )
         }
         Err(p) => Err(p)
       }
-    }
     Dot(_) => {
       // Dotted name like namespace A.B.C
       let parser = advance_parser(parser)
       match parse_module_declaration(parser) {
         Ok((nested, parser)) => {
           let end_loc = get_location(nested)
-          Ok((
-            Node::ModuleDeclaration(ModuleDeclaration::{
-              name,
-              body: Some(nested),
-              location: SourceLocation::new(start_loc.file_path, start_loc.start, end_loc.end)
-            }),
-            parser
-          ))
+          Ok(
+            (
+              Node::ModuleDeclaration(ModuleDeclaration::{
+                name,
+                body: Some(nested),
+                location: SourceLocation::new(
+                  start_loc.file_path,
+                  start_loc.start,
+                  end_loc.end,
+                ),
+              }),
+              parser,
+            ),
+          )
         }
         Err(p) => Err(p)
       }
@@ -5491,14 +2874,16 @@ fn parse_module_declaration(parser : Parser) -> Result[(Node, Parser), Parser] {
     _ => {
       // Empty module/namespace (declaration only)
       let parser = expect_semicolon(parser)
-      Ok((
-        Node::ModuleDeclaration(ModuleDeclaration::{
-          name,
-          body: None,
-          location: start_loc
-        }),
-        parser
-      ))
+      Ok(
+        (
+          Node::ModuleDeclaration(ModuleDeclaration::{
+            name,
+            body: None,
+            location: start_loc,
+          }),
+          parser,
+        ),
+      )
     }
   }
 }
@@ -5520,14 +2905,20 @@ fn parse_import_declaration(parser : Parser) -> Result[(Node, Parser), Parser] {
         _ => parser
       }
       let end_loc = current_token(parser).location()
-      return Ok((
-        Node::ImportDeclaration(ImportDeclaration::{
-          import_clause: None,
-          module_specifier,
-          location: SourceLocation::new(start_loc.file_path, start_loc.start, end_loc.end)
-        }),
-        parser
-      ))
+      return Ok(
+        (
+          Node::ImportDeclaration(ImportDeclaration::{
+            import_clause: None,
+            module_specifier,
+            location: SourceLocation::new(
+              start_loc.file_path,
+              start_loc.start,
+              end_loc.end,
+            ),
+          }),
+          parser,
+        ),
+      )
     }
     _ => ()
   }
@@ -5561,10 +2952,24 @@ fn parse_import_declaration(parser : Parser) -> Result[(Node, Parser), Parser] {
               let parser = advance_parser(parser)
               (Some(NamedImports::NamespaceImport(name, loc)), parser)
             }
-            _ => return Err(add_error(parser, "Expected identifier after 'as'", current_token(parser).location()))
+            _ =>
+              return Err(
+                add_error(
+                  parser,
+                  "Expected identifier after 'as'",
+                  current_token(parser).location(),
+                ),
+              )
           }
         }
-        _ => return Err(add_error(parser, "Expected 'as' after '*'", current_token(parser).location()))
+        _ =>
+          return Err(
+            add_error(
+              parser,
+              "Expected 'as' after '*'",
+              current_token(parser).location(),
+            ),
+          )
       }
     }
     OpenBrace(_) => {
@@ -5576,7 +2981,14 @@ fn parse_import_declaration(parser : Parser) -> Result[(Node, Parser), Parser] {
           let parser = advance_parser(parser)
           (Some(NamedImports::NamedImports(specifiers, loc)), parser)
         }
-        _ => return Err(add_error(parser, "Expected '}' after import specifiers", current_token(parser).location()))
+        _ =>
+          return Err(
+            add_error(
+              parser,
+              "Expected '}' after import specifiers",
+              current_token(parser).location(),
+            ),
+          )
       }
     }
     _ => (None, parser)
@@ -5585,15 +2997,28 @@ fn parse_import_declaration(parser : Parser) -> Result[(Node, Parser), Parser] {
   // Expect 'from' keyword
   let parser = match current_token(parser) {
     KeywordFrom(_) => advance_parser(parser)
-    _ => return Err(add_error(parser, "Expected 'from' after import clause", current_token(parser).location()))
+    _ =>
+      return Err(
+        add_error(
+          parser,
+          "Expected 'from' after import clause",
+          current_token(parser).location(),
+        ),
+      )
   }
 
   // Parse module specifier (string literal)
   let (module_specifier, parser) = match current_token(parser) {
     StringLiteral(spec, _) => (spec, advance_parser(parser))
-    _ => return Err(add_error(parser, "Expected module specifier string", current_token(parser).location()))
+    _ =>
+      return Err(
+        add_error(
+          parser,
+          "Expected module specifier string",
+          current_token(parser).location(),
+        ),
+      )
   }
-
   let end_loc = current_token(parser).location()
 
   // Build import clause if we have default or named imports
@@ -5603,7 +3028,11 @@ fn parse_import_declaration(parser : Parser) -> Result[(Node, Parser), Parser] {
     Some(ImportClause::{
       name: default_import,
       named_bindings,
-      location: SourceLocation::new(start_loc.file_path, start_loc.start, end_loc.end)
+      location: SourceLocation::new(
+        start_loc.file_path,
+        start_loc.start,
+        end_loc.end,
+      ),
     })
   }
 
@@ -5612,15 +3041,20 @@ fn parse_import_declaration(parser : Parser) -> Result[(Node, Parser), Parser] {
     Semicolon(_) => advance_parser(parser)
     _ => parser
   }
-
-  Ok((
-    Node::ImportDeclaration(ImportDeclaration::{
-      import_clause,
-      module_specifier,
-      location: SourceLocation::new(start_loc.file_path, start_loc.start, end_loc.end)
-    }),
-    parser
-  ))
+  Ok(
+    (
+      Node::ImportDeclaration(ImportDeclaration::{
+        import_clause,
+        module_specifier,
+        location: SourceLocation::new(
+          start_loc.file_path,
+          start_loc.start,
+          end_loc.end,
+        ),
+      }),
+      parser,
+    ),
+  )
 }
 
 ///|
@@ -5631,7 +3065,10 @@ fn parse_import_specifiers(parser : Parser) -> (Array[ImportSpecifier], Parser) 
 
 ///|
 /// Tail-recursive helper for parsing import specifiers
-fn parse_import_specifiers_aux(parser : Parser, acc : Array[ImportSpecifier]) -> (Array[ImportSpecifier], Parser) {
+fn parse_import_specifiers_aux(
+  parser : Parser,
+  acc : Array[ImportSpecifier],
+) -> (Array[ImportSpecifier], Parser) {
   match current_token(parser) {
     CloseBrace(_) | EOF(_) => (acc, parser)
     Identifier(name, loc) => {
@@ -5643,10 +3080,15 @@ fn parse_import_specifiers_aux(parser : Parser, acc : Array[ImportSpecifier]) ->
           match current_token(parser) {
             Identifier(local_name, _) => {
               let parser = advance_parser(parser)
-              acc.push(ImportSpecifier::{ property_name: Some(name), name: local_name, location: loc })
+              acc.push(ImportSpecifier::{
+                property_name: Some(name),
+                name: local_name,
+                location: loc,
+              })
               // Check for comma
               match current_token(parser) {
-                Comma(_) => parse_import_specifiers_aux(advance_parser(parser), acc)
+                Comma(_) =>
+                  parse_import_specifiers_aux(advance_parser(parser), acc)
                 _ => (acc, parser)
               }
             }
@@ -5677,24 +3119,24 @@ fn parse_export_declaration(parser : Parser) -> Result[(Node, Parser), Parser] {
   // export const/let/var/function/class ...
   let start_loc = current_token(parser).location()
   let parser = advance_parser(parser) // consume 'export'
-
   match current_token(parser) {
     // export default expression/declaration
     KeywordDefault(_) => {
       let parser = advance_parser(parser)
       // Check if it's a declaration (function or class)
       match current_token(parser) {
-        KeywordFunction(_) | KeywordClass(_) => {
+        KeywordFunction(_) | KeywordClass(_) =>
           // Parse as declaration and add Export + Default modifiers
           match parse_statement(parser) {
             Ok((declaration, parser)) => {
-              let decl_with_modifiers = add_export_default_modifiers(declaration)
+              let decl_with_modifiers = add_export_default_modifiers(
+                declaration,
+              )
               Ok((decl_with_modifiers, parser))
             }
             Err(p) => Err(p)
           }
-        }
-        _ => {
+        _ =>
           // Parse as expression - use ExportAssignment
           match parse_expression(parser) {
             Ok((expression, parser)) => {
@@ -5704,18 +3146,23 @@ fn parse_export_declaration(parser : Parser) -> Result[(Node, Parser), Parser] {
                 Semicolon(_) => advance_parser(parser)
                 _ => parser
               }
-              Ok((
-                Node::ExportAssignment(ExportAssignment::{
-                  expression,
-                  is_export_equals: false,
-                  location: SourceLocation::new(start_loc.file_path, start_loc.start, end_loc.end)
-                }),
-                parser
-              ))
+              Ok(
+                (
+                  Node::ExportAssignment(ExportAssignment::{
+                    expression,
+                    is_export_equals: false,
+                    location: SourceLocation::new(
+                      start_loc.file_path,
+                      start_loc.start,
+                      end_loc.end,
+                    ),
+                  }),
+                  parser,
+                ),
+              )
             }
             Err(p) => Err(p)
           }
-        }
       }
     }
 
@@ -5742,23 +3189,52 @@ fn parse_export_declaration(parser : Parser) -> Result[(Node, Parser), Parser] {
                         _ => parser
                       }
                       let end_loc = current_token(parser).location()
-                      Ok((
-                        Node::ExportDeclaration(ExportDeclaration::{
-                          export_clause: Some(NamedExports::NamespaceExport(ns_name, star_loc)),
-                          module_specifier: Some(module_specifier),
-                          is_type_only: false,
-                          location: SourceLocation::new(start_loc.file_path, start_loc.start, end_loc.end)
-                        }),
-                        parser
-                      ))
+                      Ok(
+                        (
+                          Node::ExportDeclaration(ExportDeclaration::{
+                            export_clause: Some(
+                              NamedExports::NamespaceExport(ns_name, star_loc),
+                            ),
+                            module_specifier: Some(module_specifier),
+                            is_type_only: false,
+                            location: SourceLocation::new(
+                              start_loc.file_path,
+                              start_loc.start,
+                              end_loc.end,
+                            ),
+                          }),
+                          parser,
+                        ),
+                      )
                     }
-                    _ => Err(add_error(parser, "Expected module specifier after 'from'", current_token(parser).location()))
+                    _ =>
+                      Err(
+                        add_error(
+                          parser,
+                          "Expected module specifier after 'from'",
+                          current_token(parser).location(),
+                        ),
+                      )
                   }
                 }
-                _ => Err(add_error(parser, "Expected 'from' after namespace export", current_token(parser).location()))
+                _ =>
+                  Err(
+                    add_error(
+                      parser,
+                      "Expected 'from' after namespace export",
+                      current_token(parser).location(),
+                    ),
+                  )
               }
             }
-            _ => Err(add_error(parser, "Expected namespace name after 'as'", current_token(parser).location()))
+            _ =>
+              Err(
+                add_error(
+                  parser,
+                  "Expected namespace name after 'as'",
+                  current_token(parser).location(),
+                ),
+              )
           }
         }
         // export * from 'module'
@@ -5773,20 +3249,40 @@ fn parse_export_declaration(parser : Parser) -> Result[(Node, Parser), Parser] {
                 _ => parser
               }
               let end_loc = current_token(parser).location()
-              Ok((
-                Node::ExportDeclaration(ExportDeclaration::{
-                  export_clause: None,
-                  module_specifier: Some(module_specifier),
-                  is_type_only: false,
-                  location: SourceLocation::new(start_loc.file_path, start_loc.start, end_loc.end)
-                }),
-                parser
-              ))
+              Ok(
+                (
+                  Node::ExportDeclaration(ExportDeclaration::{
+                    export_clause: None,
+                    module_specifier: Some(module_specifier),
+                    is_type_only: false,
+                    location: SourceLocation::new(
+                      start_loc.file_path,
+                      start_loc.start,
+                      end_loc.end,
+                    ),
+                  }),
+                  parser,
+                ),
+              )
             }
-            _ => Err(add_error(parser, "Expected module specifier after 'from'", current_token(parser).location()))
+            _ =>
+              Err(
+                add_error(
+                  parser,
+                  "Expected module specifier after 'from'",
+                  current_token(parser).location(),
+                ),
+              )
           }
         }
-        _ => Err(add_error(parser, "Expected 'from' or 'as' after 'export *'", current_token(parser).location()))
+        _ =>
+          Err(
+            add_error(
+              parser,
+              "Expected 'from' or 'as' after 'export *'",
+              current_token(parser).location(),
+            ),
+          )
       }
     }
 
@@ -5807,8 +3303,16 @@ fn parse_export_declaration(parser : Parser) -> Result[(Node, Parser), Parser] {
                 KeywordFrom(_) => {
                   let parser = advance_parser(parser)
                   match current_token(parser) {
-                    StringLiteral(spec, _) => (Some(spec), advance_parser(parser))
-                    _ => return Err(add_error(parser, "Expected module specifier after 'from'", current_token(parser).location()))
+                    StringLiteral(spec, _) =>
+                      (Some(spec), advance_parser(parser))
+                    _ =>
+                      return Err(
+                        add_error(
+                          parser,
+                          "Expected module specifier after 'from'",
+                          current_token(parser).location(),
+                        ),
+                      )
                   }
                 }
                 _ => (None, parser)
@@ -5819,21 +3323,36 @@ fn parse_export_declaration(parser : Parser) -> Result[(Node, Parser), Parser] {
                 _ => parser
               }
               let end_loc = current_token(parser).location()
-              Ok((
-                Node::ExportDeclaration(ExportDeclaration::{
-                  export_clause: Some(NamedExports::NamedExports(specifiers, loc)),
-                  module_specifier,
-                  is_type_only: true,
-                  location: SourceLocation::new(start_loc.file_path, start_loc.start, end_loc.end)
-                }),
-                parser
-              ))
+              Ok(
+                (
+                  Node::ExportDeclaration(ExportDeclaration::{
+                    export_clause: Some(
+                      NamedExports::NamedExports(specifiers, loc),
+                    ),
+                    module_specifier,
+                    is_type_only: true,
+                    location: SourceLocation::new(
+                      start_loc.file_path,
+                      start_loc.start,
+                      end_loc.end,
+                    ),
+                  }),
+                  parser,
+                ),
+              )
             }
-            _ => Err(add_error(parser, "Expected '}' after export specifiers", current_token(parser).location()))
+            _ =>
+              Err(
+                add_error(
+                  parser,
+                  "Expected '}' after export specifiers",
+                  current_token(parser).location(),
+                ),
+              )
           }
         }
         // export type Foo = ... (type alias declaration with export)
-        _ => {
+        _ =>
           // Parse as type alias declaration (parser is still at 'type' keyword) and add Export modifier
           match parse_type_alias_declaration(parser) {
             Ok((type_alias, parser)) => {
@@ -5842,7 +3361,6 @@ fn parse_export_declaration(parser : Parser) -> Result[(Node, Parser), Parser] {
             }
             Err(p) => Err(p)
           }
-        }
       }
     }
 
@@ -5859,7 +3377,14 @@ fn parse_export_declaration(parser : Parser) -> Result[(Node, Parser), Parser] {
               let parser = advance_parser(parser)
               match current_token(parser) {
                 StringLiteral(spec, _) => (Some(spec), advance_parser(parser))
-                _ => return Err(add_error(parser, "Expected module specifier after 'from'", current_token(parser).location()))
+                _ =>
+                  return Err(
+                    add_error(
+                      parser,
+                      "Expected module specifier after 'from'",
+                      current_token(parser).location(),
+                    ),
+                  )
               }
             }
             _ => (None, parser)
@@ -5870,22 +3395,35 @@ fn parse_export_declaration(parser : Parser) -> Result[(Node, Parser), Parser] {
             _ => parser
           }
           let end_loc = current_token(parser).location()
-          Ok((
-            Node::ExportDeclaration(ExportDeclaration::{
-              export_clause: Some(NamedExports::NamedExports(specifiers, loc)),
-              module_specifier,
-              is_type_only: false,
-              location: SourceLocation::new(start_loc.file_path, start_loc.start, end_loc.end)
-            }),
-            parser
-          ))
+          Ok(
+            (
+              Node::ExportDeclaration(ExportDeclaration::{
+                export_clause: Some(NamedExports::NamedExports(specifiers, loc)),
+                module_specifier,
+                is_type_only: false,
+                location: SourceLocation::new(
+                  start_loc.file_path,
+                  start_loc.start,
+                  end_loc.end,
+                ),
+              }),
+              parser,
+            ),
+          )
         }
-        _ => Err(add_error(parser, "Expected '}' after export specifiers", current_token(parser).location()))
+        _ =>
+          Err(
+            add_error(
+              parser,
+              "Expected '}' after export specifiers",
+              current_token(parser).location(),
+            ),
+          )
       }
     }
 
     // export declaration (const, let, var, function, class, etc.)
-    _ => {
+    _ =>
       // Parse the declaration and add Export modifier
       match parse_statement(parser) {
         Ok((stmt, parser)) => {
@@ -5895,7 +3433,6 @@ fn parse_export_declaration(parser : Parser) -> Result[(Node, Parser), Parser] {
         }
         Err(p) => Err(p)
       }
-    }
   }
 }
 
@@ -5998,7 +3535,10 @@ fn add_export_modifier(node : Node) -> Node {
 fn add_export_default_modifiers(node : Node) -> Node {
   match node {
     FunctionDeclaration(fd) => {
-      let new_modifiers : Array[Modifier] = [Modifier::Export, Modifier::Default]
+      let new_modifiers : Array[Modifier] = [
+        Modifier::Export,
+        Modifier::Default,
+      ]
       for m in fd.modifiers {
         new_modifiers.push(m)
       }
@@ -6015,7 +3555,10 @@ fn add_export_default_modifiers(node : Node) -> Node {
       })
     }
     ClassDeclaration(cd) => {
-      let new_modifiers : Array[Modifier] = [Modifier::Export, Modifier::Default]
+      let new_modifiers : Array[Modifier] = [
+        Modifier::Export,
+        Modifier::Default,
+      ]
       for m in cd.modifiers {
         new_modifiers.push(m)
       }
@@ -6039,7 +3582,6 @@ fn add_export_default_modifiers(node : Node) -> Node {
 fn parse_declare_declaration(parser : Parser) -> Result[(Node, Parser), Parser] {
   // declare const/let/var/function/class/enum/module/namespace
   let parser = advance_parser(parser) // consume 'declare'
-
   match parse_statement(parser) {
     Ok((stmt, parser)) => {
       // Add Declare modifier to the declaration
@@ -6152,7 +3694,10 @@ fn parse_export_specifiers(parser : Parser) -> (Array[ExportSpecifier], Parser) 
 
 ///|
 /// Tail-recursive helper for parsing export specifiers
-fn parse_export_specifiers_aux(parser : Parser, acc : Array[ExportSpecifier]) -> (Array[ExportSpecifier], Parser) {
+fn parse_export_specifiers_aux(
+  parser : Parser,
+  acc : Array[ExportSpecifier],
+) -> (Array[ExportSpecifier], Parser) {
   match current_token(parser) {
     CloseBrace(_) | EOF(_) => (acc, parser)
     Identifier(name, loc) => {
@@ -6164,10 +3709,15 @@ fn parse_export_specifiers_aux(parser : Parser, acc : Array[ExportSpecifier]) ->
           match current_token(parser) {
             Identifier(export_name, _) => {
               let parser = advance_parser(parser)
-              acc.push(ExportSpecifier::{ property_name: Some(name), name: export_name, location: loc })
+              acc.push(ExportSpecifier::{
+                property_name: Some(name),
+                name: export_name,
+                location: loc,
+              })
               // Check for comma
               match current_token(parser) {
-                Comma(_) => parse_export_specifiers_aux(advance_parser(parser), acc)
+                Comma(_) =>
+                  parse_export_specifiers_aux(advance_parser(parser), acc)
                 _ => (acc, parser)
               }
             }
@@ -6198,7 +3748,14 @@ fn parse_switch_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
   // Expect '('
   let parser = match current_token(parser) {
     OpenParen(_) => advance_parser(parser)
-    _ => return Err(add_error(parser, "Expected '(' after 'switch'", current_token(parser).location()))
+    _ =>
+      return Err(
+        add_error(
+          parser,
+          "Expected '(' after 'switch'",
+          current_token(parser).location(),
+        ),
+      )
   }
 
   // Parse expression
@@ -6210,13 +3767,27 @@ fn parse_switch_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
   // Expect ')'
   let parser = match current_token(parser) {
     CloseParen(_) => advance_parser(parser)
-    _ => return Err(add_error(parser, "Expected ')' after switch expression", current_token(parser).location()))
+    _ =>
+      return Err(
+        add_error(
+          parser,
+          "Expected ')' after switch expression",
+          current_token(parser).location(),
+        ),
+      )
   }
 
   // Expect '{'
   let parser = match current_token(parser) {
     OpenBrace(_) => advance_parser(parser)
-    _ => return Err(add_error(parser, "Expected '{' after switch header", current_token(parser).location()))
+    _ =>
+      return Err(
+        add_error(
+          parser,
+          "Expected '{' after switch header",
+          current_token(parser).location(),
+        ),
+      )
   }
 
   // Parse case clauses
@@ -6225,18 +3796,30 @@ fn parse_switch_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
   // Expect '}'
   let end_loc = match current_token(parser) {
     CloseBrace(loc) => loc
-    _ => return Err(add_error(parser, "Expected '}' after switch body", current_token(parser).location()))
+    _ =>
+      return Err(
+        add_error(
+          parser,
+          "Expected '}' after switch body",
+          current_token(parser).location(),
+        ),
+      )
   }
   let parser = advance_parser(parser)
-
-  Ok((
-    Node::SwitchStatement(SwitchStatement::{
-      expression,
-      cases,
-      location: SourceLocation::new(start_loc.file_path, start_loc.start, end_loc.end)
-    }),
-    parser
-  ))
+  Ok(
+    (
+      Node::SwitchStatement(SwitchStatement::{
+        expression,
+        cases,
+        location: SourceLocation::new(
+          start_loc.file_path,
+          start_loc.start,
+          end_loc.end,
+        ),
+      }),
+      parser,
+    ),
+  )
 }
 
 ///|
@@ -6246,7 +3829,10 @@ fn parse_case_clauses(parser : Parser) -> (Array[CaseClause], Parser) {
 }
 
 ///|
-fn parse_case_clauses_aux(parser : Parser, acc : Array[CaseClause]) -> (Array[CaseClause], Parser) {
+fn parse_case_clauses_aux(
+  parser : Parser,
+  acc : Array[CaseClause],
+) -> (Array[CaseClause], Parser) {
   match current_token(parser) {
     CloseBrace(_) | EOF(_) => (acc, parser)
 
@@ -6281,7 +3867,6 @@ fn parse_case_clauses_aux(parser : Parser, acc : Array[CaseClause]) -> (Array[Ca
       acc.push(CaseClause::{ expression: None, statements, location: loc })
       parse_case_clauses_aux(parser, acc)
     }
-
     _ => (acc, parser)
   }
 }
@@ -6293,10 +3878,13 @@ fn parse_case_statements(parser : Parser) -> (Array[Node], Parser) {
 }
 
 ///|
-fn parse_case_statements_aux(parser : Parser, acc : Array[Node]) -> (Array[Node], Parser) {
+fn parse_case_statements_aux(
+  parser : Parser,
+  acc : Array[Node],
+) -> (Array[Node], Parser) {
   match current_token(parser) {
     KeywordCase(_) | KeywordDefault(_) | CloseBrace(_) | EOF(_) => (acc, parser)
-    _ => {
+    _ =>
       match parse_statement(parser) {
         Ok((stmt, p)) => {
           acc.push(stmt)
@@ -6304,7 +3892,6 @@ fn parse_case_statements_aux(parser : Parser, acc : Array[Node]) -> (Array[Node]
         }
         Err(p) => (acc, p)
       }
-    }
   }
 }
 
@@ -6319,13 +3906,20 @@ fn parse_for_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
   // Expect '('
   let parser = match current_token(parser) {
     OpenParen(_) => advance_parser(parser)
-    _ => return Err(add_error(parser, "Expected '(' after 'for'", current_token(parser).location()))
+    _ =>
+      return Err(
+        add_error(
+          parser,
+          "Expected '(' after 'for'",
+          current_token(parser).location(),
+        ),
+      )
   }
 
   // Parse initializer (or for-in/for-of variable)
   let (initializer, parser) = match current_token(parser) {
     Semicolon(_) => (None, parser)
-    KeywordLet(_) | KeywordConst(_) | KeywordVar(_) => {
+    KeywordLet(_) | KeywordConst(_) | KeywordVar(_) =>
       // Use parse_variable_declaration_list to avoid consuming the semicolon
       // The semicolon belongs to the for-loop syntax, not the variable declaration
       match parse_variable_declaration_list(parser, true) {
@@ -6341,13 +3935,11 @@ fn parse_for_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
         }
         Err(p) => (None, p)
       }
-    }
-    _ => {
+    _ =>
       match parse_expression(parser) {
         Ok((expr, p)) => (Some(expr), p)
         Err(p) => (None, p)
       }
-    }
   }
 
   // Check for for-in or for-of
@@ -6357,53 +3949,97 @@ fn parse_for_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
       let parser = advance_parser(parser)
       let (expression, parser) = match parse_expression(parser) {
         Ok((expr, p)) => (expr, p)
-        Err(p) => return Err(add_error(p, "Expected expression in for-in", current_token(p).location()))
+        Err(p) =>
+          return Err(
+            add_error(
+              p,
+              "Expected expression in for-in",
+              current_token(p).location(),
+            ),
+          )
       }
       let parser = match current_token(parser) {
         CloseParen(_) => advance_parser(parser)
-        _ => return Err(add_error(parser, "Expected ')' in for-in", current_token(parser).location()))
+        _ =>
+          return Err(
+            add_error(
+              parser,
+              "Expected ')' in for-in",
+              current_token(parser).location(),
+            ),
+          )
       }
       let (statement, parser) = match parse_statement(parser) {
         Ok((stmt, p)) => (stmt, p)
         Err(p) => return Err(p)
       }
       let end_loc = get_location(statement)
-      return Ok((
-        Node::ForInStatement(ForInStatement::{
-          initializer: initializer.unwrap_or(Node::EmptyStatement(EmptyStatement::{ location: start_loc })),
-          expression,
-          statement,
-          location: SourceLocation::new(start_loc.file_path, start_loc.start, end_loc.end)
-        }),
-        parser
-      ))
+      return Ok(
+        (
+          Node::ForInStatement(ForInStatement::{
+            initializer: initializer.unwrap_or(
+              Node::EmptyStatement(EmptyStatement::{ location: start_loc }),
+            ),
+            expression,
+            statement,
+            location: SourceLocation::new(
+              start_loc.file_path,
+              start_loc.start,
+              end_loc.end,
+            ),
+          }),
+          parser,
+        ),
+      )
     }
     KeywordOf(_) => {
       // for-of loop
       let parser = advance_parser(parser)
       let (expression, parser) = match parse_expression(parser) {
         Ok((expr, p)) => (expr, p)
-        Err(p) => return Err(add_error(p, "Expected expression in for-of", current_token(p).location()))
+        Err(p) =>
+          return Err(
+            add_error(
+              p,
+              "Expected expression in for-of",
+              current_token(p).location(),
+            ),
+          )
       }
       let parser = match current_token(parser) {
         CloseParen(_) => advance_parser(parser)
-        _ => return Err(add_error(parser, "Expected ')' in for-of", current_token(parser).location()))
+        _ =>
+          return Err(
+            add_error(
+              parser,
+              "Expected ')' in for-of",
+              current_token(parser).location(),
+            ),
+          )
       }
       let (statement, parser) = match parse_statement(parser) {
         Ok((stmt, p)) => (stmt, p)
         Err(p) => return Err(p)
       }
       let end_loc = get_location(statement)
-      return Ok((
-        Node::ForOfStatement(ForOfStatement::{
-          initializer: initializer.unwrap_or(Node::EmptyStatement(EmptyStatement::{ location: start_loc })),
-          expression,
-          statement,
-          await_modifier: false,
-          location: SourceLocation::new(start_loc.file_path, start_loc.start, end_loc.end)
-        }),
-        parser
-      ))
+      return Ok(
+        (
+          Node::ForOfStatement(ForOfStatement::{
+            initializer: initializer.unwrap_or(
+              Node::EmptyStatement(EmptyStatement::{ location: start_loc }),
+            ),
+            expression,
+            statement,
+            await_modifier: false,
+            location: SourceLocation::new(
+              start_loc.file_path,
+              start_loc.start,
+              end_loc.end,
+            ),
+          }),
+          parser,
+        ),
+      )
     }
     _ => ()
   }
@@ -6412,37 +4048,60 @@ fn parse_for_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
   // Expect semicolon after initializer
   let parser = match current_token(parser) {
     Semicolon(_) => advance_parser(parser)
-    _ => return Err(add_error(parser, "Expected ';' after for loop initializer", current_token(parser).location()))
+    _ =>
+      return Err(
+        add_error(
+          parser,
+          "Expected ';' after for loop initializer",
+          current_token(parser).location(),
+        ),
+      )
   }
 
   // Parse condition
   let (condition, parser) = match current_token(parser) {
     Semicolon(_) => (None, parser)
-    _ => match parse_expression(parser) {
-      Ok((expr, p)) => (Some(expr), p)
-      Err(p) => (None, p)
-    }
+    _ =>
+      match parse_expression(parser) {
+        Ok((expr, p)) => (Some(expr), p)
+        Err(p) => (None, p)
+      }
   }
 
   // Expect semicolon after condition
   let parser = match current_token(parser) {
     Semicolon(_) => advance_parser(parser)
-    _ => return Err(add_error(parser, "Expected ';' after for loop condition", current_token(parser).location()))
+    _ =>
+      return Err(
+        add_error(
+          parser,
+          "Expected ';' after for loop condition",
+          current_token(parser).location(),
+        ),
+      )
   }
 
   // Parse incrementor
   let (incrementor, parser) = match current_token(parser) {
     CloseParen(_) => (None, parser)
-    _ => match parse_expression(parser) {
-      Ok((expr, p)) => (Some(expr), p)
-      Err(p) => (None, p)
-    }
+    _ =>
+      match parse_expression(parser) {
+        Ok((expr, p)) => (Some(expr), p)
+        Err(p) => (None, p)
+      }
   }
 
   // Expect ')'
   let parser = match current_token(parser) {
     CloseParen(_) => advance_parser(parser)
-    _ => return Err(add_error(parser, "Expected ')' after for loop header", current_token(parser).location()))
+    _ =>
+      return Err(
+        add_error(
+          parser,
+          "Expected ')' after for loop header",
+          current_token(parser).location(),
+        ),
+      )
   }
 
   // Parse statement
@@ -6450,19 +4109,23 @@ fn parse_for_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
     Ok((stmt, p)) => (stmt, p)
     Err(p) => return Err(p)
   }
-
   let end_loc = get_location(statement)
-
-  Ok((
-    Node::ForStatement(ForStatement::{
-      initializer,
-      condition,
-      incrementor,
-      statement,
-      location: SourceLocation::new(start_loc.file_path, start_loc.start, end_loc.end)
-    }),
-    parser
-  ))
+  Ok(
+    (
+      Node::ForStatement(ForStatement::{
+        initializer,
+        condition,
+        incrementor,
+        statement,
+        location: SourceLocation::new(
+          start_loc.file_path,
+          start_loc.start,
+          end_loc.end,
+        ),
+      }),
+      parser,
+    ),
+  )
 }
 
 ///|
@@ -6474,7 +4137,14 @@ fn parse_while_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
   // Expect '('
   let parser = match current_token(parser) {
     OpenParen(_) => advance_parser(parser)
-    _ => return Err(add_error(parser, "Expected '(' after 'while'", current_token(parser).location()))
+    _ =>
+      return Err(
+        add_error(
+          parser,
+          "Expected '(' after 'while'",
+          current_token(parser).location(),
+        ),
+      )
   }
 
   // Parse condition
@@ -6486,7 +4156,14 @@ fn parse_while_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
   // Expect ')'
   let parser = match current_token(parser) {
     CloseParen(_) => advance_parser(parser)
-    _ => return Err(add_error(parser, "Expected ')' after while condition", current_token(parser).location()))
+    _ =>
+      return Err(
+        add_error(
+          parser,
+          "Expected ')' after while condition",
+          current_token(parser).location(),
+        ),
+      )
   }
 
   // Parse statement
@@ -6494,17 +4171,21 @@ fn parse_while_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
     Ok((stmt, p)) => (stmt, p)
     Err(p) => return Err(p)
   }
-
   let end_loc = get_location(statement)
-
-  Ok((
-    Node::WhileStatement(WhileStatement::{
-      condition,
-      statement,
-      location: SourceLocation::new(start_loc.file_path, start_loc.start, end_loc.end)
-    }),
-    parser
-  ))
+  Ok(
+    (
+      Node::WhileStatement(WhileStatement::{
+        condition,
+        statement,
+        location: SourceLocation::new(
+          start_loc.file_path,
+          start_loc.start,
+          end_loc.end,
+        ),
+      }),
+      parser,
+    ),
+  )
 }
 
 ///|
@@ -6522,13 +4203,27 @@ fn parse_do_while_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
   // Expect 'while'
   let parser = match current_token(parser) {
     KeywordWhile(_) => advance_parser(parser)
-    _ => return Err(add_error(parser, "Expected 'while' after do statement", current_token(parser).location()))
+    _ =>
+      return Err(
+        add_error(
+          parser,
+          "Expected 'while' after do statement",
+          current_token(parser).location(),
+        ),
+      )
   }
 
   // Expect '('
   let parser = match current_token(parser) {
     OpenParen(_) => advance_parser(parser)
-    _ => return Err(add_error(parser, "Expected '(' after 'while'", current_token(parser).location()))
+    _ =>
+      return Err(
+        add_error(
+          parser,
+          "Expected '(' after 'while'",
+          current_token(parser).location(),
+        ),
+      )
   }
 
   // Parse condition
@@ -6540,7 +4235,14 @@ fn parse_do_while_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
   // Expect ')'
   let parser = match current_token(parser) {
     CloseParen(_) => advance_parser(parser)
-    _ => return Err(add_error(parser, "Expected ')' after while condition", current_token(parser).location()))
+    _ =>
+      return Err(
+        add_error(
+          parser,
+          "Expected ')' after while condition",
+          current_token(parser).location(),
+        ),
+      )
   }
 
   // Expect ';'
@@ -6549,15 +4251,20 @@ fn parse_do_while_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
     Semicolon(_) => advance_parser(parser)
     _ => parser // Semicolon is optional in some contexts
   }
-
-  Ok((
-    Node::DoWhileStatement(DoWhileStatement::{
-      statement,
-      condition,
-      location: SourceLocation::new(start_loc.file_path, start_loc.start, end_loc.end)
-    }),
-    parser
-  ))
+  Ok(
+    (
+      Node::DoWhileStatement(DoWhileStatement::{
+        statement,
+        condition,
+        location: SourceLocation::new(
+          start_loc.file_path,
+          start_loc.start,
+          end_loc.end,
+        ),
+      }),
+      parser,
+    ),
+  )
 }
 
 ///|
@@ -6578,14 +4285,19 @@ fn parse_break_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
     Semicolon(_) => advance_parser(parser)
     _ => parser
   }
-
-  Ok((
-    Node::BreakStatement(BreakStatement::{
-      label,
-      location: SourceLocation::new(start_loc.file_path, start_loc.start, end_loc.end)
-    }),
-    parser
-  ))
+  Ok(
+    (
+      Node::BreakStatement(BreakStatement::{
+        label,
+        location: SourceLocation::new(
+          start_loc.file_path,
+          start_loc.start,
+          end_loc.end,
+        ),
+      }),
+      parser,
+    ),
+  )
 }
 
 ///|
@@ -6606,14 +4318,19 @@ fn parse_continue_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
     Semicolon(_) => advance_parser(parser)
     _ => parser
   }
-
-  Ok((
-    Node::ContinueStatement(ContinueStatement::{
-      label,
-      location: SourceLocation::new(start_loc.file_path, start_loc.start, end_loc.end)
-    }),
-    parser
-  ))
+  Ok(
+    (
+      Node::ContinueStatement(ContinueStatement::{
+        label,
+        location: SourceLocation::new(
+          start_loc.file_path,
+          start_loc.start,
+          end_loc.end,
+        ),
+      }),
+      parser,
+    ),
+  )
 }
 
 ///|
@@ -6625,7 +4342,14 @@ fn parse_throw_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
   // Parse expression
   let (expression, parser) = match parse_expression(parser) {
     Ok((expr, p)) => (expr, p)
-    Err(p) => return Err(add_error(p, "Expected expression after 'throw'", current_token(p).location()))
+    Err(p) =>
+      return Err(
+        add_error(
+          p,
+          "Expected expression after 'throw'",
+          current_token(p).location(),
+        ),
+      )
   }
 
   // Expect semicolon (optional due to ASI)
@@ -6634,14 +4358,19 @@ fn parse_throw_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
     Semicolon(_) => advance_parser(parser)
     _ => parser
   }
-
-  Ok((
-    Node::ThrowStatement(ThrowStatement::{
-      expression,
-      location: SourceLocation::new(start_loc.file_path, start_loc.start, end_loc.end)
-    }),
-    parser
-  ))
+  Ok(
+    (
+      Node::ThrowStatement(ThrowStatement::{
+        expression,
+        location: SourceLocation::new(
+          start_loc.file_path,
+          start_loc.start,
+          end_loc.end,
+        ),
+      }),
+      parser,
+    ),
+  )
 }
 
 ///|
@@ -6653,7 +4382,10 @@ fn parse_try_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
   // Parse try block
   let (try_block, parser) = match parse_block_statement(parser) {
     Ok((block, p)) => (block, p)
-    Err(p) => return Err(add_error(p, "Expected block after 'try'", current_token(p).location()))
+    Err(p) =>
+      return Err(
+        add_error(p, "Expected block after 'try'", current_token(p).location()),
+      )
   }
 
   // Parse optional catch clause
@@ -6668,31 +4400,27 @@ fn parse_try_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
           let parser = advance_parser(parser)
           // Parse catch parameter: identifier, array pattern, or object pattern
           let (param, parser) = match current_token(parser) {
-            OpenBracket(_) => {
+            OpenBracket(_) =>
               // Array destructuring pattern: catch ([a, b])
               match parse_array_binding_pattern(parser) {
                 Ok((pattern, p)) => (Some(pattern), p)
                 Err(p) => (None, p)
               }
-            }
-            OpenBrace(_) => {
+            OpenBrace(_) =>
               // Object destructuring pattern: catch ({ message, name })
               match parse_object_binding_pattern(parser) {
                 Ok((pattern, p)) => (Some(pattern), p)
                 Err(p) => (None, p)
               }
-            }
-            CloseParen(_) => {
+            CloseParen(_) =>
               // Empty catch: catch ()
               (None, parser)
-            }
-            _ => {
+            _ =>
               // Regular identifier: catch (e)
               match parse_identifier(parser) {
                 Ok((id, p)) => (Some(Node::Identifier(id)), p)
                 Err(p) => (None, p)
               }
-            }
           }
           // Optional type annotation: catch (e: unknown)
           let (param, parser) = match (param, current_token(parser)) {
@@ -6710,7 +4438,14 @@ fn parse_try_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
           }
           let parser = match current_token(parser) {
             CloseParen(_) => advance_parser(parser)
-            _ => return Err(add_error(parser, "Expected ')' after catch parameter", current_token(parser).location()))
+            _ =>
+              return Err(
+                add_error(
+                  parser,
+                  "Expected ')' after catch parameter",
+                  current_token(parser).location(),
+                ),
+              )
           }
           (param, parser)
         }
@@ -6720,16 +4455,25 @@ fn parse_try_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
       // Parse catch block
       let (catch_block, parser) = match parse_block_statement(parser) {
         Ok((block, p)) => (block, p)
-        Err(p) => return Err(add_error(p, "Expected block in catch clause", current_token(p).location()))
+        Err(p) =>
+          return Err(
+            add_error(
+              p,
+              "Expected block in catch clause",
+              current_token(p).location(),
+            ),
+          )
       }
-
       let catch_end = get_location(catch_block)
       let clause = CatchClause::{
         variable_declaration: parameter,
         block: catch_block,
-        location: SourceLocation::new(catch_start.file_path, catch_start.start, catch_end.end)
+        location: SourceLocation::new(
+          catch_start.file_path,
+          catch_start.start,
+          catch_end.end,
+        ),
       }
-
       (Some(clause), parser)
     }
     _ => (None, parser)
@@ -6741,7 +4485,14 @@ fn parse_try_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
       let parser = advance_parser(parser) // consume 'finally'
       match parse_block_statement(parser) {
         Ok((block, p)) => (Some(block), p)
-        Err(p) => return Err(add_error(p, "Expected block after 'finally'", current_token(p).location()))
+        Err(p) =>
+          return Err(
+            add_error(
+              p,
+              "Expected block after 'finally'",
+              current_token(p).location(),
+            ),
+          )
       }
     }
     _ => (None, parser)
@@ -6749,26 +4500,37 @@ fn parse_try_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
 
   // Must have either catch or finally
   if catch_clause is None && finally_block is None {
-    return Err(add_error(parser, "Missing catch or finally clause", current_token(parser).location()))
+    return Err(
+      add_error(
+        parser,
+        "Missing catch or finally clause",
+        current_token(parser).location(),
+      ),
+    )
   }
-
   let end_loc = match finally_block {
     Some(block) => get_location(block)
-    None => match catch_clause {
-      Some(clause) => clause.location
-      None => get_location(try_block)
-    }
+    None =>
+      match catch_clause {
+        Some(clause) => clause.location
+        None => get_location(try_block)
+      }
   }
-
-  Ok((
-    Node::TryStatement(TryStatement::{
-      try_block,
-      catch_clause,
-      finally_block,
-      location: SourceLocation::new(start_loc.file_path, start_loc.start, end_loc.end)
-    }),
-    parser
-  ))
+  Ok(
+    (
+      Node::TryStatement(TryStatement::{
+        try_block,
+        catch_clause,
+        finally_block,
+        location: SourceLocation::new(
+          start_loc.file_path,
+          start_loc.start,
+          end_loc.end,
+        ),
+      }),
+      parser,
+    ),
+  )
 }
 
 ///|
@@ -6778,7 +4540,6 @@ fn parse_type_parameters(parser : Parser) -> (Array[TypeParameter], Parser) {
     LessThan(_) => advance_parser(parser)
     _ => return ([], parser)
   }
-
   let type_params = []
   let mut parser = parser
 
@@ -6828,7 +4589,6 @@ fn parse_type_parameters(parser : Parser) -> (Array[TypeParameter], Parser) {
           }
           _ => None
         }
-
         type_params.push(TypeParameter::{
           name,
           constraint,
@@ -6849,7 +4609,6 @@ fn parse_type_parameters(parser : Parser) -> (Array[TypeParameter], Parser) {
       _ => break
     }
   }
-
   (type_params, parser)
 }
 
@@ -6888,7 +4647,9 @@ fn consume_greater_than_in_type_context(parser : Parser) -> Parser {
 
 ///|
 /// Parse type argument list (for generic function/type usage)
-fn parse_type_argument_list(parser : Parser) -> Result[(Array[Node], Parser), Parser] {
+fn parse_type_argument_list(
+  parser : Parser,
+) -> Result[(Array[Node], Parser), Parser] {
   // Save diagnostics length for backtracking
   let initial_diag_length = parser.diagnostics.length()
 
@@ -6897,7 +4658,6 @@ fn parse_type_argument_list(parser : Parser) -> Result[(Array[Node], Parser), Pa
     LessThan(_) => advance_parser(parser)
     _ => return Err(parser)
   }
-
   let type_args = []
   let mut parser = parser
 
@@ -6908,7 +4668,6 @@ fn parse_type_argument_list(parser : Parser) -> Result[(Array[Node], Parser), Pa
       parser = consume_greater_than_in_type_context(parser)
       break
     }
-
     match parse_type(parser) {
       Ok((ty, p)) => {
         type_args.push(ty)
@@ -6928,6 +4687,7 @@ fn parse_type_argument_list(parser : Parser) -> Result[(Array[Node], Parser), Pa
             // Failed to parse - restore diagnostics and return error
             while parser.diagnostics.length() > initial_diag_length {
               let _ = parser.diagnostics.pop()
+
             }
             return Err(parser)
           }
@@ -6937,545 +4697,13 @@ fn parse_type_argument_list(parser : Parser) -> Result[(Array[Node], Parser), Pa
         // Failed to parse type - restore diagnostics and return error
         while p.diagnostics.length() > initial_diag_length {
           let _ = p.diagnostics.pop()
+
         }
         return Err(p)
       }
     }
   }
-
   Ok((type_args, parser))
-}
-
-// ============================================================================
-// JSX Parsing
-// ============================================================================
-
-///|
-/// Check if current position starts JSX element
-/// Only returns true if JSX mode is enabled (for .tsx files)
-fn is_jsx_start(parser : Parser) -> Bool {
-  // Only parse JSX if explicitly in JSX mode
-  if not(parser.context.in_jsx) {
-    return false
-  }
-  match current_token(parser) {
-    LessThan(_) => {
-      // Check if it's JSX or less-than operator
-      // JSX: <identifier, <>, </
-      let next = peek_token(parser)
-      match next {
-        Identifier(_, _) => true
-        GreaterThan(_) => true      // Fragment <>
-        Slash(_) => false           // Not JSX (< /)
-        LessThan(_) => false        // Not JSX (<<)
-        _ => false
-      }
-    }
-    _ => false
-  }
-}
-
-///|
-/// Parse JSX element or fragment
-fn parse_jsx_element_or_fragment(parser : Parser) -> Result[(Node, Parser), Parser] {
-  let start_loc = current_token(parser).location()
-  let parser = advance_parser(parser)  // consume <
-
-  match current_token(parser) {
-    GreaterThan(_) => {
-      // Fragment: <>...</>
-      parse_jsx_fragment(parser, start_loc)
-    }
-    Identifier(_, _) => {
-      // Element: <tag>...</tag> or <tag />
-      parse_jsx_element(parser, start_loc)
-    }
-    _ => {
-      Err(add_error(parser, "Expected JSX element name or '>'", start_loc))
-    }
-  }
-}
-
-///|
-/// Parse JSX element (after initial <)
-fn parse_jsx_element(
-  parser : Parser,
-  start_loc : SourceLocation,
-) -> Result[(Node, Parser), Parser] {
-  // Parse tag name
-  let (tag_name, parser) = match parse_jsx_tag_name(parser) {
-    Ok((name, p)) => (name, p)
-    Err(p) => return Err(p)
-  }
-
-  // Parse attributes
-  let (attributes, parser) = parse_jsx_attributes(parser)
-
-  match current_token(parser) {
-    SlashGreaterThan(_) => {
-      // Self-closing: <tag ... />
-      let parser = advance_parser(parser)
-      let end_loc = current_token(parser).location()
-      Ok((Node::JsxSelfClosingElement(JsxSelfClosingElement::{
-        tag_name,
-        type_arguments: [],
-        attributes,
-        location: SourceLocation::span(start_loc, end_loc),
-      }), parser))
-    }
-    GreaterThan(_) => {
-      // Opening tag: <tag ...>
-      let parser = advance_parser(parser)
-      let opening = Node::JsxOpeningElement(JsxOpeningElement::{
-        tag_name: tag_name,
-        type_arguments: [],
-        attributes,
-        location: start_loc,
-      })
-
-      // Parse children
-      let (children, parser) = parse_jsx_children(parser)
-
-      // Parse closing tag
-      match parse_jsx_closing_element(parser, tag_name) {
-        Ok((closing, parser)) => {
-          let end_loc = get_location(closing)
-          Ok((Node::JsxElement(JsxElement::{
-            opening_element: opening,
-            children,
-            closing_element: Some(closing),
-            location: SourceLocation::span(start_loc, end_loc),
-          }), parser))
-        }
-        Err(p) => Err(p)
-      }
-    }
-    _ => {
-      Err(add_error(parser, "Expected '>' or '/>' in JSX element", start_loc))
-    }
-  }
-}
-
-///|
-/// Parse JSX tag name (identifier or member expression)
-fn parse_jsx_tag_name(parser : Parser) -> Result[(JsxTagName, Parser), Parser] {
-  let start_loc = current_token(parser).location()
-
-  match current_token(parser) {
-    Identifier(name, loc) => {
-      let parser = advance_parser(parser)
-
-      // Check for namespaced name: svg:rect
-      match current_token(parser) {
-        Colon(_) => {
-          let parser = advance_parser(parser)
-          match current_token(parser) {
-            Identifier(local_name, _) => {
-              let parser = advance_parser(parser)
-              Ok((JsxTagName::NamespacedName(name, local_name, loc), parser))
-            }
-            _ => Err(add_error(parser, "Expected identifier after ':' in JSX tag", loc))
-          }
-        }
-        // Check for member expression: Module.Component
-        Dot(_) => {
-          let mut parser = parser
-          let mut current_expr = Node::Identifier(Identifier::{ name, location: loc })
-
-          while true {
-            match current_token(parser) {
-              Dot(_) => {
-                parser = advance_parser(parser)
-                match current_token(parser) {
-                  Identifier(member_name, member_loc) => {
-                    parser = advance_parser(parser)
-                    current_expr = Node::PropertyAccessExpression(PropertyAccessExpression::{
-                      expression: current_expr,
-                      name: member_name,
-                      location: member_loc,
-                    })
-                  }
-                  _ => return Err(add_error(parser, "Expected identifier after '.' in JSX tag", loc))
-                }
-              }
-              _ => break
-            }
-          }
-
-          Ok((JsxTagName::PropertyAccess(current_expr, "", loc), parser))
-        }
-        _ => Ok((JsxTagName::Identifier(name, loc), parser))
-      }
-    }
-    _ => {
-      Err(add_error(parser, "Expected JSX element name", start_loc))
-    }
-  }
-}
-
-///|
-/// Parse JSX attributes
-fn parse_jsx_attributes(parser : Parser) -> (Array[JsxAttribute], Parser) {
-  let attributes : Array[JsxAttribute] = []
-  let mut parser = parser
-
-  while !is_jsx_attribute_end(parser) {
-    match current_token(parser) {
-      // Spread attribute: {...props}
-      OpenBrace(_) => {
-        let loc = current_token(parser).location()
-        parser = advance_parser(parser)
-
-        match current_token(parser) {
-          DotDotDot(_) => {
-            parser = advance_parser(parser)
-            match parse_expression(parser) {
-              Ok((expr, p)) => {
-                parser = p
-                match current_token(parser) {
-                  CloseBrace(_) => {
-                    parser = advance_parser(parser)
-                    attributes.push(JsxAttribute::SpreadAttribute(expr, loc))
-                  }
-                  _ => break
-                }
-              }
-              Err(_) => break
-            }
-          }
-          _ => break
-        }
-      }
-      // Regular attribute: name="value" or name={expr}
-      Identifier(name, loc) => {
-        parser = advance_parser(parser)
-
-        // Check for namespaced attribute: xlink:href
-        let attr_name = match current_token(parser) {
-          Colon(_) => {
-            parser = advance_parser(parser)
-            match current_token(parser) {
-              Identifier(local_name, _) => {
-                parser = advance_parser(parser)
-                JsxAttributeName::NamespacedName(name, local_name, loc)
-              }
-              _ => {
-                JsxAttributeName::Identifier(name, loc)
-              }
-            }
-          }
-          _ => JsxAttributeName::Identifier(name, loc)
-        }
-
-        // Check for value
-        let initializer = match current_token(parser) {
-          Equals(_) => {
-            parser = advance_parser(parser)
-            match parse_jsx_attribute_value(parser) {
-              Ok((value, p)) => {
-                parser = p
-                Some(value)
-              }
-              Err(_) => None
-            }
-          }
-          _ => None  // Boolean attribute like "disabled"
-        }
-
-        attributes.push(JsxAttribute::Attribute(JsxAttributeNode::{
-          name: attr_name,
-          initializer,
-          location: loc,
-        }))
-      }
-      _ => break
-    }
-  }
-
-  (attributes, parser)
-}
-
-///|
-/// Check if we're at end of JSX attributes
-fn is_jsx_attribute_end(parser : Parser) -> Bool {
-  match current_token(parser) {
-    GreaterThan(_) | SlashGreaterThan(_) | EOF(_) => true
-    _ => false
-  }
-}
-
-///|
-/// Parse JSX attribute value
-fn parse_jsx_attribute_value(parser : Parser) -> Result[(JsxAttributeValue, Parser), Parser] {
-  let loc = current_token(parser).location()
-
-  match current_token(parser) {
-    // String value: "text"
-    StringLiteral(value, _) => {
-      let parser = advance_parser(parser)
-      Ok((JsxAttributeValue::StringLiteral(value, loc), parser))
-    }
-    // Expression value: {expr}
-    OpenBrace(_) => {
-      let parser = advance_parser(parser)
-      match parse_expression(parser) {
-        Ok((expr, parser)) => {
-          match current_token(parser) {
-            CloseBrace(_) => {
-              let parser = advance_parser(parser)
-              Ok((JsxAttributeValue::Expression(expr, loc), parser))
-            }
-            _ => Err(add_error(parser, "Expected '}' after JSX attribute expression", loc))
-          }
-        }
-        Err(p) => Err(p)
-      }
-    }
-    // Nested JSX element
-    LessThan(_) => {
-      match parse_jsx_element_or_fragment(parser) {
-        Ok((element, parser)) => {
-          Ok((JsxAttributeValue::Element(element, loc), parser))
-        }
-        Err(p) => Err(p)
-      }
-    }
-    _ => {
-      Err(add_error(parser, "Expected JSX attribute value", loc))
-    }
-  }
-}
-
-///|
-/// Parse JSX children
-fn parse_jsx_children(parser : Parser) -> (Array[JsxChild], Parser) {
-  let children : Array[JsxChild] = []
-  let mut parser = parser
-
-  while !is_jsx_children_end(parser) {
-    let loc = current_token(parser).location()
-
-    match current_token(parser) {
-      // Nested element or fragment: <child>...</child> or <>...</>
-      LessThan(_) => {
-        // Check if it's closing tag
-        let next = peek_token(parser)
-        match next {
-          Slash(_) => break  // Closing tag, stop parsing children
-          GreaterThan(_) => {
-            // Fragment: <>...</>
-            match parse_jsx_element_or_fragment(parser) {
-              Ok((fragment, p)) => {
-                parser = p
-                children.push(JsxChild::Fragment(fragment, loc))
-              }
-              Err(p) => {
-                parser = p
-                break
-              }
-            }
-          }
-          _ => {
-            // Regular element: <tag>...</tag>
-            match parse_jsx_element_or_fragment(parser) {
-              Ok((element, p)) => {
-                parser = p
-                children.push(JsxChild::Element(element, loc))
-              }
-              Err(p) => {
-                parser = p
-                break
-              }
-            }
-          }
-        }
-      }
-      // Expression: {expr}
-      OpenBrace(_) => {
-        parser = advance_parser(parser)
-
-        // Check for empty expression {}
-        match current_token(parser) {
-          CloseBrace(_) => {
-            parser = advance_parser(parser)
-            children.push(JsxChild::Expression(JsxExpression::{
-              expression: None,
-              location: loc,
-            }))
-          }
-          _ => {
-            match parse_expression(parser) {
-              Ok((expr, p)) => {
-                parser = p
-                match current_token(parser) {
-                  CloseBrace(_) => {
-                    parser = advance_parser(parser)
-                    children.push(JsxChild::Expression(JsxExpression::{
-                      expression: Some(expr),
-                      location: loc,
-                    }))
-                  }
-                  _ => break
-                }
-              }
-              Err(_) => break
-            }
-          }
-        }
-      }
-      // Text content - handle identifiers and string literals as JSX text
-      Identifier(text, _) => {
-        children.push(JsxChild::Text(text, loc))
-        parser = advance_parser(parser)
-      }
-      StringLiteral(text, _) => {
-        children.push(JsxChild::Text(text, loc))
-        parser = advance_parser(parser)
-      }
-      // Other tokens that could be text content
-      _ => {
-        // For other tokens, try to extract text representation
-        let text = token_to_jsx_text(current_token(parser))
-        if text.length() > 0 {
-          children.push(JsxChild::Text(text, loc))
-        }
-        parser = advance_parser(parser)
-      }
-    }
-  }
-
-  (children, parser)
-}
-
-///|
-/// Check if we're at end of JSX children
-fn is_jsx_children_end(parser : Parser) -> Bool {
-  match current_token(parser) {
-    LessThanSlash(_) | EOF(_) => true
-    LessThan(_) => {
-      // Check if it's a closing tag
-      match peek_token(parser) {
-        Slash(_) => true
-        _ => false
-      }
-    }
-    _ => false
-  }
-}
-
-///|
-/// Parse JSX closing element: </tag>
-fn parse_jsx_closing_element(
-  parser : Parser,
-  expected_tag : JsxTagName,
-) -> Result[(Node, Parser), Parser] {
-  let start_loc = current_token(parser).location()
-
-  // Expect </
-  let parser = match current_token(parser) {
-    LessThanSlash(_) => advance_parser(parser)
-    LessThan(_) => {
-      let parser = advance_parser(parser)
-      match current_token(parser) {
-        Slash(_) => advance_parser(parser)
-        _ => return Err(add_error(parser, "Expected closing tag", start_loc))
-      }
-    }
-    _ => return Err(add_error(parser, "Expected '</'", start_loc))
-  }
-
-  // Parse tag name
-  let (tag_name, parser) = match parse_jsx_tag_name(parser) {
-    Ok((name, p)) => (name, p)
-    Err(p) => return Err(p)
-  }
-
-  // Verify tag name matches
-  if !jsx_tag_names_match(expected_tag, tag_name) {
-    let parser = add_error(
-      parser,
-      "JSX closing tag does not match opening tag",
-      start_loc,
-    )
-    // Continue anyway to try to recover
-    let _ = parser
-  }
-
-  // Expect >
-  let parser = match current_token(parser) {
-    GreaterThan(_) => advance_parser(parser)
-    _ => return Err(add_error(parser, "Expected '>' after closing tag", start_loc))
-  }
-
-  let end_loc = current_token(parser).location()
-
-  Ok((Node::JsxClosingElement(JsxClosingElement::{
-    tag_name,
-    location: SourceLocation::span(start_loc, end_loc),
-  }), parser))
-}
-
-///|
-/// Check if two JSX tag names match
-fn jsx_tag_names_match(a : JsxTagName, b : JsxTagName) -> Bool {
-  match (a, b) {
-    (JsxTagName::Identifier(name_a, _), JsxTagName::Identifier(name_b, _)) =>
-      name_a == name_b
-    (JsxTagName::NamespacedName(ns_a, local_a, _),
-     JsxTagName::NamespacedName(ns_b, local_b, _)) =>
-      ns_a == ns_b && local_a == local_b
-    _ => false  // PropertyAccess comparison would need deeper check
-  }
-}
-
-///|
-/// Parse JSX fragment: <>...</>
-fn parse_jsx_fragment(
-  parser : Parser,
-  start_loc : SourceLocation,
-) -> Result[(Node, Parser), Parser] {
-  // Already consumed <, expect >
-  let parser = match current_token(parser) {
-    GreaterThan(_) => advance_parser(parser)
-    _ => return Err(add_error(parser, "Expected '>' for fragment", start_loc))
-  }
-  let opening_loc = start_loc
-
-  // Parse children
-  let (children, parser) = parse_jsx_children(parser)
-
-  // Expect </>
-  let parser = match current_token(parser) {
-    LessThanSlash(_) => advance_parser(parser)
-    _ => return Err(add_error(parser, "Expected '</>' to close fragment", start_loc))
-  }
-
-  let parser = match current_token(parser) {
-    GreaterThan(_) => advance_parser(parser)
-    _ => return Err(add_error(parser, "Expected '>' to close fragment", start_loc))
-  }
-  let closing_loc = current_token(parser).location()
-
-  Ok((Node::JsxFragment(JsxFragment::{
-    opening_fragment: opening_loc,
-    children,
-    closing_fragment: closing_loc,
-    location: SourceLocation::span(start_loc, closing_loc),
-  }), parser))
-}
-
-///|
-/// Convert a token to JSX text representation
-fn token_to_jsx_text(token : Token) -> String {
-  match token {
-    Identifier(text, _) => text
-    StringLiteral(text, _) => text
-    NumericLiteral(text, _) => text
-    // Keywords that might appear as text
-    KeywordNull(_) => "null"
-    // Skip whitespace and punctuation that shouldn't be text
-    _ => ""
-  }
 }
 
 // ============================================================================
@@ -7550,7 +4778,11 @@ fn decrement_depth(parser : Parser) -> Parser {
 fn check_depth(parser : Parser) -> Result[Parser, Parser] {
   if parser.depth > max_expression_depth {
     let loc = current_token(parser).location()
-    Err(add_error(parser, "Expression too deeply nested (stack overflow prevention)", loc))
+    Err(
+      add_error(
+        parser, "Expression too deeply nested (stack overflow prevention)", loc,
+      ),
+    )
   } else {
     Ok(parser)
   }
@@ -7640,7 +4872,8 @@ fn get_binary_operator(token : Token) -> BinaryOperator? {
     Caret(_) => Some(BinaryOperator::BitwiseXor)
     LessThanLessThan(_) => Some(BinaryOperator::LeftShift)
     GreaterThanGreaterThan(_) => Some(BinaryOperator::RightShift)
-    GreaterThanGreaterThanGreaterThan(_) => Some(BinaryOperator::UnsignedRightShift)
+    GreaterThanGreaterThanGreaterThan(_) =>
+      Some(BinaryOperator::UnsignedRightShift)
     KeywordIn(_) => Some(BinaryOperator::In)
     KeywordInstanceOf(_) => Some(BinaryOperator::InstanceOf)
     // Compound assignment operators
@@ -7655,7 +4888,8 @@ fn get_binary_operator(token : Token) -> BinaryOperator? {
     StarStarEquals(_) => Some(BinaryOperator::ExponentiateAssign)
     LessThanLessThanEquals(_) => Some(BinaryOperator::LeftShiftAssign)
     GreaterThanGreaterThanEquals(_) => Some(BinaryOperator::RightShiftAssign)
-    GreaterThanGreaterThanGreaterThanEquals(_) => Some(BinaryOperator::UnsignedRightShiftAssign)
+    GreaterThanGreaterThanGreaterThanEquals(_) =>
+      Some(BinaryOperator::UnsignedRightShiftAssign)
     AmpersandAmpersandEquals(_) => Some(BinaryOperator::LogicalAndAssign)
     BarBarEquals(_) => Some(BinaryOperator::LogicalOrAssign)
     QuestionQuestionEquals(_) => Some(BinaryOperator::NullishCoalescingAssign)
@@ -7770,1010 +5004,4 @@ fn matches_arrow(token : Token) -> Bool {
     Arrow(_) => true
     _ => false
   }
-}
-
-// ============================================================================
-// JSON Parsing
-// ============================================================================
-
-///|
-/// Parsing mode for different file types
-pub enum ParserMode {
-  TypeScript   // Full TypeScript/JavaScript
-  JSON         // JSON only (strict)
-  JSONC        // JSON with comments
-} derive(Show, Eq)
-
-///|
-/// Parse a JSON file
-pub fn parse_json(
-  tokens : Array[Token],
-  file_path : String,
-) -> ParseResult[Node] {
-  let parser = Parser::new(tokens)
-  match parse_json_value(parser) {
-    Ok((node, parser)) => {
-      // Check for trailing content
-      if not(is_at_end(parser)) {
-        let loc = current_token(parser).location()
-        let parser = add_error(parser, "Unexpected content after JSON value", loc)
-        Err(parser.diagnostics)
-      } else if parser.diagnostics.length() > 0 {
-        Err(parser.diagnostics)
-      } else {
-        Ok(node)
-      }
-    }
-    Err(parser) => Err(parser.diagnostics)
-  }
-}
-
-///|
-/// Parse a JSONC file (JSON with comments)
-pub fn parse_jsonc(
-  tokens : Array[Token],
-  file_path : String,
-) -> ParseResult[Node] {
-  // JSONC is the same as JSON but the scanner should have already stripped comments
-  parse_json(tokens, file_path)
-}
-
-///|
-/// Parse a JSON value (object, array, string, number, boolean, null)
-fn parse_json_value(parser : Parser) -> Result[(Node, Parser), Parser] {
-  let token = current_token(parser)
-  let loc = token.location()
-
-  match token {
-    // Object: { }
-    OpenBrace(_) => parse_json_object(parser)
-
-    // Array: [ ]
-    OpenBracket(_) => parse_json_array(parser)
-
-    // String
-    StringLiteral(value, _) => {
-      let parser = advance_parser(parser)
-      Ok((Node::StringLiteral(StringLiteral::{ value, location: loc }), parser))
-    }
-
-    // Number
-    NumericLiteral(value, _) => {
-      let parser = advance_parser(parser)
-      Ok((Node::NumericLiteral(NumericLiteral::{ value, location: loc }), parser))
-    }
-
-    // Negative number
-    Minus(_) => {
-      let parser = advance_parser(parser)
-      match current_token(parser) {
-        NumericLiteral(value, _) => {
-          let parser = advance_parser(parser)
-          // Store as negative number by prepending "-" to the string value
-          Ok((Node::NumericLiteral(NumericLiteral::{ value: "-" + value, location: loc }), parser))
-        }
-        _ => Err(add_error(parser, "Expected number after '-' in JSON", loc))
-      }
-    }
-
-    // Null
-    KeywordNull(_) => {
-      let parser = advance_parser(parser)
-      Ok((Node::NullLiteral(NullLiteral::{ location: loc }), parser))
-    }
-
-    // Boolean and null as identifiers (true, false, null)
-    Identifier(name, _) => {
-      match name {
-        "true" => {
-          let parser = advance_parser(parser)
-          Ok((Node::BooleanLiteral(BooleanLiteral::{ value: true, location: loc }), parser))
-        }
-        "false" => {
-          let parser = advance_parser(parser)
-          Ok((Node::BooleanLiteral(BooleanLiteral::{ value: false, location: loc }), parser))
-        }
-        "null" => {
-          let parser = advance_parser(parser)
-          Ok((Node::NullLiteral(NullLiteral::{ location: loc }), parser))
-        }
-        _ => Err(add_error(parser, "Unexpected identifier in JSON: " + name, loc))
-      }
-    }
-
-    EOF(_) => Err(add_error(parser, "Unexpected end of file, expected JSON value", loc))
-
-    _ => Err(add_error(parser, "Expected JSON value", loc))
-  }
-}
-
-///|
-/// Parse a JSON object: { "key": value, ... }
-fn parse_json_object(parser : Parser) -> Result[(Node, Parser), Parser] {
-  let start_loc = current_token(parser).location()
-  let parser = advance_parser(parser)  // Skip {
-
-  let properties : Array[ObjectProperty] = []
-  let mut parser = parser
-
-  // Handle empty object
-  if matches_close_brace(current_token(parser)) {
-    let parser = advance_parser(parser)
-    return Ok((Node::ObjectLiteralExpression(ObjectLiteralExpression::{
-      properties,
-      location: start_loc,
-    }), parser))
-  }
-
-  while not(is_at_end(parser)) {
-    // Property name must be a string
-    match current_token(parser) {
-      StringLiteral(name, name_loc) => {
-        parser = advance_parser(parser)
-
-        // Expect :
-        match current_token(parser) {
-          Colon(_) => parser = advance_parser(parser)
-          _ => {
-            let loc = current_token(parser).location()
-            return Err(add_error(parser, "Expected ':' after property name in JSON object", loc))
-          }
-        }
-
-        // Parse value
-        match parse_json_value(parser) {
-          Ok((value, p)) => {
-            parser = p
-            properties.push(ObjectProperty::PropertyAssignment(name, value, name_loc))
-          }
-          Err(p) => return Err(p)
-        }
-
-        // Check for comma or closing brace
-        match current_token(parser) {
-          Comma(_) => {
-            parser = advance_parser(parser)
-            // Check for trailing comma (not allowed in strict JSON)
-            if matches_close_brace(current_token(parser)) {
-              let loc = current_token(parser).location()
-              let parser = add_error(parser, "Trailing comma not allowed in JSON", loc)
-              // Continue anyway to be lenient
-              let parser = advance_parser(parser)
-              return Ok((Node::ObjectLiteralExpression(ObjectLiteralExpression::{
-                properties,
-                location: start_loc,
-              }), parser))
-            }
-          }
-          CloseBrace(_) => {
-            let parser = advance_parser(parser)
-            return Ok((Node::ObjectLiteralExpression(ObjectLiteralExpression::{
-              properties,
-              location: start_loc,
-            }), parser))
-          }
-          _ => {
-            let loc = current_token(parser).location()
-            return Err(add_error(parser, "Expected ',' or '}' in JSON object", loc))
-          }
-        }
-      }
-      CloseBrace(_) => {
-        // Empty object or trailing comma handled
-        let parser = advance_parser(parser)
-        return Ok((Node::ObjectLiteralExpression(ObjectLiteralExpression::{
-          properties,
-          location: start_loc,
-        }), parser))
-      }
-      _ => {
-        let loc = current_token(parser).location()
-        return Err(add_error(parser, "Expected string property name in JSON object", loc))
-      }
-    }
-  }
-
-  Err(add_error(parser, "Unexpected end of file in JSON object", start_loc))
-}
-
-///|
-/// Parse a JSON array: [ value, ... ]
-fn parse_json_array(parser : Parser) -> Result[(Node, Parser), Parser] {
-  let start_loc = current_token(parser).location()
-  let parser = advance_parser(parser)  // Skip [
-
-  let elements : Array[Node?] = []
-  let mut parser = parser
-
-  // Handle empty array
-  if matches_close_bracket(current_token(parser)) {
-    let parser = advance_parser(parser)
-    return Ok((Node::ArrayLiteralExpression(ArrayLiteralExpression::{
-      elements,
-      location: start_loc,
-    }), parser))
-  }
-
-  while not(is_at_end(parser)) {
-    // Parse value
-    match parse_json_value(parser) {
-      Ok((value, p)) => {
-        parser = p
-        elements.push(Some(value))
-      }
-      Err(p) => return Err(p)
-    }
-
-    // Check for comma or closing bracket
-    match current_token(parser) {
-      Comma(_) => {
-        parser = advance_parser(parser)
-        // Check for trailing comma (not allowed in strict JSON)
-        if matches_close_bracket(current_token(parser)) {
-          let loc = current_token(parser).location()
-          let parser = add_error(parser, "Trailing comma not allowed in JSON", loc)
-          // Continue anyway to be lenient
-          let parser = advance_parser(parser)
-          return Ok((Node::ArrayLiteralExpression(ArrayLiteralExpression::{
-            elements,
-            location: start_loc,
-          }), parser))
-        }
-      }
-      CloseBracket(_) => {
-        let parser = advance_parser(parser)
-        return Ok((Node::ArrayLiteralExpression(ArrayLiteralExpression::{
-          elements,
-          location: start_loc,
-        }), parser))
-      }
-      _ => {
-        let loc = current_token(parser).location()
-        return Err(add_error(parser, "Expected ',' or ']' in JSON array", loc))
-      }
-    }
-  }
-
-  Err(add_error(parser, "Unexpected end of file in JSON array", start_loc))
-}
-
-// ============================================================================
-// JSDoc Parsing
-// ============================================================================
-
-///|
-/// Parse a JSDoc comment into structured tags
-fn parse_jsdoc_comment(content : String, loc : SourceLocation) -> JSDocComment {
-  let tags : Array[JSDocTag] = []
-  let lines = split_jsdoc_lines(content)
-
-  let mut i = 0
-  while i < lines.length() {
-    let line = lines[i]
-    let trimmed = trim_jsdoc_line(line)
-
-    // Check for tag at start
-    if trimmed.has_prefix("@") {
-      match parse_jsdoc_tag(trimmed, loc) {
-        Some(tag) => tags.push(tag)
-        None => ()
-      }
-    }
-    i = i + 1
-  }
-
-  JSDocComment::{ comment: content, tags, location: loc }
-}
-
-///|
-/// Split JSDoc content into lines
-fn split_jsdoc_lines(content : String) -> Array[String] {
-  let lines : Array[String] = []
-  let mut current = ""
-  let mut i = 0
-  while i < content.length() {
-    match content.get(i) {
-      Some(ch) => {
-        let c = Char::from_int(ch)
-        if c == '\n' {
-          lines.push(current)
-          current = ""
-        } else {
-          current = current + Char::to_string(c)
-        }
-      }
-      None => ()
-    }
-    i = i + 1
-  }
-  if current.length() > 0 {
-    lines.push(current)
-  }
-  lines
-}
-
-///|
-/// Trim leading/trailing whitespace and leading * from JSDoc line
-fn trim_jsdoc_line(line : String) -> String {
-  let mut result = ""
-  let mut started = false
-  let mut past_star = false
-  let mut i = 0
-
-  while i < line.length() {
-    match line.get(i) {
-      Some(ch) => {
-        let c = Char::from_int(ch)
-        if not(started) {
-          if c == ' ' || c == '\t' || c == '\r' {
-            // skip leading whitespace
-            ()
-          } else if c == '*' && not(past_star) {
-            past_star = true
-          } else {
-            started = true
-            result = result + Char::to_string(c)
-          }
-        } else {
-          result = result + Char::to_string(c)
-        }
-      }
-      None => ()
-    }
-    i = i + 1
-  }
-
-  // Trim trailing whitespace
-  trim_trailing_whitespace(result)
-}
-
-///|
-/// Trim trailing whitespace from string
-fn trim_trailing_whitespace(s : String) -> String {
-  let mut end = s.length()
-  while end > 0 {
-    match s.get(end - 1) {
-      Some(ch) => {
-        let c = Char::from_int(ch)
-        if c == ' ' || c == '\t' || c == '\r' {
-          end = end - 1
-        } else {
-          break
-        }
-      }
-      None => break
-    }
-  }
-  s.substring(start=0, end=end)
-}
-
-///|
-/// Parse a single JSDoc tag
-fn parse_jsdoc_tag(line : String, loc : SourceLocation) -> JSDocTag? {
-  // Extract tag name (after @)
-  let tag_end = find_whitespace_or_end(line, 1)
-  let tag_name = line.substring(start=1, end=tag_end)
-  let rest = if tag_end < line.length() {
-    trim_leading_whitespace(line.substring(start=tag_end, end=line.length()))
-  } else {
-    ""
-  }
-
-  match tag_name {
-    "param" | "arg" | "argument" => Some(parse_jsdoc_param_tag(rest, loc))
-    "returns" | "return" => Some(parse_jsdoc_returns_tag(rest, loc))
-    "type" => Some(parse_jsdoc_type_tag(rest, loc))
-    "typedef" => Some(parse_jsdoc_typedef_tag(rest, loc))
-    "property" | "prop" => Some(parse_jsdoc_property_tag(rest, loc))
-    "template" => Some(parse_jsdoc_template_tag(rest, loc))
-    "deprecated" => Some(JSDocTag::Deprecated(JSDocDeprecated::{ description: rest, location: loc }))
-    "example" => Some(JSDocTag::Example(JSDocExample::{ content: rest, location: loc }))
-    "see" => Some(JSDocTag::See(JSDocSee::{ reference: rest, location: loc }))
-    "throws" | "exception" => Some(parse_jsdoc_throws_tag(rest, loc))
-    "author" => Some(JSDocTag::Author(JSDocAuthor::{ name: rest, location: loc }))
-    "since" => Some(JSDocTag::Since(JSDocSince::{ version: rest, location: loc }))
-    "default" | "defaultvalue" => Some(JSDocTag::Default(JSDocDefault::{ value: rest, location: loc }))
-    "readonly" => Some(JSDocTag::Readonly(loc))
-    "override" => Some(JSDocTag::Override(loc))
-    "public" => Some(JSDocTag::Public(loc))
-    "private" => Some(JSDocTag::Private(loc))
-    "protected" => Some(JSDocTag::Protected(loc))
-    _ => Some(JSDocTag::Unknown(tag_name, rest, loc))
-  }
-}
-
-///|
-/// Parse @param tag
-fn parse_jsdoc_param_tag(content : String, loc : SourceLocation) -> JSDocTag {
-  let (type_annotation, rest) = extract_jsdoc_type(content)
-  let (name, is_optional, description) = extract_jsdoc_param_name(rest)
-
-  JSDocTag::Param(JSDocParam::{
-    name,
-    type_annotation,
-    description,
-    is_optional,
-    location: loc,
-  })
-}
-
-///|
-/// Parse @returns tag
-fn parse_jsdoc_returns_tag(content : String, loc : SourceLocation) -> JSDocTag {
-  let (type_annotation, description) = extract_jsdoc_type(content)
-
-  JSDocTag::Returns(JSDocReturns::{
-    type_annotation,
-    description: trim_leading_whitespace(description),
-    location: loc,
-  })
-}
-
-///|
-/// Parse @type tag
-fn parse_jsdoc_type_tag(content : String, loc : SourceLocation) -> JSDocTag {
-  let (type_annotation, _) = extract_jsdoc_type(content)
-
-  JSDocTag::Type(JSDocTypeTag::{
-    type_annotation: type_annotation.or(""),
-    location: loc,
-  })
-}
-
-///|
-/// Parse @typedef tag
-fn parse_jsdoc_typedef_tag(content : String, loc : SourceLocation) -> JSDocTag {
-  let (type_annotation, rest) = extract_jsdoc_type(content)
-  let name_end = find_whitespace_or_end(rest, 0)
-  let name = rest.substring(start=0, end=name_end)
-  let description = if name_end < rest.length() {
-    trim_leading_whitespace(rest.substring(start=name_end, end=rest.length()))
-  } else {
-    ""
-  }
-
-  JSDocTag::TypeDef(JSDocTypeDef::{
-    name,
-    type_annotation: type_annotation.or(""),
-    description,
-    location: loc,
-  })
-}
-
-///|
-/// Parse @property tag
-fn parse_jsdoc_property_tag(content : String, loc : SourceLocation) -> JSDocTag {
-  let (type_annotation, rest) = extract_jsdoc_type(content)
-  let (name, is_optional, description) = extract_jsdoc_param_name(rest)
-
-  JSDocTag::Property(JSDocProperty::{
-    name,
-    type_annotation,
-    description,
-    is_optional,
-    location: loc,
-  })
-}
-
-///|
-/// Parse @template tag
-fn parse_jsdoc_template_tag(content : String, loc : SourceLocation) -> JSDocTag {
-  // Parse type params: T, U, V or {constraint} T
-  let type_params : Array[String] = []
-  let mut constraint : String? = None
-
-  let (maybe_constraint, rest) = extract_jsdoc_type(content)
-  constraint = maybe_constraint
-
-  // Split rest by comma
-  let params_str = if constraint.is_empty() { content } else { rest }
-  let parts = split_by_comma(params_str)
-  for part in parts {
-    let trimmed = trim_leading_whitespace(part)
-    if trimmed.length() > 0 {
-      type_params.push(trimmed)
-    }
-  }
-
-  JSDocTag::Template(JSDocTemplate::{
-    type_params,
-    constraint,
-    location: loc,
-  })
-}
-
-///|
-/// Parse @throws tag
-fn parse_jsdoc_throws_tag(content : String, loc : SourceLocation) -> JSDocTag {
-  let (type_annotation, description) = extract_jsdoc_type(content)
-
-  JSDocTag::Throws(JSDocThrows::{
-    type_annotation,
-    description: trim_leading_whitespace(description),
-    location: loc,
-  })
-}
-
-///|
-/// Extract type annotation from JSDoc: {type} rest
-fn extract_jsdoc_type(content : String) -> (String?, String) {
-  let trimmed = trim_leading_whitespace(content)
-  if trimmed.has_prefix("{") {
-    // Find matching }
-    let mut depth = 0
-    let mut end = 0
-    let mut i = 0
-    while i < trimmed.length() {
-      match trimmed.get(i) {
-        Some(ch) => {
-          let c = Char::from_int(ch)
-          if c == '{' {
-            depth = depth + 1
-          } else if c == '}' {
-            depth = depth - 1
-            if depth == 0 {
-              end = i
-              break
-            }
-          }
-        }
-        None => ()
-      }
-      i = i + 1
-    }
-    if end > 1 {
-      let type_str = trimmed.substring(start=1, end=end)
-      let rest = trimmed.substring(start=end + 1, end=trimmed.length())
-      (Some(type_str), trim_leading_whitespace(rest))
-    } else {
-      (None, content)
-    }
-  } else {
-    (None, content)
-  }
-}
-
-///|
-/// Extract param name, checking for [name] optional syntax
-fn extract_jsdoc_param_name(content : String) -> (String, Bool, String) {
-  let trimmed = trim_leading_whitespace(content)
-
-  if trimmed.has_prefix("[") {
-    // Optional param: [name] or [name=default]
-    let bracket_end = find_char(trimmed, ']', 1)
-    if bracket_end > 1 {
-      let name_part = trimmed.substring(start=1, end=bracket_end)
-      // Check for default value
-      let equals_pos = find_char(name_part, '=', 0)
-      let name = if equals_pos > 0 {
-        name_part.substring(start=0, end=equals_pos)
-      } else {
-        name_part
-      }
-      let rest = trimmed.substring(start=bracket_end + 1, end=trimmed.length())
-      return (name, true, trim_leading_whitespace(rest))
-    }
-  }
-
-  // Regular param name
-  let name_end = find_whitespace_or_end(trimmed, 0)
-  let name = trimmed.substring(start=0, end=name_end)
-  let description = if name_end < trimmed.length() {
-    trim_leading_whitespace(trimmed.substring(start=name_end, end=trimmed.length()))
-  } else {
-    ""
-  }
-  (name, false, description)
-}
-
-///|
-/// Find first whitespace character or end of string
-fn find_whitespace_or_end(s : String, start : Int) -> Int {
-  let mut i = start
-  while i < s.length() {
-    match s.get(i) {
-      Some(ch) => {
-        let c = Char::from_int(ch)
-        if c == ' ' || c == '\t' || c == '\r' || c == '\n' {
-          return i
-        }
-      }
-      None => return i
-    }
-    i = i + 1
-  }
-  i
-}
-
-///|
-/// Trim leading whitespace
-fn trim_leading_whitespace(s : String) -> String {
-  let mut start = 0
-  while start < s.length() {
-    match s.get(start) {
-      Some(ch) => {
-        let c = Char::from_int(ch)
-        if c == ' ' || c == '\t' || c == '\r' {
-          start = start + 1
-        } else {
-          break
-        }
-      }
-      None => break
-    }
-  }
-  s.substring(start=start, end=s.length())
-}
-
-///|
-/// Find character in string
-fn find_char(s : String, target : Char, start : Int) -> Int {
-  let mut i = start
-  while i < s.length() {
-    match s.get(i) {
-      Some(ch) => {
-        if Char::from_int(ch) == target {
-          return i
-        }
-      }
-      None => ()
-    }
-    i = i + 1
-  }
-  -1
-}
-
-///|
-/// Split string by comma
-fn split_by_comma(s : String) -> Array[String] {
-  let parts : Array[String] = []
-  let mut current = ""
-  let mut i = 0
-  while i < s.length() {
-    match s.get(i) {
-      Some(ch) => {
-        let c = Char::from_int(ch)
-        if c == ',' {
-          parts.push(current)
-          current = ""
-        } else {
-          current = current + Char::to_string(c)
-        }
-      }
-      None => ()
-    }
-    i = i + 1
-  }
-  if current.length() > 0 {
-    parts.push(current)
-  }
-  parts
-}
-
-///|
-/// Check if optional is empty
-fn Option::is_empty[T](self : T?) -> Bool {
-  match self {
-    Some(_) => false
-    None => true
-  }
-}
-
-///|
-/// Parse JSDoc token into JSDocComment node
-pub fn parse_jsdoc_token(parser : Parser) -> (Node, Parser) {
-  match current_token(parser) {
-    JSDocComment(content, loc) => {
-      let jsdoc = parse_jsdoc_comment(content, loc)
-      let parser = advance_parser(parser)
-      (Node::JSDocComment(jsdoc), parser)
-    }
-    _ => {
-      // Should not happen, but handle gracefully
-      let loc = current_token(parser).location()
-      let empty_jsdoc = JSDocComment::{
-        comment: "",
-        tags: [],
-        location: loc,
-      }
-      (Node::JSDocComment(empty_jsdoc), parser)
-    }
-  }
-}
-
-// ============================================================================
-// Incremental Parsing
-// ============================================================================
-
-///|
-/// Helper function to parse source string to AST
-fn parse_from_source(source : String, file_path : String) -> Node? {
-  let scanner = Scanner::new(source, file_path)
-  let tokens = scan_all(scanner)
-  match parse_source_file(tokens, file_path) {
-    Ok(sf) => Some(Node::SourceFile(sf))
-    Err(_) => None
-  }
-}
-
-///|
-/// Parse source file with incremental update support
-/// If old_source_file is provided, attempts to reuse unchanged portions
-pub fn parse_incremental(
-  new_source : String,
-  file_path : String,
-  change_range : TextChangeRange?,
-  old_source_file : Node?
-) -> IncrementalParseResult {
-  // If no change range or no old source file, do a full parse
-  match (change_range, old_source_file) {
-    (None, _) | (_, None) => {
-      let result = parse_from_source(new_source, file_path)
-      match result {
-        Some(sf) => IncrementalParseResult::{
-          source_file: sf,
-          affected_range: None,
-        }
-        None => {
-          // Create empty source file on parse error
-          let eof_loc = SourceLocation::new(
-            file_path,
-            Position::new(1, 0, 0),
-            Position::new(1, 0, 0),
-          )
-          let empty_sf = SourceFile::{
-            statements: [],
-            file_path,
-            end_of_file_token: EOF(eof_loc),
-            has_no_default_lib: false,
-          }
-          IncrementalParseResult::{
-            source_file: Node::SourceFile(empty_sf),
-            affected_range: None,
-          }
-        }
-      }
-    }
-    (Some(change), Some(_old_sf)) => {
-      // Try incremental parsing
-      try_incremental_parse(new_source, file_path, change)
-    }
-  }
-}
-
-///|
-/// Attempt incremental parsing based on change range
-fn try_incremental_parse(
-  new_source : String,
-  file_path : String,
-  change_range : TextChangeRange
-) -> IncrementalParseResult {
-  // Calculate the affected range - expand to statement boundaries
-  let affected_start = find_statement_start(new_source, change_range.span.start)
-  let change_end = change_range.span.start + change_range.new_length
-  let affected_end = find_statement_end(new_source, change_end)
-
-  let affected_span = TextSpan::new(affected_start, affected_end - affected_start)
-
-  // For simplicity in this implementation, if the change is large (>20% of file),
-  // just do a full reparse
-  if affected_span.length > new_source.length() / 5 {
-    let result = parse_from_source(new_source, file_path)
-    return match result {
-      Some(sf) => IncrementalParseResult::{
-        source_file: sf,
-        affected_range: None,
-      }
-      None => {
-        let eof_loc = SourceLocation::new(
-          file_path,
-          Position::new(1, 0, 0),
-          Position::new(1, 0, 0),
-        )
-        let empty_sf = SourceFile::{
-          statements: [],
-          file_path,
-          end_of_file_token: EOF(eof_loc),
-          has_no_default_lib: false,
-        }
-        IncrementalParseResult::{
-          source_file: Node::SourceFile(empty_sf),
-          affected_range: None,
-        }
-      }
-    }
-  }
-
-  // Otherwise, parse the full file but record the affected range
-  // A more sophisticated implementation would actually reuse unchanged nodes
-  let result = parse_from_source(new_source, file_path)
-  match result {
-    Some(sf) => IncrementalParseResult::{
-      source_file: sf,
-      affected_range: Some(affected_span),
-    }
-    None => {
-      let eof_loc = SourceLocation::new(
-        file_path,
-        Position::new(1, 0, 0),
-        Position::new(1, 0, 0),
-      )
-      let empty_sf = SourceFile::{
-        statements: [],
-        file_path,
-        end_of_file_token: EOF(eof_loc),
-        has_no_default_lib: false,
-      }
-      IncrementalParseResult::{
-        source_file: Node::SourceFile(empty_sf),
-        affected_range: Some(affected_span),
-      }
-    }
-  }
-}
-
-///|
-/// Find the start of the statement containing the given position
-fn find_statement_start(source : String, position : Int) -> Int {
-  // Search backwards for a statement boundary
-  let mut pos = position
-  let mut brace_depth = 0
-  let mut paren_depth = 0
-
-  while pos > 0 {
-    match source.get(pos - 1) {
-      Some(ch) => {
-        let c = Char::from_int(ch)
-        match c {
-          '}' => brace_depth = brace_depth + 1
-          '{' => {
-            if brace_depth > 0 {
-              brace_depth = brace_depth - 1
-            } else {
-              // Found an unmatched { - go back before it
-              pos = pos - 1
-              break
-            }
-          }
-          ')' => paren_depth = paren_depth + 1
-          '(' => {
-            if paren_depth > 0 {
-              paren_depth = paren_depth - 1
-            }
-          }
-          ';' | '\n' => {
-            if brace_depth == 0 && paren_depth == 0 {
-              // Found statement boundary
-              break
-            }
-          }
-          _ => ()
-        }
-        pos = pos - 1
-      }
-      None => break
-    }
-  }
-  pos
-}
-
-///|
-/// Find the end of the statement containing the given position
-fn find_statement_end(source : String, position : Int) -> Int {
-  // Search forward for a statement boundary
-  let mut pos = position
-  let mut brace_depth = 0
-  let mut paren_depth = 0
-  let len = source.length()
-
-  while pos < len {
-    match source.get(pos) {
-      Some(ch) => {
-        let c = Char::from_int(ch)
-        match c {
-          '{' => brace_depth = brace_depth + 1
-          '}' => {
-            if brace_depth > 0 {
-              brace_depth = brace_depth - 1
-            } else {
-              // Found an unmatched } - include it
-              pos = pos + 1
-              break
-            }
-          }
-          '(' => paren_depth = paren_depth + 1
-          ')' => {
-            if paren_depth > 0 {
-              paren_depth = paren_depth - 1
-            }
-          }
-          ';' | '\n' => {
-            if brace_depth == 0 && paren_depth == 0 {
-              // Found statement boundary - include the semicolon/newline
-              pos = pos + 1
-              break
-            }
-          }
-          _ => ()
-        }
-        pos = pos + 1
-      }
-      None => break
-    }
-  }
-  pos
-}
-
-///|
-/// Apply a text change to source and get the new source
-pub fn apply_text_change(
-  old_source : String,
-  change_range : TextChangeRange,
-  new_text : String
-) -> String {
-  let span = change_range.span
-  let prefix = if span.start > 0 {
-    old_source.substring(start=0, end=span.start)
-  } else {
-    ""
-  }
-  let suffix = if span.end() < old_source.length() {
-    old_source.substring(start=span.end(), end=old_source.length())
-  } else {
-    ""
-  }
-  prefix + new_text + suffix
-}
-
-///|
-/// Create a change range for an insertion at a position
-pub fn create_insertion_change(position : Int, length : Int) -> TextChangeRange {
-  TextChangeRange::new(TextSpan::new(position, 0), length)
-}
-
-///|
-/// Create a change range for a deletion
-pub fn create_deletion_change(start : Int, length : Int) -> TextChangeRange {
-  TextChangeRange::new(TextSpan::new(start, length), 0)
-}
-
-///|
-/// Create a change range for a replacement
-pub fn create_replacement_change(start : Int, old_length : Int, new_length : Int) -> TextChangeRange {
-  TextChangeRange::new(TextSpan::new(start, old_length), new_length)
-}
-
-///|
-/// Combine multiple change ranges into a single range that covers all changes
-pub fn collapse_text_change_ranges(changes : Array[TextChangeRange]) -> TextChangeRange? {
-  if changes.length() == 0 {
-    return None
-  }
-
-  if changes.length() == 1 {
-    return Some(changes[0])
-  }
-
-  // Find the encompassing range
-  let mut start = changes[0].span.start
-  let mut end = changes[0].span.end()
-  let mut total_delta = 0
-
-  for change in changes {
-    // Apply previous deltas to get actual positions
-    let adjusted_start = change.span.start + total_delta
-    let adjusted_end = change.span.end() + total_delta
-
-    if adjusted_start < start {
-      start = adjusted_start
-    }
-    if adjusted_end > end {
-      end = adjusted_end
-    }
-
-    total_delta = total_delta + change.delta()
-  }
-
-  let final_length = (end - start) + total_delta
-  Some(TextChangeRange::new(TextSpan::new(start, end - start), final_length))
 }

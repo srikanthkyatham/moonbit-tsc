@@ -395,13 +395,12 @@ test "transform arrow function with block body for ES5" {
     VariableStatement(vs) => {
       let decl = vs.declarations[0]
       match decl.initializer {
-        Some(FunctionExpression(fe)) => {
+        Some(FunctionExpression(fe)) =>
           // Should be function expression with block body
           match fe.body {
             BlockStatement(_) => assert_true(true)
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
     }
@@ -416,7 +415,7 @@ test "transform for loop with const for ES5" {
   let ctx = TransformerContext::es5()
   let transformed = transform(stmts[0], ctx)
   match transformed {
-    ForStatement(fs) => {
+    ForStatement(fs) =>
       match fs.initializer {
         Some(VariableStatement(vs)) => {
           // Should be converted to var
@@ -425,7 +424,6 @@ test "transform for loop with const for ES5" {
         }
         _ => assert_true(false)
       }
-    }
     _ => assert_true(false)
   }
 }
@@ -437,15 +435,13 @@ test "transform preserves let in for loop for ES2015" {
   let ctx = TransformerContext::es2015()
   let transformed = transform(stmts[0], ctx)
   match transformed {
-    ForStatement(fs) => {
+    ForStatement(fs) =>
       match fs.initializer {
-        Some(VariableStatement(vs)) => {
+        Some(VariableStatement(vs)) =>
           // Should preserve let for ES2015+
           assert_true(vs.is_let)
-        }
         _ => assert_true(false)
       }
-    }
     _ => assert_true(false)
   }
 }
@@ -473,14 +469,13 @@ test "transform class preserves structure for ES5" {
   let ctx = TransformerContext::es5()
   let transformed = transform(stmts[0], ctx)
   match transformed {
-    ClassDeclaration(cd) => {
+    ClassDeclaration(cd) =>
       // Class should remain as ClassDeclaration
       // (Full ES5 downleveling to constructor functions not yet implemented)
       match cd.name {
         Some(Identifier(id)) => assert_eq(id.name, "Foo")
         _ => assert_true(false)
       }
-    }
     _ => assert_true(false)
   }
 }
@@ -497,9 +492,8 @@ test "transform enum to const object for all targets" {
       assert_true(vs.is_const)
       let decl = vs.declarations[0]
       match decl.initializer {
-        Some(ObjectLiteralExpression(ole)) => {
+        Some(ObjectLiteralExpression(ole)) =>
           assert_eq(ole.properties.length(), 2)
-        }
         _ => assert_true(false)
       }
     }
@@ -740,7 +734,6 @@ test "target ordinal values" {
   let es2019 = TransformerContext::es2019().target
   let es2020 = TransformerContext::es2020().target
   let esnext = TransformerContext::esnext().target
-
   assert_true(es5.ordinal() < es2015.ordinal())
   assert_true(es2015.ordinal() < es2016.ordinal())
   assert_true(es2016.ordinal() < es2017.ordinal())

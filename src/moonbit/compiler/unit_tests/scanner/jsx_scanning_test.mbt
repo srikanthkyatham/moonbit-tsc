@@ -41,7 +41,9 @@ test "scan jsx - self-closing element" {
 
 ///|
 test "scan jsx - element with attribute" {
-  let tokens = @compiler.scan_all_jsx("<div className=\"container\"></div>", "test.tsx")
+  let tokens = @compiler.scan_all_jsx(
+    "<div className=\"container\"></div>", "test.tsx",
+  )
   // <, div, className, =, "container", >, </, div, >, EOF
   assert_true(tokens.length() >= 6)
   match tokens[2] {
@@ -126,9 +128,15 @@ test "scan jsx - multiple attributes" {
   for token in tokens {
     match token {
       @compiler.Identifier(ident_name, _) => {
-        if ident_name == "input" { found_input = true }
-        if ident_name == "disabled" { found_disabled = true }
-        if ident_name == "checked" { found_checked = true }
+        if ident_name == "input" {
+          found_input = true
+        }
+        if ident_name == "disabled" {
+          found_disabled = true
+        }
+        if ident_name == "checked" {
+          found_checked = true
+        }
       }
       _ => ()
     }
@@ -140,7 +148,9 @@ test "scan jsx - multiple attributes" {
 
 ///|
 test "scan jsx - nested elements" {
-  let tokens = @compiler.scan_all_jsx("<div><span>Text</span></div>", "test.tsx")
+  let tokens = @compiler.scan_all_jsx(
+    "<div><span>Text</span></div>", "test.tsx",
+  )
   // Contains nested structure
   assert_true(tokens.length() >= 10)
 
@@ -157,18 +167,19 @@ test "scan jsx - nested elements" {
 
 ///|
 test "scan jsx - expression attribute" {
-  let tokens = @compiler.scan_all_jsx("<button onClick={handleClick}>Click</button>", "test.tsx")
+  let tokens = @compiler.scan_all_jsx(
+    "<button onClick={handleClick}>Click</button>", "test.tsx",
+  )
   // Check for expression in attribute
   let mut found_expr_start = false
   let mut found_handleClick = false
   for token in tokens {
     match token {
       @compiler.JsxExpressionStart(_) => found_expr_start = true
-      @compiler.Identifier(name, _) => {
+      @compiler.Identifier(name, _) =>
         if name == "handleClick" {
           found_handleClick = true
         }
-      }
       _ => ()
     }
   }
@@ -178,7 +189,9 @@ test "scan jsx - expression attribute" {
 
 ///|
 test "scan jsx - fragment" {
-  let tokens = @compiler.scan_all_jsx("<><span>A</span><span>B</span></>", "test.tsx")
+  let tokens = @compiler.scan_all_jsx(
+    "<><span>A</span><span>B</span></>", "test.tsx",
+  )
   // Contains fragments and elements
   assert_true(tokens.length() >= 8)
 }

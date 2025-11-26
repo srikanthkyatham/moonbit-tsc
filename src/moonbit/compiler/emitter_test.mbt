@@ -140,7 +140,9 @@ test "emit do-while loop" {
 ///|
 /// Test: Emit switch statement
 test "emit switch statement" {
-  let js = compile_to_js("switch (x) { case 1: return \"one\"; default: return \"other\"; }")
+  let js = compile_to_js(
+    "switch (x) { case 1: return \"one\"; default: return \"other\"; }",
+  )
   assert_true(js.contains("switch (x)"))
   assert_true(js.contains("case 1:"))
   assert_true(js.contains("default:"))
@@ -161,7 +163,9 @@ test "emit try-catch statement" {
 ///|
 /// Test: Emit try-catch-finally
 test "emit try-catch-finally" {
-  let js = compile_to_js("try { x = 1; } catch (e) { x = 0; } finally { y = 2; }")
+  let js = compile_to_js(
+    "try { x = 1; } catch (e) { x = 0; } finally { y = 2; }",
+  )
   assert_true(js.contains("try {"))
   assert_true(js.contains("} catch"))
   assert_true(js.contains("} finally {"))
@@ -249,7 +253,9 @@ test "emit new expression" {
 ///|
 /// Test: Emit class declaration
 test "emit class declaration" {
-  let js = compile_to_js("class Person { constructor(name) { this.name = name; } }")
+  let js = compile_to_js(
+    "class Person { constructor(name) { this.name = name; } }",
+  )
   assert_true(js.contains("class Person"))
   assert_true(js.contains("constructor(name)"))
   assert_true(js.contains("this.name = name;"))
@@ -472,7 +478,9 @@ test "emit function expression" {
 ///|
 /// Test: Emit named function expression
 test "emit named function expression" {
-  let js = compile_to_js("const factorial = function fact(n) { return n <= 1 ? 1 : n * fact(n - 1); };")
+  let js = compile_to_js(
+    "const factorial = function fact(n) { return n <= 1 ? 1 : n * fact(n - 1); };",
+  )
   assert_true(js.contains("function fact(n)"))
 }
 
@@ -780,7 +788,9 @@ test "emit module declaration with export const" {
 ///|
 /// Test: Emit module declaration with exported function
 test "emit module declaration with export function" {
-  let js = compile_to_js("module Utils { export function helper() { return 1; } }")
+  let js = compile_to_js(
+    "module Utils { export function helper() { return 1; } }",
+  )
   assert_true(js.contains("var Utils;"))
   assert_true(js.contains("Utils.helper = function()"))
 }

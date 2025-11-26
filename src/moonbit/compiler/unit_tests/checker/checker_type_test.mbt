@@ -96,7 +96,9 @@ test "unit/checker/intersection - create intersection type" {
   let checker = @compiler.TypeChecker::new("test.ts", None)
   let (num_type, checker) = @compiler.number_type(checker)
   let (str_type, checker) = @compiler.string_type(checker)
-  let (inter_type, _) = @compiler.intersection_type(checker, [num_type, str_type])
+  let (inter_type, _) = @compiler.intersection_type(checker, [
+    num_type, str_type,
+  ])
   match inter_type {
     Intersection(inter) => assert_eq(inter.types.length(), 2)
     _ => assert_true(false)
@@ -120,7 +122,9 @@ test "unit/checker/intersection - flattens nested" {
   let (num_type, checker) = @compiler.number_type(checker)
   let (str_type, checker) = @compiler.string_type(checker)
   let (bool_type, checker) = @compiler.boolean_type(checker)
-  let (inner, checker) = @compiler.intersection_type(checker, [num_type, str_type])
+  let (inner, checker) = @compiler.intersection_type(checker, [
+    num_type, str_type,
+  ])
   let (outer, _) = @compiler.intersection_type(checker, [inner, bool_type])
   match outer {
     Intersection(inter) => assert_eq(inter.types.length(), 3)
@@ -200,19 +204,14 @@ test "unit/checker/conditional - create conditional type" {
   let (bool_type, checker) = @compiler.boolean_type(checker)
   let (any_t, checker) = @compiler.any_type(checker)
   let (cond_type, _) = @compiler.conditional_type(
-    checker,
-    num_type,
-    any_t,
-    str_type,
-    bool_type,
+    checker, num_type, any_t, str_type, bool_type,
   )
   match cond_type {
-    Conditional(cond) => {
+    Conditional(cond) =>
       match cond.check_type {
         Number(_) => assert_true(true)
         _ => assert_true(false)
       }
-    }
     _ => assert_true(false)
   }
 }
@@ -225,11 +224,7 @@ test "unit/checker/conditional - evaluate true branch" {
   let (str_type, checker) = @compiler.string_type(checker)
   let (bool_type, checker) = @compiler.boolean_type(checker)
   let (cond_type, checker) = @compiler.conditional_type(
-    checker,
-    num_type,
-    any_t,
-    str_type,
-    bool_type,
+    checker, num_type, any_t, str_type, bool_type,
   )
   match cond_type {
     Conditional(cond) => {
@@ -252,11 +247,7 @@ test "unit/checker/conditional - evaluate false branch" {
   let (void_t, checker) = @compiler.void_type(checker)
   // number extends string ? boolean : void
   let (cond_type, checker) = @compiler.conditional_type(
-    checker,
-    num_type,
-    str_type,
-    bool_type,
-    void_t,
+    checker, num_type, str_type, bool_type, void_t,
   )
   match cond_type {
     Conditional(cond) => {
@@ -296,11 +287,9 @@ test "unit/checker/template-literal - create template literal type" {
 test "unit/checker/template-literal - matches string with prefix" {
   let checker = @compiler.TypeChecker::new("test.ts", None)
   let (num_type, checker) = @compiler.number_type(checker)
-  let (template, _) = @compiler.template_literal_type(
-    checker,
-    ["hello", ""],
-    [num_type],
-  )
+  let (template, _) = @compiler.template_literal_type(checker, ["hello", ""], [
+    num_type,
+  ])
   match template {
     TemplateLiteral(t) =>
       assert_true(@compiler.matches_template_literal("hello42", t))
@@ -312,11 +301,9 @@ test "unit/checker/template-literal - matches string with prefix" {
 test "unit/checker/template-literal - does not match wrong prefix" {
   let checker = @compiler.TypeChecker::new("test.ts", None)
   let (num_type, checker) = @compiler.number_type(checker)
-  let (template, _) = @compiler.template_literal_type(
-    checker,
-    ["hello", ""],
-    [num_type],
-  )
+  let (template, _) = @compiler.template_literal_type(checker, ["hello", ""], [
+    num_type,
+  ])
   match template {
     TemplateLiteral(t) =>
       assert_false(@compiler.matches_template_literal("world42", t))
@@ -335,12 +322,11 @@ test "unit/checker/index-access - create index access type" {
   let (str_type, checker) = @compiler.string_type(checker)
   let (ia_type, _) = @compiler.index_access_type(checker, num_type, str_type)
   match ia_type {
-    IndexAccess(ia) => {
+    IndexAccess(ia) =>
       match ia.object_type {
         Number(_) => assert_true(true)
         _ => assert_true(false)
       }
-    }
     _ => assert_true(false)
   }
 }
@@ -416,7 +402,9 @@ test "unit/checker/union - removes duplicates" {
   let (num_type1, checker) = @compiler.number_type(checker)
   let (num_type2, checker) = @compiler.number_type(checker)
   let (str_type, checker) = @compiler.string_type(checker)
-  let (result, _) = @compiler.union_type(checker, [num_type1, str_type, num_type2])
+  let (result, _) = @compiler.union_type(checker, [
+    num_type1, str_type, num_type2,
+  ])
   match result {
     Union(u) => assert_eq(u.types.length(), 2)
     _ => assert_true(false)
@@ -456,7 +444,9 @@ test "unit/checker/integration - check boolean literal" {
 
 ///|
 test "unit/checker/integration - check tuple type annotation" {
-  let result = parse_bind_check("const tuple: [number, string] = [1, \"hello\"];")
+  let result = parse_bind_check(
+    "const tuple: [number, string] = [1, \"hello\"];",
+  )
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(_) => assert_true(false)
@@ -465,7 +455,9 @@ test "unit/checker/integration - check tuple type annotation" {
 
 ///|
 test "unit/checker/integration - check intersection type annotation" {
-  let result = parse_bind_check("interface A { a: number; }\ninterface B { b: string; }\nconst obj: A & B = { a: 1, b: \"hello\" };")
+  let result = parse_bind_check(
+    "interface A { a: number; }\ninterface B { b: string; }\nconst obj: A & B = { a: 1, b: \"hello\" };",
+  )
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(_) => assert_true(false)
@@ -505,7 +497,9 @@ test "unit/checker/integration - check union type annotation" {
 
 ///|
 test "unit/checker/index-signature - string index signature" {
-  let result = parse_bind_check("interface StringIndex { [key: string]: number; }")
+  let result = parse_bind_check(
+    "interface StringIndex { [key: string]: number; }",
+  )
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(_) => assert_true(false)
@@ -514,7 +508,9 @@ test "unit/checker/index-signature - string index signature" {
 
 ///|
 test "unit/checker/index-signature - number index signature" {
-  let result = parse_bind_check("interface NumberIndex { [index: number]: string; }")
+  let result = parse_bind_check(
+    "interface NumberIndex { [index: number]: string; }",
+  )
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(_) => assert_true(false)
@@ -523,7 +519,9 @@ test "unit/checker/index-signature - number index signature" {
 
 ///|
 test "unit/checker/index-signature - readonly index signature" {
-  let result = parse_bind_check("interface ReadonlyIndex { readonly [key: string]: number; }")
+  let result = parse_bind_check(
+    "interface ReadonlyIndex { readonly [key: string]: number; }",
+  )
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(_) => assert_true(false)
@@ -532,7 +530,9 @@ test "unit/checker/index-signature - readonly index signature" {
 
 ///|
 test "unit/checker/index-signature - with known properties" {
-  let result = parse_bind_check("interface WithProps { name: string; [key: string]: string; }")
+  let result = parse_bind_check(
+    "interface WithProps { name: string; [key: string]: string; }",
+  )
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(_) => assert_true(false)
@@ -545,7 +545,9 @@ test "unit/checker/index-signature - with known properties" {
 
 ///|
 test "unit/checker/mapped-type - basic mapped type" {
-  let result = parse_bind_check("type MyMapped<K extends string> = { [P in K]: string };")
+  let result = parse_bind_check(
+    "type MyMapped<K extends string> = { [P in K]: string };",
+  )
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(_) => assert_true(false)
@@ -554,7 +556,9 @@ test "unit/checker/mapped-type - basic mapped type" {
 
 ///|
 test "unit/checker/mapped-type - with readonly modifier" {
-  let result = parse_bind_check("type ReadonlyMapped<T> = { readonly [P in keyof T]: T[P] };")
+  let result = parse_bind_check(
+    "type ReadonlyMapped<T> = { readonly [P in keyof T]: T[P] };",
+  )
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(_) => assert_true(false)
@@ -563,7 +567,9 @@ test "unit/checker/mapped-type - with readonly modifier" {
 
 ///|
 test "unit/checker/mapped-type - with optional modifier" {
-  let result = parse_bind_check("type OptionalMapped<T> = { [P in keyof T]?: T[P] };")
+  let result = parse_bind_check(
+    "type OptionalMapped<T> = { [P in keyof T]?: T[P] };",
+  )
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(_) => assert_true(false)
@@ -572,7 +578,9 @@ test "unit/checker/mapped-type - with optional modifier" {
 
 ///|
 test "unit/checker/mapped-type - with plus readonly modifier" {
-  let result = parse_bind_check("type AddReadonly<T> = { +readonly [P in keyof T]: T[P] };")
+  let result = parse_bind_check(
+    "type AddReadonly<T> = { +readonly [P in keyof T]: T[P] };",
+  )
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(_) => assert_true(false)
@@ -581,7 +589,9 @@ test "unit/checker/mapped-type - with plus readonly modifier" {
 
 ///|
 test "unit/checker/mapped-type - with minus readonly modifier" {
-  let result = parse_bind_check("type RemoveReadonly<T> = { -readonly [P in keyof T]: T[P] };")
+  let result = parse_bind_check(
+    "type RemoveReadonly<T> = { -readonly [P in keyof T]: T[P] };",
+  )
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(_) => assert_true(false)
@@ -590,7 +600,9 @@ test "unit/checker/mapped-type - with minus readonly modifier" {
 
 ///|
 test "unit/checker/mapped-type - with plus optional modifier" {
-  let result = parse_bind_check("type AddOptional<T> = { [P in keyof T]+?: T[P] };")
+  let result = parse_bind_check(
+    "type AddOptional<T> = { [P in keyof T]+?: T[P] };",
+  )
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(_) => assert_true(false)
@@ -599,7 +611,9 @@ test "unit/checker/mapped-type - with plus optional modifier" {
 
 ///|
 test "unit/checker/mapped-type - with minus optional modifier" {
-  let result = parse_bind_check("type RemoveOptional<T> = { [P in keyof T]-?: T[P] };")
+  let result = parse_bind_check(
+    "type RemoveOptional<T> = { [P in keyof T]-?: T[P] };",
+  )
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(_) => assert_true(false)
@@ -608,7 +622,9 @@ test "unit/checker/mapped-type - with minus optional modifier" {
 
 ///|
 test "unit/checker/mapped-type - both modifiers" {
-  let result = parse_bind_check("type FullMapped<T> = { readonly [P in keyof T]?: T[P] };")
+  let result = parse_bind_check(
+    "type FullMapped<T> = { readonly [P in keyof T]?: T[P] };",
+  )
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(_) => assert_true(false)
@@ -621,7 +637,9 @@ test "unit/checker/mapped-type - both modifiers" {
 
 ///|
 test "unit/checker/type-param - generic function with constraint" {
-  let result = parse_bind_check("function process<T extends number>(value: T): T { return value; }")
+  let result = parse_bind_check(
+    "function process<T extends number>(value: T): T { return value; }",
+  )
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(_) => assert_true(false)
@@ -630,7 +648,9 @@ test "unit/checker/type-param - generic function with constraint" {
 
 ///|
 test "unit/checker/type-param - generic with default type" {
-  let result = parse_bind_check("function create<T = string>(value: T): T { return value; }")
+  let result = parse_bind_check(
+    "function create<T = string>(value: T): T { return value; }",
+  )
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(_) => assert_true(false)
@@ -639,7 +659,9 @@ test "unit/checker/type-param - generic with default type" {
 
 ///|
 test "unit/checker/type-param - generic class with constraint" {
-  let result = parse_bind_check("class Container<T extends object> { value: T; }")
+  let result = parse_bind_check(
+    "class Container<T extends object> { value: T; }",
+  )
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(_) => assert_true(false)
@@ -648,7 +670,9 @@ test "unit/checker/type-param - generic class with constraint" {
 
 ///|
 test "unit/checker/type-param - generic interface with multiple params" {
-  let result = parse_bind_check("interface Map<K extends string, V> { get(key: K): V; }")
+  let result = parse_bind_check(
+    "interface Map<K extends string, V> { get(key: K): V; }",
+  )
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(_) => assert_true(false)
@@ -661,7 +685,9 @@ test "unit/checker/type-param - generic interface with multiple params" {
 
 ///|
 test "unit/checker/narrowing - typeof string guard" {
-  let result = parse_bind_check("function test(x: string | number) { if (typeof x === \"string\") { return x.length; } return x; }")
+  let result = parse_bind_check(
+    "function test(x: string | number) { if (typeof x === \"string\") { return x.length; } return x; }",
+  )
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(_) => assert_true(false)
@@ -670,7 +696,9 @@ test "unit/checker/narrowing - typeof string guard" {
 
 ///|
 test "unit/checker/narrowing - typeof number guard" {
-  let result = parse_bind_check("function test(x: string | number) { if (typeof x === \"number\") { return x.toFixed(); } return x; }")
+  let result = parse_bind_check(
+    "function test(x: string | number) { if (typeof x === \"number\") { return x.toFixed(); } return x; }",
+  )
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(_) => assert_true(false)
@@ -679,7 +707,9 @@ test "unit/checker/narrowing - typeof number guard" {
 
 ///|
 test "unit/checker/narrowing - null check" {
-  let result = parse_bind_check("function test(x: string | null) { if (x !== null) { return x.length; } return 0; }")
+  let result = parse_bind_check(
+    "function test(x: string | null) { if (x !== null) { return x.length; } return 0; }",
+  )
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(_) => assert_true(false)
@@ -688,7 +718,9 @@ test "unit/checker/narrowing - null check" {
 
 ///|
 test "unit/checker/narrowing - undefined check" {
-  let result = parse_bind_check("function test(x: string | undefined) { if (x !== undefined) { return x.length; } return 0; }")
+  let result = parse_bind_check(
+    "function test(x: string | undefined) { if (x !== undefined) { return x.length; } return 0; }",
+  )
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(_) => assert_true(false)
@@ -697,7 +729,9 @@ test "unit/checker/narrowing - undefined check" {
 
 ///|
 test "unit/checker/narrowing - instanceof guard" {
-  let result = parse_bind_check("class Foo { x: number; } function test(obj: Foo | string) { if (obj instanceof Foo) { return obj.x; } return 0; }")
+  let result = parse_bind_check(
+    "class Foo { x: number; } function test(obj: Foo | string) { if (obj instanceof Foo) { return obj.x; } return 0; }",
+  )
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(_) => assert_true(false)
@@ -706,7 +740,9 @@ test "unit/checker/narrowing - instanceof guard" {
 
 ///|
 test "unit/checker/narrowing - negated typeof" {
-  let result = parse_bind_check("function test(x: string | number) { if (typeof x !== \"string\") { return x.toFixed(); } return x; }")
+  let result = parse_bind_check(
+    "function test(x: string | number) { if (typeof x !== \"string\") { return x.toFixed(); } return x; }",
+  )
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(_) => assert_true(false)
@@ -715,7 +751,9 @@ test "unit/checker/narrowing - negated typeof" {
 
 ///|
 test "unit/checker/narrowing - truthy check" {
-  let result = parse_bind_check("function test(x: string | null) { if (x) { return x.length; } return 0; }")
+  let result = parse_bind_check(
+    "function test(x: string | null) { if (x) { return x.length; } return 0; }",
+  )
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(_) => assert_true(false)
@@ -724,7 +762,9 @@ test "unit/checker/narrowing - truthy check" {
 
 ///|
 test "unit/checker/narrowing - nested if statements" {
-  let result = parse_bind_check("function test(x: string | number | null) { if (x !== null) { if (typeof x === \"string\") { return x.length; } } return 0; }")
+  let result = parse_bind_check(
+    "function test(x: string | number | null) { if (x !== null) { if (typeof x === \"string\") { return x.length; } } return 0; }",
+  )
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(_) => assert_true(false)
@@ -740,6 +780,7 @@ test "unit/checker/narrowing - create narrowed type" {
   // Verify the narrowed type was created successfully
   assert_true(true)
   let _ = narrowed
+
 }
 
 // ============================================================================
@@ -748,39 +789,41 @@ test "unit/checker/narrowing - create narrowed type" {
 
 ///|
 test "unit/checker/unreachable - return statement" {
-  let result = parse_bind_check("function test() { return 1; console.log('unreachable'); }")
+  let result = parse_bind_check(
+    "function test() { return 1; console.log('unreachable'); }",
+  )
   // This should detect unreachable code and report it in diagnostics
   match result {
-    Ok(_typed) => {
+    Ok(_typed) =>
       // May have diagnostics even on success
       assert_true(false)
-    }
-    Err(diagnostics) => {
+    Err(diagnostics) =>
       // Expected - unreachable code diagnostic
       assert_true(diagnostics.length() > 0)
-    }
   }
 }
 
 ///|
 test "unit/checker/unreachable - throw statement" {
-  let result = parse_bind_check("function test() { throw new Error(); console.log('unreachable'); }")
+  let result = parse_bind_check(
+    "function test() { throw new Error(); console.log('unreachable'); }",
+  )
   // This should detect unreachable code and report it in diagnostics
   match result {
-    Ok(typed) => {
+    Ok(typed) =>
       // May have diagnostics even on success
       assert_eq(typed.file_path, "test.ts")
-    }
-    Err(diagnostics) => {
+    Err(diagnostics) =>
       // Expected - unreachable code diagnostic
       assert_true(diagnostics.length() > 0)
-    }
   }
 }
 
 ///|
 test "unit/checker/unreachable - no false positives" {
-  let result = parse_bind_check("function test(x: boolean) { if (x) { return 1; } return 2; }")
+  let result = parse_bind_check(
+    "function test(x: boolean) { if (x) { return 1; } return 2; }",
+  )
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(_) => assert_true(false)
@@ -793,7 +836,9 @@ test "unit/checker/unreachable - no false positives" {
 
 ///|
 test "unit/checker/abstract - cannot instantiate abstract class" {
-  let result = parse_bind_check("abstract class Foo { abstract method(): void; } new Foo();")
+  let result = parse_bind_check(
+    "abstract class Foo { abstract method(): void; } new Foo();",
+  )
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(_) => assert_true(false)
@@ -802,7 +847,9 @@ test "unit/checker/abstract - cannot instantiate abstract class" {
 
 ///|
 test "unit/checker/abstract - can instantiate concrete class" {
-  let result = parse_bind_check("class Foo { method(): void {} } const x = new Foo();")
+  let result = parse_bind_check(
+    "class Foo { method(): void {} } const x = new Foo();",
+  )
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(_) => assert_true(false)
@@ -818,14 +865,12 @@ test "unit/checker/const - cannot reassign const" {
   let result = parse_bind_check("const x = 1; x = 2;")
   // This should detect const assignment error
   match result {
-    Ok(typed) => {
+    Ok(typed) =>
       // May still succeed but with diagnostics
       assert_eq(typed.file_path, "test.ts")
-    }
-    Err(diagnostics) => {
+    Err(diagnostics) =>
       // Expected - const assignment error
       assert_true(diagnostics.length() > 0)
-    }
   }
 }
 
@@ -843,14 +888,12 @@ test "unit/checker/const - compound assignment to const" {
   let result = parse_bind_check("const x = 1; x += 2;")
   // This should detect const assignment error
   match result {
-    Ok(typed) => {
+    Ok(typed) =>
       // May still succeed but with diagnostics
       assert_eq(typed.file_path, "test.ts")
-    }
-    Err(diagnostics) => {
+    Err(diagnostics) =>
       // Expected - const assignment error
       assert_true(diagnostics.length() > 0)
-    }
   }
 }
 
@@ -869,7 +912,9 @@ test "unit/checker/return - type matches declared" {
 
 ///|
 test "unit/checker/return - void function with no return" {
-  let result = parse_bind_check("function test(): void { console.log('hello'); }")
+  let result = parse_bind_check(
+    "function test(): void { console.log('hello'); }",
+  )
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(_) => assert_true(false)
@@ -882,10 +927,9 @@ test "unit/checker/return - type mismatch" {
   // This should detect return type mismatch - expect error
   match result {
     Ok(_) => assert_true(false) // Should have detected error
-    Err(diagnostics) => {
+    Err(diagnostics) =>
       // Expected - return type mismatch error
       assert_true(diagnostics.length() > 0)
-    }
   }
 }
 
@@ -916,9 +960,7 @@ test "unit/checker/assign - incompatible types" {
   let result = parse_bind_check("const x: number = 'hello';")
   match result {
     Ok(_) => assert_true(false) // Should have detected type error
-    Err(diagnostics) => {
-      assert_true(diagnostics.length() > 0)
-    }
+    Err(diagnostics) => assert_true(diagnostics.length() > 0)
   }
 }
 
@@ -928,7 +970,9 @@ test "unit/checker/assign - incompatible types" {
 
 ///|
 test "unit/checker/generic - identity function" {
-  let result = parse_bind_check("function identity<T>(x: T): T { return x; } const result = identity(42);")
+  let result = parse_bind_check(
+    "function identity<T>(x: T): T { return x; } const result = identity(42);",
+  )
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(_) => assert_true(false)
@@ -937,7 +981,9 @@ test "unit/checker/generic - identity function" {
 
 ///|
 test "unit/checker/generic - multiple type params" {
-  let result = parse_bind_check("function pair<A, B>(a: A, b: B): [A, B] { return [a, b]; } const p = pair(1, 'hello');")
+  let result = parse_bind_check(
+    "function pair<A, B>(a: A, b: B): [A, B] { return [a, b]; } const p = pair(1, 'hello');",
+  )
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(_) => assert_true(false)
@@ -946,7 +992,9 @@ test "unit/checker/generic - multiple type params" {
 
 ///|
 test "unit/checker/generic - constrained type param" {
-  let result = parse_bind_check("function getLength<T extends { length: number }>(x: T): number { return x.length; } getLength([1, 2, 3]);")
+  let result = parse_bind_check(
+    "function getLength<T extends { length: number }>(x: T): number { return x.length; } getLength([1, 2, 3]);",
+  )
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(_) => assert_true(false)
@@ -990,7 +1038,9 @@ test "unit/checker/object - computed property with string" {
 
 ///|
 test "unit/checker/narrowing - assignment invalidates narrowing" {
-  let result = parse_bind_check("function test(x: string | number) { if (typeof x === 'string') { x = 42; return x; } return 0; }")
+  let result = parse_bind_check(
+    "function test(x: string | number) { if (typeof x === 'string') { x = 42; return x; } return 0; }",
+  )
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(_) => assert_true(false)
@@ -999,7 +1049,9 @@ test "unit/checker/narrowing - assignment invalidates narrowing" {
 
 ///|
 test "unit/checker/narrowing - function scope clears narrowing" {
-  let result = parse_bind_check("function outer(x: string | number) { if (typeof x === 'string') { function inner() { return x; } } }")
+  let result = parse_bind_check(
+    "function outer(x: string | number) { if (typeof x === 'string') { function inner() { return x; } } }",
+  )
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(_) => assert_true(false)

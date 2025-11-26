@@ -4,11 +4,11 @@
 ///|
 /// Comment directive kinds for TypeScript compiler directives
 pub enum CommentDirectiveKind {
-  TsIgnore          // @ts-ignore
-  TsExpectError     // @ts-expect-error
-  TsNocheck         // @ts-nocheck
-  TsCheck           // @ts-check
-  TripleSlashRef    // /// <reference ... />
+  TsIgnore // @ts-ignore
+  TsExpectError // @ts-expect-error
+  TsNocheck // @ts-nocheck
+  TsCheck // @ts-check
+  TripleSlashRef // /// <reference ... />
 } derive(Show, Eq)
 
 ///|

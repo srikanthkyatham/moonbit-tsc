@@ -13,7 +13,9 @@ test "scan hashbang - basic node" {
 
 ///|
 test "scan hashbang - with code after" {
-  let scanner = @compiler.Scanner::new("#!/usr/bin/env node\nconst x = 1;", "test.ts")
+  let scanner = @compiler.Scanner::new(
+    "#!/usr/bin/env node\nconst x = 1;", "test.ts",
+  )
   let tokens = @compiler.scan_all(scanner)
   // Hashbang, const, x, =, 1, ;, EOF
   assert_eq(tokens.length(), 7)
@@ -32,7 +34,8 @@ test "scan hashbang - ts-node" {
   let scanner = @compiler.Scanner::new("#!/usr/bin/env ts-node\n", "test.ts")
   let (hashbang, _) = @compiler.scan_hashbang(scanner)
   match hashbang {
-    Some(@compiler.Hashbang(text, _)) => assert_eq(text, "#!/usr/bin/env ts-node")
+    Some(@compiler.Hashbang(text, _)) =>
+      assert_eq(text, "#!/usr/bin/env ts-node")
     _ => assert_true(false)
   }
 }
@@ -49,17 +52,22 @@ test "scan hashbang - direct path" {
 
 ///|
 test "scan hashbang - with arguments" {
-  let scanner = @compiler.Scanner::new("#!/usr/bin/env node --experimental-modules\n", "test.ts")
+  let scanner = @compiler.Scanner::new(
+    "#!/usr/bin/env node --experimental-modules\n", "test.ts",
+  )
   let (hashbang, _) = @compiler.scan_hashbang(scanner)
   match hashbang {
-    Some(@compiler.Hashbang(text, _)) => assert_eq(text, "#!/usr/bin/env node --experimental-modules")
+    Some(@compiler.Hashbang(text, _)) =>
+      assert_eq(text, "#!/usr/bin/env node --experimental-modules")
     _ => assert_true(false)
   }
 }
 
 ///|
 test "scan hashbang - not at start returns none" {
-  let scanner = @compiler.Scanner::new("const x = 1;\n#!/usr/bin/env node", "test.ts")
+  let scanner = @compiler.Scanner::new(
+    "const x = 1;\n#!/usr/bin/env node", "test.ts",
+  )
   let (hashbang, _) = @compiler.scan_hashbang(scanner)
   match hashbang {
     None => ()
@@ -89,7 +97,9 @@ test "scan hashbang - just hash no bang" {
 
 ///|
 test "scan hashbang - preserves position for next token" {
-  let scanner = @compiler.Scanner::new("#!/usr/bin/env node\nlet x = 1;", "test.ts")
+  let scanner = @compiler.Scanner::new(
+    "#!/usr/bin/env node\nlet x = 1;", "test.ts",
+  )
   let tokens = @compiler.scan_all(scanner)
   // Hashbang, let, x, =, 1, ;, EOF
   assert_eq(tokens.length(), 7)
@@ -101,10 +111,13 @@ test "scan hashbang - preserves position for next token" {
 
 ///|
 test "scan hashbang - deno" {
-  let scanner = @compiler.Scanner::new("#!/usr/bin/env -S deno run\n", "test.ts")
+  let scanner = @compiler.Scanner::new(
+    "#!/usr/bin/env -S deno run\n", "test.ts",
+  )
   let (hashbang, _) = @compiler.scan_hashbang(scanner)
   match hashbang {
-    Some(@compiler.Hashbang(text, _)) => assert_eq(text, "#!/usr/bin/env -S deno run")
+    Some(@compiler.Hashbang(text, _)) =>
+      assert_eq(text, "#!/usr/bin/env -S deno run")
     _ => assert_true(false)
   }
 }
