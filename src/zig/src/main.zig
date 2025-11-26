@@ -71,17 +71,23 @@ fn printHelp() !void {
         \\    --project <PATH>        Compile project at path (tsconfig.json)
         \\    --target <TARGET>       Target ECMAScript version (es5, es2015, esnext)
         \\    --outDir <DIR>          Output directory
-        \\    --sourceMap             Generate source maps
         \\    --declaration           Generate .d.ts files
         \\    --watch                 Watch for file changes
         \\    --parallel <N>          Number of parallel workers (default: CPU count)
         \\    --verbose               Verbose output
+        \\
+        \\SOURCE MAP OPTIONS:
+        \\    --sourceMap             Generate external source maps (.map files)
+        \\    --inlineSourceMap       Embed source maps inline in JS output
+        \\    --sourceMapMode <MODE>  Explicit mode: none, external, inline
         \\
         \\EXAMPLES:
         \\    moonbit-tsc file.ts                    Compile a single file
         \\    moonbit-tsc src/**/*.ts                Compile multiple files
         \\    moonbit-tsc --project ./tsconfig.json  Compile a project
         \\    moonbit-tsc --watch src/               Watch mode
+        \\    moonbit-tsc --sourceMap file.ts        Compile with external source map
+        \\    moonbit-tsc --inlineSourceMap file.ts  Compile with inline source map
         \\
         \\ARCHITECTURE:
         \\    This compiler uses MoonBit for core compilation logic with async I/O
@@ -109,7 +115,7 @@ fn compileCommand(allocator: std.mem.Allocator, args: [][:0]u8) !void {
     var options = CompilerOptions{
         .target = "es2015",
         .out_dir = null,
-        .source_map = false,
+        .source_map_mode = .none,
         .declaration = false,
         .watch = false,
         .verbose = false,
@@ -129,7 +135,21 @@ fn compileCommand(allocator: std.mem.Allocator, args: [][:0]u8) !void {
                 i += 1;
                 options.out_dir = args[i];
             } else if (std.mem.eql(u8, arg, "--sourceMap")) {
-                options.source_map = true;
+                // Default --sourceMap means external source map
+                options.source_map_mode = .external;
+            } else if (std.mem.eql(u8, arg, "--inlineSourceMap")) {
+                // Inline source map embedded in JS
+                options.source_map_mode = .@"inline";
+            } else if (std.mem.eql(u8, arg, "--sourceMapMode") and i + 1 < args.len) {
+                // Explicit mode: none, external, inline
+                i += 1;
+                if (SourceMapMode.fromString(args[i])) |mode| {
+                    options.source_map_mode = mode;
+                } else {
+                    try stdout.print("❌ Error: Invalid sourceMapMode '{s}'. Use: none, external, inline\n", .{args[i]});
+                    try stdout.flush();
+                    std.process.exit(1);
+                }
             } else if (std.mem.eql(u8, arg, "--declaration")) {
                 options.declaration = true;
             } else if (std.mem.eql(u8, arg, "--watch")) {
@@ -157,7 +177,7 @@ fn compileCommand(allocator: std.mem.Allocator, args: [][:0]u8) !void {
         try stdout.writeAll("📋 Configuration:\n");
         try stdout.print("   Target: {s}\n", .{options.target});
         try stdout.print("   Files: {d}\n", .{files.items.len});
-        try stdout.print("   Source maps: {}\n", .{options.source_map});
+        try stdout.print("   Source maps: {s}\n", .{options.source_map_mode.toString()});
         try stdout.print("   Declarations: {}\n", .{options.declaration});
         try stdout.writeAll("\n");
         try stdout.flush();
@@ -203,10 +223,31 @@ fn compileCommand(allocator: std.mem.Allocator, args: [][:0]u8) !void {
     try stdout.flush();
 }
 
+const SourceMapMode = enum {
+    none,
+    external,
+    @"inline",
+
+    pub fn fromString(s: []const u8) ?SourceMapMode {
+        if (std.mem.eql(u8, s, "none")) return .none;
+        if (std.mem.eql(u8, s, "external")) return .external;
+        if (std.mem.eql(u8, s, "inline")) return .@"inline";
+        return null;
+    }
+
+    pub fn toString(self: SourceMapMode) []const u8 {
+        return switch (self) {
+            .none => "none",
+            .external => "external",
+            .@"inline" => "inline",
+        };
+    }
+};
+
 const CompilerOptions = struct {
     target: []const u8,
     out_dir: ?[]const u8,
-    source_map: bool,
+    source_map_mode: SourceMapMode,
     declaration: bool,
     watch: bool,
     verbose: bool,
