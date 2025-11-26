@@ -82,18 +82,20 @@ fn try_parse_single_param_arrow_function(
   }
 
   // Create parameter and parse body
-  let param = Node::Parameter(Parameter::{
-    name: Node::Identifier(id),
-    type_annotation: None,
-    initializer: None,
-    is_optional: false,
-    is_rest: false,
-    modifiers: [],
-    location: id.location,
-  })
   match parse_arrow_body(parser) {
     Ok((body, parser)) =>
-      Ok((make_arrow_function([param], None, body, false, start_loc), parser))
+      Ok(
+        (
+          make_arrow_function(
+            [make_simple_parameter(id)],
+            None,
+            body,
+            false,
+            start_loc,
+          ),
+          parser,
+        ),
+      )
     Err(p) => Err(p)
   }
 }
@@ -1314,20 +1316,17 @@ fn parse_arrow_function_single_param(
   match expect(parser, fn(t) { matches_arrow(t) }) {
     Ok(parser) => {
       let parser = advance_parser(parser)
-      let param_node = Node::Parameter(Parameter::{
-        name: Node::Identifier(id),
-        type_annotation: None,
-        initializer: None,
-        is_optional: false,
-        is_rest: false,
-        modifiers: [],
-        location: start_loc,
-      })
       match parse_arrow_body(parser) {
         Ok((body, parser)) =>
           Ok(
             (
-              make_arrow_function([param_node], None, body, false, start_loc),
+              make_arrow_function(
+                [make_simple_parameter(id)],
+                None,
+                body,
+                false,
+                start_loc,
+              ),
               parser,
             ),
           )

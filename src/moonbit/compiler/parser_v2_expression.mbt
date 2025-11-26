@@ -288,6 +288,20 @@ fn make_function_expression(
 }
 
 ///|
+/// Create a simple parameter node from an identifier
+fn make_simple_parameter(id : Identifier) -> Node {
+  Node::Parameter(Parameter::{
+    name: Node::Identifier(id),
+    type_annotation: None,
+    initializer: None,
+    is_optional: false,
+    is_rest: false,
+    modifiers: [],
+    location: id.location,
+  })
+}
+
+///|
 /// Parse function expression body (parameters, optional return type, block)
 /// Used for both regular and async function expressions
 fn parse_function_expression_body(
@@ -367,19 +381,20 @@ fn parse_async_arrow_single_param(
   match current_token(parser) {
     Arrow(_) => {
       let parser = advance_parser(parser)
-      let param = Node::Parameter(Parameter::{
-        name: Node::Identifier(Identifier::{ name, location: param_loc }),
-        type_annotation: None,
-        initializer: None,
-        is_optional: false,
-        is_rest: false,
-        modifiers: [],
-        location: param_loc,
-      })
+      let id = Identifier::{ name, location: param_loc }
       match parse_arrow_body(parser) {
         Ok((body, parser)) =>
           Ok(
-            (make_arrow_function([param], None, body, true, start_loc), parser),
+            (
+              make_arrow_function(
+                [make_simple_parameter(id)],
+                None,
+                body,
+                true,
+                start_loc,
+              ),
+              parser,
+            ),
           )
         Err(parser) => Err(parser)
       }
