@@ -10,8 +10,7 @@
 fn parse_and_bind(
   source : String,
 ) -> Result[@compiler.BoundSourceFile, Array[@compiler.Diagnostic]] {
-  let scanner = @compiler.Scanner::new(source, "test.ts")
-  let tokens = @compiler.scan_all(scanner)
+  let tokens = @compiler.scan_all_v2(source, "test.ts")
   match @compiler.parse_source_file(tokens, "test.ts") {
     Ok(source_file) => @compiler.bind_source_file(source_file)
     Err(_) => Err([])

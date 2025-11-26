@@ -4,8 +4,7 @@
 ///|
 /// Helper function to create tokens from source
 fn tokens_from_source(source : String) -> Array[@compiler.Token] {
-  let scanner = @compiler.Scanner::new(source, "test.json")
-  @compiler.scan_all(scanner)
+  @compiler.scan_all_v2(source, "test.json")
 }
 
 ///|
@@ -28,8 +27,7 @@ fn parse_json(source : String) -> @compiler.Node? {
 fn parse_json_value(source : String) -> @compiler.Node? {
   // Wrap in const x = ... to parse objects as expressions
   let wrapped = "const x = " + source
-  let scanner = @compiler.Scanner::new(wrapped, "test.ts")
-  let tokens = @compiler.scan_all(scanner)
+  let tokens = @compiler.scan_all_v2(wrapped, "test.ts")
   match @compiler.parse_source_file(tokens, "test.ts") {
     Ok(sf) =>
       if sf.statements.length() > 0 {

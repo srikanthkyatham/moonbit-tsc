@@ -110,8 +110,7 @@ fn profile_file(file_name : String, source : String) -> MemoryStats {
   let file_size = source.length()
 
   // Phase 1: Scanning
-  let scanner = Scanner::new(source, file_name)
-  let tokens = scan_all(scanner)
+  let tokens = scan_all_v2(source, file_name)
   let token_count = tokens.length()
 
   // Phase 2: Parsing
@@ -237,8 +236,7 @@ test "parse and typecheck small.ts" {
 
   // Phase 1: Scanning
   println("\n[Phase 1] Scanning...")
-  let scanner = Scanner::new(source, file_path)
-  let tokens = scan_all(scanner)
+  let tokens = scan_all_v2(source, file_path)
   println("  Tokens generated: \{tokens.length()}")
 
   // Phase 2: Parsing

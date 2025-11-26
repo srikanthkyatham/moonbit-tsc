@@ -5,8 +5,7 @@
 
 ///|
 fn tokens_from_source(source : String) -> Array[Token] {
-  let scanner = Scanner::new(source, "test.ts")
-  scan_all(scanner)
+  scan_all_v2(source, "test.ts")
 }
 
 ///|

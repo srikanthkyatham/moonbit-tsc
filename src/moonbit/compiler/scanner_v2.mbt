@@ -1031,7 +1031,10 @@ fn scan_single_token_v2(
     }
 
     // === Private identifier (#name) ===
-    ['#', .. rest] => {
+    // Only valid if followed by identifier start character
+    ['#', ch, .. rest] if ch >= 'a' && ch <= 'z' || ch >= 'A' && ch <= 'Z' ||
+      ch == '_' ||
+      ch == '$' => {
       let start_line = state.line
       let start_col = state.col
       let start_offset = state.offset
@@ -1039,6 +1042,10 @@ fn scan_single_token_v2(
       state.offset += 1
       let ident = StringBuilder::new()
       ident.write_char('#')
+      // Re-include the first identifier char
+      ident.write_char(ch)
+      state.col += 1
+      state.offset += 1
       let rest2 = scan_ident_chars(rest, state, ident)
       let loc = SourceLocation::new(
         file_path,
@@ -1046,6 +1053,13 @@ fn scan_single_token_v2(
         Position::new(state.line, state.col, state.offset),
       )
       (PrivateIdentifier(ident.to_string(), loc), rest2)
+    }
+    // Invalid private identifier - just # followed by non-identifier char
+    ['#', .. rest] => {
+      let loc = make_loc(state.line, state.col, state.offset)
+      state.col += 1
+      state.offset += 1
+      (Unknown("#", loc), rest)
     }
 
     // === Strings ===
@@ -1275,6 +1289,23 @@ fn scan_single_token_v2(
         Position::new(state.line, state.col, state.offset),
       )
       (keyword_token(ident.to_string(), loc), rest2)
+    }
+
+    // === Unicode identifiers ===
+    [ch, .. rest] if is_unicode_ident_start(ch) => {
+      let start_col = state.col
+      let start_offset = state.offset
+      state.col += 1
+      state.offset += 1
+      let ident = StringBuilder::new()
+      ident.write_char(ch)
+      let rest2 = scan_ident_chars(rest, state, ident)
+      let loc = SourceLocation::new(
+        file_path,
+        Position::new(state.line, start_col, start_offset),
+        Position::new(state.line, state.col, state.offset),
+      )
+      (Identifier(ident.to_string(), loc), rest2)
     }
 
     // === Unknown character ===
@@ -1721,7 +1752,104 @@ fn skip_whitespace_with_special_comments_v2(
 }
 
 ///|
-/// Scan double-quoted string
+/// Convert hex character to its numeric value
+fn hex_digit_value_v2(ch : Char) -> Int? {
+  match ch {
+    '0'..='9' => Some(ch.to_int() - '0'.to_int())
+    'a'..='f' => Some(ch.to_int() - 'a'.to_int() + 10)
+    'A'..='F' => Some(ch.to_int() - 'A'.to_int() + 10)
+    _ => None
+  }
+}
+
+///|
+/// Convert code point to string
+fn code_point_to_string_v2(code_point : Int) -> String {
+  if code_point <= 0xFFFF {
+    Char::from_int(code_point).to_string()
+  } else {
+    // Surrogate pair for code points > 0xFFFF
+    let adjusted = code_point - 0x10000
+    let high = 0xD800 + (adjusted >> 10)
+    let low = 0xDC00 + (adjusted & 0x3FF)
+    Char::from_int(high).to_string() + Char::from_int(low).to_string()
+  }
+}
+
+///|
+/// Parse Unicode escape sequence \uXXXX or \u{XXXXX}
+/// Returns (parsed_string, chars_consumed) or None if invalid
+fn parse_unicode_escape_v2(code : StringView) -> (String, Int)? {
+  match code {
+    ['{', .. rest] => {
+      // Variable-length: \u{XXXXX}
+      let mut i = 0
+      let mut code_point = 0
+      let mut digit_count = 0
+      loop rest {
+        ['}', ..] => {
+          if digit_count == 0 || code_point > 0x10FFFF {
+            return None
+          }
+          return Some((code_point_to_string_v2(code_point), i + 2)) // +2 for { and }
+        }
+        [ch, .. rest2] => {
+          match hex_digit_value_v2(ch) {
+            Some(value) => {
+              code_point = code_point * 16 + value
+              digit_count = digit_count + 1
+              i = i + 1
+              continue rest2
+            }
+            None => return None
+          }
+        }
+        [] => return None
+      }
+    }
+    _ => {
+      // Fixed 4-digit: \uXXXX
+      let mut code_point = 0
+      let mut remaining = code
+      for i = 0; i < 4; i = i + 1 {
+        match remaining {
+          [ch, .. rest] => {
+            match hex_digit_value_v2(ch) {
+              Some(value) => {
+                code_point = code_point * 16 + value
+                remaining = rest
+              }
+              None => return None
+            }
+          }
+          [] => return None
+        }
+      }
+      Some((code_point_to_string_v2(code_point), 4))
+    }
+  }
+}
+
+///|
+/// Parse hex escape sequence \xXX
+/// Returns (parsed_char, chars_consumed) or None if invalid
+fn parse_hex_escape_v2(code : StringView) -> (String, Int)? {
+  match code {
+    [h1, h2, ..] => {
+      match (hex_digit_value_v2(h1), hex_digit_value_v2(h2)) {
+        (Some(v1), Some(v2)) => {
+          let value = v1 * 16 + v2
+          Some((Char::from_int(value).to_string(), 2))
+        }
+        _ => None
+      }
+    }
+    _ => None
+  }
+}
+
+///|
+/// Scan double-quoted string with full escape support
 fn scan_double_string(
   code : StringView,
   state : ScanState,
@@ -1751,6 +1879,30 @@ fn scan_double_string(
       state.offset += 2
       continue rest
     }
+    [.. "\\b", .. rest] => {
+      content.write_char('\u{0008}')
+      state.col += 2
+      state.offset += 2
+      continue rest
+    }
+    [.. "\\f", .. rest] => {
+      content.write_char('\u{000C}')
+      state.col += 2
+      state.offset += 2
+      continue rest
+    }
+    [.. "\\v", .. rest] => {
+      content.write_char('\u{000B}')
+      state.col += 2
+      state.offset += 2
+      continue rest
+    }
+    [.. "\\0", .. rest] => {
+      content.write_char('\u{0000}')
+      state.col += 2
+      state.offset += 2
+      continue rest
+    }
     [.. "\\\\", .. rest] => {
       content.write_char('\\')
       state.col += 2
@@ -1763,7 +1915,77 @@ fn scan_double_string(
       state.offset += 2
       continue rest
     }
+    [.. "\\'", .. rest] => {
+      content.write_char('\'')
+      state.col += 2
+      state.offset += 2
+      continue rest
+    }
+    [.. "\\u", .. rest] => {
+      // Unicode escape: \uXXXX or \u{XXXXX}
+      match parse_unicode_escape_v2(rest) {
+        Some((str, chars_consumed)) => {
+          content.write_string(str)
+          state.col += 2 + chars_consumed
+          state.offset += 2 + chars_consumed
+          continue try! rest[chars_consumed:]
+        }
+        None => {
+          // Invalid escape - keep literal
+          content.write_string("\\u")
+          state.col += 2
+          state.offset += 2
+          continue rest
+        }
+      }
+    }
+    [.. "\\x", .. rest] => {
+      // Hex escape: \xXX
+      match parse_hex_escape_v2(rest) {
+        Some((str, chars_consumed)) => {
+          content.write_string(str)
+          state.col += 2 + chars_consumed
+          state.offset += 2 + chars_consumed
+          continue try! rest[chars_consumed:]
+        }
+        None => {
+          // Invalid escape - keep literal
+          content.write_string("\\x")
+          state.col += 2
+          state.offset += 2
+          continue rest
+        }
+      }
+    }
     ['\n', .. remaining] => remaining // Unterminated at newline
+    ['\\', '\n', .. rest] => {
+      // Line continuation - skip the newline
+      state.line += 1
+      state.col = 1
+      state.offset += 2
+      continue rest
+    }
+    ['\\', '\r', '\n', .. rest] => {
+      // Line continuation - skip CR LF
+      state.line += 1
+      state.col = 1
+      state.offset += 3
+      continue rest
+    }
+    ['\\', '\r', .. rest] => {
+      // Line continuation - skip CR
+      state.line += 1
+      state.col = 1
+      state.offset += 2
+      continue rest
+    }
+    ['\\', ch, .. rest] => {
+      // Unknown escape - keep literal character
+      content.write_char(ch)
+      state.col += 2
+      state.offset += 2
+      continue rest
+    }
     [ch, .. rest] => {
       content.write_char(ch)
       state.col += 1
@@ -1775,7 +1997,7 @@ fn scan_double_string(
 }
 
 ///|
-/// Scan single-quoted string
+/// Scan single-quoted string with full escape support
 fn scan_single_string(
   code : StringView,
   state : ScanState,
@@ -1805,6 +2027,30 @@ fn scan_single_string(
       state.offset += 2
       continue rest
     }
+    [.. "\\b", .. rest] => {
+      content.write_char('\u{0008}')
+      state.col += 2
+      state.offset += 2
+      continue rest
+    }
+    [.. "\\f", .. rest] => {
+      content.write_char('\u{000C}')
+      state.col += 2
+      state.offset += 2
+      continue rest
+    }
+    [.. "\\v", .. rest] => {
+      content.write_char('\u{000B}')
+      state.col += 2
+      state.offset += 2
+      continue rest
+    }
+    [.. "\\0", .. rest] => {
+      content.write_char('\u{0000}')
+      state.col += 2
+      state.offset += 2
+      continue rest
+    }
     [.. "\\\\", .. rest] => {
       content.write_char('\\')
       state.col += 2
@@ -1817,7 +2063,77 @@ fn scan_single_string(
       state.offset += 2
       continue rest
     }
+    [.. "\\\"", .. rest] => {
+      content.write_char('"')
+      state.col += 2
+      state.offset += 2
+      continue rest
+    }
+    [.. "\\u", .. rest] => {
+      // Unicode escape: \uXXXX or \u{XXXXX}
+      match parse_unicode_escape_v2(rest) {
+        Some((str, chars_consumed)) => {
+          content.write_string(str)
+          state.col += 2 + chars_consumed
+          state.offset += 2 + chars_consumed
+          continue try! rest[chars_consumed:]
+        }
+        None => {
+          // Invalid escape - keep literal
+          content.write_string("\\u")
+          state.col += 2
+          state.offset += 2
+          continue rest
+        }
+      }
+    }
+    [.. "\\x", .. rest] => {
+      // Hex escape: \xXX
+      match parse_hex_escape_v2(rest) {
+        Some((str, chars_consumed)) => {
+          content.write_string(str)
+          state.col += 2 + chars_consumed
+          state.offset += 2 + chars_consumed
+          continue try! rest[chars_consumed:]
+        }
+        None => {
+          // Invalid escape - keep literal
+          content.write_string("\\x")
+          state.col += 2
+          state.offset += 2
+          continue rest
+        }
+      }
+    }
     ['\n', .. remaining] => remaining // Unterminated at newline
+    ['\\', '\n', .. rest] => {
+      // Line continuation - skip the newline
+      state.line += 1
+      state.col = 1
+      state.offset += 2
+      continue rest
+    }
+    ['\\', '\r', '\n', .. rest] => {
+      // Line continuation - skip CR LF
+      state.line += 1
+      state.col = 1
+      state.offset += 3
+      continue rest
+    }
+    ['\\', '\r', .. rest] => {
+      // Line continuation - skip CR
+      state.line += 1
+      state.col = 1
+      state.offset += 2
+      continue rest
+    }
+    ['\\', ch, .. rest] => {
+      // Unknown escape - keep literal character
+      content.write_char(ch)
+      state.col += 2
+      state.offset += 2
+      continue rest
+    }
     [ch, .. rest] => {
       content.write_char(ch)
       state.col += 1
@@ -1837,7 +2153,7 @@ priv enum TemplateScanResultV2 {
 }
 
 ///|
-/// Scan template literal
+/// Scan template literal with full escape support
 fn scan_template_literal_v2(
   code : StringView,
   state : ScanState,
@@ -1869,6 +2185,91 @@ fn scan_template_literal_v2(
     }
     [.. "\\n", .. rest] => {
       content.write_char('\n')
+      state.col += 2
+      state.offset += 2
+      continue rest
+    }
+    [.. "\\r", .. rest] => {
+      content.write_char('\r')
+      state.col += 2
+      state.offset += 2
+      continue rest
+    }
+    [.. "\\t", .. rest] => {
+      content.write_char('\t')
+      state.col += 2
+      state.offset += 2
+      continue rest
+    }
+    [.. "\\b", .. rest] => {
+      content.write_char('\u{0008}')
+      state.col += 2
+      state.offset += 2
+      continue rest
+    }
+    [.. "\\f", .. rest] => {
+      content.write_char('\u{000C}')
+      state.col += 2
+      state.offset += 2
+      continue rest
+    }
+    [.. "\\v", .. rest] => {
+      content.write_char('\u{000B}')
+      state.col += 2
+      state.offset += 2
+      continue rest
+    }
+    [.. "\\0", .. rest] => {
+      content.write_char('\u{0000}')
+      state.col += 2
+      state.offset += 2
+      continue rest
+    }
+    [.. "\\\\", .. rest] => {
+      content.write_char('\\')
+      state.col += 2
+      state.offset += 2
+      continue rest
+    }
+    [.. "\\u", .. rest] => {
+      // Unicode escape: \uXXXX or \u{XXXXX}
+      match parse_unicode_escape_v2(rest) {
+        Some((str, chars_consumed)) => {
+          content.write_string(str)
+          state.col += 2 + chars_consumed
+          state.offset += 2 + chars_consumed
+          continue try! rest[chars_consumed:]
+        }
+        None => {
+          // Invalid escape - keep literal
+          content.write_string("\\u")
+          state.col += 2
+          state.offset += 2
+          continue rest
+        }
+      }
+    }
+    [.. "\\x", .. rest] => {
+      // Hex escape: \xXX
+      match parse_hex_escape_v2(rest) {
+        Some((str, chars_consumed)) => {
+          content.write_string(str)
+          state.col += 2 + chars_consumed
+          state.offset += 2 + chars_consumed
+          continue try! rest[chars_consumed:]
+        }
+        None => {
+          // Invalid escape - keep literal
+          content.write_string("\\x")
+          state.col += 2
+          state.offset += 2
+          continue rest
+        }
+      }
+    }
+    ['\\', ch, .. rest] => {
+      // Unknown escape - keep literal character
+      content.write_char(ch)
       state.col += 2
       state.offset += 2
       continue rest
@@ -1939,8 +2340,75 @@ fn scan_template_continuation_v2(
       state.offset += 2
       continue rest
     }
+    [.. "\\b", .. rest] => {
+      content.write_char('\u{0008}')
+      state.col += 2
+      state.offset += 2
+      continue rest
+    }
+    [.. "\\f", .. rest] => {
+      content.write_char('\u{000C}')
+      state.col += 2
+      state.offset += 2
+      continue rest
+    }
+    [.. "\\v", .. rest] => {
+      content.write_char('\u{000B}')
+      state.col += 2
+      state.offset += 2
+      continue rest
+    }
+    [.. "\\0", .. rest] => {
+      content.write_char('\u{0000}')
+      state.col += 2
+      state.offset += 2
+      continue rest
+    }
     [.. "\\\\", .. rest] => {
       content.write_char('\\')
+      state.col += 2
+      state.offset += 2
+      continue rest
+    }
+    [.. "\\u", .. rest] => {
+      // Unicode escape: \uXXXX or \u{XXXXX}
+      match parse_unicode_escape_v2(rest) {
+        Some((str, chars_consumed)) => {
+          content.write_string(str)
+          state.col += 2 + chars_consumed
+          state.offset += 2 + chars_consumed
+          continue try! rest[chars_consumed:]
+        }
+        None => {
+          // Invalid escape - keep literal
+          content.write_string("\\u")
+          state.col += 2
+          state.offset += 2
+          continue rest
+        }
+      }
+    }
+    [.. "\\x", .. rest] => {
+      // Hex escape: \xXX
+      match parse_hex_escape_v2(rest) {
+        Some((str, chars_consumed)) => {
+          content.write_string(str)
+          state.col += 2 + chars_consumed
+          state.offset += 2 + chars_consumed
+          continue try! rest[chars_consumed:]
+        }
+        None => {
+          // Invalid escape - keep literal
+          content.write_string("\\x")
+          state.col += 2
+          state.offset += 2
+          continue rest
+        }
+      }
+    }
+    ['\\', ch, .. rest] => {
+      // Unknown escape - keep literal character
+      content.write_char(ch)
       state.col += 2
       state.offset += 2
       continue rest
@@ -2186,7 +2654,57 @@ fn scan_decimal_digits(
 }
 
 ///|
-/// Scan identifier characters
+/// Check if character is a valid Unicode identifier start (simplified)
+/// Covers ASCII letters, underscore, dollar, and common Unicode letter ranges
+fn is_unicode_ident_start(ch : Char) -> Bool {
+  let code = ch.to_int()
+  // ASCII letters and common identifier characters
+  (ch >= 'a' && ch <= 'z') ||
+  (ch >= 'A' && ch <= 'Z') ||
+  ch == '_' ||
+  ch == '$' ||
+  // Latin Extended-A, Extended-B (0x0100-0x024F)
+  (code >= 0x0100 && code <= 0x024F) ||
+  // Greek and Coptic (0x0370-0x03FF)
+  (code >= 0x0370 && code <= 0x03FF) ||
+  // Cyrillic (0x0400-0x04FF)
+  (code >= 0x0400 && code <= 0x04FF) ||
+  // Armenian (0x0530-0x058F)
+  (code >= 0x0530 && code <= 0x058F) ||
+  // Hebrew (0x0590-0x05FF)
+  (code >= 0x0590 && code <= 0x05FF) ||
+  // Arabic (0x0600-0x06FF)
+  (code >= 0x0600 && code <= 0x06FF) ||
+  // Devanagari (0x0900-0x097F)
+  (code >= 0x0900 && code <= 0x097F) ||
+  // Thai (0x0E00-0x0E7F)
+  (code >= 0x0E00 && code <= 0x0E7F) ||
+  // Hangul Jamo (0x1100-0x11FF)
+  (code >= 0x1100 && code <= 0x11FF) ||
+  // CJK Unified Ideographs (0x4E00-0x9FFF)
+  (code >= 0x4E00 && code <= 0x9FFF) ||
+  // Hiragana (0x3040-0x309F)
+  (code >= 0x3040 && code <= 0x309F) ||
+  // Katakana (0x30A0-0x30FF)
+  (code >= 0x30A0 && code <= 0x30FF) ||
+  // Hangul Syllables (0xAC00-0xD7AF)
+  (code >= 0xAC00 && code <= 0xD7AF) ||
+  // Other common letter ranges
+  (code >= 0x00C0 && code <= 0x00FF && code != 0x00D7 && code != 0x00F7) // Latin-1 Supplement letters
+}
+
+///|
+/// Check if character is a valid Unicode identifier continue (simplified)
+fn is_unicode_ident_continue(ch : Char) -> Bool {
+  // Identifier start characters plus digits and some combining marks
+  is_unicode_ident_start(ch) ||
+  (ch >= '0' && ch <= '9') ||
+  ch == '\u{200C}' || // Zero Width Non-Joiner
+  ch == '\u{200D}' // Zero Width Joiner
+}
+
+///|
+/// Scan identifier characters (including Unicode)
 fn scan_ident_chars(
   code : StringView,
   state : ScanState,
@@ -2194,6 +2712,12 @@ fn scan_ident_chars(
 ) -> StringView {
   loop code {
     ['a'..='z' | 'A'..='Z' | '0'..='9' | '_' | '$' as ch, .. rest] => {
+      ident.write_char(ch)
+      state.col += 1
+      state.offset += 1
+      continue rest
+    }
+    [ch, .. rest] if is_unicode_ident_continue(ch) => {
       ident.write_char(ch)
       state.col += 1
       state.offset += 1

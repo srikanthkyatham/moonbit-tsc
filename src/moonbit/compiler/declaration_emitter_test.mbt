@@ -4,8 +4,7 @@
 /// Test: Basic function declaration
 test "emit function declaration" {
   let source = "function add(a: number, b: number): number { return a + b; }"
-  let scanner = Scanner::new(source, "test.ts")
-  let tokens = scan_all(scanner)
+  let tokens = scan_all_v2(source, "test.ts")
   match parse_source_file(tokens, "test.ts") {
     Ok(source_file) => {
       let ctx = DeclarationEmitterContext::default()
@@ -32,8 +31,7 @@ test "emit function declaration" {
 /// Test: Interface declaration
 test "emit interface declaration" {
   let source = "interface Point { x: number; y: number; }"
-  let scanner = Scanner::new(source, "test.ts")
-  let tokens = scan_all(scanner)
+  let tokens = scan_all_v2(source, "test.ts")
   match parse_source_file(tokens, "test.ts") {
     Ok(source_file) => {
       let ctx = DeclarationEmitterContext::default()
@@ -60,8 +58,7 @@ test "emit interface declaration" {
 /// Test: Type alias declaration
 test "emit type alias" {
   let source = "type Status = \"active\" | \"inactive\" | \"pending\";"
-  let scanner = Scanner::new(source, "test.ts")
-  let tokens = scan_all(scanner)
+  let tokens = scan_all_v2(source, "test.ts")
   match parse_source_file(tokens, "test.ts") {
     Ok(source_file) => {
       let ctx = DeclarationEmitterContext::default()
@@ -87,8 +84,7 @@ test "emit type alias" {
 /// Test: Enum declaration
 test "emit enum declaration" {
   let source = "enum Color { Red, Green, Blue }"
-  let scanner = Scanner::new(source, "test.ts")
-  let tokens = scan_all(scanner)
+  let tokens = scan_all_v2(source, "test.ts")
   match parse_source_file(tokens, "test.ts") {
     Ok(source_file) => {
       let ctx = DeclarationEmitterContext::default()
@@ -116,8 +112,7 @@ test "emit enum declaration" {
 /// Test: Class declaration
 test "emit class declaration" {
   let source = "class Person { name: string; age: number; constructor(name: string, age: number) {} greet(): string { return ''; } }"
-  let scanner = Scanner::new(source, "test.ts")
-  let tokens = scan_all(scanner)
+  let tokens = scan_all_v2(source, "test.ts")
   match parse_source_file(tokens, "test.ts") {
     Ok(source_file) => {
       let ctx = DeclarationEmitterContext::default()
@@ -146,8 +141,7 @@ test "emit class declaration" {
 /// Test: Variable declaration
 test "emit variable declaration" {
   let source = "const message: string = 'hello';"
-  let scanner = Scanner::new(source, "test.ts")
-  let tokens = scan_all(scanner)
+  let tokens = scan_all_v2(source, "test.ts")
   match parse_source_file(tokens, "test.ts") {
     Ok(source_file) => {
       let ctx = DeclarationEmitterContext::default()
@@ -173,8 +167,7 @@ test "emit variable declaration" {
 /// Test: Generic function
 test "emit generic function" {
   let source = "function identity<T>(value: T): T { return value; }"
-  let scanner = Scanner::new(source, "test.ts")
-  let tokens = scan_all(scanner)
+  let tokens = scan_all_v2(source, "test.ts")
   match parse_source_file(tokens, "test.ts") {
     Ok(source_file) => {
       let ctx = DeclarationEmitterContext::default()
@@ -202,8 +195,7 @@ test "emit generic function" {
 /// Test: Generic interface
 test "emit generic interface" {
   let source = "interface Result<T, E> { value: T; error: E; }"
-  let scanner = Scanner::new(source, "test.ts")
-  let tokens = scan_all(scanner)
+  let tokens = scan_all_v2(source, "test.ts")
   match parse_source_file(tokens, "test.ts") {
     Ok(source_file) => {
       let ctx = DeclarationEmitterContext::default()
@@ -231,8 +223,7 @@ test "emit generic interface" {
 /// Test: Multiple declarations
 test "emit multiple declarations" {
   let source = "interface User { id: number; name: string; }\nfunction getUser(id: number): User { return null; }\ntype UserID = number;"
-  let scanner = Scanner::new(source, "test.ts")
-  let tokens = scan_all(scanner)
+  let tokens = scan_all_v2(source, "test.ts")
   match parse_source_file(tokens, "test.ts") {
     Ok(source_file) => {
       let ctx = DeclarationEmitterContext::default()
@@ -259,8 +250,7 @@ test "emit multiple declarations" {
 /// Test: Optional parameters
 test "emit optional parameters" {
   let source = "function greet(name: string, greeting?: string): string { return ''; }"
-  let scanner = Scanner::new(source, "test.ts")
-  let tokens = scan_all(scanner)
+  let tokens = scan_all_v2(source, "test.ts")
   match parse_source_file(tokens, "test.ts") {
     Ok(source_file) => {
       let ctx = DeclarationEmitterContext::default()
@@ -286,8 +276,7 @@ test "emit optional parameters" {
 /// Test: Arrow function type
 test "emit arrow function type" {
   let source = "type Handler = (event: string) => void;"
-  let scanner = Scanner::new(source, "test.ts")
-  let tokens = scan_all(scanner)
+  let tokens = scan_all_v2(source, "test.ts")
   match parse_source_file(tokens, "test.ts") {
     Ok(source_file) => {
       let ctx = DeclarationEmitterContext::default()
@@ -314,8 +303,7 @@ test "emit arrow function type" {
 /// Test: Array types
 test "emit array types" {
   let source = "function process(items: string[]): number[] { return []; }"
-  let scanner = Scanner::new(source, "test.ts")
-  let tokens = scan_all(scanner)
+  let tokens = scan_all_v2(source, "test.ts")
   match parse_source_file(tokens, "test.ts") {
     Ok(source_file) => {
       let ctx = DeclarationEmitterContext::default()
@@ -341,8 +329,7 @@ test "emit array types" {
 /// Test: Comprehensive declaration file
 test "emit comprehensive declaration file" {
   let source = "interface Config { host: string; port: number; }\nclass Server { config: Config; start(): void {} stop(): void {} }\nenum Status { Running, Stopped }\nfunction createServer(config: Config): Server { return null; }"
-  let scanner = Scanner::new(source, "test.ts")
-  let tokens = scan_all(scanner)
+  let tokens = scan_all_v2(source, "test.ts")
   match parse_source_file(tokens, "test.ts") {
     Ok(source_file) => {
       let ctx = DeclarationEmitterContext::default()
@@ -376,8 +363,7 @@ test "emit comprehensive declaration file" {
 /// Test: Interface with extends clause
 test "emit interface with extends" {
   let source = "interface Base { id: number; }\ninterface Extended extends Base { name: string; }"
-  let scanner = Scanner::new(source, "test.ts")
-  let tokens = scan_all(scanner)
+  let tokens = scan_all_v2(source, "test.ts")
   match parse_source_file(tokens, "test.ts") {
     Ok(source_file) => {
       let ctx = DeclarationEmitterContext::default()
@@ -403,8 +389,7 @@ test "emit interface with extends" {
 /// Test: Const enum
 test "emit const enum" {
   let source = "const enum Direction { Up, Down, Left, Right }"
-  let scanner = Scanner::new(source, "test.ts")
-  let tokens = scan_all(scanner)
+  let tokens = scan_all_v2(source, "test.ts")
   match parse_source_file(tokens, "test.ts") {
     Ok(source_file) => {
       let ctx = DeclarationEmitterContext::default()
@@ -431,8 +416,7 @@ test "emit const enum" {
 /// Test: Enum with initializers
 test "emit enum with initializers" {
   let source = "enum HttpStatus { OK = 200, NotFound = 404, ServerError = 500 }"
-  let scanner = Scanner::new(source, "test.ts")
-  let tokens = scan_all(scanner)
+  let tokens = scan_all_v2(source, "test.ts")
   match parse_source_file(tokens, "test.ts") {
     Ok(source_file) => {
       let ctx = DeclarationEmitterContext::default()
@@ -460,8 +444,7 @@ test "emit enum with initializers" {
 /// Test: Export default function
 test "emit export default function" {
   let source = "export default function greet(name: string): string { return 'Hello ' + name; }"
-  let scanner = Scanner::new(source, "test.ts")
-  let tokens = scan_all(scanner)
+  let tokens = scan_all_v2(source, "test.ts")
   match parse_source_file(tokens, "test.ts") {
     Ok(source_file) => {
       let ctx = DeclarationEmitterContext::default()
@@ -489,8 +472,7 @@ test "emit export default function" {
 /// Test: Export default class
 test "emit export default class" {
   let source = "export default class User { name: string; age: number; constructor(name: string, age: number) {} }"
-  let scanner = Scanner::new(source, "test.ts")
-  let tokens = scan_all(scanner)
+  let tokens = scan_all_v2(source, "test.ts")
   match parse_source_file(tokens, "test.ts") {
     Ok(source_file) => {
       let ctx = DeclarationEmitterContext::default()
@@ -518,8 +500,7 @@ test "emit export default class" {
 /// Test: Readonly modifiers
 test "emit readonly modifiers" {
   let source = "interface Config { readonly host: string; readonly port: number; }"
-  let scanner = Scanner::new(source, "test.ts")
-  let tokens = scan_all(scanner)
+  let tokens = scan_all_v2(source, "test.ts")
   match parse_source_file(tokens, "test.ts") {
     Ok(source_file) => {
       let ctx = DeclarationEmitterContext::default()
@@ -545,8 +526,7 @@ test "emit readonly modifiers" {
 /// Test: Static class members
 test "emit static class members" {
   let source = "class MathUtils { static PI: number; static abs(x: number): number { return x; } }"
-  let scanner = Scanner::new(source, "test.ts")
-  let tokens = scan_all(scanner)
+  let tokens = scan_all_v2(source, "test.ts")
   match parse_source_file(tokens, "test.ts") {
     Ok(source_file) => {
       let ctx = DeclarationEmitterContext::default()
@@ -572,8 +552,7 @@ test "emit static class members" {
 /// Test: Async functions
 test "emit async functions" {
   let source = "async function fetchData(url: string): Promise<string> { return ''; }"
-  let scanner = Scanner::new(source, "test.ts")
-  let tokens = scan_all(scanner)
+  let tokens = scan_all_v2(source, "test.ts")
   match parse_source_file(tokens, "test.ts") {
     Ok(source_file) => {
       let ctx = DeclarationEmitterContext::default()
@@ -600,8 +579,7 @@ test "emit async functions" {
 /// Test: Tuple types
 test "emit tuple types" {
   let source = "type Point = [number, number]; type NamedPoint = [x: number, y: number];"
-  let scanner = Scanner::new(source, "test.ts")
-  let tokens = scan_all(scanner)
+  let tokens = scan_all_v2(source, "test.ts")
   match parse_source_file(tokens, "test.ts") {
     Ok(source_file) => {
       let ctx = DeclarationEmitterContext::default()
@@ -628,8 +606,7 @@ test "emit tuple types" {
 /// Test: Intersection types
 test "emit intersection types" {
   let source = "type Named = { name: string }; type Aged = { age: number }; type Person = Named & Aged;"
-  let scanner = Scanner::new(source, "test.ts")
-  let tokens = scan_all(scanner)
+  let tokens = scan_all_v2(source, "test.ts")
   match parse_source_file(tokens, "test.ts") {
     Ok(source_file) => {
       let ctx = DeclarationEmitterContext::default()
@@ -657,8 +634,7 @@ test "emit intersection types" {
 /// Test: Index signatures
 test "emit index signatures" {
   let source = "interface StringMap { [key: string]: string; } interface NumberMap { [index: number]: number; }"
-  let scanner = Scanner::new(source, "test.ts")
-  let tokens = scan_all(scanner)
+  let tokens = scan_all_v2(source, "test.ts")
   match parse_source_file(tokens, "test.ts") {
     Ok(source_file) => {
       let ctx = DeclarationEmitterContext::default()
@@ -686,8 +662,7 @@ test "emit index signatures" {
 /// Test: Indexed access types
 test "emit indexed access types" {
   let source = "type PersonName = Person['name']; type ArrayElement = Array[number]; type TypeAtKey<T, K> = T[K];"
-  let scanner = Scanner::new(source, "test.ts")
-  let tokens = scan_all(scanner)
+  let tokens = scan_all_v2(source, "test.ts")
   match parse_source_file(tokens, "test.ts") {
     Ok(source_file) => {
       let ctx = DeclarationEmitterContext::default()
@@ -714,8 +689,7 @@ test "emit indexed access types" {
 /// Test: Conditional types
 test "emit conditional types" {
   let source = "type IsString<T> = T extends string ? string : number; type NonNullable<T> = T extends number ? string : T;"
-  let scanner = Scanner::new(source, "test.ts")
-  let tokens = scan_all(scanner)
+  let tokens = scan_all_v2(source, "test.ts")
   match parse_source_file(tokens, "test.ts") {
     Ok(source_file) => {
       let ctx = DeclarationEmitterContext::default()
@@ -742,8 +716,7 @@ test "emit conditional types" {
 /// Test: Mapped types
 test "emit mapped types" {
   let source = "type MyMapped<K> = { [P in K]: string }; type AnotherMapped<T, K> = { [P in K]: T };"
-  let scanner = Scanner::new(source, "test.ts")
-  let tokens = scan_all(scanner)
+  let tokens = scan_all_v2(source, "test.ts")
   match parse_source_file(tokens, "test.ts") {
     Ok(source_file) => {
       let ctx = DeclarationEmitterContext::default()
@@ -769,8 +742,7 @@ test "emit mapped types" {
 /// Test: Type assertions with 'as' keyword
 test "emit as expressions" {
   let source = "const value = getValue() as string; const num = getNum() as number;"
-  let scanner = Scanner::new(source, "test.ts")
-  let tokens = scan_all(scanner)
+  let tokens = scan_all_v2(source, "test.ts")
   match parse_source_file(tokens, "test.ts") {
     Ok(source_file) => {
       let ctx = DeclarationEmitterContext::default()
@@ -796,8 +768,7 @@ test "emit as expressions" {
 /// Test: Type assertions with angle brackets
 test "emit type assertion expressions" {
   let source = "const value = <string>getValue(); const num = <number>getNum();"
-  let scanner = Scanner::new(source, "test.ts")
-  let tokens = scan_all(scanner)
+  let tokens = scan_all_v2(source, "test.ts")
   match parse_source_file(tokens, "test.ts") {
     Ok(source_file) => {
       let ctx = DeclarationEmitterContext::default()
@@ -823,8 +794,7 @@ test "emit type assertion expressions" {
 /// Test: Non-null assertions
 test "emit non-null expressions" {
   let source = "const value = getValue()!; const prop = obj.property!;"
-  let scanner = Scanner::new(source, "test.ts")
-  let tokens = scan_all(scanner)
+  let tokens = scan_all_v2(source, "test.ts")
   match parse_source_file(tokens, "test.ts") {
     Ok(source_file) => {
       let ctx = DeclarationEmitterContext::default()

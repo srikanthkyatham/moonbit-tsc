@@ -13,8 +13,7 @@
 ///|
 /// Helper function to parse, bind, and check source code
 fn parse_bind_check(source : String) -> @compiler.CheckResult {
-  let scanner = @compiler.Scanner::new(source, "test.ts")
-  let tokens = @compiler.scan_all(scanner)
+  let tokens = @compiler.scan_all_v2(source, "test.ts")
   match @compiler.parse_source_file(tokens, "test.ts") {
     Ok(source_file) =>
       match @compiler.bind_source_file(source_file) {

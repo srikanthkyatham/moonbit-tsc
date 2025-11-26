@@ -3,8 +3,7 @@
 ///|
 /// Helper to parse source and get tokens for source map tests
 fn get_tokens_for_sourcemap(source : String) -> Array[Token] {
-  let scanner = Scanner::new(source, "test.ts")
-  scan_all(scanner)
+  scan_all_v2(source, "test.ts")
 }
 
 ///|

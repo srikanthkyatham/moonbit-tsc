@@ -4,8 +4,7 @@
 ///|
 /// Helper function to create tokens from source
 fn jsdoc_tokens_from_source(source : String) -> Array[@compiler.Token] {
-  let scanner = @compiler.Scanner::new(source, "test.ts")
-  @compiler.scan_all(scanner)
+  @compiler.scan_all_v2(source, "test.ts")
 }
 
 // ============================================================================

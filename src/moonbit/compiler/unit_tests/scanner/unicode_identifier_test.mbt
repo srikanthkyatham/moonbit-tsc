@@ -3,8 +3,7 @@
 
 ///|
 test "scan unicode identifier - greek letters" {
-  let scanner = @compiler.Scanner::new("αβγδ", "test.ts")
-  let tokens = @compiler.scan_all(scanner)
+  let tokens = @compiler.scan_all_v2("αβγδ", "test.ts")
   assert_eq(tokens.length(), 2) // identifier + EOF
   match tokens[0] {
     @compiler.Identifier(name, _) => assert_eq(name, "αβγδ")
@@ -14,8 +13,7 @@ test "scan unicode identifier - greek letters" {
 
 ///|
 test "scan unicode identifier - cyrillic letters" {
-  let scanner = @compiler.Scanner::new("привет", "test.ts")
-  let tokens = @compiler.scan_all(scanner)
+  let tokens = @compiler.scan_all_v2("привет", "test.ts")
   assert_eq(tokens.length(), 2) // identifier + EOF
   match tokens[0] {
     @compiler.Identifier(name, _) => assert_eq(name, "привет")
@@ -25,8 +23,7 @@ test "scan unicode identifier - cyrillic letters" {
 
 ///|
 test "scan unicode identifier - chinese characters" {
-  let scanner = @compiler.Scanner::new("你好世界", "test.ts")
-  let tokens = @compiler.scan_all(scanner)
+  let tokens = @compiler.scan_all_v2("你好世界", "test.ts")
   assert_eq(tokens.length(), 2) // identifier + EOF
   match tokens[0] {
     @compiler.Identifier(name, _) => assert_eq(name, "你好世界")
@@ -36,8 +33,7 @@ test "scan unicode identifier - chinese characters" {
 
 ///|
 test "scan unicode identifier - japanese hiragana" {
-  let scanner = @compiler.Scanner::new("こんにちは", "test.ts")
-  let tokens = @compiler.scan_all(scanner)
+  let tokens = @compiler.scan_all_v2("こんにちは", "test.ts")
   assert_eq(tokens.length(), 2) // identifier + EOF
   match tokens[0] {
     @compiler.Identifier(name, _) => assert_eq(name, "こんにちは")
@@ -47,8 +43,7 @@ test "scan unicode identifier - japanese hiragana" {
 
 ///|
 test "scan unicode identifier - mixed with ascii" {
-  let scanner = @compiler.Scanner::new("myVar_αβ123", "test.ts")
-  let tokens = @compiler.scan_all(scanner)
+  let tokens = @compiler.scan_all_v2("myVar_αβ123", "test.ts")
   assert_eq(tokens.length(), 2) // identifier + EOF
   match tokens[0] {
     @compiler.Identifier(name, _) => assert_eq(name, "myVar_αβ123")
@@ -58,8 +53,7 @@ test "scan unicode identifier - mixed with ascii" {
 
 ///|
 test "scan unicode identifier - korean hangul" {
-  let scanner = @compiler.Scanner::new("안녕하세요", "test.ts")
-  let tokens = @compiler.scan_all(scanner)
+  let tokens = @compiler.scan_all_v2("안녕하세요", "test.ts")
   assert_eq(tokens.length(), 2) // identifier + EOF
   match tokens[0] {
     @compiler.Identifier(name, _) => assert_eq(name, "안녕하세요")
@@ -69,8 +63,7 @@ test "scan unicode identifier - korean hangul" {
 
 ///|
 test "scan unicode identifier - arabic letters" {
-  let scanner = @compiler.Scanner::new("مرحبا", "test.ts")
-  let tokens = @compiler.scan_all(scanner)
+  let tokens = @compiler.scan_all_v2("مرحبا", "test.ts")
   assert_eq(tokens.length(), 2) // identifier + EOF
   match tokens[0] {
     @compiler.Identifier(name, _) => assert_eq(name, "مرحبا")
@@ -80,8 +73,7 @@ test "scan unicode identifier - arabic letters" {
 
 ///|
 test "scan unicode identifier - hebrew letters" {
-  let scanner = @compiler.Scanner::new("שלום", "test.ts")
-  let tokens = @compiler.scan_all(scanner)
+  let tokens = @compiler.scan_all_v2("שלום", "test.ts")
   assert_eq(tokens.length(), 2) // identifier + EOF
   match tokens[0] {
     @compiler.Identifier(name, _) => assert_eq(name, "שלום")
@@ -91,8 +83,7 @@ test "scan unicode identifier - hebrew letters" {
 
 ///|
 test "scan unicode identifier - variable declaration" {
-  let scanner = @compiler.Scanner::new("const μ = 42;", "test.ts")
-  let tokens = @compiler.scan_all(scanner)
+  let tokens = @compiler.scan_all_v2("const μ = 42;", "test.ts")
   // const, identifier, =, number, ;, EOF
   assert_eq(tokens.length(), 6)
   match tokens[1] {
@@ -103,8 +94,7 @@ test "scan unicode identifier - variable declaration" {
 
 ///|
 test "scan unicode identifier - function name" {
-  let scanner = @compiler.Scanner::new("function 计算() { }", "test.ts")
-  let tokens = @compiler.scan_all(scanner)
+  let tokens = @compiler.scan_all_v2("function 计算() { }", "test.ts")
   // function, identifier, (, ), {, }, EOF
   assert_eq(tokens.length(), 7)
   match tokens[1] {
@@ -115,8 +105,7 @@ test "scan unicode identifier - function name" {
 
 ///|
 test "scan unicode identifier - thai characters" {
-  let scanner = @compiler.Scanner::new("สวัสดี", "test.ts")
-  let tokens = @compiler.scan_all(scanner)
+  let tokens = @compiler.scan_all_v2("สวัสดี", "test.ts")
   assert_eq(tokens.length(), 2) // identifier + EOF
   match tokens[0] {
     @compiler.Identifier(name, _) => assert_eq(name, "สวัสดี")
@@ -126,8 +115,7 @@ test "scan unicode identifier - thai characters" {
 
 ///|
 test "scan unicode identifier - devanagari" {
-  let scanner = @compiler.Scanner::new("नमस्ते", "test.ts")
-  let tokens = @compiler.scan_all(scanner)
+  let tokens = @compiler.scan_all_v2("नमस्ते", "test.ts")
   assert_eq(tokens.length(), 2) // identifier + EOF
   match tokens[0] {
     @compiler.Identifier(name, _) => assert_eq(name, "नमस्ते")
@@ -138,8 +126,7 @@ test "scan unicode identifier - devanagari" {
 ///|
 test "scan unicode identifier with unicode digits" {
   // Test identifiers that include Unicode digits after start
-  let scanner = @compiler.Scanner::new("var١٢٣", "test.ts")
-  let tokens = @compiler.scan_all(scanner)
+  let tokens = @compiler.scan_all_v2("var١٢٣", "test.ts")
   assert_eq(tokens.length(), 2) // identifier + EOF
   match tokens[0] {
     @compiler.Identifier(name, _) => assert_eq(name, "var١٢٣")
@@ -149,8 +136,7 @@ test "scan unicode identifier with unicode digits" {
 
 ///|
 test "scan multiple unicode identifiers" {
-  let scanner = @compiler.Scanner::new("α + β * γ", "test.ts")
-  let tokens = @compiler.scan_all(scanner)
+  let tokens = @compiler.scan_all_v2("α + β * γ", "test.ts")
   // α, +, β, *, γ, EOF
   assert_eq(tokens.length(), 6)
   match tokens[0] {

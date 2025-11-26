@@ -4,8 +4,7 @@
 ///|
 /// Helper function to parse source string to AST
 fn parse_from_source(source : String, file_path : String) -> Node? {
-  let scanner = Scanner::new(source, file_path)
-  let tokens = scan_all(scanner)
+  let tokens = scan_all_v2(source, file_path)
   match parse_source_file(tokens, file_path) {
     Ok(sf) => Some(Node::SourceFile(sf))
     Err(_) => None

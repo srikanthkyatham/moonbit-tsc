@@ -5,8 +5,7 @@
 /// Type check TypeScript source code
 /// Returns a TypedFile on success or diagnostics on failure
 pub fn type_check(source : String, file_path : String) -> CheckResult {
-  let scanner = Scanner::new(source, file_path)
-  let tokens = scan_all(scanner)
+  let tokens = scan_all_v2(source, file_path)
   match parse_source_file(tokens, file_path) {
     Ok(source_file) =>
       match bind_source_file(source_file) {
@@ -24,8 +23,7 @@ pub fn type_check_with_all_diagnostics(
   source : String,
   file_path : String,
 ) -> (TypedFile?, Array[Diagnostic]) {
-  let scanner = Scanner::new(source, file_path)
-  let tokens = scan_all(scanner)
+  let tokens = scan_all_v2(source, file_path)
   match parse_source_file(tokens, file_path) {
     Ok(source_file) =>
       match bind_source_file(source_file) {
