@@ -20,9 +20,26 @@ pub fn tokenize_v2_simple(source : String, file_path : String) -> Array[Token] {
 }
 
 ///|
+/// Scan all tokens with JSX support - V2 API
+/// Handles JSX elements, text content, and expressions
+pub fn scan_all_v2_jsx(source : String, file_path : String) -> Array[Token] {
+  tokenize_with_jsx_support(source, file_path)
+}
+
+///|
+/// JSX scanner mode
+priv enum JsxModeV2 {
+  Standard // Normal TypeScript/JavaScript
+  JsxTag // Inside JSX tag (scanning attributes)
+  JsxText // JSX text content (between tags)
+  JsxExpression // Inside JSX expression {expr}
+}
+
+///|
 /// Tokenize with proper template interpolation and regex handling
 /// Produces TemplateHead, TemplateMiddle, TemplateTail for templates with ${...}
 /// Produces RegExpLiteral when / follows an operator or keyword (vs division)
+/// Also handles JSDoc comments, hashbang, and comment directives
 fn tokenize_with_template_tracking(
   source : String,
   file_path : String,
@@ -44,6 +61,21 @@ fn tokenize_with_template_tracking(
       Position::new(start_line, start_col, start_offset),
       Position::new(state.line, state.col, state.offset),
     )
+  }
+
+  // Check for hashbang at file start
+  let (hashbang_token, code_after_hashbang) = scan_hashbang_v2(
+    code,
+    state,
+    file_path,
+  )
+  match hashbang_token {
+    Some(token) => {
+      tokens.push(token)
+      prev_token = Some(token)
+      code = code_after_hashbang
+    }
+    None => ()
   }
 
   while true {
@@ -79,6 +111,24 @@ fn tokenize_with_template_tracking(
       continue
     }
 
+    // Skip whitespace and check for special comments (JSDoc, directives)
+    let (code_after_ws, special_token) = skip_whitespace_with_special_comments_v2(
+      code,
+      state,
+      file_path,
+    )
+    code = code_after_ws
+
+    // If we found a special comment token, add it and continue
+    match special_token {
+      Some(token) => {
+        tokens.push(token)
+        prev_token = Some(token)
+        continue
+      }
+      None => ()
+    }
+
     // Scan single token with context for regex disambiguation
     let (token, rest) = scan_single_token_with_context_v2(
       code,
@@ -101,6 +151,453 @@ fn tokenize_with_template_tracking(
     prev_token = Some(token)
   }
   tokens
+}
+
+///|
+/// Tokenize with JSX support
+/// Handles JSX elements, text, expressions, plus templates and regex
+fn tokenize_with_jsx_support(
+  source : String,
+  file_path : String,
+) -> Array[Token] {
+  let tokens : Array[Token] = []
+  let state : ScanState = { line: 1, col: 1, offset: 0 }
+  let mut template_depth = 0
+  let mut scan_template_continuation = false
+  let mut code : StringView = source[:]
+  let mut prev_token : Token? = None
+  let mut jsx_mode : JsxModeV2 = JsxModeV2::Standard
+  let jsx_mode_stack : Array[JsxModeV2] = []
+
+  fn make_loc(
+    start_line : Int,
+    start_col : Int,
+    start_offset : Int,
+  ) -> SourceLocation {
+    SourceLocation::new(
+      file_path,
+      Position::new(start_line, start_col, start_offset),
+      Position::new(state.line, state.col, state.offset),
+    )
+  }
+
+  fn push_jsx_mode(new_mode : JsxModeV2) -> Unit {
+    jsx_mode_stack.push(jsx_mode)
+    jsx_mode = new_mode
+  }
+
+  fn pop_jsx_mode() -> Unit {
+    match jsx_mode_stack.pop() {
+      Some(mode) => jsx_mode = mode
+      None => jsx_mode = JsxModeV2::Standard
+    }
+  }
+
+  // Check for hashbang at file start
+  let (hashbang_token, code_after_hashbang) = scan_hashbang_v2(
+    code,
+    state,
+    file_path,
+  )
+  match hashbang_token {
+    Some(token) => {
+      tokens.push(token)
+      prev_token = Some(token)
+      code = code_after_hashbang
+    }
+    None => ()
+  }
+
+  while true {
+    // Handle template continuation after CloseBrace
+    if scan_template_continuation {
+      scan_template_continuation = false
+      let start_line = state.line
+      let start_col = state.col
+      let start_offset = state.offset
+      let content = StringBuilder::new()
+      let result = scan_template_continuation_v2(code, state, content)
+      match result {
+        TemplateScanResultV2::Complete(rest) => {
+          let loc = make_loc(start_line, start_col, start_offset)
+          let token = TemplateTail(content.to_string(), loc)
+          tokens.push(token)
+          prev_token = Some(token)
+          template_depth -= 1
+          code = rest
+        }
+        TemplateScanResultV2::Middle(rest) => {
+          let loc = make_loc(start_line, start_col, start_offset)
+          let token = TemplateMiddle(content.to_string(), loc)
+          tokens.push(token)
+          prev_token = Some(token)
+          code = rest
+        }
+        TemplateScanResultV2::Head(_) =>
+          abort("Unexpected Head result from template continuation")
+      }
+      continue
+    }
+
+    // Mode-specific scanning
+    match jsx_mode {
+      JsxModeV2::Standard => {
+        // Skip whitespace and check for special comments (JSDoc, directives)
+        let (code_after_ws, special_token) = skip_whitespace_with_special_comments_v2(
+          code,
+          state,
+          file_path,
+        )
+        code = code_after_ws
+
+        // If we found a special comment token, add it and continue
+        match special_token {
+          Some(token) => {
+            tokens.push(token)
+            prev_token = Some(token)
+            continue
+          }
+          None => ()
+        }
+
+        // Check for JSX start (<)
+        match code_after_ws {
+          ['<', '/', .. rest] => {
+            // Closing tag </
+            let start_line = state.line
+            let start_col = state.col
+            let start_offset = state.offset
+            state.col += 2
+            state.offset += 2
+            let loc = make_loc(start_line, start_col, start_offset)
+            let token = LessThanSlash(loc)
+            tokens.push(token)
+            prev_token = Some(token)
+            code = rest
+            push_jsx_mode(JsxModeV2::JsxTag)
+          }
+          ['<', ch, ..] if is_jsx_tag_start(ch) => {
+            // Opening tag <
+            let start_line = state.line
+            let start_col = state.col
+            let start_offset = state.offset
+            state.col += 1
+            state.offset += 1
+            let loc = make_loc(start_line, start_col, start_offset)
+            let token = JsxTagOpen(loc)
+            tokens.push(token)
+            prev_token = Some(token)
+            code = try! code_after_ws[1:]
+            push_jsx_mode(JsxModeV2::JsxTag)
+          }
+          _ => {
+            // Regular token scanning with context
+            let (token, rest) = scan_single_token_with_context_v2(
+              code,
+              state,
+              file_path,
+              prev_token,
+            )
+            tokens.push(token)
+            code = rest
+            // Track template depth
+            match token {
+              TemplateHead(_, _) => template_depth += 1
+              CloseBrace(_) if template_depth > 0 =>
+                scan_template_continuation = true
+              EOF(_) => break
+              _ => ()
+            }
+            prev_token = Some(token)
+          }
+        }
+      }
+      JsxModeV2::JsxTag => {
+        // Inside JSX tag, scanning tag name and attributes
+        let code_after_ws = skip_whitespace_v2(code, state)
+        match code_after_ws {
+          [] => {
+            let loc = make_loc(state.line, state.col, state.offset)
+            tokens.push(EOF(loc))
+            break
+          }
+          ['/', '>', .. rest] => {
+            // Self-closing />
+            let start_line = state.line
+            let start_col = state.col
+            let start_offset = state.offset
+            state.col += 2
+            state.offset += 2
+            let loc = make_loc(start_line, start_col, start_offset)
+            let token = SlashGreaterThan(loc)
+            tokens.push(token)
+            prev_token = Some(token)
+            code = rest
+            pop_jsx_mode()
+          }
+          ['>', .. rest] => {
+            // Tag close >
+            let start_line = state.line
+            let start_col = state.col
+            let start_offset = state.offset
+            state.col += 1
+            state.offset += 1
+            let loc = make_loc(start_line, start_col, start_offset)
+            let token = JsxTagClose(loc)
+            tokens.push(token)
+            prev_token = Some(token)
+            code = rest
+            // After >, switch to JsxText mode
+            jsx_mode = JsxModeV2::JsxText
+          }
+          ['{', .. rest] => {
+            // Expression in attribute {expr}
+            let start_line = state.line
+            let start_col = state.col
+            let start_offset = state.offset
+            state.col += 1
+            state.offset += 1
+            let loc = make_loc(start_line, start_col, start_offset)
+            let token = JsxExpressionStart(loc)
+            tokens.push(token)
+            prev_token = Some(token)
+            code = rest
+            push_jsx_mode(JsxModeV2::JsxExpression)
+          }
+          ['=', .. rest] => {
+            let start_line = state.line
+            let start_col = state.col
+            let start_offset = state.offset
+            state.col += 1
+            state.offset += 1
+            let loc = make_loc(start_line, start_col, start_offset)
+            let token = Token::Equals(loc)
+            tokens.push(token)
+            prev_token = Some(token)
+            code = rest
+          }
+          ['"', .. rest] => {
+            // String attribute value
+            let start_line = state.line
+            let start_col = state.col
+            let start_offset = state.offset
+            state.col += 1
+            state.offset += 1
+            let content = StringBuilder::new()
+            let rest2 = scan_double_string(rest, state, content)
+            let loc = make_loc(start_line, start_col, start_offset)
+            let token = Token::StringLiteral(content.to_string(), loc)
+            tokens.push(token)
+            prev_token = Some(token)
+            code = rest2
+          }
+          ['\'', .. rest] => {
+            // Single-quoted attribute value
+            let start_line = state.line
+            let start_col = state.col
+            let start_offset = state.offset
+            state.col += 1
+            state.offset += 1
+            let content = StringBuilder::new()
+            let rest2 = scan_single_string(rest, state, content)
+            let loc = make_loc(start_line, start_col, start_offset)
+            let token = Token::StringLiteral(content.to_string(), loc)
+            tokens.push(token)
+            prev_token = Some(token)
+            code = rest2
+          }
+          _ => {
+            // Identifier (tag name or attribute name)
+            let (token, rest) = scan_jsx_identifier(code_after_ws, state, file_path)
+            tokens.push(token)
+            prev_token = Some(token)
+            code = rest
+          }
+        }
+      }
+      JsxModeV2::JsxText => {
+        // JSX text content between tags
+        match code {
+          [] => {
+            let loc = make_loc(state.line, state.col, state.offset)
+            tokens.push(EOF(loc))
+            break
+          }
+          ['<', '/', ..] => {
+            // Closing tag </
+            let start_line = state.line
+            let start_col = state.col
+            let start_offset = state.offset
+            state.col += 2
+            state.offset += 2
+            let loc = make_loc(start_line, start_col, start_offset)
+            let token = LessThanSlash(loc)
+            tokens.push(token)
+            prev_token = Some(token)
+            code = try! code[2:]
+            jsx_mode = JsxModeV2::JsxTag
+          }
+          ['<', ch, ..] if is_jsx_tag_start(ch) => {
+            // Nested opening tag
+            let start_line = state.line
+            let start_col = state.col
+            let start_offset = state.offset
+            state.col += 1
+            state.offset += 1
+            let loc = make_loc(start_line, start_col, start_offset)
+            let token = JsxTagOpen(loc)
+            tokens.push(token)
+            prev_token = Some(token)
+            code = try! code[1:]
+            push_jsx_mode(JsxModeV2::JsxTag)
+          }
+          ['{', .. rest] => {
+            // Expression {expr}
+            let start_line = state.line
+            let start_col = state.col
+            let start_offset = state.offset
+            state.col += 1
+            state.offset += 1
+            let loc = make_loc(start_line, start_col, start_offset)
+            let token = JsxExpressionStart(loc)
+            tokens.push(token)
+            prev_token = Some(token)
+            code = rest
+            push_jsx_mode(JsxModeV2::JsxExpression)
+          }
+          _ => {
+            // Scan text content
+            let (token, rest) = scan_jsx_text_v2(code, state, file_path)
+            tokens.push(token)
+            prev_token = Some(token)
+            code = rest
+          }
+        }
+      }
+      JsxModeV2::JsxExpression => {
+        // Inside JSX expression {expr}
+        let code_after_ws = skip_whitespace_v2(code, state)
+        match code_after_ws {
+          [] => {
+            let loc = make_loc(state.line, state.col, state.offset)
+            tokens.push(EOF(loc))
+            break
+          }
+          ['}', .. rest] => {
+            // End of expression
+            let start_line = state.line
+            let start_col = state.col
+            let start_offset = state.offset
+            state.col += 1
+            state.offset += 1
+            let loc = make_loc(start_line, start_col, start_offset)
+            let token = JsxExpressionEnd(loc)
+            tokens.push(token)
+            prev_token = Some(token)
+            code = rest
+            pop_jsx_mode()
+          }
+          _ => {
+            // Regular token inside expression
+            let (token, rest) = scan_single_token_with_context_v2(
+              code,
+              state,
+              file_path,
+              prev_token,
+            )
+            tokens.push(token)
+            code = rest
+            match token {
+              TemplateHead(_, _) => template_depth += 1
+              CloseBrace(_) if template_depth > 0 =>
+                scan_template_continuation = true
+              EOF(_) => break
+              _ => ()
+            }
+            prev_token = Some(token)
+          }
+        }
+      }
+    }
+  }
+  tokens
+}
+
+///|
+/// Check if character can start a JSX tag name
+fn is_jsx_tag_start(ch : Char) -> Bool {
+  (ch >= 'a' && ch <= 'z') ||
+  (ch >= 'A' && ch <= 'Z') ||
+  ch == '_' ||
+  ch == '$'
+}
+
+///|
+/// Scan JSX text content (between tags)
+fn scan_jsx_text_v2(
+  code : StringView,
+  state : ScanState,
+  file_path : String,
+) -> (Token, StringView) {
+  let start_line = state.line
+  let start_col = state.col
+  let start_offset = state.offset
+  let text = StringBuilder::new()
+
+  let rest = loop code {
+    [] as remaining => remaining
+    ['<' | '{', ..] as remaining => remaining // End of text
+    ['\n', .. rest] => {
+      text.write_char('\n')
+      state.line += 1
+      state.col = 1
+      state.offset += 1
+      continue rest
+    }
+    [ch, .. rest] => {
+      text.write_char(ch)
+      state.col += 1
+      state.offset += 1
+      continue rest
+    }
+  }
+
+  let loc = SourceLocation::new(
+    file_path,
+    Position::new(start_line, start_col, start_offset),
+    Position::new(state.line, state.col, state.offset),
+  )
+  (JsxText(text.to_string(), loc), rest)
+}
+
+///|
+/// Scan JSX identifier (tag name or attribute name, may contain -)
+fn scan_jsx_identifier(
+  code : StringView,
+  state : ScanState,
+  file_path : String,
+) -> (Token, StringView) {
+  let start_line = state.line
+  let start_col = state.col
+  let start_offset = state.offset
+  let ident = StringBuilder::new()
+
+  let rest = loop code {
+    ['a'..='z' | 'A'..='Z' | '0'..='9' | '_' | '$' | '-' as ch, .. rest] => {
+      ident.write_char(ch)
+      state.col += 1
+      state.offset += 1
+      continue rest
+    }
+    remaining => remaining
+  }
+
+  let loc = SourceLocation::new(
+    file_path,
+    Position::new(start_line, start_col, start_offset),
+    Position::new(state.line, state.col, state.offset),
+  )
+  (Identifier(ident.to_string(), loc), rest)
 }
 
 ///|
@@ -927,6 +1424,299 @@ fn skip_block_comment(
       continue rest
     }
     remaining => remaining // End of input (unterminated comment)
+  }
+}
+
+///|
+/// Check if code starts with JSDoc comment (/** but not /**/)
+fn is_jsdoc_start_v2(code : StringView) -> Bool {
+  match code {
+    [.. "/**", ch, ..] if ch != '/' => true
+    _ => false
+  }
+}
+
+///|
+/// Check if code starts with a comment directive (// @ts-* or /// <reference)
+fn is_comment_directive_start_v2(code : StringView) -> Bool {
+  match code {
+    // Triple-slash reference directive: /// <reference or /// <amd-
+    [.. "///", ' ', '<', ..] => true
+    [.. "///<", ..] => true
+    // @ts-* directives: // @ts-ignore, // @ts-expect-error, etc.
+    [.. "// @ts-", ..] => true
+    [.. "//@ts-", ..] => true
+    _ => false
+  }
+}
+
+///|
+/// Scan JSDoc comment /** ... */ and return token with content
+fn scan_jsdoc_comment_v2(
+  code : StringView,
+  state : ScanState,
+  file_path : String,
+) -> (Token, StringView) {
+  let start_line = state.line
+  let start_col = state.col
+  let start_offset = state.offset
+  let content = StringBuilder::new()
+
+  // Skip "/**"
+  state.col += 3
+  state.offset += 3
+
+  fn make_loc() -> SourceLocation {
+    SourceLocation::new(
+      file_path,
+      Position::new(start_line, start_col, start_offset),
+      Position::new(state.line, state.col, state.offset),
+    )
+  }
+
+  // Skip the opening /** and scan content
+  let rest = loop code {
+    // Skip opening /**
+    [.. "/**", .. rest] => continue rest
+    // End of JSDoc
+    [.. "*/", .. rest] => {
+      state.col += 2
+      state.offset += 2
+      rest
+    }
+    ['\n', .. rest] => {
+      content.write_char('\n')
+      state.line += 1
+      state.col = 1
+      state.offset += 1
+      continue rest
+    }
+    [ch, .. rest] => {
+      content.write_char(ch)
+      state.col += 1
+      state.offset += 1
+      continue rest
+    }
+    [] as remaining => remaining // Unterminated
+  }
+
+  (JSDocComment(content.to_string(), make_loc()), rest)
+}
+
+///|
+/// Scan comment directive (// @ts-* or /// <reference) and return token
+fn scan_comment_directive_v2(
+  code : StringView,
+  state : ScanState,
+  file_path : String,
+) -> (Token, StringView) {
+  let start_line = state.line
+  let start_col = state.col
+  let start_offset = state.offset
+
+  fn make_loc() -> SourceLocation {
+    SourceLocation::new(
+      file_path,
+      Position::new(start_line, start_col, start_offset),
+      Position::new(state.line, state.col, state.offset),
+    )
+  }
+
+  // Check for triple-slash directive first
+  match code {
+    [.. "///", .. rest] => {
+      state.col += 3
+      state.offset += 3
+      // Scan rest of line as content
+      let content = StringBuilder::new()
+      let rest2 = loop rest {
+        ['\n', ..] as remaining => remaining
+        [ch, .. rest3] => {
+          content.write_char(ch)
+          state.col += 1
+          state.offset += 1
+          continue rest3
+        }
+        [] as remaining => remaining
+      }
+      return (
+        CommentDirective(TripleSlashRef, content.to_string(), make_loc()),
+        rest2,
+      )
+    }
+    _ => ()
+  }
+
+  // Handle // @ts-* directives
+  let (directive_kind, rest) = loop code {
+    [.. "// @ts-ignore", .. rest] => {
+      state.col += 13
+      state.offset += 13
+      (TsIgnore, rest)
+    }
+    [.. "//@ts-ignore", .. rest] => {
+      state.col += 12
+      state.offset += 12
+      (TsIgnore, rest)
+    }
+    [.. "// @ts-expect-error", .. rest] => {
+      state.col += 19
+      state.offset += 19
+      (TsExpectError, rest)
+    }
+    [.. "//@ts-expect-error", .. rest] => {
+      state.col += 18
+      state.offset += 18
+      (TsExpectError, rest)
+    }
+    [.. "// @ts-nocheck", .. rest] => {
+      state.col += 14
+      state.offset += 14
+      (TsNocheck, rest)
+    }
+    [.. "//@ts-nocheck", .. rest] => {
+      state.col += 13
+      state.offset += 13
+      (TsNocheck, rest)
+    }
+    [.. "// @ts-check", .. rest] => {
+      state.col += 12
+      state.offset += 12
+      (TsCheck, rest)
+    }
+    [.. "//@ts-check", .. rest] => {
+      state.col += 11
+      state.offset += 11
+      (TsCheck, rest)
+    }
+    _ => {
+      // Default fallback - skip // and treat as unknown directive
+      state.col += 2
+      state.offset += 2
+      match code {
+        [.. "//", .. rest] => (TsIgnore, rest)
+        _ => (TsIgnore, code)
+      }
+    }
+  }
+
+  // Scan rest of line as argument
+  let arg = StringBuilder::new()
+  let rest2 = loop rest {
+    ['\n', ..] as remaining => remaining
+    [ch, .. rest3] => {
+      arg.write_char(ch)
+      state.col += 1
+      state.offset += 1
+      continue rest3
+    }
+    [] as remaining => remaining
+  }
+
+  (CommentDirective(directive_kind, arg.to_string(), make_loc()), rest2)
+}
+
+///|
+/// Scan hashbang at start of file (#!/usr/bin/env node)
+/// Returns (Some(token), rest) if hashbang found, (None, code) otherwise
+fn scan_hashbang_v2(
+  code : StringView,
+  state : ScanState,
+  file_path : String,
+) -> (Token?, StringView) {
+  // Hashbang only valid at position 0
+  if state.offset != 0 {
+    return (None, code)
+  }
+
+  match code {
+    [.. "#!", .. rest] => {
+      let start_line = state.line
+      let start_col = state.col
+      let start_offset = state.offset
+      let content = StringBuilder::new()
+      content.write_string("#!")
+      state.col += 2
+      state.offset += 2
+
+      // Scan to end of line
+      let rest2 = loop rest {
+        ['\n', .. rest3] => {
+          // Don't include newline in content, but advance past it
+          state.line += 1
+          state.col = 1
+          state.offset += 1
+          rest3
+        }
+        [ch, .. rest3] => {
+          content.write_char(ch)
+          state.col += 1
+          state.offset += 1
+          continue rest3
+        }
+        [] as remaining => remaining
+      }
+
+      let loc = SourceLocation::new(
+        file_path,
+        Position::new(start_line, start_col, start_offset),
+        Position::new(state.line, state.col, state.offset),
+      )
+      (Some(Hashbang(content.to_string(), loc)), rest2)
+    }
+    _ => (None, code)
+  }
+}
+
+///|
+/// Skip whitespace and regular comments, but NOT JSDoc or directives
+/// Returns (code_after_skip, Option<special_comment_token>)
+fn skip_whitespace_with_special_comments_v2(
+  code : StringView,
+  state : ScanState,
+  file_path : String,
+) -> (StringView, Token?) {
+  loop code {
+    [' ' | '\t', .. rest] => {
+      state.col += 1
+      state.offset += 1
+      continue rest
+    }
+    ['\r', .. rest] => {
+      state.offset += 1
+      continue rest
+    }
+    ['\n', .. rest] => {
+      state.line += 1
+      state.col = 1
+      state.offset += 1
+      continue rest
+    }
+    // Check for JSDoc comment first (/** but not /**/)
+    [.. "/**", ch, ..] if ch != '/' => {
+      let (token, rest) = scan_jsdoc_comment_v2(code, state, file_path)
+      (rest, Some(token))
+    }
+    // Check for comment directive
+    [.. "///", ' ', '<', ..] | [.. "///<", ..] | [.. "// @ts-", ..] | [.. "//@ts-", ..] => {
+      let (token, rest) = scan_comment_directive_v2(code, state, file_path)
+      (rest, Some(token))
+    }
+    // Regular single-line comment
+    [.. "//", .. rest] => {
+      state.col += 2
+      state.offset += 2
+      let rest2 = skip_line_comment(rest, state)
+      continue rest2
+    }
+    // Regular block comment
+    [.. "/*", .. rest] => {
+      state.col += 2
+      state.offset += 2
+      let rest2 = skip_block_comment(rest, state)
+      continue rest2
+    }
+    remaining => (remaining, None)
   }
 }
 
