@@ -51,7 +51,7 @@ pub struct TransformerContext {
 ///|
 /// Target ECMAScript version
 #valtype
-pub enum Target {
+pub(all) enum Target {
   ES5
   ES2015
   ES2016

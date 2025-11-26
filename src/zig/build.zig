@@ -4,6 +4,9 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
+    // Build option to enable MoonBit FFI
+    const enable_moonbit_ffi = b.option(bool, "moonbit-ffi", "Link MoonBit compiler library") orelse false;
+
     // Main executable
     const exe = b.addExecutable(.{
         .name = "moonbit-tsc",
@@ -20,8 +23,17 @@ pub fn build(b: *std.Build) void {
     // Link libc (required for FFI)
     exe.linkLibC();
 
-    // MoonBit library will be added later when available
-    // exe.addObjectFile(b.path("../moonbit/target/release/libmoonbit_compiler.a"));
+    // MoonBit library linkage
+    if (enable_moonbit_ffi) {
+        // Add MoonBit library path
+        exe.addLibraryPath(b.path("../moonbit/ffi_lib/lib"));
+
+        // Link the MoonBit TypeScript compiler library
+        exe.linkSystemLibrary("moonbit_tsc");
+
+        // On macOS, we need to set the rpath
+        exe.addRPath(.{ .cwd_relative = "../moonbit/ffi_lib/lib" });
+    }
 
     b.installArtifact(exe);
 
