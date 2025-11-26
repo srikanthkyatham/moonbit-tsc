@@ -1,259 +1,144 @@
-// FFI Header for MoonBit Compiler
+// FFI Header for MoonBit TypeScript Compiler
 // Defines C ABI interface between Zig and MoonBit
+//
+// NOTE: MoonBit exports functions with mangled names based on module paths.
+// The mangled names use URL-encoding (e.g., - becomes $2d$).
+// We use __asm__ labels to map clean names to mangled symbols.
 
 #ifndef MOONBIT_COMPILER_H
 #define MOONBIT_COMPILER_H
 
 #include <stddef.h>
 #include <stdint.h>
-#include <stdbool.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 // ============================================================================
-// Opaque Types
+// MoonBit Types (opaque pointers)
 // ============================================================================
 
-// Core types (opaque pointers to MoonBit data structures)
-typedef struct MBSourceFile MBSourceFile;
-typedef struct MBToken MBToken;
-typedef struct MBTokenArray MBTokenArray;
-typedef struct MBDiagnostic MBDiagnostic;
-typedef struct MBDiagnosticArray MBDiagnosticArray;
-typedef struct MBTypeChecker MBTypeChecker;
-typedef struct MBProgram MBProgram;
-typedef struct MBModuleGraph MBModuleGraph;
+typedef void* MBFixedArrayByte;  // MoonBit FixedArray[Byte]
+typedef void* MBBytes;           // MoonBit Bytes
 
 // ============================================================================
-// Structures with C ABI
+// Target ECMAScript Versions
 // ============================================================================
 
-// Position in source file
-typedef struct {
-    int32_t line;
-    int32_t column;
-    int32_t offset;
-} MBPosition;
-
-// Source location
-typedef struct {
-    const char* file_path;
-    size_t file_path_len;
-    MBPosition start;
-    MBPosition end;
-} MBSourceLocation;
-
-// Diagnostic category
 typedef enum {
-    MB_DIAG_ERROR = 0,
-    MB_DIAG_WARNING = 1,
-    MB_DIAG_MESSAGE = 2,
-    MB_DIAG_SUGGESTION = 3
-} MBDiagnosticCategory;
-
-// Diagnostic (for returning to Zig)
-typedef struct {
-    const char* message;
-    size_t message_len;
-    MBSourceLocation location;
-    MBDiagnosticCategory category;
-    int32_t code;
-} MBDiagnosticData;
-
-// Compilation result
-typedef struct {
-    bool success;
-    MBDiagnosticArray* diagnostics;
-} MBCompileResult;
-
-// Emit result
-typedef struct {
-    bool success;
-    const char* javascript;
-    size_t javascript_len;
-    const char* source_map;
-    size_t source_map_len;
-    const char* declaration;
-    size_t declaration_len;
-} MBEmitResult;
-
-// Compiler options
-typedef struct {
-    const char* target;  // "es5", "es2015", "esnext", etc.
-    bool strict;
-    bool no_implicit_any;
-    bool source_map;
-    bool declaration;
-    bool incremental;
-    // Add more options as needed
-} MBCompilerOptions;
+    MB_TARGET_ES5     = 0,
+    MB_TARGET_ES2015  = 1,
+    MB_TARGET_ES2016  = 2,
+    MB_TARGET_ES2017  = 3,
+    MB_TARGET_ES2018  = 4,
+    MB_TARGET_ES2019  = 5,
+    MB_TARGET_ES2020  = 6,
+    MB_TARGET_ESNEXT  = 7
+} MBTarget;
 
 // ============================================================================
-// Scanner Functions
+// Core Compilation Functions
 // ============================================================================
 
-// Scan source file into tokens
-// Returns: Array of tokens (caller must free with mb_destroy_token_array)
-MBTokenArray* mb_scan_source(
-    const char* source,
-    size_t source_len,
-    const char* file_path,
-    size_t file_path_len
-);
+// Compile TypeScript source to JavaScript
+// Parameters:
+//   source_ptr, source_len: Source code as FixedArray[Byte]
+//   file_path_ptr, file_path_len: File path as FixedArray[Byte]
+//   target: Target ECMAScript version (MBTarget enum)
+//   source_map: Generate source map (0=false, 1=true)
+//   declaration: Generate .d.ts (0=false, 1=true)
+// Returns: 1 on success, 0 on failure
+// Call mb_result_* functions to retrieve results
+int32_t mb_compile(
+    MBFixedArrayByte source_ptr, int32_t source_len,
+    MBFixedArrayByte file_path_ptr, int32_t file_path_len,
+    int32_t target, int32_t source_map, int32_t declaration
+) __asm__("_$moonbit$2d$ts$2d$compiler$ffi_lib$moonbit_tsc_compile");
 
-// Get token count from array
-size_t mb_token_array_length(const MBTokenArray* tokens);
+// Parse TypeScript source (syntax check only, no type checking)
+// Returns: 1 on success, 0 on failure
+int32_t mb_parse(
+    MBFixedArrayByte source_ptr, int32_t source_len,
+    MBFixedArrayByte file_path_ptr, int32_t file_path_len
+) __asm__("_$moonbit$2d$ts$2d$compiler$ffi_lib$moonbit_tsc_parse");
 
-// Get token at index (for debugging)
-const char* mb_token_to_string(const MBTokenArray* tokens, size_t index);
-
-// Destroy token array
-void mb_destroy_token_array(MBTokenArray* tokens);
-
-// ============================================================================
-// Parser Functions
-// ============================================================================
-
-// Parse source file
-// Returns: Parsed AST (caller must free with mb_destroy_source_file)
-MBSourceFile* mb_parse_source(
-    const char* source,
-    size_t source_len,
-    const char* file_path,
-    size_t file_path_len,
-    MBCompilerOptions* options
-);
-
-// Async version for use with MoonBit's async runtime
-// Note: This will integrate with Zig's async system
-MBSourceFile* mb_parse_source_async(
-    const char* source,
-    size_t source_len,
-    const char* file_path,
-    size_t file_path_len,
-    MBCompilerOptions* options
-);
-
-// Destroy parsed source file
-void mb_destroy_source_file(MBSourceFile* file);
+// Scan TypeScript source (lexical analysis only)
+// Returns: number of tokens
+int32_t mb_scan(
+    MBFixedArrayByte source_ptr, int32_t source_len,
+    MBFixedArrayByte file_path_ptr, int32_t file_path_len
+) __asm__("_$moonbit$2d$ts$2d$compiler$ffi_lib$moonbit_tsc_scan");
 
 // ============================================================================
-// Binder Functions
+// Result Retrieval Functions
 // ============================================================================
 
-// Bind source file (symbol resolution)
-MBCompileResult mb_bind_source_file(
-    MBSourceFile* file,
-    MBProgram* program
-);
+// Get compiler version string (returns FixedArray[Byte])
+MBFixedArrayByte mb_get_version(void)
+    __asm__("_$moonbit$2d$ts$2d$compiler$ffi_lib$moonbit_tsc_get_version");
+
+// Check if last compilation was successful
+// Returns: 1 if successful, 0 otherwise
+int32_t mb_result_success(void)
+    __asm__("_$moonbit$2d$ts$2d$compiler$ffi_lib$moonbit_tsc_result_success");
+
+// Get JavaScript output from last compilation
+// Returns: FixedArray[Byte] pointer (data starts at pointer)
+MBFixedArrayByte mb_result_javascript(void)
+    __asm__("_$moonbit$2d$ts$2d$compiler$ffi_lib$moonbit_tsc_result_javascript");
+
+// Get length of JavaScript output
+int32_t mb_result_javascript_len(void)
+    __asm__("_$moonbit$2d$ts$2d$compiler$ffi_lib$moonbit_tsc_result_javascript_len");
+
+// Get error message from last compilation
+// Returns: FixedArray[Byte] pointer
+MBFixedArrayByte mb_result_error(void)
+    __asm__("_$moonbit$2d$ts$2d$compiler$ffi_lib$moonbit_tsc_result_error");
+
+// Get length of error message
+int32_t mb_result_error_len(void)
+    __asm__("_$moonbit$2d$ts$2d$compiler$ffi_lib$moonbit_tsc_result_error_len");
+
+// Free the current result (call after retrieving results)
+void mb_result_free(void)
+    __asm__("_$moonbit$2d$ts$2d$compiler$ffi_lib$moonbit_tsc_result_free");
 
 // ============================================================================
-// Type Checker Functions
+// MoonBit Runtime Functions
 // ============================================================================
 
-// Create type checker
-MBTypeChecker* mb_create_type_checker(MBCompilerOptions* options);
+// Initialize MoonBit runtime (must be called once before any other function)
+void moonbit_runtime_init(int argc, char** argv);
 
-// Type check a source file
-MBCompileResult mb_check_source_file(
-    MBSourceFile* file,
-    MBTypeChecker* checker
-);
+// Allocate MoonBit FixedArray
+// kind: MOONBIT_BLOCK_KIND_FIXED_ARRAY (2)
+// elem_size_shift: 0 for bytes (2^0 = 1 byte)
+// len: number of elements
+void* moonbit_malloc_array(int kind, int elem_size_shift, int32_t len);
 
-// Destroy type checker
-void mb_destroy_type_checker(MBTypeChecker* checker);
-
-// ============================================================================
-// Transformer & Emitter Functions
-// ============================================================================
-
-// Transform and emit source file
-MBEmitResult mb_emit_source_file(
-    MBSourceFile* file,
-    MBCompilerOptions* options
-);
-
-// Async version
-MBEmitResult mb_emit_source_file_async(
-    MBSourceFile* file,
-    MBCompilerOptions* options
-);
+#define MOONBIT_BLOCK_KIND_FIXED_ARRAY 2
 
 // ============================================================================
-// Program & Module Resolution Functions
+// Helper Macros
 // ============================================================================
 
-// Create program
-MBProgram* mb_create_program(
-    const char** root_files,
-    size_t root_files_count,
-    MBCompilerOptions* options
-);
+// Create a MoonBit FixedArray[Byte] from C data
+static inline MBFixedArrayByte mb_make_bytes(const char* data, int32_t len) {
+    void* arr = moonbit_malloc_array(MOONBIT_BLOCK_KIND_FIXED_ARRAY, 0, len);
+    if (arr && data) {
+        for (int32_t i = 0; i < len; i++) {
+            ((char*)arr)[i] = data[i];
+        }
+    }
+    return arr;
+}
 
-// Resolve module graph (async)
-MBModuleGraph* mb_resolve_modules_async(
-    const char** root_files,
-    size_t root_files_count,
-    MBCompilerOptions* options
-);
-
-// Get files from module graph
-size_t mb_module_graph_file_count(const MBModuleGraph* graph);
-const char* mb_module_graph_get_file(const MBModuleGraph* graph, size_t index);
-
-// Destroy module graph
-void mb_destroy_module_graph(MBModuleGraph* graph);
-
-// Destroy program
-void mb_destroy_program(MBProgram* program);
-
-// ============================================================================
-// Diagnostic Functions
-// ============================================================================
-
-// Get diagnostic count
-size_t mb_diagnostic_array_length(const MBDiagnosticArray* diagnostics);
-
-// Get diagnostic at index
-MBDiagnosticData mb_get_diagnostic(
-    const MBDiagnosticArray* diagnostics,
-    size_t index
-);
-
-// Destroy diagnostic array
-void mb_destroy_diagnostic_array(MBDiagnosticArray* diagnostics);
-
-// ============================================================================
-// Language Service Functions (for future TSServer)
-// ============================================================================
-
-// Get completions at position
-typedef struct MBCompletionList MBCompletionList;
-
-MBCompletionList* mb_get_completions(
-    MBProgram* program,
-    const char* file_path,
-    size_t file_path_len,
-    int32_t line,
-    int32_t column
-);
-
-void mb_destroy_completion_list(MBCompletionList* completions);
-
-// ============================================================================
-// Utility Functions
-// ============================================================================
-
-// Initialize MoonBit runtime (call once at startup)
-void mb_init_runtime(void);
-
-// Shutdown MoonBit runtime (call at exit)
-void mb_shutdown_runtime(void);
-
-// Get version string
-const char* mb_get_version(void);
+// Extract C string pointer from MoonBit FixedArray[Byte]
+static inline const char* mb_get_cstr(MBFixedArrayByte arr) {
+    return (const char*)arr;
+}
 
 #ifdef __cplusplus
 }
