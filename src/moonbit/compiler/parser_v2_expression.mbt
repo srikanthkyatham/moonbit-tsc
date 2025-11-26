@@ -302,6 +302,15 @@ fn make_simple_parameter(id : Identifier) -> Node {
 }
 
 ///|
+/// Parse optional function name (identifier)
+fn parse_optional_function_name(parser : Parser) -> (String?, Parser) {
+  match current_token(parser) {
+    Identifier(fname, _) => (Some(fname), advance_parser(parser))
+    _ => (None, parser)
+  }
+}
+
+///|
 /// Parse function expression body (parameters, optional return type, block)
 /// Used for both regular and async function expressions
 fn parse_function_expression_body(

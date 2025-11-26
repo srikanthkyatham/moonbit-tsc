@@ -922,12 +922,7 @@ fn parse_primary_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
     // Function expression (e.g., function() {} or function foo() {})
     KeywordFunction(start_loc) => {
       let parser = advance_parser(parser) // consume 'function'
-
-      // Optional function name
-      let (name, parser) = match current_token(parser) {
-        Identifier(fname, _) => (Some(fname), advance_parser(parser))
-        _ => (None, parser)
-      }
+      let (name, parser) = parse_optional_function_name(parser)
       parse_function_expression_body(parser, name, false, start_loc)
     }
 
@@ -984,11 +979,7 @@ fn parse_primary_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
         // async function expression
         KeywordFunction(_) => {
           let parser = advance_parser(parser) // consume 'function'
-          // Optional function name
-          let (name, parser) = match current_token(parser) {
-            Identifier(fname, _) => (Some(fname), advance_parser(parser))
-            _ => (None, parser)
-          }
+          let (name, parser) = parse_optional_function_name(parser)
           parse_function_expression_body(parser, name, true, start_loc)
         }
         // async arrow function: async () => ... or async (params) => ...
