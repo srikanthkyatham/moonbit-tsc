@@ -730,6 +730,7 @@ moon test --target native
 20. ✅ **Generic constraint checking with `check_type_arguments_strict()`**
 21. ✅ **Discriminated union infrastructure for type narrowing**
 22. ✅ **New diagnostic codes: TS2345, TS2349, TS2554, TS2769**
+23. ✅ **CLI source map flags: `--sourceMap`, `--inlineSourceMap`, `--sourceMapMode`**
 
 ## Conclusion
 
