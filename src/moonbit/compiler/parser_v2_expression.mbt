@@ -311,6 +311,51 @@ fn parse_optional_function_name(parser : Parser) -> (String?, Parser) {
 }
 
 ///|
+/// Create a YieldExpression node
+fn make_yield_expression(
+  expression : Node?,
+  is_delegate : Bool,
+  location : SourceLocation,
+) -> Node {
+  Node::YieldExpression(YieldExpression::{ expression, is_delegate, location })
+}
+
+///|
+/// Create a NewExpression node
+fn make_new_expression(
+  expr : Node,
+  arguments : Array[Node]?,
+  location : SourceLocation,
+) -> Node {
+  Node::NewExpression(NewExpression::{
+    expression: expr,
+    type_arguments: [],
+    arguments,
+    location,
+  })
+}
+
+///|
+/// Parse bracketed expression [expr] with depth management
+/// Returns the parsed index expression
+fn parse_bracketed_expression(
+  parser : Parser,
+) -> Result[(Node, Parser), Parser] {
+  let parser = advance_parser(parser) // consume [
+  let parser = increment_depth(parser)
+  match parse_expression(parser) {
+    Ok((index, parser)) => {
+      let parser = decrement_depth(parser)
+      match expect(parser, fn(t) { matches_close_bracket(t) }) {
+        Ok(p) => Ok((index, advance_parser(p)))
+        Err(p) => Err(p)
+      }
+    }
+    Err(p) => Err(decrement_depth(p))
+  }
+}
+
+///|
 /// Parse property value after colon (expects parser positioned at ':')
 /// Returns PropertyAssignment on success
 fn parse_colon_property_value(
@@ -448,4 +493,69 @@ fn parse_async_arrow_single_param(
         ),
       )
   }
+}
+
+///|
+/// Parse parenthesized expression with depth management
+/// Expects parser positioned at '(' - consumes '(' and ')'
+/// Returns the parsed expression
+fn parse_parenthesized_expression(
+  parser : Parser,
+) -> Result[(Node, Parser), Parser] {
+  let parser = advance_parser(parser) // consume (
+  let parser = increment_depth(parser)
+  match parse_expression(parser) {
+    Ok((expr, parser)) => {
+      let parser = decrement_depth(parser)
+      match expect(parser, fn(t) { matches_close_paren(t) }) {
+        Ok(p) => Ok((expr, advance_parser(p)))
+        Err(p) => Err(p)
+      }
+    }
+    Err(p) => Err(decrement_depth(p))
+  }
+}
+
+///|
+/// Create a CallExpression node
+fn make_call_expression(
+  expression : Node,
+  type_arguments : Array[Node],
+  arguments : Array[Node],
+  location : SourceLocation,
+) -> Node {
+  Node::CallExpression(CallExpression::{
+    expression,
+    type_arguments,
+    arguments,
+    location,
+  })
+}
+
+///|
+/// Create a PropertyAccessExpression node
+fn make_property_access(
+  expression : Node,
+  name : String,
+  location : SourceLocation,
+) -> Node {
+  Node::PropertyAccessExpression(PropertyAccessExpression::{
+    expression,
+    name,
+    location,
+  })
+}
+
+///|
+/// Create an ElementAccessExpression node
+fn make_element_access(
+  expression : Node,
+  argument_expression : Node,
+  location : SourceLocation,
+) -> Node {
+  Node::ElementAccessExpression(ElementAccessExpression::{
+    expression,
+    argument_expression,
+    location,
+  })
 }

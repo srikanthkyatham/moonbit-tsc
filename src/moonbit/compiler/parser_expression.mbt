@@ -212,14 +212,7 @@ fn parse_unary_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
         | Colon(_) => {
           let parser = decrement_depth(parser)
           return Ok(
-            (
-              Node::YieldExpression(YieldExpression::{
-                expression: None,
-                is_delegate,
-                location: start_loc,
-              }),
-              parser,
-            ),
+            (make_yield_expression(None, is_delegate, start_loc), parser),
           )
         }
         _ =>
@@ -228,11 +221,7 @@ fn parse_unary_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
               let parser = decrement_depth(parser)
               return Ok(
                 (
-                  Node::YieldExpression(YieldExpression::{
-                    expression: Some(expr),
-                    is_delegate,
-                    location: start_loc,
-                  }),
+                  make_yield_expression(Some(expr), is_delegate, start_loc),
                   parser,
                 ),
               )
@@ -241,14 +230,7 @@ fn parse_unary_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
               // No expression, that's okay for yield
               let parser = decrement_depth(parser)
               return Ok(
-                (
-                  Node::YieldExpression(YieldExpression::{
-                    expression: None,
-                    is_delegate,
-                    location: start_loc,
-                  }),
-                  parser,
-                ),
+                (make_yield_expression(None, is_delegate, start_loc), parser),
               )
             }
           }
@@ -273,30 +255,12 @@ fn parse_unary_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
               let parser = advance_parser(parser)
               let (arguments, parser) = parse_argument_list(parser)
               Ok(
-                (
-                  Node::NewExpression(NewExpression::{
-                    expression: expr,
-                    type_arguments: [],
-                    arguments: Some(arguments),
-                    location: start_loc,
-                  }),
-                  parser,
-                ),
+                (make_new_expression(expr, Some(arguments), start_loc), parser),
               )
             }
             _ =>
               // No arguments (e.g., new Date)
-              Ok(
-                (
-                  Node::NewExpression(NewExpression::{
-                    expression: expr,
-                    type_arguments: [],
-                    arguments: None,
-                    location: start_loc,
-                  }),
-                  parser,
-                ),
-              )
+              Ok((make_new_expression(expr, None, start_loc), parser))
           }
         }
         Err(parser) => {
@@ -364,12 +328,9 @@ fn parse_postfix_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
                 parser = advance_parser(next_parser)
                 let (arguments, next_parser) = parse_argument_list(parser)
                 parser = next_parser
-                left = Node::CallExpression(CallExpression::{
-                  expression: left,
-                  type_arguments: type_args,
-                  arguments,
-                  location: start_loc,
-                })
+                left = make_call_expression(
+                  left, type_args, arguments, start_loc,
+                )
               }
               _ => {
                 // Not a generic call, backtrack - treat < as comparison
@@ -391,12 +352,7 @@ fn parse_postfix_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
         parser = advance_parser(parser)
         let (arguments, next_parser) = parse_argument_list(parser)
         parser = next_parser
-        left = Node::CallExpression(CallExpression::{
-          expression: left,
-          type_arguments: [],
-          arguments,
-          location: start_loc,
-        })
+        left = make_call_expression(left, [], arguments, start_loc)
       }
 
       // Property access
@@ -405,11 +361,7 @@ fn parse_postfix_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
         parser = advance_parser(parser)
         match parse_identifier(parser) {
           Ok((id, next_parser)) => {
-            left = Node::PropertyAccessExpression(PropertyAccessExpression::{
-              expression: left,
-              name: id.name,
-              location: start_loc,
-            })
+            left = make_property_access(left, id.name, start_loc)
             parser = next_parser
           }
           Err(p) => return Err(p)
@@ -428,11 +380,7 @@ fn parse_postfix_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
         // Then parse the property access
         match parse_identifier(parser) {
           Ok((id, next_parser)) => {
-            left = Node::PropertyAccessExpression(PropertyAccessExpression::{
-              expression: non_null_expr,
-              name: id.name,
-              location: start_loc,
-            })
+            left = make_property_access(non_null_expr, id.name, start_loc)
             parser = next_parser
           }
           Err(p) => return Err(p)
@@ -445,27 +393,18 @@ fn parse_postfix_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
         parser = advance_parser(parser)
         match current_token(parser) {
           // Optional element access: obj?.[index]
-          OpenBracket(_) => {
-            parser = advance_parser(parser)
-            parser = increment_depth(parser)
-            match parse_expression(parser) {
+          OpenBracket(_) =>
+            match parse_bracketed_expression(parser) {
               Ok((index, next_parser)) => {
-                parser = decrement_depth(next_parser)
-                match expect(parser, fn(t) { matches_close_bracket(t) }) {
-                  Ok(p) => {
-                    parser = advance_parser(p)
-                    left = Node::OptionalChain(OptionalChain::{
-                      expression: left,
-                      chain: OptionalChainKind::Element(index),
-                      location: start_loc,
-                    })
-                  }
-                  Err(p) => return Err(p)
-                }
+                parser = next_parser
+                left = Node::OptionalChain(OptionalChain::{
+                  expression: left,
+                  chain: OptionalChainKind::Element(index),
+                  location: start_loc,
+                })
               }
-              Err(p) => return Err(decrement_depth(p))
+              Err(p) => return Err(p)
             }
-          }
           // Optional call: func?.()
           OpenParen(_) => {
             parser = advance_parser(parser)
@@ -496,24 +435,12 @@ fn parse_postfix_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
       // Element access
       OpenBracket(_) => {
         let start_loc = get_location(left)
-        parser = advance_parser(parser)
-        parser = increment_depth(parser)
-        match parse_expression(parser) {
+        match parse_bracketed_expression(parser) {
           Ok((index, next_parser)) => {
-            parser = decrement_depth(next_parser)
-            match expect(parser, fn(t) { matches_close_bracket(t) }) {
-              Ok(p) => {
-                parser = advance_parser(p)
-                left = Node::ElementAccessExpression(ElementAccessExpression::{
-                  expression: left,
-                  argument_expression: index,
-                  location: start_loc,
-                })
-              }
-              Err(p) => return Err(p)
-            }
+            parser = next_parser
+            left = make_element_access(left, index, start_loc)
           }
-          Err(p) => return Err(decrement_depth(p))
+          Err(p) => return Err(p)
         }
       }
 
@@ -852,12 +779,7 @@ fn parse_primary_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
                 Ok(parser) =>
                   Ok(
                     (
-                      Node::NewExpression(NewExpression::{
-                        expression: expr,
-                        type_arguments: [],
-                        arguments: Some(args),
-                        location: start_loc,
-                      }),
+                      make_new_expression(expr, Some(args), start_loc),
                       advance_parser(parser),
                     ),
                   )
@@ -866,17 +788,7 @@ fn parse_primary_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
             }
             _ =>
               // No arguments
-              Ok(
-                (
-                  Node::NewExpression(NewExpression::{
-                    expression: expr,
-                    type_arguments: [],
-                    arguments: None,
-                    location: start_loc,
-                  }),
-                  parser,
-                ),
-              )
+              Ok((make_new_expression(expr, None, start_loc), parser))
           }
         }
         _ =>
@@ -887,29 +799,18 @@ fn parse_primary_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
     // Parenthesized expression
     OpenParen(_) => {
       let start_loc = token.location()
-      let parser = advance_parser(parser)
-      let parser = increment_depth(parser)
-      match parse_expression(parser) {
-        Ok((expr, parser)) => {
-          let parser = decrement_depth(parser)
-          match expect(parser, fn(t) { matches_close_paren(t) }) {
-            Ok(parser) =>
-              Ok(
-                (
-                  Node::ParenthesizedExpression(ParenthesizedExpression::{
-                    expression: expr,
-                    location: start_loc,
-                  }),
-                  advance_parser(parser),
-                ),
-              )
-            Err(parser) => Err(parser)
-          }
-        }
-        Err(parser) => {
-          let parser = decrement_depth(parser)
-          Err(parser)
-        }
+      match parse_parenthesized_expression(parser) {
+        Ok((expr, parser)) =>
+          Ok(
+            (
+              Node::ParenthesizedExpression(ParenthesizedExpression::{
+                expression: expr,
+                location: start_loc,
+              }),
+              parser,
+            ),
+          )
+        Err(p) => Err(p)
       }
     }
 
