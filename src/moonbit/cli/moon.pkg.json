@@ -1,0 +1,16 @@
+{
+  "is-main": true,
+  "import": [
+    "moonbit-ts-compiler/compiler",
+    "moonbit-ts-compiler/protocol",
+    "moonbit-ts-compiler/worker",
+    "moonbit-ts-compiler/coordinator",
+    "moonbitlang/async",
+    "moonbitlang/async/fs",
+    "moonbitlang/async/io",
+    "moonbitlang/async/stdio"
+  ],
+  "targets": {
+    "*.mbt": ["native"]
+  }
+}
