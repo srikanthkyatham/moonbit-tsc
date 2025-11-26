@@ -207,26 +207,8 @@ test "scan jsx - component name" {
   }
 }
 
-///|
-test "scan jsx - scanner state mode is standard initially" {
-  let state = @compiler.ScannerState::new("<div>", "test.tsx")
-  // Check mode using match pattern
-  match state.mode {
-    @compiler.Standard => ()
-    _ => assert_true(false)
-  }
-}
-
-///|
-test "scan jsx - enter jsx mode changes to JSXText" {
-  let state = @compiler.ScannerState::new("<div>", "test.tsx")
-  let new_state = @compiler.enter_jsx_mode(state)
-  // Check mode using match pattern
-  match new_state.mode {
-    @compiler.JSXText => ()
-    _ => assert_true(false)
-  }
-}
+// NOTE: Tests for ScannerState and enter_jsx_mode removed as scanner_v2
+// uses a different internal architecture that doesn't expose this state
 
 ///|
 test "scan jsx - single quotes in attribute" {

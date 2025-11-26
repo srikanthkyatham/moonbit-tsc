@@ -2,6 +2,104 @@
 // Contains all JSDoc-related parsing functions
 
 ///|
+/// Result of parsing JSDoc content (public API for tests)
+pub struct JSDocParseResult {
+  description : String
+  tags : Array[JSDocTag]
+}
+
+///|
+/// Public API to parse JSDoc content string
+pub fn parse_jsdoc(content : String) -> JSDocParseResult {
+  let dummy_pos = Position::{ line: 0, column: 0, offset: 0 }
+  let dummy_loc = SourceLocation::{
+    file_path: "",
+    start: dummy_pos,
+    end: dummy_pos,
+  }
+  let tags : Array[JSDocTag] = []
+  let lines = split_jsdoc_lines(content)
+  let description_lines : Array[String] = []
+  let mut in_tags = false
+  let mut i = 0
+
+  while i < lines.length() {
+    let trimmed = trim_jsdoc_line(lines[i])
+
+    // Check for tag at start
+    if trimmed.has_prefix("@") {
+      in_tags = true
+      // Check if this is a multi-line tag like @example
+      let tag_end = find_whitespace_or_end(trimmed, 1)
+      let tag_name = trimmed.substring(start=1, end=tag_end)
+
+      if tag_name == "example" {
+        // Collect all lines until next tag or end
+        let rest = if tag_end < trimmed.length() {
+          trim_leading_whitespace(
+            trimmed.substring(start=tag_end, end=trimmed.length()),
+          )
+        } else {
+          ""
+        }
+        let example_lines : Array[String] = []
+        if rest.length() > 0 {
+          example_lines.push(rest)
+        }
+        // Collect continuation lines
+        i = i + 1
+        while i < lines.length() {
+          let next_trimmed = trim_jsdoc_line(lines[i])
+          if next_trimmed.has_prefix("@") {
+            // Don't increment i here - let the outer loop handle this tag
+            break
+          }
+          if next_trimmed.length() > 0 {
+            example_lines.push(next_trimmed)
+          }
+          i = i + 1
+        }
+        let example_content = example_lines.iter().fold(
+          init="",
+          fn(acc, line) {
+            if acc.length() == 0 {
+              line
+            } else {
+              acc + "\n" + line
+            }
+          },
+        )
+        tags.push(
+          JSDocTag::Example(JSDocExample::{ content: example_content, location: dummy_loc }),
+        )
+        continue // Skip the i increment at the end since we already moved forward
+      } else {
+        match parse_jsdoc_tag(trimmed, dummy_loc) {
+          Some(tag) => tags.push(tag)
+          None => ()
+        }
+      }
+    } else if not(in_tags) && trimmed.length() > 0 {
+      // Collect description lines (before any tags)
+      description_lines.push(trimmed)
+    }
+    i = i + 1
+  }
+
+  let description = description_lines.iter().fold(
+    init="",
+    fn(acc, line) {
+      if acc.length() == 0 {
+        line
+      } else {
+        acc + "\n" + line
+      }
+    },
+  )
+  JSDocParseResult::{ description, tags }
+}
+
+///|
 /// Parse a JSDoc comment into structured tags
 fn parse_jsdoc_comment(content : String, loc : SourceLocation) -> JSDocComment {
   let tags : Array[JSDocTag] = []
@@ -135,7 +233,7 @@ fn parse_jsdoc_tag(line : String, loc : SourceLocation) -> JSDocTag? {
     "throws" | "exception" => Some(parse_jsdoc_throws_tag(rest, loc))
     "author" =>
       Some(JSDocTag::Author(JSDocAuthor::{ name: rest, location: loc }))
-    "since" =>
+    "since" | "version" =>
       Some(JSDocTag::Since(JSDocSince::{ version: rest, location: loc }))
     "default" | "defaultvalue" =>
       Some(JSDocTag::Default(JSDocDefault::{ value: rest, location: loc }))
@@ -144,6 +242,8 @@ fn parse_jsdoc_tag(line : String, loc : SourceLocation) -> JSDocTag? {
     "public" => Some(JSDocTag::Public(loc))
     "private" => Some(JSDocTag::Private(loc))
     "protected" => Some(JSDocTag::Protected(loc))
+    "abstract" => Some(JSDocTag::Abstract(loc))
+    "virtual" => Some(JSDocTag::Virtual(loc))
     _ => Some(JSDocTag::Unknown(tag_name, rest, loc))
   }
 }

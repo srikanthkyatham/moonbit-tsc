@@ -1192,6 +1192,10 @@ pub enum JSDocTag {
   Private(SourceLocation)
   /// @protected
   Protected(SourceLocation)
+  /// @abstract
+  Abstract(SourceLocation)
+  /// @virtual (alias for abstract)
+  Virtual(SourceLocation)
   /// Generic/unknown tag
   Unknown(String, String, SourceLocation) // tag name, content, location
 } derive(Show)

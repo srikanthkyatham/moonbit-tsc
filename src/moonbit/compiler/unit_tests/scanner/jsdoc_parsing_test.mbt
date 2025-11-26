@@ -67,7 +67,7 @@ test "parse jsdoc - type tag" {
   let result = @compiler.parse_jsdoc(content)
   assert_eq(result.tags.length(), 1)
   match result.tags[0] {
-    @compiler.Type(typ) => assert_eq(typ.type_annotation, Some("Array<string>"))
+    @compiler.Type(typ) => assert_eq(typ.type_annotation, "Array<string>")
     _ => assert_true(false)
   }
 }
@@ -79,7 +79,7 @@ test "parse jsdoc - typedef tag" {
   assert_eq(result.tags.length(), 1)
   match result.tags[0] {
     @compiler.TypeDef(td) => {
-      assert_eq(td.type_annotation, Some("Object"))
+      assert_eq(td.type_annotation, "Object")
       assert_eq(td.name, "Person")
     }
     _ => assert_true(false)
@@ -92,9 +92,9 @@ test "parse jsdoc - template tag single" {
   let result = @compiler.parse_jsdoc(content)
   assert_eq(result.tags.length(), 1)
   match result.tags[0] {
-    @compiler.Template(params) => {
-      assert_eq(params.length(), 1)
-      assert_eq(params[0], "T")
+    @compiler.Template(template) => {
+      assert_eq(template.type_params.length(), 1)
+      assert_eq(template.type_params[0], "T")
     }
     _ => assert_true(false)
   }
@@ -106,11 +106,11 @@ test "parse jsdoc - template tag multiple" {
   let result = @compiler.parse_jsdoc(content)
   assert_eq(result.tags.length(), 1)
   match result.tags[0] {
-    @compiler.Template(params) => {
-      assert_eq(params.length(), 3)
-      assert_eq(params[0], "T")
-      assert_eq(params[1], "U")
-      assert_eq(params[2], "V")
+    @compiler.Template(template) => {
+      assert_eq(template.type_params.length(), 3)
+      assert_eq(template.type_params[0], "T")
+      assert_eq(template.type_params[1], "U")
+      assert_eq(template.type_params[2], "V")
     }
     _ => assert_true(false)
   }
@@ -122,11 +122,7 @@ test "parse jsdoc - deprecated tag" {
   let result = @compiler.parse_jsdoc(content)
   assert_eq(result.tags.length(), 1)
   match result.tags[0] {
-    @compiler.Deprecated(reason) =>
-      match reason {
-        Some(msg) => assert_true(msg.contains("newFunction"))
-        None => assert_true(false)
-      }
+    @compiler.Deprecated(dep) => assert_true(dep.description.contains("newFunction"))
     _ => assert_true(false)
   }
 }
@@ -137,18 +133,32 @@ test "parse jsdoc - deprecated without reason" {
   let result = @compiler.parse_jsdoc(content)
   assert_eq(result.tags.length(), 1)
   match result.tags[0] {
-    @compiler.Deprecated(reason) => assert_eq(reason, None)
+    @compiler.Deprecated(dep) => assert_eq(dep.description, "")
     _ => assert_true(false)
   }
 }
 
 ///|
-test "parse jsdoc - example tag" {
-  let content = "@example\nconst x = foo();"
+test "parse jsdoc - example tag single line" {
+  let content = "@example const x = foo();"
   let result = @compiler.parse_jsdoc(content)
   assert_eq(result.tags.length(), 1)
   match result.tags[0] {
-    @compiler.Example(ex) => assert_true(ex.contains("foo()"))
+    @compiler.Example(ex) => assert_true(ex.content.contains("foo()"))
+    _ => assert_true(false)
+  }
+}
+
+///|
+test "parse jsdoc - example tag multi-line" {
+  let content = "@example\nconst x = foo();\nconsole.log(x);"
+  let result = @compiler.parse_jsdoc(content)
+  assert_eq(result.tags.length(), 1)
+  match result.tags[0] {
+    @compiler.Example(ex) => {
+      assert_true(ex.content.contains("foo()"))
+      assert_true(ex.content.contains("console.log"))
+    }
     _ => assert_true(false)
   }
 }
@@ -159,7 +169,7 @@ test "parse jsdoc - see tag" {
   let result = @compiler.parse_jsdoc(content)
   assert_eq(result.tags.length(), 1)
   match result.tags[0] {
-    @compiler.See(reference) => assert_eq(reference, "OtherClass")
+    @compiler.See(see) => assert_eq(see.reference, "OtherClass")
     _ => assert_true(false)
   }
 }
@@ -170,7 +180,7 @@ test "parse jsdoc - author tag" {
   let result = @compiler.parse_jsdoc(content)
   assert_eq(result.tags.length(), 1)
   match result.tags[0] {
-    @compiler.Author(name) => assert_eq(name, "John Doe")
+    @compiler.Author(author) => assert_eq(author.name, "John Doe")
     _ => assert_true(false)
   }
 }
@@ -181,7 +191,7 @@ test "parse jsdoc - since tag" {
   let result = @compiler.parse_jsdoc(content)
   assert_eq(result.tags.length(), 1)
   match result.tags[0] {
-    @compiler.Since(version) => assert_eq(version, "1.0.0")
+    @compiler.Since(since) => assert_eq(since.version, "1.0.0")
     _ => assert_true(false)
   }
 }
@@ -206,7 +216,7 @@ test "parse jsdoc - private tag" {
   let result = @compiler.parse_jsdoc(content)
   assert_eq(result.tags.length(), 1)
   match result.tags[0] {
-    @compiler.Private => ()
+    @compiler.Private(_) => ()
     _ => assert_true(false)
   }
 }
@@ -217,7 +227,7 @@ test "parse jsdoc - public tag" {
   let result = @compiler.parse_jsdoc(content)
   assert_eq(result.tags.length(), 1)
   match result.tags[0] {
-    @compiler.Public => ()
+    @compiler.Public(_) => ()
     _ => assert_true(false)
   }
 }
@@ -228,7 +238,7 @@ test "parse jsdoc - protected tag" {
   let result = @compiler.parse_jsdoc(content)
   assert_eq(result.tags.length(), 1)
   match result.tags[0] {
-    @compiler.Protected => ()
+    @compiler.Protected(_) => ()
     _ => assert_true(false)
   }
 }
@@ -239,7 +249,7 @@ test "parse jsdoc - readonly tag" {
   let result = @compiler.parse_jsdoc(content)
   assert_eq(result.tags.length(), 1)
   match result.tags[0] {
-    @compiler.Readonly => ()
+    @compiler.Readonly(_) => ()
     _ => assert_true(false)
   }
 }
@@ -250,7 +260,7 @@ test "parse jsdoc - override tag" {
   let result = @compiler.parse_jsdoc(content)
   assert_eq(result.tags.length(), 1)
   match result.tags[0] {
-    @compiler.Override => ()
+    @compiler.Override(_) => ()
     _ => assert_true(false)
   }
 }
@@ -261,7 +271,7 @@ test "parse jsdoc - abstract tag" {
   let result = @compiler.parse_jsdoc(content)
   assert_eq(result.tags.length(), 1)
   match result.tags[0] {
-    @compiler.Abstract => ()
+    @compiler.Abstract(_) => ()
     _ => assert_true(false)
   }
 }
@@ -272,7 +282,7 @@ test "parse jsdoc - unknown tag" {
   let result = @compiler.parse_jsdoc(content)
   assert_eq(result.tags.length(), 1)
   match result.tags[0] {
-    @compiler.Other(name, value) => {
+    @compiler.Unknown(name, value, _) => {
       assert_eq(name, "customtag")
       assert_eq(value, "some value")
     }
@@ -312,10 +322,7 @@ test "parse jsdoc - complex type annotation" {
   match result.tags[0] {
     @compiler.Type(typ) =>
       // Should handle nested braces correctly
-      match typ.type_annotation {
-        Some(annotation) => assert_true(annotation.contains("Map"))
-        None => assert_true(false)
-      }
+      assert_true(typ.type_annotation.contains("Map"))
     _ => assert_true(false)
   }
 }
@@ -359,18 +366,18 @@ test "parse jsdoc - version alias for since" {
   let result = @compiler.parse_jsdoc(content)
   assert_eq(result.tags.length(), 1)
   match result.tags[0] {
-    @compiler.Since(version) => assert_eq(version, "2.0.0")
+    @compiler.Since(since) => assert_eq(since.version, "2.0.0")
     _ => assert_true(false)
   }
 }
 
 ///|
-test "parse jsdoc - virtual alias for abstract" {
+test "parse jsdoc - virtual tag" {
   let content = "@virtual"
   let result = @compiler.parse_jsdoc(content)
   assert_eq(result.tags.length(), 1)
   match result.tags[0] {
-    @compiler.Abstract => ()
+    @compiler.Virtual(_) => ()
     _ => assert_true(false)
   }
 }
