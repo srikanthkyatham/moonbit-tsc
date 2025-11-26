@@ -5,8 +5,781 @@
 // the traditional peek_char/advance approach.
 
 ///|
-/// State for tracking position in the scanner
-struct ScanState {
+/// Scan all tokens from source - V2 API (pattern matching based)
+/// Can be used as a drop-in replacement for Scanner::new() + scan_all()
+/// This version handles template interpolations properly with TemplateMiddle/TemplateTail
+pub fn scan_all_v2(source : String, file_path : String) -> Array[Token] {
+  tokenize_with_template_tracking(source, file_path)
+}
+
+///|
+/// Simple tokenizer - does NOT handle template interpolations properly
+/// Use tokenize_with_template_tracking for full TypeScript compatibility
+pub fn tokenize_v2_simple(source : String, file_path : String) -> Array[Token] {
+  tokenize_v2(source, file_path)
+}
+
+///|
+/// Tokenize with proper template interpolation handling
+/// Produces TemplateHead, TemplateMiddle, TemplateTail for templates with ${...}
+fn tokenize_with_template_tracking(
+  source : String,
+  file_path : String,
+) -> Array[Token] {
+  let tokens : Array[Token] = []
+  let state : ScanState = { line: 1, col: 1, offset: 0 }
+  let mut template_depth = 0
+  let mut scan_continuation = false
+  let mut code : StringView = source[:]
+
+  fn make_loc(
+    start_line : Int,
+    start_col : Int,
+    start_offset : Int,
+  ) -> SourceLocation {
+    SourceLocation::new(
+      file_path,
+      Position::new(start_line, start_col, start_offset),
+      Position::new(state.line, state.col, state.offset),
+    )
+  }
+
+  while true {
+    // After CloseBrace inside template, scan template continuation
+    if scan_continuation {
+      scan_continuation = false
+      let start_line = state.line
+      let start_col = state.col
+      let start_offset = state.offset
+      let content = StringBuilder::new()
+      let result = scan_template_continuation_v2(code, state, content)
+      match result {
+        TemplateScanResultV2::Complete(rest) => {
+          let loc = make_loc(start_line, start_col, start_offset)
+          tokens.push(TemplateTail(content.to_string(), loc))
+          template_depth -= 1
+          code = rest
+        }
+        TemplateScanResultV2::Middle(rest) => {
+          let loc = make_loc(start_line, start_col, start_offset)
+          tokens.push(TemplateMiddle(content.to_string(), loc))
+          code = rest
+        }
+        TemplateScanResultV2::Head(_) => {
+          // Should not happen for continuation, but handle gracefully
+          abort("Unexpected Head result from template continuation")
+        }
+      }
+      continue
+    }
+
+    // Scan single token
+    let (token, rest) = scan_single_token_v2(code, state, file_path)
+    tokens.push(token)
+    code = rest
+
+    // Track template depth and trigger continuation scanning
+    match token {
+      TemplateHead(_, _) => template_depth += 1
+      TemplateLiteral(_, _) => () // Simple template, no interpolation
+      CloseBrace(_) if template_depth > 0 => scan_continuation = true
+      EOF(_) => break
+      _ => ()
+    }
+  }
+  tokens
+}
+
+///|
+/// Scan a single token from the source
+/// Returns the token and the remaining source
+fn scan_single_token_v2(
+  code : StringView,
+  state : ScanState,
+  file_path : String,
+) -> (Token, StringView) {
+  fn make_loc(
+    start_line : Int,
+    start_col : Int,
+    start_offset : Int,
+  ) -> SourceLocation {
+    SourceLocation::new(
+      file_path,
+      Position::new(start_line, start_col, start_offset),
+      Position::new(state.line, state.col, state.offset),
+    )
+  }
+
+  loop code {
+    // End of input
+    [] as remaining => {
+      let loc = make_loc(state.line, state.col, state.offset)
+      (EOF(loc), remaining)
+    }
+
+    // === Whitespace ===
+    [' ' | '\t', .. rest] => {
+      state.col += 1
+      state.offset += 1
+      continue rest
+    }
+    ['\r', .. rest] => {
+      state.offset += 1
+      continue rest
+    }
+    ['\n', .. rest] => {
+      state.line += 1
+      state.col = 1
+      state.offset += 1
+      continue rest
+    }
+
+    // === Comments ===
+    [.. "//", .. rest] => {
+      state.col += 2
+      state.offset += 2
+      let rest2 = skip_line_comment(rest, state)
+      continue rest2
+    }
+    [.. "/*", .. rest] => {
+      state.col += 2
+      state.offset += 2
+      let rest2 = skip_block_comment(rest, state)
+      continue rest2
+    }
+
+    // === Multi-character operators (longest match first) ===
+    [.. ">>>=", .. rest] => {
+      let loc = make_loc(state.line, state.col, state.offset)
+      state.col += 4
+      state.offset += 4
+      (GreaterThanGreaterThanGreaterThanEquals(loc), rest)
+    }
+    [.. "===", .. rest] => {
+      let loc = make_loc(state.line, state.col, state.offset)
+      state.col += 3
+      state.offset += 3
+      (EqualsEqualsEquals(loc), rest)
+    }
+    [.. "!==", .. rest] => {
+      let loc = make_loc(state.line, state.col, state.offset)
+      state.col += 3
+      state.offset += 3
+      (ExclamationEqualsEquals(loc), rest)
+    }
+    [.. ">>>", .. rest] => {
+      let loc = make_loc(state.line, state.col, state.offset)
+      state.col += 3
+      state.offset += 3
+      (GreaterThanGreaterThanGreaterThan(loc), rest)
+    }
+    [.. "<<=", .. rest] => {
+      let loc = make_loc(state.line, state.col, state.offset)
+      state.col += 3
+      state.offset += 3
+      (LessThanLessThanEquals(loc), rest)
+    }
+    [.. ">>=", .. rest] => {
+      let loc = make_loc(state.line, state.col, state.offset)
+      state.col += 3
+      state.offset += 3
+      (GreaterThanGreaterThanEquals(loc), rest)
+    }
+    [.. "**=", .. rest] => {
+      let loc = make_loc(state.line, state.col, state.offset)
+      state.col += 3
+      state.offset += 3
+      (StarStarEquals(loc), rest)
+    }
+    [.. "&&=", .. rest] => {
+      let loc = make_loc(state.line, state.col, state.offset)
+      state.col += 3
+      state.offset += 3
+      (AmpersandAmpersandEquals(loc), rest)
+    }
+    [.. "||=", .. rest] => {
+      let loc = make_loc(state.line, state.col, state.offset)
+      state.col += 3
+      state.offset += 3
+      (BarBarEquals(loc), rest)
+    }
+    [.. "??=", .. rest] => {
+      let loc = make_loc(state.line, state.col, state.offset)
+      state.col += 3
+      state.offset += 3
+      (QuestionQuestionEquals(loc), rest)
+    }
+    [.. "...", .. rest] => {
+      let loc = make_loc(state.line, state.col, state.offset)
+      state.col += 3
+      state.offset += 3
+      (DotDotDot(loc), rest)
+    }
+
+    // 2-character operators
+    [.. "==", .. rest] => {
+      let loc = make_loc(state.line, state.col, state.offset)
+      state.col += 2
+      state.offset += 2
+      (EqualsEquals(loc), rest)
+    }
+    [.. "!=", .. rest] => {
+      let loc = make_loc(state.line, state.col, state.offset)
+      state.col += 2
+      state.offset += 2
+      (ExclamationEquals(loc), rest)
+    }
+    [.. "<=", .. rest] => {
+      let loc = make_loc(state.line, state.col, state.offset)
+      state.col += 2
+      state.offset += 2
+      (LessThanEquals(loc), rest)
+    }
+    [.. ">=", .. rest] => {
+      let loc = make_loc(state.line, state.col, state.offset)
+      state.col += 2
+      state.offset += 2
+      (GreaterThanEquals(loc), rest)
+    }
+    [.. "<<", .. rest] => {
+      let loc = make_loc(state.line, state.col, state.offset)
+      state.col += 2
+      state.offset += 2
+      (LessThanLessThan(loc), rest)
+    }
+    [.. ">>", .. rest] => {
+      let loc = make_loc(state.line, state.col, state.offset)
+      state.col += 2
+      state.offset += 2
+      (GreaterThanGreaterThan(loc), rest)
+    }
+    [.. "++", .. rest] => {
+      let loc = make_loc(state.line, state.col, state.offset)
+      state.col += 2
+      state.offset += 2
+      (PlusPlus(loc), rest)
+    }
+    [.. "--", .. rest] => {
+      let loc = make_loc(state.line, state.col, state.offset)
+      state.col += 2
+      state.offset += 2
+      (MinusMinus(loc), rest)
+    }
+    [.. "**", .. rest] => {
+      let loc = make_loc(state.line, state.col, state.offset)
+      state.col += 2
+      state.offset += 2
+      (StarStar(loc), rest)
+    }
+    [.. "&&", .. rest] => {
+      let loc = make_loc(state.line, state.col, state.offset)
+      state.col += 2
+      state.offset += 2
+      (AmpersandAmpersand(loc), rest)
+    }
+    [.. "||", .. rest] => {
+      let loc = make_loc(state.line, state.col, state.offset)
+      state.col += 2
+      state.offset += 2
+      (BarBar(loc), rest)
+    }
+    [.. "??", .. rest] => {
+      let loc = make_loc(state.line, state.col, state.offset)
+      state.col += 2
+      state.offset += 2
+      (QuestionQuestion(loc), rest)
+    }
+    [.. "?.", .. rest] => {
+      let loc = make_loc(state.line, state.col, state.offset)
+      state.col += 2
+      state.offset += 2
+      (QuestionDot(loc), rest)
+    }
+    [.. "=>", .. rest] => {
+      let loc = make_loc(state.line, state.col, state.offset)
+      state.col += 2
+      state.offset += 2
+      (Arrow(loc), rest)
+    }
+    [.. "+=", .. rest] => {
+      let loc = make_loc(state.line, state.col, state.offset)
+      state.col += 2
+      state.offset += 2
+      (PlusEquals(loc), rest)
+    }
+    [.. "-=", .. rest] => {
+      let loc = make_loc(state.line, state.col, state.offset)
+      state.col += 2
+      state.offset += 2
+      (MinusEquals(loc), rest)
+    }
+    [.. "*=", .. rest] => {
+      let loc = make_loc(state.line, state.col, state.offset)
+      state.col += 2
+      state.offset += 2
+      (StarEquals(loc), rest)
+    }
+    [.. "/=", .. rest] => {
+      let loc = make_loc(state.line, state.col, state.offset)
+      state.col += 2
+      state.offset += 2
+      (SlashEquals(loc), rest)
+    }
+    [.. "%=", .. rest] => {
+      let loc = make_loc(state.line, state.col, state.offset)
+      state.col += 2
+      state.offset += 2
+      (PercentEquals(loc), rest)
+    }
+    [.. "&=", .. rest] => {
+      let loc = make_loc(state.line, state.col, state.offset)
+      state.col += 2
+      state.offset += 2
+      (AmpersandEquals(loc), rest)
+    }
+    [.. "|=", .. rest] => {
+      let loc = make_loc(state.line, state.col, state.offset)
+      state.col += 2
+      state.offset += 2
+      (BarEquals(loc), rest)
+    }
+    [.. "^=", .. rest] => {
+      let loc = make_loc(state.line, state.col, state.offset)
+      state.col += 2
+      state.offset += 2
+      (CaretEquals(loc), rest)
+    }
+    [.. "</", .. rest] => {
+      let loc = make_loc(state.line, state.col, state.offset)
+      state.col += 2
+      state.offset += 2
+      (LessThanSlash(loc), rest)
+    }
+    [.. "/>", .. rest] => {
+      let loc = make_loc(state.line, state.col, state.offset)
+      state.col += 2
+      state.offset += 2
+      (SlashGreaterThan(loc), rest)
+    }
+    [.. "!.", .. rest] => {
+      let loc = make_loc(state.line, state.col, state.offset)
+      state.col += 2
+      state.offset += 2
+      (ExclamationDot(loc), rest)
+    }
+
+    // === Single-character operators ===
+    ['+', .. rest] => {
+      let loc = make_loc(state.line, state.col, state.offset)
+      state.col += 1
+      state.offset += 1
+      (Plus(loc), rest)
+    }
+    ['-', .. rest] => {
+      let loc = make_loc(state.line, state.col, state.offset)
+      state.col += 1
+      state.offset += 1
+      (Minus(loc), rest)
+    }
+    ['*', .. rest] => {
+      let loc = make_loc(state.line, state.col, state.offset)
+      state.col += 1
+      state.offset += 1
+      (Star(loc), rest)
+    }
+    ['/', .. rest] => {
+      let loc = make_loc(state.line, state.col, state.offset)
+      state.col += 1
+      state.offset += 1
+      (Slash(loc), rest)
+    }
+    ['%', .. rest] => {
+      let loc = make_loc(state.line, state.col, state.offset)
+      state.col += 1
+      state.offset += 1
+      (Percent(loc), rest)
+    }
+    ['<', .. rest] => {
+      let loc = make_loc(state.line, state.col, state.offset)
+      state.col += 1
+      state.offset += 1
+      (LessThan(loc), rest)
+    }
+    ['>', .. rest] => {
+      let loc = make_loc(state.line, state.col, state.offset)
+      state.col += 1
+      state.offset += 1
+      (GreaterThan(loc), rest)
+    }
+    ['=', .. rest] => {
+      let loc = make_loc(state.line, state.col, state.offset)
+      state.col += 1
+      state.offset += 1
+      (Equals(loc), rest)
+    }
+    ['!', .. rest] => {
+      let loc = make_loc(state.line, state.col, state.offset)
+      state.col += 1
+      state.offset += 1
+      (Exclamation(loc), rest)
+    }
+    ['&', .. rest] => {
+      let loc = make_loc(state.line, state.col, state.offset)
+      state.col += 1
+      state.offset += 1
+      (Ampersand(loc), rest)
+    }
+    ['|', .. rest] => {
+      let loc = make_loc(state.line, state.col, state.offset)
+      state.col += 1
+      state.offset += 1
+      (Bar(loc), rest)
+    }
+    ['^', .. rest] => {
+      let loc = make_loc(state.line, state.col, state.offset)
+      state.col += 1
+      state.offset += 1
+      (Caret(loc), rest)
+    }
+    ['~', .. rest] => {
+      let loc = make_loc(state.line, state.col, state.offset)
+      state.col += 1
+      state.offset += 1
+      (Tilde(loc), rest)
+    }
+    ['?', .. rest] => {
+      let loc = make_loc(state.line, state.col, state.offset)
+      state.col += 1
+      state.offset += 1
+      (Question(loc), rest)
+    }
+    [':', .. rest] => {
+      let loc = make_loc(state.line, state.col, state.offset)
+      state.col += 1
+      state.offset += 1
+      (Colon(loc), rest)
+    }
+    [';', .. rest] => {
+      let loc = make_loc(state.line, state.col, state.offset)
+      state.col += 1
+      state.offset += 1
+      (Semicolon(loc), rest)
+    }
+    [',', .. rest] => {
+      let loc = make_loc(state.line, state.col, state.offset)
+      state.col += 1
+      state.offset += 1
+      (Comma(loc), rest)
+    }
+    ['.', .. rest] => {
+      let loc = make_loc(state.line, state.col, state.offset)
+      state.col += 1
+      state.offset += 1
+      (Dot(loc), rest)
+    }
+    ['(', .. rest] => {
+      let loc = make_loc(state.line, state.col, state.offset)
+      state.col += 1
+      state.offset += 1
+      (OpenParen(loc), rest)
+    }
+    [')', .. rest] => {
+      let loc = make_loc(state.line, state.col, state.offset)
+      state.col += 1
+      state.offset += 1
+      (CloseParen(loc), rest)
+    }
+    ['{', .. rest] => {
+      let loc = make_loc(state.line, state.col, state.offset)
+      state.col += 1
+      state.offset += 1
+      (OpenBrace(loc), rest)
+    }
+    ['}', .. rest] => {
+      let loc = make_loc(state.line, state.col, state.offset)
+      state.col += 1
+      state.offset += 1
+      (CloseBrace(loc), rest)
+    }
+    ['[', .. rest] => {
+      let loc = make_loc(state.line, state.col, state.offset)
+      state.col += 1
+      state.offset += 1
+      (OpenBracket(loc), rest)
+    }
+    [']', .. rest] => {
+      let loc = make_loc(state.line, state.col, state.offset)
+      state.col += 1
+      state.offset += 1
+      (CloseBracket(loc), rest)
+    }
+    ['@', .. rest] => {
+      let loc = make_loc(state.line, state.col, state.offset)
+      state.col += 1
+      state.offset += 1
+      (At(loc), rest)
+    }
+
+    // === Private identifier (#name) ===
+    ['#', .. rest] => {
+      let start_line = state.line
+      let start_col = state.col
+      let start_offset = state.offset
+      state.col += 1
+      state.offset += 1
+      let ident = StringBuilder::new()
+      ident.write_char('#')
+      let rest2 = scan_ident_chars(rest, state, ident)
+      let loc = SourceLocation::new(
+        file_path,
+        Position::new(start_line, start_col, start_offset),
+        Position::new(state.line, state.col, state.offset),
+      )
+      (PrivateIdentifier(ident.to_string(), loc), rest2)
+    }
+
+    // === Strings ===
+    ['"', .. rest] => {
+      let start_line = state.line
+      let start_col = state.col
+      let start_offset = state.offset
+      state.col += 1
+      state.offset += 1
+      let content = StringBuilder::new()
+      let rest2 = scan_double_string(rest, state, content)
+      let loc = SourceLocation::new(
+        file_path,
+        Position::new(start_line, start_col, start_offset),
+        Position::new(state.line, state.col, state.offset),
+      )
+      (StringLiteral(content.to_string(), loc), rest2)
+    }
+    ['\'', .. rest] => {
+      let start_line = state.line
+      let start_col = state.col
+      let start_offset = state.offset
+      state.col += 1
+      state.offset += 1
+      let content = StringBuilder::new()
+      let rest2 = scan_single_string(rest, state, content)
+      let loc = SourceLocation::new(
+        file_path,
+        Position::new(start_line, start_col, start_offset),
+        Position::new(state.line, state.col, state.offset),
+      )
+      (StringLiteral(content.to_string(), loc), rest2)
+    }
+
+    // === Template literal ===
+    ['`', .. rest] => {
+      let start_line = state.line
+      let start_col = state.col
+      let start_offset = state.offset
+      state.col += 1
+      state.offset += 1
+      let content = StringBuilder::new()
+      let result = scan_template_literal_v2(rest, state, content)
+      match result {
+        TemplateScanResultV2::Complete(rest2) => {
+          let loc = SourceLocation::new(
+            file_path,
+            Position::new(start_line, start_col, start_offset),
+            Position::new(state.line, state.col, state.offset),
+          )
+          (TemplateLiteral(content.to_string(), loc), rest2)
+        }
+        TemplateScanResultV2::Head(rest2) | TemplateScanResultV2::Middle(rest2) => {
+          let loc = SourceLocation::new(
+            file_path,
+            Position::new(start_line, start_col, start_offset),
+            Position::new(state.line, state.col, state.offset),
+          )
+          (TemplateHead(content.to_string(), loc), rest2)
+        }
+      }
+    }
+
+    // === Numbers ===
+    [.. "0x", .. rest] | [.. "0X", .. rest] => {
+      let start_col = state.col
+      let start_offset = state.offset
+      state.col += 2
+      state.offset += 2
+      let digits = StringBuilder::new()
+      digits.write_string("0x")
+      let rest2 = scan_hex_digits(rest, state, digits)
+      match rest2 {
+        ['n', .. rest3] => {
+          state.col += 1
+          state.offset += 1
+          let loc = SourceLocation::new(
+            file_path,
+            Position::new(state.line, start_col, start_offset),
+            Position::new(state.line, state.col, state.offset),
+          )
+          (BigIntLiteral(digits.to_string() + "n", loc), rest3)
+        }
+        _ => {
+          let loc = SourceLocation::new(
+            file_path,
+            Position::new(state.line, start_col, start_offset),
+            Position::new(state.line, state.col, state.offset),
+          )
+          (NumericLiteral(digits.to_string(), loc), rest2)
+        }
+      }
+    }
+    [.. "0o", .. rest] | [.. "0O", .. rest] => {
+      let start_col = state.col
+      let start_offset = state.offset
+      state.col += 2
+      state.offset += 2
+      let digits = StringBuilder::new()
+      digits.write_string("0o")
+      let rest2 = scan_octal_digits(rest, state, digits)
+      match rest2 {
+        ['n', .. rest3] => {
+          state.col += 1
+          state.offset += 1
+          let loc = SourceLocation::new(
+            file_path,
+            Position::new(state.line, start_col, start_offset),
+            Position::new(state.line, state.col, state.offset),
+          )
+          (BigIntLiteral(digits.to_string() + "n", loc), rest3)
+        }
+        _ => {
+          let loc = SourceLocation::new(
+            file_path,
+            Position::new(state.line, start_col, start_offset),
+            Position::new(state.line, state.col, state.offset),
+          )
+          (NumericLiteral(digits.to_string(), loc), rest2)
+        }
+      }
+    }
+    [.. "0b", .. rest] | [.. "0B", .. rest] => {
+      let start_col = state.col
+      let start_offset = state.offset
+      state.col += 2
+      state.offset += 2
+      let digits = StringBuilder::new()
+      digits.write_string("0b")
+      let rest2 = scan_binary_digits(rest, state, digits)
+      match rest2 {
+        ['n', .. rest3] => {
+          state.col += 1
+          state.offset += 1
+          let loc = SourceLocation::new(
+            file_path,
+            Position::new(state.line, start_col, start_offset),
+            Position::new(state.line, state.col, state.offset),
+          )
+          (BigIntLiteral(digits.to_string() + "n", loc), rest3)
+        }
+        _ => {
+          let loc = SourceLocation::new(
+            file_path,
+            Position::new(state.line, start_col, start_offset),
+            Position::new(state.line, state.col, state.offset),
+          )
+          (NumericLiteral(digits.to_string(), loc), rest2)
+        }
+      }
+    }
+    // Decimal number
+    ['0'..='9' as first_digit, .. rest] => {
+      let start_col = state.col
+      let start_offset = state.offset
+      state.col += 1
+      state.offset += 1
+      let num = StringBuilder::new()
+      num.write_char(first_digit)
+      // Integer part
+      let rest2 = scan_decimal_digits(rest, state, num)
+      // Decimal part
+      let (rest3, has_dot) = match rest2 {
+        ['.', '0'..='9' as ch, .. rest4] => {
+          num.write_char('.')
+          num.write_char(ch)
+          state.col += 2
+          state.offset += 2
+          (scan_decimal_digits(rest4, state, num), true)
+        }
+        _ => (rest2, false)
+      }
+      // Exponent part
+      let (rest4, has_exp) = match rest3 {
+        ['e' | 'E', '+' | '-' as sign, '0'..='9' as ch, .. rest5] => {
+          num.write_char('e')
+          num.write_char(sign)
+          num.write_char(ch)
+          state.col += 3
+          state.offset += 3
+          (scan_decimal_digits(rest5, state, num), true)
+        }
+        ['e' | 'E', '0'..='9' as ch, .. rest5] => {
+          num.write_char('e')
+          num.write_char(ch)
+          state.col += 2
+          state.offset += 2
+          (scan_decimal_digits(rest5, state, num), true)
+        }
+        _ => (rest3, false)
+      }
+      // BigInt suffix
+      match rest4 {
+        ['n', .. rest5] if not(has_dot) && not(has_exp) => {
+          state.col += 1
+          state.offset += 1
+          let loc = SourceLocation::new(
+            file_path,
+            Position::new(state.line, start_col, start_offset),
+            Position::new(state.line, state.col, state.offset),
+          )
+          (BigIntLiteral(num.to_string() + "n", loc), rest5)
+        }
+        _ => {
+          let loc = SourceLocation::new(
+            file_path,
+            Position::new(state.line, start_col, start_offset),
+            Position::new(state.line, state.col, state.offset),
+          )
+          (NumericLiteral(num.to_string(), loc), rest4)
+        }
+      }
+    }
+
+    // === Identifiers and keywords ===
+    ['a'..='z' | 'A'..='Z' | '_' | '$' as first_char, .. rest] => {
+      let start_col = state.col
+      let start_offset = state.offset
+      state.col += 1
+      state.offset += 1
+      let ident = StringBuilder::new()
+      ident.write_char(first_char)
+      let rest2 = scan_ident_chars(rest, state, ident)
+      let loc = SourceLocation::new(
+        file_path,
+        Position::new(state.line, start_col, start_offset),
+        Position::new(state.line, state.col, state.offset),
+      )
+      (keyword_token(ident.to_string(), loc), rest2)
+    }
+
+    // === Unknown character ===
+    [ch, .. rest] => {
+      let loc = make_loc(state.line, state.col, state.offset)
+      state.col += 1
+      state.offset += 1
+      (Unknown(Char::to_string(ch), loc), rest)
+    }
+  }
+}
+
+///|
+/// Internal state for tracking position in the scanner
+priv struct ScanState {
   mut line : Int
   mut col : Int
   mut offset : Int
@@ -19,7 +792,6 @@ fn skip_line_comment(
   state : ScanState,
 ) -> StringView {
   loop code {
-    [] => code
     ['\n', .. rest] => {
       state.line += 1
       state.col = 1
@@ -31,6 +803,7 @@ fn skip_line_comment(
       state.offset += 1
       continue rest
     }
+    remaining => remaining // End of input or after newline
   }
 }
 
@@ -41,7 +814,6 @@ fn skip_block_comment(
   state : ScanState,
 ) -> StringView {
   loop code {
-    [] => code
     [.. "*/", .. rest] => {
       state.col += 2
       state.offset += 2
@@ -58,6 +830,7 @@ fn skip_block_comment(
       state.offset += 1
       continue rest
     }
+    remaining => remaining // End of input (unterminated comment)
   }
 }
 
@@ -69,7 +842,6 @@ fn scan_double_string(
   content : StringBuilder,
 ) -> StringView {
   loop code {
-    [] => code
     ['"', .. rest] => {
       state.col += 1
       state.offset += 1
@@ -105,13 +877,14 @@ fn scan_double_string(
       state.offset += 2
       continue rest
     }
-    ['\n', ..] => code // Unterminated at newline
+    ['\n', .. remaining] => remaining // Unterminated at newline
     [ch, .. rest] => {
       content.write_char(ch)
       state.col += 1
       state.offset += 1
       continue rest
     }
+    remaining => remaining // End of input (unterminated string)
   }
 }
 
@@ -123,7 +896,6 @@ fn scan_single_string(
   content : StringBuilder,
 ) -> StringView {
   loop code {
-    [] => code
     ['\'', .. rest] => {
       state.col += 1
       state.offset += 1
@@ -159,21 +931,23 @@ fn scan_single_string(
       state.offset += 2
       continue rest
     }
-    ['\n', ..] => code // Unterminated at newline
+    ['\n', .. remaining] => remaining // Unterminated at newline
     [ch, .. rest] => {
       content.write_char(ch)
       state.col += 1
       state.offset += 1
       continue rest
     }
+    remaining => remaining // End of input (unterminated string)
   }
 }
 
 ///|
 /// Template literal scanning result
-enum TemplateScanResultV2 {
-  Complete(StringView)
-  Head(StringView)
+priv enum TemplateScanResultV2 {
+  Complete(StringView) // Full template literal or template tail
+  Head(StringView) // Template head (has interpolation after)
+  Middle(StringView) // Template middle (has interpolation after)
 }
 
 ///|
@@ -184,7 +958,7 @@ fn scan_template_literal_v2(
   content : StringBuilder,
 ) -> TemplateScanResultV2 {
   loop code {
-    [] => Complete(code)
+    [] as remaining => Complete(remaining)
     ['`', .. rest] => {
       state.col += 1
       state.offset += 1
@@ -209,6 +983,78 @@ fn scan_template_literal_v2(
     }
     [.. "\\n", .. rest] => {
       content.write_char('\n')
+      state.col += 2
+      state.offset += 2
+      continue rest
+    }
+    ['\n', .. rest] => {
+      content.write_char('\n')
+      state.line += 1
+      state.col = 1
+      state.offset += 1
+      continue rest
+    }
+    [ch, .. rest] => {
+      content.write_char(ch)
+      state.col += 1
+      state.offset += 1
+      continue rest
+    }
+  }
+}
+
+///|
+/// Scan template continuation (after closing } of interpolation)
+/// Returns Complete for TemplateTail or Middle for TemplateMiddle
+fn scan_template_continuation_v2(
+  code : StringView,
+  state : ScanState,
+  content : StringBuilder,
+) -> TemplateScanResultV2 {
+  loop code {
+    [] as remaining => Complete(remaining) // Unterminated
+    ['`', .. rest] => {
+      state.col += 1
+      state.offset += 1
+      Complete(rest) // TemplateTail
+    }
+    [.. "${", .. rest] => {
+      state.col += 2
+      state.offset += 2
+      Middle(rest) // TemplateMiddle
+    }
+    [.. "\\`", .. rest] => {
+      content.write_char('`')
+      state.col += 2
+      state.offset += 2
+      continue rest
+    }
+    [.. "\\$", .. rest] => {
+      content.write_char('$')
+      state.col += 2
+      state.offset += 2
+      continue rest
+    }
+    [.. "\\n", .. rest] => {
+      content.write_char('\n')
+      state.col += 2
+      state.offset += 2
+      continue rest
+    }
+    [.. "\\r", .. rest] => {
+      content.write_char('\r')
+      state.col += 2
+      state.offset += 2
+      continue rest
+    }
+    [.. "\\t", .. rest] => {
+      content.write_char('\t')
+      state.col += 2
+      state.offset += 2
+      continue rest
+    }
+    [.. "\\\\", .. rest] => {
+      content.write_char('\\')
       state.col += 2
       state.offset += 2
       continue rest
@@ -970,7 +1816,8 @@ pub fn tokenize_v2(source : String, file_path : String) -> Array[Token] {
           tokens.push(TemplateLiteral(content.to_string(), loc))
           continue rest2
         }
-        TemplateScanResultV2::Head(rest2) => {
+        TemplateScanResultV2::Head(rest2)
+        | TemplateScanResultV2::Middle(rest2) => {
           let loc = SourceLocation::new(
             file_path,
             Position::new(start_line, start_col, start_offset),

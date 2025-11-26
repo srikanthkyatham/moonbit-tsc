@@ -567,3 +567,111 @@ test "scanner_v2 jsx operators" {
     _ => assert_true(false)
   }
 }
+
+///|
+test "scanner_v2 template with interpolation" {
+  // Using scan_all_v2 which properly handles template interpolations
+  let tokens = @compiler.scan_all_v2("`hello ${name} world`", "test.ts")
+  // Expected: TemplateHead("hello ") Identifier("name") CloseBrace TemplateTail(" world") EOF
+  assert_eq(tokens.length(), 5)
+  match tokens[0] {
+    TemplateHead(value, _) => assert_eq(value, "hello ")
+    _ => {
+      println("Expected TemplateHead, got: \{tokens[0]}")
+      assert_true(false)
+    }
+  }
+  match tokens[1] {
+    Identifier(value, _) => assert_eq(value, "name")
+    _ => {
+      println("Expected Identifier, got: \{tokens[1]}")
+      assert_true(false)
+    }
+  }
+  match tokens[2] {
+    CloseBrace(_) => () // End of interpolation
+    _ => {
+      println("Expected CloseBrace, got: \{tokens[2]}")
+      assert_true(false)
+    }
+  }
+  match tokens[3] {
+    TemplateTail(value, _) => assert_eq(value, " world")
+    _ => {
+      println("Expected TemplateTail, got: \{tokens[3]}")
+      assert_true(false)
+    }
+  }
+  match tokens[4] {
+    EOF(_) => ()
+    _ => assert_true(false)
+  }
+}
+
+///|
+test "scanner_v2 template with multiple interpolations" {
+  // Using scan_all_v2 for proper handling
+  let tokens = @compiler.scan_all_v2("`a${x}b${y}c`", "test.ts")
+  // Expected: TemplateHead("a") Identifier("x") CloseBrace TemplateMiddle("b") Identifier("y") CloseBrace TemplateTail("c") EOF
+  assert_eq(tokens.length(), 8)
+  match tokens[0] {
+    TemplateHead(value, _) => assert_eq(value, "a")
+    _ => {
+      println("Expected TemplateHead, got: \{tokens[0]}")
+      assert_true(false)
+    }
+  }
+  match tokens[1] {
+    Identifier(value, _) => assert_eq(value, "x")
+    _ => assert_true(false)
+  }
+  match tokens[2] {
+    CloseBrace(_) => ()
+    _ => {
+      println("Expected CloseBrace, got: \{tokens[2]}")
+      assert_true(false)
+    }
+  }
+  match tokens[3] {
+    TemplateMiddle(value, _) => assert_eq(value, "b")
+    _ => {
+      println("Expected TemplateMiddle, got: \{tokens[3]}")
+      assert_true(false)
+    }
+  }
+  match tokens[4] {
+    Identifier(value, _) => assert_eq(value, "y")
+    _ => assert_true(false)
+  }
+  match tokens[5] {
+    CloseBrace(_) => ()
+    _ => {
+      println("Expected CloseBrace, got: \{tokens[5]}")
+      assert_true(false)
+    }
+  }
+  match tokens[6] {
+    TemplateTail(value, _) => assert_eq(value, "c")
+    _ => {
+      println("Expected TemplateTail, got: \{tokens[6]}")
+      assert_true(false)
+    }
+  }
+  match tokens[7] {
+    EOF(_) => ()
+    _ => assert_true(false)
+  }
+}
+
+///|
+test "scanner_v2 simple template (no interpolation)" {
+  let tokens = @compiler.scan_all_v2("`hello world`", "test.ts")
+  assert_eq(tokens.length(), 2) // TemplateLiteral EOF
+  match tokens[0] {
+    TemplateLiteral(value, _) => assert_eq(value, "hello world")
+    _ => {
+      println("Expected TemplateLiteral, got: \{tokens[0]}")
+      assert_true(false)
+    }
+  }
+}
