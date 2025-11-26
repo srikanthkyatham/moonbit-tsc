@@ -4831,3 +4831,69 @@ fn resolve_interface_type(
     _ => (None, checker)
   }
 }
+
+// ============================================================================
+// V2 Type Checker Integration
+// ============================================================================
+
+///|
+/// Create a TypeEnv from the TypeChecker's current scope
+fn type_env_from_checker(checker : TypeChecker) -> TypeEnv {
+  let mut env = TypeEnv::with_builtins()
+
+  // Add narrowed types from control flow analysis
+  for kv in checker.narrowed_types {
+    let var_name = kv.0
+    let narrowed = kv.1
+    // narrowed_type is always present (not Option)
+    let type_v2 = type_to_v2(narrowed.narrowed_type)
+    env = env.with_narrowing(var_name, type_v2)
+  }
+
+  env
+}
+
+///|
+/// Infer type using the v2 bidirectional type checker
+/// This provides richer error messages and control flow narrowing
+pub fn infer_type_v2_integrated(
+  checker : TypeChecker,
+  expr : Node
+) -> (Type, TypeChecker, Array[TypeMismatchError]) {
+  // Create TypeEnv from checker state
+  let env = type_env_from_checker(checker)
+
+  // Use v2 bidirectional type checker
+  let result = infer_expr_v2(env, expr)
+
+  // Convert result type back to old Type format
+  let convert_result = v2_to_type(checker, result.ty)
+  let old_type = convert_result.0
+  let updated_checker = convert_result.1
+
+  (old_type, updated_checker, result.errors)
+}
+
+///|
+/// Check expression against expected type using v2 checker
+pub fn check_type_v2_integrated(
+  checker : TypeChecker,
+  expr : Node,
+  expected : Type
+) -> (Type, TypeChecker, Array[TypeMismatchError]) {
+  // Create TypeEnv from checker state
+  let env = type_env_from_checker(checker)
+
+  // Convert expected type to v2 format
+  let expected_v2 = type_to_v2(expected)
+
+  // Use v2 bidirectional type checker in Check mode
+  let result = check_expr_v2(env, expr, Check(expected_v2))
+
+  // Convert result type back to old Type format
+  let convert_result = v2_to_type(checker, result.ty)
+  let old_type = convert_result.0
+  let updated_checker = convert_result.1
+
+  (old_type, updated_checker, result.errors)
+}
