@@ -1738,24 +1738,92 @@ fn infer_call_expression_type(
     // Try to infer from Function type directly
     match func_type {
       Type::Function(func) =>
-        // Return the function's return type
-        (func.return_type, checker)
-      Any(_) =>
-        // Any is callable and returns any
+        // Check arguments against parameter types
+        check_function_call_args(checker, func, arg_types, call.location)
+      Any(_) | Unknown(_) | TypeReference(_) | Error(_) =>
+        // Any, unknown, type references (might be classes), and error types
+        // are treated as callable and return any
         any_type(checker)
+      Number(_) | String(_) | Boolean(_) | Void(_) | Null(_) | Undefined(_) |
+      NumberLiteral(_, _) | StringLiteral(_, _) | BooleanLiteral(_, _) | Never(_) | Symbol(_) => {
+        // Primitive types are not callable
+        let checker = add_diagnostic_with_code(
+          checker,
+          "This expression is not callable. Type '\{type_to_string(func_type)}' has no call signatures.",
+          call.location,
+          TS2349,
+        )
+        any_type(checker)
+      }
       _ =>
-        // Not callable - return any for now (could add diagnostic)
+        // For other types (objects without call signatures, etc.),
+        // be permissive and return any without error
         any_type(checker)
     }
   } else {
     // Resolve which overload matches
     match resolve_call_overload(checker, signatures, arg_types) {
       Some((return_type, c)) => (return_type, c)
-      None =>
-        // No overload matches - return any for now
-        any_type(checker)
+      None => {
+        // No overload matches - add diagnostic and return error type
+        let checker = add_diagnostic_with_code(
+          checker,
+          "No overload matches this call. Arguments: (\{format_arg_types(arg_types)})",
+          call.location,
+          TS2769,
+        )
+        let (err_t, checker) = error_type(checker)
+        (err_t, checker)
+      }
     }
   }
+}
+
+///|
+/// Check function call arguments and return result type
+fn check_function_call_args(
+  checker : TypeChecker,
+  func : CheckerFunctionType,
+  arg_types : Array[Type],
+  location : SourceLocation,
+) -> (Type, TypeChecker) {
+  let mut checker = checker
+
+  // Check argument count
+  let min_params = count_required_params(func.parameters)
+  if arg_types.length() < min_params {
+    checker = add_diagnostic_with_code(
+      checker,
+      "Expected \{min_params} arguments, but got \{arg_types.length()}",
+      location,
+      TS2554,
+    )
+  }
+
+  // Check each argument type
+  for i = 0; i < arg_types.length() && i < func.parameters.length(); i = i + 1 {
+    let param = func.parameters[i]
+    if not(is_assignable(arg_types[i], param.param_type)) {
+      checker = add_diagnostic_with_code(
+        checker,
+        "Argument of type '\{type_to_string(arg_types[i])}' is not assignable to parameter '\{param.name}' of type '\{type_to_string(param.param_type)}'",
+        location,
+        TS2345,
+      )
+    }
+  }
+
+  (func.return_type, checker)
+}
+
+///|
+/// Format argument types for error messages
+fn format_arg_types(arg_types : Array[Type]) -> String {
+  let parts : Array[String] = []
+  for t in arg_types {
+    parts.push(type_to_string(t))
+  }
+  parts.join(", ")
 }
 
 ///|
@@ -1823,7 +1891,7 @@ fn try_signature(
   }
 
   // If the signature has type parameters, infer them from arguments
-  let (effective_params, return_type, checker) = if signature.type_parameters.length() >
+  let (effective_params, return_type, checker, constraint_ok) = if signature.type_parameters.length() >
     0 {
     // Infer type arguments from actual arguments
     let param_types : Array[Type] = []
@@ -1836,16 +1904,11 @@ fn try_signature(
       param_types,
       arg_types,
     )
-    // Check type arguments against constraints
-    let checker = check_type_arguments(
+    // Check type arguments against constraints (returns false if any constraint violated)
+    let (checker, constraints_satisfied) = check_type_arguments_strict(
       checker,
       signature.type_parameters,
       inferred_type_args,
-      {
-        file_path: "",
-        start: { line: 0, column: 0, offset: 0 },
-        end: { line: 0, column: 0, offset: 0 },
-      },
     )
     // Substitute type parameters in parameter types and return type
     let mut checker = checker
@@ -1871,9 +1934,14 @@ fn try_signature(
       signature.type_parameters,
       inferred_type_args,
     )
-    (new_params, subst_return, checker)
+    (new_params, subst_return, checker, constraints_satisfied)
   } else {
-    (signature.parameters, signature.return_type, checker)
+    (signature.parameters, signature.return_type, checker, true)
+  }
+
+  // If constraints were violated, this signature doesn't match
+  if not(constraint_ok) {
+    return None
   }
 
   // Check each argument against corresponding parameter type
@@ -1889,6 +1957,28 @@ fn try_signature(
     }
   }
   Some((return_type, checker))
+}
+
+///|
+/// Check type arguments against constraints, return bool indicating if all satisfied
+fn check_type_arguments_strict(
+  checker : TypeChecker,
+  type_params : Array[CheckerTypeParameter],
+  type_args : Array[Type],
+) -> (TypeChecker, Bool) {
+  let mut all_satisfied = true
+
+  // Check constraints
+  for i = 0; i < type_args.length() && i < type_params.length(); i = i + 1 {
+    match type_params[i].constraint {
+      Some(constraint) =>
+        if not(is_assignable(type_args[i], constraint)) {
+          all_satisfied = false
+        }
+      None => ()
+    }
+  }
+  (checker, all_satisfied)
 }
 
 ///|
@@ -3922,23 +4012,443 @@ fn is_function_assignable(
 }
 
 ///|
-/// Check assignment compatibility
+/// Check assignment compatibility with detailed error messages
 fn check_assignment_compatibility(
   checker : TypeChecker,
   source : Type,
   target : Type,
   location : SourceLocation,
 ) -> TypeChecker {
+  // Use detailed checking that produces specific error messages
+  check_assignment_detailed(checker, source, target, location, "")
+}
+
+///|
+/// Check assignment with detailed error reporting
+fn check_assignment_detailed(
+  checker : TypeChecker,
+  source : Type,
+  target : Type,
+  location : SourceLocation,
+  path : String,
+) -> TypeChecker {
+  // Handle special cases first
+  match (source, target) {
+    // Any is assignable to/from anything
+    (Any(_), _) | (_, Any(_)) => return checker
+    // Never is assignable to everything
+    (Never(_), _) => return checker
+    // Error type assignable to anything (to prevent cascading errors)
+    (Error(_), _) | (_, Error(_)) => return checker
+    // Unknown is only assignable to unknown or any
+    (_, Unknown(_)) => return checker
+    (Unknown(_), Unknown(_)) => return checker
+    // Nothing is assignable to never
+    (_, Never(_)) =>
+      return add_diagnostic_with_code(
+        checker,
+        "Type '\{type_to_string(source)}' is not assignable to type 'never'",
+        location,
+        TS2322,
+      )
+    _ => ()
+  }
+
+  // Check object types with detailed property checking
+  match (source, target) {
+    (Object(source_obj), Object(target_obj)) =>
+      return check_object_assignability_detailed(
+        checker, source_obj, target_obj, location, path,
+      )
+    _ => ()
+  }
+
+  // Check union types with discriminant checking
+  match target {
+    Union(union) =>
+      return check_union_assignability_detailed(
+        checker, source, union, location, path,
+      )
+    _ => ()
+  }
+
+  // Check intersection types
+  match target {
+    Intersection(intersection) =>
+      return check_intersection_assignability_detailed(
+        checker, source, intersection, location, path,
+      )
+    _ => ()
+  }
+
+  // Check array types with element checking
+  match (source, target) {
+    (Type::Array(source_arr), Type::Array(target_arr)) =>
+      return check_array_assignability_detailed(
+        checker, source_arr, target_arr, location, path,
+      )
+    _ => ()
+  }
+
+  // Check function types
+  match (source, target) {
+    (Type::Function(source_fn), Type::Function(target_fn)) =>
+      return check_function_assignability_detailed(
+        checker, source_fn, target_fn, location, path,
+      )
+    _ => ()
+  }
+
+  // Check tuple types
+  match (source, target) {
+    (Tuple(source_tuple), Tuple(target_tuple)) =>
+      return check_tuple_assignability_detailed(
+        checker, source_tuple, target_tuple, location, path,
+      )
+    _ => ()
+  }
+
+  // Fall back to simple assignability check
   if is_assignable(source, target) {
     checker
   } else {
-    add_diagnostic_with_code(
+    let msg = if path == "" {
+      "Type '\{type_to_string(source)}' is not assignable to type '\{type_to_string(target)}'"
+    } else {
+      "Type '\{type_to_string(source)}' is not assignable to type '\{type_to_string(target)}' at \{path}"
+    }
+    add_diagnostic_with_code(checker, msg, location, TS2322)
+  }
+}
+
+///|
+/// Check object assignability with detailed property error reporting
+fn check_object_assignability_detailed(
+  checker : TypeChecker,
+  source : ObjectType,
+  target : ObjectType,
+  location : SourceLocation,
+  path : String,
+) -> TypeChecker {
+  let mut checker = checker
+
+  // Check that all required properties in target exist in source with compatible types
+  for entry in target.properties {
+    let (prop_name, target_prop) = entry
+    let prop_path = if path == "" { prop_name } else { "\{path}.\{prop_name}" }
+
+    match source.properties.get(prop_name) {
+      Some(source_prop) =>
+        // Check property type compatibility recursively
+        checker = check_assignment_detailed(
+          checker,
+          source_prop.prop_type,
+          target_prop.prop_type,
+          location,
+          prop_path,
+        )
+      None =>
+        // Property missing
+        if not(target_prop.is_optional) {
+          checker = add_diagnostic_with_code(
+            checker,
+            "Property '\{prop_name}' is missing in type '\{type_to_string(Object(source))}' but required in type '\{type_to_string(Object(target))}'",
+            location,
+            TS2322,
+          )
+        }
+    }
+  }
+
+  // Check index signatures if target has one
+  for index_sig in target.index_signatures {
+    // All source properties must conform to target index signature
+    for entry in source.properties {
+      let (prop_name, source_prop) = entry
+      // Skip properties already defined in target (they have their own types)
+      if target.properties.get(prop_name) is None {
+        if not(is_assignable(source_prop.prop_type, index_sig.return_type)) {
+          checker = add_diagnostic_with_code(
+            checker,
+            "Property '\{prop_name}' of type '\{type_to_string(source_prop.prop_type)}' is not assignable to index signature type '\{type_to_string(index_sig.return_type)}'",
+            location,
+            TS2322,
+          )
+        }
+      }
+    }
+  }
+
+  checker
+}
+
+///|
+/// Check union assignability with discriminant analysis
+fn check_union_assignability_detailed(
+  checker : TypeChecker,
+  source : Type,
+  union : CheckerUnionType,
+  location : SourceLocation,
+  _path : String,
+) -> TypeChecker {
+  // Check if source is assignable to any member of the union
+  for union_type in union.types {
+    if is_assignable(source, union_type) {
+      return checker
+    }
+  }
+
+  // If source is an object, try discriminated union checking
+  match source {
+    Object(source_obj) => {
+      // Look for discriminant properties (literal type properties like "kind")
+      let discriminants = find_discriminant_properties(union)
+      for discriminant in discriminants {
+        match source_obj.properties.get(discriminant) {
+          Some(source_prop) => {
+            // Check if source's discriminant value matches any union member
+            let matching = find_union_members_by_discriminant(
+              union, discriminant, source_prop.prop_type,
+            )
+            if matching.is_empty() {
+              return add_diagnostic_with_code(
+                checker,
+                "Type '\{type_to_string(source_prop.prop_type)}' is not assignable to discriminant property '\{discriminant}'. Expected one of: \{format_discriminant_values(union, discriminant)}",
+                location,
+                TS2322,
+              )
+            }
+          }
+          None => ()
+        }
+      }
+    }
+    _ => ()
+  }
+
+  // No union member matches
+  add_diagnostic_with_code(
+    checker,
+    "Type '\{type_to_string(source)}' is not assignable to type '\{type_to_string(Union(union))}'",
+    location,
+    TS2322,
+  )
+}
+
+///|
+/// Find discriminant properties in a union (properties that are literal types)
+fn find_discriminant_properties(union : CheckerUnionType) -> Array[String] {
+  let result : Array[String] = []
+  let candidates : Map[String, Int] = Map::new()
+
+  // Find properties that appear in all object members with literal types
+  for union_type in union.types {
+    match union_type {
+      Object(obj) =>
+        for entry in obj.properties {
+          let (name, prop) = entry
+          // Check if property has a literal type
+          match prop.prop_type {
+            StringLiteral(_, _) | NumberLiteral(_, _) | BooleanLiteral(_, _) => {
+              let count = candidates.get(name).unwrap_or(0)
+              candidates.set(name, count + 1)
+            }
+            _ => ()
+          }
+        }
+      _ => ()
+    }
+  }
+
+  // Properties that appear in multiple members are good discriminants
+  for entry in candidates {
+    let (name, count) = entry
+    if count >= 2 {
+      result.push(name)
+    }
+  }
+  result
+}
+
+///|
+/// Find union members that have a specific discriminant value
+fn find_union_members_by_discriminant(
+  union : CheckerUnionType,
+  prop_name : String,
+  value : Type,
+) -> Array[Type] {
+  let result : Array[Type] = []
+  for union_type in union.types {
+    match union_type {
+      Object(obj) =>
+        match obj.properties.get(prop_name) {
+          Some(prop) =>
+            if is_assignable(value, prop.prop_type) {
+              result.push(union_type)
+            }
+          None => ()
+        }
+      _ => ()
+    }
+  }
+  result
+}
+
+///|
+/// Format expected discriminant values for error message
+fn format_discriminant_values(union : CheckerUnionType, prop_name : String) -> String {
+  let values : Array[String] = []
+  for union_type in union.types {
+    match union_type {
+      Object(obj) =>
+        match obj.properties.get(prop_name) {
+          Some(prop) => values.push(type_to_string(prop.prop_type))
+          None => ()
+        }
+      _ => ()
+    }
+  }
+  values.join(" | ")
+}
+
+///|
+/// Check intersection assignability
+fn check_intersection_assignability_detailed(
+  checker : TypeChecker,
+  source : Type,
+  intersection : CheckerIntersectionType,
+  location : SourceLocation,
+  path : String,
+) -> TypeChecker {
+  let mut checker = checker
+
+  // Source must be assignable to ALL members of the intersection
+  for i = 0; i < intersection.types.length(); i = i + 1 {
+    let intersect_type = intersection.types[i]
+    checker = check_assignment_detailed(
+      checker, source, intersect_type, location, path,
+    )
+  }
+
+  checker
+}
+
+///|
+/// Check array assignability with element type checking
+fn check_array_assignability_detailed(
+  checker : TypeChecker,
+  source : CheckerArrayType,
+  target : CheckerArrayType,
+  location : SourceLocation,
+  path : String,
+) -> TypeChecker {
+  let elem_path = if path == "" { "[element]" } else { "\{path}[element]" }
+  check_assignment_detailed(
+    checker,
+    source.element_type,
+    target.element_type,
+    location,
+    elem_path,
+  )
+}
+
+///|
+/// Check function assignability with parameter and return type checking
+fn check_function_assignability_detailed(
+  checker : TypeChecker,
+  source : CheckerFunctionType,
+  target : CheckerFunctionType,
+  location : SourceLocation,
+  path : String,
+) -> TypeChecker {
+  let mut checker = checker
+
+  // Return type must be assignable (covariant)
+  let ret_path = if path == "" { "return" } else { "\{path}.return" }
+  checker = check_assignment_detailed(
+    checker,
+    source.return_type,
+    target.return_type,
+    location,
+    ret_path,
+  )
+
+  // Parameters are contravariant - target params must be assignable to source
+  if source.parameters.length() < target.parameters.length() {
+    checker = add_diagnostic_with_code(
       checker,
-      "Type '\{type_to_string(source)}' is not assignable to type '\{type_to_string(target)}'",
+      "Function has fewer parameters (\{source.parameters.length()}) than required (\{target.parameters.length()})",
       location,
       TS2322,
     )
   }
+
+  for i = 0; i < target.parameters.length(); i = i + 1 {
+    if i < source.parameters.length() {
+      let param_path = if path == "" {
+        "parameter '\{target.parameters[i].name}'"
+      } else {
+        "\{path}.parameter '\{target.parameters[i].name}'"
+      }
+      // Contravariant: target param type must be assignable to source param type
+      checker = check_assignment_detailed(
+        checker,
+        target.parameters[i].param_type,
+        source.parameters[i].param_type,
+        location,
+        param_path,
+      )
+    }
+  }
+
+  checker
+}
+
+///|
+/// Check tuple assignability
+fn check_tuple_assignability_detailed(
+  checker : TypeChecker,
+  source : CheckerTupleType,
+  target : CheckerTupleType,
+  location : SourceLocation,
+  path : String,
+) -> TypeChecker {
+  let mut checker = checker
+
+  // Count required elements in target
+  let mut target_required = 0
+  for elem in target.element_types {
+    if not(elem.is_optional) && not(elem.is_rest) {
+      target_required = target_required + 1
+    }
+  }
+
+  // Source must have at least as many elements as target required
+  if source.element_types.length() < target_required {
+    checker = add_diagnostic_with_code(
+      checker,
+      "Tuple has fewer elements (\{source.element_types.length()}) than required (\{target_required})",
+      location,
+      TS2322,
+    )
+    return checker
+  }
+
+  // Check element-wise assignability
+  for i = 0; i < target.element_types.length(); i = i + 1 {
+    if i < source.element_types.length() {
+      let elem_path = if path == "" { "[\{i}]" } else { "\{path}[\{i}]" }
+      checker = check_assignment_detailed(
+        checker,
+        source.element_types[i].element_type,
+        target.element_types[i].element_type,
+        location,
+        elem_path,
+      )
+    }
+  }
+
+  checker
 }
 
 ///|

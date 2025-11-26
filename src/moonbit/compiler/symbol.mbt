@@ -334,6 +334,8 @@ pub enum DiagnosticCode {
   TS2314 // Generic type requires more type arguments
   TS2322 // Type 'X' is not assignable to type 'Y'
   TS2344 // Type 'X' does not satisfy the constraint 'Y'
+  TS2345 // Argument of type 'X' is not assignable to parameter of type 'Y'
+  TS2349 // This expression is not callable
   TS2355 // A function whose declared type is neither 'void' nor 'any' must return a value
   TS2363 // The right-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type
 
@@ -342,8 +344,12 @@ pub enum DiagnosticCode {
 
   // Variable/Constant Errors (2500-2599)
   TS2511 // Cannot create an instance of an abstract class
+  TS2554 // Expected X arguments, but got Y
   TS2558 // Expected X type arguments, but got Y
   TS2588 // Cannot assign to 'X' because it is a constant
+
+  // Overload Errors (2700-2799)
+  TS2769 // No overload matches this call
 
   // Unreachable Code (7000-7099)
   TS7027 // Unreachable code detected
@@ -356,12 +362,16 @@ pub fn DiagnosticCode::to_int(self : DiagnosticCode) -> Int {
     TS2314 => 2314
     TS2322 => 2322
     TS2344 => 2344
+    TS2345 => 2345
+    TS2349 => 2349
     TS2355 => 2355
     TS2363 => 2363
     TS2474 => 2474
     TS2511 => 2511
+    TS2554 => 2554
     TS2558 => 2558
     TS2588 => 2588
+    TS2769 => 2769
     TS7027 => 7027
   }
 }
@@ -373,12 +383,16 @@ pub fn DiagnosticCode::from_int(code : Int) -> DiagnosticCode? {
     2314 => Some(TS2314)
     2322 => Some(TS2322)
     2344 => Some(TS2344)
+    2345 => Some(TS2345)
+    2349 => Some(TS2349)
     2355 => Some(TS2355)
     2363 => Some(TS2363)
     2474 => Some(TS2474)
     2511 => Some(TS2511)
+    2554 => Some(TS2554)
     2558 => Some(TS2558)
     2588 => Some(TS2588)
+    2769 => Some(TS2769)
     7027 => Some(TS7027)
     _ => None
   }
