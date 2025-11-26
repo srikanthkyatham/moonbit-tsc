@@ -4,8 +4,15 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    // Build option to enable MoonBit FFI
-    const enable_moonbit_ffi = b.option(bool, "moonbit-ffi", "Link MoonBit compiler library") orelse false;
+    // Build option to enable MoonBit FFI (dynamic linking)
+    const enable_moonbit_ffi = b.option(bool, "moonbit-ffi", "Link MoonBit compiler library (dynamic)") orelse false;
+
+    // Static library path (passed from CMake for static linking)
+    const moonbit_static_lib = b.option(
+        []const u8,
+        "moonbit-static-lib",
+        "Path to static MoonBit library (libmoonbit_tsc.a)",
+    );
 
     // Main executable
     const exe = b.addExecutable(.{
@@ -19,12 +26,16 @@ pub fn build(b: *std.Build) void {
 
     // Add include path for FFI headers
     exe.addIncludePath(b.path("include"));
+    exe.addIncludePath(b.path("../moonbit/ffi_lib"));
 
     // Link libc (required for FFI)
     exe.linkLibC();
 
-    // MoonBit library linkage
-    if (enable_moonbit_ffi) {
+    // Static linking of MoonBit library (preferred for single binary)
+    if (moonbit_static_lib) |lib_path| {
+        exe.addObjectFile(.{ .cwd_relative = lib_path });
+    } else if (enable_moonbit_ffi) {
+        // Fallback to dynamic linking if -Dmoonbit-ffi is specified
         // Add MoonBit library path
         exe.addLibraryPath(b.path("../moonbit/ffi_lib/lib"));
 

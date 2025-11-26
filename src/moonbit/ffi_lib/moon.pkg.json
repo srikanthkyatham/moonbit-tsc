@@ -19,7 +19,7 @@
         "moonbit_tsc_result_error_len",
         "moonbit_tsc_result_free"
       ],
-      "cc-link-flags": "-shared -fPIC"
+      "cc-link-flags": "-c"
     }
   }
 }

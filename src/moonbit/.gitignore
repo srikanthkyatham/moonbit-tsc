@@ -17,3 +17,5 @@ ffi_lib/lib/
 *.dylib
 *.so
 *.a
+*.o
+*.exe

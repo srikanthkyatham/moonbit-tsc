@@ -3,6 +3,11 @@ recursive_bug_repro
 
 # Build output
 target/
+build/
+cmake-build-*/
+
+# CMake user-specific files
+CMakeUserPresets.json
 
 # Claude settings
 .claude/
