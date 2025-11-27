@@ -1,20 +1,21 @@
 // Worker process for parallel TypeScript compilation
 // Reads CompileRequest JSON from stdin, writes CompileResponse JSON to stdout
+// Uses moonbitlang/async for I/O operations
 
 ///|
 /// Run the worker loop - reads requests from stdin, writes responses to stdout
-pub async fn run_worker() -> Unit {
+pub async fn run_worker() -> Unit raise Error {
   let reader = @io.BufferedReader::new(@stdio.stdin)
 
   // Process requests until stdin is closed
   while true {
-    let line = reader.read_line!()
+    let line = reader.read_line()
     match line {
       None => break // EOF - coordinator closed stdin
       Some(json_str) => {
         let response = process_request(json_str)
         let output = response.to_ndjson()
-        @stdio.stdout.write!(output)
+        @stdio.stdout.write(output)
       }
     }
   }
@@ -25,7 +26,7 @@ pub async fn run_worker() -> Unit {
 fn process_request(json_str : String) -> @protocol.CompileResponse {
   // Parse the request
   let request = try {
-    @protocol.parse_request!(json_str)
+    @protocol.parse_request(json_str)
   } catch {
     err => {
       return @protocol.CompileResponse::error("", "Failed to parse request: \{err}")

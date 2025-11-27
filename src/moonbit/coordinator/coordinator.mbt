@@ -1,4 +1,5 @@
 // Coordinator for parallel TypeScript compilation
+// Uses moonbitlang/async for process management and task coordination
 
 ///|
 /// Compilation options for the coordinator
@@ -38,7 +39,7 @@ pub async fn compile_parallel(
   executable : String,
   files : Array[(String, String)], // (file_path, source) pairs
   options : CoordinatorOptions,
-) -> CompilationSummary!Error {
+) -> CompilationSummary raise Error {
   let start_time = @async.now()
 
   // Handle edge cases
@@ -73,10 +74,10 @@ pub async fn compile_parallel(
     options.worker_count
   }
 
-  let workers = spawn_workers!(executable, worker_count)
+  let workers = spawn_workers(executable, worker_count)
 
   // Distribute work and collect results
-  let results = @async.with_task_group!(fn(group) {
+  let results = @async.with_task_group(fn(group) {
     let all_results : Array[@protocol.CompileResponse] = []
 
     // Process each file, distributing round-robin to workers
@@ -95,12 +96,12 @@ pub async fn compile_parallel(
       // Spawn a task for each compilation
       let task = group.spawn(
         async fn() {
-          send_request!(worker, request)
+          send_request(worker, request)
         },
       )
 
       // Collect result when task completes
-      let result = task.wait!()
+      let result = task.wait()
       all_results.push(result)
     }
 

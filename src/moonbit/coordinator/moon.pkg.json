@@ -6,7 +6,9 @@
     "moonbitlang/async/io",
     "moonbitlang/async/fs",
     "moonbitlang/async/pipe",
-    "moonbitlang/async/process"
+    "moonbitlang/async/process",
+    "moonbitlang/async/semaphore",
+    "moonbitlang/async/aqueue"
   ],
   "targets": {
     "*.mbt": ["native"]

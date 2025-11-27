@@ -79,7 +79,7 @@ fn base64_encode(input : String) -> String {
 
 ///|
 /// Ensure directory exists (create parent directories if needed)
-async fn ensure_dir(path : String) -> Unit!Error {
+async fn ensure_dir(path : String) -> Unit raise Error {
   // Try to create the directory, ignore if exists
   let exists = @fs.exists(path)
   if not(exists) {
@@ -87,7 +87,7 @@ async fn ensure_dir(path : String) -> Unit!Error {
     match find_last_char(path, '/') {
       Some(idx) if idx > 0 => {
         let parent = path.substring(end=idx)
-        ensure_dir!(parent)
+        ensure_dir(parent)
       }
       _ => ()
     }
@@ -100,7 +100,7 @@ async fn ensure_dir(path : String) -> Unit!Error {
 pub async fn write_output(
   response : @protocol.CompileResponse,
   options : CLIOptions,
-) -> Unit!Error {
+) -> Unit raise Error {
   if not(response.success) {
     return
   }
@@ -113,7 +113,7 @@ pub async fn write_output(
   let base_name = get_base_name(response.file_path)
 
   // Ensure output directory exists
-  ensure_dir!(out_dir)
+  ensure_dir(out_dir)
 
   // Build JavaScript content with source map handling
   let js_content = match options.source_map_mode {
@@ -167,8 +167,8 @@ pub async fn write_output(
 pub async fn write_all_outputs(
   results : Array[@protocol.CompileResponse],
   options : CLIOptions,
-) -> Unit!Error {
+) -> Unit raise Error {
   for result in results {
-    write_output!(result, options)
+    write_output(result, options)
   }
 }

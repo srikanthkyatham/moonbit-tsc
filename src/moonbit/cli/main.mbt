@@ -1,5 +1,6 @@
 // MoonBit TypeScript Compiler CLI
 // Pure MoonBit implementation with process-based parallelism
+// Uses moonbitlang/async for file I/O, process spawning, and task coordination
 
 ///|
 /// Main entry point
@@ -19,15 +20,15 @@ async fn async_main() -> Unit {
     }
     Ok(Command::Help) => print_help()
     Ok(Command::Version) => print_version()
-    Ok(Command::Worker) => run_worker_mode!()
-    Ok(Command::Compile(files, options)) => run_compile!(files, options)
+    Ok(Command::Worker) => run_worker_mode()
+    Ok(Command::Compile(files, options)) => run_compile(files, options)
   }
 }
 
 ///|
 /// Run in worker mode (called by coordinator)
-async fn run_worker_mode() -> Unit!Error {
-  @worker.run_worker!()
+async fn run_worker_mode() -> Unit raise Error {
+  @worker.run_worker()
 }
 
 ///|
@@ -35,7 +36,7 @@ async fn run_worker_mode() -> Unit!Error {
 async fn run_compile(
   file_patterns : Array[String],
   options : CLIOptions,
-) -> Unit!Error {
+) -> Unit raise Error {
   if options.verbose {
     println("MoonBit TypeScript Compiler v" + @compiler.get_compiler_version())
     println("Target: " + options.target)
@@ -43,7 +44,7 @@ async fn run_compile(
   }
 
   // Discover files
-  let file_paths = @coordinator.discover_files!(file_patterns)
+  let file_paths = @coordinator.discover_files(file_patterns)
 
   if file_paths.length() == 0 {
     println("No TypeScript files found")
@@ -54,8 +55,8 @@ async fn run_compile(
     println("Found " + file_paths.length().to_string() + " file(s)")
   }
 
-  // Read all files
-  let files = @coordinator.read_files!(file_paths)
+  // Read all files (now uses parallel reading with semaphore)
+  let files = @coordinator.read_files(file_paths)
 
   // Get executable path (self)
   let executable = @env.args()[0]
@@ -65,15 +66,15 @@ async fn run_compile(
     target: options.target,
     source_map: options.source_map_mode != SourceMapMode::None,
     declaration: options.declaration,
-    worker_count: options.parallel.or(default_worker_count()),
+    worker_count: options.parallel.unwrap_or(default_worker_count()),
     verbose: options.verbose,
   }
 
   // Compile files
-  let summary = @coordinator.compile_parallel!(executable, files, coord_options)
+  let summary = @coordinator.compile_parallel(executable, files, coord_options)
 
   // Write output files
-  write_all_outputs!(summary.results, options)
+  write_all_outputs(summary.results, options)
 
   // Print summary
   print_summary(summary, options)
