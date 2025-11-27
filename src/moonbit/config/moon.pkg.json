@@ -1,0 +1,9 @@
+{
+  "import": [
+    "moonbitlang/async/fs",
+    "moonbitlang/async/io"
+  ],
+  "targets": {
+    "*.mbt": ["native"]
+  }
+}

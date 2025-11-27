@@ -1,0 +1,423 @@
+// TSConfig - TypeScript configuration file parser
+// Parses tsconfig.json files and provides project configuration
+
+///|
+/// Project reference for composite projects
+pub(all) struct ProjectReference {
+  path : String
+  prepend : Bool?
+} derive(Show)
+
+///|
+/// TSConfig root structure
+pub(all) struct TSConfig {
+  compiler_options : CompilerOptions?
+  files : Array[String]?
+  include_patterns : Array[String]?
+  exclude_patterns : Array[String]?
+  extends : String?
+  references : Array[ProjectReference]?
+  compile_on_save : Bool?
+} derive(Show)
+
+///|
+/// Create default TSConfig
+pub fn TSConfig::default() -> TSConfig {
+  {
+    compiler_options: None,
+    files: None,
+    include_patterns: None,
+    exclude_patterns: None,
+    extends: None,
+    references: None,
+    compile_on_save: None,
+  }
+}
+
+///|
+/// Parse tsconfig.json from file path
+pub async fn parse_tsconfig_file(path : String) -> TSConfig raise {
+  let data = @fs.read_file(path)
+  let content = data.text()
+  parse_tsconfig_text(content, path)
+}
+
+///|
+/// Parse tsconfig.json from JSON string
+pub fn parse_tsconfig_text(
+  json_text : String,
+  _file_path : String,
+) -> TSConfig raise {
+  let json = @json.parse(json_text)
+  parse_tsconfig_json(json)
+}
+
+///|
+/// Parse TSConfig from JSON value
+fn parse_tsconfig_json(json : Json) -> TSConfig raise {
+  guard json is Object(obj) else {
+    fail("TSConfig must be an object")
+  }
+
+  let compiler_options : CompilerOptions? = match obj.get("compilerOptions") {
+    Some(opts) => Some(parse_compiler_options(opts))
+    _ => None
+  }
+
+  let files = match obj.get("files") {
+    Some(Array(arr)) => Some(parse_string_array(arr))
+    _ => None
+  }
+
+  let include_patterns = match obj.get("include") {
+    Some(Array(arr)) => Some(parse_string_array(arr))
+    _ => None
+  }
+
+  let exclude_patterns = match obj.get("exclude") {
+    Some(Array(arr)) => Some(parse_string_array(arr))
+    _ => None
+  }
+
+  let extends = match obj.get("extends") {
+    Some(String(s)) => Some(s)
+    _ => None
+  }
+
+  let references = match obj.get("references") {
+    Some(Array(arr)) => Some(parse_project_references(arr))
+    _ => None
+  }
+
+  let compile_on_save = match obj.get("compileOnSave") {
+    Some(True) => Some(true)
+    Some(False) => Some(false)
+    _ => None
+  }
+
+  {
+    compiler_options,
+    files,
+    include_patterns,
+    exclude_patterns,
+    extends,
+    references,
+    compile_on_save,
+  }
+}
+
+///|
+/// Parse compilerOptions object
+fn parse_compiler_options(json : Json) -> CompilerOptions {
+  guard json is Object(obj) else {
+    return CompilerOptions::default()
+  }
+
+  // Parse target
+  let target = match obj.get("target") {
+    Some(String(s)) => ScriptTarget::from_string(s)
+    _ => None
+  }
+
+  // Parse module
+  let module_kind = match obj.get("module") {
+    Some(String(s)) => ModuleKind::from_string(s)
+    _ => None
+  }
+
+  // Parse outDir
+  let out_dir = get_string(obj, "outDir")
+
+  // Parse outFile
+  let out_file = get_string(obj, "outFile")
+
+  // Parse rootDir
+  let root_dir = get_string(obj, "rootDir")
+
+  // Source map options
+  let source_map = get_bool(obj, "sourceMap")
+  let inline_source_map = get_bool(obj, "inlineSourceMap")
+  let inline_sources = get_bool(obj, "inlineSources")
+  let source_root = get_string(obj, "sourceRoot")
+  let map_root = get_string(obj, "mapRoot")
+
+  // Declaration options
+  let declaration = get_bool(obj, "declaration")
+  let declaration_map = get_bool(obj, "declarationMap")
+  let declaration_dir = get_string(obj, "declarationDir")
+  let emit_declaration_only = get_bool(obj, "emitDeclarationOnly")
+
+  // Module resolution
+  let module_resolution = match obj.get("moduleResolution") {
+    Some(String(s)) => ModuleResolutionKind::from_string(s)
+    _ => None
+  }
+  let base_url = get_string(obj, "baseUrl")
+  let paths = parse_paths_map(obj)
+  let root_dirs = get_string_array(obj, "rootDirs")
+  let resolve_json_module = get_bool(obj, "resolveJsonModule")
+  let type_roots = get_string_array(obj, "typeRoots")
+  let types = get_string_array(obj, "types")
+
+  // Strict options
+  let strict = get_bool(obj, "strict")
+  let no_implicit_any = get_bool(obj, "noImplicitAny")
+  let strict_null_checks = get_bool(obj, "strictNullChecks")
+  let strict_function_types = get_bool(obj, "strictFunctionTypes")
+  let strict_bind_call_apply = get_bool(obj, "strictBindCallApply")
+  let strict_property_initialization = get_bool(obj, "strictPropertyInitialization")
+  let no_implicit_this = get_bool(obj, "noImplicitThis")
+  let use_unknown_in_catch_variables = get_bool(obj, "useUnknownInCatchVariables")
+  let always_strict = get_bool(obj, "alwaysStrict")
+
+  // Additional type checking
+  let no_unused_locals = get_bool(obj, "noUnusedLocals")
+  let no_unused_parameters = get_bool(obj, "noUnusedParameters")
+  let no_implicit_returns = get_bool(obj, "noImplicitReturns")
+  let no_fallthrough_cases_in_switch = get_bool(obj, "noFallthroughCasesInSwitch")
+  let no_unchecked_indexed_access = get_bool(obj, "noUncheckedIndexedAccess")
+  let no_implicit_override = get_bool(obj, "noImplicitOverride")
+
+  // Emit options
+  let remove_comments = get_bool(obj, "removeComments")
+  let no_emit = get_bool(obj, "noEmit")
+  let no_emit_on_error = get_bool(obj, "noEmitOnError")
+  let no_emit_helpers = get_bool(obj, "noEmitHelpers")
+  let import_helpers = get_bool(obj, "importHelpers")
+  let downlevel_iteration = get_bool(obj, "downlevelIteration")
+  let preserve_const_enums = get_bool(obj, "preserveConstEnums")
+
+  // JSX options
+  let jsx = match obj.get("jsx") {
+    Some(String(s)) => JsxEmit::from_string(s)
+    _ => None
+  }
+  let jsx_factory = get_string(obj, "jsxFactory")
+  let jsx_fragment_factory = get_string(obj, "jsxFragmentFactory")
+  let jsx_import_source = get_string(obj, "jsxImportSource")
+
+  // Interop options
+  let es_module_interop = get_bool(obj, "esModuleInterop")
+  let allow_synthetic_default_imports = get_bool(obj, "allowSyntheticDefaultImports")
+  let isolated_modules = get_bool(obj, "isolatedModules")
+  let verbatim_module_syntax = get_bool(obj, "verbatimModuleSyntax")
+
+  // Library options
+  let lib = get_string_array(obj, "lib")
+  let no_lib = get_bool(obj, "noLib")
+
+  // Misc options
+  let skip_lib_check = get_bool(obj, "skipLibCheck")
+  let skip_default_lib_check = get_bool(obj, "skipDefaultLibCheck")
+  let allow_js = get_bool(obj, "allowJs")
+  let check_js = get_bool(obj, "checkJs")
+  let experimental_decorators = get_bool(obj, "experimentalDecorators")
+  let emit_decorator_metadata = get_bool(obj, "emitDecoratorMetadata")
+
+  // Incremental options
+  let incremental = get_bool(obj, "incremental")
+  let composite = get_bool(obj, "composite")
+  let ts_build_info_file = get_string(obj, "tsBuildInfoFile")
+
+  {
+    target,
+    module_kind,
+    out_dir,
+    out_file,
+    root_dir,
+    source_map,
+    inline_source_map,
+    inline_sources,
+    source_root,
+    map_root,
+    declaration,
+    declaration_map,
+    declaration_dir,
+    emit_declaration_only,
+    module_resolution,
+    base_url,
+    paths,
+    root_dirs,
+    resolve_json_module,
+    type_roots,
+    types,
+    strict,
+    no_implicit_any,
+    strict_null_checks,
+    strict_function_types,
+    strict_bind_call_apply,
+    strict_property_initialization,
+    no_implicit_this,
+    use_unknown_in_catch_variables,
+    always_strict,
+    no_unused_locals,
+    no_unused_parameters,
+    no_implicit_returns,
+    no_fallthrough_cases_in_switch,
+    no_unchecked_indexed_access,
+    no_implicit_override,
+    remove_comments,
+    no_emit,
+    no_emit_on_error,
+    no_emit_helpers,
+    import_helpers,
+    downlevel_iteration,
+    preserve_const_enums,
+    jsx,
+    jsx_factory,
+    jsx_fragment_factory,
+    jsx_import_source,
+    es_module_interop,
+    allow_synthetic_default_imports,
+    isolated_modules,
+    verbatim_module_syntax,
+    lib,
+    no_lib,
+    skip_lib_check,
+    skip_default_lib_check,
+    allow_js,
+    check_js,
+    experimental_decorators,
+    emit_decorator_metadata,
+    incremental,
+    composite,
+    ts_build_info_file,
+  }
+}
+
+///|
+/// Get string value from object
+fn get_string(obj : Map[String, Json], key : String) -> String? {
+  match obj.get(key) {
+    Some(String(s)) => Some(s)
+    _ => None
+  }
+}
+
+///|
+/// Get bool value from object
+fn get_bool(obj : Map[String, Json], key : String) -> Bool? {
+  match obj.get(key) {
+    Some(True) => Some(true)
+    Some(False) => Some(false)
+    _ => None
+  }
+}
+
+///|
+/// Get string array value from object
+fn get_string_array(obj : Map[String, Json], key : String) -> Array[String]? {
+  match obj.get(key) {
+    Some(Array(arr)) => Some(parse_string_array(arr))
+    _ => None
+  }
+}
+
+///|
+/// Parse array of strings
+fn parse_string_array(arr : Array[Json]) -> Array[String] {
+  let result : Array[String] = []
+  for item in arr {
+    match item {
+      String(s) => result.push(s)
+      _ => ()
+    }
+  }
+  result
+}
+
+///|
+/// Parse paths map (e.g., { "@/*": ["./src/*"] })
+fn parse_paths_map(obj : Map[String, Json]) -> Map[String, Array[String]]? {
+  match obj.get("paths") {
+    Some(Object(paths_obj)) => {
+      let result : Map[String, Array[String]] = {}
+      for key, value in paths_obj {
+        match value {
+          Array(arr) => result[key] = parse_string_array(arr)
+          _ => ()
+        }
+      }
+      if result.is_empty() {
+        None
+      } else {
+        Some(result)
+      }
+    }
+    _ => None
+  }
+}
+
+///|
+/// Parse project references array
+fn parse_project_references(arr : Array[Json]) -> Array[ProjectReference] {
+  let result : Array[ProjectReference] = []
+  for item in arr {
+    match item {
+      Object(obj) => {
+        let path = match obj.get("path") {
+          Some(String(s)) => s
+          _ => continue
+        }
+        let prepend = get_bool(obj, "prepend")
+        result.push({ path, prepend })
+      }
+      _ => ()
+    }
+  }
+  result
+}
+
+///|
+/// Get default include patterns
+pub fn get_default_include() -> Array[String] {
+  ["**/*"]
+}
+
+///|
+/// Get default exclude patterns
+pub fn get_default_exclude(out_dir : String?) -> Array[String] {
+  let result : Array[String] = ["node_modules", "bower_components", "jspm_packages"]
+  match out_dir {
+    Some(dir) => {
+      result.push(dir)
+      result
+    }
+    None => result
+  }
+}
+
+///|
+/// Get effective include patterns from config
+pub fn get_effective_include(config : TSConfig) -> Array[String] {
+  match config.include_patterns {
+    Some(patterns) if patterns.length() > 0 => patterns
+    _ =>
+      match config.files {
+        Some(files) if files.length() > 0 => [] // When files is set, don't use include
+        _ => get_default_include()
+      }
+  }
+}
+
+///|
+/// Get effective exclude patterns from config
+pub fn get_effective_exclude(config : TSConfig) -> Array[String] {
+  let out_dir = match config.compiler_options {
+    Some(opts) => opts.out_dir
+    None => None
+  }
+  match config.exclude_patterns {
+    Some(patterns) if patterns.length() > 0 => patterns
+    _ => get_default_exclude(out_dir)
+  }
+}
+
+///|
+/// Check if the config has explicit files list
+pub fn has_files_list(config : TSConfig) -> Bool {
+  match config.files {
+    Some(files) => files.length() > 0
+    None => false
+  }
+}
