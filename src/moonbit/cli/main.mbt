@@ -32,6 +32,8 @@ async fn async_main() -> Unit {
     Ok(Command::Compile(files, options)) => run_compile(files, options)
     Ok(Command::CompileProject(tsconfig_path, options)) =>
       run_project_compile(tsconfig_path, options)
+    Ok(Command::BuildReferences(tsconfig_path, options)) =>
+      run_build_references(tsconfig_path, options)
   }
 }
 
@@ -362,11 +364,13 @@ fn print_help() -> Unit {
   println("")
   println("Usage: moonbit-tsc [options] <file...>")
   println("       moonbit-tsc --project <tsconfig.json>")
+  println("       moonbit-tsc --build <tsconfig.json>")
   println("")
   println("Options:")
   println("  --help, -h              Show this help message")
   println("  --version, -v           Show version")
   println("  --project, -p <path>    Compile project from tsconfig.json")
+  println("  --build, -b <path>      Build project with all references")
   println("  --target <target>       ECMAScript target (es5, es2015, esnext, etc.)")
   println("  --outDir <dir>          Output directory")
   println("  --sourceMap             Generate external source map files")
@@ -385,6 +389,7 @@ fn print_help() -> Unit {
   println("  moonbit-tsc --watch --outDir dist src/")
   println("  moonbit-tsc --project tsconfig.json")
   println("  moonbit-tsc -p ./tsconfig.build.json --verbose")
+  println("  moonbit-tsc --build tsconfig.json        # Build with references")
 }
 
 ///|
@@ -510,8 +515,8 @@ async fn run_project_compile(
     println("")
   }
 
-  // Parse tsconfig.json
-  let tsconfig = @config.parse_tsconfig_file(tsconfig_path)
+  // Parse tsconfig.json with extends resolution
+  let tsconfig = @config.load_tsconfig_with_extends(tsconfig_path)
 
   // Get project directory (for resolving relative paths)
   let project_dir = get_tsconfig_directory(tsconfig_path)
@@ -718,24 +723,31 @@ async fn discover_project_files(
     _ => ()
   }
 
-  // Otherwise, use include patterns (walk directory for now)
-  let include = @config.get_effective_include(tsconfig)
-  let exclude = @config.get_effective_exclude(tsconfig)
+  // Get include and exclude patterns
+  let include_patterns = @config.get_effective_include(tsconfig)
+  let exclude_patterns = @config.get_effective_exclude(tsconfig)
 
-  // For now, walk the project directory and filter
-  // Future: implement proper glob pattern matching
+  // Walk the project directory and collect all TypeScript files
   let all_files = @coordinator.discover_files([project_dir])
 
-  // Filter based on exclude patterns (basic filtering for now)
+  // Filter based on include and exclude patterns
   let filtered : Array[String] = []
   for file in all_files {
-    let should_exclude = false
-    for pattern in exclude {
-      if file.contains(pattern) {
-        continue // Skip excluded files
-      }
+    // Get relative path for pattern matching
+    let rel_path = @config.get_relative_path(project_dir, file)
+
+    // Check if file matches any include pattern
+    let matches_include = if include_patterns.length() == 0 {
+      true // No include patterns means include all
+    } else {
+      @config.matches_any_pattern(include_patterns, rel_path)
     }
-    if not(should_exclude) {
+
+    // Check if file should be excluded
+    let matches_exclude = @config.should_exclude(exclude_patterns, rel_path)
+
+    // Include file if it matches include patterns and doesn't match exclude
+    if matches_include && not(matches_exclude) {
       filtered.push(file)
     }
   }
@@ -778,4 +790,126 @@ fn resolve_path(base_dir : String, relative_path : String) -> String {
 async fn try_auto_detect_tsconfig() -> Bool {
   // Check if tsconfig.json exists in current directory
   @fs.exists("tsconfig.json")
+}
+
+///|
+/// Run build with project references
+/// Builds all referenced projects in topological order
+async fn run_build_references(
+  tsconfig_path : String,
+  cli_options : CLIOptions,
+) -> Unit raise Error {
+  println("MoonBit TypeScript Compiler v" + @compiler.get_compiler_version())
+  println("Building project with references: " + tsconfig_path)
+  println("")
+
+  // Load project graph with all references
+  let graph = @config.load_project_graph(tsconfig_path)
+
+  if graph.projects.length() == 0 {
+    println("No projects found")
+    return
+  }
+
+  println(
+    "Found " +
+    graph.projects.length().to_string() +
+    " project(s) to build",
+  )
+  println("")
+
+  // Build projects in topological order
+  let mut total_files = 0
+  let mut total_success = 0
+  let mut total_failed = 0
+  let start_time = @async.now()
+
+  for project_path in graph.build_order {
+    // Find the project config
+    let mut project_config : @config.TSConfig? = None
+    for project in graph.projects {
+      if project.path == project_path {
+        project_config = Some(project.config)
+        break
+      }
+    }
+
+    guard project_config is Some(config) else {
+      continue
+    }
+
+    // Get project directory
+    let project_dir = get_tsconfig_directory(project_path)
+
+    println("Building: " + project_path)
+
+    // Build coordinator options from config
+    let coord_options = build_coordinator_options_from_tsconfig(config, cli_options)
+    let effective_cli = build_cli_options_from_tsconfig(config, cli_options)
+
+    // Discover files for this project
+    let file_paths = discover_project_files(config, project_dir)
+
+    if file_paths.length() == 0 {
+      println("  No files to compile")
+      continue
+    }
+
+    println("  Found " + file_paths.length().to_string() + " file(s)")
+
+    // Read and compile files
+    let files = @coordinator.read_files(file_paths)
+    let executable = @env.args()[0]
+    let summary = @coordinator.compile_parallel(executable, files, coord_options)
+
+    // Write output files
+    write_all_outputs(summary.results, effective_cli)
+
+    // Update totals
+    total_files = total_files + summary.total_files
+    total_success = total_success + summary.successful
+    total_failed = total_failed + summary.failed
+
+    // Print project result
+    if summary.failed == 0 {
+      println(
+        "  Compiled " +
+        summary.successful.to_string() +
+        " file(s) in " +
+        summary.total_time_ms.to_string() +
+        "ms",
+      )
+    } else {
+      // Print errors
+      for result in summary.results {
+        if not(result.success) {
+          for diag in result.diagnostics {
+            println("  " + diag)
+          }
+        }
+      }
+      println(
+        "  Compiled " +
+        summary.successful.to_string() +
+        ", failed " +
+        summary.failed.to_string(),
+      )
+    }
+    println("")
+  }
+
+  let end_time = @async.now()
+  let total_time = end_time - start_time
+
+  // Print final summary
+  println("Build complete:")
+  println(
+    "  Projects: " + graph.projects.length().to_string(),
+  )
+  println("  Total files: " + total_files.to_string())
+  println("  Successful: " + total_success.to_string())
+  if total_failed > 0 {
+    println("  Failed: " + total_failed.to_string())
+  }
+  println("  Total time: " + total_time.to_string() + "ms")
 }

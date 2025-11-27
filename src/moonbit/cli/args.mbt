@@ -13,6 +13,7 @@ pub(all) enum SourceMapMode {
 pub(all) enum Command {
   Compile(Array[String], CLIOptions)
   CompileProject(String, CLIOptions) // tsconfig.json path
+  BuildReferences(String, CLIOptions) // Build project with all references
   Worker
   Version
   Help
@@ -78,6 +79,24 @@ pub fn parse_args(args : Array[String]) -> Result[Command, String] {
       return Ok(Command::Worker)
     } else if arg == "--init" {
       return Ok(Command::Init)
+    } else if arg == "--build" || arg == "-b" {
+      i = i + 1
+      if i >= args.length() {
+        return Err("--build requires a path to tsconfig.json")
+      }
+      let build_path = args[i]
+      // Skip remaining args and return build command
+      let options : CLIOptions = {
+        target: None,
+        out_dir: None,
+        source_map_mode: None,
+        declaration: None,
+        verbose: false,
+        parallel: None,
+        watch: false,
+        watch_interval: 500,
+      }
+      return Ok(Command::BuildReferences(build_path, options))
     } else if arg == "--project" || arg == "-p" {
       i = i + 1
       if i >= args.length() {

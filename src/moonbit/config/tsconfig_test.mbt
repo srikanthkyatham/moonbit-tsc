@@ -376,6 +376,92 @@ test "has_files_list - returns true when has files" {
 }
 
 ///|
+test "merge_tsconfigs - merges compiler options" {
+  let base : TSConfig = {
+    ..TSConfig::default(),
+    compiler_options: Some({
+      ..CompilerOptions::default(),
+      target: Some(ScriptTarget::ES5),
+      source_map: Some(true),
+    }),
+  }
+  let override_ : TSConfig = {
+    ..TSConfig::default(),
+    compiler_options: Some({
+      ..CompilerOptions::default(),
+      target: Some(ScriptTarget::ES2020),
+      declaration: Some(true),
+    }),
+  }
+  let merged = merge_tsconfigs(base, override_)
+  guard merged.compiler_options is Some(opts) else {
+    assert_true(false)
+    return
+  }
+  // Override takes precedence for target
+  assert_eq(opts.target, Some(ScriptTarget::ES2020))
+  // Base fills in source_map
+  assert_eq(opts.source_map, Some(true))
+  // Override adds declaration
+  assert_eq(opts.declaration, Some(true))
+}
+
+///|
+test "merge_tsconfigs - files override replaces base" {
+  let base : TSConfig = {
+    ..TSConfig::default(),
+    files: Some(["base.ts"]),
+  }
+  let override_ : TSConfig = {
+    ..TSConfig::default(),
+    files: Some(["override.ts"]),
+  }
+  let merged = merge_tsconfigs(base, override_)
+  guard merged.files is Some(files) else {
+    assert_true(false)
+    return
+  }
+  assert_eq(files.length(), 1)
+  assert_eq(files[0], "override.ts")
+}
+
+///|
+test "merge_tsconfigs - preserves base when override not set" {
+  let base : TSConfig = {
+    ..TSConfig::default(),
+    files: Some(["base.ts"]),
+    include_patterns: Some(["src/**/*"]),
+    exclude_patterns: Some(["node_modules"]),
+  }
+  let override_ = TSConfig::default()
+  let merged = merge_tsconfigs(base, override_)
+  guard merged.files is Some(files) else {
+    assert_true(false)
+    return
+  }
+  assert_eq(files[0], "base.ts")
+  guard merged.include_patterns is Some(incl) else {
+    assert_true(false)
+    return
+  }
+  assert_eq(incl[0], "src/**/*")
+}
+
+///|
+test "merge_tsconfigs - clears extends after merge" {
+  let base : TSConfig = {
+    ..TSConfig::default(),
+    extends: Some("./other.json"),
+  }
+  let override_ : TSConfig = {
+    ..TSConfig::default(),
+    extends: Some("./base.json"),
+  }
+  let merged = merge_tsconfigs(base, override_)
+  assert_true(merged.extends is None)
+}
+
+///|
 test "parse_tsconfig_text - full realistic config" {
   let json =
     #|{

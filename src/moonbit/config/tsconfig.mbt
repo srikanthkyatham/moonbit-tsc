@@ -421,3 +421,168 @@ pub fn has_files_list(config : TSConfig) -> Bool {
     None => false
   }
 }
+
+///|
+/// Load tsconfig.json with extends resolution
+/// Handles circular extends detection
+pub async fn load_tsconfig_with_extends(path : String) -> TSConfig raise Error {
+  let seen : Array[String] = []
+  load_tsconfig_recursive(path, seen)
+}
+
+///|
+/// Internal recursive loader for extends support
+async fn load_tsconfig_recursive(
+  path : String,
+  seen : Array[String],
+) -> TSConfig raise Error {
+  // Get real path for circular detection
+  let real_path = @fs.realpath(path)
+
+  // Check for circular extends
+  for visited in seen {
+    if visited == real_path {
+      fail("Circular extends detected: " + path)
+    }
+  }
+  seen.push(real_path)
+
+  // Parse the current config
+  let config = parse_tsconfig_file(path)
+
+  // If no extends, return as-is
+  guard config.extends is Some(extends_path) else {
+    return config
+  }
+
+  // Resolve the extends path relative to current config directory
+  let config_dir = get_config_directory(path)
+  let resolved_extends = resolve_extends_path(extends_path, config_dir)
+
+  // Load the base config recursively
+  let base_config = load_tsconfig_recursive(resolved_extends, seen)
+
+  // Merge base into current (current takes precedence)
+  merge_tsconfigs(base_config, config)
+}
+
+///|
+/// Merge two TSConfig objects (override takes precedence)
+pub fn merge_tsconfigs(base : TSConfig, override_ : TSConfig) -> TSConfig {
+  // Merge compiler options
+  let merged_options = match (base.compiler_options, override_.compiler_options) {
+    (Some(base_opts), Some(override_opts)) =>
+      Some(merge_compiler_options(base_opts, override_opts))
+    (None, Some(opts)) => Some(opts)
+    (Some(opts), None) => Some(opts)
+    (None, None) => None
+  }
+
+  // Files: override completely replaces base if present
+  let files = match override_.files {
+    Some(_) => override_.files
+    None => base.files
+  }
+
+  // Include: override completely replaces base if present
+  let include_patterns = match override_.include_patterns {
+    Some(_) => override_.include_patterns
+    None => base.include_patterns
+  }
+
+  // Exclude: override completely replaces base if present
+  let exclude_patterns = match override_.exclude_patterns {
+    Some(_) => override_.exclude_patterns
+    None => base.exclude_patterns
+  }
+
+  // References: override completely replaces base if present
+  let references = match override_.references {
+    Some(_) => override_.references
+    None => base.references
+  }
+
+  // CompileOnSave: override takes precedence
+  let compile_on_save = match override_.compile_on_save {
+    Some(_) => override_.compile_on_save
+    None => base.compile_on_save
+  }
+
+  {
+    compiler_options: merged_options,
+    files,
+    include_patterns,
+    exclude_patterns,
+    extends: None, // Clear extends after merge
+    references,
+    compile_on_save,
+  }
+}
+
+///|
+/// Resolve extends path (handles relative paths and package references)
+fn resolve_extends_path(extends_path : String, config_dir : String) -> String {
+  // Handle relative paths
+  if extends_path.has_prefix("./") || extends_path.has_prefix("../") {
+    join_paths(config_dir, extends_path)
+  } else if extends_path.has_prefix("/") {
+    // Absolute path
+    extends_path
+  } else {
+    // Package reference (e.g., "@tsconfig/node18")
+    // For now, try to resolve from node_modules
+    let node_modules_path = join_paths(config_dir, "node_modules/" + extends_path)
+    // Check if it's a package with tsconfig.json
+    if not(extends_path.has_suffix(".json")) {
+      join_paths(node_modules_path, "tsconfig.json")
+    } else {
+      node_modules_path
+    }
+  }
+}
+
+///|
+/// Get directory from config file path
+fn get_config_directory(path : String) -> String {
+  let mut last_slash = -1
+  for i = 0; i < path.length(); i = i + 1 {
+    if path[i] == '/' || path[i] == '\\' {
+      last_slash = i
+    }
+  }
+  if last_slash == -1 {
+    "."
+  } else if last_slash == 0 {
+    "/"
+  } else {
+    path.substring(start=0, end=last_slash)
+  }
+}
+
+///|
+/// Join two path segments
+fn join_paths(base : String, relative : String) -> String {
+  // Remove trailing slash from base
+  let base_clean = if base.has_suffix("/") || base.has_suffix("\\") {
+    base.substring(start=0, end=base.length() - 1)
+  } else {
+    base
+  }
+
+  // Handle . and ..
+  if relative == "." {
+    return base_clean
+  }
+
+  if relative.has_prefix("./") {
+    return base_clean + "/" + relative.substring(start=2)
+  }
+
+  if relative.has_prefix("../") {
+    // Go up one directory
+    let parent_dir = get_config_directory(base_clean)
+    return join_paths(parent_dir, relative.substring(start=3))
+  }
+
+  base_clean + "/" + relative
+}
