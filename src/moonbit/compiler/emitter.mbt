@@ -325,6 +325,17 @@ fn has_declare_modifier(modifiers : Array[Modifier]) -> Bool {
 }
 
 ///|
+/// Check if modifiers array contains Abstract modifier
+fn has_abstract_modifier(modifiers : Array[Modifier]) -> Bool {
+  for modifier in modifiers {
+    if modifier == Modifier::Abstract {
+      return true
+    }
+  }
+  false
+}
+
+///|
 /// Get export prefix based on modifiers (export, export default, or empty)
 fn get_export_prefix(modifiers : Array[Modifier]) -> String {
   if has_export_modifier(modifiers) {
@@ -1183,6 +1194,11 @@ fn emit_property_declaration(
   pd : PropertyDeclaration,
   ctx : EmitterContext,
 ) -> String {
+  // Skip abstract properties - they have no JavaScript output
+  if has_abstract_modifier(pd.modifiers) {
+    return ""
+  }
+
   let mut result = ctx.get_indent()
 
   // Check if Static modifier is present
@@ -1210,6 +1226,11 @@ fn emit_method_declaration(
   md : MethodDeclaration,
   ctx : EmitterContext,
 ) -> String {
+  // Skip abstract methods - they have no JavaScript output
+  if has_abstract_modifier(md.modifiers) {
+    return ""
+  }
+
   let mut result = ctx.get_indent()
 
   // Check if Static modifier is present

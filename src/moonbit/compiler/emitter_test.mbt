@@ -1344,3 +1344,98 @@ test "emit Boolean for boolean type" {
   // Type annotations are preserved for decorated properties
   assert_true(js.contains("__metadata(\"design:type\", Boolean)"))
 }
+
+// ============================================================================
+// Abstract Class Tests
+// ============================================================================
+
+///|
+/// Test: abstract class compiles to regular class
+test "emit abstract class as regular class" {
+  let js = compile_to_js("abstract class Animal { name: string; }")
+  println("Abstract class output:\n\{js}")
+  // Abstract class should emit as regular class
+  assert_true(js.contains("class Animal"))
+  assert_true(js.contains("name;"))
+  // Should NOT contain 'abstract' keyword in output
+  assert_false(js.contains("abstract"))
+}
+
+///|
+/// Test: abstract method is omitted from output
+test "emit abstract class with abstract method - method omitted" {
+  let js = compile_to_js("abstract class Animal { abstract speak(): void; }")
+  println("Abstract class with abstract method:\n\{js}")
+  // Abstract class should emit as regular class
+  assert_true(js.contains("class Animal"))
+  // Abstract method should NOT be emitted
+  assert_false(js.contains("speak"))
+}
+
+///|
+/// Test: abstract class with concrete method - concrete method is emitted
+test "emit abstract class with concrete method" {
+  let js = compile_to_js(
+    "abstract class Animal { abstract speak(): void; move() { console.log('moving'); } }",
+  )
+  println("Abstract class with concrete method:\n\{js}")
+  // Abstract class should emit as regular class
+  assert_true(js.contains("class Animal"))
+  // Abstract method should NOT be emitted
+  assert_false(js.contains("speak"))
+  // Concrete method should be emitted
+  assert_true(js.contains("move()"))
+  assert_true(js.contains("console.log"))
+}
+
+///|
+/// Test: abstract property is omitted from output
+test "emit abstract class with abstract property - property omitted" {
+  let js = compile_to_js("abstract class Animal { abstract readonly name: string; }")
+  println("Abstract class with abstract property:\n\{js}")
+  // Abstract class should emit as regular class
+  assert_true(js.contains("class Animal"))
+  // Abstract property should NOT be emitted
+  assert_false(js.contains("name"))
+}
+
+///|
+/// Test: class extending another class
+test "emit class extending another class" {
+  let js = compile_to_js("class Dog extends Animal { speak() { console.log('woof'); } }")
+  println("Class extending another class:\n\{js}")
+  assert_true(js.contains("class Dog extends Animal"))
+  assert_true(js.contains("speak()"))
+  assert_true(js.contains("woof"))
+}
+
+///|
+/// Test: abstract class with constructor
+test "emit abstract class with constructor" {
+  let js = compile_to_js(
+    "abstract class Animal { name: string; constructor(name) { this.name = name; } }",
+  )
+  println("Abstract class with constructor:\n\{js}")
+  // Abstract class should emit as regular class
+  assert_true(js.contains("class Animal"))
+  // Constructor should be emitted
+  assert_true(js.contains("constructor(name)"))
+  assert_true(js.contains("this.name = name"))
+}
+
+///|
+/// Test: abstract class with mixed abstract and concrete members
+test "emit abstract class with mixed members" {
+  let js = compile_to_js(
+    "abstract class Shape { abstract area(): number; abstract perimeter(): number; getName() { return 'shape'; } }",
+  )
+  println("Abstract class with mixed members:\n\{js}")
+  // Abstract class should emit as regular class
+  assert_true(js.contains("class Shape"))
+  // Abstract methods should NOT be emitted
+  assert_false(js.contains("area"))
+  assert_false(js.contains("perimeter"))
+  // Concrete method should be emitted
+  assert_true(js.contains("getName()"))
+  assert_true(js.contains("shape"))
+}

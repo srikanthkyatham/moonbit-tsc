@@ -428,10 +428,22 @@ fn transform_heritage_clauses(
   for clause in clauses {
     match clause.kind {
       Extends => {
-        // Keep extends clause but remove type arguments from types
+        // Keep extends clause but convert TypeReference to Identifier
         let transformed_types : Array[Node] = []
         for type_node in clause.types {
-          transformed_types.push(transform(type_node, ctx))
+          // Heritage clause types are TypeReference nodes from parser
+          // Convert them to Identifier nodes for JavaScript output
+          match type_node {
+            TypeReference(tr) =>
+              transformed_types.push(
+                Node::Identifier(Identifier::{
+                  name: tr.type_name,
+                  location: tr.location,
+                }),
+              )
+            Identifier(_) => transformed_types.push(type_node)
+            _ => transformed_types.push(transform(type_node, ctx))
+          }
         }
         result.push({
           kind: Extends,
