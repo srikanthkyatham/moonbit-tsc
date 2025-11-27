@@ -239,33 +239,69 @@ fn parse_unary_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
     _ => ()
   }
 
-  // Check for "new" expression
+  // Check for "new" expression or new.target
   match token {
     KeywordNew(start_loc) => {
       let parser = advance_parser(parser)
-      let parser = increment_depth(parser)
-      // Parse the constructor expression (which might have property/element access)
-      match parse_postfix_expression(parser) {
-        Ok((expr, parser)) => {
-          let parser = decrement_depth(parser)
-          // Check if there are explicit call arguments
+      // Check for new.target meta property
+      match current_token(parser) {
+        Dot(_) => {
+          let parser = advance_parser(parser) // consume '.'
           match current_token(parser) {
-            OpenParen(_) => {
-              // Has explicit arguments
-              let parser = advance_parser(parser)
-              let (arguments, parser) = parse_argument_list(parser)
+            Identifier(name, end_loc) if name == "target" => {
+              let parser = advance_parser(parser) // consume 'target'
               Ok(
-                (make_new_expression(expr, Some(arguments), start_loc), parser),
+                (
+                  Node::MetaProperty(MetaProperty::{
+                    keyword_kind: NewTarget,
+                    name: "target",
+                    location: SourceLocation::new(
+                      start_loc.file_path,
+                      start_loc.start,
+                      end_loc.end,
+                    ),
+                  }),
+                  parser,
+                ),
               )
             }
             _ =>
-              // No arguments (e.g., new Date)
-              Ok((make_new_expression(expr, None, start_loc), parser))
+              Err(
+                add_error(
+                  parser,
+                  "Expected 'target' after 'new.'",
+                  current_token(parser).location(),
+                ),
+              )
           }
         }
-        Err(parser) => {
-          let parser = decrement_depth(parser)
-          Err(parser)
+        _ => {
+          // Regular new expression
+          let parser = increment_depth(parser)
+          // Parse the constructor expression (which might have property/element access)
+          match parse_postfix_expression(parser) {
+            Ok((expr, parser)) => {
+              let parser = decrement_depth(parser)
+              // Check if there are explicit call arguments
+              match current_token(parser) {
+                OpenParen(_) => {
+                  // Has explicit arguments
+                  let parser = advance_parser(parser)
+                  let (arguments, parser) = parse_argument_list(parser)
+                  Ok(
+                    (make_new_expression(expr, Some(arguments), start_loc), parser),
+                  )
+                }
+                _ =>
+                  // No arguments (e.g., new Date)
+                  Ok((make_new_expression(expr, None, start_loc), parser))
+              }
+            }
+            Err(parser) => {
+              let parser = decrement_depth(parser)
+              Err(parser)
+            }
+          }
         }
       }
     }
@@ -844,12 +880,43 @@ fn parse_primary_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
         ),
       )
 
-    // new expression
+    // new expression or new.target
     KeywordNew(start_loc) => {
       let parser = advance_parser(parser) // consume 'new'
 
-      // Parse the constructor identifier (e.g., Foo)
+      // Check for new.target
       match current_token(parser) {
+        Dot(_) => {
+          let parser = advance_parser(parser) // consume '.'
+          match current_token(parser) {
+            Identifier(name, end_loc) if name == "target" => {
+              let parser = advance_parser(parser) // consume 'target'
+              Ok(
+                (
+                  Node::MetaProperty(MetaProperty::{
+                    keyword_kind: NewTarget,
+                    name: "target",
+                    location: SourceLocation::new(
+                      start_loc.file_path,
+                      start_loc.start,
+                      end_loc.end,
+                    ),
+                  }),
+                  parser,
+                ),
+              )
+            }
+            _ =>
+              Err(
+                add_error(
+                  parser,
+                  "Expected 'target' after 'new.'",
+                  current_token(parser).location(),
+                ),
+              )
+          }
+        }
+        // Parse the constructor identifier (e.g., Foo)
         Identifier(name, loc) => {
           let expr = Node::Identifier(Identifier::{ name, location: loc })
           let parser = advance_parser(parser) // consume identifier
@@ -880,7 +947,7 @@ fn parse_primary_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
           }
         }
         _ =>
-          Err(add_error(parser, "Expected identifier after 'new'", start_loc))
+          Err(add_error(parser, "Expected identifier or '.' after 'new'", start_loc))
       }
     }
 
@@ -992,12 +1059,43 @@ fn parse_primary_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
       }
     }
 
-    // Dynamic import expression: import('./module')
+    // Dynamic import expression: import('./module') or import.meta
     KeywordImport(start_loc) => {
       let parser = advance_parser(parser) // consume 'import'
 
-      // Expect opening parenthesis
       match current_token(parser) {
+        // import.meta
+        Dot(_) => {
+          let parser = advance_parser(parser) // consume '.'
+          match current_token(parser) {
+            Identifier(name, end_loc) if name == "meta" => {
+              let parser = advance_parser(parser) // consume 'meta'
+              Ok(
+                (
+                  Node::MetaProperty(MetaProperty::{
+                    keyword_kind: ImportMeta,
+                    name: "meta",
+                    location: SourceLocation::new(
+                      start_loc.file_path,
+                      start_loc.start,
+                      end_loc.end,
+                    ),
+                  }),
+                  parser,
+                ),
+              )
+            }
+            _ =>
+              Err(
+                add_error(
+                  parser,
+                  "Expected 'meta' after 'import.'",
+                  current_token(parser).location(),
+                ),
+              )
+          }
+        }
+        // Dynamic import: import('./module')
         OpenParen(_) => {
           let parser = advance_parser(parser) // consume '('
 
@@ -1032,7 +1130,7 @@ fn parse_primary_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
           Err(
             add_error(
               parser,
-              "Expected '(' after 'import' for dynamic import",
+              "Expected '(' or '.' after 'import'",
               current_token(parser).location(),
             ),
           )

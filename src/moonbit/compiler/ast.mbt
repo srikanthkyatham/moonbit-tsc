@@ -81,6 +81,7 @@ pub enum Node {
   RegExpLiteral(RegExpLiteral)
   ThisExpression(ThisExpression)
   SuperExpression(SuperExpression)
+  MetaProperty(MetaProperty) // import.meta or new.target
 
   // Type Nodes
   TypeReference(TypeReference)
@@ -806,6 +807,21 @@ pub struct SuperExpression {
 } derive(Show)
 
 ///|
+/// Meta property (import.meta or new.target)
+pub struct MetaProperty {
+  keyword_kind : MetaPropertyKind // import or new
+  name : String // meta or target
+  location : SourceLocation
+} derive(Show)
+
+///|
+#valtype
+pub enum MetaPropertyKind {
+  ImportMeta // import.meta
+  NewTarget // new.target
+} derive(Show, Eq)
+
+///|
 /// Type nodes
 pub struct TypeReference {
   type_name : String
@@ -1495,6 +1511,7 @@ pub fn get_location(node : Node) -> SourceLocation {
     RegExpLiteral(r) => r.location
     ThisExpression(t) => t.location
     SuperExpression(s) => s.location
+    MetaProperty(m) => m.location
     TypeReference(t) => t.location
     UnionType(u) => u.location
     IntersectionType(i) => i.location

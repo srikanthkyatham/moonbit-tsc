@@ -192,6 +192,7 @@ pub fn emit(node : Node, ctx : EmitterContext) -> String {
     RegExpLiteral(rl) => rl.pattern
     ThisExpression(_) => "this"
     SuperExpression(_) => "super"
+    MetaProperty(mp) => emit_meta_property(mp)
 
     // Type Nodes (should be removed by transformer)
     TypeReference(_) => ""
@@ -2039,6 +2040,15 @@ fn emit_parenthesized_expression(
   ctx : EmitterContext,
 ) -> String {
   "(" + emit(pe.expression, ctx) + ")"
+}
+
+///|
+/// Emit meta property (import.meta or new.target)
+fn emit_meta_property(mp : MetaProperty) -> String {
+  match mp.keyword_kind {
+    ImportMeta => "import.meta"
+    NewTarget => "new.target"
+  }
 }
 
 ///|

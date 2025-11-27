@@ -313,6 +313,7 @@ pub fn transform(node : Node, ctx : TransformerContext) -> Node {
     RegExpLiteral(rl) => RegExpLiteral(rl)
     ThisExpression(te) => ThisExpression(te)
     SuperExpression(se) => SuperExpression(se)
+    MetaProperty(mp) => MetaProperty(mp) // import.meta and new.target pass through
 
     // Type Nodes - should not appear in runtime code, return empty
     TypeReference(_)

@@ -3621,6 +3621,131 @@ test "parse class expression with method" {
 }
 
 // ============================================================================
+// Meta Property Tests (import.meta, new.target)
+// ============================================================================
+
+test "parse import.meta" {
+  let source = "const url = import.meta.url"
+  let tokens = tokens_from_source(source)
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        VariableStatement(vs) => {
+          match vs.declarations[0].initializer {
+            Some(PropertyAccessExpression(pae)) => {
+              match pae.expression {
+                MetaProperty(mp) => {
+                  match mp.keyword_kind {
+                    ImportMeta => assert_eq(mp.name, "meta")
+                    _ => assert_true(false)
+                  }
+                }
+                _ => assert_true(false)
+              }
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+test "parse import.meta standalone" {
+  let source = "console.log(import.meta)"
+  let tokens = tokens_from_source(source)
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        ExpressionStatement(es) => {
+          match es.expression {
+            CallExpression(ce) => {
+              assert_eq(ce.arguments.length(), 1)
+              match ce.arguments[0] {
+                MetaProperty(mp) => {
+                  match mp.keyword_kind {
+                    ImportMeta => assert_eq(mp.name, "meta")
+                    _ => assert_true(false)
+                  }
+                }
+                _ => assert_true(false)
+              }
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+test "parse new.target standalone" {
+  let source = "console.log(new.target)"
+  let tokens = tokens_from_source(source)
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        ExpressionStatement(es) => {
+          match es.expression {
+            CallExpression(ce) => {
+              assert_eq(ce.arguments.length(), 1)
+              match ce.arguments[0] {
+                MetaProperty(mp) => {
+                  match mp.keyword_kind {
+                    NewTarget => assert_eq(mp.name, "target")
+                    _ => assert_true(false)
+                  }
+                }
+                _ => assert_true(false)
+              }
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+test "parse new.target as variable initializer" {
+  let source = "const target = new.target"
+  let tokens = tokens_from_source(source)
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        VariableStatement(vs) => {
+          match vs.declarations[0].initializer {
+            Some(MetaProperty(mp)) => {
+              match mp.keyword_kind {
+                NewTarget => assert_eq(mp.name, "target")
+                _ => assert_true(false)
+              }
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+// ============================================================================
 // Parser Error Code Tests
 // ============================================================================
 // Note: ParserErrorCode enum variants are tested internally in the parser module.
