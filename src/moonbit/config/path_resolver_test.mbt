@@ -423,3 +423,251 @@ test "resolve_module_full - paths take priority over node_modules" {
   // Paths mapping should take priority - should contain local path
   assert_true(resolved.contains("local-lib"))
 }
+
+// ============================================================================
+// Package.json Exports Field Tests
+// ============================================================================
+
+///|
+test "resolve_package_exports - simple string export" {
+  let package_json = "{\"name\": \"my-pkg\", \"exports\": \"./dist/index.js\"}"
+
+  fn file_exists(path : String) -> Bool {
+    path == "/pkg/dist/index.d.ts"
+  }
+
+  let result = resolve_package_exports(package_json, "", file_exists, "/pkg")
+  guard result is Some(resolved) else {
+    assert_true(false)
+    return
+  }
+  assert_eq(resolved, "/pkg/dist/index.d.ts")
+}
+
+///|
+test "resolve_package_exports - subpath exports" {
+  let package_json = "{\"name\": \"my-pkg\", \"exports\": {\".\":\"./dist/index.js\", \"./utils\": \"./dist/utils.js\"}}"
+
+  fn file_exists(path : String) -> Bool {
+    path == "/pkg/dist/utils.d.ts"
+  }
+
+  let result = resolve_package_exports(package_json, "./utils", file_exists, "/pkg")
+  guard result is Some(resolved) else {
+    assert_true(false)
+    return
+  }
+  assert_eq(resolved, "/pkg/dist/utils.d.ts")
+}
+
+///|
+test "resolve_package_exports - conditional exports with types" {
+  let package_json = "{\"name\": \"my-pkg\", \"exports\": {\".\": {\"types\": \"./types/index.d.ts\", \"import\": \"./dist/index.mjs\"}}}"
+
+  fn file_exists(path : String) -> Bool {
+    path == "/pkg/types/index.d.ts" || path == "/pkg/dist/index.mjs"
+  }
+
+  let result = resolve_package_exports(package_json, "", file_exists, "/pkg")
+  guard result is Some(resolved) else {
+    assert_true(false)
+    return
+  }
+  // Should prefer "types" condition
+  assert_eq(resolved, "/pkg/types/index.d.ts")
+}
+
+///|
+test "resolve_package_exports - conditional exports fallback to import" {
+  let package_json = "{\"name\": \"my-pkg\", \"exports\": {\".\": {\"types\": \"./types/index.d.ts\", \"import\": \"./dist/index.mjs\"}}}"
+
+  fn file_exists(path : String) -> Bool {
+    // types file doesn't exist, only import .d.mts exists
+    path == "/pkg/dist/index.d.mts"
+  }
+
+  let result = resolve_package_exports(package_json, "", file_exists, "/pkg")
+  guard result is Some(resolved) else {
+    assert_true(false)
+    return
+  }
+  // Should fallback to import and find .d.mts
+  assert_eq(resolved, "/pkg/dist/index.d.mts")
+}
+
+///|
+test "resolve_package_exports - wildcard pattern" {
+  let package_json = "{\"name\": \"my-pkg\", \"exports\": {\"./*\": \"./dist/*.js\"}}"
+
+  fn file_exists(path : String) -> Bool {
+    path == "/pkg/dist/utils.d.ts"
+  }
+
+  let result = resolve_package_exports(package_json, "./utils", file_exists, "/pkg")
+  guard result is Some(resolved) else {
+    assert_true(false)
+    return
+  }
+  assert_eq(resolved, "/pkg/dist/utils.d.ts")
+}
+
+///|
+test "resolve_package_exports - wildcard with conditional" {
+  let package_json = "{\"name\": \"my-pkg\", \"exports\": {\"./*\": {\"types\": \"./types/*.d.ts\", \"import\": \"./dist/*.mjs\"}}}"
+
+  fn file_exists(path : String) -> Bool {
+    path == "/pkg/types/helpers.d.ts"
+  }
+
+  let result = resolve_package_exports(package_json, "./helpers", file_exists, "/pkg")
+  guard result is Some(resolved) else {
+    assert_true(false)
+    return
+  }
+  assert_eq(resolved, "/pkg/types/helpers.d.ts")
+}
+
+///|
+test "resolve_package_exports - null export (private)" {
+  let package_json = "{\"name\": \"my-pkg\", \"exports\": {\".\": \"./index.js\", \"./internal\": null}}"
+
+  fn file_exists(path : String) -> Bool {
+    path == "/pkg/internal/secret.js"
+  }
+
+  let result = resolve_package_exports(package_json, "./internal", file_exists, "/pkg")
+  // Should return None because ./internal is explicitly null (private)
+  assert_true(result is None)
+}
+
+///|
+test "resolve_package_exports - no exports field returns None" {
+  let package_json = "{\"name\": \"my-pkg\", \"main\": \"./index.js\"}"
+
+  fn file_exists(_path : String) -> Bool {
+    true
+  }
+
+  let result = resolve_package_exports(package_json, "", file_exists, "/pkg")
+  // No exports field, should return None
+  assert_true(result is None)
+}
+
+///|
+test "resolve_package_exports - subpath without ./ prefix" {
+  let package_json = "{\"name\": \"my-pkg\", \"exports\": {\".\": \"./index.js\", \"./utils\": \"./dist/utils.js\"}}"
+
+  fn file_exists(path : String) -> Bool {
+    path == "/pkg/dist/utils.d.ts"
+  }
+
+  // Test with subpath that doesn't have "./" prefix
+  let result = resolve_package_exports(package_json, "/utils", file_exists, "/pkg")
+  guard result is Some(resolved) else {
+    assert_true(false)
+    return
+  }
+  assert_eq(resolved, "/pkg/dist/utils.d.ts")
+}
+
+///|
+test "resolve_from_node_modules - uses exports field" {
+  fn file_exists(path : String) -> Bool {
+    path == "/project/node_modules/modern-pkg/dist/index.d.ts"
+  }
+
+  fn read_file(path : String) -> String? {
+    if path == "/project/node_modules/modern-pkg/package.json" {
+      Some("{\"name\": \"modern-pkg\", \"exports\": {\".\": {\"types\": \"./dist/index.d.ts\", \"import\": \"./dist/index.mjs\"}}}")
+    } else {
+      None
+    }
+  }
+
+  let result = resolve_from_node_modules(
+    "modern-pkg",
+    "/project/src/index.ts",
+    file_exists,
+    read_file,
+  )
+  guard result is Some(resolved) else {
+    assert_true(false)
+    return
+  }
+  assert_eq(resolved, "/project/node_modules/modern-pkg/dist/index.d.ts")
+}
+
+///|
+test "resolve_from_node_modules - exports subpath" {
+  fn file_exists(path : String) -> Bool {
+    path == "/project/node_modules/modern-pkg/dist/utils.d.ts"
+  }
+
+  fn read_file(path : String) -> String? {
+    if path == "/project/node_modules/modern-pkg/package.json" {
+      Some("{\"name\": \"modern-pkg\", \"exports\": {\".\": \"./index.js\", \"./utils\": \"./dist/utils.js\"}}")
+    } else {
+      None
+    }
+  }
+
+  let result = resolve_from_node_modules(
+    "modern-pkg/utils",
+    "/project/src/index.ts",
+    file_exists,
+    read_file,
+  )
+  guard result is Some(resolved) else {
+    assert_true(false)
+    return
+  }
+  assert_eq(resolved, "/project/node_modules/modern-pkg/dist/utils.d.ts")
+}
+
+///|
+test "resolve_from_node_modules - exports takes priority over direct file" {
+  // When both exports and direct file exist, exports should win
+  fn file_exists(path : String) -> Bool {
+    path == "/project/node_modules/dual-pkg/lib/index.d.ts" ||
+    path == "/project/node_modules/dual-pkg/utils.ts"
+  }
+
+  fn read_file(path : String) -> String? {
+    if path == "/project/node_modules/dual-pkg/package.json" {
+      // exports maps ./utils to lib/index.d.ts, not utils.ts
+      Some("{\"name\": \"dual-pkg\", \"exports\": {\"./utils\": \"./lib/index.js\"}}")
+    } else {
+      None
+    }
+  }
+
+  let result = resolve_from_node_modules(
+    "dual-pkg/utils",
+    "/project/src/index.ts",
+    file_exists,
+    read_file,
+  )
+  guard result is Some(resolved) else {
+    assert_true(false)
+    return
+  }
+  // Should use exports mapping, not direct file
+  assert_eq(resolved, "/project/node_modules/dual-pkg/lib/index.d.ts")
+}
+
+///|
+test "parse_exports_field - handles nested conditionals" {
+  let package_json = "{\"exports\": {\".\": {\"types\": \"./types.d.ts\", \"import\": {\"types\": \"./esm/types.d.ts\", \"default\": \"./esm/index.mjs\"}}}}"
+
+  fn file_exists(path : String) -> Bool {
+    path == "/pkg/types.d.ts"
+  }
+
+  let result = resolve_package_exports(package_json, "", file_exists, "/pkg")
+  guard result is Some(resolved) else {
+    assert_true(false)
+    return
+  }
+  // Should find top-level types first
+  assert_eq(resolved, "/pkg/types.d.ts")
+}

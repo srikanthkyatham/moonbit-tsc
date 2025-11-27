@@ -407,8 +407,30 @@ fn try_resolve_package(
   file_exists : (String) -> Bool,
   read_file : (String) -> String?,
 ) -> String? {
+  // First, try to use package.json exports field (highest priority for modern packages)
+  let package_json_path = join_path(package_path, "package.json")
+
+  match read_file(package_json_path) {
+    Some(content) => {
+      // Try exports field first (modern Node.js resolution)
+      match resolve_package_exports(content, subpath, file_exists, package_path) {
+        Some(resolved) => return Some(resolved)
+        None => ()
+      }
+
+      // If no subpath, try legacy fields (types, typings, main)
+      if subpath.length() == 0 {
+        match get_package_entry_point(content, file_exists, package_path) {
+          Some(entry) => return Some(entry)
+          None => ()
+        }
+      }
+    }
+    None => ()
+  }
+
+  // Fallback: direct file resolution for subpaths
   if subpath.length() > 0 {
-    // Has subpath, try direct resolution
     let full_path = package_path + subpath
     // Try TypeScript extensions first
     for ext_path in try_resolve_extensions(full_path) {
@@ -428,21 +450,6 @@ fn try_resolve_package(
       return Some(full_path)
     }
     return None
-  }
-
-  // No subpath - need to find entry point from package.json
-  let package_json_path = join_path(package_path, "package.json")
-
-  // Try to read and parse package.json
-  match read_file(package_json_path) {
-    Some(content) => {
-      // Try to find types/main field
-      match get_package_entry_point(content, file_exists, package_path) {
-        Some(entry) => return Some(entry)
-        None => ()
-      }
-    }
-    None => ()
   }
 
   // Fallback: try index files
@@ -581,6 +588,461 @@ fn find_substring(haystack : String, needle : String) -> Int? {
     }
   }
   None
+}
+
+// ============================================================================
+// Package.json Exports Field Resolution
+// ============================================================================
+
+///|
+/// Export target - can be a string path or conditional object
+pub(all) enum ExportTarget {
+  /// Direct path: "./index.js"
+  Path(String)
+  /// Conditional object: { "types": "./index.d.ts", "import": "./index.mjs" }
+  Conditional(Map[String, ExportTarget])
+  /// Null/excluded
+  Null
+}
+
+///|
+/// Parsed exports field structure
+pub(all) enum ExportsField {
+  /// Single string: "exports": "./index.js"
+  Single(String)
+  /// Object with subpaths: { ".": "./index.js", "./utils": "./utils.js" }
+  Subpaths(Map[String, ExportTarget])
+}
+
+///|
+/// Resolve a subpath using package.json exports field
+/// Returns the resolved path relative to package root, or None if not found
+pub fn resolve_package_exports(
+  package_json_content : String,
+  subpath : String,
+  file_exists : (String) -> Bool,
+  package_path : String,
+) -> String? {
+  // Parse the exports field
+  let exports = parse_exports_field(package_json_content)
+
+  match exports {
+    None => None
+    Some(exports_field) => {
+      match exports_field {
+        ExportsField::Single(path) => {
+          // Single export - only matches "." (main entry)
+          if subpath == "" || subpath == "." {
+            resolve_export_target_to_path(
+              ExportTarget::Path(path),
+              file_exists,
+              package_path,
+            )
+          } else {
+            None
+          }
+        }
+        ExportsField::Subpaths(subpaths) => {
+          // Normalize subpath for matching
+          // parse_package_name returns "/utils" but exports uses "./utils"
+          let normalized_subpath = if subpath.has_prefix("/") {
+            "." + subpath // Convert "/utils" to "./utils"
+          } else {
+            subpath
+          }
+          let match_key = if normalized_subpath == "" { "." } else { normalized_subpath }
+
+          // Try exact match first
+          match subpaths.get(match_key) {
+            Some(target) => {
+              return resolve_export_target_to_path(target, file_exists, package_path)
+            }
+            None => ()
+          }
+
+          // Try with "./" prefix if subpath doesn't have it
+          if not(match_key.has_prefix("./")) && match_key != "." {
+            let prefixed_key = "./" + match_key
+            match subpaths.get(prefixed_key) {
+              Some(target) => {
+                return resolve_export_target_to_path(target, file_exists, package_path)
+              }
+              None => ()
+            }
+          }
+
+          // Try pattern matching with wildcards
+          for pattern, target in subpaths {
+            match try_match_export_pattern(pattern, match_key) {
+              Some(matched_part) => {
+                // Replace * in target with matched part
+                let resolved_target = substitute_export_pattern(target, matched_part)
+                match resolve_export_target_to_path(resolved_target, file_exists, package_path) {
+                  Some(path) => return Some(path)
+                  None => continue
+                }
+              }
+              None => continue
+            }
+          }
+
+          None
+        }
+      }
+    }
+  }
+}
+
+///|
+/// Parse the exports field from package.json content
+fn parse_exports_field(json : String) -> ExportsField? {
+  // Find "exports" field
+  let exports_pattern = "\"exports\""
+  let exports_start = find_substring(json, exports_pattern)
+
+  match exports_start {
+    None => None
+    Some(start_idx) => {
+      // Find the colon after "exports"
+      let after_exports = start_idx + exports_pattern.length()
+      let colon_idx = find_char_from(json, ':', after_exports)
+
+      match colon_idx {
+        None => None
+        Some(colon) => {
+          // Skip whitespace after colon
+          let value_start = skip_whitespace(json, colon + 1)
+
+          if value_start >= json.length() {
+            return None
+          }
+
+          // Check what type of value we have
+          if json[value_start] == '"'.to_int() {
+            // Simple string export
+            let quote_end = find_char_from(json, '"', value_start + 1)
+            match quote_end {
+              None => None
+              Some(end) => {
+                let path = @utils.substr(json, start=value_start + 1, end=end)
+                Some(ExportsField::Single(path))
+              }
+            }
+          } else if json[value_start] == '{'.to_int() {
+            // Object export - parse it
+            match parse_exports_object(json, value_start) {
+              Some(subpaths) => Some(ExportsField::Subpaths(subpaths))
+              None => None
+            }
+          } else {
+            None
+          }
+        }
+      }
+    }
+  }
+}
+
+///|
+/// Parse an exports object (handles nested objects for conditional exports)
+fn parse_exports_object(json : String, start : Int) -> Map[String, ExportTarget]? {
+  let result : Map[String, ExportTarget] = {}
+  let mut pos = start + 1 // Skip opening brace
+  let mut depth = 1
+
+  while pos < json.length() && depth > 0 {
+    // Skip whitespace
+    pos = skip_whitespace(json, pos)
+    if pos >= json.length() {
+      break
+    }
+
+    // Check for closing brace
+    if json[pos] == '}'.to_int() {
+      depth = depth - 1
+      pos = pos + 1
+      continue
+    }
+
+    // Check for comma
+    if json[pos] == ','.to_int() {
+      pos = pos + 1
+      continue
+    }
+
+    // Parse key (should be a string)
+    if json[pos] != '"'.to_int() {
+      pos = pos + 1
+      continue
+    }
+
+    let key_start = pos + 1
+    let key_end = find_char_from(json, '"', key_start)
+    match key_end {
+      None => break
+      Some(ke) => {
+        let key = @utils.substr(json, start=key_start, end=ke)
+        pos = ke + 1
+
+        // Find colon
+        pos = skip_whitespace(json, pos)
+        if pos >= json.length() || json[pos] != ':'.to_int() {
+          break
+        }
+        pos = pos + 1
+        pos = skip_whitespace(json, pos)
+
+        // Parse value
+        if pos >= json.length() {
+          break
+        }
+
+        if json[pos] == '"'.to_int() {
+          // String value
+          let value_start = pos + 1
+          let value_end = find_char_from(json, '"', value_start)
+          match value_end {
+            None => break
+            Some(ve) => {
+              let value = @utils.substr(json, start=value_start, end=ve)
+              result[key] = ExportTarget::Path(value)
+              pos = ve + 1
+            }
+          }
+        } else if json[pos] == '{'.to_int() {
+          // Nested object (conditional exports)
+          match parse_exports_object(json, pos) {
+            Some(nested) => {
+              result[key] = ExportTarget::Conditional(nested)
+              // Find the end of this object
+              pos = find_object_end(json, pos)
+            }
+            None => break
+          }
+        } else if json[pos] == 'n'.to_int() {
+          // Possibly "null"
+          if @utils.substr(json, start=pos, end=pos + 4) == "null" {
+            result[key] = ExportTarget::Null
+            pos = pos + 4
+          } else {
+            pos = pos + 1
+          }
+        } else {
+          // Skip unknown value
+          pos = pos + 1
+        }
+      }
+    }
+  }
+
+  if result.size() > 0 {
+    Some(result)
+  } else {
+    None
+  }
+}
+
+///|
+/// Find the end of a JSON object (matching closing brace)
+fn find_object_end(json : String, start : Int) -> Int {
+  let mut depth = 0
+  let mut pos = start
+  let mut in_string = false
+
+  while pos < json.length() {
+    let ch = json[pos]
+
+    if in_string {
+      if ch == '"'.to_int() && (pos == 0 || json[pos - 1] != '\\'.to_int()) {
+        in_string = false
+      }
+    } else {
+      if ch == '"'.to_int() {
+        in_string = true
+      } else if ch == '{'.to_int() {
+        depth = depth + 1
+      } else if ch == '}'.to_int() {
+        depth = depth - 1
+        if depth == 0 {
+          return pos + 1
+        }
+      }
+    }
+    pos = pos + 1
+  }
+
+  json.length()
+}
+
+///|
+/// Skip whitespace characters
+fn skip_whitespace(s : String, start : Int) -> Int {
+  let mut pos = start
+  while pos < s.length() {
+    let ch = s[pos]
+    if ch == ' '.to_int() ||
+       ch == '\t'.to_int() ||
+       ch == '\n'.to_int() ||
+       ch == '\r'.to_int() {
+      pos = pos + 1
+    } else {
+      break
+    }
+  }
+  pos
+}
+
+///|
+/// Resolve an export target to an actual file path
+fn resolve_export_target_to_path(
+  target : ExportTarget,
+  file_exists : (String) -> Bool,
+  package_path : String,
+) -> String? {
+  match target {
+    ExportTarget::Null => None
+    ExportTarget::Path(path) => {
+      let full_path = join_path(package_path, path)
+      // Try the path as-is first
+      if file_exists(full_path) {
+        return Some(full_path)
+      }
+      // Try with TypeScript extensions for .js files
+      if full_path.has_suffix(".js") {
+        let base = @utils.substr(full_path, start=0, end=full_path.length() - 3)
+        let dts_path = base + ".d.ts"
+        if file_exists(dts_path) {
+          return Some(dts_path)
+        }
+      }
+      if full_path.has_suffix(".mjs") {
+        let base = @utils.substr(full_path, start=0, end=full_path.length() - 4)
+        let dts_path = base + ".d.mts"
+        if file_exists(dts_path) {
+          return Some(dts_path)
+        }
+        let dts_path2 = base + ".d.ts"
+        if file_exists(dts_path2) {
+          return Some(dts_path2)
+        }
+      }
+      if full_path.has_suffix(".cjs") {
+        let base = @utils.substr(full_path, start=0, end=full_path.length() - 4)
+        let dts_path = base + ".d.cts"
+        if file_exists(dts_path) {
+          return Some(dts_path)
+        }
+        let dts_path2 = base + ".d.ts"
+        if file_exists(dts_path2) {
+          return Some(dts_path2)
+        }
+      }
+      // Return the path if it exists, otherwise None
+      if file_exists(full_path) {
+        Some(full_path)
+      } else {
+        None
+      }
+    }
+    ExportTarget::Conditional(conditions) => {
+      // TypeScript condition priority: types > import > require > default
+      let priority_conditions = ["types", "import", "require", "node", "default"]
+
+      for condition in priority_conditions {
+        match conditions.get(condition) {
+          Some(target) => {
+            match resolve_export_target_to_path(target, file_exists, package_path) {
+              Some(path) => return Some(path)
+              None => continue
+            }
+          }
+          None => continue
+        }
+      }
+
+      // Try any other conditions
+      for condition, target in conditions {
+        // Skip already tried conditions
+        let mut skip = false
+        for pc in priority_conditions {
+          if condition == pc {
+            skip = true
+            break
+          }
+        }
+        if skip {
+          continue
+        }
+
+        match resolve_export_target_to_path(target, file_exists, package_path) {
+          Some(path) => return Some(path)
+          None => continue
+        }
+      }
+
+      None
+    }
+  }
+}
+
+///|
+/// Try to match an export pattern like "./*" or "./utils/*"
+fn try_match_export_pattern(pattern : String, subpath : String) -> String? {
+  // Find wildcard position
+  let wildcard_idx = find_char(pattern, '*')
+
+  match wildcard_idx {
+    None => None // No pattern matching needed (exact match handled elsewhere)
+    Some(idx) => {
+      let prefix = @utils.substr(pattern, start=0, end=idx)
+      let suffix = if idx + 1 < pattern.length() {
+        @utils.substr(pattern, start=idx + 1)
+      } else {
+        ""
+      }
+
+      // Normalize subpath for matching
+      let match_subpath = if subpath.has_prefix("./") {
+        subpath
+      } else if subpath == "." {
+        return None // "." doesn't match wildcard patterns
+      } else {
+        "./" + subpath
+      }
+
+      if match_subpath.has_prefix(prefix) {
+        let after_prefix = @utils.substr(match_subpath, start=prefix.length())
+        if suffix.length() == 0 {
+          Some(after_prefix)
+        } else if after_prefix.has_suffix(suffix) {
+          let middle_end = after_prefix.length() - suffix.length()
+          Some(@utils.substr(after_prefix, start=0, end=middle_end))
+        } else {
+          None
+        }
+      } else {
+        None
+      }
+    }
+  }
+}
+
+///|
+/// Substitute * in an export target with the matched part
+fn substitute_export_pattern(target : ExportTarget, matched_part : String) -> ExportTarget {
+  match target {
+    ExportTarget::Null => ExportTarget::Null
+    ExportTarget::Path(path) => {
+      ExportTarget::Path(replace_wildcard(path, matched_part))
+    }
+    ExportTarget::Conditional(conditions) => {
+      let new_conditions : Map[String, ExportTarget] = {}
+      for key, value in conditions {
+        new_conditions[key] = substitute_export_pattern(value, matched_part)
+      }
+      ExportTarget::Conditional(new_conditions)
+    }
+  }
 }
 
 ///|
