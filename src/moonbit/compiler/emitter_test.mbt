@@ -793,6 +793,45 @@ test "emit namespace declaration" {
   assert_true(js.contains("MyLib.VERSION"))
 }
 
+///|
+/// Test: Emit namespace with exported class
+test "emit namespace with exported class" {
+  let js = compile_to_js(
+    "namespace Models { export class User { name: string; } }",
+  )
+  println("Namespace with class:\n\{js}")
+  assert_true(js.contains("var Models;"))
+  assert_true(js.contains("(function (Models)"))
+  assert_true(js.contains("Models.User = class User"))
+  assert_true(js.contains("Models || (Models = {})"))
+}
+
+///|
+/// Test: Emit namespace with multiple exports
+test "emit namespace with multiple exports" {
+  let js = compile_to_js(
+    "namespace Utils { export const PI = 3.14; export function double(x) { return x * 2; } }",
+  )
+  println("Namespace with multiple exports:\n\{js}")
+  assert_true(js.contains("var Utils;"))
+  assert_true(js.contains("Utils.PI = 3.14"))
+  assert_true(js.contains("Utils.double = function"))
+}
+
+///|
+/// Test: Emit namespace with non-exported (internal) member
+test "emit namespace with internal member" {
+  let js = compile_to_js(
+    "namespace Internal { const secret = 42; export const visible = secret; }",
+  )
+  println("Namespace with internal member:\n\{js}")
+  assert_true(js.contains("var Internal;"))
+  // Non-exported member should be local variable
+  assert_true(js.contains("const secret = 42"))
+  // Exported member should be on namespace
+  assert_true(js.contains("Internal.visible"))
+}
+
 // ============================================================================
 // Decorator Tests
 // ============================================================================
