@@ -634,11 +634,13 @@ test "emit regular const still works" {
 }
 
 ///|
-/// Test: Const enum is emitted (preserveConstEnums behavior)
+/// Test: Const enum is NOT emitted (inlined at usage sites)
 test "emit const enum" {
   let js = compile_to_js("const enum Color { Red, Green, Blue }")
-  // Const enums are emitted as const objects (like --preserveConstEnums)
-  assert_true(js.contains("const Color"))
+  println("Const enum output:\n\{js}")
+  // Const enums are inlined and NOT emitted as objects
+  assert_false(js.contains("const Color"))
+  assert_false(js.contains("Color"))
 }
 
 ///|
@@ -649,12 +651,23 @@ test "emit regular enum" {
 }
 
 ///|
-/// Test: Const enum with values
-test "emit const enum with values" {
-  let js = compile_to_js("const enum Direction { Up = 1, Down = 2 }")
-  assert_true(js.contains("const Direction"))
-  assert_true(js.contains("Up"))
-  assert_true(js.contains("Down"))
+/// Test: Const enum value is inlined
+test "emit const enum with inlined values" {
+  let js = compile_to_js("const enum Direction { Up = 1, Down = 2 }; let x = Direction.Up;")
+  println("Const enum inlined output:\n\{js}")
+  // Const enum declaration should NOT be emitted
+  assert_false(js.contains("const Direction"))
+  // Direction.Up should be inlined to 1
+  assert_true(js.contains("let x = 1"))
+}
+
+///|
+/// Test: Const enum auto-increment values
+test "emit const enum auto-increment" {
+  let js = compile_to_js("const enum Color { Red, Green, Blue }; let c = Color.Green;")
+  println("Const enum auto-increment output:\n\{js}")
+  // Color.Green should be inlined to 1 (auto-increment from 0)
+  assert_true(js.contains("let c = 1"))
 }
 
 ///|

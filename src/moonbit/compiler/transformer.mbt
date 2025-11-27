@@ -46,8 +46,9 @@
 pub struct TransformerContext {
   target : Target // Target ECMAScript version
   in_decorated_class : Bool // True if we're inside a class with decorators
+  const_enums : Map[String, Map[String, Node]] // Const enum name -> member name -> value
   // Future: options for JSX, module system, etc.
-} derive(Show)
+}
 
 ///|
 /// Target ECMAScript version
@@ -93,19 +94,19 @@ pub fn Target::older_than(self : Target, version : Target) -> Bool {
 ///|
 /// Create a new transformer context
 pub fn TransformerContext::new(target : Target) -> TransformerContext {
-  { target, in_decorated_class: false }
+  { target, in_decorated_class: false, const_enums: Map::new() }
 }
 
 ///|
 /// Create default transformer context (ES2015 target)
 pub fn TransformerContext::default() -> TransformerContext {
-  { target: ES2015, in_decorated_class: false }
+  { target: ES2015, in_decorated_class: false, const_enums: Map::new() }
 }
 
 ///|
 /// Create transformer context for ES5 target
 pub fn TransformerContext::es5() -> TransformerContext {
-  { target: ES5, in_decorated_class: false }
+  { target: ES5, in_decorated_class: false, const_enums: Map::new() }
 }
 
 ///|
@@ -114,49 +115,94 @@ fn TransformerContext::with_decorated_class(
   self : TransformerContext,
   decorated : Bool,
 ) -> TransformerContext {
-  { target: self.target, in_decorated_class: decorated }
+  { target: self.target, in_decorated_class: decorated, const_enums: self.const_enums }
 }
 
 ///|
 /// Create transformer context for ES2015 target
 pub fn TransformerContext::es2015() -> TransformerContext {
-  { target: ES2015, in_decorated_class: false }
+  { target: ES2015, in_decorated_class: false, const_enums: Map::new() }
 }
 
 ///|
 /// Create transformer context for ES2016 target
 pub fn TransformerContext::es2016() -> TransformerContext {
-  { target: ES2016, in_decorated_class: false }
+  { target: ES2016, in_decorated_class: false, const_enums: Map::new() }
 }
 
 ///|
 /// Create transformer context for ES2017 target
 pub fn TransformerContext::es2017() -> TransformerContext {
-  { target: ES2017, in_decorated_class: false }
+  { target: ES2017, in_decorated_class: false, const_enums: Map::new() }
 }
 
 ///|
 /// Create transformer context for ES2018 target
 pub fn TransformerContext::es2018() -> TransformerContext {
-  { target: ES2018, in_decorated_class: false }
+  { target: ES2018, in_decorated_class: false, const_enums: Map::new() }
 }
 
 ///|
 /// Create transformer context for ES2019 target
 pub fn TransformerContext::es2019() -> TransformerContext {
-  { target: ES2019, in_decorated_class: false }
+  { target: ES2019, in_decorated_class: false, const_enums: Map::new() }
 }
 
 ///|
 /// Create transformer context for ES2020 target
 pub fn TransformerContext::es2020() -> TransformerContext {
-  { target: ES2020, in_decorated_class: false }
+  { target: ES2020, in_decorated_class: false, const_enums: Map::new() }
 }
 
 ///|
 /// Create transformer context for ESNext target
 pub fn TransformerContext::esnext() -> TransformerContext {
-  { target: ESNext, in_decorated_class: false }
+  { target: ESNext, in_decorated_class: false, const_enums: Map::new() }
+}
+
+///|
+/// Collect const enum declarations from statements and populate the context
+fn collect_const_enums(
+  statements : Array[Node],
+  ctx : TransformerContext,
+) -> Unit {
+  for stmt in statements {
+    match stmt {
+      EnumDeclaration(ed) =>
+        if ed.is_const {
+          // Build member map for this const enum
+          let members : Map[String, Node] = Map::new()
+          let mut auto_value = 0
+          for m in ed.members {
+            let value : Node = match m.initializer {
+              Some(init) => {
+                // Try to extract numeric value for auto-increment
+                match init {
+                  NumericLiteral(nl) => {
+                    let num_val = @strconv.parse_int(nl.value) catch { _ => 0 }
+                    auto_value = num_val + 1
+                  }
+                  _ => ()
+                }
+                init
+              }
+              None => {
+                // Auto-increment numeric value
+                let node : Node = Node::NumericLiteral({
+                  value: auto_value.to_string(),
+                  location: m.location,
+                })
+                auto_value = auto_value + 1
+                node
+              }
+            }
+            members.set(m.name, value)
+          }
+          ctx.const_enums.set(ed.name, members)
+        }
+      _ => ()
+    }
+  }
 }
 
 ///|
@@ -165,6 +211,9 @@ pub fn transform(node : Node, ctx : TransformerContext) -> Node {
   match node {
     // Source File - transform all statements
     SourceFile(sf) => {
+      // First pass: collect const enum declarations
+      collect_const_enums(sf.statements, ctx)
+      // Second pass: transform statements
       let transformed_statements = transform_statements(sf.statements, ctx)
       SourceFile({
         file_path: sf.file_path,
@@ -465,16 +514,36 @@ fn transform_enum_declaration(
   ed : EnumDeclaration,
   ctx : TransformerContext,
 ) -> Node {
-  // For now, convert enums to const objects
-  // Future: support const enums, numeric enums, string enums properly
+  // Const enums are inlined and don't produce any output
+  if ed.is_const {
+    return EmptyStatement({ location: ed.location })
+  }
 
+  // Regular enums: convert to const objects
   let properties : Array[ObjectProperty] = []
+  let mut auto_value = 0
   for a_member in ed.members {
-    let value_node = match a_member.initializer {
-      Some(init) => transform(init, ctx)
-      None =>
-        // Auto-increment numeric enums - for now, just use the string name
-        StringLiteral({ value: a_member.name, location: a_member.location })
+    let value_node : Node = match a_member.initializer {
+      Some(init) => {
+        // Try to extract numeric value for auto-increment
+        match init {
+          NumericLiteral(nl) => {
+            let num_val = @strconv.parse_int(nl.value) catch { _ => 0 }
+            auto_value = num_val + 1
+          }
+          _ => ()
+        }
+        transform(init, ctx)
+      }
+      None => {
+        // Auto-increment numeric value
+        let node : Node = Node::NumericLiteral({
+          value: auto_value.to_string(),
+          location: a_member.location,
+        })
+        auto_value = auto_value + 1
+        node
+      }
     }
     properties.push(
       PropertyAssignment(a_member.name, value_node, a_member.location),
@@ -928,6 +997,25 @@ fn transform_property_access_expression(
   pae : PropertyAccessExpression,
   ctx : TransformerContext,
 ) -> Node {
+  // Check if this is a const enum member access (e.g., Direction.Up)
+  match pae.expression {
+    Identifier(id) =>
+      // Check if the identifier is a const enum
+      match ctx.const_enums.get(id.name) {
+        Some(members) =>
+          // Check if the property is a member of this const enum
+          match members.get(pae.name) {
+            Some(value) =>
+              // Inline the const enum value
+              return value
+            None => ()
+          }
+        None => ()
+      }
+    _ => ()
+  }
+
+  // Default: transform normally
   PropertyAccessExpression({
     expression: transform(pae.expression, ctx),
     name: pae.name,
