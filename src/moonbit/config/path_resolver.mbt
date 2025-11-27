@@ -122,23 +122,23 @@ fn try_match_path_pattern(
     }
     Some(idx) => {
       // Pattern has wildcard
-      let prefix = pattern.substring(start=0, end=idx)
+      let prefix = @utils.substr(pattern, start=0, end=idx)
       let suffix = if idx + 1 < pattern.length() {
-        pattern.substring(start=idx + 1)
+        @utils.substr(pattern, start=idx + 1)
       } else {
         ""
       }
 
       // Check if specifier matches pattern
       if specifier.has_prefix(prefix) {
-        let after_prefix = specifier.substring(start=prefix.length())
+        let after_prefix = @utils.substr(specifier, start=prefix.length())
         if suffix.length() == 0 {
           // Pattern ends with *, match rest
           Some(after_prefix)
         } else if after_prefix.has_suffix(suffix) {
           // Pattern has suffix after *, extract middle
           let middle_end = after_prefix.length() - suffix.length()
-          Some(after_prefix.substring(start=0, end=middle_end))
+          Some(@utils.substr(after_prefix, start=0, end=middle_end))
         } else {
           None
         }
@@ -195,7 +195,7 @@ fn get_parent_directory(path : String) -> String {
   if last_slash <= 0 {
     "."
   } else {
-    path.substring(start=0, end=last_slash)
+    @utils.substr(path, start=0, end=last_slash)
   }
 }
 
@@ -207,16 +207,16 @@ fn join_path(base : String, relative : String) -> String {
   }
 
   let base_clean = if base.has_suffix("/") || base.has_suffix("\\") {
-    base.substring(start=0, end=base.length() - 1)
+    @utils.substr(base, start=0, end=base.length() - 1)
   } else {
     base
   }
 
   if relative.has_prefix("./") {
-    base_clean + "/" + relative.substring(start=2)
+    base_clean + "/" + @utils.substr(relative, start=2)
   } else if relative.has_prefix("../") {
     let parent = get_parent_directory(base_clean)
-    join_path(parent, relative.substring(start=3))
+    join_path(parent, @utils.substr(relative, start=3))
   } else {
     base_clean + "/" + relative
   }
@@ -256,9 +256,9 @@ pub fn is_bare_specifier(specifier : String) -> Bool {
 /// Normalize a module specifier (remove .ts/.tsx extension if present)
 pub fn normalize_specifier(specifier : String) -> String {
   if specifier.has_suffix(".ts") {
-    specifier.substring(start=0, end=specifier.length() - 3)
+    @utils.substr(specifier, start=0, end=specifier.length() - 3)
   } else if specifier.has_suffix(".tsx") {
-    specifier.substring(start=0, end=specifier.length() - 4)
+    @utils.substr(specifier, start=0, end=specifier.length() - 4)
   } else {
     specifier
   }

@@ -131,7 +131,7 @@ pub fn parse_args(args : Array[String]) -> Result[Command, String] {
         return Err("--watchInterval requires a number (milliseconds)")
       }
       try {
-        watch_interval = @strconv.parse_int!(args[i])
+        watch_interval = @strconv.parse_int(args[i])
       } catch {
         _ => return Err("--watchInterval requires a valid number")
       }
@@ -141,7 +141,7 @@ pub fn parse_args(args : Array[String]) -> Result[Command, String] {
         return Err("--parallel requires a number")
       }
       try {
-        parallel = Some(@strconv.parse_int!(args[i]))
+        parallel = Some(@strconv.parse_int(args[i]))
       } catch {
         _ => return Err("--parallel requires a valid number")
       }

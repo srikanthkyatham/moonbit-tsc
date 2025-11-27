@@ -555,7 +555,7 @@ fn get_config_directory(path : String) -> String {
   } else if last_slash == 0 {
     "/"
   } else {
-    path.substring(start=0, end=last_slash)
+    @utils.substr(path, start=0, end=last_slash)
   }
 }
 
@@ -564,7 +564,7 @@ fn get_config_directory(path : String) -> String {
 fn join_paths(base : String, relative : String) -> String {
   // Remove trailing slash from base
   let base_clean = if base.has_suffix("/") || base.has_suffix("\\") {
-    base.substring(start=0, end=base.length() - 1)
+    @utils.substr(base, start=0, end=base.length() - 1)
   } else {
     base
   }
@@ -575,13 +575,13 @@ fn join_paths(base : String, relative : String) -> String {
   }
 
   if relative.has_prefix("./") {
-    return base_clean + "/" + relative.substring(start=2)
+    return base_clean + "/" + @utils.substr(relative, start=2)
   }
 
   if relative.has_prefix("../") {
     // Go up one directory
     let parent_dir = get_config_directory(base_clean)
-    return join_paths(parent_dir, relative.substring(start=3))
+    return join_paths(parent_dir, @utils.substr(relative, start=3))
   }
 
   base_clean + "/" + relative

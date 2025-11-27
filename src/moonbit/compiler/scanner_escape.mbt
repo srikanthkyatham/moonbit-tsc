@@ -16,13 +16,13 @@ fn hex_digit_value_v2(ch : Char) -> Int? {
 /// Convert code point to string
 fn code_point_to_string_v2(code_point : Int) -> String {
   if code_point <= 0xFFFF {
-    Char::from_int(code_point).to_string()
+    Int::unsafe_to_char(code_point).to_string()
   } else {
     // Surrogate pair for code points > 0xFFFF
     let adjusted = code_point - 0x10000
     let high = 0xD800 + (adjusted >> 10)
     let low = 0xDC00 + (adjusted & 0x3FF)
-    Char::from_int(high).to_string() + Char::from_int(low).to_string()
+    Int::unsafe_to_char(high).to_string() + Int::unsafe_to_char(low).to_string()
   }
 }
 
@@ -89,7 +89,7 @@ fn parse_hex_escape_v2(code : StringView) -> (String, Int)? {
       match (hex_digit_value_v2(h1), hex_digit_value_v2(h2)) {
         (Some(v1), Some(v2)) => {
           let value = v1 * 16 + v2
-          Some((Char::from_int(value).to_string(), 2))
+          Some((Int::unsafe_to_char(value).to_string(), 2))
         }
         _ => None
       }

@@ -90,7 +90,7 @@ test "bind variable declaration" {
   match parse_and_bind(source) {
     Ok(bound_file) => {
       let symbol = bound_file.global_scope.symbols.get("x")
-      assert_true(symbol.is_some())
+      assert_true(symbol is Some(_))
       match symbol {
         Some(s) => {
           assert_true(is_variable_kind(s.kind))
@@ -110,7 +110,7 @@ test "bind let variable declaration" {
   match parse_and_bind(source) {
     Ok(bound_file) => {
       let symbol = bound_file.global_scope.symbols.get("y")
-      assert_true(symbol.is_some())
+      assert_true(symbol is Some(_))
       match symbol {
         Some(s) => {
           assert_true(is_variable_kind(s.kind))
@@ -129,7 +129,7 @@ test "bind function declaration" {
   match parse_and_bind(source) {
     Ok(bound_file) => {
       let symbol = bound_file.global_scope.symbols.get("foo")
-      assert_true(symbol.is_some())
+      assert_true(symbol is Some(_))
       match symbol {
         Some(s) => {
           assert_true(is_function_kind(s.kind))
@@ -148,7 +148,7 @@ test "bind class declaration" {
   match parse_and_bind(source) {
     Ok(bound_file) => {
       let symbol = bound_file.global_scope.symbols.get("MyClass")
-      assert_true(symbol.is_some())
+      assert_true(symbol is Some(_))
       match symbol {
         Some(s) => {
           assert_true(is_class_kind(s.kind))
@@ -167,7 +167,7 @@ test "bind interface declaration" {
   match parse_and_bind(source) {
     Ok(bound_file) => {
       let symbol = bound_file.global_scope.symbols.get("IFoo")
-      assert_true(symbol.is_some())
+      assert_true(symbol is Some(_))
       match symbol {
         Some(s) => {
           assert_true(is_interface_kind(s.kind))
@@ -186,7 +186,7 @@ test "bind enum declaration" {
   match parse_and_bind(source) {
     Ok(bound_file) => {
       let symbol = bound_file.global_scope.symbols.get("Color")
-      assert_true(symbol.is_some())
+      assert_true(symbol is Some(_))
       match symbol {
         Some(s) => {
           assert_true(is_enum_kind(s.kind))
@@ -205,7 +205,7 @@ test "bind type alias declaration" {
   match parse_and_bind(source) {
     Ok(bound_file) => {
       let symbol = bound_file.global_scope.symbols.get("StringOrNumber")
-      assert_true(symbol.is_some())
+      assert_true(symbol is Some(_))
       match symbol {
         Some(s) => {
           assert_true(is_type_kind(s.kind))
@@ -224,7 +224,7 @@ test "bind namespace declaration" {
   match parse_and_bind(source) {
     Ok(bound_file) => {
       let symbol = bound_file.global_scope.symbols.get("MyNamespace")
-      assert_true(symbol.is_some())
+      assert_true(symbol is Some(_))
       match symbol {
         Some(s) => {
           assert_true(is_module_kind(s.kind))
@@ -298,7 +298,7 @@ test "can merge interfaces from parsed source" {
     Ok(bound_file) => {
       // Should succeed - interfaces can merge
       let symbol = bound_file.global_scope.symbols.get("IFoo")
-      assert_true(symbol.is_some())
+      assert_true(symbol is Some(_))
     }
     Err(_) => assert_true(false)
   }
@@ -335,12 +335,12 @@ test "function creates new scope" {
     Ok(bound_file) => {
       // Function should be in global scope
       let foo_symbol = bound_file.global_scope.symbols.get("foo")
-      assert_true(foo_symbol.is_some())
+      assert_true(foo_symbol is Some(_))
       // Parameter and local variable are in function scope, not global
       let x_symbol = bound_file.global_scope.symbols.get("x")
       let y_symbol = bound_file.global_scope.symbols.get("y")
-      assert_true(x_symbol.is_none())
-      assert_true(y_symbol.is_none())
+      assert_true(x_symbol is None)
+      assert_true(y_symbol is None)
     }
     Err(_) => assert_true(false)
   }
@@ -353,10 +353,10 @@ test "class creates new scope for members" {
     Ok(bound_file) => {
       // Class should be in global scope
       let class_symbol = bound_file.global_scope.symbols.get("Foo")
-      assert_true(class_symbol.is_some())
+      assert_true(class_symbol is Some(_))
       // Class members are not in global scope
       let x_symbol = bound_file.global_scope.symbols.get("x")
-      assert_true(x_symbol.is_none())
+      assert_true(x_symbol is None)
     }
     Err(_) => assert_true(false)
   }
@@ -373,7 +373,7 @@ test "return statement creates flow" {
     Ok(bound_file) => {
       // Should bind successfully - return creates flow node
       let symbol = bound_file.global_scope.symbols.get("foo")
-      assert_true(symbol.is_some())
+      assert_true(symbol is Some(_))
     }
     Err(_) => assert_true(false)
   }
@@ -386,7 +386,7 @@ test "if statement creates flow" {
     Ok(bound_file) => {
       // Should bind successfully - if creates condition flow nodes
       let symbol = bound_file.global_scope.symbols.get("foo")
-      assert_true(symbol.is_some())
+      assert_true(symbol is Some(_))
     }
     Err(_) => assert_true(false)
   }
@@ -398,7 +398,7 @@ test "while loop creates flow" {
   match parse_and_bind(source) {
     Ok(bound_file) => {
       let symbol = bound_file.global_scope.symbols.get("foo")
-      assert_true(symbol.is_some())
+      assert_true(symbol is Some(_))
     }
     Err(_) => assert_true(false)
   }
@@ -410,7 +410,7 @@ test "switch statement creates flow" {
   match parse_and_bind(source) {
     Ok(bound_file) => {
       let symbol = bound_file.global_scope.symbols.get("foo")
-      assert_true(symbol.is_some())
+      assert_true(symbol is Some(_))
     }
     Err(_) => assert_true(false)
   }
@@ -468,7 +468,7 @@ test "function overloads allowed" {
     Ok(bound_file) => {
       // Should succeed without duplicate errors
       let symbol = bound_file.global_scope.symbols.get("foo")
-      assert_true(symbol.is_some())
+      assert_true(symbol is Some(_))
     }
     Err(_) => assert_true(false)
   }
@@ -791,7 +791,7 @@ test "CFG builds for simple variable declaration" {
       // Should have start, end nodes and possibly assignment
       assert_true(cfg.nodes.length() >= 2)
       // Node map should have entries
-      assert_true(cfg.node_map.size() >= 2)
+      assert_true(cfg.node_map.length() >= 2)
     }
     Err(_) => assert_true(false)
   }
@@ -882,7 +882,7 @@ test "CFG node map contains all nodes" {
     Ok(bound_file) => {
       let cfg = bound_file.control_flow_graph
       // Node map should have same number of entries as nodes array
-      assert_eq(cfg.node_map.size(), cfg.nodes.length())
+      assert_eq(cfg.node_map.length(), cfg.nodes.length())
     }
     Err(_) => assert_true(false)
   }

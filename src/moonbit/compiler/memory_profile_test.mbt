@@ -261,7 +261,7 @@ test "parse and typecheck small.ts" {
           println("  Binding succeeded!")
           println("  Symbols created: \{bound.symbol_count}")
           println(
-            "  Global scope symbols: \{bound.global_scope.symbols.size()}",
+            "  Global scope symbols: \{bound.global_scope.symbols.length()}",
           )
 
           // Phase 4: Type Checking
@@ -269,7 +269,7 @@ test "parse and typecheck small.ts" {
           match check_source_file(bound) {
             Ok(typed) => {
               println("  Type checking succeeded!")
-              println("  Types inferred: \{typed.types.size()}")
+              println("  Types inferred: \{typed.types.length()}")
               if typed.diagnostics.length() > 0 {
                 println("\n  Diagnostics:")
                 for i = 0; i < typed.diagnostics.length(); i = i + 1 {

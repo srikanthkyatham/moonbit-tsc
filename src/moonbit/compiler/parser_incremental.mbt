@@ -135,7 +135,7 @@ fn find_statement_start(source : String, position : Int) -> Int {
   while pos > 0 {
     match source.get(pos - 1) {
       Some(ch) => {
-        let c = Char::from_int(ch)
+        let c = @utils.int_to_char(ch)
         match c {
           '}' => brace_depth = brace_depth + 1
           '{' =>
@@ -174,7 +174,7 @@ fn find_statement_end(source : String, position : Int) -> Int {
   while pos < len {
     match source.get(pos) {
       Some(ch) => {
-        let c = Char::from_int(ch)
+        let c = @utils.int_to_char(ch)
         match c {
           '{' => brace_depth = brace_depth + 1
           '}' =>
@@ -212,12 +212,12 @@ pub fn apply_text_change(
 ) -> String {
   let span = change_range.span
   let prefix = if span.start > 0 {
-    old_source.substring(start=0, end=span.start)
+    @utils.substr(old_source, start=0, end=span.start)
   } else {
     ""
   }
   let suffix = if span.end() < old_source.length() {
-    old_source.substring(start=span.end(), end=old_source.length())
+    @utils.substr(old_source, start=span.end(), end=old_source.length())
   } else {
     ""
   }

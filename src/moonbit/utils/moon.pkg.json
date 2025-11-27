@@ -1,0 +1,5 @@
+{
+  "targets": {
+    "*.mbt": ["native"]
+  }
+}

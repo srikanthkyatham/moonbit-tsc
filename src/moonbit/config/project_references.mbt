@@ -194,7 +194,7 @@ fn get_project_directory(tsconfig_path : String) -> String {
   if last_slash <= 0 {
     "."
   } else {
-    tsconfig_path.substring(start=0, end=last_slash)
+    @utils.substr(tsconfig_path, start=0, end=last_slash)
   }
 }
 

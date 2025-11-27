@@ -3084,11 +3084,11 @@ test "check await using declaration" {
 }
 
 // ============================================================================
-// Debugger Statement Tests
+// Debugger Statement Tests (Additional)
 // ============================================================================
 
 ///|
-test "check debugger statement" {
+test "check debugger statement basic" {
   let result = parse_bind_and_check("debugger;")
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
@@ -3097,7 +3097,7 @@ test "check debugger statement" {
 }
 
 ///|
-test "check debugger statement without semicolon" {
+test "check debugger statement in function" {
   let result = parse_bind_and_check("function test() { debugger }")
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
@@ -3139,7 +3139,7 @@ test "check static method" {
 }
 
 ///|
-test "check readonly property" {
+test "check readonly property in class" {
   let result = parse_bind_and_check("class Config { readonly name: string; }")
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
@@ -3245,7 +3245,7 @@ test "check readonly type operator" {
 }
 
 ///|
-test "check readonly tuple" {
+test "check readonly tuple type alias" {
   let result = parse_bind_and_check("type Point = readonly [number, number];")
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
@@ -3619,11 +3619,11 @@ test "check call expression with optional params" {
 }
 
 // ============================================================================
-// Generic Type Tests
+// Generic Type Tests (Additional)
 // ============================================================================
 
 ///|
-test "check generic function declaration" {
+test "check generic function with identity pattern" {
   let result = parse_bind_and_check(
     "function identity<T>(value: T): T { return value; }",
   )
@@ -3645,7 +3645,7 @@ test "check generic type with constraint" {
 }
 
 ///|
-test "check generic class declaration" {
+test "check generic class with Box pattern" {
   let result = parse_bind_and_check(
     "class Box<T> { value: T; constructor(value: T) { this.value = value; } }",
   )
@@ -3730,7 +3730,7 @@ test "check control flow termination" {
 }
 
 ///|
-test "check abstract class declaration" {
+test "check abstract class with abstract method" {
   let result = parse_bind_and_check(
     "abstract class Shape { abstract area(): number; }",
   )

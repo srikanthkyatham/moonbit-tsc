@@ -784,7 +784,7 @@ fn get_tsconfig_directory(path : String) -> String {
   if last_slash == -1 {
     "."
   } else {
-    path.substring(end=last_slash)
+    @utils.substr(path, end=last_slash)
   }
 }
 
@@ -794,9 +794,9 @@ fn resolve_path(base_dir : String, relative_path : String) -> String {
   if relative_path.has_prefix("/") || relative_path.has_prefix("\\") {
     relative_path
   } else if relative_path.has_prefix("./") {
-    base_dir + "/" + relative_path.substring(start=2)
+    base_dir + "/" + @utils.substr(relative_path, start=2)
   } else if relative_path.has_prefix(".\\") {
-    base_dir + "/" + relative_path.substring(start=2)
+    base_dir + "/" + @utils.substr(relative_path, start=2)
   } else {
     base_dir + "/" + relative_path
   }

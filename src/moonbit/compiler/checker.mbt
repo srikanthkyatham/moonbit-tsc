@@ -2219,7 +2219,7 @@ fn check_type_arguments(
 fn count_required_type_params(type_params : Array[CheckerTypeParameter]) -> Int {
   let mut count = 0
   for param in type_params {
-    if param.default_type.is_none() {
+    if param.default_type is None {
       count = count + 1
     }
   }

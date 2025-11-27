@@ -1,7 +1,8 @@
 {
   "import": [
     "moonbitlang/async/fs",
-    "moonbitlang/async/io"
+    "moonbitlang/async/io",
+    "moonbit-ts-compiler/utils"
   ],
   "targets": {
     "*.mbt": ["native"]

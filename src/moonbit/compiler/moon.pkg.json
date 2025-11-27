@@ -1,3 +1,6 @@
 {
-  "is-main": false
+  "is-main": false,
+  "import": [
+    "moonbit-ts-compiler/utils"
+  ]
 }

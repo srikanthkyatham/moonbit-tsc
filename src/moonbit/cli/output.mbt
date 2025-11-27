@@ -16,7 +16,7 @@ fn find_last_char(s : String, c : Char) -> Int? {
 /// Get the directory from a file path
 fn get_directory(path : String) -> String {
   match find_last_char(path, '/') {
-    Some(idx) => path.substring(end=idx)
+    Some(idx) => @utils.substr(path, end=idx)
     None => "."
   }
 }
@@ -25,15 +25,15 @@ fn get_directory(path : String) -> String {
 /// Get the base name without extension
 fn get_base_name(path : String) -> String {
   let name = match find_last_char(path, '/') {
-    Some(idx) => path.substring(start=idx + 1)
+    Some(idx) => @utils.substr(path, start=idx + 1)
     None => path
   }
 
   // Remove .ts or .tsx extension
   if name.has_suffix(".tsx") {
-    name.substring(end=name.length() - 4)
+    @utils.substr(name, end=name.length() - 4)
   } else if name.has_suffix(".ts") {
-    name.substring(end=name.length() - 3)
+    @utils.substr(name, end=name.length() - 3)
   } else {
     name
   }
@@ -86,7 +86,7 @@ async fn ensure_dir(path : String) -> Unit raise Error {
     // Create parent directories first if needed
     match find_last_char(path, '/') {
       Some(idx) if idx > 0 => {
-        let parent = path.substring(end=idx)
+        let parent = @utils.substr(path, end=idx)
         ensure_dir(parent)
       }
       _ => ()

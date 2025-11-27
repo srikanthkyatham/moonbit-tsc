@@ -85,14 +85,14 @@ pub fn CompileResponse::to_ndjson(self : CompileResponse) -> String {
 
 ///|
 /// Parse request from JSON string
-pub fn parse_request(json_str : String) -> CompileRequest!Error {
-  let json = @json.parse!(json_str)
-  @json.from_json!(json)
+pub fn parse_request(json_str : String) -> CompileRequest raise Error {
+  let json = @json.parse(json_str)
+  @json.from_json(json)
 }
 
 ///|
 /// Parse response from JSON string
-pub fn parse_response(json_str : String) -> CompileResponse!Error {
-  let json = @json.parse!(json_str)
-  @json.from_json!(json)
+pub fn parse_response(json_str : String) -> CompileResponse raise Error {
+  let json = @json.parse(json_str)
+  @json.from_json(json)
 }

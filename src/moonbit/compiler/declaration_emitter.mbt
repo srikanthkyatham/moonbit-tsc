@@ -823,14 +823,14 @@ fn emit_decl_export_assignment(
         // Emit as export default function (not top-level since it's exported)
         let func_decl = emit_decl_function(func, ctx, false)
         // Remove the indent and add "export default " prefix
-        let func_body = func_decl.substring(start=indent.length())
+        let func_body = @utils.substr(func_decl, start=indent.length())
         indent + "export default " + func_body
       }
       ClassDeclaration(cls) => {
         // Emit as export default class (not top-level since it's exported)
         let cls_decl = emit_decl_class(cls, ctx, false)
         // Remove the indent and add "export default " prefix
-        let cls_body = cls_decl.substring(start=indent.length())
+        let cls_body = @utils.substr(cls_decl, start=indent.length())
         indent + "export default " + cls_body
       }
       _ =>

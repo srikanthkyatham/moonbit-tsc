@@ -31,13 +31,13 @@ pub fn parse_jsdoc(content : String) -> JSDocParseResult {
       in_tags = true
       // Check if this is a multi-line tag like @example
       let tag_end = find_whitespace_or_end(trimmed, 1)
-      let tag_name = trimmed.substring(start=1, end=tag_end)
+      let tag_name = @utils.substr(trimmed, start=1, end=tag_end)
 
       if tag_name == "example" {
         // Collect all lines until next tag or end
         let rest = if tag_end < trimmed.length() {
           trim_leading_whitespace(
-            trimmed.substring(start=tag_end, end=trimmed.length()),
+            @utils.substr(trimmed, start=tag_end, end=trimmed.length()),
           )
         } else {
           ""
@@ -130,7 +130,7 @@ fn split_jsdoc_lines(content : String) -> Array[String] {
   while i < content.length() {
     match content.get(i) {
       Some(ch) => {
-        let c = Char::from_int(ch)
+        let c = @utils.int_to_char(ch)
         if c == '\n' {
           lines.push(current)
           current = ""
@@ -158,7 +158,7 @@ fn trim_jsdoc_line(line : String) -> String {
   while i < line.length() {
     match line.get(i) {
       Some(ch) => {
-        let c = Char::from_int(ch)
+        let c = @utils.int_to_char(ch)
         if not(started) {
           if c == ' ' || c == '\t' || c == '\r' {
             // skip leading whitespace
@@ -189,7 +189,7 @@ fn trim_trailing_whitespace(s : String) -> String {
   while end > 0 {
     match s.get(end - 1) {
       Some(ch) => {
-        let c = Char::from_int(ch)
+        let c = @utils.int_to_char(ch)
         if c == ' ' || c == '\t' || c == '\r' {
           end = end - 1
         } else {
@@ -199,7 +199,7 @@ fn trim_trailing_whitespace(s : String) -> String {
       None => break
     }
   }
-  s.substring(start=0, end~)
+  @utils.substr(s, start=0, end=end)
 }
 
 ///|
@@ -207,9 +207,9 @@ fn trim_trailing_whitespace(s : String) -> String {
 fn parse_jsdoc_tag(line : String, loc : SourceLocation) -> JSDocTag? {
   // Extract tag name (after @)
   let tag_end = find_whitespace_or_end(line, 1)
-  let tag_name = line.substring(start=1, end=tag_end)
+  let tag_name = @utils.substr(line, start=1, end=tag_end)
   let rest = if tag_end < line.length() {
-    trim_leading_whitespace(line.substring(start=tag_end, end=line.length()))
+    trim_leading_whitespace(@utils.substr(line, start=tag_end, end=line.length()))
   } else {
     ""
   }
@@ -278,7 +278,7 @@ fn parse_jsdoc_returns_tag(content : String, loc : SourceLocation) -> JSDocTag {
 fn parse_jsdoc_type_tag(content : String, loc : SourceLocation) -> JSDocTag {
   let (type_annotation, _) = extract_jsdoc_type(content)
   JSDocTag::Type(JSDocTypeTag::{
-    type_annotation: type_annotation.or(""),
+    type_annotation: type_annotation.unwrap_or(""),
     location: loc,
   })
 }
@@ -288,15 +288,15 @@ fn parse_jsdoc_type_tag(content : String, loc : SourceLocation) -> JSDocTag {
 fn parse_jsdoc_typedef_tag(content : String, loc : SourceLocation) -> JSDocTag {
   let (type_annotation, rest) = extract_jsdoc_type(content)
   let name_end = find_whitespace_or_end(rest, 0)
-  let name = rest.substring(start=0, end=name_end)
+  let name = @utils.substr(rest, start=0, end=name_end)
   let description = if name_end < rest.length() {
-    trim_leading_whitespace(rest.substring(start=name_end, end=rest.length()))
+    trim_leading_whitespace(@utils.substr(rest, start=name_end, end=rest.length()))
   } else {
     ""
   }
   JSDocTag::TypeDef(JSDocTypeDef::{
     name,
-    type_annotation: type_annotation.or(""),
+    type_annotation: type_annotation.unwrap_or(""),
     description,
     location: loc,
   })
@@ -360,7 +360,7 @@ fn extract_jsdoc_type(content : String) -> (String?, String) {
     while i < trimmed.length() {
       match trimmed.get(i) {
         Some(ch) => {
-          let c = Char::from_int(ch)
+          let c = @utils.int_to_char(ch)
           if c == '{' {
             depth = depth + 1
           } else if c == '}' {
@@ -376,8 +376,8 @@ fn extract_jsdoc_type(content : String) -> (String?, String) {
       i = i + 1
     }
     if end > 1 {
-      let type_str = trimmed.substring(start=1, end~)
-      let rest = trimmed.substring(start=end + 1, end=trimmed.length())
+      let type_str = @utils.substr(trimmed, start=1, end=end)
+      let rest = @utils.substr(trimmed, start=end + 1, end=trimmed.length())
       (Some(type_str), trim_leading_whitespace(rest))
     } else {
       (None, content)
@@ -395,25 +395,25 @@ fn extract_jsdoc_param_name(content : String) -> (String, Bool, String) {
     // Optional param: [name] or [name=default]
     let bracket_end = find_char(trimmed, ']', 1)
     if bracket_end > 1 {
-      let name_part = trimmed.substring(start=1, end=bracket_end)
+      let name_part = @utils.substr(trimmed, start=1, end=bracket_end)
       // Check for default value
       let equals_pos = find_char(name_part, '=', 0)
       let name = if equals_pos > 0 {
-        name_part.substring(start=0, end=equals_pos)
+        @utils.substr(name_part, start=0, end=equals_pos)
       } else {
         name_part
       }
-      let rest = trimmed.substring(start=bracket_end + 1, end=trimmed.length())
+      let rest = @utils.substr(trimmed, start=bracket_end + 1, end=trimmed.length())
       return (name, true, trim_leading_whitespace(rest))
     }
   }
 
   // Regular param name
   let name_end = find_whitespace_or_end(trimmed, 0)
-  let name = trimmed.substring(start=0, end=name_end)
+  let name = @utils.substr(trimmed, start=0, end=name_end)
   let description = if name_end < trimmed.length() {
     trim_leading_whitespace(
-      trimmed.substring(start=name_end, end=trimmed.length()),
+      @utils.substr(trimmed, start=name_end, end=trimmed.length()),
     )
   } else {
     ""
@@ -428,7 +428,7 @@ fn find_whitespace_or_end(s : String, start : Int) -> Int {
   while i < s.length() {
     match s.get(i) {
       Some(ch) => {
-        let c = Char::from_int(ch)
+        let c = @utils.int_to_char(ch)
         if c == ' ' || c == '\t' || c == '\r' || c == '\n' {
           return i
         }
@@ -447,7 +447,7 @@ fn trim_leading_whitespace(s : String) -> String {
   while start < s.length() {
     match s.get(start) {
       Some(ch) => {
-        let c = Char::from_int(ch)
+        let c = @utils.int_to_char(ch)
         if c == ' ' || c == '\t' || c == '\r' {
           start = start + 1
         } else {
@@ -457,7 +457,7 @@ fn trim_leading_whitespace(s : String) -> String {
       None => break
     }
   }
-  s.substring(start~, end=s.length())
+  @utils.substr(s, start=start, end=s.length())
 }
 
 ///|
@@ -466,7 +466,7 @@ fn find_char(s : String, target : Char, start : Int) -> Int {
   let mut i = start
   while i < s.length() {
     match s.get(i) {
-      Some(ch) => if Char::from_int(ch) == target { return i }
+      Some(ch) => if @utils.int_to_char(ch) == target { return i }
       None => ()
     }
     i = i + 1
@@ -483,7 +483,7 @@ fn split_by_comma(s : String) -> Array[String] {
   while i < s.length() {
     match s.get(i) {
       Some(ch) => {
-        let c = Char::from_int(ch)
+        let c = @utils.int_to_char(ch)
         if c == ',' {
           parts.push(current)
           current = ""
