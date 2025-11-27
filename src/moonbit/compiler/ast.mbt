@@ -971,6 +971,7 @@ pub struct PropertyDeclaration {
   type_annotation : Node?
   initializer : Node?
   is_optional : Bool
+  decorators : Array[Node]
   modifiers : Array[Modifier]
   location : SourceLocation
 } derive(Show)
@@ -991,6 +992,7 @@ pub struct MethodDeclaration {
   parameters : Array[Node]
   return_type : Node?
   body : Node?
+  decorators : Array[Node]
   modifiers : Array[Modifier]
   is_async : Bool
   is_generator : Bool
@@ -1002,6 +1004,7 @@ pub struct MethodDeclaration {
 pub struct ConstructorDeclaration {
   parameters : Array[Node]
   body : Node?
+  decorators : Array[Node]
   location : SourceLocation
 } derive(Show)
 
@@ -1010,6 +1013,7 @@ pub struct GetAccessor {
   name : String
   return_type : Node?
   body : Node?
+  decorators : Array[Node]
   modifiers : Array[Modifier]
   location : SourceLocation
 } derive(Show)
@@ -1019,6 +1023,7 @@ pub struct SetAccessor {
   name : String
   parameter : Node
   body : Node?
+  decorators : Array[Node]
   modifiers : Array[Modifier]
   location : SourceLocation
 } derive(Show)

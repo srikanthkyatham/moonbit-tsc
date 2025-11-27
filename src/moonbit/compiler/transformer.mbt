@@ -1258,8 +1258,9 @@ fn transform_property_declaration(
       Some(init) => Some(transform(init, ctx))
       None => None
     },
-    modifiers: pd.modifiers,
     is_optional: pd.is_optional,
+    decorators: pd.decorators,
+    modifiers: pd.modifiers,
     location: pd.location,
   })
 }
@@ -1279,6 +1280,7 @@ fn transform_method_declaration(
       Some(b) => Some(transform(b, ctx))
       None => None
     },
+    decorators: md.decorators,
     modifiers: md.modifiers,
     is_async: md.is_async,
     is_generator: md.is_generator,
@@ -1299,6 +1301,7 @@ fn transform_constructor_declaration(
       Some(b) => Some(transform(b, ctx))
       None => None
     },
+    decorators: cd.decorators,
     location: cd.location,
   })
 }
@@ -1313,6 +1316,7 @@ fn transform_get_accessor(ga : GetAccessor, ctx : TransformerContext) -> Node {
       Some(b) => Some(transform(b, ctx))
       None => None
     },
+    decorators: ga.decorators,
     modifiers: ga.modifiers,
     location: ga.location,
   })
@@ -1328,6 +1332,7 @@ fn transform_set_accessor(sa : SetAccessor, ctx : TransformerContext) -> Node {
       Some(b) => Some(transform(b, ctx))
       None => None
     },
+    decorators: sa.decorators,
     modifiers: sa.modifiers,
     location: sa.location,
   })

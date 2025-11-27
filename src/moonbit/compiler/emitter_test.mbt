@@ -943,3 +943,122 @@ test "emit multiple decorator factories" {
   assert_true(js.contains("Module"))
   assert_true(js.contains("Controller"))
 }
+
+// =============================================================================
+// Member Decorator Tests
+// =============================================================================
+
+///|
+/// Test: Emit method with single decorator
+test "emit method with single decorator" {
+  let js = compile_to_js("class MyClass { @log myMethod() { } }")
+  println("Method with decorator:\n\{js}")
+  // Should emit __decorate call for the method
+  assert_true(js.contains("__decorate"))
+  assert_true(js.contains("log"))
+  assert_true(js.contains("MyClass.prototype"))
+  assert_true(js.contains("\"myMethod\""))
+}
+
+///|
+/// Test: Emit method with decorator factory
+test "emit method with decorator factory" {
+  let js = compile_to_js("class MyClass { @Bind() handleClick() { } }")
+  println("Method with decorator factory:\n\{js}")
+  assert_true(js.contains("__decorate"))
+  assert_true(js.contains("Bind()"))
+  assert_true(js.contains("MyClass.prototype"))
+  assert_true(js.contains("\"handleClick\""))
+}
+
+///|
+/// Test: Emit method with multiple decorators
+test "emit method with multiple decorators" {
+  let js = compile_to_js("class MyClass { @log @deprecated myMethod() { } }")
+  println("Method with multiple decorators:\n\{js}")
+  assert_true(js.contains("__decorate"))
+  assert_true(js.contains("log"))
+  assert_true(js.contains("deprecated"))
+  assert_true(js.contains("MyClass.prototype"))
+  assert_true(js.contains("\"myMethod\""))
+}
+
+///|
+/// Test: Emit property with decorator
+test "emit property with decorator" {
+  let js = compile_to_js("class MyClass { @Input() value = 42; }")
+  println("Property with decorator:\n\{js}")
+  assert_true(js.contains("__decorate"))
+  assert_true(js.contains("Input()"))
+  assert_true(js.contains("MyClass.prototype"))
+  assert_true(js.contains("\"value\""))
+}
+
+///|
+/// Test: Emit static method with decorator
+test "emit static method with decorator" {
+  let js = compile_to_js("class MyClass { @log static myStaticMethod() { } }")
+  println("Static method with decorator:\n\{js}")
+  assert_true(js.contains("__decorate"))
+  assert_true(js.contains("log"))
+  // Static members use the class itself, not prototype
+  assert_true(js.contains("MyClass,"))
+  assert_true(js.contains("\"myStaticMethod\""))
+}
+
+///|
+/// Test: Emit getter with decorator
+test "emit getter with decorator" {
+  let js = compile_to_js("class MyClass { @computed get value() { return 42; } }")
+  println("Getter with decorator:\n\{js}")
+  assert_true(js.contains("__decorate"))
+  assert_true(js.contains("computed"))
+  assert_true(js.contains("MyClass.prototype"))
+  assert_true(js.contains("\"value\""))
+}
+
+///|
+/// Test: Emit setter with decorator
+test "emit setter with decorator" {
+  let js = compile_to_js("class MyClass { @validate set name(val) { this._name = val; } }")
+  println("Setter with decorator:\n\{js}")
+  assert_true(js.contains("__decorate"))
+  assert_true(js.contains("validate"))
+  assert_true(js.contains("MyClass.prototype"))
+  assert_true(js.contains("\"name\""))
+}
+
+///|
+/// Test: Emit class with both class and member decorators
+test "emit class with class and member decorators" {
+  let js = compile_to_js("@Component class MyComponent { @Input() data; @Output() change() { } }")
+  println("Class with class and member decorators:\n\{js}")
+  // Should have class decorator
+  assert_true(js.contains("Component"))
+  // Should have member decorators
+  assert_true(js.contains("Input()"))
+  assert_true(js.contains("Output()"))
+  // All should use __decorate
+  assert_true(js.contains("__decorate"))
+}
+
+///|
+/// Test: Emit private method with decorator
+test "emit private method with decorator" {
+  let js = compile_to_js("class MyClass { @log private handleEvent() { } }")
+  println("Private method with decorator:\n\{js}")
+  assert_true(js.contains("__decorate"))
+  assert_true(js.contains("log"))
+  assert_true(js.contains("\"handleEvent\""))
+}
+
+///|
+/// Test: Emit async method with decorator
+test "emit async method with decorator" {
+  let js = compile_to_js("class MyClass { @log async fetchData() { } }")
+  println("Async method with decorator:\n\{js}")
+  assert_true(js.contains("__decorate"))
+  assert_true(js.contains("log"))
+  assert_true(js.contains("async"))
+  assert_true(js.contains("fetchData"))
+}

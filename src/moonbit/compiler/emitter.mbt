@@ -463,15 +463,15 @@ fn get_member_name(member : Node) -> String? {
 
 ///|
 /// Get decorators from a class member
-/// Note: Currently returns empty array as member decorators are not yet stored in AST.
-/// Member decorators would require AST changes to support.
-fn get_member_decorators(_member : Node) -> Array[Node] {
-  // Member decorators (method, property, accessor, parameter) are not currently
-  // stored in the AST. Only class-level decorators are supported for emission.
-  // To support member decorators, the AST structs would need to be updated to
-  // include a `decorators : Array[Node]` field on MethodDeclaration,
-  // PropertyDeclaration, GetAccessor, and SetAccessor.
-  []
+fn get_member_decorators(member : Node) -> Array[Node] {
+  match member {
+    MethodDeclaration(md) => md.decorators
+    PropertyDeclaration(pd) => pd.decorators
+    GetAccessor(ga) => ga.decorators
+    SetAccessor(sa) => sa.decorators
+    ConstructorDeclaration(cd) => cd.decorators
+    _ => []
+  }
 }
 
 ///|

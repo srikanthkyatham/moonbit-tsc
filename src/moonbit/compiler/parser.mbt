@@ -1548,6 +1548,23 @@ fn parse_class_members_aux(
   parser : Parser,
   acc : Array[Node],
 ) -> (Array[Node], Parser) {
+  // First check for member decorators
+  match current_token(parser) {
+    At(_) => {
+      let (decorators, parser) = parse_decorators(parser)
+      parse_class_member_with_decorators(parser, acc, decorators)
+    }
+    _ => parse_class_member_with_decorators(parser, acc, [])
+  }
+}
+
+///|
+/// Parse a single class member with optional decorators
+fn parse_class_member_with_decorators(
+  parser : Parser,
+  acc : Array[Node],
+  decorators : Array[Node],
+) -> (Array[Node], Parser) {
   match current_token(parser) {
     CloseBrace(_) | EOF(_) => (acc, parser)
 
@@ -1588,6 +1605,7 @@ fn parse_class_members_aux(
                   parameters,
                   return_type,
                   body,
+                  decorators,
                   modifiers: [Modifier::Static],
                   is_async: false,
                   is_generator: false,
@@ -1625,8 +1643,9 @@ fn parse_class_members_aux(
                   type_annotation,
                   initializer,
                   is_optional: false,
-                  location: loc,
+                  decorators,
                   modifiers: [Modifier::Static],
+                  location: loc,
                 }),
               )
               let parser = match current_token(parser) {
@@ -1662,6 +1681,7 @@ fn parse_class_members_aux(
             Node::ConstructorDeclaration(ConstructorDeclaration::{
               parameters,
               body,
+              decorators,
               location: loc,
             }),
           )
@@ -1710,6 +1730,7 @@ fn parse_class_members_aux(
                   name,
                   return_type,
                   body,
+                  decorators,
                   modifiers: [],
                   location: start_loc,
                 }),
@@ -1750,6 +1771,7 @@ fn parse_class_members_aux(
                       parameters,
                       return_type,
                       body,
+                      decorators,
                       modifiers: [],
                       is_async: false,
                       is_generator: false,
@@ -1820,6 +1842,7 @@ fn parse_class_members_aux(
                   name,
                   parameter,
                   body,
+                  decorators,
                   modifiers: [],
                   location: start_loc,
                 }),
@@ -1836,43 +1859,43 @@ fn parse_class_members_aux(
     // Private modifier
     KeywordPrivate(_) => {
       let parser = advance_parser(parser)
-      parse_class_member_with_modifiers(parser, acc, [Modifier::Private])
+      parse_class_member_with_modifiers(parser, acc, decorators, [Modifier::Private])
     }
 
     // Protected modifier
     KeywordProtected(_) => {
       let parser = advance_parser(parser)
-      parse_class_member_with_modifiers(parser, acc, [Modifier::Protected])
+      parse_class_member_with_modifiers(parser, acc, decorators, [Modifier::Protected])
     }
 
     // Public modifier
     KeywordPublic(_) => {
       let parser = advance_parser(parser)
-      parse_class_member_with_modifiers(parser, acc, [Modifier::Public])
+      parse_class_member_with_modifiers(parser, acc, decorators, [Modifier::Public])
     }
 
     // Static modifier
     KeywordStatic(_) => {
       let parser = advance_parser(parser)
-      parse_class_member_with_modifiers(parser, acc, [Modifier::Static])
+      parse_class_member_with_modifiers(parser, acc, decorators, [Modifier::Static])
     }
 
     // Readonly modifier
     KeywordReadonly(_) => {
       let parser = advance_parser(parser)
-      parse_class_member_with_modifiers(parser, acc, [Modifier::Readonly])
+      parse_class_member_with_modifiers(parser, acc, decorators, [Modifier::Readonly])
     }
 
     // Abstract modifier
     KeywordAbstract(_) => {
       let parser = advance_parser(parser)
-      parse_class_member_with_modifiers(parser, acc, [Modifier::Abstract])
+      parse_class_member_with_modifiers(parser, acc, decorators, [Modifier::Abstract])
     }
 
     // Async modifier
     KeywordAsync(_) => {
       let parser = advance_parser(parser)
-      parse_class_member_with_modifiers(parser, acc, [Modifier::Async])
+      parse_class_member_with_modifiers(parser, acc, decorators, [Modifier::Async])
     }
 
     // Property or method
@@ -1910,6 +1933,7 @@ fn parse_class_members_aux(
               parameters,
               return_type,
               body,
+              decorators,
               modifiers: [],
               is_async: false,
               is_generator: false,
@@ -1957,6 +1981,7 @@ fn parse_class_members_aux(
               type_annotation,
               initializer,
               is_optional: false,
+              decorators,
               modifiers: [],
               location: loc,
             }),
@@ -1976,6 +2001,7 @@ fn parse_class_members_aux(
 fn parse_class_member_with_modifiers(
   parser : Parser,
   acc : Array[Node],
+  decorators : Array[Node],
   modifiers : Array[Modifier],
 ) -> (Array[Node], Parser) {
   match current_token(parser) {
@@ -1983,37 +2009,37 @@ fn parse_class_member_with_modifiers(
     KeywordPublic(_) => {
       let parser = advance_parser(parser)
       modifiers.push(Modifier::Public)
-      parse_class_member_with_modifiers(parser, acc, modifiers)
+      parse_class_member_with_modifiers(parser, acc, decorators, modifiers)
     }
     KeywordPrivate(_) => {
       let parser = advance_parser(parser)
       modifiers.push(Modifier::Private)
-      parse_class_member_with_modifiers(parser, acc, modifiers)
+      parse_class_member_with_modifiers(parser, acc, decorators, modifiers)
     }
     KeywordProtected(_) => {
       let parser = advance_parser(parser)
       modifiers.push(Modifier::Protected)
-      parse_class_member_with_modifiers(parser, acc, modifiers)
+      parse_class_member_with_modifiers(parser, acc, decorators, modifiers)
     }
     KeywordStatic(_) => {
       let parser = advance_parser(parser)
       modifiers.push(Modifier::Static)
-      parse_class_member_with_modifiers(parser, acc, modifiers)
+      parse_class_member_with_modifiers(parser, acc, decorators, modifiers)
     }
     KeywordReadonly(_) => {
       let parser = advance_parser(parser)
       modifiers.push(Modifier::Readonly)
-      parse_class_member_with_modifiers(parser, acc, modifiers)
+      parse_class_member_with_modifiers(parser, acc, decorators, modifiers)
     }
     KeywordAbstract(_) => {
       let parser = advance_parser(parser)
       modifiers.push(Modifier::Abstract)
-      parse_class_member_with_modifiers(parser, acc, modifiers)
+      parse_class_member_with_modifiers(parser, acc, decorators, modifiers)
     }
     KeywordAsync(_) => {
       let parser = advance_parser(parser)
       modifiers.push(Modifier::Async)
-      parse_class_member_with_modifiers(parser, acc, modifiers)
+      parse_class_member_with_modifiers(parser, acc, decorators, modifiers)
     }
     Identifier(name, loc) => {
       let parser = advance_parser(parser)
@@ -2055,6 +2081,7 @@ fn parse_class_member_with_modifiers(
               parameters,
               return_type,
               body,
+              decorators,
               modifiers,
               is_async,
               is_generator: false,
@@ -2095,8 +2122,9 @@ fn parse_class_member_with_modifiers(
               name,
               type_annotation,
               initializer,
-              modifiers,
               is_optional: false,
+              decorators,
+              modifiers,
               location: loc,
             }),
           )
@@ -2382,8 +2410,9 @@ fn parse_interface_declaration(
                             type_annotation: Some(prop_type),
                             initializer: None,
                             is_optional,
-                            location: prop_loc,
+                            decorators: [],
                             modifiers: [Modifier::Readonly],
+                            location: prop_loc,
                           }),
                         )
                         match current_token(parser) {
@@ -2447,11 +2476,12 @@ fn parse_interface_declaration(
                 parameters: params,
                 return_type,
                 body: None,
-                location: call_loc,
+                decorators: [],
                 modifiers: [],
                 is_async: false,
                 is_generator: false,
                 is_optional: false,
+                location: call_loc,
               }),
             )
 
@@ -2494,11 +2524,12 @@ fn parse_interface_declaration(
                     parameters: params,
                     return_type,
                     body: None,
-                    location: new_loc,
+                    decorators: [],
                     modifiers: [],
                     is_async: false,
                     is_generator: false,
                     is_optional: false,
+                    location: new_loc,
                   }),
                 )
 
@@ -2563,11 +2594,12 @@ fn parse_interface_declaration(
                     parameters: params,
                     return_type,
                     body: None,
-                    location: prop_loc,
+                    decorators: [],
                     modifiers: [],
                     is_async: false,
                     is_generator: false,
                     is_optional,
+                    location: prop_loc,
                   }),
                 )
 
@@ -2593,8 +2625,9 @@ fn parse_interface_declaration(
                         type_annotation: Some(prop_type),
                         initializer: None,
                         is_optional,
-                        location: prop_loc,
+                        decorators: [],
                         modifiers: [],
+                        location: prop_loc,
                       }),
                     )
 
