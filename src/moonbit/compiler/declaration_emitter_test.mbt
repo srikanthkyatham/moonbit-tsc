@@ -815,3 +815,116 @@ test "emit non-null expressions" {
     }
   }
 }
+
+// ============ Optional Property Tests ============
+
+///|
+/// Test: Interface with optional properties
+test "emit interface with optional properties" {
+  let source = "interface User { name: string; email?: string; age?: number; }"
+  let tokens = scan_all_v2(source, "test.ts")
+  match parse_source_file(tokens, "test.ts") {
+    Ok(source_file) => {
+      let ctx = DeclarationEmitterContext::default()
+      let output = emit_declaration_file(source_file, ctx)
+
+      // Should contain optional property markers
+      assert_true(output.contains("interface User"))
+      assert_true(output.contains("name: string"))
+      assert_true(output.contains("email?: string"))
+      assert_true(output.contains("age?: number"))
+      println("\nInterface with optional properties output:")
+      println(output)
+    }
+    Err(diagnostics) => {
+      println("Parse error:")
+      for i = 0; i < diagnostics.length(); i = i + 1 {
+        println("  " + diagnostics[i].message)
+      }
+      assert_true(false)
+    }
+  }
+}
+
+///|
+/// Test: Generic interface with optional properties
+test "emit generic interface with optional properties" {
+  let source = "interface Result<T> { success: boolean; data?: T; error?: string; }"
+  let tokens = scan_all_v2(source, "test.ts")
+  match parse_source_file(tokens, "test.ts") {
+    Ok(source_file) => {
+      let ctx = DeclarationEmitterContext::default()
+      let output = emit_declaration_file(source_file, ctx)
+
+      // Should contain generic interface with optional markers
+      assert_true(output.contains("interface Result<T>"))
+      assert_true(output.contains("success: boolean"))
+      assert_true(output.contains("data?: T"))
+      assert_true(output.contains("error?: string"))
+      println("\nGeneric interface with optional properties output:")
+      println(output)
+    }
+    Err(diagnostics) => {
+      println("Parse error:")
+      for i = 0; i < diagnostics.length(); i = i + 1 {
+        println("  " + diagnostics[i].message)
+      }
+      assert_true(false)
+    }
+  }
+}
+
+///|
+/// Test: Interface with readonly optional property
+test "emit interface with readonly optional property" {
+  let source = "interface Config { readonly version?: string; name: string; }"
+  let tokens = scan_all_v2(source, "test.ts")
+  match parse_source_file(tokens, "test.ts") {
+    Ok(source_file) => {
+      let ctx = DeclarationEmitterContext::default()
+      let output = emit_declaration_file(source_file, ctx)
+
+      // Should contain readonly optional property
+      assert_true(output.contains("interface Config"))
+      assert_true(output.contains("readonly version?: string"))
+      assert_true(output.contains("name: string"))
+      println("\nInterface with readonly optional property output:")
+      println(output)
+    }
+    Err(diagnostics) => {
+      println("Parse error:")
+      for i = 0; i < diagnostics.length(); i = i + 1 {
+        println("  " + diagnostics[i].message)
+      }
+      assert_true(false)
+    }
+  }
+}
+
+///|
+/// Test: Generic interface with multiple type parameters and optional properties
+test "emit generic interface with multiple type params and optional" {
+  let source = "interface Response<T, E = Error> { loading: boolean; data?: T; error?: E; }"
+  let tokens = scan_all_v2(source, "test.ts")
+  match parse_source_file(tokens, "test.ts") {
+    Ok(source_file) => {
+      let ctx = DeclarationEmitterContext::default()
+      let output = emit_declaration_file(source_file, ctx)
+
+      // Should contain generic interface with optional markers
+      assert_true(output.contains("interface Response"))
+      assert_true(output.contains("loading: boolean"))
+      assert_true(output.contains("data?: T"))
+      assert_true(output.contains("error?: E"))
+      println("\nGeneric interface with multiple type params output:")
+      println(output)
+    }
+    Err(diagnostics) => {
+      println("Parse error:")
+      for i = 0; i < diagnostics.length(); i = i + 1 {
+        println("  " + diagnostics[i].message)
+      }
+      assert_true(false)
+    }
+  }
+}

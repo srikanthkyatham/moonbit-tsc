@@ -633,3 +633,240 @@ test "parse nested loops" {
     Err(_) => assert_true(false)
   }
 }
+
+// ============ Generic Interface Tests ============
+
+///|
+test "parse simple generic interface" {
+  let tokens = tokens_from_source("interface Result<T> { data: T; }")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        InterfaceDeclaration(decl) => {
+          assert_eq(decl.name, "Result")
+          // Check type parameters
+          assert_eq(decl.type_parameters.length(), 1)
+          assert_eq(decl.members.length(), 1)
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse generic interface with optional property" {
+  let tokens = tokens_from_source("interface Result<T> { data?: T; }")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        InterfaceDeclaration(decl) => {
+          assert_eq(decl.name, "Result")
+          assert_eq(decl.type_parameters.length(), 1)
+          assert_eq(decl.members.length(), 1)
+          // Verify the property is marked as optional
+          match decl.members[0] {
+            PropertyDeclaration(prop) => assert_true(prop.is_optional)
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse generic interface with multiple type parameters" {
+  let tokens = tokens_from_source(
+    "interface Response<T, E> { data: T; error?: E; }",
+  )
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        InterfaceDeclaration(decl) => {
+          assert_eq(decl.name, "Response")
+          assert_eq(decl.type_parameters.length(), 2)
+          assert_eq(decl.members.length(), 2)
+          // First property (data) should not be optional
+          match decl.members[0] {
+            PropertyDeclaration(prop) => {
+              assert_eq(prop.name.to_string(), "data")
+              assert_true(not(prop.is_optional))
+            }
+            _ => assert_true(false)
+          }
+          // Second property (error) should be optional
+          match decl.members[1] {
+            PropertyDeclaration(prop) => {
+              assert_eq(prop.name.to_string(), "error")
+              assert_true(prop.is_optional)
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse generic interface with constraint" {
+  let tokens = tokens_from_source(
+    "interface Container<T extends object> { value: T; }",
+  )
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        InterfaceDeclaration(decl) => {
+          assert_eq(decl.name, "Container")
+          assert_eq(decl.type_parameters.length(), 1)
+          // Type parameter should have a constraint
+          assert_true(decl.type_parameters[0].constraint is Some(_))
+          assert_eq(decl.members.length(), 1)
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse interface with mixed optional and required properties" {
+  let tokens = tokens_from_source(
+    "interface User { id: number; name: string; email?: string; age?: number; }",
+  )
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        InterfaceDeclaration(decl) => {
+          assert_eq(decl.name, "User")
+          assert_eq(decl.members.length(), 4)
+          // id - required
+          match decl.members[0] {
+            PropertyDeclaration(prop) => assert_true(not(prop.is_optional))
+            _ => assert_true(false)
+          }
+          // name - required
+          match decl.members[1] {
+            PropertyDeclaration(prop) => assert_true(not(prop.is_optional))
+            _ => assert_true(false)
+          }
+          // email - optional
+          match decl.members[2] {
+            PropertyDeclaration(prop) => assert_true(prop.is_optional)
+            _ => assert_true(false)
+          }
+          // age - optional
+          match decl.members[3] {
+            PropertyDeclaration(prop) => assert_true(prop.is_optional)
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse generic interface with default type" {
+  let tokens = tokens_from_source("interface Box<T = string> { value: T; }")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        InterfaceDeclaration(decl) => {
+          assert_eq(decl.name, "Box")
+          assert_eq(decl.type_parameters.length(), 1)
+          // Type parameter should have a default type
+          assert_true(decl.type_parameters[0].default is Some(_))
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse interface extending another interface" {
+  let tokens = tokens_from_source(
+    "interface Admin extends User { permissions: string[]; }",
+  )
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        InterfaceDeclaration(decl) => {
+          assert_eq(decl.name, "Admin")
+          assert_eq(decl.heritage_clauses.length(), 1)
+          assert_eq(decl.members.length(), 1)
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse generic interface with nested generic type" {
+  let tokens = tokens_from_source(
+    "interface Result<T> { data: Promise<T>; }",
+  )
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        InterfaceDeclaration(decl) => {
+          assert_eq(decl.name, "Result")
+          assert_eq(decl.type_parameters.length(), 1)
+          assert_eq(decl.members.length(), 1)
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse interface with readonly optional property" {
+  let tokens = tokens_from_source(
+    "interface Config { readonly version?: string; }",
+  )
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        InterfaceDeclaration(decl) => {
+          assert_eq(decl.name, "Config")
+          assert_eq(decl.members.length(), 1)
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}

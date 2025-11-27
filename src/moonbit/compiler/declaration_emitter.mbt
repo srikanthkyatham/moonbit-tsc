@@ -388,6 +388,11 @@ fn emit_decl_property(
   // Property name
   output = output + prop.name
 
+  // Optional marker
+  if prop.is_optional {
+    output = output + "?"
+  }
+
   // Type annotation
   match prop.type_annotation {
     Some(type_node) =>
@@ -562,6 +567,10 @@ fn emit_decl_property_signature(
     output = output + "readonly "
   }
   output = output + prop.name
+  // Optional marker
+  if prop.is_optional {
+    output = output + "?"
+  }
   match prop.type_annotation {
     Some(type_node) =>
       output = output + ": " + emit_decl_type_node(type_node, ctx)

@@ -1623,6 +1623,7 @@ fn parse_class_members_aux(
                   name,
                   type_annotation,
                   initializer,
+                  is_optional: false,
                   location: loc,
                   modifiers: [Modifier::Static],
                 }),
@@ -1952,6 +1953,7 @@ fn parse_class_members_aux(
               name,
               type_annotation,
               initializer,
+              is_optional: false,
               modifiers: [],
               location: loc,
             }),
@@ -2090,6 +2092,7 @@ fn parse_class_member_with_modifiers(
               type_annotation,
               initializer,
               modifiers,
+              is_optional: false,
               location: loc,
             }),
           )
@@ -2354,6 +2357,14 @@ fn parse_interface_declaration(
                 parser = advance_parser(parser)
                 let prop_name = n
                 let prop_loc = loc
+                // Check for optional marker (?)
+                let is_optional = match current_token(parser) {
+                  Question(_) => {
+                    parser = advance_parser(parser)
+                    true
+                  }
+                  _ => false
+                }
                 // Must be followed by colon (readonly properties, not methods)
                 match current_token(parser) {
                   Colon(_) => {
@@ -2366,6 +2377,7 @@ fn parse_interface_declaration(
                             name: prop_name,
                             type_annotation: Some(prop_type),
                             initializer: None,
+                            is_optional,
                             location: prop_loc,
                             modifiers: [Modifier::Readonly],
                           }),
@@ -2503,6 +2515,15 @@ fn parse_interface_declaration(
           Identifier(prop_name, prop_loc) => {
             parser = advance_parser(parser)
 
+            // Check for optional marker (?)
+            let is_optional = match current_token(parser) {
+              Question(_) => {
+                parser = advance_parser(parser)
+                true
+              }
+              _ => false
+            }
+
             // Check if it's a method (has parentheses) or property (has colon)
             match current_token(parser) {
               OpenParen(_) => {
@@ -2577,6 +2598,7 @@ fn parse_interface_declaration(
                         name: prop_name,
                         type_annotation: Some(prop_type),
                         initializer: None,
+                        is_optional,
                         location: prop_loc,
                         modifiers: [],
                       }),

@@ -1259,6 +1259,7 @@ fn transform_property_declaration(
       None => None
     },
     modifiers: pd.modifiers,
+    is_optional: pd.is_optional,
     location: pd.location,
   })
 }

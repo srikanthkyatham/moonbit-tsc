@@ -970,6 +970,7 @@ pub struct PropertyDeclaration {
   name : String
   type_annotation : Node?
   initializer : Node?
+  is_optional : Bool
   modifiers : Array[Modifier]
   location : SourceLocation
 } derive(Show)
