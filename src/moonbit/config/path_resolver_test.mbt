@@ -671,3 +671,226 @@ test "parse_exports_field - handles nested conditionals" {
   // Should find top-level types first
   assert_eq(resolved, "/pkg/types.d.ts")
 }
+
+// ============================================================================
+// Package.json Imports Field Tests (Self-referencing with #)
+// ============================================================================
+
+///|
+test "is_imports_specifier - detects # imports" {
+  assert_true(is_imports_specifier("#internal"))
+  assert_true(is_imports_specifier("#utils/helpers"))
+  assert_false(is_imports_specifier("lodash"))
+  assert_false(is_imports_specifier("./local"))
+  assert_false(is_imports_specifier("@scope/pkg"))
+}
+
+///|
+test "resolve_package_imports - simple import" {
+  fn file_exists(path : String) -> Bool {
+    path == "/project/src/internal/index.ts"
+  }
+
+  fn read_file(path : String) -> String? {
+    if path == "/project/package.json" {
+      Some("{\"name\": \"my-project\", \"imports\": {\"#internal\": \"./src/internal/index.ts\"}}")
+    } else {
+      None
+    }
+  }
+
+  let result = resolve_package_imports(
+    "#internal",
+    "/project/src/app/main.ts",
+    file_exists,
+    read_file,
+  )
+  guard result is Some(resolved) else {
+    assert_true(false)
+    return
+  }
+  assert_eq(resolved, "/project/src/internal/index.ts")
+}
+
+///|
+test "resolve_package_imports - wildcard pattern" {
+  fn file_exists(path : String) -> Bool {
+    path == "/project/src/utils/format.ts"
+  }
+
+  fn read_file(path : String) -> String? {
+    if path == "/project/package.json" {
+      Some("{\"name\": \"my-project\", \"imports\": {\"#utils/*\": \"./src/utils/*.ts\"}}")
+    } else {
+      None
+    }
+  }
+
+  let result = resolve_package_imports(
+    "#utils/format",
+    "/project/src/app/main.ts",
+    file_exists,
+    read_file,
+  )
+  guard result is Some(resolved) else {
+    assert_true(false)
+    return
+  }
+  assert_eq(resolved, "/project/src/utils/format.ts")
+}
+
+///|
+test "resolve_package_imports - conditional import" {
+  fn file_exists(path : String) -> Bool {
+    path == "/project/src/internal/types.d.ts"
+  }
+
+  fn read_file(path : String) -> String? {
+    if path == "/project/package.json" {
+      Some("{\"name\": \"my-project\", \"imports\": {\"#internal\": {\"types\": \"./src/internal/types.d.ts\", \"default\": \"./src/internal/index.js\"}}}")
+    } else {
+      None
+    }
+  }
+
+  let result = resolve_package_imports(
+    "#internal",
+    "/project/src/app/main.ts",
+    file_exists,
+    read_file,
+  )
+  guard result is Some(resolved) else {
+    assert_true(false)
+    return
+  }
+  assert_eq(resolved, "/project/src/internal/types.d.ts")
+}
+
+///|
+test "resolve_package_imports - nested package.json" {
+  // Package.json is in a parent directory
+  fn file_exists(path : String) -> Bool {
+    path == "/project/src/lib/helpers.ts"
+  }
+
+  fn read_file(path : String) -> String? {
+    if path == "/project/package.json" {
+      Some("{\"name\": \"my-project\", \"imports\": {\"#lib/*\": \"./src/lib/*.ts\"}}")
+    } else {
+      None
+    }
+  }
+
+  let result = resolve_package_imports(
+    "#lib/helpers",
+    "/project/packages/app/src/index.ts",
+    file_exists,
+    read_file,
+  )
+  guard result is Some(resolved) else {
+    assert_true(false)
+    return
+  }
+  assert_eq(resolved, "/project/src/lib/helpers.ts")
+}
+
+///|
+test "resolve_package_imports - no imports field returns None" {
+  fn file_exists(_path : String) -> Bool {
+    true
+  }
+
+  fn read_file(path : String) -> String? {
+    if path == "/project/package.json" {
+      Some("{\"name\": \"my-project\"}")
+    } else {
+      None
+    }
+  }
+
+  let result = resolve_package_imports(
+    "#internal",
+    "/project/src/main.ts",
+    file_exists,
+    read_file,
+  )
+  assert_true(result is None)
+}
+
+///|
+test "resolve_package_imports - no package.json returns None" {
+  fn file_exists(_path : String) -> Bool {
+    true
+  }
+
+  fn read_file(_path : String) -> String? {
+    None
+  }
+
+  let result = resolve_package_imports(
+    "#internal",
+    "/project/src/main.ts",
+    file_exists,
+    read_file,
+  )
+  assert_true(result is None)
+}
+
+///|
+test "resolve_module_full - imports take priority" {
+  let options = CompilerOptions::default()
+
+  fn file_exists(path : String) -> Bool {
+    path == "/project/src/internal/index.ts" ||
+    path == "/project/node_modules/internal/index.ts"
+  }
+
+  fn read_file(path : String) -> String? {
+    if path == "/project/package.json" {
+      Some("{\"name\": \"my-project\", \"imports\": {\"#internal\": \"./src/internal/index.ts\"}}")
+    } else {
+      None
+    }
+  }
+
+  let result = resolve_module_full(
+    "#internal",
+    "/project/src/app/main.ts",
+    options,
+    file_exists,
+    read_file,
+  )
+  guard result is Some(resolved) else {
+    assert_true(false)
+    return
+  }
+  // Should use imports, not node_modules
+  assert_eq(resolved, "/project/src/internal/index.ts")
+}
+
+///|
+test "resolve_package_imports - deep wildcard" {
+  fn file_exists(path : String) -> Bool {
+    path == "/project/src/components/ui/Button.tsx"
+  }
+
+  fn read_file(path : String) -> String? {
+    if path == "/project/package.json" {
+      Some("{\"name\": \"my-project\", \"imports\": {\"#components/*\": \"./src/components/*.tsx\"}}")
+    } else {
+      None
+    }
+  }
+
+  let result = resolve_package_imports(
+    "#components/ui/Button",
+    "/project/src/app/main.ts",
+    file_exists,
+    read_file,
+  )
+  guard result is Some(resolved) else {
+    assert_true(false)
+    return
+  }
+  assert_eq(resolved, "/project/src/components/ui/Button.tsx")
+}

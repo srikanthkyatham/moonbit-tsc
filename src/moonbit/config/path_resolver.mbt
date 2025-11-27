@@ -835,7 +835,7 @@ fn parse_exports_object(json : String, start : Int) -> Map[String, ExportTarget]
     }
   }
 
-  if result.size() > 0 {
+  if result.length() > 0 {
     Some(result)
   } else {
     None
@@ -1055,7 +1055,15 @@ pub fn resolve_module_full(
   file_exists : (String) -> Bool,
   read_file : (String) -> String?,
 ) -> String? {
-  // 1. Try paths mapping first (highest priority)
+  // 0. Try package.json imports field for # specifiers (highest priority)
+  if is_imports_specifier(module_specifier) {
+    match resolve_package_imports(module_specifier, from_file, file_exists, read_file) {
+      Some(resolved) => return Some(resolved)
+      None => ()
+    }
+  }
+
+  // 1. Try paths mapping first (highest priority for non-# specifiers)
   match resolve_with_paths(module_specifier, from_file, options) {
     Some(resolved) => return Some(resolved)
     None => ()
@@ -1082,4 +1090,183 @@ pub fn resolve_module_full(
 
   // No resolution found
   None
+}
+
+// ============================================================================
+// Package.json Imports Field Resolution (Self-referencing with #)
+// ============================================================================
+
+///|
+/// Check if a module specifier is an imports specifier (starts with #)
+pub fn is_imports_specifier(specifier : String) -> Bool {
+  specifier.has_prefix("#")
+}
+
+///|
+/// Find the nearest package.json for a file by climbing the directory tree
+/// Returns the directory containing package.json and the content
+fn find_package_json_for_file(
+  from_file : String,
+  read_file : (String) -> String?,
+) -> (String, String)? {
+  let mut current_dir = get_parent_directory(from_file)
+
+  // Climb the directory tree looking for package.json
+  while current_dir.length() > 0 && current_dir != "/" && current_dir != "." {
+    let package_json_path = join_path(current_dir, "package.json")
+    match read_file(package_json_path) {
+      Some(content) => return Some((current_dir, content))
+      None => ()
+    }
+
+    let parent = get_parent_directory(current_dir)
+    if parent == current_dir {
+      break
+    }
+    current_dir = parent
+  }
+
+  // Check root
+  match read_file("/package.json") {
+    Some(content) => Some(("/", content))
+    None => None
+  }
+}
+
+///|
+/// Resolve a # specifier using package.json imports field
+pub fn resolve_package_imports(
+  specifier : String,
+  from_file : String,
+  file_exists : (String) -> Bool,
+  read_file : (String) -> String?,
+) -> String? {
+  // Find the package.json for the importing file
+  match find_package_json_for_file(from_file, read_file) {
+    None => None
+    Some((package_dir, package_json_content)) => {
+      // Parse and resolve the imports field
+      resolve_imports_field(
+        package_json_content,
+        specifier,
+        file_exists,
+        package_dir,
+      )
+    }
+  }
+}
+
+///|
+/// Parse and resolve the imports field from package.json
+fn resolve_imports_field(
+  package_json_content : String,
+  specifier : String,
+  file_exists : (String) -> Bool,
+  package_dir : String,
+) -> String? {
+  // Parse the imports field
+  let imports = parse_imports_field(package_json_content)
+
+  match imports {
+    None => None
+    Some(imports_map) => {
+      // Try exact match first
+      match imports_map.get(specifier) {
+        Some(target) => {
+          return resolve_export_target_to_path(target, file_exists, package_dir)
+        }
+        None => ()
+      }
+
+      // Try pattern matching with wildcards
+      for pattern, target in imports_map {
+        match try_match_imports_pattern(pattern, specifier) {
+          Some(matched_part) => {
+            let resolved_target = substitute_export_pattern(target, matched_part)
+            match resolve_export_target_to_path(resolved_target, file_exists, package_dir) {
+              Some(path) => return Some(path)
+              None => continue
+            }
+          }
+          None => continue
+        }
+      }
+
+      None
+    }
+  }
+}
+
+///|
+/// Parse the imports field from package.json content
+fn parse_imports_field(json : String) -> Map[String, ExportTarget]? {
+  // Find "imports" field
+  let imports_pattern = "\"imports\""
+  let imports_start = find_substring(json, imports_pattern)
+
+  match imports_start {
+    None => None
+    Some(start_idx) => {
+      // Find the colon after "imports"
+      let after_imports = start_idx + imports_pattern.length()
+      let colon_idx = find_char_from(json, ':', after_imports)
+
+      match colon_idx {
+        None => None
+        Some(colon) => {
+          // Skip whitespace after colon
+          let value_start = skip_whitespace(json, colon + 1)
+
+          if value_start >= json.length() {
+            return None
+          }
+
+          // imports field must be an object
+          if json[value_start] == '{'.to_int() {
+            parse_exports_object(json, value_start)
+          } else {
+            None
+          }
+        }
+      }
+    }
+  }
+}
+
+///|
+/// Try to match an imports pattern like "#internal/*"
+fn try_match_imports_pattern(pattern : String, specifier : String) -> String? {
+  // Both pattern and specifier should start with #
+  if not(pattern.has_prefix("#")) || not(specifier.has_prefix("#")) {
+    return None
+  }
+
+  // Find wildcard position
+  let wildcard_idx = find_char(pattern, '*')
+
+  match wildcard_idx {
+    None => None // No pattern matching needed (exact match handled elsewhere)
+    Some(idx) => {
+      let prefix = @utils.substr(pattern, start=0, end=idx)
+      let suffix = if idx + 1 < pattern.length() {
+        @utils.substr(pattern, start=idx + 1)
+      } else {
+        ""
+      }
+
+      if specifier.has_prefix(prefix) {
+        let after_prefix = @utils.substr(specifier, start=prefix.length())
+        if suffix.length() == 0 {
+          Some(after_prefix)
+        } else if after_prefix.has_suffix(suffix) {
+          let middle_end = after_prefix.length() - suffix.length()
+          Some(@utils.substr(after_prefix, start=0, end=middle_end))
+        } else {
+          None
+        }
+      } else {
+        None
+      }
+    }
+  }
 }
