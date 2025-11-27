@@ -1253,97 +1253,94 @@ test "emit design:type for method" {
 }
 
 ///|
-/// Test: design:type metadata for property decorator
-/// Note: Type annotations are removed by transformer, so defaults to Object
+/// Test: design:type metadata for property decorator with String type
 test "emit design:type for property with type" {
   let js = compile_to_js("class MyClass { @observable name: string; }")
   println("Property design:type:\n\{js}")
-  // Type annotations are stripped by transformer, defaults to Object
-  assert_true(js.contains("__metadata(\"design:type\", Object)"))
+  // Type annotations are preserved for decorated properties
+  assert_true(js.contains("__metadata(\"design:type\", String)"))
 }
 
 ///|
 /// Test: design:paramtypes for method with typed parameters
-/// Note: Type annotations are removed by transformer, so defaults to Object
 test "emit design:paramtypes for method" {
   let js = compile_to_js("class MyClass { @log myMethod(a: string, b: number) { } }")
   println("Method design:paramtypes:\n\{js}")
-  // Type annotations are stripped by transformer, defaults to Object
-  assert_true(js.contains("__metadata(\"design:paramtypes\", [Object, Object])"))
+  // Type annotations are preserved for decorated methods
+  assert_true(js.contains("__metadata(\"design:paramtypes\", [String, Number])"))
 }
 
 ///|
-/// Test: design:returntype for method
-/// Note: Type annotations are removed by transformer, so defaults to Object
+/// Test: design:returntype for method with return type
 test "emit design:returntype for method" {
   let js = compile_to_js("class MyClass { @log myMethod(): string { return ''; } }")
   println("Method design:returntype:\n\{js}")
-  // Type annotations are stripped by transformer, defaults to Object
-  assert_true(js.contains("__metadata(\"design:returntype\", Object)"))
+  // Type annotations are preserved for decorated methods
+  assert_true(js.contains("__metadata(\"design:returntype\", String)"))
 }
 
 ///|
 /// Test: design:paramtypes for class with constructor params
-/// Note: Type annotations are removed by transformer, so defaults to Object
+/// Type annotations are preserved when class has decorators
 test "emit design:paramtypes for constructor" {
   let js = compile_to_js("@Injectable class MyService { constructor(dep: Logger) { } }")
   println("Constructor design:paramtypes:\n\{js}")
-  // Type annotations are stripped by transformer, defaults to Object
-  assert_true(js.contains("__metadata(\"design:paramtypes\", [Object])"))
+  // Type annotations are preserved for decorated classes
+  assert_true(js.contains("__metadata(\"design:paramtypes\", [Logger])"))
 }
 
 ///|
-/// Test: design:type Function for getter
+/// Test: design:type Function for getter with return type
 test "emit design:type for getter" {
   let js = compile_to_js("class MyClass { @computed get value(): number { return 42; } }")
   println("Getter design:type:\n\{js}")
   assert_true(js.contains("__metadata(\"design:type\", Function)"))
-  // Type annotations are stripped by transformer, defaults to Object
-  assert_true(js.contains("__metadata(\"design:returntype\", Object)"))
+  // Type annotations are preserved for decorated getters
+  assert_true(js.contains("__metadata(\"design:returntype\", Number)"))
 }
 
 ///|
-/// Test: design:paramtypes for setter
+/// Test: design:paramtypes for setter with typed parameter
 test "emit design:paramtypes for setter" {
   let js = compile_to_js("class MyClass { @validate set name(val: string) { } }")
   println("Setter design:paramtypes:\n\{js}")
   assert_true(js.contains("__metadata(\"design:type\", Function)"))
-  // Type annotations are stripped by transformer, defaults to Object
-  assert_true(js.contains("__metadata(\"design:paramtypes\", [Object])"))
+  // Type annotations are preserved for decorated setters
+  assert_true(js.contains("__metadata(\"design:paramtypes\", [String])"))
 }
 
 ///|
-/// Test: Object type for interface parameters (since types are stripped)
-test "emit Object for complex types" {
+/// Test: Interface types preserved in metadata
+test "emit interface type for decorated method params" {
   let js = compile_to_js("class MyClass { @log myMethod(config: MyInterface) { } }")
   println("Complex type design:paramtypes:\n\{js}")
-  // Type annotations are stripped by transformer, defaults to Object
-  assert_true(js.contains("__metadata(\"design:paramtypes\", [Object])"))
+  // Type annotations are preserved for decorated methods
+  assert_true(js.contains("__metadata(\"design:paramtypes\", [MyInterface])"))
 }
 
 ///|
-/// Test: Array type serializes as Object (since types are stripped)
+/// Test: Array type serializes as Array
 test "emit Array for array types" {
   let js = compile_to_js("class MyClass { @observable items: string[]; }")
   println("Array type design:type:\n\{js}")
-  // Type annotations are stripped by transformer, defaults to Object
-  assert_true(js.contains("__metadata(\"design:type\", Object)"))
+  // Type annotations are preserved for decorated properties
+  assert_true(js.contains("__metadata(\"design:type\", Array)"))
 }
 
 ///|
-/// Test: void 0 for void return type (since types are stripped)
+/// Test: void 0 for void return type
 test "emit void 0 for void return" {
   let js = compile_to_js("class MyClass { @log myMethod(): void { } }")
   println("Void return design:returntype:\n\{js}")
-  // Type annotations are stripped by transformer, defaults to Object
-  assert_true(js.contains("__metadata(\"design:returntype\", Object)"))
+  // Type annotations are preserved, void becomes void 0
+  assert_true(js.contains("__metadata(\"design:returntype\", void 0)"))
 }
 
 ///|
-/// Test: Boolean type conversion (since types are stripped)
+/// Test: Boolean type preserved in metadata
 test "emit Boolean for boolean type" {
   let js = compile_to_js("class MyClass { @observable active: boolean; }")
   println("Boolean type design:type:\n\{js}")
-  // Type annotations are stripped by transformer, defaults to Object
-  assert_true(js.contains("__metadata(\"design:type\", Object)"))
+  // Type annotations are preserved for decorated properties
+  assert_true(js.contains("__metadata(\"design:type\", Boolean)"))
 }

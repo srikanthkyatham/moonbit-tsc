@@ -45,6 +45,7 @@
 /// TransformerContext holds state during transformation
 pub struct TransformerContext {
   target : Target // Target ECMAScript version
+  in_decorated_class : Bool // True if we're inside a class with decorators
   // Future: options for JSX, module system, etc.
 } derive(Show)
 
@@ -92,61 +93,70 @@ pub fn Target::older_than(self : Target, version : Target) -> Bool {
 ///|
 /// Create a new transformer context
 pub fn TransformerContext::new(target : Target) -> TransformerContext {
-  { target, }
+  { target, in_decorated_class: false }
 }
 
 ///|
 /// Create default transformer context (ES2015 target)
 pub fn TransformerContext::default() -> TransformerContext {
-  { target: ES2015 }
+  { target: ES2015, in_decorated_class: false }
 }
 
 ///|
 /// Create transformer context for ES5 target
 pub fn TransformerContext::es5() -> TransformerContext {
-  { target: ES5 }
+  { target: ES5, in_decorated_class: false }
+}
+
+///|
+/// Create a new context with in_decorated_class flag set
+fn TransformerContext::with_decorated_class(
+  self : TransformerContext,
+  decorated : Bool,
+) -> TransformerContext {
+  { target: self.target, in_decorated_class: decorated }
 }
 
 ///|
 /// Create transformer context for ES2015 target
 pub fn TransformerContext::es2015() -> TransformerContext {
-  { target: ES2015 }
+  { target: ES2015, in_decorated_class: false }
 }
 
 ///|
 /// Create transformer context for ES2016 target
 pub fn TransformerContext::es2016() -> TransformerContext {
-  { target: ES2016 }
+  { target: ES2016, in_decorated_class: false }
 }
 
 ///|
 /// Create transformer context for ES2017 target
 pub fn TransformerContext::es2017() -> TransformerContext {
-  { target: ES2017 }
+  { target: ES2017, in_decorated_class: false }
 }
 
 ///|
 /// Create transformer context for ES2018 target
 pub fn TransformerContext::es2018() -> TransformerContext {
-  { target: ES2018 }
+  { target: ES2018, in_decorated_class: false }
 }
 
 ///|
 /// Create transformer context for ES2019 target
 pub fn TransformerContext::es2019() -> TransformerContext {
-  { target: ES2019 }
+  { target: ES2019, in_decorated_class: false }
 }
 
 ///|
 /// Create transformer context for ES2020 target
 pub fn TransformerContext::es2020() -> TransformerContext {
-  { target: ES2020 }
+  { target: ES2020, in_decorated_class: false }
 }
 
 ///|
 /// Create transformer context for ESNext target
 pub fn TransformerContext::esnext() -> TransformerContext {
-  { target: ESNext }
+  { target: ESNext, in_decorated_class: false }
 }
 
 ///|
@@ -384,9 +394,13 @@ fn transform_class_declaration(
   cd : ClassDeclaration,
   ctx : TransformerContext,
 ) -> Node {
+  // If class has decorators, use a context that preserves types for metadata
+  let has_class_decorators = cd.decorators.length() > 0
+  let member_ctx = ctx.with_decorated_class(has_class_decorators)
+
   let transformed_members : Array[Node] = []
   for cmember in cd.members {
-    let transformed = transform(cmember, ctx)
+    let transformed = transform(cmember, member_ctx)
     transformed_members.push(transformed)
   }
   ClassDeclaration({
@@ -490,11 +504,44 @@ fn transform_parameters(
 }
 
 ///|
-/// Transform parameter (remove type annotation)
+/// Transform parameters preserving type annotations (for decorated methods)
+fn transform_parameters_preserve_types(
+  params : Array[Node],
+  ctx : TransformerContext,
+) -> Array[Node] {
+  let result : Array[Node] = []
+  for param in params {
+    match param {
+      Parameter(p) =>
+        result.push(
+          Parameter({
+            name: transform(p.name, ctx),
+            type_annotation: p.type_annotation, // Preserve type for metadata
+            initializer: match p.initializer {
+              Some(init) => Some(transform(init, ctx))
+              None => None
+            },
+            is_rest: p.is_rest,
+            is_optional: p.is_optional,
+            decorators: p.decorators,
+            modifiers: p.modifiers,
+            location: p.location,
+          }),
+        )
+      _ => result.push(transform(param, ctx))
+    }
+  }
+  result
+}
+
+///|
+/// Transform parameter (remove type annotation unless decorated)
 fn transform_parameter(p : Parameter, ctx : TransformerContext) -> Node {
+  // Preserve type annotation if parameter has decorators (for metadata emission)
+  let preserve_type = p.decorators.length() > 0
   Parameter({
     name: transform(p.name, ctx),
-    type_annotation: None, // Remove type annotation
+    type_annotation: if preserve_type { p.type_annotation } else { None },
     initializer: match p.initializer {
       Some(init) => Some(transform(init, ctx))
       None => None
@@ -1252,9 +1299,11 @@ fn transform_property_declaration(
   pd : PropertyDeclaration,
   ctx : TransformerContext,
 ) -> Node {
+  // Preserve type annotation if property has decorators (for metadata emission)
+  let preserve_type = pd.decorators.length() > 0
   PropertyDeclaration({
     name: pd.name,
-    type_annotation: None, // Remove type annotation
+    type_annotation: if preserve_type { pd.type_annotation } else { None },
     initializer: match pd.initializer {
       Some(init) => Some(transform(init, ctx))
       None => None
@@ -1272,11 +1321,17 @@ fn transform_method_declaration(
   md : MethodDeclaration,
   ctx : TransformerContext,
 ) -> Node {
+  // Preserve types if method has decorators (for metadata emission)
+  let preserve_types = md.decorators.length() > 0
   MethodDeclaration({
     name: md.name,
     type_parameters: [], // Remove type parameters
-    parameters: transform_parameters(md.parameters, ctx),
-    return_type: None, // Remove return type
+    parameters: if preserve_types {
+      transform_parameters_preserve_types(md.parameters, ctx)
+    } else {
+      transform_parameters(md.parameters, ctx)
+    },
+    return_type: if preserve_types { md.return_type } else { None },
     body: match md.body {
       Some(b) => Some(transform(b, ctx))
       None => None
@@ -1296,8 +1351,30 @@ fn transform_constructor_declaration(
   cd : ConstructorDeclaration,
   ctx : TransformerContext,
 ) -> Node {
+  // Preserve parameter types if:
+  // - Constructor has decorators, or
+  // - Any parameter has decorators, or
+  // - Class has decorators (via context flag)
+  let mut has_param_decorators = false
+  for param in cd.parameters {
+    match param {
+      Parameter(p) =>
+        if p.decorators.length() > 0 {
+          has_param_decorators = true
+          break
+        }
+      _ => ()
+    }
+  }
+  let preserve_types = cd.decorators.length() > 0 ||
+    has_param_decorators ||
+    ctx.in_decorated_class
   ConstructorDeclaration({
-    parameters: transform_parameters(cd.parameters, ctx),
+    parameters: if preserve_types {
+      transform_parameters_preserve_types(cd.parameters, ctx)
+    } else {
+      transform_parameters(cd.parameters, ctx)
+    },
     body: match cd.body {
       Some(b) => Some(transform(b, ctx))
       None => None
@@ -1310,9 +1387,11 @@ fn transform_constructor_declaration(
 ///|
 /// Transform get accessor (remove type annotation)
 fn transform_get_accessor(ga : GetAccessor, ctx : TransformerContext) -> Node {
+  // Preserve return type if getter has decorators (for metadata emission)
+  let preserve_type = ga.decorators.length() > 0
   GetAccessor({
     name: ga.name,
-    return_type: None, // Remove return type
+    return_type: if preserve_type { ga.return_type } else { None },
     body: match ga.body {
       Some(b) => Some(transform(b, ctx))
       None => None
@@ -1326,9 +1405,33 @@ fn transform_get_accessor(ga : GetAccessor, ctx : TransformerContext) -> Node {
 ///|
 /// Transform set accessor (remove type annotation)
 fn transform_set_accessor(sa : SetAccessor, ctx : TransformerContext) -> Node {
+  // Preserve parameter type if setter has decorators (for metadata emission)
+  let preserve_type = sa.decorators.length() > 0
+  let transformed_param : Node = if preserve_type {
+    // Preserve type annotation on parameter for metadata
+    match sa.parameter {
+      Parameter(p) =>
+        Node::Parameter({
+          name: transform(p.name, ctx),
+          type_annotation: p.type_annotation,
+          initializer: match p.initializer {
+            Some(init) => Some(transform(init, ctx))
+            None => None
+          },
+          is_rest: p.is_rest,
+          is_optional: p.is_optional,
+          decorators: p.decorators,
+          modifiers: p.modifiers,
+          location: p.location,
+        })
+      _ => transform(sa.parameter, ctx)
+    }
+  } else {
+    transform(sa.parameter, ctx)
+  }
   SetAccessor({
     name: sa.name,
-    parameter: transform(sa.parameter, ctx),
+    parameter: transformed_param,
     body: match sa.body {
       Some(b) => Some(transform(b, ctx))
       None => None

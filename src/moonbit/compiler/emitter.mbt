@@ -521,6 +521,22 @@ fn type_to_runtime(type_node : Node?) -> String {
     None => "Object"
     Some(node) =>
       match node {
+        // Keyword types (string, number, boolean, etc.)
+        KeywordType(kt) =>
+          match kt.kind {
+            TypeKeyword::String => "String"
+            TypeKeyword::Number => "Number"
+            TypeKeyword::Boolean => "Boolean"
+            TypeKeyword::Symbol => "Symbol"
+            TypeKeyword::Void => "void 0"
+            TypeKeyword::Undefined => "void 0"
+            TypeKeyword::Null => "void 0"
+            TypeKeyword::Never => "void 0"
+            TypeKeyword::Any => "Object"
+            TypeKeyword::Unknown => "Object"
+            TypeKeyword::Object => "Object"
+            _ => "Object"
+          }
         // Type reference with type_name string
         TypeReference(tr) =>
           match tr.type_name {
