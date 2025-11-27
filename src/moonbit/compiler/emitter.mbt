@@ -234,9 +234,43 @@ pub fn emit(node : Node, ctx : EmitterContext) -> String {
 }
 
 ///|
+/// Public function to compile a parsed SourceFile to JavaScript
+/// This function transforms and emits the source file with helper functions
+pub fn compile_source_file(
+  sf : SourceFile,
+  ctx : TransformerContext,
+  emit_ctx : EmitterContext,
+) -> String {
+  // Create SourceFile node
+  let sf_node : Node = SourceFile({
+    file_path: sf.file_path,
+    statements: sf.statements,
+    end_of_file_token: sf.end_of_file_token,
+    has_no_default_lib: sf.has_no_default_lib,
+  })
+  // Transform and emit
+  let transformed = transform(sf_node, ctx)
+  emit(transformed, emit_ctx)
+}
+
+///|
 /// Emit source file
 fn emit_source_file(sf : SourceFile, ctx : EmitterContext) -> String {
   let mut result = ""
+
+  // Emit helper functions if decorators are used
+  let uses_decorators = source_file_uses_decorators(sf)
+  let uses_param_decorators = source_file_uses_param_decorators(sf)
+
+  if uses_decorators {
+    result = result + get_decorate_helper() + "\n"
+    ctx.emit_newline()
+    if uses_param_decorators {
+      result = result + get_param_helper() + "\n"
+      ctx.emit_newline()
+    }
+  }
+
   for i = 0; i < sf.statements.length(); i = i + 1 {
     let stmt_str = emit(sf.statements[i], ctx)
     if stmt_str.length() > 0 {
@@ -447,6 +481,76 @@ fn emit_decorator_expression(decorator : Node, ctx : EmitterContext) -> String {
 /// Check if a class has any decorators
 fn has_decorators(decorators : Array[Node]) -> Bool {
   decorators.length() > 0
+}
+
+///|
+/// Get the __decorate helper function definition
+fn get_decorate_helper() -> String {
+  "var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {\n" +
+    "    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;\n" +
+    "    if (typeof Reflect === \"object\" && typeof Reflect.decorate === \"function\") r = Reflect.decorate(decorators, target, key, desc);\n" +
+    "    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;\n" +
+    "    return c > 3 && r && Object.defineProperty(target, key, r), r;\n" +
+    "};"
+}
+
+///|
+/// Get the __param helper function definition
+fn get_param_helper() -> String {
+  "var __param = (this && this.__param) || function (paramIndex, decorator) {\n" +
+    "    return function (target, key) { decorator(target, key, paramIndex); }\n" +
+    "};"
+}
+
+///|
+/// Check if a class uses any decorators (class, member, or parameter)
+fn class_uses_decorators(cd : ClassDeclaration) -> Bool {
+  // Check class decorators
+  if cd.decorators.length() > 0 {
+    return true
+  }
+  // Check member decorators and parameter decorators
+  for member in cd.members {
+    if get_member_decorators(member).length() > 0 {
+      return true
+    }
+    if has_parameter_decorators(member) {
+      return true
+    }
+  }
+  false
+}
+
+///|
+/// Check if a source file uses any decorators
+fn source_file_uses_decorators(sf : SourceFile) -> Bool {
+  for stmt in sf.statements {
+    match stmt {
+      ClassDeclaration(cd) =>
+        if class_uses_decorators(cd) {
+          return true
+        }
+      _ => ()
+    }
+  }
+  false
+}
+
+///|
+/// Check if a source file uses parameter decorators
+fn source_file_uses_param_decorators(sf : SourceFile) -> Bool {
+  for stmt in sf.statements {
+    match stmt {
+      ClassDeclaration(cd) =>
+        for member in cd.members {
+          if has_parameter_decorators(member) {
+            return true
+          }
+        }
+      _ => ()
+    }
+  }
+  false
 }
 
 ///|

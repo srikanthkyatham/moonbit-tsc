@@ -10,18 +10,9 @@ fn compile_to_js(source : String) -> String {
       let ctx = TransformerContext::default()
       let emit_ctx = EmitterContext::default()
 
-      // Transform and emit each statement
-      let mut result = ""
-      for i = 0; i < source_file.statements.length(); i = i + 1 {
-        let stmt = source_file.statements[i]
-        let transformed_stmt = transform(stmt, ctx)
-        let emitted = emit(transformed_stmt, emit_ctx)
-        result = result + emitted
-        if i < source_file.statements.length() - 1 {
-          result = result + "\n"
-        }
-      }
-      result
+      // Use the public compile_source_file function
+      // This ensures helpers are emitted when decorators are used
+      compile_source_file(source_file, ctx, emit_ctx)
     }
     Err(_) => abort("Failed to parse source")
   }
@@ -1147,4 +1138,95 @@ test "emit constructor param decorator applies to class" {
   println("Constructor param decorator on class:\n\{js}")
   // Constructor param decorators should apply to the class, not prototype
   assert_true(js.contains("MyClass = __decorate"))
+}
+
+// =============================================================================
+// Helper Emission Tests
+// =============================================================================
+
+///|
+/// Test: __decorate helper is emitted when class decorators are used
+test "emit __decorate helper for class decorator" {
+  let js = compile_to_js("@Component class MyClass { }")
+  println("Class decorator with helper:\n\{js}")
+  // Should start with the __decorate helper definition
+  assert_true(js.contains("var __decorate = (this && this.__decorate) || function"))
+  assert_true(js.contains("arguments.length"))
+  assert_true(js.contains("Object.getOwnPropertyDescriptor"))
+}
+
+///|
+/// Test: __decorate helper is emitted when member decorators are used
+test "emit __decorate helper for member decorator" {
+  let js = compile_to_js("class MyClass { @log myMethod() { } }")
+  println("Member decorator with helper:\n\{js}")
+  // Should have the __decorate helper definition
+  assert_true(js.contains("var __decorate = (this && this.__decorate) || function"))
+}
+
+///|
+/// Test: __param helper is emitted when parameter decorators are used
+test "emit __param helper for parameter decorator" {
+  let js = compile_to_js("class MyClass { constructor(@inject service) { } }")
+  println("Parameter decorator with helpers:\n\{js}")
+  // Should have both __decorate and __param helper definitions
+  assert_true(js.contains("var __decorate = (this && this.__decorate) || function"))
+  assert_true(js.contains("var __param = (this && this.__param) || function"))
+}
+
+///|
+/// Test: No helpers are emitted when no decorators are present
+test "emit no helpers without decorators" {
+  let js = compile_to_js("class MyClass { myMethod() { } }")
+  println("No decorators, no helpers:\n\{js}")
+  // Should NOT have helper definitions
+  assert_true(js.contains("var __decorate") == false)
+  assert_true(js.contains("var __param") == false)
+}
+
+///|
+/// Test: __param helper is NOT emitted for class decorators only
+test "emit no __param helper for class decorator only" {
+  let js = compile_to_js("@Component class MyClass { }")
+  println("Class decorator only, no __param:\n\{js}")
+  // Should have __decorate but NOT __param
+  assert_true(js.contains("var __decorate = (this && this.__decorate) || function"))
+  assert_true(js.contains("var __param") == false)
+}
+
+///|
+/// Test: __param helper is NOT emitted for member decorators only
+test "emit no __param helper for member decorator only" {
+  let js = compile_to_js("class MyClass { @log myMethod() { } }")
+  println("Member decorator only, no __param:\n\{js}")
+  // Should have __decorate but NOT __param
+  assert_true(js.contains("var __decorate = (this && this.__decorate) || function"))
+  assert_true(js.contains("var __param") == false)
+}
+
+///|
+/// Test: Both helpers emitted for method with parameter decorator
+test "emit both helpers for method parameter decorator" {
+  let js = compile_to_js("class MyClass { myMethod(@validate arg) { } }")
+  println("Method param decorator with helpers:\n\{js}")
+  // Should have both helpers
+  assert_true(js.contains("var __decorate = (this && this.__decorate) || function"))
+  assert_true(js.contains("var __param = (this && this.__param) || function"))
+}
+
+///|
+/// Test: Helper appears at the top of the file
+test "emit helper at top of file" {
+  let js = compile_to_js("@Component class MyClass { }")
+  println("Helper at top of file:\n\{js}")
+  // __decorate should appear before class definition
+  let decorate_pos = js.find("var __decorate")
+  let class_pos = js.find("class MyClass")
+  assert_true(decorate_pos.is_some())
+  assert_true(class_pos.is_some())
+  // decorate_pos should be less than class_pos
+  match (decorate_pos, class_pos) {
+    (Some(d), Some(c)) => assert_true(d < c)
+    _ => assert_true(false)
+  }
 }
