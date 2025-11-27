@@ -1008,3 +1008,54 @@ test "transform readonly parameter property" {
     _ => assert_true(false)
   }
 }
+
+// ============================================================================
+// Dynamic Import Tests
+// ============================================================================
+
+///|
+/// Test: Transform dynamic import preserves expression
+test "transform dynamic import" {
+  let stmts = parse_source("const m = import('./module.js');")
+  let transformed = transform_stmt(stmts[0])
+  match transformed {
+    VariableStatement(vs) => {
+      match vs.declarations[0].initializer {
+        Some(ImportExpression(ie)) => {
+          match ie.source {
+            StringLiteral(sl) => assert_eq(sl.value, "./module.js")
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    _ => assert_true(false)
+  }
+}
+
+///|
+/// Test: Transform dynamic import with await
+test "transform dynamic import with await" {
+  let stmts = parse_source("const m = await import('./async.js');")
+  let transformed = transform_stmt(stmts[0])
+  match transformed {
+    VariableStatement(vs) => {
+      match vs.declarations[0].initializer {
+        Some(AwaitExpression(ae)) => {
+          match ae.expression {
+            ImportExpression(ie) => {
+              match ie.source {
+                StringLiteral(sl) => assert_eq(sl.value, "./async.js")
+                _ => assert_true(false)
+              }
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    _ => assert_true(false)
+  }
+}

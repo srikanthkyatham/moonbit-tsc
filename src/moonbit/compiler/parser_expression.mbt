@@ -900,6 +900,54 @@ fn parse_primary_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
           )
       }
     }
+
+    // Dynamic import expression: import('./module')
+    KeywordImport(start_loc) => {
+      let parser = advance_parser(parser) // consume 'import'
+
+      // Expect opening parenthesis
+      match current_token(parser) {
+        OpenParen(_) => {
+          let parser = advance_parser(parser) // consume '('
+
+          // Parse the source expression (usually a string literal)
+          match parse_assignment_expression(parser) {
+            Ok((source, parser)) =>
+              // Expect closing parenthesis
+              match current_token(parser) {
+                CloseParen(_) =>
+                  Ok(
+                    (
+                      Node::ImportExpression(ImportExpression::{
+                        source,
+                        location: start_loc,
+                      }),
+                      advance_parser(parser),
+                    ),
+                  )
+                _ =>
+                  Err(
+                    add_error(
+                      parser,
+                      "Expected ')' after import expression",
+                      current_token(parser).location(),
+                    ),
+                  )
+              }
+            Err(p) => Err(p)
+          }
+        }
+        _ =>
+          Err(
+            add_error(
+              parser,
+              "Expected '(' after 'import' for dynamic import",
+              current_token(parser).location(),
+            ),
+          )
+      }
+    }
+
     _ =>
       Err(add_error(parser, "Unexpected token in expression", token.location()))
   }

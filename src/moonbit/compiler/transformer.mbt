@@ -295,6 +295,7 @@ pub fn transform(node : Node, ctx : TransformerContext) -> Node {
     OptionalChain(oc) => transform_optional_chain(oc, ctx)
     AwaitExpression(ae) => transform_await_expression(ae, ctx)
     YieldExpression(ye) => transform_yield_expression(ye, ctx)
+    ImportExpression(ie) => transform_import_expression(ie, ctx)
 
     // Binding Patterns
     ArrayBindingPattern(abp) => transform_array_binding_pattern(abp, ctx)
@@ -1550,6 +1551,19 @@ fn transform_yield_expression(
     },
     is_delegate: ye.is_delegate,
     location: ye.location,
+  })
+}
+
+///|
+/// Transform dynamic import expression: import('./module')
+fn transform_import_expression(
+  ie : ImportExpression,
+  ctx : TransformerContext,
+) -> Node {
+  // Transform the source expression (in case it contains expressions that need transformation)
+  ImportExpression({
+    source: transform(ie.source, ctx),
+    location: ie.location,
   })
 }
 

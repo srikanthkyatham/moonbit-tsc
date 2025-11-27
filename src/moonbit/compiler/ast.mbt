@@ -63,6 +63,7 @@ pub enum Node {
   OptionalChain(OptionalChain)
   AwaitExpression(AwaitExpression)
   YieldExpression(YieldExpression)
+  ImportExpression(ImportExpression) // Dynamic import: import('./module')
 
   // Binding Patterns
   ArrayBindingPattern(ArrayBindingPattern)
@@ -710,6 +711,13 @@ pub struct AwaitExpression {
 pub struct YieldExpression {
   expression : Node?
   is_delegate : Bool // true for yield*
+  location : SourceLocation
+} derive(Show)
+
+///|
+/// Dynamic import expression: import('./module')
+pub struct ImportExpression {
+  source : Node // The module specifier (usually a StringLiteral or expression)
   location : SourceLocation
 } derive(Show)
 
@@ -1463,6 +1471,7 @@ pub fn get_location(node : Node) -> SourceLocation {
     OptionalChain(o) => o.location
     AwaitExpression(a) => a.location
     YieldExpression(y) => y.location
+    ImportExpression(ie) => ie.location
     ArrayBindingPattern(a) => a.location
     ObjectBindingPattern(o) => o.location
     Identifier(i) => i.location

@@ -3266,6 +3266,124 @@ test "parse static block in class" {
 }
 
 // ============================================================================
+// Dynamic Import Tests
+// ============================================================================
+
+///|
+test "parse dynamic import with string literal" {
+  let source = "const module = import('./module.js');"
+  let tokens = tokens_from_source(source)
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        VariableStatement(vs) => {
+          assert_eq(vs.declarations.length(), 1)
+          match vs.declarations[0].initializer {
+            Some(ImportExpression(ie)) => {
+              match ie.source {
+                StringLiteral(sl) => assert_eq(sl.value, "./module.js")
+                _ => assert_true(false)
+              }
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse dynamic import with await" {
+  let source = "const mod = await import('./dynamic.js');"
+  let tokens = tokens_from_source(source)
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        VariableStatement(vs) => {
+          match vs.declarations[0].initializer {
+            Some(AwaitExpression(ae)) => {
+              match ae.expression {
+                ImportExpression(ie) => {
+                  match ie.source {
+                    StringLiteral(sl) => assert_eq(sl.value, "./dynamic.js")
+                    _ => assert_true(false)
+                  }
+                }
+                _ => assert_true(false)
+              }
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse dynamic import with expression" {
+  let source = "import(modulePath)"
+  let tokens = tokens_from_source(source)
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        ExpressionStatement(es) => {
+          match es.expression {
+            ImportExpression(ie) => {
+              match ie.source {
+                Identifier(id) => assert_eq(id.name, "modulePath")
+                _ => assert_true(false)
+              }
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse dynamic import with template literal" {
+  let source = "import(`./modules/test.js`)"
+  let tokens = tokens_from_source(source)
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        ExpressionStatement(es) => {
+          match es.expression {
+            ImportExpression(ie) => {
+              match ie.source {
+                TemplateExpression(_) => assert_true(true)
+                _ => assert_true(false)
+              }
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+// ============================================================================
 // Parser Error Code Tests
 // ============================================================================
 // Note: ParserErrorCode enum variants are tested internally in the parser module.

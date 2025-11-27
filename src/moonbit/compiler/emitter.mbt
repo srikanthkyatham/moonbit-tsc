@@ -166,6 +166,7 @@ pub fn emit(node : Node, ctx : EmitterContext) -> String {
     OptionalChain(oc) => emit_optional_chain(oc, ctx)
     AwaitExpression(ae) => emit_await_expression(ae, ctx)
     YieldExpression(ye) => emit_yield_expression(ye, ctx)
+    ImportExpression(ie) => emit_import_expression(ie, ctx)
 
     // Binding Patterns
     ArrayBindingPattern(abp) => emit_array_binding_pattern(abp, ctx)
@@ -2065,6 +2066,12 @@ fn emit_yield_expression(ye : YieldExpression, ctx : EmitterContext) -> String {
     Some(expr) => yield_kw + " " + emit(expr, ctx)
     None => yield_kw
   }
+}
+
+///|
+/// Emit dynamic import expression: import('./module')
+fn emit_import_expression(ie : ImportExpression, ctx : EmitterContext) -> String {
+  "import(" + emit(ie.source, ctx) + ")"
 }
 
 ///|
