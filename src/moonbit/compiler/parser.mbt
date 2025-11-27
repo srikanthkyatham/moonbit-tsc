@@ -1081,39 +1081,19 @@ fn parse_parameter(parser : Parser) -> Result[(Node, Parser), Parser] {
   let mut parser = parser
 
   // Parse parameter decorators (@decorator)
+  let decorators : Array[Node] = []
   while true {
     match current_token(parser) {
-      At(_) => {
-        // Parse and skip decorator
+      At(dec_loc) => {
         parser = advance_parser(parser) // consume @
-        match current_token(parser) {
-          Identifier(_, _) => {
-            parser = advance_parser(parser) // consume decorator name
-            // Optional decorator arguments
-            match current_token(parser) {
-              OpenParen(_) => {
-                // Skip arguments - simple implementation: find matching close paren
-                parser = advance_parser(parser)
-                let mut depth = 1
-                while depth > 0 {
-                  match current_token(parser) {
-                    OpenParen(_) => {
-                      depth = depth + 1
-                      parser = advance_parser(parser)
-                    }
-                    CloseParen(_) => {
-                      depth = depth - 1
-                      parser = advance_parser(parser)
-                    }
-                    EOF(_) => break
-                    _ => parser = advance_parser(parser)
-                  }
-                }
-              }
-              _ => ()
-            }
+        match parse_expression(parser) {
+          Ok((expr, p)) => {
+            decorators.push(
+              Node::Decorator(Decorator::{ expression: expr, location: dec_loc }),
+            )
+            parser = p
           }
-          _ => ()
+          Err(_) => break
         }
       }
       _ => break
@@ -1193,6 +1173,7 @@ fn parse_parameter(parser : Parser) -> Result[(Node, Parser), Parser] {
         initializer,
         is_optional,
         is_rest,
+        decorators,
         modifiers,
         location: start_loc,
       }),

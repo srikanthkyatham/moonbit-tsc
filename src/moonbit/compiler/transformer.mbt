@@ -501,6 +501,7 @@ fn transform_parameter(p : Parameter, ctx : TransformerContext) -> Node {
     },
     is_rest: p.is_rest,
     is_optional: p.is_optional,
+    decorators: p.decorators, // Preserve decorators for output
     modifiers: p.modifiers, // Preserve modifiers for output
     location: p.location,
   })

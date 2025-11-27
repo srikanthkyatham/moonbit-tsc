@@ -296,6 +296,7 @@ fn make_simple_parameter(id : Identifier) -> Node {
     initializer: None,
     is_optional: false,
     is_rest: false,
+    decorators: [],
     modifiers: [],
     location: id.location,
   })

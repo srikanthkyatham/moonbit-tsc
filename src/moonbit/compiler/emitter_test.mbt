@@ -1062,3 +1062,89 @@ test "emit async method with decorator" {
   assert_true(js.contains("async"))
   assert_true(js.contains("fetchData"))
 }
+
+// =============================================================================
+// Parameter Decorator Tests
+// =============================================================================
+
+///|
+/// Test: Emit constructor with single parameter decorator
+test "emit constructor with parameter decorator" {
+  let js = compile_to_js("class MyClass { constructor(@inject service) { } }")
+  println("Constructor with param decorator:\n\{js}")
+  assert_true(js.contains("__decorate"))
+  assert_true(js.contains("__param"))
+  assert_true(js.contains("0"))
+  assert_true(js.contains("inject"))
+}
+
+///|
+/// Test: Emit constructor with parameter decorator factory
+test "emit constructor with parameter decorator factory" {
+  let js = compile_to_js("class MyClass { constructor(@Inject('Logger') logger) { } }")
+  println("Constructor with param decorator factory:\n\{js}")
+  assert_true(js.contains("__decorate"))
+  assert_true(js.contains("__param"))
+  assert_true(js.contains("Inject"))
+}
+
+///|
+/// Test: Emit constructor with multiple parameter decorators
+test "emit constructor with multiple parameter decorators" {
+  let js = compile_to_js("class MyClass { constructor(@inject @optional service) { } }")
+  println("Constructor with multiple param decorators:\n\{js}")
+  assert_true(js.contains("__decorate"))
+  assert_true(js.contains("__param(0, inject)"))
+  assert_true(js.contains("__param(0, optional)"))
+}
+
+///|
+/// Test: Emit constructor with decorators on multiple parameters
+test "emit constructor with decorators on multiple parameters" {
+  let js = compile_to_js("class MyClass { constructor(@inject a, @optional b) { } }")
+  println("Constructor with decorators on multiple params:\n\{js}")
+  assert_true(js.contains("__decorate"))
+  assert_true(js.contains("__param(0, inject)"))
+  assert_true(js.contains("__param(1, optional)"))
+}
+
+///|
+/// Test: Emit method with parameter decorator
+test "emit method with parameter decorator" {
+  let js = compile_to_js("class MyClass { myMethod(@validate arg) { } }")
+  println("Method with param decorator:\n\{js}")
+  assert_true(js.contains("__decorate"))
+  assert_true(js.contains("__param"))
+  assert_true(js.contains("validate"))
+  assert_true(js.contains("MyClass.prototype"))
+  assert_true(js.contains("\"myMethod\""))
+}
+
+///|
+/// Test: Emit method with both method and parameter decorators
+test "emit method with method and parameter decorators" {
+  let js = compile_to_js("class MyClass { @log myMethod(@validate arg) { } }")
+  println("Method with method and param decorators:\n\{js}")
+  assert_true(js.contains("__decorate"))
+  assert_true(js.contains("log"))
+  assert_true(js.contains("__param(0, validate)"))
+}
+
+///|
+/// Test: Emit class with both class and constructor param decorators
+test "emit class with class and constructor param decorators" {
+  let js = compile_to_js("@Injectable class Service { constructor(@inject dep) { } }")
+  println("Class with class and constructor param decorators:\n\{js}")
+  assert_true(js.contains("__decorate"))
+  assert_true(js.contains("Injectable"))
+  assert_true(js.contains("__param(0, inject)"))
+}
+
+///|
+/// Test: Emit constructor param decorator with class decorator
+test "emit constructor param decorator applies to class" {
+  let js = compile_to_js("class MyClass { constructor(@inject service) { } }")
+  println("Constructor param decorator on class:\n\{js}")
+  // Constructor param decorators should apply to the class, not prototype
+  assert_true(js.contains("MyClass = __decorate"))
+}

@@ -475,6 +475,33 @@ fn get_member_decorators(member : Node) -> Array[Node] {
 }
 
 ///|
+/// Get parameters from a class member
+fn get_member_parameters(member : Node) -> Array[Node] {
+  match member {
+    MethodDeclaration(md) => md.parameters
+    ConstructorDeclaration(cd) => cd.parameters
+    SetAccessor(sa) => [sa.parameter]
+    _ => []
+  }
+}
+
+///|
+/// Check if a member has any parameter decorators
+fn has_parameter_decorators(member : Node) -> Bool {
+  let params = get_member_parameters(member)
+  for param in params {
+    match param {
+      Parameter(p) =>
+        if p.decorators.length() > 0 {
+          return true
+        }
+      _ => ()
+    }
+  }
+  false
+}
+
+///|
 /// Check if a member is static
 fn is_static_member(member : Node) -> Bool {
   match member {
@@ -554,27 +581,81 @@ fn emit_class_declaration(
   }
   result = result + ctx.get_indent() + "}"
 
-  // If class has decorators, emit decorator application
-  if has_class_decorators && class_name.length() > 0 {
+  // Check for constructor parameter decorators
+  let mut has_ctor_param_decorators = false
+  for class_member in cd.members {
+    match class_member {
+      ConstructorDeclaration(_) =>
+        if has_parameter_decorators(class_member) {
+          has_ctor_param_decorators = true
+          break
+        }
+      _ => ()
+    }
+  }
+
+  // If class has decorators or constructor param decorators, emit decorator application
+  if (has_class_decorators || has_ctor_param_decorators) && class_name.length() > 0 {
     result = result + ";\n"
     result = result + ctx.get_indent() + class_name + " = __decorate([\n"
     let decorator_ctx = ctx.indent()
+
+    // Emit class decorators
     for i = 0; i < cd.decorators.length(); i = i + 1 {
       result = result +
         decorator_ctx.get_indent() +
         emit_decorator_expression(cd.decorators[i], ctx)
-      if i < cd.decorators.length() - 1 {
+      if i < cd.decorators.length() - 1 || has_ctor_param_decorators {
         result = result + ","
       }
       result = result + "\n"
     }
+
+    // Emit constructor parameter decorators
+    for class_member in cd.members {
+      match class_member {
+        ConstructorDeclaration(ctor) => {
+          let params = ctor.parameters
+          let mut param_decorator_emitted = false
+          for param_index = 0; param_index < params.length(); param_index = param_index +
+            1 {
+            match params[param_index] {
+              Parameter(p) =>
+                for dec_index = 0; dec_index < p.decorators.length(); dec_index = dec_index +
+                  1 {
+                  if param_decorator_emitted {
+                    result = result + ",\n"
+                  }
+                  result = result +
+                    decorator_ctx.get_indent() +
+                    "__param(" +
+                    param_index.to_string() +
+                    ", " +
+                    emit_decorator_expression(p.decorators[dec_index], ctx) +
+                    ")"
+                  param_decorator_emitted = true
+                }
+              _ => ()
+            }
+          }
+          if param_decorator_emitted {
+            result = result + "\n"
+          }
+        }
+        _ => ()
+      }
+    }
+
     result = result + ctx.get_indent() + "], " + class_name + ")"
   }
 
-  // Emit member decorators
+  // Emit member decorators and parameter decorators
   for class_member in cd.members {
     let member_decorators = get_member_decorators(class_member)
-    if member_decorators.length() > 0 {
+    let has_param_decorators = has_parameter_decorators(class_member)
+
+    // Only emit if we have member decorators or parameter decorators
+    if member_decorators.length() > 0 || has_param_decorators {
       match get_member_name(class_member) {
         Some(member_name) => {
           let target = if is_static_member(class_member) {
@@ -585,15 +666,49 @@ fn emit_class_declaration(
           result = result + ";\n"
           result = result + ctx.get_indent() + "__decorate([\n"
           let decorator_ctx = ctx.indent()
+
+          // First emit member decorators
+          let mut decorator_index = 0
           for i = 0; i < member_decorators.length(); i = i + 1 {
             result = result +
               decorator_ctx.get_indent() +
               emit_decorator_expression(member_decorators[i], ctx)
-            if i < member_decorators.length() - 1 {
+            decorator_index = decorator_index + 1
+            // Check if there are more decorators coming (member or param)
+            if i < member_decorators.length() - 1 || has_param_decorators {
               result = result + ","
             }
             result = result + "\n"
           }
+
+          // Then emit parameter decorators with __param
+          let params = get_member_parameters(class_member)
+          let mut param_decorator_emitted = false
+          for param_index = 0; param_index < params.length(); param_index = param_index +
+            1 {
+            match params[param_index] {
+              Parameter(p) =>
+                for dec_index = 0; dec_index < p.decorators.length(); dec_index = dec_index +
+                  1 {
+                  if param_decorator_emitted {
+                    result = result + ",\n"
+                  }
+                  result = result +
+                    decorator_ctx.get_indent() +
+                    "__param(" +
+                    param_index.to_string() +
+                    ", " +
+                    emit_decorator_expression(p.decorators[dec_index], ctx) +
+                    ")"
+                  param_decorator_emitted = true
+                }
+              _ => ()
+            }
+          }
+          if param_decorator_emitted {
+            result = result + "\n"
+          }
+
           result = result +
             ctx.get_indent() +
             "], " +

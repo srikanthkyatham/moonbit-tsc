@@ -960,6 +960,7 @@ pub struct Parameter {
   initializer : Node?
   is_optional : Bool
   is_rest : Bool
+  decorators : Array[Node]
   modifiers : Array[Modifier]
   location : SourceLocation
 } derive(Show)
