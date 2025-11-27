@@ -2,6 +2,83 @@
 // Contains all JSX-related parsing functions
 
 ///|
+/// Extract identifier name from a token that can be used as JSX attribute name.
+/// In JSX, keywords like `type`, `for`, `class` can be used as attribute names.
+fn get_jsx_attribute_name_from_token(token : Token) -> (String, SourceLocation)? {
+  match token {
+    Identifier(name, loc) => Some((name, loc))
+    // Type Keywords that can be JSX attribute names
+    KeywordAny(loc) => Some(("any", loc))
+    KeywordBoolean(loc) => Some(("boolean", loc))
+    KeywordNumber(loc) => Some(("number", loc))
+    KeywordString(loc) => Some(("string", loc))
+    KeywordSymbol(loc) => Some(("symbol", loc))
+    KeywordObject(loc) => Some(("object", loc))
+    KeywordVoid(loc) => Some(("void", loc))
+    KeywordUnknown(loc) => Some(("unknown", loc))
+    KeywordNever(loc) => Some(("never", loc))
+    KeywordUndefined(loc) => Some(("undefined", loc))
+    KeywordNull(loc) => Some(("null", loc))
+    // Declaration Keywords
+    KeywordLet(loc) => Some(("let", loc))
+    KeywordConst(loc) => Some(("const", loc))
+    KeywordVar(loc) => Some(("var", loc))
+    KeywordFunction(loc) => Some(("function", loc))
+    KeywordClass(loc) => Some(("class", loc))
+    KeywordInterface(loc) => Some(("interface", loc))
+    KeywordEnum(loc) => Some(("enum", loc))
+    KeywordType(loc) => Some(("type", loc))
+    KeywordNamespace(loc) => Some(("namespace", loc))
+    KeywordModule(loc) => Some(("module", loc))
+    // Control Flow Keywords
+    KeywordIf(loc) => Some(("if", loc))
+    KeywordElse(loc) => Some(("else", loc))
+    KeywordSwitch(loc) => Some(("switch", loc))
+    KeywordCase(loc) => Some(("case", loc))
+    KeywordDefault(loc) => Some(("default", loc))
+    KeywordFor(loc) => Some(("for", loc))
+    KeywordWhile(loc) => Some(("while", loc))
+    KeywordDo(loc) => Some(("do", loc))
+    KeywordBreak(loc) => Some(("break", loc))
+    KeywordContinue(loc) => Some(("continue", loc))
+    KeywordReturn(loc) => Some(("return", loc))
+    KeywordThrow(loc) => Some(("throw", loc))
+    KeywordTry(loc) => Some(("try", loc))
+    KeywordCatch(loc) => Some(("catch", loc))
+    KeywordFinally(loc) => Some(("finally", loc))
+    // Modifier Keywords
+    KeywordPublic(loc) => Some(("public", loc))
+    KeywordPrivate(loc) => Some(("private", loc))
+    KeywordProtected(loc) => Some(("protected", loc))
+    KeywordStatic(loc) => Some(("static", loc))
+    KeywordReadonly(loc) => Some(("readonly", loc))
+    KeywordAbstract(loc) => Some(("abstract", loc))
+    KeywordAsync(loc) => Some(("async", loc))
+    KeywordAwait(loc) => Some(("await", loc))
+    KeywordDeclare(loc) => Some(("declare", loc))
+    // Other Keywords
+    KeywordNew(loc) => Some(("new", loc))
+    KeywordThis(loc) => Some(("this", loc))
+    KeywordSuper(loc) => Some(("super", loc))
+    KeywordImport(loc) => Some(("import", loc))
+    KeywordExport(loc) => Some(("export", loc))
+    KeywordFrom(loc) => Some(("from", loc))
+    KeywordAs(loc) => Some(("as", loc))
+    KeywordSatisfies(loc) => Some(("satisfies", loc))
+    KeywordExtends(loc) => Some(("extends", loc))
+    KeywordImplements(loc) => Some(("implements", loc))
+    KeywordYield(loc) => Some(("yield", loc))
+    KeywordIn(loc) => Some(("in", loc))
+    KeywordOf(loc) => Some(("of", loc))
+    KeywordInstanceOf(loc) => Some(("instanceof", loc))
+    KeywordTypeOf(loc) => Some(("typeof", loc))
+    KeywordDelete(loc) => Some(("delete", loc))
+    KeywordDebugger(loc) => Some(("debugger", loc))
+    _ => None
+  }
+}
+
+///|
 /// Check if current position starts JSX element
 /// Only returns true if JSX mode is enabled (for .tsx files)
 fn is_jsx_start(parser : Parser) -> Bool {
@@ -209,47 +286,51 @@ fn parse_jsx_attributes(parser : Parser) -> (Array[JsxAttribute], Parser) {
         }
       }
       // Regular attribute: name="value" or name={expr}
-      Identifier(name, loc) => {
-        parser = advance_parser(parser)
-
-        // Check for namespaced attribute: xlink:href
-        let attr_name = match current_token(parser) {
-          Colon(_) => {
+      // Use helper to handle keywords as attribute names (e.g., type, for, class)
+      _ =>
+        match get_jsx_attribute_name_from_token(current_token(parser)) {
+          Some((name, loc)) => {
             parser = advance_parser(parser)
-            match current_token(parser) {
-              Identifier(local_name, _) => {
+
+            // Check for namespaced attribute: xlink:href
+            let attr_name = match current_token(parser) {
+              Colon(_) => {
                 parser = advance_parser(parser)
-                JsxAttributeName::NamespacedName(name, local_name, loc)
+                match get_jsx_attribute_name_from_token(current_token(parser)) {
+                  Some((local_name, _)) => {
+                    parser = advance_parser(parser)
+                    JsxAttributeName::NamespacedName(name, local_name, loc)
+                  }
+                  None => JsxAttributeName::Identifier(name, loc)
+                }
               }
               _ => JsxAttributeName::Identifier(name, loc)
             }
-          }
-          _ => JsxAttributeName::Identifier(name, loc)
-        }
 
-        // Check for value
-        let initializer = match current_token(parser) {
-          Equals(_) => {
-            parser = advance_parser(parser)
-            match parse_jsx_attribute_value(parser) {
-              Ok((value, p)) => {
-                parser = p
-                Some(value)
+            // Check for value
+            let initializer = match current_token(parser) {
+              Equals(_) => {
+                parser = advance_parser(parser)
+                match parse_jsx_attribute_value(parser) {
+                  Ok((value, p)) => {
+                    parser = p
+                    Some(value)
+                  }
+                  Err(_) => None
+                }
               }
-              Err(_) => None
+              _ => None // Boolean attribute like "disabled"
             }
+            attributes.push(
+              JsxAttribute::Attribute(JsxAttributeNode::{
+                name: attr_name,
+                initializer,
+                location: loc,
+              }),
+            )
           }
-          _ => None // Boolean attribute like "disabled"
+          None => break
         }
-        attributes.push(
-          JsxAttribute::Attribute(JsxAttributeNode::{
-            name: attr_name,
-            initializer,
-            location: loc,
-          }),
-        )
-      }
-      _ => break
     }
   }
   (attributes, parser)

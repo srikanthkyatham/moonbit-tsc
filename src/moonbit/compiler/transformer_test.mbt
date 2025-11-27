@@ -1059,3 +1059,209 @@ test "transform dynamic import with await" {
     _ => assert_true(false)
   }
 }
+
+// ============================================================================
+// JSX Transformation Tests
+// ============================================================================
+
+///|
+/// Helper to transform with JSX classic mode
+fn transform_jsx_classic(stmt : Node) -> Node {
+  let ctx = TransformerContext::with_jsx(ES2015, Classic("React.createElement", "React.Fragment"))
+  transform(stmt, ctx)
+}
+
+///|
+/// Helper to transform with JSX automatic mode
+fn transform_jsx_automatic(stmt : Node) -> Node {
+  let ctx = TransformerContext::with_jsx(ES2015, Automatic("react"))
+  transform(stmt, ctx)
+}
+
+///|
+/// Helper to parse JSX source
+fn parse_jsx_source(source : String) -> Array[Node] {
+  let tokens = tokens_from_source(source)
+  match parse_source_file(tokens, "test.tsx") {
+    Ok(source_file) => source_file.statements
+    Err(_) => abort("Failed to parse source")
+  }
+}
+
+///|
+test "JSX classic - simple element" {
+  // <div /> -> React.createElement("div", null)
+  let stmts = parse_jsx_source("const x = <div />;")
+  let transformed = transform_jsx_classic(stmts[0])
+  match transformed {
+    VariableStatement(vs) => {
+      match vs.declarations[0].initializer {
+        Some(CallExpression(ce)) => {
+          // Should be React.createElement
+          match ce.expression {
+            PropertyAccessExpression(pae) => {
+              assert_eq(pae.name, "createElement")
+            }
+            _ => assert_true(false)
+          }
+          // First arg should be "div"
+          match ce.arguments[0] {
+            StringLiteral(sl) => assert_eq(sl.value, "div")
+            _ => assert_true(false)
+          }
+          // Second arg should be null
+          match ce.arguments[1] {
+            NullLiteral(_) => assert_true(true)
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    _ => assert_true(false)
+  }
+}
+
+///|
+test "JSX classic - element with props" {
+  // <div className="foo" /> -> React.createElement("div", { className: "foo" })
+  let stmts = parse_jsx_source("const x = <div className=\"foo\" />;")
+  let transformed = transform_jsx_classic(stmts[0])
+  match transformed {
+    VariableStatement(vs) => {
+      match vs.declarations[0].initializer {
+        Some(CallExpression(ce)) => {
+          // Second arg should be an object
+          match ce.arguments[1] {
+            ObjectLiteralExpression(ole) => {
+              assert_eq(ole.properties.length(), 1)
+              match ole.properties[0] {
+                PropertyAssignment(name, _, _) => assert_eq(name, "className")
+                _ => assert_true(false)
+              }
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    _ => assert_true(false)
+  }
+}
+
+///|
+test "JSX classic - element with children" {
+  // <div>Hello</div> -> React.createElement("div", null, "Hello")
+  let stmts = parse_jsx_source("const x = <div>Hello</div>;")
+  let transformed = transform_jsx_classic(stmts[0])
+  match transformed {
+    VariableStatement(vs) => {
+      match vs.declarations[0].initializer {
+        Some(CallExpression(ce)) => {
+          // Should have 3 arguments: type, props, child
+          assert_true(ce.arguments.length() >= 3)
+          // Third arg should be "Hello"
+          match ce.arguments[2] {
+            StringLiteral(sl) => assert_eq(sl.value, "Hello")
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    _ => assert_true(false)
+  }
+}
+
+///|
+test "JSX classic - component (uppercase)" {
+  // <MyComponent /> -> React.createElement(MyComponent, null)
+  let stmts = parse_jsx_source("const x = <MyComponent />;")
+  let transformed = transform_jsx_classic(stmts[0])
+  match transformed {
+    VariableStatement(vs) => {
+      match vs.declarations[0].initializer {
+        Some(CallExpression(ce)) => {
+          // First arg should be identifier MyComponent (not string)
+          match ce.arguments[0] {
+            Identifier(id) => assert_eq(id.name, "MyComponent")
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    _ => assert_true(false)
+  }
+}
+
+///|
+test "JSX automatic - simple element" {
+  // <div /> -> _jsx("div", {})
+  let stmts = parse_jsx_source("const x = <div />;")
+  let transformed = transform_jsx_automatic(stmts[0])
+  match transformed {
+    VariableStatement(vs) => {
+      match vs.declarations[0].initializer {
+        Some(CallExpression(ce)) => {
+          // Should be _jsx
+          match ce.expression {
+            Identifier(id) => assert_eq(id.name, "_jsx")
+            _ => assert_true(false)
+          }
+          // First arg should be "div"
+          match ce.arguments[0] {
+            StringLiteral(sl) => assert_eq(sl.value, "div")
+            _ => assert_true(false)
+          }
+          // Second arg should be object (props)
+          match ce.arguments[1] {
+            ObjectLiteralExpression(_) => assert_true(true)
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    _ => assert_true(false)
+  }
+}
+
+///|
+test "JSX automatic - with children uses jsxs" {
+  // <div><span /><span /></div> -> _jsxs("div", { children: [...] })
+  let stmts = parse_jsx_source("const x = <div><span /><span /></div>;")
+  let transformed = transform_jsx_automatic(stmts[0])
+  match transformed {
+    VariableStatement(vs) => {
+      match vs.declarations[0].initializer {
+        Some(CallExpression(ce)) => {
+          // Should be _jsxs for multiple children
+          match ce.expression {
+            Identifier(id) => assert_eq(id.name, "_jsxs")
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    _ => assert_true(false)
+  }
+}
+
+///|
+test "JSX preserve mode - keeps JSX" {
+  let ctx = TransformerContext::with_jsx(ES2015, Preserve)
+  let stmts = parse_jsx_source("const x = <div />;")
+  let transformed = transform(stmts[0], ctx)
+  match transformed {
+    VariableStatement(vs) => {
+      match vs.declarations[0].initializer {
+        Some(JsxSelfClosingElement(_)) => assert_true(true)
+        _ => assert_true(false)
+      }
+    }
+    _ => assert_true(false)
+  }
+}

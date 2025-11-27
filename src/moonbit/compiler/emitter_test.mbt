@@ -1491,3 +1491,151 @@ test "emit abstract class with mixed members" {
   assert_true(js.contains("getName()"))
   assert_true(js.contains("shape"))
 }
+
+// ============================================================================
+// JSX Emitter Tests - Classic Mode (React.createElement)
+// ============================================================================
+
+///|
+/// Helper to parse, transform with JSX classic mode, and emit TypeScript code
+fn compile_jsx_classic(source : String) -> String {
+  let tokens = scan_all_v2(source, "test.tsx")
+  match parse_source_file(tokens, "test.tsx") {
+    Ok(source_file) => {
+      let ctx = TransformerContext::with_jsx(
+        ES2015,
+        Classic("React.createElement", "React.Fragment"),
+      )
+      let emit_ctx = EmitterContext::default()
+      compile_source_file(source_file, ctx, emit_ctx)
+    }
+    Err(e) => abort("Failed to parse source: \{e}")
+  }
+}
+
+///|
+/// Test: JSX self-closing element emits React.createElement
+test "emit JSX self-closing element classic" {
+  let js = compile_jsx_classic("const x = <div />;")
+  println("JSX self-closing classic:\n\{js}")
+  assert_true(js.contains("React.createElement"))
+  assert_true(js.contains("\"div\""))
+  assert_true(js.contains("null"))
+}
+
+///|
+/// Test: JSX element with string attribute
+test "emit JSX element with className classic" {
+  let js = compile_jsx_classic("const x = <div className=\"container\" />;")
+  println("JSX with className classic:\n\{js}")
+  assert_true(js.contains("React.createElement"))
+  assert_true(js.contains("\"div\""))
+  assert_true(js.contains("className"))
+  assert_true(js.contains("\"container\""))
+}
+
+///|
+/// Test: JSX element with expression attribute
+test "emit JSX element with expression attribute classic" {
+  let js = compile_jsx_classic("const x = <div id={myId} />;")
+  println("JSX with expression attribute classic:\n\{js}")
+  assert_true(js.contains("React.createElement"))
+  assert_true(js.contains("\"div\""))
+  assert_true(js.contains("id"))
+  assert_true(js.contains("myId"))
+}
+
+///|
+/// Test: JSX element with text child
+test "emit JSX element with text child classic" {
+  let js = compile_jsx_classic("const x = <div>Hello World</div>;")
+  println("JSX with text child classic:\n\{js}")
+  assert_true(js.contains("React.createElement"))
+  assert_true(js.contains("\"div\""))
+  // Text gets split into words as separate children
+  assert_true(js.contains("Hello"))
+  assert_true(js.contains("World"))
+}
+
+///|
+/// Test: JSX element with expression child
+test "emit JSX element with expression child classic" {
+  let js = compile_jsx_classic("const x = <div>{message}</div>;")
+  println("JSX with expression child classic:\n\{js}")
+  assert_true(js.contains("React.createElement"))
+  assert_true(js.contains("\"div\""))
+  assert_true(js.contains("message"))
+}
+
+///|
+/// Test: JSX element with multiple children
+test "emit JSX element with multiple children classic" {
+  let js = compile_jsx_classic("const x = <div><span>A</span><span>B</span></div>;")
+  println("JSX with multiple children classic:\n\{js}")
+  assert_true(js.contains("React.createElement"))
+  assert_true(js.contains("\"div\""))
+  assert_true(js.contains("\"span\""))
+}
+
+///|
+/// Test: JSX component (uppercase) vs intrinsic (lowercase)
+test "emit JSX component element classic" {
+  let js = compile_jsx_classic("const x = <MyComponent />;")
+  println("JSX component classic:\n\{js}")
+  assert_true(js.contains("React.createElement"))
+  // Component should be identifier, not string
+  assert_true(js.contains("MyComponent"))
+  assert_false(js.contains("\"MyComponent\""))
+}
+
+///|
+/// Test: JSX nested elements
+test "emit JSX nested elements classic" {
+  let js = compile_jsx_classic(
+    "const x = <div><header><h1>Title</h1></header></div>;",
+  )
+  println("JSX nested elements classic:\n\{js}")
+  assert_true(js.contains("React.createElement"))
+  assert_true(js.contains("\"div\""))
+  assert_true(js.contains("\"header\""))
+  assert_true(js.contains("\"h1\""))
+  assert_true(js.contains("Title"))
+}
+
+///|
+/// Test: JSX with multiple attributes including keywords like `type`
+test "emit JSX with multiple attributes classic" {
+  let js = compile_jsx_classic(
+    "const x = <button type=\"submit\" disabled={true} onClick={handleClick}>Submit</button>;",
+  )
+  println("JSX with multiple attributes classic:\n\{js}")
+  assert_true(js.contains("React.createElement"))
+  assert_true(js.contains("\"button\""))
+  assert_true(js.contains("type"))
+  assert_true(js.contains("\"submit\""))
+  assert_true(js.contains("disabled"))
+  assert_true(js.contains("onClick"))
+  assert_true(js.contains("handleClick"))
+  assert_true(js.contains("Submit"))
+}
+
+///|
+/// Test: JSX fragment
+test "emit JSX fragment classic" {
+  let js = compile_jsx_classic("const x = <><div /><span /></>;")
+  println("JSX fragment classic:\n\{js}")
+  assert_true(js.contains("React.createElement"))
+  assert_true(js.contains("React.Fragment"))
+  assert_true(js.contains("\"div\""))
+  assert_true(js.contains("\"span\""))
+}
+
+///|
+/// Test: JSX spread attributes
+test "emit JSX spread attributes classic" {
+  let js = compile_jsx_classic("const x = <div {...props} />;")
+  println("JSX spread attributes classic:\n\{js}")
+  assert_true(js.contains("React.createElement"))
+  assert_true(js.contains("\"div\""))
+  assert_true(js.contains("props"))
+}

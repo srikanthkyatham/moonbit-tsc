@@ -42,12 +42,25 @@
 // - Nullish coalescing (??) preserved
 
 ///|
+/// JSX transformation mode
+pub(all) enum JsxTransform {
+  /// Preserve JSX as-is (no transformation)
+  Preserve
+  /// Classic mode: React.createElement(type, props, ...children)
+  Classic(String, String) // (factory, fragmentFactory)
+  /// Automatic mode: jsx/jsxs from runtime import
+  Automatic(String) // import source (e.g., "react")
+  /// Automatic dev mode: jsxDEV from runtime import
+  AutomaticDev(String) // import source
+} derive(Show)
+
+///|
 /// TransformerContext holds state during transformation
 pub struct TransformerContext {
   target : Target // Target ECMAScript version
   in_decorated_class : Bool // True if we're inside a class with decorators
   const_enums : Map[String, Map[String, Node]] // Const enum name -> member name -> value
-  // Future: options for JSX, module system, etc.
+  jsx_transform : JsxTransform // JSX transformation mode
 }
 
 ///|
@@ -94,19 +107,25 @@ pub fn Target::older_than(self : Target, version : Target) -> Bool {
 ///|
 /// Create a new transformer context
 pub fn TransformerContext::new(target : Target) -> TransformerContext {
-  { target, in_decorated_class: false, const_enums: Map::new() }
+  { target, in_decorated_class: false, const_enums: Map::new(), jsx_transform: Preserve }
+}
+
+///|
+/// Create a new transformer context with JSX options
+pub fn TransformerContext::with_jsx(target : Target, jsx_transform : JsxTransform) -> TransformerContext {
+  { target, in_decorated_class: false, const_enums: Map::new(), jsx_transform }
 }
 
 ///|
 /// Create default transformer context (ES2015 target)
 pub fn TransformerContext::default() -> TransformerContext {
-  { target: ES2015, in_decorated_class: false, const_enums: Map::new() }
+  { target: ES2015, in_decorated_class: false, const_enums: Map::new(), jsx_transform: Preserve }
 }
 
 ///|
 /// Create transformer context for ES5 target
 pub fn TransformerContext::es5() -> TransformerContext {
-  { target: ES5, in_decorated_class: false, const_enums: Map::new() }
+  { target: ES5, in_decorated_class: false, const_enums: Map::new(), jsx_transform: Preserve }
 }
 
 ///|
@@ -115,49 +134,49 @@ fn TransformerContext::with_decorated_class(
   self : TransformerContext,
   decorated : Bool,
 ) -> TransformerContext {
-  { target: self.target, in_decorated_class: decorated, const_enums: self.const_enums }
+  { target: self.target, in_decorated_class: decorated, const_enums: self.const_enums, jsx_transform: self.jsx_transform }
 }
 
 ///|
 /// Create transformer context for ES2015 target
 pub fn TransformerContext::es2015() -> TransformerContext {
-  { target: ES2015, in_decorated_class: false, const_enums: Map::new() }
+  { target: ES2015, in_decorated_class: false, const_enums: Map::new(), jsx_transform: Preserve }
 }
 
 ///|
 /// Create transformer context for ES2016 target
 pub fn TransformerContext::es2016() -> TransformerContext {
-  { target: ES2016, in_decorated_class: false, const_enums: Map::new() }
+  { target: ES2016, in_decorated_class: false, const_enums: Map::new(), jsx_transform: Preserve }
 }
 
 ///|
 /// Create transformer context for ES2017 target
 pub fn TransformerContext::es2017() -> TransformerContext {
-  { target: ES2017, in_decorated_class: false, const_enums: Map::new() }
+  { target: ES2017, in_decorated_class: false, const_enums: Map::new(), jsx_transform: Preserve }
 }
 
 ///|
 /// Create transformer context for ES2018 target
 pub fn TransformerContext::es2018() -> TransformerContext {
-  { target: ES2018, in_decorated_class: false, const_enums: Map::new() }
+  { target: ES2018, in_decorated_class: false, const_enums: Map::new(), jsx_transform: Preserve }
 }
 
 ///|
 /// Create transformer context for ES2019 target
 pub fn TransformerContext::es2019() -> TransformerContext {
-  { target: ES2019, in_decorated_class: false, const_enums: Map::new() }
+  { target: ES2019, in_decorated_class: false, const_enums: Map::new(), jsx_transform: Preserve }
 }
 
 ///|
 /// Create transformer context for ES2020 target
 pub fn TransformerContext::es2020() -> TransformerContext {
-  { target: ES2020, in_decorated_class: false, const_enums: Map::new() }
+  { target: ES2020, in_decorated_class: false, const_enums: Map::new(), jsx_transform: Preserve }
 }
 
 ///|
 /// Create transformer context for ESNext target
 pub fn TransformerContext::esnext() -> TransformerContext {
-  { target: ESNext, in_decorated_class: false, const_enums: Map::new() }
+  { target: ESNext, in_decorated_class: false, const_enums: Map::new(), jsx_transform: Preserve }
 }
 
 ///|
@@ -356,13 +375,13 @@ pub fn transform(node : Node, ctx : TransformerContext) -> Node {
     // Module declaration
     ModuleDeclaration(md) => transform_module_declaration(md, ctx)
 
-    // JSX - keep as-is (JSX transformation is typically done by another transformer)
-    JsxElement(jsx) => JsxElement(jsx)
-    JsxSelfClosingElement(jsx) => JsxSelfClosingElement(jsx)
-    JsxFragment(jsx) => JsxFragment(jsx)
-    JsxOpeningElement(jsx) => JsxOpeningElement(jsx)
-    JsxClosingElement(jsx) => JsxClosingElement(jsx)
-    JsxExpression(jsx) => JsxExpression(jsx)
+    // JSX - transform based on jsx_transform mode
+    JsxElement(jsx) => transform_jsx_element(jsx, ctx)
+    JsxSelfClosingElement(jsx) => transform_jsx_self_closing(jsx, ctx)
+    JsxFragment(jsx) => transform_jsx_fragment(jsx, ctx)
+    JsxOpeningElement(jsx) => JsxOpeningElement(jsx) // Not used directly
+    JsxClosingElement(jsx) => JsxClosingElement(jsx) // Not used directly
+    JsxExpression(jsx) => transform_jsx_expression(jsx, ctx)
 
     // JSDoc - pass through unchanged
     JSDocComment(jsdoc) => JSDocComment(jsdoc)
@@ -1872,4 +1891,539 @@ fn transform_module_declaration(
     },
     location: md.location,
   })
+}
+
+// ============================================================================
+// JSX Transformation
+// ============================================================================
+// Transforms JSX syntax into function calls:
+// - Classic mode: React.createElement(type, props, ...children)
+// - Automatic mode: jsx(type, props) / jsxs(type, props) from runtime
+
+///|
+/// Transform JSX element: <tag>children</tag>
+fn transform_jsx_element(jsx : JsxElement, ctx : TransformerContext) -> Node {
+  match ctx.jsx_transform {
+    Preserve => JsxElement(jsx)
+    Classic(factory, _) => {
+      // Extract tag name and attributes from opening element
+      guard jsx.opening_element is JsxOpeningElement(opening) else {
+        return JsxElement(jsx)
+      }
+      transform_jsx_to_classic(
+        opening.tag_name,
+        opening.attributes,
+        jsx.children,
+        jsx.location,
+        factory,
+        ctx,
+      )
+    }
+    Automatic(import_source) => {
+      guard jsx.opening_element is JsxOpeningElement(opening) else {
+        return JsxElement(jsx)
+      }
+      transform_jsx_to_automatic(
+        opening.tag_name,
+        opening.attributes,
+        jsx.children,
+        jsx.location,
+        import_source,
+        false,
+        ctx,
+      )
+    }
+    AutomaticDev(import_source) => {
+      guard jsx.opening_element is JsxOpeningElement(opening) else {
+        return JsxElement(jsx)
+      }
+      transform_jsx_to_automatic(
+        opening.tag_name,
+        opening.attributes,
+        jsx.children,
+        jsx.location,
+        import_source,
+        true,
+        ctx,
+      )
+    }
+  }
+}
+
+///|
+/// Transform JSX self-closing element: <tag ... />
+fn transform_jsx_self_closing(jsx : JsxSelfClosingElement, ctx : TransformerContext) -> Node {
+  match ctx.jsx_transform {
+    Preserve => JsxSelfClosingElement(jsx)
+    Classic(factory, _) => {
+      transform_jsx_to_classic(
+        jsx.tag_name,
+        jsx.attributes,
+        [], // No children for self-closing
+        jsx.location,
+        factory,
+        ctx,
+      )
+    }
+    Automatic(import_source) => {
+      transform_jsx_to_automatic(
+        jsx.tag_name,
+        jsx.attributes,
+        [],
+        jsx.location,
+        import_source,
+        false,
+        ctx,
+      )
+    }
+    AutomaticDev(import_source) => {
+      transform_jsx_to_automatic(
+        jsx.tag_name,
+        jsx.attributes,
+        [],
+        jsx.location,
+        import_source,
+        true,
+        ctx,
+      )
+    }
+  }
+}
+
+///|
+/// Transform JSX fragment: <>children</>
+fn transform_jsx_fragment(jsx : JsxFragment, ctx : TransformerContext) -> Node {
+  match ctx.jsx_transform {
+    Preserve => JsxFragment(jsx)
+    Classic(_, fragment_factory) => {
+      transform_jsx_fragment_to_classic(
+        jsx.children,
+        jsx.location,
+        fragment_factory,
+        ctx,
+      )
+    }
+    Automatic(import_source) => {
+      transform_jsx_fragment_to_automatic(
+        jsx.children,
+        jsx.location,
+        import_source,
+        false,
+        ctx,
+      )
+    }
+    AutomaticDev(import_source) => {
+      transform_jsx_fragment_to_automatic(
+        jsx.children,
+        jsx.location,
+        import_source,
+        true,
+        ctx,
+      )
+    }
+  }
+}
+
+///|
+/// Transform JSX expression container: {expression}
+fn transform_jsx_expression(jsx : JsxExpression, ctx : TransformerContext) -> Node {
+  match jsx.expression {
+    Some(expr) => transform(expr, ctx)
+    None => Node::Identifier({ name: "undefined", location: jsx.location })
+  }
+}
+
+///|
+/// Transform JSX to classic React.createElement call
+fn transform_jsx_to_classic(
+  tag_name : JsxTagName,
+  attributes : Array[JsxAttribute],
+  children : Array[JsxChild],
+  location : SourceLocation,
+  factory : String,
+  ctx : TransformerContext,
+) -> Node {
+  // Create the factory function call
+  let factory_expr = create_factory_expression(factory, location)
+
+  // Create the type argument (tag name)
+  let type_arg = jsx_tag_name_to_node(tag_name, location)
+
+  // Create the props object (or null if no attributes)
+  let props_arg = jsx_attributes_to_props(attributes, location, ctx)
+
+  // Create children arguments
+  let children_args = jsx_children_to_args(children, ctx)
+
+  // Build arguments: [type, props, ...children]
+  let arguments : Array[Node] = [type_arg, props_arg]
+  for child in children_args {
+    arguments.push(child)
+  }
+
+  Node::CallExpression({
+    expression: factory_expr,
+    type_arguments: [],
+    arguments,
+    location,
+  })
+}
+
+///|
+/// Transform JSX fragment to classic React.Fragment call
+fn transform_jsx_fragment_to_classic(
+  children : Array[JsxChild],
+  location : SourceLocation,
+  fragment_factory : String,
+  ctx : TransformerContext,
+) -> Node {
+  // Parse factory string (e.g., "React.createElement")
+  let factory_parts = split_string(fragment_factory, '.')
+  let factory_expr = if factory_parts.length() == 1 {
+    Node::Identifier({ name: fragment_factory, location })
+  } else {
+    // React.createElement -> PropertyAccess
+    let mut expr = Node::Identifier({ name: factory_parts[0], location })
+    for i = 1; i < factory_parts.length(); i = i + 1 {
+      expr = Node::PropertyAccessExpression({ expression: expr, name: factory_parts[i], location })
+    }
+    expr
+  }
+
+  // React.createElement(React.Fragment, null, ...children)
+  let create_element = create_factory_expression("React.createElement", location)
+  let children_args = jsx_children_to_args(children, ctx)
+
+  let arguments : Array[Node] = [factory_expr, Node::NullLiteral({ location, })]
+  for child in children_args {
+    arguments.push(child)
+  }
+
+  Node::CallExpression({
+    expression: create_element,
+    type_arguments: [],
+    arguments,
+    location,
+  })
+}
+
+///|
+/// Transform JSX to automatic runtime (jsx/jsxs)
+fn transform_jsx_to_automatic(
+  tag_name : JsxTagName,
+  attributes : Array[JsxAttribute],
+  children : Array[JsxChild],
+  location : SourceLocation,
+  _import_source : String,
+  _is_dev : Bool,
+  ctx : TransformerContext,
+) -> Node {
+  // For automatic mode, we use _jsx or _jsxs
+  // _jsx for single or no children, _jsxs for multiple children
+  let transformed_children = jsx_children_to_args(children, ctx)
+  let jsx_fn = if transformed_children.length() > 1 { "_jsxs" } else { "_jsx" }
+
+  let jsx_expr = Node::Identifier({ name: jsx_fn, location })
+  let type_arg = jsx_tag_name_to_node(tag_name, location)
+
+  // For automatic mode, children go in props.children
+  let props = jsx_attributes_to_props_with_children(
+    attributes,
+    transformed_children,
+    location,
+    ctx,
+  )
+
+  Node::CallExpression({
+    expression: jsx_expr,
+    type_arguments: [],
+    arguments: [type_arg, props],
+    location,
+  })
+}
+
+///|
+/// Transform JSX fragment to automatic runtime
+fn transform_jsx_fragment_to_automatic(
+  children : Array[JsxChild],
+  location : SourceLocation,
+  _import_source : String,
+  _is_dev : Bool,
+  ctx : TransformerContext,
+) -> Node {
+  let transformed_children = jsx_children_to_args(children, ctx)
+  let jsx_fn = if transformed_children.length() > 1 { "_jsxs" } else { "_jsx" }
+
+  let jsx_expr = Node::Identifier({ name: jsx_fn, location })
+  let fragment_expr = Node::Identifier({ name: "_Fragment", location })
+
+  // Create props with children
+  let props = if transformed_children.length() == 0 {
+    Node::ObjectLiteralExpression({ properties: [], location })
+  } else if transformed_children.length() == 1 {
+    Node::ObjectLiteralExpression({
+      properties: [PropertyAssignment("children", transformed_children[0], location)],
+      location,
+    })
+  } else {
+    Node::ObjectLiteralExpression({
+      properties: [
+        PropertyAssignment(
+          "children",
+          Node::ArrayLiteralExpression({
+            elements: transformed_children.map(fn(c) { Some(c) }),
+            location,
+          }),
+          location,
+        ),
+      ],
+      location,
+    })
+  }
+
+  Node::CallExpression({
+    expression: jsx_expr,
+    type_arguments: [],
+    arguments: [fragment_expr, props],
+    location,
+  })
+}
+
+///|
+/// Create a factory expression from a dotted string like "React.createElement"
+fn create_factory_expression(factory : String, location : SourceLocation) -> Node {
+  let parts = split_string(factory, '.')
+  if parts.length() == 1 {
+    Node::Identifier({ name: factory, location })
+  } else {
+    let mut expr = Node::Identifier({ name: parts[0], location })
+    for i = 1; i < parts.length(); i = i + 1 {
+      expr = Node::PropertyAccessExpression({
+        expression: expr,
+        name: parts[i],
+        location,
+      })
+    }
+    expr
+  }
+}
+
+///|
+/// Convert JSX tag name to AST node
+fn jsx_tag_name_to_node(tag_name : JsxTagName, location : SourceLocation) -> Node {
+  match tag_name {
+    Identifier(name, _) => {
+      // Lowercase = intrinsic element (string), uppercase = component (identifier)
+      if name.length() > 0 && is_lowercase(name[0]) {
+        Node::StringLiteral({ value: name, location })
+      } else {
+        Node::Identifier({ name, location })
+      }
+    }
+    NamespacedName(ns, name, _) => {
+      // xml:href -> "xml:href"
+      Node::StringLiteral({ value: ns + ":" + name, location })
+    }
+    PropertyAccess(expr, name, _) => {
+      // Module.Component -> Module.Component (keep as identifier chain)
+      Node::PropertyAccessExpression({ expression: expr, name, location })
+    }
+  }
+}
+
+///|
+/// Check if a character code represents a lowercase letter
+fn is_lowercase(code : Int) -> Bool {
+  code >= 'a'.to_int() && code <= 'z'.to_int()
+}
+
+///|
+/// Convert JSX attributes to props object
+fn jsx_attributes_to_props(
+  attributes : Array[JsxAttribute],
+  location : SourceLocation,
+  ctx : TransformerContext,
+) -> Node {
+  if attributes.length() == 0 {
+    return Node::NullLiteral({ location, })
+  }
+
+  let properties : Array[ObjectProperty] = []
+  let mut has_spread = false
+
+  for attr in attributes {
+    match attr {
+      Attribute(attr_node) => {
+        let name = jsx_attr_name_to_string(attr_node.name)
+        let value = match attr_node.initializer {
+          Some(init) => jsx_attr_value_to_node(init, ctx)
+          None => Node::BooleanLiteral({ value: true, location: attr_node.location })
+        }
+        properties.push(PropertyAssignment(name, value, attr_node.location))
+      }
+      SpreadAttribute(expr, loc) => {
+        has_spread = true
+        properties.push(SpreadAssignment(transform(expr, ctx), loc))
+      }
+    }
+  }
+
+  // If we have spread attributes, we might need Object.assign
+  // For simplicity, just use object literal with spread
+  if has_spread {
+    Node::ObjectLiteralExpression({ properties, location })
+  } else {
+    Node::ObjectLiteralExpression({ properties, location })
+  }
+}
+
+///|
+/// Convert JSX attributes to props with children (for automatic mode)
+fn jsx_attributes_to_props_with_children(
+  attributes : Array[JsxAttribute],
+  children : Array[Node],
+  location : SourceLocation,
+  ctx : TransformerContext,
+) -> Node {
+  let properties : Array[ObjectProperty] = []
+
+  for attr in attributes {
+    match attr {
+      Attribute(attr_node) => {
+        let name = jsx_attr_name_to_string(attr_node.name)
+        let value = match attr_node.initializer {
+          Some(init) => jsx_attr_value_to_node(init, ctx)
+          None => Node::BooleanLiteral({ value: true, location: attr_node.location })
+        }
+        properties.push(PropertyAssignment(name, value, attr_node.location))
+      }
+      SpreadAttribute(expr, loc) => {
+        properties.push(SpreadAssignment(transform(expr, ctx), loc))
+      }
+    }
+  }
+
+  // Add children to props
+  if children.length() == 1 {
+    properties.push(PropertyAssignment("children", children[0], location))
+  } else if children.length() > 1 {
+    properties.push(
+      PropertyAssignment(
+        "children",
+        Node::ArrayLiteralExpression({
+          elements: children.map(fn(c) { Some(c) }),
+          location,
+        }),
+        location,
+      ),
+    )
+  }
+
+  Node::ObjectLiteralExpression({ properties, location })
+}
+
+///|
+/// Convert JSX attribute name to string
+fn jsx_attr_name_to_string(name : JsxAttributeName) -> String {
+  match name {
+    JsxAttributeName::Identifier(id, _) => id
+    JsxAttributeName::NamespacedName(ns, n, _) => ns + ":" + n
+  }
+}
+
+///|
+/// Convert JSX attribute value to AST node
+fn jsx_attr_value_to_node(value : JsxAttributeValue, ctx : TransformerContext) -> Node {
+  match value {
+    StringLiteral(s, loc) => Node::StringLiteral({ value: s, location: loc })
+    Expression(expr, _) => transform(expr, ctx)
+    Element(elem, _) => transform(elem, ctx)
+  }
+}
+
+///|
+/// Convert JSX children to array of argument nodes
+fn jsx_children_to_args(children : Array[JsxChild], ctx : TransformerContext) -> Array[Node] {
+  let result : Array[Node] = []
+
+  for child in children {
+    match child {
+      JsxChild::Text(text, loc) => {
+        // Skip whitespace-only text
+        let trimmed = trim_jsx_text(text)
+        if trimmed.length() > 0 {
+          result.push(Node::StringLiteral({ value: trimmed, location: loc }))
+        }
+      }
+      JsxChild::Expression(jsx_expr) => {
+        match jsx_expr.expression {
+          Some(expr) => result.push(transform(expr, ctx))
+          None => () // Skip empty expressions
+        }
+      }
+      JsxChild::Element(elem, _) => {
+        result.push(transform(elem, ctx))
+      }
+      JsxChild::Fragment(frag, _) => {
+        result.push(transform(frag, ctx))
+      }
+    }
+  }
+
+  result
+}
+
+///|
+/// Trim JSX text content (normalize whitespace)
+fn trim_jsx_text(text : String) -> String {
+  let result = StringBuilder::new()
+  let mut last_was_space = true
+  let mut has_content = false
+
+  for i = 0; i < text.length(); i = i + 1 {
+    let ch = text[i]
+    if ch == ' '.to_int() || ch == '\t'.to_int() || ch == '\n'.to_int() || ch == '\r'.to_int() {
+      if not(last_was_space) && has_content {
+        result.write_char(' ')
+        last_was_space = true
+      }
+    } else {
+      result.write_char(Int::unsafe_to_char(ch))
+      last_was_space = false
+      has_content = true
+    }
+  }
+
+  // Trim trailing space
+  let s = result.to_string()
+  if s.has_suffix(" ") {
+    @utils.substr(s, start=0, end=s.length() - 1)
+  } else {
+    s
+  }
+}
+
+///|
+/// Split a string by a delimiter character
+fn split_string(s : String, delim : Char) -> Array[String] {
+  let result : Array[String] = []
+  let current = StringBuilder::new()
+  let delim_code = delim.to_int()
+
+  for i = 0; i < s.length(); i = i + 1 {
+    if s[i] == delim_code {
+      result.push(current.to_string())
+      current.reset()
+    } else {
+      current.write_char(Int::unsafe_to_char(s[i]))
+    }
+  }
+
+  // Don't forget the last part
+  let last = current.to_string()
+  if last.length() > 0 || result.length() > 0 {
+    result.push(last)
+  }
+
+  result
 }
