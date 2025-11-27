@@ -269,6 +269,9 @@ fn emit_source_file(sf : SourceFile, ctx : EmitterContext) -> String {
       result = result + get_param_helper() + "\n"
       ctx.emit_newline()
     }
+    // Emit metadata helper for design-time type information
+    result = result + get_metadata_helper() + "\n"
+    ctx.emit_newline()
   }
 
   for i = 0; i < sf.statements.length(); i = i + 1 {
@@ -503,6 +506,103 @@ fn get_param_helper() -> String {
 }
 
 ///|
+/// Get the __metadata helper function definition
+fn get_metadata_helper() -> String {
+  "var __metadata = (this && this.__metadata) || function (k, v) {\n" +
+    "    if (typeof Reflect === \"object\" && typeof Reflect.metadata === \"function\") return Reflect.metadata(k, v);\n" +
+    "};"
+}
+
+///|
+/// Convert a TypeScript type node to its runtime representation
+/// e.g., string -> String, number -> Number, etc.
+fn type_to_runtime(type_node : Node?) -> String {
+  match type_node {
+    None => "Object"
+    Some(node) =>
+      match node {
+        // Type reference with type_name string
+        TypeReference(tr) =>
+          match tr.type_name {
+            "string" => "String"
+            "number" => "Number"
+            "boolean" => "Boolean"
+            "symbol" => "Symbol"
+            "bigint" => "BigInt"
+            "void" => "void 0"
+            "undefined" => "void 0"
+            "null" => "void 0"
+            "never" => "void 0"
+            "any" => "Object"
+            "unknown" => "Object"
+            "object" => "Object"
+            // For class types, use the class name
+            name => name
+          }
+        // Array types
+        ArrayType(_) => "Array"
+        // Tuple types
+        TupleType(_) => "Array"
+        // Function types
+        FunctionType(_) => "Function"
+        // Union and intersection types serialize as Object
+        UnionType(_) => "Object"
+        IntersectionType(_) => "Object"
+        // Literal types
+        LiteralType(lt) =>
+          match lt.literal {
+            StringLiteral(_) => "String"
+            NumericLiteral(_) => "Number"
+            BooleanLiteral(_) => "Boolean"
+            _ => "Object"
+          }
+        // Keywords that might appear as type nodes
+        Identifier(id) =>
+          match id.name {
+            "string" => "String"
+            "number" => "Number"
+            "boolean" => "Boolean"
+            "symbol" => "Symbol"
+            "bigint" => "BigInt"
+            "void" => "void 0"
+            "undefined" => "void 0"
+            "null" => "void 0"
+            "never" => "void 0"
+            "any" => "Object"
+            "unknown" => "Object"
+            "object" => "Object"
+            name => name
+          }
+        // Default to Object for complex types
+        _ => "Object"
+      }
+  }
+}
+
+///|
+/// Get parameter types as runtime values for design:paramtypes
+fn get_param_types_runtime(params : Array[Node]) -> String {
+  if params.length() == 0 {
+    return "[]"
+  }
+  let mut result = "["
+  for i = 0; i < params.length(); i = i + 1 {
+    match params[i] {
+      Parameter(p) => {
+        result = result + type_to_runtime(p.type_annotation)
+      }
+      _ => {
+        result = result + "Object"
+      }
+    }
+    if i < params.length() - 1 {
+      result = result + ", "
+    }
+  }
+  result + "]"
+}
+
+///|
 /// Check if a class uses any decorators (class, member, or parameter)
 fn class_uses_decorators(cd : ClassDeclaration) -> Bool {
   // Check class decorators
@@ -562,6 +662,31 @@ fn get_member_name(member : Node) -> String? {
     GetAccessor(ga) => Some(ga.name)
     SetAccessor(sa) => Some(sa.name)
     _ => None
+  }
+}
+
+///|
+/// Get the design:type for a class member
+/// Methods and accessors are Function, properties use their type annotation
+fn get_member_design_type(member : Node) -> String {
+  match member {
+    MethodDeclaration(_) => "Function"
+    GetAccessor(_) => "Function"
+    SetAccessor(_) => "Function"
+    PropertyDeclaration(pd) => type_to_runtime(pd.type_annotation)
+    _ => "Object"
+  }
+}
+
+///|
+/// Get the return type for a class member (for design:returntype)
+fn get_member_return_type(member : Node) -> String {
+  match member {
+    MethodDeclaration(md) => type_to_runtime(md.return_type)
+    GetAccessor(ga) => type_to_runtime(ga.return_type)
+    SetAccessor(_) => "void 0" // Setters return void
+    PropertyDeclaration(_) => "void 0" // Properties don't have return type
+    _ => "void 0"
   }
 }
 
@@ -715,10 +840,12 @@ fn emit_class_declaration(
       result = result + "\n"
     }
 
-    // Emit constructor parameter decorators
+    // Emit constructor parameter decorators and metadata
+    let mut ctor_params : Array[Node] = []
     for class_member in cd.members {
       match class_member {
         ConstructorDeclaration(ctor) => {
+          ctor_params = ctor.parameters
           let params = ctor.parameters
           let mut param_decorator_emitted = false
           for param_index = 0; param_index < params.length(); param_index = param_index +
@@ -743,12 +870,19 @@ fn emit_class_declaration(
             }
           }
           if param_decorator_emitted {
-            result = result + "\n"
+            result = result + ","
           }
         }
         _ => ()
       }
     }
+
+    // Emit design:paramtypes metadata for constructor parameters
+    result = result + "\n" +
+      decorator_ctx.get_indent() +
+      "__metadata(\"design:paramtypes\", " +
+      get_param_types_runtime(ctor_params) +
+      ")\n"
 
     result = result + ctx.get_indent() + "], " + class_name + ")"
   }
@@ -778,10 +912,8 @@ fn emit_class_declaration(
               decorator_ctx.get_indent() +
               emit_decorator_expression(member_decorators[i], ctx)
             decorator_index = decorator_index + 1
-            // Check if there are more decorators coming (member or param)
-            if i < member_decorators.length() - 1 || has_param_decorators {
-              result = result + ","
-            }
+            // Always add comma since we have more items (param decorators or metadata)
+            result = result + ","
             result = result + "\n"
           }
 
@@ -810,8 +942,51 @@ fn emit_class_declaration(
             }
           }
           if param_decorator_emitted {
-            result = result + "\n"
+            result = result + ","
           }
+
+          // Emit design-time type metadata
+          // design:type - the type of the member
+          let design_type = get_member_design_type(class_member)
+          result = result + "\n" +
+            decorator_ctx.get_indent() +
+            "__metadata(\"design:type\", " +
+            design_type +
+            ")"
+
+          // design:paramtypes - for methods/accessors with parameters
+          match class_member {
+            MethodDeclaration(md) => {
+              result = result + ",\n" +
+                decorator_ctx.get_indent() +
+                "__metadata(\"design:paramtypes\", " +
+                get_param_types_runtime(md.parameters) +
+                ")"
+            }
+            SetAccessor(sa) => {
+              result = result + ",\n" +
+                decorator_ctx.get_indent() +
+                "__metadata(\"design:paramtypes\", " +
+                get_param_types_runtime([sa.parameter]) +
+                ")"
+            }
+            _ => ()
+          }
+
+          // design:returntype - for methods and getters
+          match class_member {
+            MethodDeclaration(_) | GetAccessor(_) => {
+              let return_type = get_member_return_type(class_member)
+              result = result + ",\n" +
+                decorator_ctx.get_indent() +
+                "__metadata(\"design:returntype\", " +
+                return_type +
+                ")"
+            }
+            _ => ()
+          }
+
+          result = result + "\n"
 
           result = result +
             ctx.get_indent() +

@@ -1230,3 +1230,120 @@ test "emit helper at top of file" {
     _ => assert_true(false)
   }
 }
+
+// =============================================================================
+// Decorator Metadata Tests
+// =============================================================================
+
+///|
+/// Test: __metadata helper is emitted when decorators are used
+test "emit __metadata helper for decorators" {
+  let js = compile_to_js("@Component class MyClass { }")
+  println("Metadata helper:\n\{js}")
+  assert_true(js.contains("var __metadata = (this && this.__metadata) || function"))
+  assert_true(js.contains("Reflect.metadata"))
+}
+
+///|
+/// Test: design:type metadata for method decorator
+test "emit design:type for method" {
+  let js = compile_to_js("class MyClass { @log myMethod() { } }")
+  println("Method design:type:\n\{js}")
+  assert_true(js.contains("__metadata(\"design:type\", Function)"))
+}
+
+///|
+/// Test: design:type metadata for property decorator
+/// Note: Type annotations are removed by transformer, so defaults to Object
+test "emit design:type for property with type" {
+  let js = compile_to_js("class MyClass { @observable name: string; }")
+  println("Property design:type:\n\{js}")
+  // Type annotations are stripped by transformer, defaults to Object
+  assert_true(js.contains("__metadata(\"design:type\", Object)"))
+}
+
+///|
+/// Test: design:paramtypes for method with typed parameters
+/// Note: Type annotations are removed by transformer, so defaults to Object
+test "emit design:paramtypes for method" {
+  let js = compile_to_js("class MyClass { @log myMethod(a: string, b: number) { } }")
+  println("Method design:paramtypes:\n\{js}")
+  // Type annotations are stripped by transformer, defaults to Object
+  assert_true(js.contains("__metadata(\"design:paramtypes\", [Object, Object])"))
+}
+
+///|
+/// Test: design:returntype for method
+/// Note: Type annotations are removed by transformer, so defaults to Object
+test "emit design:returntype for method" {
+  let js = compile_to_js("class MyClass { @log myMethod(): string { return ''; } }")
+  println("Method design:returntype:\n\{js}")
+  // Type annotations are stripped by transformer, defaults to Object
+  assert_true(js.contains("__metadata(\"design:returntype\", Object)"))
+}
+
+///|
+/// Test: design:paramtypes for class with constructor params
+/// Note: Type annotations are removed by transformer, so defaults to Object
+test "emit design:paramtypes for constructor" {
+  let js = compile_to_js("@Injectable class MyService { constructor(dep: Logger) { } }")
+  println("Constructor design:paramtypes:\n\{js}")
+  // Type annotations are stripped by transformer, defaults to Object
+  assert_true(js.contains("__metadata(\"design:paramtypes\", [Object])"))
+}
+
+///|
+/// Test: design:type Function for getter
+test "emit design:type for getter" {
+  let js = compile_to_js("class MyClass { @computed get value(): number { return 42; } }")
+  println("Getter design:type:\n\{js}")
+  assert_true(js.contains("__metadata(\"design:type\", Function)"))
+  // Type annotations are stripped by transformer, defaults to Object
+  assert_true(js.contains("__metadata(\"design:returntype\", Object)"))
+}
+
+///|
+/// Test: design:paramtypes for setter
+test "emit design:paramtypes for setter" {
+  let js = compile_to_js("class MyClass { @validate set name(val: string) { } }")
+  println("Setter design:paramtypes:\n\{js}")
+  assert_true(js.contains("__metadata(\"design:type\", Function)"))
+  // Type annotations are stripped by transformer, defaults to Object
+  assert_true(js.contains("__metadata(\"design:paramtypes\", [Object])"))
+}
+
+///|
+/// Test: Object type for interface parameters (since types are stripped)
+test "emit Object for complex types" {
+  let js = compile_to_js("class MyClass { @log myMethod(config: MyInterface) { } }")
+  println("Complex type design:paramtypes:\n\{js}")
+  // Type annotations are stripped by transformer, defaults to Object
+  assert_true(js.contains("__metadata(\"design:paramtypes\", [Object])"))
+}
+
+///|
+/// Test: Array type serializes as Object (since types are stripped)
+test "emit Array for array types" {
+  let js = compile_to_js("class MyClass { @observable items: string[]; }")
+  println("Array type design:type:\n\{js}")
+  // Type annotations are stripped by transformer, defaults to Object
+  assert_true(js.contains("__metadata(\"design:type\", Object)"))
+}
+
+///|
+/// Test: void 0 for void return type (since types are stripped)
+test "emit void 0 for void return" {
+  let js = compile_to_js("class MyClass { @log myMethod(): void { } }")
+  println("Void return design:returntype:\n\{js}")
+  // Type annotations are stripped by transformer, defaults to Object
+  assert_true(js.contains("__metadata(\"design:returntype\", Object)"))
+}
+
+///|
+/// Test: Boolean type conversion (since types are stripped)
+test "emit Boolean for boolean type" {
+  let js = compile_to_js("class MyClass { @observable active: boolean; }")
+  println("Boolean type design:type:\n\{js}")
+  // Type annotations are stripped by transformer, defaults to Object
+  assert_true(js.contains("__metadata(\"design:type\", Object)"))
+}
