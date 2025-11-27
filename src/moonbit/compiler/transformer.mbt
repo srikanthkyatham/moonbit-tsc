@@ -280,6 +280,7 @@ pub fn transform(node : Node, ctx : TransformerContext) -> Node {
       transform_element_access_expression(eae, ctx)
     ArrowFunction(af) => transform_arrow_function(af, ctx)
     FunctionExpression(fe) => transform_function_expression(fe, ctx)
+    ClassExpression(ce) => transform_class_expression(ce, ctx)
     ArrayLiteralExpression(ale) => transform_array_literal_expression(ale, ctx)
     ObjectLiteralExpression(ole) =>
       transform_object_literal_expression(ole, ctx)
@@ -518,6 +519,93 @@ fn transform_class_declaration(
   }
 
   ClassDeclaration({
+    name: match cd.name {
+      Some(n) => Some(transform(n, ctx))
+      None => None
+    },
+    type_parameters: [], // Remove type parameters
+    heritage_clauses: transform_heritage_clauses(cd.heritage_clauses, ctx),
+    members: transformed_members,
+    is_abstract: cd.is_abstract,
+    decorators: cd.decorators,
+    modifiers: cd.modifiers,
+    location: cd.location,
+  })
+}
+
+///|
+/// Transform class expression (same as class declaration but returns ClassExpression)
+fn transform_class_expression(
+  cd : ClassDeclaration,
+  ctx : TransformerContext,
+) -> Node {
+  // If class has decorators, use a context that preserves types for metadata
+  let has_class_decorators = cd.decorators.length() > 0
+  let member_ctx = ctx.with_decorated_class(has_class_decorators)
+
+  // First pass: find constructor and extract parameter properties
+  let param_properties : Array[(String, Array[Modifier], SourceLocation)] = []
+
+  for cmember in cd.members {
+    match cmember {
+      ConstructorDeclaration(ctor) => {
+        // Extract parameter properties (parameters with access modifiers)
+        for param in ctor.parameters {
+          match param {
+            Parameter(p) => {
+              if has_access_modifier(p.modifiers) {
+                match p.name {
+                  Identifier(id) =>
+                    param_properties.push((id.name, p.modifiers, p.location))
+                  _ => ()
+                }
+              }
+            }
+            _ => ()
+          }
+        }
+      }
+      _ => ()
+    }
+  }
+
+  // Transform all members
+  let transformed_members : Array[Node] = []
+
+  // Add generated property declarations for parameter properties
+  for prop in param_properties {
+    let (name, modifiers, location) = prop
+    transformed_members.push(
+      Node::PropertyDeclaration(PropertyDeclaration::{
+        name,
+        type_annotation: None, // Type is removed in JS output
+        initializer: None, // Will be assigned in constructor
+        is_optional: false,
+        decorators: [],
+        modifiers,
+        location,
+      }),
+    )
+  }
+
+  // Transform existing members
+  for cmember in cd.members {
+    match cmember {
+      ConstructorDeclaration(ctor) => {
+        // Transform constructor with parameter property assignments
+        let transformed = transform_constructor_with_param_properties(
+          ctor, param_properties, member_ctx,
+        )
+        transformed_members.push(transformed)
+      }
+      _ => {
+        let transformed = transform(cmember, member_ctx)
+        transformed_members.push(transformed)
+      }
+    }
+  }
+
+  ClassExpression({
     name: match cd.name {
       Some(n) => Some(transform(n, ctx))
       None => None

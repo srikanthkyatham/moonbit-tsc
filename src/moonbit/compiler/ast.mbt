@@ -51,6 +51,7 @@ pub enum Node {
   ElementAccessExpression(ElementAccessExpression)
   ArrowFunction(ArrowFunction)
   FunctionExpression(FunctionExpression)
+  ClassExpression(ClassDeclaration) // Class expression: const X = class { }
   ArrayLiteralExpression(ArrayLiteralExpression)
   ObjectLiteralExpression(ObjectLiteralExpression)
   ParenthesizedExpression(ParenthesizedExpression)
@@ -1468,6 +1469,7 @@ pub fn get_location(node : Node) -> SourceLocation {
     ElementAccessExpression(e) => e.location
     ArrowFunction(a) => a.location
     FunctionExpression(f) => f.location
+    ClassExpression(c) => c.location
     ArrayLiteralExpression(a) => a.location
     ObjectLiteralExpression(o) => o.location
     ParenthesizedExpression(p) => p.location

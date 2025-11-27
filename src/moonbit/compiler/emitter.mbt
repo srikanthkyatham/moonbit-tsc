@@ -154,6 +154,7 @@ pub fn emit(node : Node, ctx : EmitterContext) -> String {
     ElementAccessExpression(eae) => emit_element_access_expression(eae, ctx)
     ArrowFunction(af) => emit_arrow_function(af, ctx)
     FunctionExpression(fe) => emit_function_expression(fe, ctx)
+    ClassExpression(ce) => emit_class_expression(ce, ctx)
     ArrayLiteralExpression(ale) => emit_array_literal_expression(ale, ctx)
     ObjectLiteralExpression(ole) => emit_object_literal_expression(ole, ctx)
     ParenthesizedExpression(pe) => emit_parenthesized_expression(pe, ctx)
@@ -1031,6 +1032,44 @@ fn emit_class_declaration(
     }
   }
 
+  result
+}
+
+///|
+/// Emit class expression (e.g., class {} or class Foo {})
+fn emit_class_expression(cd : ClassDeclaration, ctx : EmitterContext) -> String {
+  let mut result = "class"
+
+  // Emit optional class name
+  match cd.name {
+    Some(Identifier(id)) => {
+      result = result + " " + id.name
+    }
+    _ => ()
+  }
+
+  // Emit heritage (extends only, implements removed by transformer)
+  for clause in cd.heritage_clauses {
+    if clause.kind == Extends {
+      result = result + " extends "
+      for i = 0; i < clause.types.length(); i = i + 1 {
+        result = result + emit(clause.types[i], ctx)
+        if i < clause.types.length() - 1 {
+          result = result + ", "
+        }
+      }
+    }
+  }
+
+  result = result + " {\n"
+  let inner_ctx = ctx.indent()
+  for class_member in cd.members {
+    let member_str = emit(class_member, inner_ctx)
+    if member_str.length() > 0 {
+      result = result + member_str + "\n"
+    }
+  }
+  result = result + ctx.get_indent() + "}"
   result
 }
 

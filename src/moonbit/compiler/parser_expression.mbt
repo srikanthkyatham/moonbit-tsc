@@ -915,6 +915,9 @@ fn parse_primary_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
       parse_function_expression_body(parser, name, false, start_loc)
     }
 
+    // Class expression (e.g., class {} or class Foo {})
+    KeywordClass(start_loc) => parse_class_expression(parser, start_loc)
+
     // JSX element or Type assertion with angle brackets (<Type>expr)
     LessThan(_) => {
       let start_loc = token.location()
@@ -1322,5 +1325,81 @@ fn parse_arrow_function_single_param(
       }
     }
     Err(parser) => Err(parser)
+  }
+}
+
+///|
+/// Parse class expression (e.g., class {} or class Foo {})
+fn parse_class_expression(
+  parser : Parser,
+  start_loc : SourceLocation,
+) -> Result[(Node, Parser), Parser] {
+  let parser = advance_parser(parser) // consume 'class'
+
+  // Parse optional class name
+  let (name, parser) = match current_token(parser) {
+    Identifier(n, loc) =>
+      (
+        Some(Node::Identifier(Identifier::{ name: n, location: loc })),
+        advance_parser(parser),
+      )
+    _ => (None, parser)
+  }
+
+  // Parse type parameters if present (e.g., class Box<T>)
+  let (type_parameters, parser) = match current_token(parser) {
+    LessThan(_) => parse_type_parameters(parser)
+    _ => ([], parser)
+  }
+
+  // Parse heritage clauses (extends, implements)
+  let (heritage_clauses, parser) = parse_heritage_clauses(parser)
+
+  // Parse class body
+  match current_token(parser) {
+    OpenBrace(_) => {
+      let parser = advance_parser(parser)
+      let (members, parser) = parse_class_members(parser)
+      match current_token(parser) {
+        CloseBrace(loc) => {
+          let parser = advance_parser(parser)
+          Ok(
+            (
+              Node::ClassExpression(ClassDeclaration::{
+                name,
+                type_parameters,
+                heritage_clauses,
+                members,
+                is_abstract: false,
+                decorators: [],
+                modifiers: [],
+                location: SourceLocation::new(
+                  start_loc.file_path,
+                  start_loc.start,
+                  loc.end,
+                ),
+              }),
+              parser,
+            ),
+          )
+        }
+        _ =>
+          Err(
+            add_error(
+              parser,
+              "Expected '}' after class body",
+              current_token(parser).location(),
+            ),
+          )
+      }
+    }
+    _ =>
+      Err(
+        add_error(
+          parser,
+          "Expected '{' after class name",
+          current_token(parser).location(),
+        ),
+      )
   }
 }

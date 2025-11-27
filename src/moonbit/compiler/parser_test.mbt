@@ -3510,6 +3510,117 @@ test "parse css tagged template" {
 }
 
 // ============================================================================
+// Class Expression Tests
+// ============================================================================
+
+test "parse anonymous class expression" {
+  let source = "const MyClass = class {}"
+  let tokens = tokens_from_source(source)
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        VariableStatement(vs) => {
+          match vs.declarations[0].initializer {
+            Some(ClassExpression(ce)) => {
+              match ce.name {
+                None => () // Expected: anonymous class
+                _ => assert_true(false)
+              }
+              assert_eq(ce.members.length(), 0)
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+test "parse named class expression" {
+  let source = "const MyClass = class Foo {}"
+  let tokens = tokens_from_source(source)
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        VariableStatement(vs) => {
+          match vs.declarations[0].initializer {
+            Some(ClassExpression(ce)) => {
+              match ce.name {
+                Some(Identifier(id)) => assert_eq(id.name, "Foo")
+                _ => assert_true(false)
+              }
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+test "parse class expression with extends" {
+  let source = "const MyClass = class extends Base {}"
+  let tokens = tokens_from_source(source)
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        VariableStatement(vs) => {
+          match vs.declarations[0].initializer {
+            Some(ClassExpression(ce)) => {
+              assert_eq(ce.heritage_clauses.length(), 1)
+              match ce.heritage_clauses[0].kind {
+                Extends => () // Expected: extends clause
+                _ => assert_true(false)
+              }
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+test "parse class expression with method" {
+  let source = "const MyClass = class { foo() { return 1; } }"
+  let tokens = tokens_from_source(source)
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        VariableStatement(vs) => {
+          match vs.declarations[0].initializer {
+            Some(ClassExpression(ce)) => {
+              assert_eq(ce.members.length(), 1)
+              match ce.members[0] {
+                MethodDeclaration(md) => assert_eq(md.name, "foo")
+                _ => assert_true(false)
+              }
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+// ============================================================================
 // Parser Error Code Tests
 // ============================================================================
 // Note: ParserErrorCode enum variants are tested internally in the parser module.
