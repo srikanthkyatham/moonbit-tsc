@@ -787,3 +787,145 @@ test "target older_than method" {
   // ESNext is not older than anything
   assert_false(esnext.older_than(es2020))
 }
+
+// ============================================================================
+// String Enum Transformation Tests
+// ============================================================================
+
+///|
+/// Test: Transform string enum preserves string values
+test "transform string enum preserves values" {
+  let source =
+    #|enum Color {
+    #|  Red = "RED",
+    #|  Green = "GREEN",
+    #|  Blue = "BLUE"
+    #|}
+  let stmts = parse_source(source)
+  let transformed = transform_stmt(stmts[0])
+  match transformed {
+    VariableStatement(vs) => {
+      assert_true(vs.is_const)
+      let decl = vs.declarations[0]
+      match decl.initializer {
+        Some(ObjectLiteralExpression(ole)) => {
+          assert_eq(ole.properties.length(), 3)
+          // Check that string values are preserved
+          match ole.properties[0] {
+            PropertyAssignment(name, value, _) => {
+              assert_eq(name, "Red")
+              match value {
+                StringLiteral(sl) => assert_eq(sl.value, "RED")
+                _ => assert_true(false)
+              }
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    _ => assert_true(false)
+  }
+}
+
+///|
+/// Test: Transform mixed numeric and string enum
+test "transform mixed enum with string and numeric values" {
+  let source =
+    #|enum Status {
+    #|  Pending = 0,
+    #|  Active = "ACTIVE",
+    #|  Done = 2
+    #|}
+  let stmts = parse_source(source)
+  let transformed = transform_stmt(stmts[0])
+  match transformed {
+    VariableStatement(vs) => {
+      let decl = vs.declarations[0]
+      match decl.initializer {
+        Some(ObjectLiteralExpression(ole)) => {
+          assert_eq(ole.properties.length(), 3)
+          // Check second property is string
+          match ole.properties[1] {
+            PropertyAssignment(name, value, _) => {
+              assert_eq(name, "Active")
+              match value {
+                StringLiteral(sl) => assert_eq(sl.value, "ACTIVE")
+                _ => assert_true(false)
+              }
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    _ => assert_true(false)
+  }
+}
+
+// ============================================================================
+// Nested Namespace Transformation Tests
+// ============================================================================
+
+///|
+/// Test: Transform nested namespace
+test "transform nested namespace preserves structure" {
+  let stmts = parse_source("namespace A.B { const x = 1; }")
+  let transformed = transform_stmt(stmts[0])
+  match transformed {
+    ModuleDeclaration(outer) => {
+      assert_eq(outer.name, "A")
+      match outer.body {
+        Some(ModuleDeclaration(inner)) => {
+          assert_eq(inner.name, "B")
+          match inner.body {
+            Some(BlockStatement(_)) => assert_true(true)
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    _ => assert_true(false)
+  }
+}
+
+// ============================================================================
+// Export Assignment Transformation Tests
+// ============================================================================
+
+///|
+/// Test: Transform export default expression
+test "transform export default expression" {
+  let stmts = parse_source("export default 42;")
+  let transformed = transform_stmt(stmts[0])
+  match transformed {
+    ExportAssignment(ea) => {
+      assert_false(ea.is_export_equals)
+      match ea.expression {
+        NumericLiteral(nl) => assert_eq(nl.value, "42")
+        _ => assert_true(false)
+      }
+    }
+    _ => assert_true(false)
+  }
+}
+
+///|
+/// Test: Transform export default with object literal
+test "transform export default object" {
+  let stmts = parse_source("export default { name: 'test' };")
+  let transformed = transform_stmt(stmts[0])
+  match transformed {
+    ExportAssignment(ea) => {
+      assert_false(ea.is_export_equals)
+      match ea.expression {
+        ObjectLiteralExpression(_) => assert_true(true)
+        _ => assert_true(false)
+      }
+    }
+    _ => assert_true(false)
+  }
+}

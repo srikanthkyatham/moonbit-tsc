@@ -2838,7 +2838,16 @@ fn parse_module_declaration(parser : Parser) -> Result[(Node, Parser), Parser] {
   // module Name { statements }
   let start_loc = current_token(parser).location()
   let parser = advance_parser(parser) // consume 'namespace' or 'module'
+  parse_module_declaration_body(parser, start_loc)
+}
 
+///|
+/// Parse the body of a module declaration (after the keyword)
+/// This handles dotted names like A.B.C
+fn parse_module_declaration_body(
+  parser : Parser,
+  start_loc : SourceLocation,
+) -> Result[(Node, Parser), Parser] {
   // Parse namespace/module name
   let (name, parser) = match current_token(parser) {
     Identifier(n, _) => (n, advance_parser(parser))
@@ -2878,9 +2887,10 @@ fn parse_module_declaration(parser : Parser) -> Result[(Node, Parser), Parser] {
         Err(p) => Err(p)
       }
     Dot(_) => {
-      // Dotted name like namespace A.B.C
+      // Dotted name like namespace A.B.C - recurse to parse B.C
       let parser = advance_parser(parser)
-      match parse_module_declaration(parser) {
+      let nested_start_loc = current_token(parser).location()
+      match parse_module_declaration_body(parser, nested_start_loc) {
         Ok((nested, parser)) => {
           let end_loc = get_location(nested)
           Ok(
