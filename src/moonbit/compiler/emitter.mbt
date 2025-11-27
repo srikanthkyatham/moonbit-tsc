@@ -435,6 +435,62 @@ fn emit_parameter(p : Parameter, ctx : EmitterContext) -> String {
 }
 
 ///|
+/// Emit a single decorator expression
+fn emit_decorator_expression(decorator : Node, ctx : EmitterContext) -> String {
+  match decorator {
+    Decorator(d) => emit(d.expression, ctx)
+    _ => ""
+  }
+}
+
+///|
+/// Check if a class has any decorators
+fn has_decorators(decorators : Array[Node]) -> Bool {
+  decorators.length() > 0
+}
+
+///|
+/// Get the name of a class member for decorator emission
+fn get_member_name(member : Node) -> String? {
+  match member {
+    MethodDeclaration(md) => Some(md.name)
+    PropertyDeclaration(pd) => Some(pd.name)
+    GetAccessor(ga) => Some(ga.name)
+    SetAccessor(sa) => Some(sa.name)
+    _ => None
+  }
+}
+
+///|
+/// Get decorators from a class member
+/// Note: Currently returns empty array as member decorators are not yet stored in AST.
+/// Member decorators would require AST changes to support.
+fn get_member_decorators(_member : Node) -> Array[Node] {
+  // Member decorators (method, property, accessor, parameter) are not currently
+  // stored in the AST. Only class-level decorators are supported for emission.
+  // To support member decorators, the AST structs would need to be updated to
+  // include a `decorators : Array[Node]` field on MethodDeclaration,
+  // PropertyDeclaration, GetAccessor, and SetAccessor.
+  []
+}
+
+///|
+/// Check if a member is static
+fn is_static_member(member : Node) -> Bool {
+  match member {
+    MethodDeclaration(md) =>
+      md.modifiers.iter().any(fn(m) { m == Modifier::Static })
+    PropertyDeclaration(pd) =>
+      pd.modifiers.iter().any(fn(m) { m == Modifier::Static })
+    GetAccessor(ga) =>
+      ga.modifiers.iter().any(fn(m) { m == Modifier::Static })
+    SetAccessor(sa) =>
+      sa.modifiers.iter().any(fn(m) { m == Modifier::Static })
+    _ => false
+  }
+}
+
+///|
 /// Emit class declaration
 fn emit_class_declaration(
   cd : ClassDeclaration,
@@ -445,21 +501,35 @@ fn emit_class_declaration(
     return ""
   }
 
+  let class_name = match cd.name {
+    Some(Identifier(id)) => id.name
+    _ => ""
+  }
+  let has_class_decorators = has_decorators(cd.decorators)
+  let export_prefix = get_export_prefix(cd.modifiers)
+
   // Add source mapping at the start of the class declaration
   ctx.add_mapping(cd.location.start.line, cd.location.start.column, None)
-  let export_prefix = get_export_prefix(cd.modifiers)
-  let mut result = ctx.get_indent() + export_prefix + "class "
-  match cd.name {
-    Some(Identifier(id)) => {
-      // Add mapping for class name
-      ctx.add_mapping(
-        id.location.start.line,
-        id.location.start.column,
-        Some(id.name),
-      )
-      result = result + id.name
+
+  let mut result = ctx.get_indent()
+
+  // If class has decorators, use let ClassName = class ClassName {...} pattern
+  if has_class_decorators && class_name.length() > 0 {
+    result = result + export_prefix + "let " + class_name + " = class " + class_name
+  } else {
+    result = result + export_prefix + "class "
+    match cd.name {
+      Some(Identifier(id)) => {
+        // Add mapping for class name
+        ctx.add_mapping(
+          id.location.start.line,
+          id.location.start.column,
+          Some(id.name),
+        )
+        result = result + id.name
+      }
+      _ => ()
     }
-    _ => ()
   }
 
   // Emit heritage (extends only, implements removed by transformer)
@@ -483,6 +553,60 @@ fn emit_class_declaration(
     }
   }
   result = result + ctx.get_indent() + "}"
+
+  // If class has decorators, emit decorator application
+  if has_class_decorators && class_name.length() > 0 {
+    result = result + ";\n"
+    result = result + ctx.get_indent() + class_name + " = __decorate([\n"
+    let decorator_ctx = ctx.indent()
+    for i = 0; i < cd.decorators.length(); i = i + 1 {
+      result = result +
+        decorator_ctx.get_indent() +
+        emit_decorator_expression(cd.decorators[i], ctx)
+      if i < cd.decorators.length() - 1 {
+        result = result + ","
+      }
+      result = result + "\n"
+    }
+    result = result + ctx.get_indent() + "], " + class_name + ")"
+  }
+
+  // Emit member decorators
+  for class_member in cd.members {
+    let member_decorators = get_member_decorators(class_member)
+    if member_decorators.length() > 0 {
+      match get_member_name(class_member) {
+        Some(member_name) => {
+          let target = if is_static_member(class_member) {
+            class_name
+          } else {
+            class_name + ".prototype"
+          }
+          result = result + ";\n"
+          result = result + ctx.get_indent() + "__decorate([\n"
+          let decorator_ctx = ctx.indent()
+          for i = 0; i < member_decorators.length(); i = i + 1 {
+            result = result +
+              decorator_ctx.get_indent() +
+              emit_decorator_expression(member_decorators[i], ctx)
+            if i < member_decorators.length() - 1 {
+              result = result + ","
+            }
+            result = result + "\n"
+          }
+          result = result +
+            ctx.get_indent() +
+            "], " +
+            target +
+            ", \"" +
+            member_name +
+            "\", null)"
+        }
+        None => ()
+      }
+    }
+  }
+
   result
 }
 

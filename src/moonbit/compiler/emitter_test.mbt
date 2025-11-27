@@ -801,3 +801,145 @@ test "emit namespace declaration" {
   assert_true(js.contains("var MyLib;"))
   assert_true(js.contains("MyLib.VERSION"))
 }
+
+// ============================================================================
+// Decorator Tests
+// ============================================================================
+
+///|
+/// Test: Emit class with single decorator
+test "emit class with single decorator" {
+  let js = compile_to_js("@sealed class MyClass { }")
+  println("Generated JS:\n\{js}")
+  // Decorated class should use let ClassName = class ClassName pattern
+  assert_true(js.contains("let MyClass = class MyClass"))
+  // Decorator call should be emitted after class definition
+  assert_true(js.contains("__decorate"))
+  assert_true(js.contains("sealed"))
+  assert_true(js.contains("], MyClass)"))
+}
+
+///|
+/// Test: Emit class with decorator factory (with arguments)
+test "emit class with decorator factory" {
+  let js = compile_to_js("@Component({ selector: 'app' }) class AppComponent { }")
+  println("Decorator factory JS:\n\{js}")
+  // Decorated class should use let ClassName = class ClassName pattern
+  assert_true(js.contains("let AppComponent = class AppComponent"))
+  // Decorator call should include the factory call
+  assert_true(js.contains("__decorate"))
+  assert_true(js.contains("Component"))
+}
+
+///|
+/// Test: Emit class with multiple decorators
+test "emit class with multiple decorators" {
+  let js = compile_to_js("@first @second @third class MultiDecorated { }")
+  println("Multiple decorators JS:\n\{js}")
+  // Should emit let ClassName = class ClassName pattern
+  assert_true(js.contains("let MultiDecorated = class MultiDecorated"))
+  // All decorators should be in the __decorate call
+  assert_true(js.contains("__decorate"))
+  assert_true(js.contains("first"))
+  assert_true(js.contains("second"))
+  assert_true(js.contains("third"))
+}
+
+///|
+/// Test: Emit class without decorators still works normally
+test "emit class without decorators unchanged" {
+  let js = compile_to_js("class NormalClass { constructor() { } }")
+  // Regular class should not use let = pattern
+  assert_true(js.contains("class NormalClass"))
+  assert_true(not(js.contains("let NormalClass = class")))
+  // Should not have __decorate
+  assert_true(not(js.contains("__decorate")))
+}
+
+///|
+/// Test: Emit decorated class with class body
+test "emit decorated class with members" {
+  let js = compile_to_js("@injectable class Service { name = 'test'; getValue() { return 42; } }")
+  println("Decorated class with members:\n\{js}")
+  assert_true(js.contains("let Service = class Service"))
+  assert_true(js.contains("__decorate"))
+  assert_true(js.contains("injectable"))
+  // Class body should still have members
+  assert_true(js.contains("name = \"test\""))
+  assert_true(js.contains("getValue()"))
+}
+
+///|
+/// Test: Emit decorator with property access (e.g., @Ng.Component)
+test "emit decorator with property access" {
+  let js = compile_to_js("@Ng.Component class MyComponent { }")
+  println("Decorator with property access:\n\{js}")
+  assert_true(js.contains("let MyComponent = class MyComponent"))
+  assert_true(js.contains("__decorate"))
+  assert_true(js.contains("Ng.Component"))
+}
+
+///|
+/// Test: Emit decorator factory with multiple arguments
+test "emit decorator factory with multiple args" {
+  let js = compile_to_js("@define('name', { value: 123 }) class Config { }")
+  println("Decorator factory with multiple args:\n\{js}")
+  assert_true(js.contains("let Config = class Config"))
+  assert_true(js.contains("__decorate"))
+  assert_true(js.contains("define"))
+}
+
+///|
+/// Test: Emit export decorated class
+test "emit export decorated class" {
+  let js = compile_to_js("export @logged class ExportedClass { }")
+  println("Export decorated class:\n\{js}")
+  // Should have export and decoration
+  assert_true(js.contains("export"))
+  assert_true(js.contains("__decorate"))
+  assert_true(js.contains("logged"))
+}
+
+///|
+/// Test: Emit decorated class with constructor
+test "emit decorated class with constructor" {
+  let js = compile_to_js("@singleton class Database { constructor(url) { this.url = url; } }")
+  println("Decorated class with constructor:\n\{js}")
+  assert_true(js.contains("let Database = class Database"))
+  assert_true(js.contains("constructor(url)"))
+  assert_true(js.contains("this.url = url"))
+  assert_true(js.contains("__decorate"))
+  assert_true(js.contains("singleton"))
+}
+
+///|
+/// Test: Emit decorated abstract class
+test "emit decorated abstract class" {
+  let js = compile_to_js("@base abstract class BaseEntity { }")
+  println("Decorated abstract class:\n\{js}")
+  // Abstract keyword is removed in JS output, but decoration should work
+  assert_true(js.contains("let BaseEntity = class BaseEntity"))
+  assert_true(js.contains("__decorate"))
+  assert_true(js.contains("base"))
+}
+
+///|
+/// Test: Emit decorator with arrow function argument
+test "emit decorator with arrow function arg" {
+  let js = compile_to_js("@filter(x => x > 0) class PositiveFilter { }")
+  println("Decorator with arrow function:\n\{js}")
+  assert_true(js.contains("let PositiveFilter = class PositiveFilter"))
+  assert_true(js.contains("__decorate"))
+  assert_true(js.contains("filter"))
+}
+
+///|
+/// Test: Emit multiple decorator factories
+test "emit multiple decorator factories" {
+  let js = compile_to_js("@Module({ imports: [] }) @Controller('/api') class ApiModule { }")
+  println("Multiple decorator factories:\n\{js}")
+  assert_true(js.contains("let ApiModule = class ApiModule"))
+  assert_true(js.contains("__decorate"))
+  assert_true(js.contains("Module"))
+  assert_true(js.contains("Controller"))
+}
