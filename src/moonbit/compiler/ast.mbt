@@ -106,6 +106,7 @@ pub enum Node {
   ConstructorDeclaration(ConstructorDeclaration)
   GetAccessor(GetAccessor)
   SetAccessor(SetAccessor)
+  StaticBlock(StaticBlock)
   Decorator(Decorator)
 
   // JSX
@@ -1030,6 +1031,14 @@ pub struct SetAccessor {
 } derive(Show)
 
 ///|
+/// Static initialization block (ES2022)
+/// static { ... }
+pub struct StaticBlock {
+  body : Node // BlockStatement
+  location : SourceLocation
+} derive(Show)
+
+///|
 /// Decorator (@decorator or @decorator(args))
 pub struct Decorator {
   expression : Node // The decorator expression (identifier or call expression)
@@ -1489,6 +1498,7 @@ pub fn get_location(node : Node) -> SourceLocation {
     ConstructorDeclaration(c) => c.location
     GetAccessor(g) => g.location
     SetAccessor(s) => s.location
+    StaticBlock(sb) => sb.location
     Decorator(d) => d.location
     JsxElement(j) => j.location
     JsxSelfClosingElement(j) => j.location

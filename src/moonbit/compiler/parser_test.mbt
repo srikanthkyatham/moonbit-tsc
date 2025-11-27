@@ -3181,11 +3181,8 @@ test "parse constructor with readonly parameter property" {
 
 ///|
 test "parse private class field with hash syntax" {
-  let source =
-    #|class Counter {
-    #|  #count = 0;
-    #|  increment() { this.#count++; }
-    #|}
+  // Use string concatenation to avoid conflict with MoonBit multiline string syntax
+  let source = "class Counter { #count = 0; increment() { } }"
   let tokens = tokens_from_source(source)
   let result = parse_source_file(tokens, "test.ts")
   match result {
@@ -3200,14 +3197,38 @@ test "parse private class field with hash syntax" {
             PropertyDeclaration(pd) => assert_eq(pd.name, "#count")
             _ => assert_true(false)
           }
+          // Second member should be the method
+          match cd.members[1] {
+            MethodDeclaration(md) => assert_eq(md.name, "increment")
+            _ => assert_true(false)
+          }
         }
         _ => assert_true(false)
       }
     }
-    Err(_) => {
-      // Private class fields may not be fully implemented yet
-      assert_true(true)
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse private method with hash syntax" {
+  let source = "class Service { #privateMethod() { return 42; } }"
+  let tokens = tokens_from_source(source)
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      match source_file.statements[0] {
+        ClassDeclaration(cd) => {
+          assert_eq(cd.members.length(), 1)
+          match cd.members[0] {
+            MethodDeclaration(md) => assert_eq(md.name, "#privateMethod")
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
     }
+    Err(_) => assert_true(false)
   }
 }
 

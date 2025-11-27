@@ -217,6 +217,7 @@ pub fn emit(node : Node, ctx : EmitterContext) -> String {
     ConstructorDeclaration(cd) => emit_constructor_declaration(cd, ctx)
     GetAccessor(ga) => emit_get_accessor(ga, ctx)
     SetAccessor(sa) => emit_set_accessor(sa, ctx)
+    StaticBlock(sb) => emit_static_block(sb, ctx)
     Decorator(_) => "" // Decorators are handled separately
     ModuleDeclaration(md) => emit_module_declaration(md, ctx)
 
@@ -1337,6 +1338,14 @@ fn emit_set_accessor(sa : SetAccessor, ctx : EmitterContext) -> String {
     }
     None => result = result + ";"
   }
+  result
+}
+
+///|
+/// Emit static block
+fn emit_static_block(sb : StaticBlock, ctx : EmitterContext) -> String {
+  let mut result = ctx.get_indent() + "static "
+  result = result + emit(sb.body, ctx)
   result
 }
 

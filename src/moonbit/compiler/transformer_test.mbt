@@ -929,3 +929,82 @@ test "transform export default object" {
     _ => assert_true(false)
   }
 }
+
+// ============================================================================
+// Parameter Properties Transformation Tests
+// ============================================================================
+
+///|
+/// Test: Transform class with parameter properties generates property declarations
+test "transform parameter properties generates properties" {
+  let source =
+    #|class Person {
+    #|  constructor(public name: string, private age: number) {}
+    #|}
+  let stmts = parse_source(source)
+  let transformed = transform_stmt(stmts[0])
+  match transformed {
+    ClassDeclaration(cd) => {
+      // Should have 3 members: 2 properties + 1 constructor
+      assert_eq(cd.members.length(), 3)
+      // First two should be property declarations
+      match cd.members[0] {
+        PropertyDeclaration(pd) => assert_eq(pd.name, "name")
+        _ => assert_true(false)
+      }
+      match cd.members[1] {
+        PropertyDeclaration(pd) => assert_eq(pd.name, "age")
+        _ => assert_true(false)
+      }
+      // Third should be constructor
+      match cd.members[2] {
+        ConstructorDeclaration(ctor) => {
+          // Constructor should have parameters without access modifiers
+          assert_eq(ctor.parameters.length(), 2)
+          // Body should contain assignments
+          match ctor.body {
+            Some(BlockStatement(block)) => {
+              // First 2 statements should be assignments
+              assert_true(block.statements.length() >= 2)
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    _ => assert_true(false)
+  }
+}
+
+///|
+/// Test: Transform readonly parameter property
+test "transform readonly parameter property" {
+  let source =
+    #|class Config {
+    #|  constructor(readonly value: number) {}
+    #|}
+  let stmts = parse_source(source)
+  let transformed = transform_stmt(stmts[0])
+  match transformed {
+    ClassDeclaration(cd) => {
+      // Should have 2 members: 1 property + 1 constructor
+      assert_eq(cd.members.length(), 2)
+      match cd.members[0] {
+        PropertyDeclaration(pd) => {
+          assert_eq(pd.name, "value")
+          // Should have readonly modifier
+          let has_readonly = pd.modifiers.iter().any(fn(m) {
+            match m {
+              Readonly => true
+              _ => false
+            }
+          })
+          assert_true(has_readonly)
+        }
+        _ => assert_true(false)
+      }
+    }
+    _ => assert_true(false)
+  }
+}

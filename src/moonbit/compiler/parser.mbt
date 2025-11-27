@@ -1549,11 +1549,27 @@ fn parse_class_member_with_decorators(
   match current_token(parser) {
     CloseBrace(_) | EOF(_) => (acc, parser)
 
-    // Static modifier
-    KeywordStatic(_) => {
+    // Static modifier or static block
+    KeywordStatic(start_loc) => {
       let parser = advance_parser(parser)
-      // Now expect an identifier for property or method name
+      // Check for static block: static { ... }
       match current_token(parser) {
+        // Static initialization block
+        OpenBrace(_) => {
+          match parse_block_statement(parser) {
+            Ok((body, parser)) => {
+              acc.push(
+                Node::StaticBlock(StaticBlock::{
+                  body,
+                  location: start_loc,
+                }),
+              )
+              parse_class_members_aux(parser, acc)
+            }
+            Err(p) => parse_class_members_aux(p, acc)
+          }
+        }
+        // Static member with identifier
         Identifier(name, loc) => {
           let parser = advance_parser(parser)
           match current_token(parser) {
@@ -1926,6 +1942,99 @@ fn parse_class_member_with_decorators(
         }
 
         // Property with initializer or type annotation
+        _ => {
+          // Parse optional type annotation
+          let (type_annotation, parser) = match current_token(parser) {
+            Colon(_) => {
+              let parser = advance_parser(parser)
+              match parse_type(parser) {
+                Ok((ty, p)) => (Some(ty), p)
+                Err(p) => (None, p)
+              }
+            }
+            _ => (None, parser)
+          }
+
+          // Parse optional initializer
+          let (initializer, parser) = match current_token(parser) {
+            Equals(_) => {
+              let parser = advance_parser(parser)
+              match parse_assignment_expression(parser) {
+                Ok((expr, p)) => (Some(expr), p)
+                Err(p) => (None, p)
+              }
+            }
+            _ => (None, parser)
+          }
+
+          // Consume optional semicolon
+          let parser = match current_token(parser) {
+            Semicolon(_) => advance_parser(parser)
+            _ => parser
+          }
+          acc.push(
+            Node::PropertyDeclaration(PropertyDeclaration::{
+              name,
+              type_annotation,
+              initializer,
+              is_optional: false,
+              decorators,
+              modifiers: [],
+              location: loc,
+            }),
+          )
+          parse_class_members_aux(parser, acc)
+        }
+      }
+    }
+
+    // Private class field with # syntax (ES2022)
+    PrivateIdentifier(name, loc) => {
+      let parser = advance_parser(parser)
+      match current_token(parser) {
+        // Private method
+        OpenParen(_) => {
+          let parser = advance_parser(parser)
+          let (parameters, parser) = parse_parameter_list(parser)
+
+          // Parse optional return type
+          let (return_type, parser) = match current_token(parser) {
+            Colon(_) => {
+              let parser = advance_parser(parser)
+              match parse_type(parser) {
+                Ok((ty, p)) => (Some(ty), p)
+                Err(p) => (None, p)
+              }
+            }
+            _ => (None, parser)
+          }
+          let (body, parser) = match current_token(parser) {
+            OpenBrace(_) =>
+              match parse_block_statement(parser) {
+                Ok((b, p)) => (Some(b), p)
+                Err(p) => (None, p)
+              }
+            _ => (None, parser)
+          }
+          acc.push(
+            Node::MethodDeclaration(MethodDeclaration::{
+              name,
+              type_parameters: [],
+              parameters,
+              return_type,
+              body,
+              decorators,
+              modifiers: [],
+              is_async: false,
+              is_generator: false,
+              is_optional: false,
+              location: loc,
+            }),
+          )
+          parse_class_members_aux(parser, acc)
+        }
+
+        // Private property with initializer or type annotation
         _ => {
           // Parse optional type annotation
           let (type_annotation, parser) = match current_token(parser) {

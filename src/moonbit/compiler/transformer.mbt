@@ -341,6 +341,12 @@ pub fn transform(node : Node, ctx : TransformerContext) -> Node {
     ConstructorDeclaration(cd) => transform_constructor_declaration(cd, ctx)
     GetAccessor(ga) => transform_get_accessor(ga, ctx)
     SetAccessor(sa) => transform_set_accessor(sa, ctx)
+    StaticBlock(sb) =>
+      // Transform the body of the static block
+      StaticBlock(StaticBlock::{
+        body: transform(sb.body, ctx),
+        location: sb.location,
+      })
     Decorator(d) => Decorator(d) // Keep decorators as-is
 
     // Module declaration
@@ -438,7 +444,7 @@ fn transform_function_declaration(
 }
 
 ///|
-/// Transform class declaration (remove type annotations)
+/// Transform class declaration (remove type annotations, handle parameter properties)
 fn transform_class_declaration(
   cd : ClassDeclaration,
   ctx : TransformerContext,
@@ -447,11 +453,68 @@ fn transform_class_declaration(
   let has_class_decorators = cd.decorators.length() > 0
   let member_ctx = ctx.with_decorated_class(has_class_decorators)
 
-  let transformed_members : Array[Node] = []
+  // First pass: find constructor and extract parameter properties
+  let param_properties : Array[(String, Array[Modifier], SourceLocation)] = []
+
   for cmember in cd.members {
-    let transformed = transform(cmember, member_ctx)
-    transformed_members.push(transformed)
+    match cmember {
+      ConstructorDeclaration(ctor) => {
+        // Extract parameter properties (parameters with access modifiers)
+        for param in ctor.parameters {
+          match param {
+            Parameter(p) => {
+              if has_access_modifier(p.modifiers) {
+                match p.name {
+                  Identifier(id) =>
+                    param_properties.push((id.name, p.modifiers, p.location))
+                  _ => ()
+                }
+              }
+            }
+            _ => ()
+          }
+        }
+      }
+      _ => ()
+    }
   }
+
+  // Transform all members
+  let transformed_members : Array[Node] = []
+
+  // Add generated property declarations for parameter properties
+  for prop in param_properties {
+    let (name, modifiers, location) = prop
+    transformed_members.push(
+      Node::PropertyDeclaration(PropertyDeclaration::{
+        name,
+        type_annotation: None, // Type is removed in JS output
+        initializer: None, // Will be assigned in constructor
+        is_optional: false,
+        decorators: [],
+        modifiers,
+        location,
+      }),
+    )
+  }
+
+  // Transform existing members
+  for cmember in cd.members {
+    match cmember {
+      ConstructorDeclaration(ctor) => {
+        // Transform constructor with parameter property assignments
+        let transformed = transform_constructor_with_param_properties(
+          ctor, param_properties, member_ctx,
+        )
+        transformed_members.push(transformed)
+      }
+      _ => {
+        let transformed = transform(cmember, member_ctx)
+        transformed_members.push(transformed)
+      }
+    }
+  }
+
   ClassDeclaration({
     name: match cd.name {
       Some(n) => Some(transform(n, ctx))
@@ -464,6 +527,139 @@ fn transform_class_declaration(
     decorators: cd.decorators,
     modifiers: cd.modifiers,
     location: cd.location,
+  })
+}
+
+///|
+/// Check if a parameter has an access modifier (public, private, protected, readonly)
+fn has_access_modifier(modifiers : Array[Modifier]) -> Bool {
+  for m in modifiers {
+    match m {
+      Public | Private | Protected | Readonly => return true
+      _ => ()
+    }
+  }
+  false
+}
+
+///|
+/// Transform constructor with parameter property assignments
+fn transform_constructor_with_param_properties(
+  ctor : ConstructorDeclaration,
+  param_properties : Array[(String, Array[Modifier], SourceLocation)],
+  ctx : TransformerContext,
+) -> Node {
+  // Generate this.x = x assignments for parameter properties
+  let assignments : Array[Node] = []
+  for prop in param_properties {
+    let (name, _, location) = prop
+    // Create: this.name = name;
+    let assignment = Node::ExpressionStatement(ExpressionStatement::{
+      expression: Node::BinaryExpression(BinaryExpression::{
+        left: Node::PropertyAccessExpression(PropertyAccessExpression::{
+          expression: Node::ThisExpression(ThisExpression::{ location }),
+          name,
+          location,
+        }),
+        operator: BinaryOperator::Assign,
+        right: Node::Identifier(Identifier::{ name, location }),
+        location,
+      }),
+      location,
+    })
+    assignments.push(assignment)
+  }
+
+  // Check if we should preserve type annotations (for decorator metadata)
+  let mut has_param_decorators = false
+  for param in ctor.parameters {
+    match param {
+      Parameter(p) =>
+        if p.decorators.length() > 0 {
+          has_param_decorators = true
+          break
+        }
+      _ => ()
+    }
+  }
+  let preserve_types = ctor.decorators.length() > 0 ||
+    has_param_decorators ||
+    ctx.in_decorated_class
+
+  // Transform parameters - remove access modifiers from parameter properties
+  let transformed_params : Array[Node] = []
+  for param in ctor.parameters {
+    match param {
+      Parameter(p) => {
+        // Remove access modifiers from parameter properties
+        let new_modifiers : Array[Modifier] = []
+        for m in p.modifiers {
+          match m {
+            Public | Private | Protected | Readonly => () // Skip access modifiers
+            _ => new_modifiers.push(m)
+          }
+        }
+        transformed_params.push(
+          Node::Parameter(Parameter::{
+            name: transform(p.name, ctx),
+            type_annotation: if preserve_types { p.type_annotation } else { None },
+            initializer: match p.initializer {
+              Some(init) => Some(transform(init, ctx))
+              None => None
+            },
+            is_optional: p.is_optional,
+            is_rest: p.is_rest,
+            decorators: p.decorators,
+            modifiers: new_modifiers,
+            location: p.location,
+          }),
+        )
+      }
+      _ => transformed_params.push(transform(param, ctx))
+    }
+  }
+
+  // Transform body and prepend assignments
+  let transformed_body : Node? = match ctor.body {
+    Some(body) =>
+      match body {
+        BlockStatement(block) => {
+          // Prepend assignments to existing statements
+          let new_statements : Array[Node] = []
+          for a in assignments {
+            new_statements.push(a)
+          }
+          for stmt in block.statements {
+            new_statements.push(transform(stmt, ctx))
+          }
+          Some(
+            Node::BlockStatement(BlockStatement::{
+              statements: new_statements,
+              location: block.location,
+            }),
+          )
+        }
+        _ => Some(transform(body, ctx))
+      }
+    None =>
+      // If no body but we have assignments, create a body
+      if assignments.length() > 0 {
+        Some(
+          Node::BlockStatement(BlockStatement::{
+            statements: assignments,
+            location: ctor.location,
+          }),
+        )
+      } else {
+        None
+      }
+  }
+
+  ConstructorDeclaration({
+    parameters: transformed_params,
+    body: transformed_body,
+    decorators: ctor.decorators,
+    location: ctor.location,
   })
 }
 
