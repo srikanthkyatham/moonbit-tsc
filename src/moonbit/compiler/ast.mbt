@@ -55,6 +55,7 @@ pub enum Node {
   ObjectLiteralExpression(ObjectLiteralExpression)
   ParenthesizedExpression(ParenthesizedExpression)
   TemplateExpression(TemplateExpression)
+  TaggedTemplateExpression(TaggedTemplateExpression) // Tagged template: tag`template`
   AsExpression(AsExpression)
   SatisfiesExpression(SatisfiesExpression)
   TypeAssertionExpression(TypeAssertionExpression)
@@ -642,6 +643,14 @@ pub struct TemplateExpression {
 pub struct TemplateSpan {
   expression : Node
   literal : String
+  location : SourceLocation
+} derive(Show)
+
+///|
+/// Tagged template expression: tag`template`
+pub struct TaggedTemplateExpression {
+  tag : Node // The tag expression (e.g., html, sql, or any expression)
+  template : Node // The template literal (TemplateExpression)
   location : SourceLocation
 } derive(Show)
 
@@ -1463,6 +1472,7 @@ pub fn get_location(node : Node) -> SourceLocation {
     ObjectLiteralExpression(o) => o.location
     ParenthesizedExpression(p) => p.location
     TemplateExpression(t) => t.location
+    TaggedTemplateExpression(tte) => tte.location
     AsExpression(a) => a.location
     SatisfiesExpression(s) => s.location
     TypeAssertionExpression(t) => t.location

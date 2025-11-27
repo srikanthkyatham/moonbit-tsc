@@ -285,6 +285,7 @@ pub fn transform(node : Node, ctx : TransformerContext) -> Node {
       transform_object_literal_expression(ole, ctx)
     ParenthesizedExpression(pe) => transform_parenthesized_expression(pe, ctx)
     TemplateExpression(te) => transform_template_expression(te, ctx)
+    TaggedTemplateExpression(tte) => transform_tagged_template_expression(tte, ctx)
 
     // Type assertions - remove them, keep only the expression
     AsExpression(ae) => transform(ae.expression, ctx)
@@ -1436,6 +1437,22 @@ fn transform_template_expression(
       location: te.location,
     })
   }
+}
+
+///|
+/// Transform tagged template expression: tag`template`
+fn transform_tagged_template_expression(
+  tte : TaggedTemplateExpression,
+  ctx : TransformerContext,
+) -> Node {
+  // Transform both the tag and the template
+  let transformed_tag = transform(tte.tag, ctx)
+  let transformed_template = transform(tte.template, ctx)
+  TaggedTemplateExpression({
+    tag: transformed_tag,
+    template: transformed_template,
+    location: tte.location,
+  })
 }
 
 ///|

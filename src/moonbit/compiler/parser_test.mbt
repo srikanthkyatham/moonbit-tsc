@@ -3384,6 +3384,132 @@ test "parse dynamic import with template literal" {
 }
 
 // ============================================================================
+// Tagged Template Literal Tests
+// ============================================================================
+
+///|
+test "parse simple tagged template literal" {
+  let source = "html`<div>Hello</div>`"
+  let tokens = tokens_from_source(source)
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        ExpressionStatement(es) => {
+          match es.expression {
+            TaggedTemplateExpression(tte) => {
+              match tte.tag {
+                Identifier(id) => assert_eq(id.name, "html")
+                _ => assert_true(false)
+              }
+              match tte.template {
+                TemplateExpression(te) => {
+                  assert_eq(te.head, "<div>Hello</div>")
+                  assert_eq(te.template_spans.length(), 0)
+                }
+                _ => assert_true(false)
+              }
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse tagged template with interpolation" {
+  let source = "sql`SELECT * FROM ${table}`"
+  let tokens = tokens_from_source(source)
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        ExpressionStatement(es) => {
+          match es.expression {
+            TaggedTemplateExpression(tte) => {
+              match tte.tag {
+                Identifier(id) => assert_eq(id.name, "sql")
+                _ => assert_true(false)
+              }
+              match tte.template {
+                TemplateExpression(te) => {
+                  assert_eq(te.head, "SELECT * FROM ")
+                  assert_eq(te.template_spans.length(), 1)
+                }
+                _ => assert_true(false)
+              }
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse tagged template with property access tag" {
+  let source = "String.raw`line1\\nline2`"
+  let tokens = tokens_from_source(source)
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        ExpressionStatement(es) => {
+          match es.expression {
+            TaggedTemplateExpression(tte) => {
+              match tte.tag {
+                PropertyAccessExpression(_) => assert_true(true)
+                _ => assert_true(false)
+              }
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse css tagged template" {
+  let source = "const styles = css`color: red;`"
+  let tokens = tokens_from_source(source)
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        VariableStatement(vs) => {
+          match vs.declarations[0].initializer {
+            Some(TaggedTemplateExpression(tte)) => {
+              match tte.tag {
+                Identifier(id) => assert_eq(id.name, "css")
+                _ => assert_true(false)
+              }
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+// ============================================================================
 // Parser Error Code Tests
 // ============================================================================
 // Note: ParserErrorCode enum variants are tested internally in the parser module.

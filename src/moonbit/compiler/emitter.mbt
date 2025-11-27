@@ -158,6 +158,7 @@ pub fn emit(node : Node, ctx : EmitterContext) -> String {
     ObjectLiteralExpression(ole) => emit_object_literal_expression(ole, ctx)
     ParenthesizedExpression(pe) => emit_parenthesized_expression(pe, ctx)
     TemplateExpression(te) => emit_template_expression(te, ctx)
+    TaggedTemplateExpression(tte) => emit_tagged_template_expression(tte, ctx)
     AsExpression(ae) => emit(ae.expression, ctx) // Unwrap type assertion
     TypeAssertionExpression(tae) => emit(tae.expression, ctx) // Unwrap
     NonNullExpression(nne) => emit(nne.expression, ctx) // Unwrap
@@ -2021,6 +2022,16 @@ fn emit_template_expression(
   }
   result = result + "`"
   result
+}
+
+///|
+/// Emit tagged template expression: tag`template`
+fn emit_tagged_template_expression(
+  tte : TaggedTemplateExpression,
+  ctx : EmitterContext,
+) -> String {
+  // Emit the tag followed by the template literal
+  emit(tte.tag, ctx) + emit(tte.template, ctx)
 }
 
 ///|

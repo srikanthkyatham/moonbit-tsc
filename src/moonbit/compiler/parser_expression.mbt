@@ -520,6 +520,94 @@ fn parse_postfix_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
           Err(p) => return Err(p)
         }
       }
+
+      // Tagged template literal: tag`template` or tag`head${expr}tail`
+      TemplateLiteral(value, loc) => {
+        let start_loc = get_location(left)
+        parser = advance_parser(parser)
+        let template = Node::TemplateExpression(TemplateExpression::{
+          head: value,
+          template_spans: [],
+          location: loc,
+        })
+        left = Node::TaggedTemplateExpression(TaggedTemplateExpression::{
+          tag: left,
+          template,
+          location: start_loc,
+        })
+      }
+
+      // Tagged template with interpolation: tag`head${expr}...`
+      TemplateHead(head, loc) => {
+        let start_loc = get_location(left)
+        parser = advance_parser(parser)
+        let template_spans : Array[TemplateSpan] = []
+        let mut current_parser = parser
+        while true {
+          // Parse the interpolated expression
+          match parse_expression(current_parser) {
+            Ok((expr, p)) => {
+              current_parser = p
+              // Expect CloseBrace
+              match current_token(current_parser) {
+                CloseBrace(_) => {
+                  current_parser = advance_parser(current_parser)
+                  // Check for TemplateTail or TemplateMiddle
+                  match current_token(current_parser) {
+                    TemplateTail(tail_text, span_loc) => {
+                      template_spans.push(TemplateSpan::{
+                        expression: expr,
+                        literal: tail_text,
+                        location: span_loc,
+                      })
+                      current_parser = advance_parser(current_parser)
+                      break
+                    }
+                    TemplateMiddle(middle_text, span_loc) => {
+                      template_spans.push(TemplateSpan::{
+                        expression: expr,
+                        literal: middle_text,
+                        location: span_loc,
+                      })
+                      current_parser = advance_parser(current_parser)
+                      // Continue loop to parse next expression
+                    }
+                    _ =>
+                      return Err(
+                        add_error(
+                          current_parser,
+                          "Expected template continuation after }",
+                          current_token(current_parser).location(),
+                        ),
+                      )
+                  }
+                }
+                _ =>
+                  return Err(
+                    add_error(
+                      current_parser,
+                      "Expected '}' after expression in template literal",
+                      current_token(current_parser).location(),
+                    ),
+                  )
+              }
+            }
+            Err(p) => return Err(p)
+          }
+        }
+        parser = current_parser
+        let template = Node::TemplateExpression(TemplateExpression::{
+          head,
+          template_spans,
+          location: loc,
+        })
+        left = Node::TaggedTemplateExpression(TaggedTemplateExpression::{
+          tag: left,
+          template,
+          location: start_loc,
+        })
+      }
+
       _ => should_continue = false
     }
   }
