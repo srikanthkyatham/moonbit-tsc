@@ -46,7 +46,8 @@ pub async fn check_for_changes(state : WatchState) -> Array[String] raise Error 
   let changed : Array[String] = []
 
   for path, file_state in state.files {
-    let (new_sec, new_nsec) = get_mtime(path)
+    let result = @fs.mtime(path)
+    let (new_sec, new_nsec) = result
 
     // Check if modification time changed
     if new_sec != file_state.mtime_sec || new_nsec != file_state.mtime_nsec {

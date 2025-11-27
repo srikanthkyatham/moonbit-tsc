@@ -95,12 +95,13 @@ async fn run_single_compile(
 
 ///|
 /// Run watch mode - continuously monitor files and recompile on changes
+/// Uses a dependency graph for smart incremental compilation
 async fn run_watch_mode(
   file_patterns : Array[String],
   options : CLIOptions,
 ) -> Unit raise Error {
   println("MoonBit TypeScript Compiler v" + @compiler.get_compiler_version())
-  println("Starting watch mode...")
+  println("Starting watch mode with incremental compilation...")
   println("")
 
   // Initial compilation
@@ -115,11 +116,19 @@ async fn run_watch_mode(
     "Watching " + file_paths.length().to_string() + " file(s)...",
   )
 
+  // Read all files and build initial dependency graph
+  let files = @coordinator.read_files(file_paths)
+  let dag = @coordinator.build_dependency_graph(files)
+
+  if options.verbose {
+    @coordinator.print_watch_message("Built dependency graph for incremental compilation")
+  }
+
   // Initialize watch state
   let watch_state = @coordinator.init_watch_state(file_paths)
 
-  // Do initial compilation
-  compile_files(file_paths, options)
+  // Do initial compilation of all files
+  compile_files_with_dag(file_paths, files, options)
 
   @coordinator.print_watch_message("Waiting for file changes...")
 
@@ -145,11 +154,99 @@ async fn run_watch_mode(
       // Update watch state with new timestamps
       @coordinator.update_watch_state(watch_state, changed)
 
-      // Recompile changed files
-      compile_files(changed, options)
+      // Read the changed files
+      let changed_files = @coordinator.read_files(changed)
+
+      // Update dependency graph for changed files
+      for file in changed_files {
+        let (path, source) = file // read_files returns (path, content)
+        let result = @coordinator.extract_imports(source, path)
+        let resolved_imports : Array[String] = []
+        for module_spec in result.imports {
+          match @coordinator.resolve_import_path(module_spec, path) {
+            Some(resolved) => resolved_imports.push(resolved)
+            None => ()
+          }
+        }
+        @coordinator.add_node(dag, path, resolved_imports, 0L, 0)
+      }
+
+      // Get all files that need recompilation (changed + dependents) in order
+      let to_recompile = @coordinator.get_recompilation_order(dag, changed)
+
+      if options.verbose {
+        @coordinator.print_watch_message(
+          "Recompiling " +
+          to_recompile.length().to_string() +
+          " file(s) including dependents",
+        )
+      }
+
+      // Read all files that need recompilation
+      let files_to_compile = @coordinator.read_files(to_recompile)
+
+      // Recompile files in topological order
+      compile_files_with_dag(to_recompile, files_to_compile, options)
 
       @coordinator.print_watch_message("Waiting for file changes...")
     }
+  }
+}
+
+///|
+/// Compile files with a pre-read file list
+async fn compile_files_with_dag(
+  file_paths : Array[String],
+  files : Array[(String, String)],
+  options : CLIOptions,
+) -> Unit raise Error {
+  // Get executable path (self)
+  let executable = @env.args()[0]
+
+  // Build coordinator options
+  let coord_options = @coordinator.CoordinatorOptions::{
+    target: options.target,
+    source_map: options.source_map_mode != SourceMapMode::None,
+    declaration: options.declaration,
+    worker_count: options.parallel.unwrap_or(default_worker_count()),
+    verbose: options.verbose,
+  }
+
+  // Compile files
+  let summary = @coordinator.compile_parallel(executable, files, coord_options)
+
+  // Write output files
+  write_all_outputs(summary.results, options)
+
+  // Print results
+  for result in summary.results {
+    if not(result.success) {
+      for diag in result.diagnostics {
+        println(diag)
+      }
+    } else if options.verbose {
+      println("  Compiled: " + result.file_path)
+    }
+  }
+
+  if summary.failed == 0 {
+    @coordinator.print_watch_message(
+      "Compiled " +
+      summary.successful.to_string() +
+      " file(s) in " +
+      summary.total_time_ms.to_string() +
+      "ms",
+    )
+  } else {
+    @coordinator.print_watch_message(
+      "Compiled " +
+      summary.successful.to_string() +
+      ", failed " +
+      summary.failed.to_string() +
+      " in " +
+      summary.total_time_ms.to_string() +
+      "ms",
+    )
   }
 }
 
