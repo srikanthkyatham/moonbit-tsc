@@ -1,12 +1,11 @@
-// File watcher for watch mode - polling-based implementation
-// Uses @fs.mtime() to detect file modifications
+// File watcher for watch mode - content hash-based implementation
+// Uses content hashing to detect file modifications (more reliable than mtime)
 
 ///|
 /// File state tracking for change detection
 struct FileState {
   path : String
-  mtime_sec : Int64
-  mtime_nsec : Int
+  content_hash : Int64 // Hash of file content
 }
 
 ///|
@@ -22,22 +21,24 @@ pub fn WatchState::new() -> WatchState {
 }
 
 ///|
-/// Get modification time for a file
-async fn get_mtime(path : String) -> (Int64, Int) raise Error {
-  @fs.mtime(path)
+/// Read file content and compute hash
+async fn read_and_hash(path : String) -> Int64 raise Error {
+  let data = @fs.read_file(path)
+  let content = data.text()
+  hash_source(content)
 }
 
 ///|
-/// Initialize watch state with current file modification times
+/// Initialize watch state with current file content hashes
 pub async fn init_watch_state(paths : Array[String]) -> WatchState raise Error {
   let files : Map[String, FileState] = {}
 
   for path in paths {
-    let (mtime_sec, mtime_nsec) = get_mtime(path)
-    files[path] = { path, mtime_sec, mtime_nsec }
+    let content_hash = read_and_hash(path)
+    files[path] = { path, content_hash }
   }
 
-  { files }
+  { files, }
 }
 
 ///|
@@ -46,11 +47,10 @@ pub async fn check_for_changes(state : WatchState) -> Array[String] raise Error 
   let changed : Array[String] = []
 
   for path, file_state in state.files {
-    let result = @fs.mtime(path)
-    let (new_sec, new_nsec) = result
+    let new_hash = read_and_hash(path)
 
-    // Check if modification time changed
-    if new_sec != file_state.mtime_sec || new_nsec != file_state.mtime_nsec {
+    // Check if content hash changed
+    if new_hash != file_state.content_hash {
       changed.push(path)
     }
   }
@@ -59,14 +59,14 @@ pub async fn check_for_changes(state : WatchState) -> Array[String] raise Error 
 }
 
 ///|
-/// Update watch state with new modification times for changed files
+/// Update watch state with new content hashes for changed files
 pub async fn update_watch_state(
   state : WatchState,
   changed_paths : Array[String],
 ) -> Unit raise Error {
   for path in changed_paths {
-    let (mtime_sec, mtime_nsec) = get_mtime(path)
-    state.files[path] = { path, mtime_sec, mtime_nsec }
+    let content_hash = read_and_hash(path)
+    state.files[path] = { path, content_hash }
   }
 }
 
@@ -78,8 +78,8 @@ pub async fn add_files_to_watch(
 ) -> Unit raise Error {
   for path in new_paths {
     if not(state.files.contains(path)) {
-      let (mtime_sec, mtime_nsec) = get_mtime(path)
-      state.files[path] = { path, mtime_sec, mtime_nsec }
+      let content_hash = read_and_hash(path)
+      state.files[path] = { path, content_hash }
     }
   }
 }

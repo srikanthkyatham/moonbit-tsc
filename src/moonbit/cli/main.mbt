@@ -161,6 +161,7 @@ async fn run_watch_mode(
       for file in changed_files {
         let (path, source) = file // read_files returns (path, content)
         let result = @coordinator.extract_imports(source, path)
+        let content_hash = @coordinator.hash_source(source)
         let resolved_imports : Array[String] = []
         for module_spec in result.imports {
           match @coordinator.resolve_import_path(module_spec, path) {
@@ -168,7 +169,7 @@ async fn run_watch_mode(
             None => ()
           }
         }
-        @coordinator.add_node(dag, path, resolved_imports, 0L, 0)
+        @coordinator.add_node(dag, path, resolved_imports, content_hash)
       }
 
       // Get all files that need recompilation (changed + dependents) in order

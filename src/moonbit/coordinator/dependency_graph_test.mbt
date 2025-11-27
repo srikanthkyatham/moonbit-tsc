@@ -10,7 +10,7 @@ test "create empty DAG" {
 ///|
 test "add single node" {
   let dag = DependencyDag::new()
-  add_node(dag, "/src/a.ts", [], 1000L, 0)
+  add_node(dag, "/src/a.ts", [], 1000L)
   assert_eq(dag.nodes.length(), 1)
   assert_true(dag.nodes.contains("/src/a.ts"))
 }
@@ -19,9 +19,9 @@ test "add single node" {
 test "add node with imports" {
   let dag = DependencyDag::new()
   // First add the dependency
-  add_node(dag, "/src/b.ts", [], 1000L, 0)
+  add_node(dag, "/src/b.ts", [], 1000L)
   // Then add the file that imports it
-  add_node(dag, "/src/a.ts", ["/src/b.ts"], 1000L, 0)
+  add_node(dag, "/src/a.ts", ["/src/b.ts"], 1000L)
 
   assert_eq(dag.nodes.length(), 2)
 
@@ -40,9 +40,9 @@ test "add node with imports" {
 test "topological sort - simple chain" {
   // a -> b -> c (a imports b, b imports c)
   let dag = DependencyDag::new()
-  add_node(dag, "/src/c.ts", [], 1000L, 0)
-  add_node(dag, "/src/b.ts", ["/src/c.ts"], 1000L, 0)
-  add_node(dag, "/src/a.ts", ["/src/b.ts"], 1000L, 0)
+  add_node(dag, "/src/c.ts", [], 1000L)
+  add_node(dag, "/src/b.ts", ["/src/c.ts"], 1000L)
+  add_node(dag, "/src/a.ts", ["/src/b.ts"], 1000L)
 
   match topological_sort(dag) {
     Some(order) => {
@@ -66,10 +66,10 @@ test "topological sort - diamond dependency" {
   //    \ /
   //     d
   let dag = DependencyDag::new()
-  add_node(dag, "/src/d.ts", [], 1000L, 0)
-  add_node(dag, "/src/b.ts", ["/src/d.ts"], 1000L, 0)
-  add_node(dag, "/src/c.ts", ["/src/d.ts"], 1000L, 0)
-  add_node(dag, "/src/a.ts", ["/src/b.ts", "/src/c.ts"], 1000L, 0)
+  add_node(dag, "/src/d.ts", [], 1000L)
+  add_node(dag, "/src/b.ts", ["/src/d.ts"], 1000L)
+  add_node(dag, "/src/c.ts", ["/src/d.ts"], 1000L)
+  add_node(dag, "/src/a.ts", ["/src/b.ts", "/src/c.ts"], 1000L)
 
   match topological_sort(dag) {
     Some(order) => {
@@ -92,9 +92,9 @@ test "topological sort - diamond dependency" {
 test "cycle detection" {
   // a -> b -> c -> a (cycle)
   let dag = DependencyDag::new()
-  add_node(dag, "/src/a.ts", ["/src/c.ts"], 1000L, 0)
-  add_node(dag, "/src/b.ts", ["/src/a.ts"], 1000L, 0)
-  add_node(dag, "/src/c.ts", ["/src/b.ts"], 1000L, 0)
+  add_node(dag, "/src/a.ts", ["/src/c.ts"], 1000L)
+  add_node(dag, "/src/b.ts", ["/src/a.ts"], 1000L)
+  add_node(dag, "/src/c.ts", ["/src/b.ts"], 1000L)
 
   assert_true(has_cycle(dag))
   assert_true(topological_sort(dag) is None)
@@ -105,9 +105,9 @@ test "get downstream dependents" {
   // a -> b -> c (c imports b, b imports a)
   // If a changes, both b and c need recompilation
   let dag = DependencyDag::new()
-  add_node(dag, "/src/a.ts", [], 1000L, 0)
-  add_node(dag, "/src/b.ts", ["/src/a.ts"], 1000L, 0)
-  add_node(dag, "/src/c.ts", ["/src/b.ts"], 1000L, 0)
+  add_node(dag, "/src/a.ts", [], 1000L)
+  add_node(dag, "/src/b.ts", ["/src/a.ts"], 1000L)
+  add_node(dag, "/src/c.ts", ["/src/b.ts"], 1000L)
 
   let dependents = get_downstream_dependents(dag, "/src/a.ts")
   assert_eq(dependents.length(), 2)
@@ -119,9 +119,9 @@ test "get downstream dependents" {
 test "get upstream dependencies" {
   // a -> b -> c
   let dag = DependencyDag::new()
-  add_node(dag, "/src/a.ts", [], 1000L, 0)
-  add_node(dag, "/src/b.ts", ["/src/a.ts"], 1000L, 0)
-  add_node(dag, "/src/c.ts", ["/src/b.ts"], 1000L, 0)
+  add_node(dag, "/src/a.ts", [], 1000L)
+  add_node(dag, "/src/b.ts", ["/src/a.ts"], 1000L)
+  add_node(dag, "/src/c.ts", ["/src/b.ts"], 1000L)
 
   let deps = get_upstream_dependencies(dag, "/src/c.ts")
   assert_eq(deps.length(), 2)
@@ -133,9 +133,9 @@ test "get upstream dependencies" {
 test "get recompilation order" {
   // a -> b -> c
   let dag = DependencyDag::new()
-  add_node(dag, "/src/a.ts", [], 1000L, 0)
-  add_node(dag, "/src/b.ts", ["/src/a.ts"], 1000L, 0)
-  add_node(dag, "/src/c.ts", ["/src/b.ts"], 1000L, 0)
+  add_node(dag, "/src/a.ts", [], 1000L)
+  add_node(dag, "/src/b.ts", ["/src/a.ts"], 1000L)
+  add_node(dag, "/src/c.ts", ["/src/b.ts"], 1000L)
 
   // If a changes, recompile a, b, c in that order
   let order = get_recompilation_order(dag, ["/src/a.ts"])
@@ -151,42 +151,42 @@ test "get recompilation order" {
 test "needs recompilation - new file" {
   let dag = DependencyDag::new()
   // File not in DAG should need recompilation
-  assert_true(needs_recompilation(dag, "/src/new.ts", 1000L, 0))
+  assert_true(needs_recompilation(dag, "/src/new.ts", 1000L))
 }
 
 ///|
-test "needs recompilation - same mtime" {
+test "needs recompilation - same hash" {
   let dag = DependencyDag::new()
-  add_node(dag, "/src/a.ts", [], 1000L, 500)
-  // Same mtime should not need recompilation
-  assert_true(not(needs_recompilation(dag, "/src/a.ts", 1000L, 500)))
+  add_node(dag, "/src/a.ts", [], 12345L)
+  // Same hash should not need recompilation
+  assert_true(not(needs_recompilation(dag, "/src/a.ts", 12345L)))
 }
 
 ///|
-test "needs recompilation - different mtime" {
+test "needs recompilation - different hash" {
   let dag = DependencyDag::new()
-  add_node(dag, "/src/a.ts", [], 1000L, 500)
-  // Different mtime should need recompilation
-  assert_true(needs_recompilation(dag, "/src/a.ts", 1001L, 0))
+  add_node(dag, "/src/a.ts", [], 12345L)
+  // Different hash should need recompilation
+  assert_true(needs_recompilation(dag, "/src/a.ts", 99999L))
 }
 
 ///|
-test "update mtime" {
+test "update content hash" {
   let dag = DependencyDag::new()
-  add_node(dag, "/src/a.ts", [], 1000L, 0)
-  update_mtime(dag, "/src/a.ts", 2000L, 100)
+  add_node(dag, "/src/a.ts", [], 1000L)
+  update_content_hash(dag, "/src/a.ts", 2000L)
 
-  // Verify mtime was updated - old mtime should need recompilation
-  assert_true(needs_recompilation(dag, "/src/a.ts", 1000L, 0))
-  // New mtime should not need recompilation
-  assert_true(not(needs_recompilation(dag, "/src/a.ts", 2000L, 100)))
+  // Verify hash was updated - old hash should need recompilation
+  assert_true(needs_recompilation(dag, "/src/a.ts", 1000L))
+  // New hash should not need recompilation
+  assert_true(not(needs_recompilation(dag, "/src/a.ts", 2000L)))
 }
 
 ///|
 test "remove node" {
   let dag = DependencyDag::new()
-  add_node(dag, "/src/a.ts", [], 1000L, 0)
-  add_node(dag, "/src/b.ts", ["/src/a.ts"], 1000L, 0)
+  add_node(dag, "/src/a.ts", [], 1000L)
+  add_node(dag, "/src/b.ts", ["/src/a.ts"], 1000L)
 
   remove_node(dag, "/src/a.ts")
   assert_eq(dag.nodes.length(), 1)
@@ -200,12 +200,12 @@ test "remove node" {
 ///|
 test "update node imports" {
   let dag = DependencyDag::new()
-  add_node(dag, "/src/a.ts", [], 1000L, 0)
-  add_node(dag, "/src/b.ts", [], 1000L, 0)
-  add_node(dag, "/src/c.ts", ["/src/a.ts"], 1000L, 0)
+  add_node(dag, "/src/a.ts", [], 1000L)
+  add_node(dag, "/src/b.ts", [], 1000L)
+  add_node(dag, "/src/c.ts", ["/src/a.ts"], 1000L)
 
   // Update c to import b instead of a
-  add_node(dag, "/src/c.ts", ["/src/b.ts"], 2000L, 0)
+  add_node(dag, "/src/c.ts", ["/src/b.ts"], 2000L)
 
   // c should now import b, not a
   let imports_c = get_direct_imports(dag, "/src/c.ts")
@@ -225,9 +225,9 @@ test "update node imports" {
 ///|
 test "get all files" {
   let dag = DependencyDag::new()
-  add_node(dag, "/src/a.ts", [], 1000L, 0)
-  add_node(dag, "/src/b.ts", [], 1000L, 0)
-  add_node(dag, "/src/c.ts", [], 1000L, 0)
+  add_node(dag, "/src/a.ts", [], 1000L)
+  add_node(dag, "/src/b.ts", [], 1000L)
+  add_node(dag, "/src/c.ts", [], 1000L)
 
   let files = get_all_files(dag)
   assert_eq(files.length(), 3)
@@ -245,7 +245,7 @@ test "no cycle in empty DAG" {
 ///|
 test "no cycle in single node" {
   let dag = DependencyDag::new()
-  add_node(dag, "/src/a.ts", [], 1000L, 0)
+  add_node(dag, "/src/a.ts", [], 1000L)
   assert_true(not(has_cycle(dag)))
 }
 
@@ -253,9 +253,9 @@ test "no cycle in single node" {
 test "independent nodes - parallel compilation possible" {
   // a, b, c with no dependencies - can all be compiled in parallel
   let dag = DependencyDag::new()
-  add_node(dag, "/src/a.ts", [], 1000L, 0)
-  add_node(dag, "/src/b.ts", [], 1000L, 0)
-  add_node(dag, "/src/c.ts", [], 1000L, 0)
+  add_node(dag, "/src/a.ts", [], 1000L)
+  add_node(dag, "/src/b.ts", [], 1000L)
+  add_node(dag, "/src/c.ts", [], 1000L)
 
   match topological_sort(dag) {
     Some(order) => assert_eq(order.length(), 3)

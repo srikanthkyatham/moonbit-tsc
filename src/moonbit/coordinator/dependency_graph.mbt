@@ -7,8 +7,7 @@ struct DagNode {
   path : String // Absolute file path
   edges_out : Array[String] // Files this file imports (outgoing edges)
   edges_in : Array[String] // Files that import this file (incoming edges)
-  mtime_sec : Int64 // Last modification time
-  mtime_nsec : Int
+  content_hash : Int64 // Hash of file content for change detection
 }
 
 ///|
@@ -26,12 +25,12 @@ pub fn DependencyDag::new() -> DependencyDag {
 ///|
 /// Add or update a file node in the DAG
 /// `imports` are the files this file depends on (edges pointing out)
+/// `content_hash` is the hash of file content for change detection
 pub fn add_node(
   dag : DependencyDag,
   path : String,
   imports : Array[String],
-  mtime_sec : Int64,
-  mtime_nsec : Int,
+  content_hash : Int64,
 ) -> Unit {
   // Remove old edges if node exists
   match dag.nodes.get(path) {
@@ -62,8 +61,7 @@ pub fn add_node(
     path,
     edges_out: imports.copy(),
     edges_in: existing_edges_in,
-    mtime_sec,
-    mtime_nsec,
+    content_hash,
   }
   dag.nodes[path] = node
 
@@ -246,26 +244,24 @@ pub fn get_recompilation_order(
 }
 
 ///|
-/// Check if file needs recompilation based on mtime
+/// Check if file needs recompilation based on content hash
 pub fn needs_recompilation(
   dag : DependencyDag,
   path : String,
-  new_mtime_sec : Int64,
-  new_mtime_nsec : Int,
+  new_content_hash : Int64,
 ) -> Bool {
   match dag.nodes.get(path) {
-    Some(node) => node.mtime_sec != new_mtime_sec || node.mtime_nsec != new_mtime_nsec
+    Some(node) => node.content_hash != new_content_hash
     None => true // New file
   }
 }
 
 ///|
-/// Update modification time for a file
-pub fn update_mtime(
+/// Update content hash for a file
+pub fn update_content_hash(
   dag : DependencyDag,
   path : String,
-  mtime_sec : Int64,
-  mtime_nsec : Int,
+  content_hash : Int64,
 ) -> Unit {
   match dag.nodes.get(path) {
     Some(old_node) =>
@@ -273,8 +269,7 @@ pub fn update_mtime(
         path: old_node.path,
         edges_out: old_node.edges_out,
         edges_in: old_node.edges_in,
-        mtime_sec,
-        mtime_nsec,
+        content_hash,
       }
     None => ()
   }

@@ -4,7 +4,7 @@
 
 This project has successfully implemented the foundational architecture for a high-performance TypeScript compiler written entirely in MoonBit.
 
-### Current Status: **Phase 8 - Pure MoonBit CLI with Parallel I/O** ✅
+### Current Status: **Phase 10 - Content Hash-Based Caching** ✅
 
 ## What's Working ✅
 
@@ -227,12 +227,42 @@ This project has successfully implemented the foundational architecture for a hi
 - Process spawning for parallel compilation (`coordinator/coordinator.mbt`)
 - Uses `moonbitlang/async` modules: `@fs`, `@process`, `@pipe`, `@aqueue`, `@semaphore`
 
+#### Incremental Compilation (~400 lines) ✅ **COMPLETE WITH DEPENDENCY GRAPH**
+- **Dependency Graph (DAG):** Tracks imports between TypeScript files (`coordinator/dependency_graph.mbt`)
+  - Bidirectional edges: imports (edges_out) and importers (edges_in)
+  - Topological sorting via Kahn's algorithm
+  - Cycle detection for circular dependency errors
+  - Downstream dependency traversal for smart recompilation
+- **Import Extractor:** Uses existing parser to extract imports (`coordinator/import_extractor.mbt`)
+  - Parses TypeScript source with `@compiler.parse_only()`
+  - Extracts ImportDeclaration module specifiers from AST
+  - Resolves relative import paths (`./foo`, `../bar`) to absolute paths
+  - Skips bare imports (node_modules) for external dependencies
+- **Smart Watch Mode:** Recompiles only what's needed
+  - Builds dependency graph on startup
+  - Updates DAG incrementally when files change
+  - Recompiles changed files + all dependents in topological order
+  - Example: Changing `utils.ts` triggers recompile of `utils.ts` → `math.ts` → `main.ts`
+
+#### Content Hash-Based Caching (~300 lines) ✅ **COMPLETE**
+- **Content Hash Detection:** Uses DJB2 hash algorithm for fast, reliable change detection (`coordinator/cache.mbt`)
+  - More reliable than mtime (touch doesn't trigger false recompiles)
+  - Same content = same hash, regardless of file timestamps
+- **Compilation Cache:** Stores compiled outputs for cache hits
+  - Cache key: file path + content hash + compilation options (target, source_map, declaration)
+  - Cache entry: JavaScript output, source map, declaration file
+  - Hit/miss statistics for monitoring
+- **Watch Mode Integration:** Content hash replaces mtime for change detection (`coordinator/watcher.mbt`)
+  - Touch (mtime only) does NOT trigger recompilation
+  - Actual content changes DO trigger recompilation
+- **46 coordinator tests passing** ✅
+
 ### 2. Build System ✅
 - MoonBit `moon.mod.json` configured
 - CMake build configuration available
 - Package structure defined
 
-### 3. Testing ✅ **1426/1426 Tests Passing! (100%)**
+### 3. Testing ✅ **1472/1472 Tests Passing! (100%)**
 - **Scanner Tests:** 22 test cases, all passing ✅
 - **Parser Tests:** 127 test cases, all passing ✅
 - **Binder Tests:** 139 test cases, all passing ✅
@@ -243,7 +273,8 @@ This project has successfully implemented the foundational architecture for a hi
 - **Declaration Emitter Tests:** 21 test cases, all passing ✅
 - **Memory Profile Tests:** 3 test cases, all passing ✅
 - **Checker Unit Tests:** 450 test cases, all passing ✅
-- **Current Test Status:** 1426/1426 tests passing (100% pass rate) ✅
+- **Coordinator Tests:** 46 test cases, all passing ✅ (DAG, import extraction, cache, content hash)
+- **Current Test Status:** 1472/1472 tests passing (100% pass rate) ✅
 
 ### 4. Memory Profiling ✅
 - Comprehensive memory consumption analysis
@@ -328,7 +359,7 @@ The project implements a pure MoonBit TypeScript compiler with parallel compilat
 
 | Component | Lines | Status |
 |-----------|-------|--------|
-| **MoonBit Compiler** | **~21,400** | **Complete** |
+| **MoonBit Compiler** | **~21,800** | **Complete** |
 | Token types | 400 | ✅ Complete |
 | AST types | 1,800 | ✅ Complete |
 | Symbol types | 920 | ✅ Complete |
@@ -340,14 +371,17 @@ The project implements a pure MoonBit TypeScript compiler with parallel compilat
 | **Emitter** | **1,849** | ✅ **Complete with Source Maps** |
 | **Source Maps** | **420** | ✅ **Complete & Integrated** |
 | **Declaration Emitter** | **1,091** | ✅ **Complete with Advanced Types** |
-| **CLI & Coordinator** | **~600** | ✅ **Complete with Parallel I/O** |
+| **CLI & Coordinator** | **~1,000** | ✅ **Complete with Incremental Compilation** |
 | - CLI (args, main, output) | ~300 | ✅ Argument parsing, file output |
 | - Coordinator | ~155 | ✅ Parallel compilation orchestration |
 | - Worker Pool | ~215 | ✅ Process spawning, async queues |
 | - File Discovery | ~120 | ✅ Directory walking, parallel reads |
 | - Protocol | ~100 | ✅ JSON-based IPC messages |
 | - Watcher | ~120 | ✅ Polling-based file watching |
-| **Tests** | **~12,000** | **1426 tests passing** |
+| - Dependency Graph | ~200 | ✅ DAG with topological sort |
+| - Import Extractor | ~170 | ✅ Parser-based import extraction |
+| - Cache | ~150 | ✅ Content hash-based caching |
+| **Tests** | **~13,000** | **1472 tests passing** |
 | Scanner tests | 400 | ✅ 22 tests passing |
 | Parser tests | 2,852 | ✅ 127 tests passing |
 | Binder tests | 1,628 | ✅ 139 tests passing |
@@ -357,7 +391,8 @@ The project implements a pure MoonBit TypeScript compiler with parallel compilat
 | Source Map tests | 840 | ✅ 59 tests passing |
 | Declaration Emitter tests | 817 | ✅ 21 tests passing |
 | Memory Profile Tests | 230 | ✅ 3 tests passing |
-| **Total** | **~33,400** | **Phase 8 Complete** |
+| Coordinator tests | 700 | ✅ 46 tests passing |
+| **Total** | **~34,500** | **Phase 10 Complete** |
 
 ## Next Steps (Priority Order)
 
@@ -377,9 +412,12 @@ The project implements a pure MoonBit TypeScript compiler with parallel compilat
    - New file detection in watch mode
 
 ### Medium Term - Optimization
-3. **Incremental Compilation**
-   - Dependency graph tracking
-   - Partial recompilation
+3. **Incremental Compilation** ✅ COMPLETE
+   - Dependency graph (DAG) tracking with bidirectional edges
+   - Import extraction using existing parser
+   - Topological sorting via Kahn's algorithm
+   - Smart recompilation of changed files + all dependents
+   - 29 coordinator tests passing
 
 4. **Performance Optimization**
    - Caching strategies
@@ -468,7 +506,7 @@ moonbit-tsc --watch --watchInterval 200 --outDir dist src/
 
 ## Key Achievements
 
-1. ✅ **~33,400 lines of production-quality MoonBit code**
+1. ✅ **~34,000 lines of production-quality MoonBit code**
 2. ✅ **Complete TypeScript token and AST definitions**
 3. ✅ **Fully functional lexical analyzer (scanner)**
 4. ✅ **100% complete parser - ALL TypeScript features implemented**
@@ -491,12 +529,19 @@ moonbit-tsc --watch --watchInterval 200 --outDir dist src/
 21. ✅ **Async queue-based worker pool for task distribution**
 22. ✅ **Process-based parallelism using moonbitlang/async**
 23. ✅ **Watch mode with polling-based file monitoring**
+24. ✅ **Incremental compilation with dependency graph (DAG)**
+25. ✅ **Import extraction using existing parser (`@compiler.parse_only`)**
+26. ✅ **Topological sorting via Kahn's algorithm for correct build order**
+27. ✅ **Smart recompilation: changed files + all downstream dependents**
+28. ✅ **Content hash-based change detection (DJB2 algorithm)**
+29. ✅ **Compilation cache infrastructure for cache hits**
+30. ✅ **Touch (mtime only) does NOT trigger false recompiles**
 
 ## Conclusion
 
-**Phase 8 (Pure MoonBit CLI with Parallel I/O) is complete! ✅ 100% Test Pass Rate Achieved!**
+**Phase 10 (Content Hash-Based Caching) is complete! ✅ 100% Test Pass Rate Achieved!**
 
-The compiler has nine complete phases:
+The compiler has eleven complete phases:
 1. ✅ **Scanner** - Full lexical analysis (1,284 lines, 22 tests)
 2. ✅ **Parser** - Complete TypeScript syntax parsing with advanced type system (5,007 lines, 127 tests)
 3. ✅ **Binder** - Symbol table construction, name resolution, and FlowNode control flow analysis (2,284 lines, 139 tests)
@@ -506,8 +551,10 @@ The compiler has nine complete phases:
 7. ✅ **Source Maps** - Complete v3 infrastructure with output modes (420 lines, 59 tests)
 8. ✅ **Declaration Emitter** - TypeScript declaration file generation (1,091 lines, 21 tests)
 9. ✅ **CLI & Coordinator** - Pure MoonBit CLI with parallel I/O (~600 lines)
+10. ✅ **Incremental Compilation** - Dependency graph with smart recompilation (~400 lines, 19 tests)
+11. ✅ **Content Hash Caching** - Hash-based change detection, compilation cache (~300 lines, 27 tests)
 
-**1426 tests pass (100% success rate)!**
+**1472 tests pass (100% success rate)!**
 
 The project demonstrates:
 - Deep understanding of compiler architecture
@@ -526,9 +573,16 @@ The project demonstrates:
 - **Async queue-based worker pool (`@aqueue`, `@process`)**
 - **Process-based parallelism for compilation**
 - **Watch mode with polling-based file monitoring (`@fs.mtime`)**
+- **Incremental compilation with dependency graph (DAG)**
+- **Import extraction using existing parser**
+- **Topological sorting for correct compilation order**
+- **Smart recompilation of changed files + dependents**
+- **Content hash-based change detection (DJB2 algorithm)**
+- **Compilation cache infrastructure for cache hits**
+- **Touch (mtime only) does NOT trigger false recompiles**
 
 ---
 
 *Last Updated: 2025-11-27*
 *MoonBit Version: 0.1.20251117*
-*Status: Phase 8 Complete - Pure MoonBit TypeScript Compiler with CLI & Watch Mode*
+*Status: Phase 10 Complete - Pure MoonBit TypeScript Compiler with Content Hash Caching*

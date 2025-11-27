@@ -137,13 +137,14 @@ pub fn build_dependency_graph(
 ) -> DependencyDag {
   let dag = DependencyDag::new()
 
-  // Store resolved imports for each file
-  let file_imports : Array[(String, Array[String])] = []
+  // Store resolved imports and content hash for each file
+  let file_data : Array[(String, Array[String], Int64)] = []
 
-  // First pass: extract imports and create empty nodes
+  // First pass: extract imports, compute hash, and create empty nodes
   for file in files {
     let (path, source) = file // read_files returns (path, content)
     let result = extract_imports(source, path)
+    let content_hash = hash_source(source)
 
     // Resolve imports to absolute paths
     let resolved_imports : Array[String] = []
@@ -154,17 +155,17 @@ pub fn build_dependency_graph(
       }
     }
 
-    file_imports.push((path, resolved_imports))
+    file_data.push((path, resolved_imports, content_hash))
 
     // Add node with no imports first (all edges_in empty)
-    add_node(dag, path, [], 0L, 0)
+    add_node(dag, path, [], content_hash)
   }
 
   // Second pass: add edges now that all nodes exist
-  for file_import in file_imports {
-    let (path, imports) = file_import
+  for data in file_data {
+    let (path, imports, content_hash) = data
     // Re-add the node with its imports, which will update edges properly
-    add_node(dag, path, imports, 0L, 0)
+    add_node(dag, path, imports, content_hash)
   }
 
   dag
