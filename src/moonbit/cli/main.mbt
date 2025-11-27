@@ -465,16 +465,33 @@ fn build_coordinator_options_from_tsconfig(
 
 ///|
 /// Build CLIOptions from TSConfig with CLI overrides (for output writing)
+/// If project_dir is provided, relative out_dir paths are resolved against it
 fn build_cli_options_from_tsconfig(
   tsconfig : @config.TSConfig,
   cli_options : CLIOptions,
+  project_dir~ : String? = None,
 ) -> CLIOptions {
   // Get outDir from tsconfig if not specified in CLI
   let out_dir = match cli_options.out_dir {
     Some(_) => cli_options.out_dir
     None =>
       match tsconfig.compiler_options {
-        Some(opts) => opts.out_dir
+        Some(opts) =>
+          match opts.out_dir {
+            Some(dir) =>
+              // Resolve relative paths against project directory
+              match project_dir {
+                Some(proj_dir) =>
+                  if dir.length() > 0 && not(dir.starts_with("/")) {
+                    // Relative path - resolve against project dir
+                    Some(proj_dir + "/" + dir)
+                  } else {
+                    Some(dir)
+                  }
+                None => Some(dir)
+              }
+            None => None
+          }
         None => None
       }
   }
@@ -523,7 +540,7 @@ async fn run_project_compile(
 
   // Build effective options
   let coord_options = build_coordinator_options_from_tsconfig(tsconfig, cli_options)
-  let effective_cli = build_cli_options_from_tsconfig(tsconfig, cli_options)
+  let effective_cli = build_cli_options_from_tsconfig(tsconfig, cli_options, project_dir=Some(project_dir))
 
   if cli_options.verbose {
     println("Target: " + coord_options.target)
@@ -845,7 +862,7 @@ async fn run_build_references(
 
     // Build coordinator options from config
     let coord_options = build_coordinator_options_from_tsconfig(config, cli_options)
-    let effective_cli = build_cli_options_from_tsconfig(config, cli_options)
+    let effective_cli = build_cli_options_from_tsconfig(config, cli_options, project_dir=Some(project_dir))
 
     // Discover files for this project
     let file_paths = discover_project_files(config, project_dir)
