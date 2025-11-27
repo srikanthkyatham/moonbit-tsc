@@ -928,3 +928,89 @@ test "emit generic interface with multiple type params and optional" {
     }
   }
 }
+
+// ============ Optional Method Tests ============
+
+///|
+/// Test: Interface with optional method
+test "emit interface with optional method" {
+  let source = "interface Logger { log(message: string): void; warn?(message: string): void; }"
+  let tokens = scan_all_v2(source, "test.ts")
+  match parse_source_file(tokens, "test.ts") {
+    Ok(source_file) => {
+      let ctx = DeclarationEmitterContext::default()
+      let output = emit_declaration_file(source_file, ctx)
+
+      // Should contain optional method marker
+      assert_true(output.contains("interface Logger"))
+      assert_true(output.contains("log(message: string): void"))
+      assert_true(output.contains("warn?(message: string): void"))
+      println("\nInterface with optional method output:")
+      println(output)
+    }
+    Err(diagnostics) => {
+      println("Parse error:")
+      for i = 0; i < diagnostics.length(); i = i + 1 {
+        println("  " + diagnostics[i].message)
+      }
+      assert_true(false)
+    }
+  }
+}
+
+///|
+/// Test: Interface with multiple optional methods
+test "emit interface with multiple optional methods" {
+  let source = "interface EventHandler { required(): void; optional1?(): void; optional2?(x: number): string; }"
+  let tokens = scan_all_v2(source, "test.ts")
+  match parse_source_file(tokens, "test.ts") {
+    Ok(source_file) => {
+      let ctx = DeclarationEmitterContext::default()
+      let output = emit_declaration_file(source_file, ctx)
+
+      // Should contain both required and optional methods
+      assert_true(output.contains("interface EventHandler"))
+      assert_true(output.contains("required(): void"))
+      assert_true(output.contains("optional1?(): void"))
+      assert_true(output.contains("optional2?(x: number): string"))
+      println("\nInterface with multiple optional methods output:")
+      println(output)
+    }
+    Err(diagnostics) => {
+      println("Parse error:")
+      for i = 0; i < diagnostics.length(); i = i + 1 {
+        println("  " + diagnostics[i].message)
+      }
+      assert_true(false)
+    }
+  }
+}
+
+///|
+/// Test: Interface with optional properties and methods combined
+test "emit interface with optional properties and methods" {
+  let source = "interface Config { name: string; version?: string; init(): void; validate?(): boolean; }"
+  let tokens = scan_all_v2(source, "test.ts")
+  match parse_source_file(tokens, "test.ts") {
+    Ok(source_file) => {
+      let ctx = DeclarationEmitterContext::default()
+      let output = emit_declaration_file(source_file, ctx)
+
+      // Should contain both optional properties and methods
+      assert_true(output.contains("interface Config"))
+      assert_true(output.contains("name: string"))
+      assert_true(output.contains("version?: string"))
+      assert_true(output.contains("init(): void"))
+      assert_true(output.contains("validate?(): boolean"))
+      println("\nInterface with optional properties and methods output:")
+      println(output)
+    }
+    Err(diagnostics) => {
+      println("Parse error:")
+      for i = 0; i < diagnostics.length(); i = i + 1 {
+        println("  " + diagnostics[i].message)
+      }
+      assert_true(false)
+    }
+  }
+}

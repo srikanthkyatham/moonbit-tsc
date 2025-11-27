@@ -425,6 +425,11 @@ fn emit_decl_method(
   // Method name
   output = output + meth.name
 
+  // Optional marker
+  if meth.is_optional {
+    output = output + "?"
+  }
+
   // Type parameters
   if meth.type_parameters.length() > 0 {
     output = output + emit_decl_type_parameters(meth.type_parameters, ctx)
@@ -606,6 +611,10 @@ fn emit_decl_method_signature(
 ) -> String {
   let indent = ctx.get_indent()
   let mut output = indent + meth.name
+  // Optional marker
+  if meth.is_optional {
+    output = output + "?"
+  }
   if meth.type_parameters.length() > 0 {
     output = output + emit_decl_type_parameters(meth.type_parameters, ctx)
   }

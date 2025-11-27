@@ -994,6 +994,7 @@ pub struct MethodDeclaration {
   modifiers : Array[Modifier]
   is_async : Bool
   is_generator : Bool
+  is_optional : Bool
   location : SourceLocation
 } derive(Show)
 

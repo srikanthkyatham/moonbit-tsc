@@ -1282,6 +1282,7 @@ fn transform_method_declaration(
     modifiers: md.modifiers,
     is_async: md.is_async,
     is_generator: md.is_generator,
+    is_optional: md.is_optional,
     location: md.location,
   })
 }

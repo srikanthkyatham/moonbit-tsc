@@ -1591,6 +1591,7 @@ fn parse_class_members_aux(
                   modifiers: [Modifier::Static],
                   is_async: false,
                   is_generator: false,
+                  is_optional: false,
                   location: loc,
                 }),
               )
@@ -1752,6 +1753,7 @@ fn parse_class_members_aux(
                       modifiers: [],
                       is_async: false,
                       is_generator: false,
+                      is_optional: false,
                       location: loc,
                     }),
                   )
@@ -1911,6 +1913,7 @@ fn parse_class_members_aux(
               modifiers: [],
               is_async: false,
               is_generator: false,
+              is_optional: false,
               location: loc,
             }),
           )
@@ -2055,6 +2058,7 @@ fn parse_class_member_with_modifiers(
               modifiers,
               is_async,
               is_generator: false,
+              is_optional: false,
               location: loc,
             }),
           )
@@ -2447,6 +2451,7 @@ fn parse_interface_declaration(
                 modifiers: [],
                 is_async: false,
                 is_generator: false,
+                is_optional: false,
               }),
             )
 
@@ -2493,6 +2498,7 @@ fn parse_interface_declaration(
                     modifiers: [],
                     is_async: false,
                     is_generator: false,
+                    is_optional: false,
                   }),
                 )
 
@@ -2527,25 +2533,12 @@ fn parse_interface_declaration(
             // Check if it's a method (has parentheses) or property (has colon)
             match current_token(parser) {
               OpenParen(_) => {
-                // Method signature: name(): returnType
+                // Method signature: name(params): returnType
                 parser = advance_parser(parser) // consume '('
 
-                // Skip parameters for now - just find closing paren
-                let mut paren_depth = 1
-                while paren_depth > 0 &&
-                      parser.position < parser.tokens.length() {
-                  match current_token(parser) {
-                    OpenParen(_) => {
-                      paren_depth = paren_depth + 1
-                      parser = advance_parser(parser)
-                    }
-                    CloseParen(_) => {
-                      paren_depth = paren_depth - 1
-                      parser = advance_parser(parser)
-                    }
-                    _ => parser = advance_parser(parser)
-                  }
-                }
+                // Parse parameters properly
+                let (params, p) = parse_parameter_list(parser)
+                parser = p
 
                 // Parse return type
                 let return_type = match current_token(parser) {
@@ -2567,13 +2560,14 @@ fn parse_interface_declaration(
                   Node::MethodDeclaration(MethodDeclaration::{
                     name: prop_name,
                     type_parameters: [],
-                    parameters: [], // Skipped for simplicity
+                    parameters: params,
                     return_type,
                     body: None,
                     location: prop_loc,
                     modifiers: [],
                     is_async: false,
                     is_generator: false,
+                    is_optional,
                   }),
                 )
 
