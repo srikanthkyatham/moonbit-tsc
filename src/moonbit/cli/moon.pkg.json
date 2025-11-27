@@ -5,6 +5,7 @@
     "moonbit-ts-compiler/protocol",
     "moonbit-ts-compiler/worker",
     "moonbit-ts-compiler/coordinator",
+    "moonbit-ts-compiler/config",
     "moonbitlang/async",
     "moonbitlang/async/fs",
     "moonbitlang/async/io",

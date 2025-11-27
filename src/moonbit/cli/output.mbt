@@ -116,7 +116,8 @@ pub async fn write_output(
   ensure_dir(out_dir)
 
   // Build JavaScript content with source map handling
-  let js_content = match options.source_map_mode {
+  let source_map_mode = get_effective_source_map(options)
+  let js_content = match source_map_mode {
     SourceMapMode::Inline => {
       match response.source_map {
         Some(sm) => {
@@ -142,7 +143,7 @@ pub async fn write_output(
   @fs.write_file(js_path, js_content, create=0o644, truncate=true)
 
   // Write external source map if requested
-  if options.source_map_mode == SourceMapMode::External {
+  if source_map_mode == SourceMapMode::External {
     match response.source_map {
       Some(sm) => {
         let map_path = out_dir + "/" + base_name + ".js.map"

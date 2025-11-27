@@ -12,18 +12,20 @@ pub(all) enum SourceMapMode {
 /// CLI command
 pub(all) enum Command {
   Compile(Array[String], CLIOptions)
+  CompileProject(String, CLIOptions) // tsconfig.json path
   Worker
   Version
   Help
+  Init // Generate tsconfig.json (future)
 } derive(Show)
 
 ///|
 /// CLI options for compilation
 pub(all) struct CLIOptions {
-  target : String
+  target : String?
   out_dir : String?
-  source_map_mode : SourceMapMode
-  declaration : Bool
+  source_map_mode : SourceMapMode?
+  declaration : Bool?
   verbose : Bool
   parallel : Int?
   watch : Bool
@@ -34,10 +36,10 @@ pub(all) struct CLIOptions {
 /// Default CLI options
 pub fn CLIOptions::default() -> CLIOptions {
   {
-    target: "es2015",
+    target: None,
     out_dir: None,
-    source_map_mode: SourceMapMode::None,
-    declaration: false,
+    source_map_mode: None,
+    declaration: None,
     verbose: false,
     parallel: None,
     watch: false,
@@ -53,14 +55,15 @@ pub fn parse_args(args : Array[String]) -> Result[Command, String] {
   }
 
   let files : Array[String] = []
-  let mut target = "es2015"
+  let mut target : String? = None
   let mut out_dir : String? = None
-  let mut source_map_mode = SourceMapMode::None
-  let mut declaration = false
+  let mut source_map_mode : SourceMapMode? = None
+  let mut declaration : Bool? = None
   let mut verbose = false
   let mut parallel : Int? = None
   let mut watch = false
   let mut watch_interval = 500
+  let mut project : String? = None
 
   let mut i = 1 // Skip program name
 
@@ -73,12 +76,20 @@ pub fn parse_args(args : Array[String]) -> Result[Command, String] {
       return Ok(Command::Help)
     } else if arg == "--worker" {
       return Ok(Command::Worker)
+    } else if arg == "--init" {
+      return Ok(Command::Init)
+    } else if arg == "--project" || arg == "-p" {
+      i = i + 1
+      if i >= args.length() {
+        return Err("--project requires a path to tsconfig.json")
+      }
+      project = Some(args[i])
     } else if arg == "--target" {
       i = i + 1
       if i >= args.length() {
         return Err("--target requires a value")
       }
-      target = args[i]
+      target = Some(args[i])
     } else if arg == "--outDir" {
       i = i + 1
       if i >= args.length() {
@@ -86,11 +97,11 @@ pub fn parse_args(args : Array[String]) -> Result[Command, String] {
       }
       out_dir = Some(args[i])
     } else if arg == "--sourceMap" {
-      source_map_mode = SourceMapMode::External
+      source_map_mode = Some(SourceMapMode::External)
     } else if arg == "--inlineSourceMap" {
-      source_map_mode = SourceMapMode::Inline
+      source_map_mode = Some(SourceMapMode::Inline)
     } else if arg == "--declaration" {
-      declaration = true
+      declaration = Some(true)
     } else if arg == "--verbose" {
       verbose = true
     } else if arg == "--watch" || arg == "-w" {
@@ -122,10 +133,6 @@ pub fn parse_args(args : Array[String]) -> Result[Command, String] {
     i = i + 1
   }
 
-  if files.length() == 0 {
-    return Ok(Command::Help)
-  }
-
   let options : CLIOptions = {
     target,
     out_dir,
@@ -137,11 +144,40 @@ pub fn parse_args(args : Array[String]) -> Result[Command, String] {
     watch_interval,
   }
 
-  Ok(Command::Compile(files, options))
+  // If --project was specified, use project mode
+  match project {
+    Some(path) => Ok(Command::CompileProject(path, options))
+    None => {
+      if files.length() == 0 {
+        // No files and no project - show help
+        Ok(Command::Help)
+      } else {
+        Ok(Command::Compile(files, options))
+      }
+    }
+  }
 }
 
 ///|
 /// Get default worker count (4 for now, could use OS CPU count later)
 pub fn default_worker_count() -> Int {
   4
+}
+
+///|
+/// Get effective target from CLI options (with default)
+pub fn get_effective_cli_target(options : CLIOptions) -> String {
+  options.target.unwrap_or("es2015")
+}
+
+///|
+/// Get effective source map mode from CLI options
+pub fn get_effective_source_map(options : CLIOptions) -> SourceMapMode {
+  options.source_map_mode.unwrap_or(SourceMapMode::None)
+}
+
+///|
+/// Get effective declaration setting from CLI options
+pub fn get_effective_declaration(options : CLIOptions) -> Bool {
+  options.declaration.unwrap_or(false)
 }
