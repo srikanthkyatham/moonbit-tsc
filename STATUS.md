@@ -346,6 +346,7 @@ The project implements a pure MoonBit TypeScript compiler with parallel compilat
 | - Worker Pool | ~215 | ✅ Process spawning, async queues |
 | - File Discovery | ~120 | ✅ Directory walking, parallel reads |
 | - Protocol | ~100 | ✅ JSON-based IPC messages |
+| - Watcher | ~120 | ✅ Polling-based file watching |
 | **Tests** | **~12,000** | **1426 tests passing** |
 | Scanner tests | 400 | ✅ 22 tests passing |
 | Parser tests | 2,852 | ✅ 127 tests passing |
@@ -368,9 +369,12 @@ The project implements a pure MoonBit TypeScript compiler with parallel compilat
    - Async queue-based worker pool for task distribution
    - Build as native executable
 
-2. **Watch Mode**
-   - File system watching
-   - Incremental recompilation
+2. **Watch Mode** ✅ COMPLETE
+   - Polling-based file system watching (`coordinator/watcher.mbt`)
+   - File modification time tracking with `@fs.mtime()`
+   - Automatic recompilation on file changes
+   - Configurable polling interval (`--watchInterval`)
+   - New file detection in watch mode
 
 ### Medium Term - Optimization
 3. **Incremental Compilation**
@@ -414,15 +418,17 @@ moon build --target native cli
 Usage: moonbit-tsc [options] <file...>
 
 Options:
-  --help, -h           Show help message
-  --version, -v        Show version
-  --target <target>    ECMAScript target (es5, es2015, esnext, etc.)
-  --outDir <dir>       Output directory
-  --sourceMap          Generate external source map files
-  --inlineSourceMap    Embed source maps in JavaScript files
-  --declaration        Generate .d.ts declaration files
-  --parallel <n>       Number of parallel workers (default: 4)
-  --verbose            Verbose output
+  --help, -h              Show help message
+  --version, -v           Show version
+  --target <target>       ECMAScript target (es5, es2015, esnext, etc.)
+  --outDir <dir>          Output directory
+  --sourceMap             Generate external source map files
+  --inlineSourceMap       Embed source maps in JavaScript files
+  --declaration           Generate .d.ts declaration files
+  --parallel <n>          Number of parallel workers (default: 4)
+  --watch, -w             Watch mode: recompile on file changes
+  --watchInterval <ms>    Watch polling interval in ms (default: 500)
+  --verbose               Verbose output
 ```
 
 ### Examples
@@ -438,6 +444,12 @@ moonbit-tsc --verbose --declaration --sourceMap --outDir dist src/
 
 # Parallel compilation with 8 workers
 moonbit-tsc --parallel 8 --outDir dist src/
+
+# Watch mode - auto-recompile on file changes
+moonbit-tsc --watch --outDir dist src/
+
+# Watch mode with custom interval (200ms)
+moonbit-tsc --watch --watchInterval 200 --outDir dist src/
 ```
 
 ### Benchmark Results (20 files)
@@ -478,6 +490,7 @@ moonbit-tsc --parallel 8 --outDir dist src/
 20. ✅ **Parallel file I/O with semaphore-based concurrency**
 21. ✅ **Async queue-based worker pool for task distribution**
 22. ✅ **Process-based parallelism using moonbitlang/async**
+23. ✅ **Watch mode with polling-based file monitoring**
 
 ## Conclusion
 
@@ -512,9 +525,10 @@ The project demonstrates:
 - **Parallel file I/O using `moonbitlang/async` (`@fs`, `@semaphore`)**
 - **Async queue-based worker pool (`@aqueue`, `@process`)**
 - **Process-based parallelism for compilation**
+- **Watch mode with polling-based file monitoring (`@fs.mtime`)**
 
 ---
 
 *Last Updated: 2025-11-27*
 *MoonBit Version: 0.1.20251117*
-*Status: Phase 8 Complete - Pure MoonBit TypeScript Compiler with CLI*
+*Status: Phase 8 Complete - Pure MoonBit TypeScript Compiler with CLI & Watch Mode*

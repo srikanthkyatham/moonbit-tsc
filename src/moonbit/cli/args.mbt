@@ -26,6 +26,8 @@ pub(all) struct CLIOptions {
   declaration : Bool
   verbose : Bool
   parallel : Int?
+  watch : Bool
+  watch_interval : Int // Polling interval in milliseconds
 } derive(Show)
 
 ///|
@@ -38,6 +40,8 @@ pub fn CLIOptions::default() -> CLIOptions {
     declaration: false,
     verbose: false,
     parallel: None,
+    watch: false,
+    watch_interval: 500, // Default 500ms polling interval
   }
 }
 
@@ -55,6 +59,8 @@ pub fn parse_args(args : Array[String]) -> Result[Command, String] {
   let mut declaration = false
   let mut verbose = false
   let mut parallel : Int? = None
+  let mut watch = false
+  let mut watch_interval = 500
 
   let mut i = 1 // Skip program name
 
@@ -87,6 +93,17 @@ pub fn parse_args(args : Array[String]) -> Result[Command, String] {
       declaration = true
     } else if arg == "--verbose" {
       verbose = true
+    } else if arg == "--watch" || arg == "-w" {
+      watch = true
+    } else if arg == "--watchInterval" {
+      i = i + 1
+      if i >= args.length() {
+        return Err("--watchInterval requires a number (milliseconds)")
+      }
+      match (try? @strconv.parse_int(args[i])) {
+        Ok(n) => watch_interval = n
+        Err(_) => return Err("--watchInterval requires a valid number")
+      }
     } else if arg == "--parallel" {
       i = i + 1
       if i >= args.length() {
@@ -116,6 +133,8 @@ pub fn parse_args(args : Array[String]) -> Result[Command, String] {
     declaration,
     verbose,
     parallel,
+    watch,
+    watch_interval,
   }
 
   Ok(Command::Compile(files, options))

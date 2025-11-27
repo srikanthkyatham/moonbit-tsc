@@ -32,8 +32,21 @@ async fn run_worker_mode() -> Unit raise Error {
 }
 
 ///|
-/// Run compilation
+/// Run compilation (with optional watch mode)
 async fn run_compile(
+  file_patterns : Array[String],
+  options : CLIOptions,
+) -> Unit raise Error {
+  if options.watch {
+    run_watch_mode(file_patterns, options)
+  } else {
+    run_single_compile(file_patterns, options)
+  }
+}
+
+///|
+/// Run a single compilation pass
+async fn run_single_compile(
   file_patterns : Array[String],
   options : CLIOptions,
 ) -> Unit raise Error {
@@ -78,6 +91,125 @@ async fn run_compile(
 
   // Print summary
   print_summary(summary, options)
+}
+
+///|
+/// Run watch mode - continuously monitor files and recompile on changes
+async fn run_watch_mode(
+  file_patterns : Array[String],
+  options : CLIOptions,
+) -> Unit raise Error {
+  println("MoonBit TypeScript Compiler v" + @compiler.get_compiler_version())
+  println("Starting watch mode...")
+  println("")
+
+  // Initial compilation
+  let file_paths = @coordinator.discover_files(file_patterns)
+
+  if file_paths.length() == 0 {
+    println("No TypeScript files found")
+    return
+  }
+
+  @coordinator.print_watch_message(
+    "Watching " + file_paths.length().to_string() + " file(s)...",
+  )
+
+  // Initialize watch state
+  let watch_state = @coordinator.init_watch_state(file_paths)
+
+  // Do initial compilation
+  compile_files(file_paths, options)
+
+  @coordinator.print_watch_message("Waiting for file changes...")
+
+  // Watch loop
+  while true {
+    // Sleep for the watch interval
+    @coordinator.sleep_ms(options.watch_interval)
+
+    // Re-discover files (in case new files were added)
+    let current_paths = @coordinator.discover_files(file_patterns)
+
+    // Add any new files to watch state
+    @coordinator.add_files_to_watch(watch_state, current_paths)
+
+    // Check for changes
+    let changed = @coordinator.check_for_changes(watch_state)
+
+    if changed.length() > 0 {
+      @coordinator.print_watch_message(
+        "File change detected: " + changed.length().to_string() + " file(s)",
+      )
+
+      // Update watch state with new timestamps
+      @coordinator.update_watch_state(watch_state, changed)
+
+      // Recompile changed files
+      compile_files(changed, options)
+
+      @coordinator.print_watch_message("Waiting for file changes...")
+    }
+  }
+}
+
+///|
+/// Compile a list of files and output results
+async fn compile_files(
+  file_paths : Array[String],
+  options : CLIOptions,
+) -> Unit raise Error {
+  // Read files
+  let files = @coordinator.read_files(file_paths)
+
+  // Get executable path (self)
+  let executable = @env.args()[0]
+
+  // Build coordinator options
+  let coord_options = @coordinator.CoordinatorOptions::{
+    target: options.target,
+    source_map: options.source_map_mode != SourceMapMode::None,
+    declaration: options.declaration,
+    worker_count: options.parallel.unwrap_or(default_worker_count()),
+    verbose: options.verbose,
+  }
+
+  // Compile files
+  let summary = @coordinator.compile_parallel(executable, files, coord_options)
+
+  // Write output files
+  write_all_outputs(summary.results, options)
+
+  // Print results
+  for result in summary.results {
+    if not(result.success) {
+      for diag in result.diagnostics {
+        println(diag)
+      }
+    } else if options.verbose {
+      println("  Compiled: " + result.file_path)
+    }
+  }
+
+  if summary.failed == 0 {
+    @coordinator.print_watch_message(
+      "Compiled " +
+      summary.successful.to_string() +
+      " file(s) in " +
+      summary.total_time_ms.to_string() +
+      "ms",
+    )
+  } else {
+    @coordinator.print_watch_message(
+      "Compiled " +
+      summary.successful.to_string() +
+      ", failed " +
+      summary.failed.to_string() +
+      " in " +
+      summary.total_time_ms.to_string() +
+      "ms",
+    )
+  }
 }
 
 ///|
@@ -140,20 +272,23 @@ fn print_help() -> Unit {
   println("Usage: moonbit-tsc [options] <file...>")
   println("")
   println("Options:")
-  println("  --help, -h           Show this help message")
-  println("  --version, -v        Show version")
-  println("  --target <target>    ECMAScript target (es5, es2015, esnext, etc.)")
-  println("  --outDir <dir>       Output directory")
-  println("  --sourceMap          Generate external source map files")
-  println("  --inlineSourceMap    Embed source maps in JavaScript files")
-  println("  --declaration        Generate .d.ts declaration files")
-  println("  --parallel <n>       Number of parallel workers (default: 4)")
-  println("  --verbose            Verbose output")
+  println("  --help, -h              Show this help message")
+  println("  --version, -v           Show version")
+  println("  --target <target>       ECMAScript target (es5, es2015, esnext, etc.)")
+  println("  --outDir <dir>          Output directory")
+  println("  --sourceMap             Generate external source map files")
+  println("  --inlineSourceMap       Embed source maps in JavaScript files")
+  println("  --declaration           Generate .d.ts declaration files")
+  println("  --parallel <n>          Number of parallel workers (default: 4)")
+  println("  --watch, -w             Watch mode: recompile on file changes")
+  println("  --watchInterval <ms>    Watch polling interval in ms (default: 500)")
+  println("  --verbose               Verbose output")
   println("")
   println("Examples:")
   println("  moonbit-tsc src/index.ts")
   println("  moonbit-tsc --target es5 --sourceMap src/*.ts")
   println("  moonbit-tsc --outDir dist --parallel 8 src/")
+  println("  moonbit-tsc --watch --outDir dist src/")
 }
 
 ///|
