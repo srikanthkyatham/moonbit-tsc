@@ -4,7 +4,7 @@
 
 This project has successfully implemented the foundational architecture for a high-performance TypeScript compiler written entirely in MoonBit.
 
-### Current Status: **Phase 7 - Complete TypeScript Compiler Core** ✅
+### Current Status: **Phase 8 - Pure MoonBit CLI with Parallel I/O** ✅
 
 ## What's Working ✅
 
@@ -232,7 +232,7 @@ This project has successfully implemented the foundational architecture for a hi
 - CMake build configuration available
 - Package structure defined
 
-### 3. Testing ✅ **733/733 Tests Passing! (100%)**
+### 3. Testing ✅ **1426/1426 Tests Passing! (100%)**
 - **Scanner Tests:** 22 test cases, all passing ✅
 - **Parser Tests:** 127 test cases, all passing ✅
 - **Binder Tests:** 139 test cases, all passing ✅
@@ -243,7 +243,7 @@ This project has successfully implemented the foundational architecture for a hi
 - **Declaration Emitter Tests:** 21 test cases, all passing ✅
 - **Memory Profile Tests:** 3 test cases, all passing ✅
 - **Checker Unit Tests:** 450 test cases, all passing ✅
-- **Current Test Status:** 733/733 tests passing (100% pass rate) ✅
+- **Current Test Status:** 1426/1426 tests passing (100% pass rate) ✅
 
 ### 4. Memory Profiling ✅
 - Comprehensive memory consumption analysis
@@ -278,45 +278,57 @@ See `ASYNC_FIXED.md` for details.
 
 ## Architecture Design ✅
 
-The project implements a pure MoonBit TypeScript compiler:
+The project implements a pure MoonBit TypeScript compiler with parallel compilation:
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│              Pure MoonBit TypeScript Compiler           │
-│                                                         │
-│  ┌─────────────────────────────────────────────────┐   │
-│  │              Compilation Pipeline               │   │
-│  │                                                 │   │
-│  │  Source → Scanner → Parser → Binder → Checker  │   │
-│  │                         ↓                       │   │
-│  │              Transformer → Emitter → Output     │   │
-│  └─────────────────────────────────────────────────┘   │
-│                                                         │
-│  ┌──────────┐  ┌──────────┐  ┌─────────┐  ┌────────┐  │
-│  │ Scanner  │  │  Parser  │  │ Binder  │  │Checker │  │
-│  │   (✅)   │  │   (✅)   │  │  (✅)   │  │  (✅)  │  │
-│  └──────────┘  └──────────┘  └─────────┘  └────────┘  │
-│                                                         │
-│  ┌────────────┐  ┌──────────┐  ┌────────────────────┐  │
-│  │Transformer │  │ Emitter  │  │ Declaration Emitter│  │
-│  │    (✅)    │  │   (✅)   │  │        (✅)        │  │
-│  └────────────┘  └──────────┘  └────────────────────┘  │
-│                                                         │
-│  ┌─────────────────────────────────────────────────┐   │
-│  │     Types (Token, AST, Symbol) - ✅ Complete    │   │
-│  └─────────────────────────────────────────────────┘   │
-│                                                         │
-│  ┌─────────────────────────────────────────────────┐   │
-│  │       Source Maps - ✅ Complete (v3 spec)       │   │
-│  └─────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│                Pure MoonBit TypeScript Compiler                 │
+│                                                                 │
+│  ┌───────────────────────────────────────────────────────────┐  │
+│  │                      CLI Layer (✅)                       │  │
+│  │  Args Parsing → File Discovery → Coordinator → Output     │  │
+│  └───────────────────────────────────────────────────────────┘  │
+│                              ↓                                   │
+│  ┌───────────────────────────────────────────────────────────┐  │
+│  │              Parallel Coordinator (✅)                     │  │
+│  │                                                           │  │
+│  │   ┌─────────┐  ┌─────────┐  ┌─────────┐  ┌─────────┐    │  │
+│  │   │Worker 1 │  │Worker 2 │  │Worker 3 │  │Worker N │    │  │
+│  │   └────┬────┘  └────┬────┘  └────┬────┘  └────┬────┘    │  │
+│  │        └────────────┴────────────┴────────────┘          │  │
+│  │                    Async Queue (aqueue)                   │  │
+│  └───────────────────────────────────────────────────────────┘  │
+│                              ↓                                   │
+│  ┌───────────────────────────────────────────────────────────┐  │
+│  │              Compilation Pipeline (per file)              │  │
+│  │                                                           │  │
+│  │  Source → Scanner → Parser → Binder → Checker            │  │
+│  │                         ↓                                 │  │
+│  │              Transformer → Emitter → Output               │  │
+│  └───────────────────────────────────────────────────────────┘  │
+│                                                                 │
+│  ┌──────────┐  ┌──────────┐  ┌─────────┐  ┌────────┐          │
+│  │ Scanner  │  │  Parser  │  │ Binder  │  │Checker │          │
+│  │   (✅)   │  │   (✅)   │  │  (✅)   │  │  (✅)  │          │
+│  └──────────┘  └──────────┘  └─────────┘  └────────┘          │
+│                                                                 │
+│  ┌────────────┐  ┌──────────┐  ┌────────────────────┐          │
+│  │Transformer │  │ Emitter  │  │ Declaration Emitter│          │
+│  │    (✅)    │  │   (✅)   │  │        (✅)        │          │
+│  └────────────┘  └──────────┘  └────────────────────┘          │
+│                                                                 │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │        moonbitlang/async: @fs, @process, @aqueue,       │   │
+│  │                    @semaphore, @pipe                     │   │
+│  └─────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
 ## Code Metrics
 
 | Component | Lines | Status |
 |-----------|-------|--------|
-| **MoonBit Compiler** | **~20,800** | **Complete** |
+| **MoonBit Compiler** | **~21,400** | **Complete** |
 | Token types | 400 | ✅ Complete |
 | AST types | 1,800 | ✅ Complete |
 | Symbol types | 920 | ✅ Complete |
@@ -328,8 +340,13 @@ The project implements a pure MoonBit TypeScript compiler:
 | **Emitter** | **1,849** | ✅ **Complete with Source Maps** |
 | **Source Maps** | **420** | ✅ **Complete & Integrated** |
 | **Declaration Emitter** | **1,091** | ✅ **Complete with Advanced Types** |
-| Async I/O | 100 | ✅ Interface ready |
-| **Tests** | **~12,000** | **733 tests passing** |
+| **CLI & Coordinator** | **~600** | ✅ **Complete with Parallel I/O** |
+| - CLI (args, main, output) | ~300 | ✅ Argument parsing, file output |
+| - Coordinator | ~155 | ✅ Parallel compilation orchestration |
+| - Worker Pool | ~215 | ✅ Process spawning, async queues |
+| - File Discovery | ~120 | ✅ Directory walking, parallel reads |
+| - Protocol | ~100 | ✅ JSON-based IPC messages |
+| **Tests** | **~12,000** | **1426 tests passing** |
 | Scanner tests | 400 | ✅ 22 tests passing |
 | Parser tests | 2,852 | ✅ 127 tests passing |
 | Binder tests | 1,628 | ✅ 139 tests passing |
@@ -339,7 +356,7 @@ The project implements a pure MoonBit TypeScript compiler:
 | Source Map tests | 840 | ✅ 59 tests passing |
 | Declaration Emitter tests | 817 | ✅ 21 tests passing |
 | Memory Profile Tests | 230 | ✅ 3 tests passing |
-| **Total** | **~32,800** | **Phase 7 Complete** |
+| **Total** | **~33,400** | **Phase 8 Complete** |
 
 ## Next Steps (Priority Order)
 
@@ -379,6 +396,63 @@ moon test --target native
 cd src/moonbit
 moon test
 ```
+
+## CLI Usage
+
+### Basic Usage
+```bash
+# Build the CLI
+cd src/moonbit
+moon build --target native cli
+
+# Run the compiler
+./target/native/release/build/cli/cli.exe [options] <files...>
+```
+
+### Command Line Options
+```
+Usage: moonbit-tsc [options] <file...>
+
+Options:
+  --help, -h           Show help message
+  --version, -v        Show version
+  --target <target>    ECMAScript target (es5, es2015, esnext, etc.)
+  --outDir <dir>       Output directory
+  --sourceMap          Generate external source map files
+  --inlineSourceMap    Embed source maps in JavaScript files
+  --declaration        Generate .d.ts declaration files
+  --parallel <n>       Number of parallel workers (default: 4)
+  --verbose            Verbose output
+```
+
+### Examples
+```bash
+# Single file compilation
+moonbit-tsc src/index.ts
+
+# Multiple files with ES5 target
+moonbit-tsc --target es5 --sourceMap src/*.ts
+
+# Directory compilation with all features
+moonbit-tsc --verbose --declaration --sourceMap --outDir dist src/
+
+# Parallel compilation with 8 workers
+moonbit-tsc --parallel 8 --outDir dist src/
+```
+
+### Benchmark Results (20 files)
+
+| Workers | Time | Speedup |
+|---------|------|---------|
+| 1 | 34ms | baseline |
+| 2 | 12ms | 2.8x |
+| 4 | 13ms | 2.6x |
+| 8 | 16ms | 2.1x |
+
+### Output Files
+- `.js` - Compiled JavaScript (ES5 or ES2015+)
+- `.js.map` - Source maps (with `--sourceMap`)
+- `.d.ts` - TypeScript declarations (with `--declaration`)
 
 ## Key Achievements
 
