@@ -30,9 +30,9 @@ fn get_base_name(path : String) -> String {
   }
 
   // Remove .ts or .tsx extension
-  if name.ends_with(".tsx") {
+  if name.has_suffix(".tsx") {
     name.substring(end=name.length() - 4)
-  } else if name.ends_with(".ts") {
+  } else if name.has_suffix(".ts") {
     name.substring(end=name.length() - 3)
   } else {
     name
@@ -58,15 +58,15 @@ fn base64_encode(input : String) -> String {
     let c2 = ((b1 & 0x0F) << 2) | (b2 >> 6)
     let c3 = b2 & 0x3F
 
-    result.write_char(Char::from_int(alphabet[c0]))
-    result.write_char(Char::from_int(alphabet[c1]))
+    result.write_char(alphabet[c0].unsafe_to_char())
+    result.write_char(alphabet[c1].unsafe_to_char())
     if i + 1 < len {
-      result.write_char(Char::from_int(alphabet[c2]))
+      result.write_char(alphabet[c2].unsafe_to_char())
     } else {
       result.write_char('=')
     }
     if i + 2 < len {
-      result.write_char(Char::from_int(alphabet[c3]))
+      result.write_char(alphabet[c3].unsafe_to_char())
     } else {
       result.write_char('=')
     }

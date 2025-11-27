@@ -8,8 +8,7 @@
     "moonbit-ts-compiler/config",
     "moonbitlang/async",
     "moonbitlang/async/fs",
-    "moonbitlang/async/io",
-    "moonbitlang/async/stdio"
+    "moonbitlang/async/io"
   ],
   "targets": {
     "*.mbt": ["native"]

@@ -130,20 +130,22 @@ pub fn parse_args(args : Array[String]) -> Result[Command, String] {
       if i >= args.length() {
         return Err("--watchInterval requires a number (milliseconds)")
       }
-      match (try? @strconv.parse_int(args[i])) {
-        Ok(n) => watch_interval = n
-        Err(_) => return Err("--watchInterval requires a valid number")
+      try {
+        watch_interval = @strconv.parse_int!(args[i])
+      } catch {
+        _ => return Err("--watchInterval requires a valid number")
       }
     } else if arg == "--parallel" {
       i = i + 1
       if i >= args.length() {
         return Err("--parallel requires a number")
       }
-      match (try? @strconv.parse_int(args[i])) {
-        Ok(n) => parallel = Some(n)
-        Err(_) => return Err("--parallel requires a valid number")
+      try {
+        parallel = Some(@strconv.parse_int!(args[i]))
+      } catch {
+        _ => return Err("--parallel requires a valid number")
       }
-    } else if arg.starts_with("-") {
+    } else if arg.has_prefix("-") {
       return Err("Unknown option: " + arg)
     } else {
       files.push(arg)

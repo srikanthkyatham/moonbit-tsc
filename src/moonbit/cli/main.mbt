@@ -204,7 +204,7 @@ async fn run_watch_mode(
 ///|
 /// Compile files with a pre-read file list
 async fn compile_files_with_dag(
-  file_paths : Array[String],
+  _file_paths : Array[String],
   files : Array[(String, String)],
   options : CLIOptions,
 ) -> Unit raise Error {
@@ -482,7 +482,7 @@ fn build_cli_options_from_tsconfig(
               // Resolve relative paths against project directory
               match project_dir {
                 Some(proj_dir) =>
-                  if dir.length() > 0 && not(dir.starts_with("/")) {
+                  if dir.length() > 0 && not(dir.has_prefix("/")) {
                     // Relative path - resolve against project dir
                     Some(proj_dir + "/" + dir)
                   } else {
@@ -676,7 +676,7 @@ async fn run_project_watch_mode(
 ///|
 /// Compile project files with given options
 async fn compile_project_files(
-  file_paths : Array[String],
+  _file_paths : Array[String],
   files : Array[(String, String)],
   options : CLIOptions,
   coord_options : @coordinator.CoordinatorOptions,
@@ -784,18 +784,18 @@ fn get_tsconfig_directory(path : String) -> String {
   if last_slash == -1 {
     "."
   } else {
-    path.substring(start=0, end=last_slash)
+    path.substring(end=last_slash)
   }
 }
 
 ///|
 /// Resolve a relative path against a base directory
 fn resolve_path(base_dir : String, relative_path : String) -> String {
-  if relative_path.starts_with("/") || relative_path.starts_with("\\") {
+  if relative_path.has_prefix("/") || relative_path.has_prefix("\\") {
     relative_path
-  } else if relative_path.starts_with("./") {
+  } else if relative_path.has_prefix("./") {
     base_dir + "/" + relative_path.substring(start=2)
-  } else if relative_path.starts_with(".\\") {
+  } else if relative_path.has_prefix(".\\") {
     base_dir + "/" + relative_path.substring(start=2)
   } else {
     base_dir + "/" + relative_path
