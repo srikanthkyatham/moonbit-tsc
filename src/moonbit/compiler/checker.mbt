@@ -1744,8 +1744,17 @@ fn infer_call_expression_type(
         // Any, unknown, type references (might be classes), and error types
         // are treated as callable and return any
         any_type(checker)
-      Number(_) | String(_) | Boolean(_) | Void(_) | Null(_) | Undefined(_) |
-      NumberLiteral(_, _) | StringLiteral(_, _) | BooleanLiteral(_, _) | Never(_) | Symbol(_) => {
+      Number(_)
+      | String(_)
+      | Boolean(_)
+      | Void(_)
+      | Null(_)
+      | Undefined(_)
+      | NumberLiteral(_, _)
+      | StringLiteral(_, _)
+      | BooleanLiteral(_, _)
+      | Never(_)
+      | Symbol(_) => {
         // Primitive types are not callable
         let checker = add_diagnostic_with_code(
           checker,
@@ -1812,7 +1821,6 @@ fn check_function_call_args(
       )
     }
   }
-
   (func.return_type, checker)
 }
 
@@ -4136,7 +4144,6 @@ fn check_object_assignability_detailed(
   for entry in target.properties {
     let (prop_name, target_prop) = entry
     let prop_path = if path == "" { prop_name } else { "\{path}.\{prop_name}" }
-
     match source.properties.get(prop_name) {
       Some(source_prop) =>
         // Check property type compatibility recursively
@@ -4178,7 +4185,6 @@ fn check_object_assignability_detailed(
       }
     }
   }
-
   checker
 }
 
@@ -4208,7 +4214,9 @@ fn check_union_assignability_detailed(
           Some(source_prop) => {
             // Check if source's discriminant value matches any union member
             let matching = find_union_members_by_discriminant(
-              union, discriminant, source_prop.prop_type,
+              union,
+              discriminant,
+              source_prop.prop_type,
             )
             if matching.is_empty() {
               return add_diagnostic_with_code(
@@ -4296,7 +4304,10 @@ fn find_union_members_by_discriminant(
 
 ///|
 /// Format expected discriminant values for error message
-fn format_discriminant_values(union : CheckerUnionType, prop_name : String) -> String {
+fn format_discriminant_values(
+  union : CheckerUnionType,
+  prop_name : String,
+) -> String {
   let values : Array[String] = []
   for union_type in union.types {
     match union_type {
@@ -4329,7 +4340,6 @@ fn check_intersection_assignability_detailed(
       checker, source, intersect_type, location, path,
     )
   }
-
   checker
 }
 
@@ -4382,7 +4392,6 @@ fn check_function_assignability_detailed(
       TS2322,
     )
   }
-
   for i = 0; i < target.parameters.length(); i = i + 1 {
     if i < source.parameters.length() {
       let param_path = if path == "" {
@@ -4400,7 +4409,6 @@ fn check_function_assignability_detailed(
       )
     }
   }
-
   checker
 }
 
@@ -4447,7 +4455,6 @@ fn check_tuple_assignability_detailed(
       )
     }
   }
-
   checker
 }
 
@@ -4811,8 +4818,8 @@ fn check_enum_members(
   if index >= members.length() {
     checker
   } else {
-    let member = members[index]
-    let checker = check_enum_member(checker, member, is_const)
+    let e_member = members[index]
+    let checker = check_enum_member(checker, e_member, is_const)
     check_enum_members(checker, members, is_const, index + 1)
   }
 }
