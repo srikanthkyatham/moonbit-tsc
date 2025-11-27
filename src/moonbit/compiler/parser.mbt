@@ -491,8 +491,18 @@ fn parse_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
     // Namespace/module declaration
     KeywordNamespace(_) | KeywordModule(_) => parse_module_declaration(parser)
 
-    // Import declaration
-    KeywordImport(_) => parse_import_declaration(parser)
+    // Import declaration or dynamic import expression
+    KeywordImport(_) => {
+      // Check if this is a dynamic import (import followed by open paren)
+      if parser.position + 1 < parser.tokens.length() {
+        match parser.tokens[parser.position + 1] {
+          OpenParen(_) => parse_expression_statement(parser) // Dynamic import
+          _ => parse_import_declaration(parser)
+        }
+      } else {
+        parse_import_declaration(parser)
+      }
+    }
 
     // Export declaration
     KeywordExport(_) => parse_export_declaration(parser)

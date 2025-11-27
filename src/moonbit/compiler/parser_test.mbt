@@ -3271,7 +3271,7 @@ test "parse static block in class" {
 
 ///|
 test "parse dynamic import with string literal" {
-  let source = "const module = import('./module.js');"
+  let source = "const mod = import('./module.js');"
   let tokens = tokens_from_source(source)
   let result = parse_source_file(tokens, "test.ts")
   match result {
