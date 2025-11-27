@@ -139,3 +139,287 @@ test "resolve_module_path - no paths or baseUrl returns None" {
   let result = resolve_module_path("utils", "/project/src/index.ts", options)
   assert_true(result is None)
 }
+
+// ============================================================================
+// Node.js Module Resolution Tests
+// ============================================================================
+
+///|
+test "parse_package_name - simple package" {
+  let parsed = parse_package_name("lodash")
+  assert_eq(parsed.package_name, "lodash")
+  assert_eq(parsed.subpath, "")
+}
+
+///|
+test "parse_package_name - package with subpath" {
+  let parsed = parse_package_name("lodash/map")
+  assert_eq(parsed.package_name, "lodash")
+  assert_eq(parsed.subpath, "/map")
+}
+
+///|
+test "parse_package_name - package with deep subpath" {
+  let parsed = parse_package_name("lodash/fp/map")
+  assert_eq(parsed.package_name, "lodash")
+  assert_eq(parsed.subpath, "/fp/map")
+}
+
+///|
+test "parse_package_name - scoped package" {
+  let parsed = parse_package_name("@types/node")
+  assert_eq(parsed.package_name, "@types/node")
+  assert_eq(parsed.subpath, "")
+}
+
+///|
+test "parse_package_name - scoped package with subpath" {
+  let parsed = parse_package_name("@types/node/fs")
+  assert_eq(parsed.package_name, "@types/node")
+  assert_eq(parsed.subpath, "/fs")
+}
+
+///|
+test "parse_package_name - scoped package with deep subpath" {
+  let parsed = parse_package_name("@angular/core/testing/fakes")
+  assert_eq(parsed.package_name, "@angular/core")
+  assert_eq(parsed.subpath, "/testing/fakes")
+}
+
+///|
+test "resolve_from_node_modules - skips relative paths" {
+  fn file_exists(_path : String) -> Bool {
+    false
+  }
+
+  fn read_file(_path : String) -> String? {
+    None
+  }
+
+  let result = resolve_from_node_modules(
+    "./local",
+    "/project/src/index.ts",
+    file_exists,
+    read_file,
+  )
+  assert_true(result is None)
+}
+
+///|
+test "resolve_from_node_modules - skips absolute paths" {
+  fn file_exists(_path : String) -> Bool {
+    false
+  }
+
+  fn read_file(_path : String) -> String? {
+    None
+  }
+
+  let result = resolve_from_node_modules(
+    "/absolute/path",
+    "/project/src/index.ts",
+    file_exists,
+    read_file,
+  )
+  assert_true(result is None)
+}
+
+///|
+test "resolve_from_node_modules - finds package with index.ts" {
+  fn file_exists(path : String) -> Bool {
+    path == "/project/node_modules/my-package/index.ts"
+  }
+
+  fn read_file(_path : String) -> String? {
+    None
+  }
+
+  let result = resolve_from_node_modules(
+    "my-package",
+    "/project/src/index.ts",
+    file_exists,
+    read_file,
+  )
+  guard result is Some(resolved) else {
+    assert_true(false)
+    return
+  }
+  assert_eq(resolved, "/project/node_modules/my-package/index.ts")
+}
+
+///|
+test "resolve_from_node_modules - finds package with types field" {
+  fn file_exists(path : String) -> Bool {
+    path == "/project/node_modules/typed-package/dist/types.d.ts"
+  }
+
+  fn read_file(path : String) -> String? {
+    if path == "/project/node_modules/typed-package/package.json" {
+      Some("{\"name\": \"typed-package\", \"types\": \"dist/types.d.ts\"}")
+    } else {
+      None
+    }
+  }
+
+  let result = resolve_from_node_modules(
+    "typed-package",
+    "/project/src/index.ts",
+    file_exists,
+    read_file,
+  )
+  guard result is Some(resolved) else {
+    assert_true(false)
+    return
+  }
+  assert_eq(resolved, "/project/node_modules/typed-package/dist/types.d.ts")
+}
+
+///|
+test "resolve_from_node_modules - finds package with subpath" {
+  fn file_exists(path : String) -> Bool {
+    path == "/project/node_modules/lodash/map.ts"
+  }
+
+  fn read_file(_path : String) -> String? {
+    None
+  }
+
+  let result = resolve_from_node_modules(
+    "lodash/map",
+    "/project/src/index.ts",
+    file_exists,
+    read_file,
+  )
+  guard result is Some(resolved) else {
+    assert_true(false)
+    return
+  }
+  assert_eq(resolved, "/project/node_modules/lodash/map.ts")
+}
+
+///|
+test "resolve_from_node_modules - finds scoped package" {
+  fn file_exists(path : String) -> Bool {
+    path == "/project/node_modules/@types/node/index.d.ts"
+  }
+
+  fn read_file(_path : String) -> String? {
+    None
+  }
+
+  let result = resolve_from_node_modules(
+    "@types/node",
+    "/project/src/index.ts",
+    file_exists,
+    read_file,
+  )
+  guard result is Some(resolved) else {
+    assert_true(false)
+    return
+  }
+  assert_eq(resolved, "/project/node_modules/@types/node/index.d.ts")
+}
+
+///|
+test "resolve_from_node_modules - climbs directory tree" {
+  // Package is in parent's node_modules, not child's
+  fn file_exists(path : String) -> Bool {
+    path == "/project/node_modules/shared-lib/index.ts"
+  }
+
+  fn read_file(_path : String) -> String? {
+    None
+  }
+
+  let result = resolve_from_node_modules(
+    "shared-lib",
+    "/project/packages/app/src/index.ts",
+    file_exists,
+    read_file,
+  )
+  guard result is Some(resolved) else {
+    assert_true(false)
+    return
+  }
+  assert_eq(resolved, "/project/node_modules/shared-lib/index.ts")
+}
+
+///|
+test "resolve_from_node_modules - returns None when not found" {
+  fn file_exists(_path : String) -> Bool {
+    false
+  }
+
+  fn read_file(_path : String) -> String? {
+    None
+  }
+
+  let result = resolve_from_node_modules(
+    "non-existent-package",
+    "/project/src/index.ts",
+    file_exists,
+    read_file,
+  )
+  assert_true(result is None)
+}
+
+///|
+test "resolve_module_full - node_modules resolution without baseUrl" {
+  // Without baseUrl, bare specifiers go to node_modules
+  let options = CompilerOptions::default()
+
+  fn file_exists(path : String) -> Bool {
+    path == "/project/node_modules/external-lib/index.ts"
+  }
+
+  fn read_file(_path : String) -> String? {
+    None
+  }
+
+  // Should resolve bare specifier via node_modules
+  let result = resolve_module_full(
+    "external-lib",
+    "/project/src/index.ts",
+    options,
+    file_exists,
+    read_file,
+  )
+  guard result is Some(resolved) else {
+    assert_true(false)
+    return
+  }
+  assert_eq(resolved, "/project/node_modules/external-lib/index.ts")
+}
+
+///|
+test "resolve_module_full - paths take priority over node_modules" {
+  let paths : Map[String, Array[String]] = {}
+  paths["my-lib"] = ["./src/local-lib"]
+  let options : CompilerOptions = {
+    ..CompilerOptions::default(),
+    base_url: Some("/project"),
+    paths: Some(paths),
+  }
+
+  fn file_exists(_path : String) -> Bool {
+    true // Both local and node_modules would match
+  }
+
+  fn read_file(_path : String) -> String? {
+    None
+  }
+
+  let result = resolve_module_full(
+    "my-lib",
+    "/project/src/index.ts",
+    options,
+    file_exists,
+    read_file,
+  )
+  guard result is Some(resolved) else {
+    assert_true(false)
+    return
+  }
+  // Paths mapping should take priority - should contain local path
+  assert_true(resolved.contains("local-lib"))
+}

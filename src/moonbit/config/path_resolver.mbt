@@ -276,3 +276,348 @@ pub fn try_resolve_extensions(path : String) -> Array[String] {
     path + "/index.d.ts",
   ]
 }
+
+// ============================================================================
+// Node.js Module Resolution
+// ============================================================================
+
+///|
+/// Parsed package name result
+pub struct ParsedPackageName {
+  package_name : String // e.g., "lodash" or "@types/node"
+  subpath : String // e.g., "" or "/deep/import"
+}
+
+///|
+/// Parse a bare specifier into package name and subpath
+/// Handles scoped packages like @types/node/fs
+pub fn parse_package_name(specifier : String) -> ParsedPackageName {
+  // Handle scoped packages (@scope/name)
+  if specifier.has_prefix("@") {
+    // Find first slash after scope
+    let first_slash = find_char_from(specifier, '/', 1)
+    match first_slash {
+      None => {
+        // Just @scope with no package name - invalid, treat as package
+        { package_name: specifier, subpath: "" }
+      }
+      Some(scope_end) => {
+        // Find second slash (after package name)
+        let second_slash = find_char_from(specifier, '/', scope_end + 1)
+        match second_slash {
+          None => {
+            // @scope/name with no subpath
+            { package_name: specifier, subpath: "" }
+          }
+          Some(pkg_end) => {
+            // @scope/name/subpath
+            let package_name = @utils.substr(specifier, start=0, end=pkg_end)
+            let subpath = @utils.substr(specifier, start=pkg_end)
+            { package_name, subpath }
+          }
+        }
+      }
+    }
+  } else {
+    // Non-scoped package
+    let slash_idx = find_char(specifier, '/')
+    match slash_idx {
+      None => {
+        // Just package name
+        { package_name: specifier, subpath: "" }
+      }
+      Some(idx) => {
+        // package/subpath
+        let package_name = @utils.substr(specifier, start=0, end=idx)
+        let subpath = @utils.substr(specifier, start=idx)
+        { package_name, subpath }
+      }
+    }
+  }
+}
+
+///|
+/// Find character in string starting from a given index
+fn find_char_from(s : String, c : Char, start : Int) -> Int? {
+  let code = c.to_int()
+  for i = start; i < s.length(); i = i + 1 {
+    if s[i] == code {
+      return Some(i)
+    }
+  }
+  None
+}
+
+///|
+/// Resolve a bare specifier from node_modules
+/// Climbs directory tree looking for node_modules/package
+pub fn resolve_from_node_modules(
+  specifier : String,
+  from_file : String,
+  file_exists : (String) -> Bool,
+  read_file : (String) -> String?,
+) -> String? {
+  // Skip relative and absolute paths
+  if is_relative_specifier(specifier) || is_absolute_specifier(specifier) {
+    return None
+  }
+
+  // Parse the package name and subpath
+  let parsed = parse_package_name(specifier)
+
+  // Start from the directory containing the importing file
+  let mut current_dir = get_parent_directory(from_file)
+
+  // Climb the directory tree
+  // Stop when we hit "." (no more parent) or "/" (root) or empty string
+  while current_dir.length() > 0 && current_dir != "/" && current_dir != "." {
+    let node_modules_path = join_path(current_dir, "node_modules")
+    let package_path = join_path(node_modules_path, parsed.package_name)
+
+    // Try to resolve from this node_modules directory
+    match try_resolve_package(
+      package_path,
+      parsed.subpath,
+      file_exists,
+      read_file,
+    ) {
+      Some(resolved) => return Some(resolved)
+      None => ()
+    }
+
+    // Move up to parent directory
+    let parent = get_parent_directory(current_dir)
+    // Stop if we're not making progress (would cause infinite loop)
+    if parent == current_dir {
+      break
+    }
+    current_dir = parent
+  }
+
+  // Also check root node_modules
+  let root_package_path = join_path("/node_modules", parsed.package_name)
+  try_resolve_package(root_package_path, parsed.subpath, file_exists, read_file)
+}
+
+///|
+/// Try to resolve a package at the given path
+fn try_resolve_package(
+  package_path : String,
+  subpath : String,
+  file_exists : (String) -> Bool,
+  read_file : (String) -> String?,
+) -> String? {
+  if subpath.length() > 0 {
+    // Has subpath, try direct resolution
+    let full_path = package_path + subpath
+    // Try TypeScript extensions first
+    for ext_path in try_resolve_extensions(full_path) {
+      if file_exists(ext_path) {
+        return Some(ext_path)
+      }
+    }
+    // Try JS extensions for declaration files
+    for ext in [".js", ".mjs", ".cjs"] {
+      let js_path = full_path + ext
+      if file_exists(js_path) {
+        return Some(js_path)
+      }
+    }
+    // Try as-is (might already have extension)
+    if file_exists(full_path) {
+      return Some(full_path)
+    }
+    return None
+  }
+
+  // No subpath - need to find entry point from package.json
+  let package_json_path = join_path(package_path, "package.json")
+
+  // Try to read and parse package.json
+  match read_file(package_json_path) {
+    Some(content) => {
+      // Try to find types/main field
+      match get_package_entry_point(content, file_exists, package_path) {
+        Some(entry) => return Some(entry)
+        None => ()
+      }
+    }
+    None => ()
+  }
+
+  // Fallback: try index files
+  for ext_path in try_resolve_extensions(package_path) {
+    if file_exists(ext_path) {
+      return Some(ext_path)
+    }
+  }
+
+  None
+}
+
+///|
+/// Extract entry point from package.json content
+/// Looks for: types, typings, main (in that order for TypeScript)
+fn get_package_entry_point(
+  package_json_content : String,
+  file_exists : (String) -> Bool,
+  package_path : String,
+) -> String? {
+  // Try to find "types" field
+  match extract_json_string_field(package_json_content, "types") {
+    Some(types_path) => {
+      let full_path = join_path(package_path, types_path)
+      if file_exists(full_path) {
+        return Some(full_path)
+      }
+    }
+    None => ()
+  }
+
+  // Try to find "typings" field (older convention)
+  match extract_json_string_field(package_json_content, "typings") {
+    Some(typings_path) => {
+      let full_path = join_path(package_path, typings_path)
+      if file_exists(full_path) {
+        return Some(full_path)
+      }
+    }
+    None => ()
+  }
+
+  // Try to find "main" field
+  match extract_json_string_field(package_json_content, "main") {
+    Some(main_path) => {
+      let full_path = join_path(package_path, main_path)
+      // For main, also try .d.ts alongside .js
+      if full_path.has_suffix(".js") {
+        let dts_path = @utils.substr(full_path, start=0, end=full_path.length() -
+            3) +
+          ".d.ts"
+        if file_exists(dts_path) {
+          return Some(dts_path)
+        }
+      }
+      if file_exists(full_path) {
+        return Some(full_path)
+      }
+      // Try with TypeScript extensions
+      for ext_path in try_resolve_extensions(
+        @utils.substr(full_path, start=0, end=full_path.length() - 3),
+      ) {
+        if file_exists(ext_path) {
+          return Some(ext_path)
+        }
+      }
+    }
+    None => ()
+  }
+
+  None
+}
+
+///|
+/// Simple JSON string field extractor
+/// Looks for "fieldName": "value" pattern
+fn extract_json_string_field(json : String, field_name : String) -> String? {
+  // Build search pattern: "fieldName"
+  let pattern = "\"" + field_name + "\""
+  let pattern_start = find_substring(json, pattern)
+
+  match pattern_start {
+    None => None
+    Some(start_idx) => {
+      // Find the colon after the field name
+      let after_field = start_idx + pattern.length()
+      let colon_idx = find_char_from(json, ':', after_field)
+
+      match colon_idx {
+        None => None
+        Some(colon) => {
+          // Find the opening quote of the value
+          let quote_start = find_char_from(json, '"', colon + 1)
+
+          match quote_start {
+            None => None
+            Some(value_start) => {
+              // Find the closing quote
+              let quote_end = find_char_from(json, '"', value_start + 1)
+
+              match quote_end {
+                None => None
+                Some(value_end) =>
+                  Some(
+                    @utils.substr(json, start=value_start + 1, end=value_end),
+                  )
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+///|
+/// Find a substring in a string
+fn find_substring(haystack : String, needle : String) -> Int? {
+  if needle.length() == 0 {
+    return Some(0)
+  }
+  if needle.length() > haystack.length() {
+    return None
+  }
+
+  for i = 0; i <= haystack.length() - needle.length(); i = i + 1 {
+    let mut matched = true
+    for j = 0; j < needle.length(); j = j + 1 {
+      if haystack[i + j] != needle[j] {
+        matched = false
+        break
+      }
+    }
+    if matched {
+      return Some(i)
+    }
+  }
+  None
+}
+
+///|
+/// Resolve module with full algorithm including node_modules
+/// This is the main entry point for module resolution
+pub fn resolve_module_full(
+  module_specifier : String,
+  from_file : String,
+  options : CompilerOptions,
+  file_exists : (String) -> Bool,
+  read_file : (String) -> String?,
+) -> String? {
+  // 1. Try paths mapping first (highest priority)
+  match resolve_with_paths(module_specifier, from_file, options) {
+    Some(resolved) => return Some(resolved)
+    None => ()
+  }
+
+  // 2. Try baseUrl resolution
+  match resolve_with_base_url(module_specifier, from_file, options) {
+    Some(resolved) => return Some(resolved)
+    None => ()
+  }
+
+  // 3. For bare specifiers, try node_modules resolution
+  if is_bare_specifier(module_specifier) {
+    match resolve_from_node_modules(
+      module_specifier,
+      from_file,
+      file_exists,
+      read_file,
+    ) {
+      Some(resolved) => return Some(resolved)
+      None => ()
+    }
+  }
+
+  // No resolution found
+  None
+}
