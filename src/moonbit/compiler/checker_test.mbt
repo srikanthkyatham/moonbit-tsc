@@ -4884,14 +4884,20 @@ test "noEmit - returns empty JavaScript when enabled" {
     #|const y: string = "hello";
   let options = CompileOptions::{
     target: Target::ES2015,
+    module_kind: ESModule,
     source_map: false,
+    inline_source_map: false,
+    inline_sources: false,
     declaration: false,
     strict: false,
+    always_strict: false,
     isolated_modules: false,
     exact_optional_property_types: false,
     no_unchecked_indexed_access: false,
     verbatim_module_syntax: false,
     no_emit: true,
+    es_module_interop: false,
+    no_implicit_any: false,
   }
   let result = compile_source(source, "test.ts", options)
   assert_true(result.success)
@@ -4908,14 +4914,20 @@ test "noEmit - type checking still runs" {
     #|const y: string = x; // type error
   let options = CompileOptions::{
     target: Target::ES2015,
+    module_kind: ESModule,
     source_map: false,
+    inline_source_map: false,
+    inline_sources: false,
     declaration: false,
     strict: false,
+    always_strict: false,
     isolated_modules: false,
     exact_optional_property_types: false,
     no_unchecked_indexed_access: false,
     verbatim_module_syntax: false,
     no_emit: true,
+    es_module_interop: false,
+    no_implicit_any: false,
   }
   let result = compile_source(source, "test.ts", options)
   // noEmit still runs type checking - diagnostics should be present
@@ -4930,14 +4942,20 @@ test "noEmit disabled - JavaScript is emitted" {
     #|const x: number = 42;
   let options = CompileOptions::{
     target: Target::ES2015,
+    module_kind: ESModule,
     source_map: false,
+    inline_source_map: false,
+    inline_sources: false,
     declaration: false,
     strict: false,
+    always_strict: false,
     isolated_modules: false,
     exact_optional_property_types: false,
     no_unchecked_indexed_access: false,
     verbatim_module_syntax: false,
     no_emit: false,
+    es_module_interop: false,
+    no_implicit_any: false,
   }
   let result = compile_source(source, "test.ts", options)
   assert_true(result.success)
@@ -4952,14 +4970,20 @@ test "noEmit - declaration not generated even if requested" {
     #|export const x: number = 42;
   let options = CompileOptions::{
     target: Target::ES2015,
+    module_kind: ESModule,
     source_map: false,
+    inline_source_map: false,
+    inline_sources: false,
     declaration: true, // requested but should be ignored
     strict: false,
+    always_strict: false,
     isolated_modules: false,
     exact_optional_property_types: false,
     no_unchecked_indexed_access: false,
     verbatim_module_syntax: false,
     no_emit: true,
+    es_module_interop: false,
+    no_implicit_any: false,
   }
   let result = compile_source(source, "test.ts", options)
   assert_true(result.success)

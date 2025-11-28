@@ -5,17 +5,30 @@
 // wrapper functions that can be called from Zig's parallel execution engine.
 
 ///|
+/// Module output format
+pub(all) enum ModuleKind {
+  ESModule // ES2015+ import/export (default)
+  CommonJS // Node.js require/module.exports
+} derive(Show, Eq)
+
+///|
 /// Compilation options passed from Zig
 pub(all) struct CompileOptions {
   target : Target
+  module_kind : ModuleKind // Module output format (ESModule or CommonJS)
   source_map : Bool
+  inline_source_map : Bool // Embed source map as base64 data URL in JS output
+  inline_sources : Bool // Include original source in source map
   declaration : Bool
   strict : Bool
+  always_strict : Bool // Emit "use strict" directive
   isolated_modules : Bool // Ensures each file can be transpiled independently
   exact_optional_property_types : Bool // Differentiates between undefined and missing properties
   no_unchecked_indexed_access : Bool // Adds undefined to indexed access types (arr[i] becomes T | undefined)
   verbatim_module_syntax : Bool // Requires type-only imports/exports to use explicit type syntax
   no_emit : Bool // Only run type checking, don't emit JavaScript or declaration files
+  es_module_interop : Bool // Emit helpers for CommonJS/ES module interoperability
+  no_implicit_any : Bool // Error on expressions and declarations with an implied 'any' type
 } derive(Show)
 
 ///|
@@ -23,14 +36,20 @@ pub(all) struct CompileOptions {
 pub fn CompileOptions::default() -> CompileOptions {
   {
     target: Target::ES2015,
+    module_kind: ESModule,
     source_map: false,
+    inline_source_map: false,
+    inline_sources: false,
     declaration: false,
     strict: false,
+    always_strict: false,
     isolated_modules: false,
     exact_optional_property_types: false,
     no_unchecked_indexed_access: false,
     verbatim_module_syntax: false,
     no_emit: false,
+    es_module_interop: false,
+    no_implicit_any: false,
   }
 }
 
@@ -147,9 +166,26 @@ pub fn compile_source(
           }
 
           // Phase 6: Emit JavaScript
-          let emitter_ctx = EmitterContext::default()
-          let (javascript, source_map_json) = if options.source_map {
-            emit_with_source_map_internal(transformed_sf, file_path)
+          let emitter_ctx = EmitterContext::with_options(
+            options.module_kind,
+            options.always_strict,
+          )
+          // Generate source map if requested (either external or inline)
+          let needs_source_map = options.source_map || options.inline_source_map
+          let (javascript, source_map_json) = if needs_source_map {
+            // Pass original source when inline_sources is enabled
+            let original_source : String? = if options.inline_sources {
+              Some(source)
+            } else {
+              None
+            }
+            emit_with_source_map_internal(
+              transformed_sf,
+              file_path,
+              options.module_kind,
+              options.always_strict,
+              original_source~,
+            )
           } else {
             (emit(SourceFile(transformed_sf), emitter_ctx), None)
           }
@@ -181,11 +217,28 @@ pub fn compile_source(
 fn emit_with_source_map_internal(
   source_file : SourceFile,
   file_path : String,
+  module_kind : ModuleKind,
+  always_strict : Bool,
+  original_source~ : String? = None,
 ) -> (String, String?) {
   let source_map_builder = SourceMapBuilder::new()
-  let ctx = EmitterContext::with_source_map(source_map_builder, file_path)
+  let ctx = EmitterContext::with_options_and_source_map(
+    module_kind,
+    always_strict,
+    source_map_builder,
+    file_path,
+  )
   let javascript = emit(SourceFile(source_file), ctx)
-  let source_map = source_map_builder.build(Some(file_path))
+
+  // Build source map with optional sources content
+  let sources_content : Array[String]? = match original_source {
+    Some(src) => Some([src])
+    None => None
+  }
+  let source_map = source_map_builder.build_with_sources(
+    Some(file_path),
+    sources_content,
+  )
   let source_map_json = source_map.to_json()
   (javascript, Some(source_map_json))
 }

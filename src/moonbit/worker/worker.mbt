@@ -34,16 +34,27 @@ fn process_request(json_str : String) -> @protocol.CompileResponse {
   }
 
   // Build compile options
+  let module_kind : @compiler.ModuleKind = if request.module_kind == "commonjs" {
+    @compiler.CommonJS
+  } else {
+    @compiler.ESModule
+  }
   let options = @compiler.CompileOptions::{
     target: @compiler.parse_target(request.target),
+    module_kind,
     source_map: request.source_map,
+    inline_source_map: request.inline_source_map,
+    inline_sources: request.inline_sources,
     declaration: request.declaration,
     strict: false,
+    always_strict: request.always_strict,
     isolated_modules: false,
     exact_optional_property_types: false,
     no_unchecked_indexed_access: false,
     verbatim_module_syntax: false,
     no_emit: false,
+    es_module_interop: request.es_module_interop,
+    no_implicit_any: false, // TODO: wire through from request
   }
 
   // Measure compilation time

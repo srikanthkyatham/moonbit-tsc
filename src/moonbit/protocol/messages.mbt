@@ -7,8 +7,13 @@ pub(all) struct CompileRequest {
   file_path : String
   source : String
   target : String
+  module_kind : String // "esmodule" or "commonjs"
   source_map : Bool
+  inline_source_map : Bool // Embed source map as base64 data URL in JS output
+  inline_sources : Bool // Include original source in source map
   declaration : Bool
+  always_strict : Bool
+  es_module_interop : Bool // Emit helpers for CommonJS/ES module interoperability
 } derive(Show, ToJson, FromJson)
 
 ///|
@@ -17,10 +22,26 @@ pub fn CompileRequest::new(
   file_path : String,
   source : String,
   target~ : String = "es2015",
+  module_kind~ : String = "esmodule",
   source_map~ : Bool = false,
+  inline_source_map~ : Bool = false,
+  inline_sources~ : Bool = false,
   declaration~ : Bool = false,
+  always_strict~ : Bool = false,
+  es_module_interop~ : Bool = false,
 ) -> CompileRequest {
-  { file_path, source, target, source_map, declaration }
+  {
+    file_path,
+    source,
+    target,
+    module_kind,
+    source_map,
+    inline_source_map,
+    inline_sources,
+    declaration,
+    always_strict,
+    es_module_interop,
+  }
 }
 
 ///|

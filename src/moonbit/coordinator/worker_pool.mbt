@@ -159,14 +159,20 @@ pub async fn run_with_pool(
     }
 
     // Enqueue all work items
+    let module_kind_str = match options.module_kind {
+      @compiler.CommonJS => "commonjs"
+      _ => "esmodule"
+    }
     for i = 0; i < files.length(); i = i + 1 {
       let (file_path, source) = files[i]
       let request = @protocol.CompileRequest::new(
         file_path,
         source,
         target=options.target,
+        module_kind=module_kind_str,
         source_map=options.source_map,
         declaration=options.declaration,
+        always_strict=options.always_strict,
       )
       pool.work_queue.put({ request, index: i })
     }

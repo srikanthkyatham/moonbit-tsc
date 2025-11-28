@@ -321,6 +321,16 @@ pub fn SourceMapBuilder::build(
   self : SourceMapBuilder,
   file : String?,
 ) -> SourceMap {
+  self.build_with_sources(file, None)
+}
+
+///|
+/// Builds the final source map with encoded mappings and optional sources content
+pub fn SourceMapBuilder::build_with_sources(
+  self : SourceMapBuilder,
+  file : String?,
+  sources_content : Array[String]?,
+) -> SourceMap {
   // Sort mappings by generated position
   let sorted = sort_mappings(self.mappings)
 
@@ -331,7 +341,7 @@ pub fn SourceMapBuilder::build(
     file,
     source_root: None,
     sources: self.sources,
-    sources_content: None,
+    sources_content,
     names: self.names,
     mappings: mappings_str,
   }

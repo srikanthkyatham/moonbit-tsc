@@ -7,6 +7,9 @@ pub struct EmitterContext {
   indent_level : Int
   indent_string : String
   newline_at_rules : Bool
+  module_kind : ModuleKind // ESModule or CommonJS
+  always_strict : Bool // Whether to emit "use strict" directive
+  es_module_interop : Bool // Emit __importDefault/__importStar helpers for CommonJS interop
   source_map_builder : SourceMapBuilder? // Optional source map builder
   source_file : String? // Source file name for mappings
   mut generated_line : Int // Current generated line (0-based)
@@ -20,6 +23,9 @@ pub fn EmitterContext::default() -> EmitterContext {
     indent_level: 0,
     indent_string: "  ",
     newline_at_rules: true,
+    module_kind: ESModule,
+    always_strict: false,
+    es_module_interop: false,
     source_map_builder: None,
     source_file: None,
     generated_line: 0,
@@ -37,6 +43,51 @@ pub fn EmitterContext::with_source_map(
     indent_level: 0,
     indent_string: "  ",
     newline_at_rules: true,
+    module_kind: ESModule,
+    always_strict: false,
+    es_module_interop: false,
+    source_map_builder: Some(builder),
+    source_file: Some(source_file),
+    generated_line: 0,
+    generated_column: 0,
+  }
+}
+
+///|
+/// Create emitter context with compile options
+pub fn EmitterContext::with_options(
+  module_kind : ModuleKind,
+  always_strict : Bool,
+) -> EmitterContext {
+  {
+    indent_level: 0,
+    indent_string: "  ",
+    newline_at_rules: true,
+    module_kind,
+    always_strict,
+    es_module_interop: false,
+    source_map_builder: None,
+    source_file: None,
+    generated_line: 0,
+    generated_column: 0,
+  }
+}
+
+///|
+/// Create emitter context with compile options and source map
+pub fn EmitterContext::with_options_and_source_map(
+  module_kind : ModuleKind,
+  always_strict : Bool,
+  builder : SourceMapBuilder,
+  source_file : String,
+) -> EmitterContext {
+  {
+    indent_level: 0,
+    indent_string: "  ",
+    newline_at_rules: true,
+    module_kind,
+    always_strict,
+    es_module_interop: false,
     source_map_builder: Some(builder),
     source_file: Some(source_file),
     generated_line: 0,
@@ -51,6 +102,9 @@ pub fn EmitterContext::indent(self : EmitterContext) -> EmitterContext {
     indent_level: self.indent_level + 1,
     indent_string: self.indent_string,
     newline_at_rules: self.newline_at_rules,
+    module_kind: self.module_kind,
+    always_strict: self.always_strict,
+    es_module_interop: self.es_module_interop,
     source_map_builder: self.source_map_builder,
     source_file: self.source_file,
     generated_line: self.generated_line,
@@ -280,6 +334,13 @@ fn emit_source_file(sf : SourceFile, ctx : EmitterContext) -> String {
     None => ()
   }
 
+  // Emit "use strict" directive if always_strict is enabled
+  if ctx.always_strict {
+    result = result + "\"use strict\";\n"
+    ctx.emit_text("\"use strict\";")
+    ctx.emit_newline()
+  }
+
   // Emit helper functions if decorators are used
   let uses_decorators = source_file_uses_decorators(sf)
   let uses_param_decorators = source_file_uses_param_decorators(sf)
@@ -359,8 +420,14 @@ fn has_abstract_modifier(modifiers : Array[Modifier]) -> Bool {
 
 ///|
 /// Get export prefix based on modifiers (export, export default, or empty)
-fn get_export_prefix(modifiers : Array[Modifier]) -> String {
+/// For CommonJS, we don't emit a prefix - we add exports.X = X after the declaration
+fn get_export_prefix(modifiers : Array[Modifier], ctx : EmitterContext) -> String {
   if has_export_modifier(modifiers) {
+    // CommonJS: no prefix, handle exports separately
+    if ctx.module_kind == CommonJS {
+      return ""
+    }
+    // ESModule: standard export prefix
     if has_default_modifier(modifiers) {
       "export default "
     } else {
@@ -368,6 +435,81 @@ fn get_export_prefix(modifiers : Array[Modifier]) -> String {
     }
   } else {
     ""
+  }
+}
+
+///|
+/// Get CommonJS export suffix for a variable statement
+fn get_commonjs_var_export_suffix(
+  vs : VariableStatement,
+  ctx : EmitterContext,
+) -> String {
+  if ctx.module_kind != CommonJS || not(has_export_modifier(vs.modifiers)) {
+    return ""
+  }
+  if has_default_modifier(vs.modifiers) {
+    // export default const x = 1 is not valid, but handle export default expression
+    return ""
+  }
+  // Collect all declared names
+  let mut result = ""
+  let indent = ctx.get_indent()
+  for decl in vs.declarations {
+    match decl.name {
+      Identifier(id) => {
+        result = result + "\n" + indent + "exports." + id.name + " = " + id.name + ";"
+      }
+      _ => () // Binding patterns are more complex, skip for now
+    }
+  }
+  result
+}
+
+///|
+/// Get CommonJS export suffix for a function declaration
+fn get_commonjs_fn_export_suffix(
+  fd : FunctionDeclaration,
+  ctx : EmitterContext,
+) -> String {
+  if ctx.module_kind != CommonJS || not(has_export_modifier(fd.modifiers)) {
+    return ""
+  }
+  let indent = ctx.get_indent()
+  if has_default_modifier(fd.modifiers) {
+    // export default function foo() {} -> function foo() {} exports.default = foo;
+    match fd.name {
+      Some(Identifier(id)) => "\n" + indent + "exports.default = " + id.name + ";"
+      _ => "\n" + indent + "module.exports = " + "_default" + ";" // anonymous default
+    }
+  } else {
+    match fd.name {
+      Some(Identifier(id)) => "\n" + indent + "exports." + id.name + " = " + id.name + ";"
+      _ => ""
+    }
+  }
+}
+
+///|
+/// Get CommonJS export suffix for a class declaration
+fn get_commonjs_class_export_suffix(
+  cd : ClassDeclaration,
+  ctx : EmitterContext,
+) -> String {
+  if ctx.module_kind != CommonJS || not(has_export_modifier(cd.modifiers)) {
+    return ""
+  }
+  let indent = ctx.get_indent()
+  if has_default_modifier(cd.modifiers) {
+    // export default class Foo {} -> class Foo {} exports.default = Foo;
+    match cd.name {
+      Some(Identifier(id)) => "\n" + indent + "exports.default = " + id.name + ";"
+      _ => "\n" + indent + "module.exports = " + "_default" + ";" // anonymous default
+    }
+  } else {
+    match cd.name {
+      Some(Identifier(id)) => "\n" + indent + "exports." + id.name + " = " + id.name + ";"
+      _ => ""
+    }
   }
 }
 
@@ -383,7 +525,7 @@ fn emit_variable_statement(
 
   // Add source mapping at the start of the statement
   ctx.add_mapping(vs.location.start.line, vs.location.start.column, None)
-  let export_prefix = get_export_prefix(vs.modifiers)
+  let export_prefix = get_export_prefix(vs.modifiers, ctx)
   let keyword = if vs.is_const {
     "const"
   } else if vs.is_let {
@@ -415,7 +557,9 @@ fn emit_variable_statement(
       decls = decls + ", "
     }
   }
-  ctx.get_indent() + export_prefix + keyword + " " + decls + ";"
+  // For CommonJS, add export suffix after declaration
+  let export_suffix = get_commonjs_var_export_suffix(vs, ctx)
+  ctx.get_indent() + export_prefix + keyword + " " + decls + ";" + export_suffix
 }
 
 ///|
@@ -429,10 +573,18 @@ fn emit_function_declaration(
     return ""
   }
 
+  // Special case: anonymous export default function in CommonJS
+  // export default function() {} -> exports.default = function() {}
+  if ctx.module_kind == CommonJS &&
+    has_default_modifier(fd.modifiers) &&
+    not(fd.name is Some(_)) {
+    return emit_anonymous_default_function_commonjs(fd, ctx)
+  }
+
   // Add source mapping at the start of the function declaration
   ctx.add_mapping(fd.location.start.line, fd.location.start.column, None)
   let mut result = ctx.get_indent()
-  result = result + get_export_prefix(fd.modifiers)
+  result = result + get_export_prefix(fd.modifiers, ctx)
   if fd.is_async {
     result = result + "async "
   }
@@ -462,7 +614,36 @@ fn emit_function_declaration(
     }
     None => result = result + ";"
   }
+  // For CommonJS, add export suffix after declaration
+  result = result + get_commonjs_fn_export_suffix(fd, ctx)
   result
+}
+
+///|
+/// Emit anonymous export default function as CommonJS
+fn emit_anonymous_default_function_commonjs(
+  fd : FunctionDeclaration,
+  ctx : EmitterContext,
+) -> String {
+  let mut result = ctx.get_indent() + "exports.default = "
+  if fd.is_async {
+    result = result + "async "
+  }
+  result = result + "function"
+  if fd.is_generator {
+    result = result + "*"
+  }
+  result = result + "("
+  result = result + emit_parameters(fd.parameters, ctx)
+  result = result + ")"
+  match fd.body {
+    Some(body) => {
+      result = result + " "
+      result = result + emit(body, ctx)
+    }
+    None => result = result + ";"
+  }
+  result + ";"
 }
 
 ///|
@@ -819,7 +1000,7 @@ fn emit_class_declaration(
     _ => ""
   }
   let has_class_decorators = has_decorators(cd.decorators)
-  let export_prefix = get_export_prefix(cd.modifiers)
+  let export_prefix = get_export_prefix(cd.modifiers, ctx)
 
   // Add source mapping at the start of the class declaration
   ctx.add_mapping(cd.location.start.line, cd.location.start.column, None)
@@ -1058,6 +1239,8 @@ fn emit_class_declaration(
     }
   }
 
+  // For CommonJS, add export suffix after class declaration
+  result = result + get_commonjs_class_export_suffix(cd, ctx)
   result
 }
 
@@ -1422,6 +1605,11 @@ fn emit_import_declaration(
   id : ImportDeclaration,
   ctx : EmitterContext,
 ) -> String {
+  // CommonJS: transform to require() calls
+  if ctx.module_kind == CommonJS {
+    return emit_import_declaration_commonjs(id, ctx)
+  }
+  // ESModule: standard import syntax
   let mut result = ctx.get_indent() + "import "
   match id.import_clause {
     Some(clause) => {
@@ -1482,11 +1670,120 @@ fn emit_import_declaration(
 }
 
 ///|
+/// Emit import declaration as CommonJS require()
+fn emit_import_declaration_commonjs(
+  id : ImportDeclaration,
+  ctx : EmitterContext,
+) -> String {
+  let indent = ctx.get_indent()
+  let module_spec = id.module_specifier
+
+  match id.import_clause {
+    Some(clause) => {
+      // Check for namespace import: import * as foo from 'mod' -> const foo = require('mod')
+      match clause.named_bindings {
+        Some(NamespaceImport(name, _)) =>
+          return indent + "const " + name + " = require(\"" + module_spec + "\");"
+        Some(NamedImports(specifiers, _)) => {
+          // Named imports: import { a, b as c } from 'mod'
+          // -> const { a, b: c } = require('mod')
+          match clause.name {
+            Some(default_name) => {
+              // Has both default and named: import foo, { bar } from 'mod'
+              // -> const foo = require('mod'); const { bar } = foo;
+              // Or: const _mod = require('mod'); const foo = _mod.default; const { bar } = _mod;
+              // Simplified: const _mod = require('mod'), foo = _mod.default, { bar } = _mod;
+              let temp_var = "_" + sanitize_module_name(module_spec)
+              let mut result = indent + "const " + temp_var + " = require(\"" + module_spec + "\");\n"
+              result = result + indent + "const " + default_name + " = " + temp_var + ".default || " + temp_var + ";\n"
+              result = result + indent + "const { "
+              for i = 0; i < specifiers.length(); i = i + 1 {
+                let spec = specifiers[i]
+                match spec.property_name {
+                  Some(prop_name) => result = result + prop_name + ": " + spec.name
+                  None => result = result + spec.name
+                }
+                if i < specifiers.length() - 1 {
+                  result = result + ", "
+                }
+              }
+              result = result + " } = " + temp_var + ";"
+              return result
+            }
+            None => {
+              // Only named imports: import { a, b as c } from 'mod' -> const { a, b: c } = require('mod')
+              let mut result = indent + "const { "
+              for i = 0; i < specifiers.length(); i = i + 1 {
+                let spec = specifiers[i]
+                match spec.property_name {
+                  Some(prop_name) => result = result + prop_name + ": " + spec.name
+                  None => result = result + spec.name
+                }
+                if i < specifiers.length() - 1 {
+                  result = result + ", "
+                }
+              }
+              result = result + " } = require(\"" + module_spec + "\");"
+              return result
+            }
+          }
+        }
+        None => {
+          // Default import only: import foo from 'mod'
+          // -> const foo = require('mod').default || require('mod')
+          // Or simpler: const foo = require('mod')
+          match clause.name {
+            Some(name) => {
+              // For CommonJS interop, we check for .default
+              let temp_var = "_" + sanitize_module_name(module_spec)
+              return indent + "const " + temp_var + " = require(\"" + module_spec + "\"), " + name + " = " + temp_var + ".default || " + temp_var + ";"
+            }
+            None => return indent + "require(\"" + module_spec + "\");"
+          }
+        }
+      }
+    }
+    None => {
+      // Side-effect import: import 'mod' -> require('mod')
+      return indent + "require(\"" + module_spec + "\");"
+    }
+  }
+}
+
+///|
+/// Sanitize module name for use as a variable
+fn sanitize_module_name(module_spec : String) -> String {
+  let mut result = ""
+  for i = 0; i < module_spec.length(); i = i + 1 {
+    let c = module_spec[i].unsafe_to_char()
+    if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_' {
+      result = result + c.to_string()
+    } else {
+      result = result + "_"
+    }
+  }
+  if result.length() == 0 {
+    return "mod"
+  }
+  // Ensure it doesn't start with a digit
+  let first = result[0].unsafe_to_char()
+  if first >= '0' && first <= '9' {
+    return "_" + result
+  }
+  result
+}
+
+///|
 /// Emit export declaration
 fn emit_export_declaration(
   ed : ExportDeclaration,
   ctx : EmitterContext,
 ) -> String {
+  // CommonJS: transform to module.exports or Object.assign
+  if ctx.module_kind == CommonJS {
+    return emit_export_declaration_commonjs(ed, ctx)
+  }
+  // ESModule: standard export syntax
   let mut result = ctx.get_indent() + "export "
   match ed.export_clause {
     Some(clause) =>
@@ -1525,11 +1822,84 @@ fn emit_export_declaration(
 }
 
 ///|
+/// Emit export declaration as CommonJS
+fn emit_export_declaration_commonjs(
+  ed : ExportDeclaration,
+  ctx : EmitterContext,
+) -> String {
+  let indent = ctx.get_indent()
+
+  match ed.export_clause {
+    Some(clause) =>
+      match clause {
+        NamedExports(specifiers, _) => {
+          match ed.module_specifier {
+            Some(ms) => {
+              // export { a, b as c } from 'mod'
+              // -> const _mod = require('mod'); exports.a = _mod.a; exports.c = _mod.b;
+              let temp_var = "_" + sanitize_module_name(ms)
+              let mut result = indent + "const " + temp_var + " = require(\"" + ms + "\");\n"
+              for i = 0; i < specifiers.length(); i = i + 1 {
+                let spec = specifiers[i]
+                let source_name = match spec.property_name {
+                  Some(prop_name) => prop_name
+                  None => spec.name
+                }
+                result = result + indent + "exports." + spec.name + " = " + temp_var + "." + source_name + ";"
+                if i < specifiers.length() - 1 {
+                  result = result + "\n"
+                }
+              }
+              result
+            }
+            None => {
+              // export { a, b as c }
+              // -> exports.a = a; exports.c = b;
+              let mut result = ""
+              for i = 0; i < specifiers.length(); i = i + 1 {
+                let spec = specifiers[i]
+                let source_name = match spec.property_name {
+                  Some(prop_name) => prop_name
+                  None => spec.name
+                }
+                result = result + indent + "exports." + spec.name + " = " + source_name + ";"
+                if i < specifiers.length() - 1 {
+                  result = result + "\n"
+                }
+              }
+              result
+            }
+          }
+        }
+        NamespaceExport(name, _) => {
+          // export * as ns from 'mod' -> exports.ns = require('mod')
+          match ed.module_specifier {
+            Some(ms) => indent + "exports." + name + " = require(\"" + ms + "\");"
+            None => "" // Invalid, but handle gracefully
+          }
+        }
+      }
+    None => {
+      // export * from 'mod' -> Object.assign(exports, require('mod'))
+      match ed.module_specifier {
+        Some(ms) => indent + "Object.assign(exports, require(\"" + ms + "\"));"
+        None => "" // Invalid, but handle gracefully
+      }
+    }
+  }
+}
+
+///|
 /// Emit export assignment
 fn emit_export_assignment(
   ea : ExportAssignment,
   ctx : EmitterContext,
 ) -> String {
+  // CommonJS: transform to module.exports
+  if ctx.module_kind == CommonJS {
+    return emit_export_assignment_commonjs(ea, ctx)
+  }
+  // ESModule
   let mut result = ctx.get_indent() + "export "
   if ea.is_export_equals {
     result = result + "= "
@@ -1538,6 +1908,23 @@ fn emit_export_assignment(
   }
   result = result + emit(ea.expression, ctx) + ";"
   result
+}
+
+///|
+/// Emit export assignment as CommonJS
+fn emit_export_assignment_commonjs(
+  ea : ExportAssignment,
+  ctx : EmitterContext,
+) -> String {
+  let indent = ctx.get_indent()
+  let expr = emit(ea.expression, ctx)
+  if ea.is_export_equals {
+    // export = foo -> module.exports = foo
+    indent + "module.exports = " + expr + ";"
+  } else {
+    // export default foo -> exports.default = foo
+    indent + "exports.default = " + expr + ";"
+  }
 }
 
 ///|

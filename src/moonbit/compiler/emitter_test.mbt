@@ -1877,3 +1877,317 @@ test "emit spread in arrays ES5 - function call" {
   assert_true(js.contains("getItems()"))
   assert_true(js.contains("getMoreItems()"))
 }
+
+// ============================================================================
+// CommonJS Module Tests
+// ============================================================================
+
+///|
+/// Helper to compile to CommonJS module format
+fn compile_to_commonjs(source : String) -> String {
+  let tokens = get_tokens_from_source(source)
+  match parse_source_file(tokens, "test.ts") {
+    Ok(source_file) => {
+      let ctx = TransformerContext::default()
+      let emit_ctx = EmitterContext::with_options(CommonJS, false)
+      compile_source_file(source_file, ctx, emit_ctx)
+    }
+    Err(_) => abort("Failed to parse source")
+  }
+}
+
+///|
+/// Helper to compile with alwaysStrict enabled
+fn compile_with_strict(source : String) -> String {
+  let tokens = get_tokens_from_source(source)
+  match parse_source_file(tokens, "test.ts") {
+    Ok(source_file) => {
+      let ctx = TransformerContext::default()
+      let emit_ctx = EmitterContext::with_options(ESModule, true)
+      compile_source_file(source_file, ctx, emit_ctx)
+    }
+    Err(_) => abort("Failed to parse source")
+  }
+}
+
+///|
+/// Test: alwaysStrict emits "use strict"
+test "emit use strict directive with alwaysStrict" {
+  let js = compile_with_strict("const x = 1;")
+  println("With alwaysStrict:\n\{js}")
+  assert_true(js.contains("\"use strict\";"))
+}
+
+///|
+/// Test: alwaysStrict preserves hashbang
+test "emit use strict after hashbang" {
+  let js = compile_with_strict("#!/usr/bin/env node\nconst x = 1;")
+  println("With hashbang and alwaysStrict:\n\{js}")
+  // Hashbang should be first
+  assert_true(js.has_prefix("#!/usr/bin/env node"))
+  // use strict should come after
+  assert_true(js.contains("\"use strict\";"))
+}
+
+///|
+/// Test: CommonJS import - side effect import
+test "commonjs emit side effect import" {
+  let js = compile_to_commonjs("import './polyfill';")
+  println("CommonJS side effect import:\n\{js}")
+  assert_true(js.contains("require(\"./polyfill\")"))
+  assert_false(js.contains("import"))
+}
+
+///|
+/// Test: CommonJS import - namespace import
+test "commonjs emit namespace import" {
+  let js = compile_to_commonjs("import * as fs from 'fs';")
+  println("CommonJS namespace import:\n\{js}")
+  assert_true(js.contains("const fs = require(\"fs\")"))
+  assert_false(js.contains("import"))
+}
+
+///|
+/// Test: CommonJS import - named imports
+test "commonjs emit named imports" {
+  let js = compile_to_commonjs("import { readFile, writeFile } from 'fs';")
+  println("CommonJS named imports:\n\{js}")
+  assert_true(js.contains("require(\"fs\")"))
+  assert_true(js.contains("const { readFile, writeFile }"))
+  assert_false(js.contains("import"))
+}
+
+///|
+/// Test: CommonJS import - named imports with alias
+test "commonjs emit named imports with alias" {
+  let js = compile_to_commonjs("import { readFile as read, writeFile as write } from 'fs';")
+  println("CommonJS named imports with alias:\n\{js}")
+  assert_true(js.contains("require(\"fs\")"))
+  assert_true(js.contains("readFile: read"))
+  assert_true(js.contains("writeFile: write"))
+  assert_false(js.contains("import"))
+}
+
+///|
+/// Test: CommonJS export - named export
+test "commonjs emit named export" {
+  let js = compile_to_commonjs("export const foo = 1;")
+  println("CommonJS named export:\n\{js}")
+  assert_true(js.contains("const foo = 1;"))
+  assert_true(js.contains("exports.foo = foo"))
+  assert_false(js.contains("export const"))
+}
+
+///|
+/// Test: CommonJS export - function export
+test "commonjs emit function export" {
+  let js = compile_to_commonjs("export function hello() { return 'hi'; }")
+  println("CommonJS function export:\n\{js}")
+  assert_true(js.contains("function hello()"))
+  assert_true(js.contains("exports.hello = hello"))
+  assert_false(js.contains("export function"))
+}
+
+///|
+/// Test: CommonJS export - class export
+test "commonjs emit class export" {
+  let js = compile_to_commonjs("export class MyClass { }")
+  println("CommonJS class export:\n\{js}")
+  assert_true(js.contains("class MyClass"))
+  assert_true(js.contains("exports.MyClass = MyClass"))
+  assert_false(js.contains("export class"))
+}
+
+///|
+/// Test: CommonJS export default
+test "commonjs emit export default" {
+  let js = compile_to_commonjs("export default function() { return 1; }")
+  println("CommonJS export default:\n\{js}")
+  assert_true(js.contains("exports.default"))
+  assert_false(js.contains("export default"))
+}
+
+///|
+/// Test: CommonJS re-export from another module
+test "commonjs emit re-export from module" {
+  let js = compile_to_commonjs("export { foo, bar } from './other';")
+  println("CommonJS re-export:\n\{js}")
+  assert_true(js.contains("require(\"./other\")"))
+  assert_true(js.contains("exports.foo"))
+  assert_true(js.contains("exports.bar"))
+  assert_false(js.contains("export {"))
+}
+
+///|
+/// Test: CommonJS export * from module
+test "commonjs emit export star from module" {
+  let js = compile_to_commonjs("export * from './utils';")
+  println("CommonJS export star:\n\{js}")
+  assert_true(js.contains("Object.assign(exports, require(\"./utils\"))"))
+  assert_false(js.contains("export *"))
+}
+
+// ============================================================================
+// Inline Source Map Tests
+// ============================================================================
+
+///|
+/// Helper to compile with source map enabled
+fn compile_with_source_map(source : String) -> CompileResult {
+  let options = CompileOptions::{
+    target: Target::ES2015,
+    module_kind: ESModule,
+    source_map: true,
+    inline_source_map: false,
+    inline_sources: false,
+    declaration: false,
+    strict: false,
+    always_strict: false,
+    isolated_modules: false,
+    exact_optional_property_types: false,
+    no_unchecked_indexed_access: false,
+    verbatim_module_syntax: false,
+    no_emit: false,
+    es_module_interop: false,
+    no_implicit_any: false,
+  }
+  compile_source(source, "test.ts", options)
+}
+
+///|
+/// Helper to compile with inline sources enabled
+fn compile_with_inline_sources(source : String) -> CompileResult {
+  let options = CompileOptions::{
+    target: Target::ES2015,
+    module_kind: ESModule,
+    source_map: true,
+    inline_source_map: false,
+    inline_sources: true,
+    declaration: false,
+    strict: false,
+    always_strict: false,
+    isolated_modules: false,
+    exact_optional_property_types: false,
+    no_unchecked_indexed_access: false,
+    verbatim_module_syntax: false,
+    no_emit: false,
+    es_module_interop: false,
+    no_implicit_any: false,
+  }
+  compile_source(source, "test.ts", options)
+}
+
+///|
+/// Test: Source map is generated when source_map is true
+test "source map generated when enabled" {
+  let source = "const x = 42;"
+  let result = compile_with_source_map(source)
+  assert_true(result.success)
+  assert_true(result.source_map.is_some())
+  match result.source_map {
+    Some(sm) => {
+      println("Source map:\n\{sm}")
+      assert_true(sm.contains("\"version\": 3"))
+      assert_true(sm.contains("\"sources\":"))
+      assert_true(sm.contains("\"mappings\":"))
+    }
+    None => assert_true(false)
+  }
+  println("Source map generation test passed")
+}
+
+///|
+/// Test: Inline sources includes sourcesContent in source map
+test "inline sources includes sourcesContent" {
+  let source = "const greeting = \"hello world\";"
+  let result = compile_with_inline_sources(source)
+  assert_true(result.success)
+  assert_true(result.source_map.is_some())
+  match result.source_map {
+    Some(sm) => {
+      println("Source map with inline sources:\n\{sm}")
+      assert_true(sm.contains("\"sourcesContent\":"))
+      // The original source should be in the source map
+      assert_true(sm.contains("hello world"))
+    }
+    None => assert_true(false)
+  }
+  println("Inline sources test passed")
+}
+
+///|
+/// Test: Source map without inline sources does not include sourcesContent
+test "source map without inline sources excludes sourcesContent" {
+  let source = "const x = 123;"
+  let result = compile_with_source_map(source)
+  assert_true(result.success)
+  assert_true(result.source_map.is_some())
+  match result.source_map {
+    Some(sm) => {
+      println("Source map without inline sources:\n\{sm}")
+      // Should not have sourcesContent field
+      assert_false(sm.contains("\"sourcesContent\":"))
+    }
+    None => assert_true(false)
+  }
+  println("Source map without inline sources test passed")
+}
+
+///|
+/// Test: Inline source map flag enables source map generation
+test "inline source map flag enables source map generation" {
+  let options = CompileOptions::{
+    target: Target::ES2015,
+    module_kind: ESModule,
+    source_map: false, // external source map disabled
+    inline_source_map: true, // but inline source map enabled
+    inline_sources: false,
+    declaration: false,
+    strict: false,
+    always_strict: false,
+    isolated_modules: false,
+    exact_optional_property_types: false,
+    no_unchecked_indexed_access: false,
+    verbatim_module_syntax: false,
+    no_emit: false,
+    es_module_interop: false,
+    no_implicit_any: false,
+  }
+  let result = compile_source("const y = 99;", "test.ts", options)
+  assert_true(result.success)
+  // Even though source_map is false, inline_source_map should trigger generation
+  assert_true(result.source_map.is_some())
+  println("Inline source map flag test passed")
+}
+
+// ============================================================================
+// esModuleInterop Tests
+// ============================================================================
+
+///|
+/// Test: esModuleInterop option is accepted
+test "esModuleInterop option accepted" {
+  let options = CompileOptions::{
+    target: Target::ES2015,
+    module_kind: CommonJS,
+    source_map: false,
+    inline_source_map: false,
+    inline_sources: false,
+    declaration: false,
+    strict: false,
+    always_strict: false,
+    isolated_modules: false,
+    exact_optional_property_types: false,
+    no_unchecked_indexed_access: false,
+    verbatim_module_syntax: false,
+    no_emit: false,
+    es_module_interop: true, // Enable esModuleInterop
+    no_implicit_any: false,
+  }
+  let source = "import foo from './bar';"
+  let result = compile_source(source, "test.ts", options)
+  assert_true(result.success)
+  // Basic CommonJS interop is already present - it checks for .default || module
+  assert_true(result.javascript.contains("require"))
+  println("esModuleInterop option test passed")
+}

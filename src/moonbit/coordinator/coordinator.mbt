@@ -5,8 +5,13 @@
 /// Compilation options for the coordinator
 pub(all) struct CoordinatorOptions {
   target : String
+  module_kind : @compiler.ModuleKind // ESModule or CommonJS
   source_map : Bool
+  inline_source_map : Bool // Embed source map as base64 data URL in JS output
+  inline_sources : Bool // Include original source in source map
   declaration : Bool
+  always_strict : Bool // Emit "use strict"
+  es_module_interop : Bool // Emit helpers for CommonJS/ES module interoperability
   worker_count : Int
   verbose : Bool
 } derive(Show)
@@ -16,8 +21,13 @@ pub(all) struct CoordinatorOptions {
 pub fn CoordinatorOptions::default() -> CoordinatorOptions {
   {
     target: "es2015",
+    module_kind: @compiler.ESModule,
     source_map: false,
+    inline_source_map: false,
+    inline_sources: false,
     declaration: false,
+    always_strict: false,
+    es_module_interop: false,
     worker_count: 4, // Default to 4 workers
     verbose: false,
   }
@@ -120,14 +130,20 @@ fn compile_single(
 ) -> @protocol.CompileResponse {
   let compile_options = @compiler.CompileOptions::{
     target: @compiler.parse_target(options.target),
+    module_kind: options.module_kind,
     source_map: options.source_map,
+    inline_source_map: options.inline_source_map,
+    inline_sources: options.inline_sources,
     declaration: options.declaration,
     strict: false,
+    always_strict: options.always_strict,
     isolated_modules: false,
     exact_optional_property_types: false,
     no_unchecked_indexed_access: false,
     verbatim_module_syntax: false,
     no_emit: false,
+    es_module_interop: options.es_module_interop,
+    no_implicit_any: false, // TODO: wire through from CoordinatorOptions
   }
 
   let start_time = @async.now()

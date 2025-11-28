@@ -409,10 +409,16 @@ fn print_init_message() -> Unit {
 ///|
 /// Build CoordinatorOptions from CLIOptions
 fn build_coordinator_options(options : CLIOptions) -> @coordinator.CoordinatorOptions {
+  let source_map_mode = get_effective_source_map(options)
   @coordinator.CoordinatorOptions::{
     target: get_effective_cli_target(options),
-    source_map: get_effective_source_map(options) != SourceMapMode::None,
+    module_kind: @compiler.ESModule, // Default to ESModule for CLI
+    source_map: source_map_mode != SourceMapMode::None,
+    inline_source_map: source_map_mode == SourceMapMode::Inline,
+    inline_sources: false, // Default to false for CLI
     declaration: get_effective_declaration(options),
+    always_strict: false, // Default to false for CLI
+    es_module_interop: false, // Default to false for CLI
     worker_count: options.parallel.unwrap_or(default_worker_count()),
     verbose: options.verbose,
   }
@@ -454,10 +460,55 @@ fn build_coordinator_options_from_tsconfig(
       }
   }
 
+  // Get module kind from tsconfig
+  let module_kind : @compiler.ModuleKind = match tsconfig.compiler_options {
+    Some(opts) =>
+      match opts.module_kind {
+        Some(@config.CommonJS) => @compiler.CommonJS
+        _ => @compiler.ESModule // Default to ESModule
+      }
+    None => @compiler.ESModule
+  }
+
+  // Get always_strict from tsconfig (from strict or alwaysStrict flags)
+  let always_strict = match tsconfig.compiler_options {
+    Some(opts) =>
+      opts.always_strict.unwrap_or(false) || opts.strict.unwrap_or(false)
+    None => false
+  }
+
+  // Get inline source map from tsconfig or CLI
+  let inline_source_map = match cli_options.source_map_mode {
+    Some(SourceMapMode::Inline) => true
+    Some(_) => false
+    None =>
+      match tsconfig.compiler_options {
+        Some(opts) => opts.inline_source_map.unwrap_or(false)
+        None => false
+      }
+  }
+
+  // Get inline sources from tsconfig
+  let inline_sources = match tsconfig.compiler_options {
+    Some(opts) => opts.inline_sources.unwrap_or(false)
+    None => false
+  }
+
+  // Get esModuleInterop from tsconfig
+  let es_module_interop = match tsconfig.compiler_options {
+    Some(opts) => opts.es_module_interop.unwrap_or(false)
+    None => false
+  }
+
   @coordinator.CoordinatorOptions::{
     target,
-    source_map,
+    module_kind,
+    source_map: source_map || inline_source_map, // Enable source map generation for inline too
+    inline_source_map,
+    inline_sources,
     declaration,
+    always_strict,
+    es_module_interop,
     worker_count: cli_options.parallel.unwrap_or(default_worker_count()),
     verbose: cli_options.verbose,
   }
