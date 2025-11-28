@@ -5470,3 +5470,59 @@ pub fn check_type_v2_integrated(
   let updated_checker = convert_result.1
   (old_type, updated_checker, result.errors)
 }
+
+// ============================================================================
+// Isolated Modules Validation
+// ============================================================================
+
+///|
+/// Validate isolatedModules constraints
+/// When isolatedModules is enabled, each file must be able to be transpiled
+/// independently without knowledge of other files.
+///
+/// Errors reported:
+/// - TS1208: File is not a module (no import/export statements)
+/// - TS1209: const enum declarations are not allowed
+pub fn validate_isolated_modules(
+  bound : BoundSourceFile,
+  file_path : String,
+) -> Array[Diagnostic] {
+  let diagnostics : Array[Diagnostic] = []
+
+  // TS1208: File must be a module (have import/export statements)
+  if not(bound.module_info.is_external_module) {
+    let location = SourceLocation::{
+      file_path,
+      start: Position::{ line: 1, column: 1, offset: 0 },
+      end: Position::{ line: 1, column: 1, offset: 0 },
+    }
+    diagnostics.push(
+      Diagnostic::{
+        code: 1208,
+        category: DiagnosticCategory::Error,
+        message: "'isolatedModules' requires all files to be modules (have import or export statements).",
+        location,
+      },
+    )
+  }
+
+  // TS1209: const enum declarations are not allowed
+  for stmt in bound.statements {
+    match stmt {
+      EnumDeclaration(enum_decl) =>
+        if enum_decl.is_const {
+          diagnostics.push(
+            Diagnostic::{
+              code: 1209,
+              category: DiagnosticCategory::Error,
+              message: "const enums are not allowed when 'isolatedModules' is enabled. Use regular enums instead.",
+              location: enum_decl.location,
+            },
+          )
+        }
+      _ => ()
+    }
+  }
+
+  diagnostics
+}

@@ -11,6 +11,7 @@ pub(all) struct CompileOptions {
   source_map : Bool
   declaration : Bool
   strict : Bool
+  isolated_modules : Bool // Ensures each file can be transpiled independently
 } derive(Show)
 
 ///|
@@ -21,6 +22,7 @@ pub fn CompileOptions::default() -> CompileOptions {
     source_map: false,
     declaration: false,
     strict: false,
+    isolated_modules: false,
   }
 }
 
@@ -81,6 +83,18 @@ pub fn compile_source(
       match bind_source_file(source_file) {
         Err(diagnostics) => CompileResult::failure(diagnostics)
         Ok(bound_source) => {
+          // Phase 3.5: Validate isolatedModules constraints if enabled
+          let isolated_modules_diagnostics = if options.isolated_modules {
+            validate_isolated_modules(bound_source, file_path)
+          } else {
+            []
+          }
+
+          // If isolatedModules validation failed, return errors
+          if isolated_modules_diagnostics.length() > 0 {
+            return CompileResult::failure(isolated_modules_diagnostics)
+          }
+
           // Phase 4: Type check
           let check_result = check_source_file(bound_source)
 

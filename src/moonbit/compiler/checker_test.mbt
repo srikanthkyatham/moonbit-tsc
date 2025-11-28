@@ -4477,3 +4477,127 @@ test "check code with multiple triple-slash directives" {
     Err(_) => assert_true(false)
   }
 }
+
+// ============================================================================
+// isolatedModules Validation Tests
+// ============================================================================
+
+///|
+fn parse_bind_for_isolated_modules(
+  source : String,
+) -> Result[BoundSourceFile, Array[Diagnostic]] {
+  let tokens = scan_all_v2(source, "test.ts")
+  match parse_source_file(tokens, "test.ts") {
+    Err(diagnostics) => Err(diagnostics)
+    Ok(source_file) => bind_source_file(source_file)
+  }
+}
+
+///|
+test "isolatedModules TS1208 - script file without imports/exports" {
+  let source =
+    #|const x = 42;
+    #|function foo() { return x; }
+  match parse_bind_for_isolated_modules(source) {
+    Err(_) => assert_true(false)
+    Ok(bound) => {
+      let diagnostics = validate_isolated_modules(bound, "test.ts")
+      // Should have TS1208 error - file is not a module
+      assert_eq(diagnostics.length(), 1)
+      assert_eq(diagnostics[0].code, 1208)
+      assert_true(
+        diagnostics[0].message.contains(
+          "isolatedModules",
+        ),
+      )
+      println("isolatedModules TS1208 script file test passed")
+    }
+  }
+}
+
+///|
+test "isolatedModules TS1209 - const enum not allowed" {
+  let source =
+    #|export const x = 1;
+    #|const enum Color { Red, Green, Blue }
+  match parse_bind_for_isolated_modules(source) {
+    Err(_) => assert_true(false)
+    Ok(bound) => {
+      let diagnostics = validate_isolated_modules(bound, "test.ts")
+      // Should have TS1209 error - const enums not allowed
+      assert_eq(diagnostics.length(), 1)
+      assert_eq(diagnostics[0].code, 1209)
+      assert_true(
+        diagnostics[0].message.contains("const enums"),
+      )
+      println("isolatedModules TS1209 const enum test passed")
+    }
+  }
+}
+
+///|
+test "isolatedModules - valid module file passes" {
+  let source =
+    #|export const x = 42;
+    #|export function foo() { return x; }
+  match parse_bind_for_isolated_modules(source) {
+    Err(_) => assert_true(false)
+    Ok(bound) => {
+      let diagnostics = validate_isolated_modules(bound, "test.ts")
+      // Should have no errors - file is a valid module
+      assert_eq(diagnostics.length(), 0)
+      println("isolatedModules valid module test passed")
+    }
+  }
+}
+
+///|
+test "isolatedModules - regular enum allowed" {
+  let source =
+    #|export const x = 1;
+    #|enum Color { Red, Green, Blue }
+  match parse_bind_for_isolated_modules(source) {
+    Err(_) => assert_true(false)
+    Ok(bound) => {
+      let diagnostics = validate_isolated_modules(bound, "test.ts")
+      // Should have no errors - regular enums are allowed
+      assert_eq(diagnostics.length(), 0)
+      println("isolatedModules regular enum test passed")
+    }
+  }
+}
+
+///|
+test "isolatedModules - multiple const enums report multiple errors" {
+  let source =
+    #|export const x = 1;
+    #|const enum Color { Red, Green, Blue }
+    #|const enum Size { Small, Medium, Large }
+  match parse_bind_for_isolated_modules(source) {
+    Err(_) => assert_true(false)
+    Ok(bound) => {
+      let diagnostics = validate_isolated_modules(bound, "test.ts")
+      // Should have 2 TS1209 errors - one per const enum
+      assert_eq(diagnostics.length(), 2)
+      assert_eq(diagnostics[0].code, 1209)
+      assert_eq(diagnostics[1].code, 1209)
+      println("isolatedModules multiple const enums test passed")
+    }
+  }
+}
+
+///|
+test "isolatedModules - import statement makes file a module" {
+  let source =
+    #|import { foo } from './bar';
+    #|const x = foo();
+  match parse_bind_for_isolated_modules(source) {
+    Err(_) => assert_true(false)
+    Ok(bound) => {
+      let diagnostics = validate_isolated_modules(bound, "test.ts")
+      // Should have no errors - import makes file a module
+      assert_eq(diagnostics.length(), 0)
+      println("isolatedModules import statement test passed")
+    }
+  }
+}
