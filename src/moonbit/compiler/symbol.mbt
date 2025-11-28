@@ -572,6 +572,7 @@ pub struct BoundSourceFile {
   control_flow_graph : ControlFlowGraph
   ambient_modules : AmbientModuleRegistry // Ambient module declarations (declare module "pattern")
   module_augmentations : Array[ModuleAugmentation] // Module augmentations (declare module in module files)
+  global_augmentations : Array[GlobalAugmentation] // Global augmentations (declare global { })
 } derive(Show)
 
 ///|
@@ -1012,6 +1013,18 @@ pub struct ModuleAugmentation {
   /// The module being augmented (e.g., "express", "lodash")
   module_name : String
   /// The declarations to merge into the module
+  declarations : SymbolTable
+  /// The AST body for later processing
+  body : Node?
+  /// Location of the augmentation
+  location : SourceLocation
+} derive(Show)
+
+///|
+/// Global augmentation - adds declarations to global scope
+/// Created from `declare global { }` blocks in module files
+pub struct GlobalAugmentation {
+  /// The declarations to add to global scope
   declarations : SymbolTable
   /// The AST body for later processing
   body : Node?

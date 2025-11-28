@@ -3246,6 +3246,7 @@ fn parse_module_declaration_body(
                 name,
                 body: Some(body),
                 is_ambient,
+                is_global_augmentation: false,
                 location: SourceLocation::new(
                   start_loc.file_path,
                   start_loc.start,
@@ -3271,6 +3272,7 @@ fn parse_module_declaration_body(
                 name,
                 body: Some(nested),
                 is_ambient: false, // Dotted names are not ambient
+                is_global_augmentation: false,
                 location: SourceLocation::new(
                   start_loc.file_path,
                   start_loc.start,
@@ -3293,6 +3295,7 @@ fn parse_module_declaration_body(
             name,
             body: None,
             is_ambient,
+            is_global_augmentation: false,
             location: start_loc,
           }),
           parser,
@@ -3994,15 +3997,41 @@ fn add_export_default_modifiers(node : Node) -> Node {
 ///|
 /// Parse declare (ambient) declaration
 fn parse_declare_declaration(parser : Parser) -> Result[(Node, Parser), Parser] {
-  // declare const/let/var/function/class/enum/module/namespace
+  // declare const/let/var/function/class/enum/module/namespace/global
+  let start_loc = current_token(parser).location()
   let parser = advance_parser(parser) // consume 'declare'
-  match parse_statement(parser) {
-    Ok((stmt, parser)) => {
-      // Add Declare modifier to the declaration
-      let stmt_with_declare = add_declare_modifier(stmt)
-      Ok((stmt_with_declare, parser))
+
+  // Check for 'declare global { }' - global augmentation
+  match current_token(parser) {
+    Identifier(name, _) if name == "global" => {
+      let parser = advance_parser(parser) // consume 'global'
+      // Parse block statement { ... }
+      match parse_block_statement(parser) {
+        Ok((body, parser)) => {
+          let end_loc = get_location(body)
+          let location = SourceLocation::new(start_loc.file_path, start_loc.start, end_loc.end)
+          // Create ModuleDeclaration with is_global_augmentation=true
+          Ok((Node::ModuleDeclaration(ModuleDeclaration::{
+            name: "global",
+            body: Some(body),
+            is_ambient: false,
+            is_global_augmentation: true,
+            location,
+          }), parser))
+        }
+        Err(p) => Err(p)
+      }
     }
-    Err(p) => Err(p)
+    _ => {
+      match parse_statement(parser) {
+        Ok((stmt, parser)) => {
+          // Add Declare modifier to the declaration
+          let stmt_with_declare = add_declare_modifier(stmt)
+          Ok((stmt_with_declare, parser))
+        }
+        Err(p) => Err(p)
+      }
+    }
   }
 }
 

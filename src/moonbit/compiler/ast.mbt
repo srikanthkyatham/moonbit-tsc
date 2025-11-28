@@ -252,6 +252,7 @@ pub struct ModuleDeclaration {
   name : String
   body : Node?
   is_ambient : Bool // True if name was a string literal (declare module "foo")
+  is_global_augmentation : Bool // True for "declare global { }"
   location : SourceLocation
 } derive(Show)
 

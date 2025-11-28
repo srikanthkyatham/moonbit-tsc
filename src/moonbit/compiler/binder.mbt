@@ -20,6 +20,7 @@ pub struct Binder {
   diagnostics : Array[Diagnostic]
   ambient_modules : AmbientModuleRegistry // Registry for ambient module declarations
   module_augmentations : Array[ModuleAugmentation] // Module augmentations (for module files)
+  global_augmentations : Array[GlobalAugmentation] // Global augmentations (declare global)
   is_external_module : Bool // Track if this file is a module (has imports/exports)
 } derive(Show)
 
@@ -45,6 +46,7 @@ fn Binder::new(file_path : String) -> Binder {
     diagnostics: [],
     ambient_modules: AmbientModuleRegistry::new(),
     module_augmentations: [],
+    global_augmentations: [],
     is_external_module: false,
   }
 }
@@ -118,6 +120,7 @@ pub fn bind_source_file(source_file : SourceFile) -> BindResult {
       control_flow_graph,
       ambient_modules: binder.ambient_modules,
       module_augmentations: binder.module_augmentations,
+      global_augmentations: binder.global_augmentations,
     })
   }
 }
@@ -879,9 +882,37 @@ fn bind_module_declaration(
   binder : Binder,
   mod_decl : ModuleDeclaration,
 ) -> Binder {
-  // Check if this is an ambient module declaration (declare module "pattern" { })
-  // The parser sets is_ambient=true when the name was a string literal
-  if mod_decl.is_ambient {
+  // Check for global augmentation (declare global { })
+  if mod_decl.is_global_augmentation {
+    // Global augmentation - declarations are added to global scope
+    // Bind the body in a new scope to collect declarations
+    let binder = push_scope(binder)
+    let binder = push_container(binder, ContainerKind::Module)
+
+    // Bind module body if present
+    let binder = match mod_decl.body {
+      Some(body) => bind_statement(binder, body)
+      None => binder
+    }
+
+    // Get the declarations from the scope
+    let augmentation_scope = current_scope(binder)
+    let declarations = augmentation_scope.symbols
+
+    // Create global augmentation record
+    let augmentation = GlobalAugmentation::{
+      declarations,
+      body: mod_decl.body,
+      location: mod_decl.location,
+    }
+    binder.global_augmentations.push(augmentation)
+
+    // Pop container and scope
+    let binder = pop_container(binder)
+    pop_scope(binder)
+  } else if mod_decl.is_ambient {
+    // Check if this is an ambient module declaration (declare module "pattern" { })
+    // The parser sets is_ambient=true when the name was a string literal
     // Bind the body in a new scope
     let binder = push_scope(binder)
     let binder = push_container(binder, ContainerKind::Module)
