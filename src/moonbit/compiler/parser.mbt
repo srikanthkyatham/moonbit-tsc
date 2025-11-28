@@ -1636,15 +1636,25 @@ fn parse_heritage_types_aux(
 ) -> (Array[Node], Parser) {
   match current_token(parser) {
     Identifier(name, loc) => {
-      // Create TypeReference instead of Identifier for heritage types
+      let parser = advance_parser(parser)
+      // Parse property access chain (e.g., cdk.Stack, aws.lambda.Function)
+      let (full_name, parser, end_loc) = parse_heritage_type_name(
+        parser,
+        name,
+        loc,
+      )
+      // Parse generic type arguments if present (e.g., Stack<Props>)
+      let (type_arguments, parser) = match current_token(parser) {
+        LessThan(_) => parse_heritage_type_arguments(parser)
+        _ => ([], parser)
+      }
       acc.push(
         Node::TypeReference(TypeReference::{
-          type_name: name,
-          type_arguments: [],
-          location: loc,
+          type_name: full_name,
+          type_arguments,
+          location: end_loc,
         }),
       )
-      let parser = advance_parser(parser)
       match current_token(parser) {
         Comma(_) => parse_heritage_types_aux(advance_parser(parser), acc)
         _ => (acc, parser)
@@ -1652,6 +1662,70 @@ fn parse_heritage_types_aux(
     }
     _ => (acc, parser)
   }
+}
+
+///|
+/// Parse a heritage type name with property access (e.g., cdk.Stack -> "cdk.Stack")
+fn parse_heritage_type_name(
+  parser : Parser,
+  base_name : String,
+  start_loc : SourceLocation,
+) -> (String, Parser, SourceLocation) {
+  match current_token(parser) {
+    Dot(_) => {
+      let parser = advance_parser(parser)
+      match current_token(parser) {
+        Identifier(prop_name, prop_loc) => {
+          let parser = advance_parser(parser)
+          let combined_name = base_name + "." + prop_name
+          parse_heritage_type_name(parser, combined_name, prop_loc)
+        }
+        _ => (base_name, parser, start_loc)
+      }
+    }
+    _ => (base_name, parser, start_loc)
+  }
+}
+
+///|
+/// Parse type arguments in heritage clause (e.g., <Props, Options>)
+fn parse_heritage_type_arguments(parser : Parser) -> (Array[Node], Parser) {
+  // Expect <
+  let parser = match current_token(parser) {
+    LessThan(_) => advance_parser(parser)
+    _ => return ([], parser)
+  }
+  let type_args : Array[Node] = []
+  let mut parser = parser
+  // Parse comma-separated types until >
+  while true {
+    match current_token(parser) {
+      GreaterThan(_) => {
+        parser = advance_parser(parser)
+        break
+      }
+      _ =>
+        match parse_type(parser) {
+          Ok((ty, p)) => {
+            type_args.push(ty)
+            parser = p
+            match current_token(parser) {
+              Comma(_) => parser = advance_parser(parser)
+              GreaterThan(_) => {
+                parser = advance_parser(parser)
+                break
+              }
+              _ => break // Error recovery
+            }
+          }
+          Err(p) => {
+            parser = p
+            break
+          }
+        }
+    }
+  }
+  (type_args, parser)
 }
 
 ///|

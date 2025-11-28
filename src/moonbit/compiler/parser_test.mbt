@@ -556,6 +556,133 @@ test "parse class with implements" {
 }
 
 ///|
+test "parse class extends with property access" {
+  let tokens = tokens_from_source("class MyStack extends cdk.Stack {}")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        ClassDeclaration(cd) => {
+          assert_eq(cd.heritage_clauses.length(), 1)
+          match cd.heritage_clauses[0].types[0] {
+            TypeReference(tr) => assert_eq(tr.type_name, "cdk.Stack")
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse class extends with nested property access" {
+  let tokens = tokens_from_source(
+    "class MyFunction extends aws.lambda.Function {}",
+  )
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        ClassDeclaration(cd) => {
+          assert_eq(cd.heritage_clauses.length(), 1)
+          match cd.heritage_clauses[0].types[0] {
+            TypeReference(tr) => assert_eq(tr.type_name, "aws.lambda.Function")
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse class extends with generic type" {
+  let tokens = tokens_from_source("class MyStack extends Stack<StackProps> {}")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        ClassDeclaration(cd) => {
+          assert_eq(cd.heritage_clauses.length(), 1)
+          match cd.heritage_clauses[0].types[0] {
+            TypeReference(tr) => {
+              assert_eq(tr.type_name, "Stack")
+              assert_eq(tr.type_arguments.length(), 1)
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse class extends with property access and generics" {
+  let tokens = tokens_from_source(
+    "class MyStack extends cdk.Stack<StackProps> {}",
+  )
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        ClassDeclaration(cd) => {
+          assert_eq(cd.heritage_clauses.length(), 1)
+          match cd.heritage_clauses[0].types[0] {
+            TypeReference(tr) => {
+              assert_eq(tr.type_name, "cdk.Stack")
+              assert_eq(tr.type_arguments.length(), 1)
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse class implements multiple with property access" {
+  let tokens = tokens_from_source(
+    "class MyClass implements ns.IFoo, ns.IBar {}",
+  )
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        ClassDeclaration(cd) => {
+          assert_eq(cd.heritage_clauses.length(), 1)
+          assert_eq(cd.heritage_clauses[0].types.length(), 2)
+          match cd.heritage_clauses[0].types[0] {
+            TypeReference(tr) => assert_eq(tr.type_name, "ns.IFoo")
+            _ => assert_true(false)
+          }
+          match cd.heritage_clauses[0].types[1] {
+            TypeReference(tr) => assert_eq(tr.type_name, "ns.IBar")
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
 test "parse class with constructor" {
   let tokens = tokens_from_source("class Foo { constructor() {} }")
   let result = parse_source_file(tokens, "test.ts")
