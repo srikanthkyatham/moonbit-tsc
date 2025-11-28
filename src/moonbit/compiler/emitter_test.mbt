@@ -1639,3 +1639,36 @@ test "emit JSX spread attributes classic" {
   assert_true(js.contains("\"div\""))
   assert_true(js.contains("props"))
 }
+
+// ============================================================================
+// `this` Parameter Type Emitter Tests
+// ============================================================================
+
+///|
+/// Test: `this` parameter is omitted from JavaScript output
+test "emit function with this parameter - this is omitted" {
+  let js = compile_to_js("function greet(this: Person, name: string): void { console.log(name); }")
+  println("Function with this parameter:\n\{js}")
+  // The output should have the function but `this` parameter should be omitted
+  assert_true(js.contains("function greet(name)"))
+  // Verify `this:` is NOT in the output
+  assert_false(js.contains("this:"))
+}
+
+///|
+/// Test: method with this parameter
+test "emit method with this parameter - this is omitted" {
+  let js = compile_to_js("class Dog { speak(this: Dog, sound: string) { console.log(sound); } }")
+  println("Method with this parameter:\n\{js}")
+  // The method should only have `sound` parameter
+  assert_true(js.contains("speak(sound)"))
+}
+
+///|
+/// Test: function with only this parameter
+test "emit function with only this parameter - empty params" {
+  let js = compile_to_js("function getSelf(this: MyClass) { return this; }")
+  println("Function with only this parameter:\n\{js}")
+  // The output should have empty parameter list
+  assert_true(js.contains("function getSelf()"))
+}

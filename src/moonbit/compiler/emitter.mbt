@@ -449,28 +449,36 @@ fn emit_function_declaration(
 }
 
 ///|
-/// Emit parameters
+/// Emit parameters (skips `this` parameters which are TypeScript-only)
 fn emit_parameters(params : Array[Node], ctx : EmitterContext) -> String {
-  let mut result = ""
+  let parts : Array[String] = []
   for i = 0; i < params.length(); i = i + 1 {
     match params[i] {
       Parameter(p) => {
-        match p.name {
-          Identifier(id) => result = result + id.name
-          _ => result = result + emit(p.name, ctx)
+        // Skip `this` parameter - it's TypeScript-only for type checking
+        if p.is_this_parameter {
+          continue
+        }
+        let mut param_str = match p.name {
+          Identifier(id) => id.name
+          _ => emit(p.name, ctx)
         }
         match p.initializer {
-          Some(init) => result = result + " = " + emit(init, ctx)
+          Some(init) => param_str = param_str + " = " + emit(init, ctx)
           None => ()
         }
+        parts.push(param_str)
       }
-      _ => result = result + emit(params[i], ctx)
-    }
-    if i < params.length() - 1 {
-      result = result + ", "
+      _ => parts.push(emit(params[i], ctx))
     }
   }
-  result
+  parts.iter().fold(init="", fn(acc, part) {
+    if acc == "" {
+      part
+    } else {
+      acc + ", " + part
+    }
+  })
 }
 
 ///|

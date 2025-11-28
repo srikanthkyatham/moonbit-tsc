@@ -172,6 +172,7 @@ pub struct TypeParameter {
   name : String
   constraint : Node?
   default : Node?
+  is_const : Bool // `const` type parameter (TS 5.0+): function foo<const T>()
   location : SourceLocation
 } derive(Show)
 
@@ -995,6 +996,7 @@ pub struct Parameter {
   initializer : Node?
   is_optional : Bool
   is_rest : Bool
+  is_this_parameter : Bool // `this` parameter: function foo(this: SomeType, ...)
   decorators : Array[Node]
   modifiers : Array[Modifier]
   location : SourceLocation

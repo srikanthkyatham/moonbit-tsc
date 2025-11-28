@@ -719,6 +719,7 @@ fn transform_constructor_with_param_properties(
             },
             is_optional: p.is_optional,
             is_rest: p.is_rest,
+            is_this_parameter: p.is_this_parameter,
             decorators: p.decorators,
             modifiers: new_modifiers,
             location: p.location,
@@ -910,6 +911,7 @@ fn transform_parameters_preserve_types(
             },
             is_rest: p.is_rest,
             is_optional: p.is_optional,
+            is_this_parameter: p.is_this_parameter,
             decorators: p.decorators,
             modifiers: p.modifiers,
             location: p.location,
@@ -935,6 +937,7 @@ fn transform_parameter(p : Parameter, ctx : TransformerContext) -> Node {
     },
     is_rest: p.is_rest,
     is_optional: p.is_optional,
+    is_this_parameter: p.is_this_parameter,
     decorators: p.decorators, // Preserve decorators for output
     modifiers: p.modifiers, // Preserve modifiers for output
     location: p.location,
@@ -1855,6 +1858,7 @@ fn transform_set_accessor(sa : SetAccessor, ctx : TransformerContext) -> Node {
           },
           is_rest: p.is_rest,
           is_optional: p.is_optional,
+          is_this_parameter: p.is_this_parameter,
           decorators: p.decorators,
           modifiers: p.modifiers,
           location: p.location,

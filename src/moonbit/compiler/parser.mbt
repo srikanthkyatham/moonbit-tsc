@@ -1140,10 +1140,21 @@ fn parse_parameter(parser : Parser) -> Result[(Node, Parser), Parser] {
     _ => (false, parser)
   }
 
-  // Parameter name
-  let (name, parser) = match parse_identifier(parser) {
-    Ok((id, p)) => (Node::Identifier(id), p)
-    Err(p) => return Err(p)
+  // Check for `this` parameter: function foo(this: SomeType, ...)
+  let (is_this_parameter, name, parser) = match current_token(parser) {
+    KeywordThis(loc) => {
+      let parser = advance_parser(parser)
+      (
+        true,
+        Node::Identifier(Identifier::{ name: "this", location: loc }),
+        parser,
+      )
+    }
+    _ =>
+      match parse_identifier(parser) {
+        Ok((id, p)) => (false, Node::Identifier(id), p)
+        Err(p) => return Err(p)
+      }
   }
 
   // Optional parameter
@@ -1164,7 +1175,7 @@ fn parse_parameter(parser : Parser) -> Result[(Node, Parser), Parser] {
     _ => (None, parser)
   }
 
-  // Default value
+  // Default value (not allowed for `this` parameter, but parse anyway for error recovery)
   let (initializer, parser) = match current_token(parser) {
     Equals(_) => {
       let parser = advance_parser(parser)
@@ -1183,6 +1194,7 @@ fn parse_parameter(parser : Parser) -> Result[(Node, Parser), Parser] {
         initializer,
         is_optional,
         is_rest,
+        is_this_parameter,
         decorators,
         modifiers,
         location: start_loc,
@@ -4693,6 +4705,52 @@ fn parse_try_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
 }
 
 ///|
+/// Helper to parse constraint and default for type parameters
+fn parse_type_param_constraint_and_default(
+  parser : Parser,
+) -> (Node?, Node?, Parser) {
+  let mut parser = parser
+
+  // Optional constraint (extends)
+  let constraint = match current_token(parser) {
+    KeywordExtends(_) => {
+      parser = advance_parser(parser)
+      match parse_type(parser) {
+        Ok((ty, p)) => {
+          parser = p
+          Some(ty)
+        }
+        Err(p) => {
+          parser = p
+          None
+        }
+      }
+    }
+    _ => None
+  }
+
+  // Optional default
+  let default_type = match current_token(parser) {
+    Equals(_) => {
+      parser = advance_parser(parser)
+      match parse_type(parser) {
+        Ok((ty, p)) => {
+          parser = p
+          Some(ty)
+        }
+        Err(p) => {
+          parser = p
+          None
+        }
+      }
+    }
+    _ => None
+  }
+
+  (constraint, default_type, parser)
+}
+
+///|
 fn parse_type_parameters(parser : Parser) -> (Array[TypeParameter], Parser) {
   // Expect <
   let parser = match current_token(parser) {
@@ -4709,51 +4767,54 @@ fn parse_type_parameters(parser : Parser) -> (Array[TypeParameter], Parser) {
         parser = advance_parser(parser)
         break
       }
+      // Check for `const` type parameter modifier (TS 5.0+)
+      KeywordConst(_) => {
+        parser = advance_parser(parser)
+        match current_token(parser) {
+          Identifier(name, loc) => {
+            parser = advance_parser(parser)
+            let (constraint, default_type, p) = parse_type_param_constraint_and_default(
+              parser,
+            )
+            parser = p
+            type_params.push(
+              TypeParameter::{
+                name,
+                constraint,
+                default: default_type,
+                is_const: true,
+                location: loc,
+              },
+            )
+            match current_token(parser) {
+              Comma(_) => {
+                parser = advance_parser(parser)
+                continue
+              }
+              GreaterThan(_) => continue
+              _ => break
+            }
+          }
+          _ => break
+        }
+      }
       Identifier(name, loc) => {
         // Parse type parameter name
         parser = advance_parser(parser)
 
-        // Optional constraint (extends)
-        let constraint = match current_token(parser) {
-          KeywordExtends(_) => {
-            parser = advance_parser(parser)
-            match parse_type(parser) {
-              Ok((ty, p)) => {
-                parser = p
-                Some(ty)
-              }
-              Err(p) => {
-                parser = p
-                None
-              }
-            }
-          }
-          _ => None
-        }
-
-        // Optional default
-        let default_type = match current_token(parser) {
-          Equals(_) => {
-            parser = advance_parser(parser)
-            match parse_type(parser) {
-              Ok((ty, p)) => {
-                parser = p
-                Some(ty)
-              }
-              Err(p) => {
-                parser = p
-                None
-              }
-            }
-          }
-          _ => None
-        }
-        type_params.push(TypeParameter::{
-          name,
-          constraint,
-          default: default_type,
-          location: loc,
-        })
+        let (constraint, default_type, p) = parse_type_param_constraint_and_default(
+          parser,
+        )
+        parser = p
+        type_params.push(
+          TypeParameter::{
+            name,
+            constraint,
+            default: default_type,
+            is_const: false,
+            location: loc,
+          },
+        )
 
         // Check for comma
         match current_token(parser) {

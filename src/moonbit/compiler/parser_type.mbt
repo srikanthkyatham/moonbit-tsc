@@ -743,6 +743,7 @@ fn parse_primary_type_with_readonly(
                                               name: param_name,
                                               constraint: Some(constraint_type),
                                               default: None,
+                                              is_const: false,
                                               location: param_loc,
                                             },
                                             type_node: Some(value_type),

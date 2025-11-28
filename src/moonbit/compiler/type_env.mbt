@@ -606,6 +606,22 @@ pub fn TypeEnv::with_builtins() -> TypeEnv {
     body: TGenericInstance("Set", [TTypeParam("T", None)]),
   })
 
+  // Add ThisType<T> - marker type for typing `this` in object literal methods
+  // Used as: methods?: M & ThisType<D & M>
+  // This is a marker interface that doesn't add properties but affects `this` typing
+  let env = env.with_type_alias("ThisType", {
+    type_params: [TypeParamV2::simple("T")],
+    body: TTypeParam("T", None), // Evaluates to T
+  })
+
+  // Add NoInfer<T> - prevents type inference from this position (TS 5.4+)
+  // Example: function foo<T>(x: T, y: NoInfer<T>): T
+  // The type of T is not inferred from y, only from x
+  let env = env.with_type_alias("NoInfer", {
+    type_params: [TypeParamV2::simple("T")],
+    body: TTypeParam("T", None), // Evaluates to T
+  })
+
   // Add common global variables
   let env = env.with_variable("undefined", TUndefined)
   let env = env.with_variable("NaN", TNumber)

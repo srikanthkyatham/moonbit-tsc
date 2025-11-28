@@ -3746,6 +3746,198 @@ test "parse new.target as variable initializer" {
 }
 
 // ============================================================================
+// `this` Parameter Type Tests
+// ============================================================================
+
+///|
+test "parse function with this parameter type" {
+  let source = "function greet(this: Person, name: string): void { }"
+  let tokens = @compiler.scan_all_v2(source, "test.ts")
+  match @compiler.parse_source_file(tokens, "test.ts") {
+    Ok(sf) => {
+      assert_true(sf.statements.length() == 1)
+      match sf.statements[0] {
+        FunctionDeclaration(fd) => {
+          assert_true(fd.parameters.length() == 2)
+          match fd.parameters[0] {
+            Parameter(p) => {
+              assert_true(p.is_this_parameter)
+              match p.name {
+                Identifier(id) => assert_eq(id.name, "this")
+                _ => assert_true(false)
+              }
+            }
+            _ => assert_true(false)
+          }
+          // Second parameter is regular
+          match fd.parameters[1] {
+            Parameter(p) => {
+              assert_false(p.is_this_parameter)
+              match p.name {
+                Identifier(id) => assert_eq(id.name, "name")
+                _ => assert_true(false)
+              }
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse method with this parameter type" {
+  let source = "class Dog { speak(this: Dog): void { } }"
+  let tokens = @compiler.scan_all_v2(source, "test.ts")
+  match @compiler.parse_source_file(tokens, "test.ts") {
+    Ok(sf) => {
+      assert_true(sf.statements.length() == 1)
+      match sf.statements[0] {
+        ClassDeclaration(cd) => {
+          assert_true(cd.members.length() == 1)
+          match cd.members[0] {
+            MethodDeclaration(md) => {
+              assert_true(md.parameters.length() == 1)
+              match md.parameters[0] {
+                Parameter(p) => assert_true(p.is_this_parameter)
+                _ => assert_true(false)
+              }
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+// ============================================================================
+// `const` Type Parameters Tests
+// ============================================================================
+
+///|
+test "parse function with const type parameter" {
+  let source = "function foo<const T>(x: T): T { return x; }"
+  let tokens = @compiler.scan_all_v2(source, "test.ts")
+  match @compiler.parse_source_file(tokens, "test.ts") {
+    Ok(sf) => {
+      assert_true(sf.statements.length() == 1)
+      match sf.statements[0] {
+        FunctionDeclaration(fd) => {
+          assert_true(fd.type_parameters.length() == 1)
+          let tp = fd.type_parameters[0]
+          assert_eq(tp.name, "T")
+          assert_true(tp.is_const)
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse function with mixed const and regular type parameters" {
+  let source = "function bar<const T, U extends T>(x: T, y: U): void { }"
+  let tokens = @compiler.scan_all_v2(source, "test.ts")
+  match @compiler.parse_source_file(tokens, "test.ts") {
+    Ok(sf) => {
+      assert_true(sf.statements.length() == 1)
+      match sf.statements[0] {
+        FunctionDeclaration(fd) => {
+          assert_true(fd.type_parameters.length() == 2)
+          // First is const T
+          assert_eq(fd.type_parameters[0].name, "T")
+          assert_true(fd.type_parameters[0].is_const)
+          // Second is regular U extends T
+          assert_eq(fd.type_parameters[1].name, "U")
+          assert_false(fd.type_parameters[1].is_const)
+          assert_true(fd.type_parameters[1].constraint is Some(_))
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+// ============================================================================
+// Variadic Tuple Types Tests
+// ============================================================================
+
+///|
+test "parse variadic tuple type with spread" {
+  let source = "type Concat<T extends any[], U extends any[]> = [...T, ...U];"
+  let tokens = @compiler.scan_all_v2(source, "test.ts")
+  match @compiler.parse_source_file(tokens, "test.ts") {
+    Ok(sf) => {
+      assert_true(sf.statements.length() == 1)
+      match sf.statements[0] {
+        TypeAliasDeclaration(tad) => {
+          assert_eq(tad.name, "Concat")
+          assert_true(tad.type_parameters.length() == 2)
+          match tad.type_node {
+            TupleType(tt) => {
+              assert_true(tt.element_types.length() == 2)
+              // Both should be RestType
+              match tt.element_types[0] {
+                RestType(_) => ()
+                _ => assert_true(false)
+              }
+              match tt.element_types[1] {
+                RestType(_) => ()
+                _ => assert_true(false)
+              }
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse tuple with leading types and spread" {
+  let source = "type Prepend<T, U extends any[]> = [T, ...U];"
+  let tokens = @compiler.scan_all_v2(source, "test.ts")
+  match @compiler.parse_source_file(tokens, "test.ts") {
+    Ok(sf) => {
+      assert_true(sf.statements.length() == 1)
+      match sf.statements[0] {
+        TypeAliasDeclaration(tad) => {
+          match tad.type_node {
+            TupleType(tt) => {
+              assert_true(tt.element_types.length() == 2)
+              // First is regular type
+              match tt.element_types[0] {
+                TypeReference(_) => ()
+                _ => assert_true(false)
+              }
+              // Second is rest type
+              match tt.element_types[1] {
+                RestType(_) => ()
+                _ => assert_true(false)
+              }
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+// ============================================================================
 // Parser Error Code Tests
 // ============================================================================
 // Note: ParserErrorCode enum variants are tested internally in the parser module.
