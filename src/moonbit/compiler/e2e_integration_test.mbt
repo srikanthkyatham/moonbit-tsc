@@ -324,3 +324,195 @@ test "e2e: continue statement" {
   let js = e2e_compile_to_js("for (let i = 0; i < 10; i++) { if (i === 5) continue; sum += i; }")
   assert_true(js.contains("continue"))
 }
+
+// ============================================================================
+// Jest-Style Test Syntax
+// ============================================================================
+
+///|
+test "e2e: jest describe block" {
+  let js = e2e_compile_to_js("describe('User tests', () => { });")
+  assert_true(js.contains("describe"))
+}
+
+///|
+test "e2e: jest test function" {
+  let js = e2e_compile_to_js("test('should add numbers', () => { expect(1 + 1).toBe(2); });")
+  assert_true(js.contains("test"))
+  assert_true(js.contains("expect"))
+}
+
+///|
+test "e2e: jest it function" {
+  let js = e2e_compile_to_js("it('should work correctly', () => { expect(true).toBeTruthy(); });")
+  assert_true(js.contains("it"))
+}
+
+///|
+test "e2e: jest nested describe" {
+  let js = e2e_compile_to_js("describe('Outer', () => { describe('Inner', () => { test('nested test', () => {}); }); });")
+  assert_true(js.contains("describe"))
+}
+
+///|
+test "e2e: jest async test" {
+  let js = e2e_compile_to_js("test('async test', async () => { const result = await fetchData(); expect(result).toBeDefined(); });")
+  assert_true(js.contains("async"))
+  assert_true(js.contains("await"))
+}
+
+///|
+test "e2e: jest beforeEach" {
+  let js = e2e_compile_to_js("beforeEach(() => { setup(); });")
+  assert_true(js.contains("beforeEach"))
+}
+
+///|
+test "e2e: jest afterEach" {
+  let js = e2e_compile_to_js("afterEach(() => { cleanup(); });")
+  assert_true(js.contains("afterEach"))
+}
+
+///|
+test "e2e: jest beforeAll" {
+  let js = e2e_compile_to_js("beforeAll(async () => { await initializeDatabase(); });")
+  assert_true(js.contains("beforeAll"))
+}
+
+///|
+test "e2e: jest afterAll" {
+  let js = e2e_compile_to_js("afterAll(async () => { await closeConnection(); });")
+  assert_true(js.contains("afterAll"))
+}
+
+///|
+test "e2e: jest expect matchers" {
+  let js = e2e_compile_to_js("expect(value).toBe(expected); expect(arr).toContain(item); expect(obj).toEqual({ a: 1 });")
+  assert_true(js.contains("toBe"))
+  assert_true(js.contains("toContain"))
+  assert_true(js.contains("toEqual"))
+}
+
+///|
+test "e2e: jest test.each" {
+  let js = e2e_compile_to_js("test.each([[1, 2, 3], [2, 3, 5]])('add(%i, %i) = %i', (a, b, expected) => { expect(a + b).toBe(expected); });")
+  assert_true(js.contains("test.each"))
+}
+
+///|
+test "e2e: jest describe.each" {
+  let js = e2e_compile_to_js("describe.each([['mobile'], ['desktop']])('on %s', (viewport) => { test('renders correctly', () => {}); });")
+  assert_true(js.contains("describe.each"))
+}
+
+///|
+test "e2e: jest mock functions" {
+  let js = e2e_compile_to_js("const mockFn = jest.fn(); jest.mock('./module');")
+  assert_true(js.contains("jest.fn"))
+  assert_true(js.contains("jest.mock"))
+}
+
+// ============================================================================
+// Playwright-Style Test Syntax
+// ============================================================================
+
+///|
+test "e2e: playwright test.describe" {
+  let js = e2e_compile_to_js("test.describe('Different users', () => { });")
+  assert_true(js.contains("test.describe"))
+}
+
+///|
+test "e2e: playwright test with page fixture" {
+  let js = e2e_compile_to_js("test('should display data', async ({ page }) => { await page.goto('/'); });")
+  assert_true(js.contains("page"))
+  assert_true(js.contains("goto"))
+}
+
+///|
+test "e2e: playwright test with destructured fixtures" {
+  let js = e2e_compile_to_js("test('admin test', async ({ page, context, browser }) => { });")
+  assert_true(js.contains("page"))
+  assert_true(js.contains("context"))
+  assert_true(js.contains("browser"))
+}
+
+///|
+test "e2e: playwright page interactions" {
+  let js = e2e_compile_to_js("test('clicks button', async ({ page }) => { await page.click('button'); await page.fill('input', 'text'); });")
+  assert_true(js.contains("click"))
+  assert_true(js.contains("fill"))
+}
+
+///|
+test "e2e: playwright locators" {
+  let js = e2e_compile_to_js("test('finds element', async ({ page }) => { const btn = page.locator('button'); await btn.click(); });")
+  assert_true(js.contains("locator"))
+}
+
+///|
+test "e2e: playwright expect assertions" {
+  let js = e2e_compile_to_js("test('visible element', async ({ page }) => { await expect(page.locator('h1')).toBeVisible(); });")
+  assert_true(js.contains("expect"))
+  assert_true(js.contains("toBeVisible"))
+}
+
+///|
+test "e2e: playwright test.beforeEach" {
+  let js = e2e_compile_to_js("test.beforeEach(async ({ page }) => { await page.goto('/login'); });")
+  assert_true(js.contains("test.beforeEach"))
+}
+
+///|
+test "e2e: playwright test.afterEach" {
+  let js = e2e_compile_to_js("test.afterEach(async ({ page }) => { await page.close(); });")
+  assert_true(js.contains("test.afterEach"))
+}
+
+///|
+test "e2e: playwright test.use" {
+  let js = e2e_compile_to_js("test.use({ storageState: 'auth.json' });")
+  assert_true(js.contains("test.use"))
+}
+
+///|
+test "e2e: playwright test.skip" {
+  let js = e2e_compile_to_js("test.skip('skipped test', async ({ page }) => { });")
+  assert_true(js.contains("test.skip"))
+}
+
+///|
+test "e2e: playwright test.only" {
+  let js = e2e_compile_to_js("test.only('focused test', async ({ page }) => { });")
+  assert_true(js.contains("test.only"))
+}
+
+///|
+test "e2e: playwright complex page operations" {
+  let source =
+    #|test('table data', async ({ page }) => {
+    #|  await page.goto('/admin');
+    #|  await expect(page.locator('table')).toBeVisible();
+    #|  const rows = page.locator('tr');
+    #|  await expect(rows).toHaveCount(5);
+    #|});
+  let js = e2e_compile_to_js(source)
+  assert_true(js.contains("goto"))
+  assert_true(js.contains("locator"))
+  assert_true(js.contains("toHaveCount"))
+}
+
+///|
+test "e2e: playwright nested describe blocks" {
+  let source =
+    #|test.describe('Different users', () => {
+    #|  test.describe('Admin', () => {
+    #|    test('should display areas table', async ({ page }) => {
+    #|      await page.goto('/admin/areas');
+    #|    });
+    #|  });
+    #|});
+  let js = e2e_compile_to_js(source)
+  assert_true(js.contains("test.describe"))
+  assert_true(js.contains("Admin"))
+}

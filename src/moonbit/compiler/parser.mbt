@@ -1265,9 +1265,23 @@ fn parse_parameter(parser : Parser) -> Result[(Node, Parser), Parser] {
       )
     }
     _ =>
-      match parse_identifier(parser) {
-        Ok((id, p)) => (false, Node::Identifier(id), p)
-        Err(p) => return Err(p)
+      // Check for destructuring patterns: { page } or [ a, b ]
+      match current_token(parser) {
+        OpenBrace(_) =>
+          match parse_object_binding_pattern(parser) {
+            Ok((pattern, p)) => (false, pattern, p)
+            Err(p) => return Err(p)
+          }
+        OpenBracket(_) =>
+          match parse_array_binding_pattern(parser) {
+            Ok((pattern, p)) => (false, pattern, p)
+            Err(p) => return Err(p)
+          }
+        _ =>
+          match parse_identifier(parser) {
+            Ok((id, p)) => (false, Node::Identifier(id), p)
+            Err(p) => return Err(p)
+          }
       }
   }
 
