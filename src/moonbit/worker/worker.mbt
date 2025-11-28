@@ -42,6 +42,7 @@ fn process_request(json_str : String) -> @protocol.CompileResponse {
     isolated_modules: false,
     exact_optional_property_types: false,
     no_unchecked_indexed_access: false,
+    verbatim_module_syntax: false,
   }
 
   // Measure compilation time

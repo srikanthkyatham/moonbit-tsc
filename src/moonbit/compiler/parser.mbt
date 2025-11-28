@@ -3325,8 +3325,23 @@ fn parse_module_declaration_body(
 fn parse_import_declaration(parser : Parser) -> Result[(Node, Parser), Parser] {
   // import [importClause] from 'module'
   // import 'module'
+  // import type { ... } from 'module'  (type-only import)
   let start_loc = current_token(parser).location()
   let parser = advance_parser(parser) // consume 'import'
+
+  // Check for type-only import: import type ...
+  let (is_type_only, parser) = match current_token(parser) {
+    KeywordType(_) => {
+      // Peek ahead to see if this is "import type X" or just "import type" as a name
+      // If the next token is an identifier, '{', or '*', it's a type-only import
+      let next = peek_token(parser)
+      match next {
+        Identifier(_, _) | OpenBrace(_) | Star(_) => (true, advance_parser(parser))
+        _ => (false, parser) // Not a type-only import, 'type' might be a binding name
+      }
+    }
+    _ => (false, parser)
+  }
 
   // Check for side-effect only import: import 'module'
   match current_token(parser) {
@@ -3343,6 +3358,7 @@ fn parse_import_declaration(parser : Parser) -> Result[(Node, Parser), Parser] {
           Node::ImportDeclaration(ImportDeclaration::{
             import_clause: None,
             module_specifier,
+            is_type_only,
             location: SourceLocation::new(
               start_loc.file_path,
               start_loc.start,
@@ -3479,6 +3495,7 @@ fn parse_import_declaration(parser : Parser) -> Result[(Node, Parser), Parser] {
       Node::ImportDeclaration(ImportDeclaration::{
         import_clause,
         module_specifier,
+        is_type_only,
         location: SourceLocation::new(
           start_loc.file_path,
           start_loc.start,
@@ -3504,6 +3521,55 @@ fn parse_import_specifiers_aux(
 ) -> (Array[ImportSpecifier], Parser) {
   match current_token(parser) {
     CloseBrace(_) | EOF(_) => (acc, parser)
+    // Check for inline type import: { type Foo }
+    KeywordType(_) => {
+      let parser = advance_parser(parser) // consume 'type'
+      match current_token(parser) {
+        Identifier(name, loc) => {
+          let parser = advance_parser(parser)
+          // Check for 'as' renaming
+          match current_token(parser) {
+            KeywordAs(_) => {
+              let parser = advance_parser(parser)
+              match current_token(parser) {
+                Identifier(local_name, _) => {
+                  let parser = advance_parser(parser)
+                  acc.push(ImportSpecifier::{
+                    property_name: Some(name),
+                    name: local_name,
+                    is_type_only: true, // inline type import
+                    location: loc,
+                  })
+                  // Check for comma
+                  match current_token(parser) {
+                    Comma(_) =>
+                      parse_import_specifiers_aux(advance_parser(parser), acc)
+                    _ => (acc, parser)
+                  }
+                }
+                _ => (acc, parser) // Error, but continue
+              }
+            }
+            _ => {
+              // No renaming
+              acc.push(ImportSpecifier::{
+                property_name: None,
+                name,
+                is_type_only: true, // inline type import
+                location: loc,
+              })
+              // Check for comma
+              match current_token(parser) {
+                Comma(_) =>
+                  parse_import_specifiers_aux(advance_parser(parser), acc)
+                _ => (acc, parser)
+              }
+            }
+          }
+        }
+        _ => (acc, parser) // Error, but continue
+      }
+    }
     Identifier(name, loc) => {
       let parser = advance_parser(parser)
       // Check for 'as' renaming
@@ -3516,6 +3582,7 @@ fn parse_import_specifiers_aux(
               acc.push(ImportSpecifier::{
                 property_name: Some(name),
                 name: local_name,
+                is_type_only: false,
                 location: loc,
               })
               // Check for comma
@@ -3530,7 +3597,12 @@ fn parse_import_specifiers_aux(
         }
         _ => {
           // No renaming
-          acc.push(ImportSpecifier::{ property_name: None, name, location: loc })
+          acc.push(ImportSpecifier::{
+            property_name: None,
+            name,
+            is_type_only: false,
+            location: loc,
+          })
           // Check for comma
           match current_token(parser) {
             Comma(_) => parse_import_specifiers_aux(advance_parser(parser), acc)
@@ -4159,6 +4231,55 @@ fn parse_export_specifiers_aux(
 ) -> (Array[ExportSpecifier], Parser) {
   match current_token(parser) {
     CloseBrace(_) | EOF(_) => (acc, parser)
+    // Check for inline type export: { type Foo }
+    KeywordType(_) => {
+      let parser = advance_parser(parser) // consume 'type'
+      match current_token(parser) {
+        Identifier(name, loc) => {
+          let parser = advance_parser(parser)
+          // Check for 'as' renaming
+          match current_token(parser) {
+            KeywordAs(_) => {
+              let parser = advance_parser(parser)
+              match current_token(parser) {
+                Identifier(export_name, _) => {
+                  let parser = advance_parser(parser)
+                  acc.push(ExportSpecifier::{
+                    property_name: Some(name),
+                    name: export_name,
+                    is_type_only: true, // inline type export
+                    location: loc,
+                  })
+                  // Check for comma
+                  match current_token(parser) {
+                    Comma(_) =>
+                      parse_export_specifiers_aux(advance_parser(parser), acc)
+                    _ => (acc, parser)
+                  }
+                }
+                _ => (acc, parser) // Error, but continue
+              }
+            }
+            _ => {
+              // No renaming
+              acc.push(ExportSpecifier::{
+                property_name: None,
+                name,
+                is_type_only: true, // inline type export
+                location: loc,
+              })
+              // Check for comma
+              match current_token(parser) {
+                Comma(_) =>
+                  parse_export_specifiers_aux(advance_parser(parser), acc)
+                _ => (acc, parser)
+              }
+            }
+          }
+        }
+        _ => (acc, parser) // Error, but continue
+      }
+    }
     Identifier(name, loc) => {
       let parser = advance_parser(parser)
       // Check for 'as' renaming
@@ -4171,6 +4292,7 @@ fn parse_export_specifiers_aux(
               acc.push(ExportSpecifier::{
                 property_name: Some(name),
                 name: export_name,
+                is_type_only: false,
                 location: loc,
               })
               // Check for comma
@@ -4185,7 +4307,12 @@ fn parse_export_specifiers_aux(
         }
         _ => {
           // No renaming
-          acc.push(ExportSpecifier::{ property_name: None, name, location: loc })
+          acc.push(ExportSpecifier::{
+            property_name: None,
+            name,
+            is_type_only: false,
+            location: loc,
+          })
           // Check for comma
           match current_token(parser) {
             Comma(_) => parse_export_specifiers_aux(advance_parser(parser), acc)

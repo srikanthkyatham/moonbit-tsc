@@ -14,6 +14,7 @@ pub(all) struct CompileOptions {
   isolated_modules : Bool // Ensures each file can be transpiled independently
   exact_optional_property_types : Bool // Differentiates between undefined and missing properties
   no_unchecked_indexed_access : Bool // Adds undefined to indexed access types (arr[i] becomes T | undefined)
+  verbatim_module_syntax : Bool // Requires type-only imports/exports to use explicit type syntax
 } derive(Show)
 
 ///|
@@ -27,6 +28,7 @@ pub fn CompileOptions::default() -> CompileOptions {
     isolated_modules: false,
     exact_optional_property_types: false,
     no_unchecked_indexed_access: false,
+    verbatim_module_syntax: false,
   }
 }
 
@@ -97,6 +99,18 @@ pub fn compile_source(
           // If isolatedModules validation failed, return errors
           if isolated_modules_diagnostics.length() > 0 {
             return CompileResult::failure(isolated_modules_diagnostics)
+          }
+
+          // Phase 3.6: Validate verbatimModuleSyntax constraints if enabled
+          let verbatim_module_diagnostics = if options.verbatim_module_syntax {
+            validate_verbatim_module_syntax(bound_source, file_path)
+          } else {
+            []
+          }
+
+          // If verbatimModuleSyntax validation failed, return errors
+          if verbatim_module_diagnostics.length() > 0 {
+            return CompileResult::failure(verbatim_module_diagnostics)
           }
 
           // Phase 4: Type check

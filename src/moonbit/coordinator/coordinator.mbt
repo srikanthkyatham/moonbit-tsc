@@ -148,6 +148,7 @@ fn compile_single(
     isolated_modules: false,
     exact_optional_property_types: false,
     no_unchecked_indexed_access: false,
+    verbatim_module_syntax: false,
   }
 
   let start_time = @async.now()

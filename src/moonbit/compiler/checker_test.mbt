@@ -4784,3 +4784,91 @@ test "noUncheckedIndexedAccess - known property access should work" {
     }
   }
 }
+
+// ============================================================================
+// verbatimModuleSyntax Validation Tests
+// ============================================================================
+
+///|
+test "verbatimModuleSyntax TS1486 - type exported without type-only syntax" {
+  let source =
+    #|interface User { name: string; }
+    #|export { User };
+  match parse_bind_for_isolated_modules(source) {
+    Err(_) => assert_true(false)
+    Ok(bound) => {
+      let diagnostics = validate_verbatim_module_syntax(bound, "test.ts")
+      // Should have TS1486 error - type must use type-only export
+      assert_eq(diagnostics.length(), 1)
+      assert_eq(diagnostics[0].code, 1486)
+      assert_true(diagnostics[0].message.contains("verbatimModuleSyntax"))
+      println("verbatimModuleSyntax TS1486 test passed")
+    }
+  }
+}
+
+///|
+test "verbatimModuleSyntax - type exported with type-only syntax allowed" {
+  let source =
+    #|interface User { name: string; }
+    #|export type { User };
+  match parse_bind_for_isolated_modules(source) {
+    Err(_) => assert_true(false)
+    Ok(bound) => {
+      let diagnostics = validate_verbatim_module_syntax(bound, "test.ts")
+      // Should have no errors - export type is correct
+      assert_eq(diagnostics.length(), 0)
+      println("verbatimModuleSyntax export type allowed test passed")
+    }
+  }
+}
+
+///|
+test "verbatimModuleSyntax - inline type specifier allowed" {
+  let source =
+    #|interface User { name: string; }
+    #|const value = 42;
+    #|export { type User, value };
+  match parse_bind_for_isolated_modules(source) {
+    Err(_) => assert_true(false)
+    Ok(bound) => {
+      let diagnostics = validate_verbatim_module_syntax(bound, "test.ts")
+      // Should have no errors - inline type specifier is correct
+      assert_eq(diagnostics.length(), 0)
+      println("verbatimModuleSyntax inline type specifier test passed")
+    }
+  }
+}
+
+///|
+test "verbatimModuleSyntax - type alias exported without type-only syntax" {
+  let source =
+    #|type ID = string | number;
+    #|export { ID };
+  match parse_bind_for_isolated_modules(source) {
+    Err(_) => assert_true(false)
+    Ok(bound) => {
+      let diagnostics = validate_verbatim_module_syntax(bound, "test.ts")
+      // Should have TS1486 error - type alias must use type-only export
+      assert_eq(diagnostics.length(), 1)
+      assert_eq(diagnostics[0].code, 1486)
+      println("verbatimModuleSyntax type alias export test passed")
+    }
+  }
+}
+
+///|
+test "verbatimModuleSyntax - value export allowed without type-only syntax" {
+  let source =
+    #|const value = 42;
+    #|export { value };
+  match parse_bind_for_isolated_modules(source) {
+    Err(_) => assert_true(false)
+    Ok(bound) => {
+      let diagnostics = validate_verbatim_module_syntax(bound, "test.ts")
+      // Should have no errors - values don't need type-only export
+      assert_eq(diagnostics.length(), 0)
+      println("verbatimModuleSyntax value export test passed")
+    }
+  }
+}

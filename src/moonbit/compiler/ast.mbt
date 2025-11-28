@@ -263,6 +263,7 @@ pub struct ModuleDeclaration {
 pub struct ImportDeclaration {
   import_clause : ImportClause?
   module_specifier : String
+  is_type_only : Bool // True for "import type { ... }" syntax
   location : SourceLocation
 } derive(Show)
 
@@ -283,6 +284,7 @@ pub enum NamedImports {
 pub struct ImportSpecifier {
   property_name : String? // For "import { foo as bar }"
   name : String
+  is_type_only : Bool // For "import { type foo }" inline type import
   location : SourceLocation
 } derive(Show)
 
@@ -305,6 +307,7 @@ pub enum NamedExports {
 pub struct ExportSpecifier {
   property_name : String?
   name : String
+  is_type_only : Bool // For "export { type foo }" inline type export
   location : SourceLocation
 } derive(Show)
 

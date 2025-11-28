@@ -5649,6 +5649,123 @@ pub fn validate_isolated_modules(
 }
 
 ///|
+/// Validate verbatimModuleSyntax constraints
+/// TS1485: 'X' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+/// TS1486: 'X' is a type and must be exported using a type-only export when 'verbatimModuleSyntax' is enabled.
+pub fn validate_verbatim_module_syntax(
+  bound : BoundSourceFile,
+  file_path : String,
+) -> Array[Diagnostic] {
+  let diagnostics : Array[Diagnostic] = []
+
+  // Collect all type-only symbols (interfaces, type aliases) from the source file
+  let type_only_symbols : Map[String, Bool] = Map::new()
+  for stmt in bound.statements {
+    match stmt {
+      InterfaceDeclaration(iface) => type_only_symbols.set(iface.name, true)
+      TypeAliasDeclaration(type_alias) =>
+        type_only_symbols.set(type_alias.name, true)
+      _ => ()
+    }
+  }
+
+  // Check imports
+  for stmt in bound.statements {
+    match stmt {
+      ImportDeclaration(import_decl) => {
+        // Skip if the entire import is type-only
+        if import_decl.is_type_only {
+          continue
+        }
+
+        // Check named imports
+        match import_decl.import_clause {
+          Some(clause) =>
+            match clause.named_bindings {
+              Some(NamedImports::NamedImports(specifiers, _)) => {
+                for specifier in specifiers {
+                  // Skip if the specifier is type-only
+                  if specifier.is_type_only {
+                    continue
+                  }
+
+                  // The local name is the name used in the file
+                  let local_name = specifier.name
+
+                  // Check if this symbol is a type-only symbol in the local scope
+                  // Since we can't resolve cross-file imports, we check local declarations
+                  if type_only_symbols.get(local_name).or(false) {
+                    diagnostics.push(
+                      Diagnostic::{
+                        code: 1485,
+                        category: DiagnosticCategory::Error,
+                        message: "'\{local_name}' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.",
+                        location: specifier.location,
+                      },
+                    )
+                  }
+                }
+              }
+              _ => ()
+            }
+          None => ()
+        }
+      }
+      _ => ()
+    }
+  }
+
+  // Check exports
+  for stmt in bound.statements {
+    match stmt {
+      ExportDeclaration(export_decl) => {
+        // Skip if the entire export is type-only
+        if export_decl.is_type_only {
+          continue
+        }
+
+        // Check named exports
+        match export_decl.export_clause {
+          Some(NamedExports::NamedExports(specifiers, _)) => {
+            for specifier in specifiers {
+              // Skip if the specifier is type-only
+              if specifier.is_type_only {
+                continue
+              }
+
+              // The property name is the local name (what we're exporting from)
+              // If no property_name, the name is used for both
+              let local_name = match specifier.property_name {
+                Some(pn) => pn
+                None => specifier.name
+              }
+
+              // Check if this symbol is a type-only symbol
+              if type_only_symbols.get(local_name).or(false) {
+                diagnostics.push(
+                  Diagnostic::{
+                    code: 1486,
+                    category: DiagnosticCategory::Error,
+                    message: "'\{local_name}' is a type and must be exported using a type-only export when 'verbatimModuleSyntax' is enabled.",
+                    location: specifier.location,
+                  },
+                )
+              }
+            }
+          }
+          Some(NamedExports::NamespaceExport(_, _)) =>
+            () // Namespace exports (export * as ns) don't need type-only checking
+          None => ()
+        }
+      }
+      _ => ()
+    }
+  }
+
+  diagnostics
+}
+
+///|
 /// Helper function to check if a type node includes undefined
 fn exact_opt_type_includes_undefined(type_node : Node) -> Bool {
   match type_node {
