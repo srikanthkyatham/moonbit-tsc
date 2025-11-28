@@ -201,6 +201,16 @@ pub fn close_worker(worker : WorkerHandle) -> Unit {
 }
 
 ///|
+/// Kill a worker process by PID
+pub async fn kill_worker(worker : WorkerHandle) -> Unit raise Error {
+  // First close stdin to signal graceful shutdown
+  worker.stdin.close()
+  // Then forcefully kill the process to ensure it terminates
+  let _ = @process.run("kill", [worker.pid.to_string()])
+
+}
+
+///|
 /// Close all workers
 pub fn close_workers(workers : Array[WorkerHandle]) -> Unit {
   for worker in workers {
@@ -209,7 +219,15 @@ pub fn close_workers(workers : Array[WorkerHandle]) -> Unit {
 }
 
 ///|
-/// Shutdown worker pool
-pub fn shutdown_pool(pool : WorkerPool) -> Unit {
-  close_workers(pool.workers)
+/// Kill all worker processes
+pub async fn kill_workers(workers : Array[WorkerHandle]) -> Unit raise Error {
+  for worker in workers {
+    kill_worker(worker)
+  }
+}
+
+///|
+/// Shutdown worker pool (kills all worker processes)
+pub async fn shutdown_pool(pool : WorkerPool) -> Unit raise Error {
+  kill_workers(pool.workers)
 }

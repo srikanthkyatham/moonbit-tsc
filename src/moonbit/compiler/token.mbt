@@ -204,6 +204,10 @@ pub enum Token {
   // Special
   EOF(SourceLocation)
   Unknown(String, SourceLocation)
+  // Smart quotes (common copy-paste error from documents/websites)
+  // found_char: the smart quote character found
+  // suggested_char: the ASCII quote to use instead
+  SmartQuote(String, String, SourceLocation)
 } derive(Show, Eq)
 
 ///|
@@ -371,7 +375,8 @@ pub fn Token::location(self : Token) -> SourceLocation {
     | Hashbang(_, loc)
     | CommentDirective(_, _, loc)
     | EOF(loc)
-    | Unknown(_, loc) => loc
+    | Unknown(_, loc)
+    | SmartQuote(_, _, loc) => loc
   }
 }
 

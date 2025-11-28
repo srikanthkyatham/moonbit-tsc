@@ -688,3 +688,59 @@ test "scan string with quote escapes" {
     _ => assert_true(false)
   }
 }
+
+// ============================================================================
+// Smart Quote Detection Tests (common copy-paste error)
+// ============================================================================
+
+///|
+test "scan left double smart quote" {
+  let tokens = scan_all_v2("\u{201C}hello", "test.ts") // "hello
+  assert_eq(tokens.length(), 3) // smart quote + identifier + EOF
+  match tokens[0] {
+    SmartQuote(found, suggested, _) => {
+      assert_eq(found, "\u{201C}")
+      assert_eq(suggested, "\"")
+    }
+    _ => assert_true(false)
+  }
+}
+
+///|
+test "scan right double smart quote" {
+  let tokens = scan_all_v2("\u{201D}hello", "test.ts") // "hello
+  assert_eq(tokens.length(), 3) // smart quote + identifier + EOF
+  match tokens[0] {
+    SmartQuote(found, suggested, _) => {
+      assert_eq(found, "\u{201D}")
+      assert_eq(suggested, "\"")
+    }
+    _ => assert_true(false)
+  }
+}
+
+///|
+test "scan left single smart quote" {
+  let tokens = scan_all_v2("\u{2018}hello", "test.ts") // 'hello
+  assert_eq(tokens.length(), 3) // smart quote + identifier + EOF
+  match tokens[0] {
+    SmartQuote(found, suggested, _) => {
+      assert_eq(found, "\u{2018}")
+      assert_eq(suggested, "'")
+    }
+    _ => assert_true(false)
+  }
+}
+
+///|
+test "scan right single smart quote" {
+  let tokens = scan_all_v2("\u{2019}hello", "test.ts") // 'hello
+  assert_eq(tokens.length(), 3) // smart quote + identifier + EOF
+  match tokens[0] {
+    SmartQuote(found, suggested, _) => {
+      assert_eq(found, "\u{2019}")
+      assert_eq(suggested, "'")
+    }
+    _ => assert_true(false)
+  }
+}

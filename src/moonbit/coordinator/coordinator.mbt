@@ -34,9 +34,10 @@ pub(all) struct CompilationSummary {
 } derive(Show)
 
 ///|
-/// Compile multiple files in parallel using worker processes
+/// Compile multiple files in parallel using async task groups
+/// Uses in-process parallelism via MoonBit's async runtime
 pub async fn compile_parallel(
-  executable : String,
+  _executable : String,
   files : Array[(String, String)], // (file_path, source) pairs
   options : CoordinatorOptions,
 ) -> CompilationSummary raise Error {
@@ -53,79 +54,56 @@ pub async fn compile_parallel(
     }
   }
 
-  // For single file, don't bother with workers
-  if files.length() == 1 {
-    let (file_path, source) = files[0]
-    let result = compile_single(file_path, source, options)
-    let end_time = @async.now()
-    return {
-      results: [result],
-      total_files: 1,
-      successful: if result.success { 1 } else { 0 },
-      failed: if result.success { 0 } else { 1 },
-      total_time_ms: end_time - start_time,
-    }
-  }
+  // Pre-allocate results array
+  let results : Array[@protocol.CompileResponse?] = Array::make(files.length(), None)
 
-  // Spawn workers
-  let worker_count = if options.worker_count > files.length() {
-    files.length()
-  } else {
-    options.worker_count
-  }
+  // Use semaphore to limit concurrency to worker_count
+  let sem = @semaphore.Semaphore::new(options.worker_count)
 
-  let workers = spawn_workers(executable, worker_count)
-
-  // Distribute work and collect results
-  let results = @async.with_task_group(fn(group) {
-    let all_results : Array[@protocol.CompileResponse] = []
-
-    // Process each file, distributing round-robin to workers
+  // Compile all files in parallel using task group
+  @async.with_task_group(fn(group) {
     for i = 0; i < files.length(); i = i + 1 {
+      let idx = i
       let (file_path, source) = files[i]
-      let worker = workers[i % workers.length()]
+      let opts = options
 
-      let request = @protocol.CompileRequest::new(
-        file_path,
-        source,
-        target=options.target,
-        source_map=options.source_map,
-        declaration=options.declaration,
-      )
+      let _ = group.spawn(async fn() {
+        // Acquire semaphore to limit concurrency
+        sem.acquire()
 
-      // Spawn a task for each compilation
-      let task = group.spawn(
-        async fn() {
-          send_request(worker, request)
-        },
-      )
+        // Compile the file
+        let result = compile_single(file_path, source, opts)
+        results[idx] = Some(result)
 
-      // Collect result when task completes
-      let result = task.wait()
-      all_results.push(result)
+        // Release semaphore
+        sem.release()
+      })
     }
-
-    all_results
   })
-
-  // Cleanup workers
-  close_workers(workers)
 
   let end_time = @async.now()
 
-  // Calculate summary
+  // Convert to final array and calculate summary
+  let final_results : Array[@protocol.CompileResponse] = []
   let mut successful = 0
   let mut failed = 0
+
   for result in results {
-    if result.success {
-      successful = successful + 1
-    } else {
-      failed = failed + 1
+    match result {
+      Some(response) => {
+        final_results.push(response)
+        if response.success {
+          successful = successful + 1
+        } else {
+          failed = failed + 1
+        }
+      }
+      None => ()
     }
   }
 
   {
-    results,
+    results: final_results,
     total_files: files.length(),
     successful,
     failed,

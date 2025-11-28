@@ -709,6 +709,22 @@ fn scan_single_token_v2(
       (Identifier(ident.to_string(), loc), rest2)
     }
 
+    // === Smart quotes (common copy-paste error from documents/websites) ===
+    // Left double quotation mark (U+201C), Right double quotation mark (U+201D)
+    [ch, .. rest] if ch.to_int() == 0x201C || ch.to_int() == 0x201D => {
+      let loc = make_loc(state.line, state.col, state.offset)
+      state.col += 1
+      state.offset += 1
+      (SmartQuote(Char::to_string(ch), "\"", loc), rest)
+    }
+    // Left single quotation mark (U+2018), Right single quotation mark (U+2019)
+    [ch, .. rest] if ch.to_int() == 0x2018 || ch.to_int() == 0x2019 => {
+      let loc = make_loc(state.line, state.col, state.offset)
+      state.col += 1
+      state.offset += 1
+      (SmartQuote(Char::to_string(ch), "'", loc), rest)
+    }
+
     // === Unknown character ===
     [ch, .. rest] => {
       let loc = make_loc(state.line, state.col, state.offset)
