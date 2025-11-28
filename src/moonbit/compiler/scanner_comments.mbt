@@ -334,7 +334,8 @@ fn skip_whitespace_with_special_comments_v2(
   state : ScanState,
   file_path : String,
 ) -> (StringView, Token?) {
-  loop code {
+  let input = code
+  loop input {
     [' ' | '\t', .. rest] => {
       state.col += 1
       state.offset += 1
@@ -351,13 +352,26 @@ fn skip_whitespace_with_special_comments_v2(
       continue rest
     }
     // Check for JSDoc comment first (/** but not /**/)
-    [.. "/**", ch, ..] if ch != '/' => {
-      let (token, rest) = scan_jsdoc_comment_v2(code, state, file_path)
+    [.. "/**", ch, ..] as current if ch != '/' => {
+      let (token, rest) = scan_jsdoc_comment_v2(current, state, file_path)
       (rest, Some(token))
     }
-    // Check for comment directive
-    [.. "///", ' ', '<', ..] | [.. "///<", ..] | [.. "// @ts-", ..] | [.. "//@ts-", ..] => {
-      let (token, rest) = scan_comment_directive_v2(code, state, file_path)
+    // Check for comment directive - triple slash
+    [.. "///", ' ', '<', ..] as current => {
+      let (token, rest) = scan_comment_directive_v2(current, state, file_path)
+      (rest, Some(token))
+    }
+    [.. "///<", ..] as current => {
+      let (token, rest) = scan_comment_directive_v2(current, state, file_path)
+      (rest, Some(token))
+    }
+    // Check for comment directive - ts directives
+    [.. "// @ts-", ..] as current => {
+      let (token, rest) = scan_comment_directive_v2(current, state, file_path)
+      (rest, Some(token))
+    }
+    [.. "//@ts-", ..] as current => {
+      let (token, rest) = scan_comment_directive_v2(current, state, file_path)
       (rest, Some(token))
     }
     // Regular single-line comment
