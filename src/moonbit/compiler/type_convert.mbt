@@ -625,6 +625,7 @@ fn TypeChecker::create_type_info(self : TypeChecker) -> (TypeInfo, TypeChecker) 
     file_path: self.file_path,
     global_scope: self.global_scope,
     current_this_type: self.current_this_type,
+    no_unchecked_indexed_access: self.no_unchecked_indexed_access,
   }
   (info, new_checker)
 }

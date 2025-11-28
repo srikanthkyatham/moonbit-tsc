@@ -266,6 +266,7 @@ pub struct TypeChecker {
   file_path : String
   global_scope : Scope? // Global scope for symbol lookup
   current_this_type : Type? // Type of 'this' in current scope (for class methods/constructors)
+  no_unchecked_indexed_access : Bool // Adds undefined to indexed access types
 } derive(Show)
 
 ///|
@@ -287,6 +288,16 @@ pub fn TypeChecker::new(
   file_path : String,
   global_scope : Scope?,
 ) -> TypeChecker {
+  TypeChecker::new_with_options(file_path, global_scope, false)
+}
+
+///|
+/// Create a new type checker with options
+pub fn TypeChecker::new_with_options(
+  file_path : String,
+  global_scope : Scope?,
+  no_unchecked_indexed_access : Bool,
+) -> TypeChecker {
   {
     next_type_id: 0,
     type_cache: Map::new(),
@@ -297,6 +308,7 @@ pub fn TypeChecker::new(
     file_path,
     global_scope,
     current_this_type: None,
+    no_unchecked_indexed_access,
   }
 }
 
@@ -1059,6 +1071,45 @@ fn contains_type(types : Array[Type], target : Type) -> Bool {
 }
 
 ///|
+/// Add undefined to a type (creates T | undefined union)
+/// Used for noUncheckedIndexedAccess to indicate that indexed access
+/// may return undefined if the index doesn't exist
+fn add_undefined_to_type(
+  checker : TypeChecker,
+  t : Type,
+) -> (Type, TypeChecker) {
+  // Don't add undefined if it's already there
+  match t {
+    Undefined(_) => (t, checker)
+    Union(ut) => {
+      // Check if union already contains undefined
+      let mut has_undefined = false
+      for i = 0; i < ut.types.length(); i = i + 1 {
+        match ut.types[i] {
+          Undefined(_) => {
+            has_undefined = true
+            break
+          }
+          _ => continue
+        }
+      }
+      if has_undefined {
+        (t, checker)
+      } else {
+        let (undef_t, checker) = undefined_type(checker)
+        union_type(checker, [t, undef_t])
+      }
+    }
+    Any(_) => (t, checker) // any already includes undefined
+    Unknown(_) => (t, checker) // unknown already includes undefined conceptually
+    _ => {
+      let (undef_t, checker) = undefined_type(checker)
+      union_type(checker, [t, undef_t])
+    }
+  }
+}
+
+///|
 /// Check if two types are structurally equal
 fn types_equal(a : Type, b : Type) -> Bool {
   match (a, b) {
@@ -1087,7 +1138,20 @@ fn types_equal(a : Type, b : Type) -> Bool {
 ///|
 /// Check a bound source file
 pub fn check_source_file(bound : BoundSourceFile) -> CheckResult {
-  let checker = TypeChecker::new(bound.file_path, Some(bound.global_scope))
+  check_source_file_with_options(bound, false)
+}
+
+///|
+/// Check a bound source file with compiler options
+pub fn check_source_file_with_options(
+  bound : BoundSourceFile,
+  no_unchecked_indexed_access : Bool,
+) -> CheckResult {
+  let checker = TypeChecker::new_with_options(
+    bound.file_path,
+    Some(bound.global_scope),
+    no_unchecked_indexed_access,
+  )
   let checker = check_statements(checker, bound.statements)
 
   // Return result
@@ -3076,25 +3140,44 @@ fn infer_property_access_type(
 
 ///|
 /// Infer element access type (bracket notation)
+/// When noUncheckedIndexedAccess is enabled, adds undefined to the result type
+/// for array access and index signature access (but not for known property access)
 fn infer_element_access_type(
   checker : TypeChecker,
   elem : ElementAccessExpression,
 ) -> (Type, TypeChecker) {
   let (object_type, checker) = infer_type(checker, elem.expression)
   let (index_type, checker) = infer_type(checker, elem.argument_expression)
+  let no_unchecked = checker.no_unchecked_indexed_access
   match object_type {
-    Array(arr_type) => (arr_type.element_type, checker)
+    Array(arr_type) => {
+      // Array access - add undefined if noUncheckedIndexedAccess is enabled
+      // because the index might be out of bounds
+      let element_type = arr_type.element_type
+      if no_unchecked {
+        add_undefined_to_type(checker, element_type)
+      } else {
+        (element_type, checker)
+      }
+    }
     Object(obj_type) =>
       // Handle object element access based on argument type
       match elem.argument_expression {
         // String literal index: obj["prop"] - look up property by name
         StringLiteral(str_lit) =>
           match obj_type.properties.get(str_lit.value) {
+            // Known property - don't add undefined (property exists)
             Some(property) => (property.prop_type, checker)
             None =>
               // Check string index signature
               match find_string_index_signature(obj_type.index_signatures) {
-                Some(sig) => (sig.return_type, checker)
+                Some(sig) =>
+                  // Index signature access - add undefined if noUncheckedIndexedAccess
+                  if no_unchecked {
+                    add_undefined_to_type(checker, sig.return_type)
+                  } else {
+                    (sig.return_type, checker)
+                  }
                 None => any_type(checker)
               }
           }
@@ -3104,24 +3187,44 @@ fn infer_element_access_type(
             Number(_) | NumberLiteral(_, _) =>
               // Number index: look for number index signature
               match find_number_index_signature(obj_type.index_signatures) {
-                Some(sig) => (sig.return_type, checker)
+                Some(sig) =>
+                  if no_unchecked {
+                    add_undefined_to_type(checker, sig.return_type)
+                  } else {
+                    (sig.return_type, checker)
+                  }
                 None =>
                   // Fall back to string index signature
                   match find_string_index_signature(obj_type.index_signatures) {
-                    Some(sig) => (sig.return_type, checker)
+                    Some(sig) =>
+                      if no_unchecked {
+                        add_undefined_to_type(checker, sig.return_type)
+                      } else {
+                        (sig.return_type, checker)
+                      }
                     None => any_type(checker)
                   }
               }
             String(_) | StringLiteral(_, _) =>
               // String index: look for string index signature
               match find_string_index_signature(obj_type.index_signatures) {
-                Some(sig) => (sig.return_type, checker)
+                Some(sig) =>
+                  if no_unchecked {
+                    add_undefined_to_type(checker, sig.return_type)
+                  } else {
+                    (sig.return_type, checker)
+                  }
                 None => any_type(checker)
               }
             _ =>
               // Unknown index type: try string index signature, then any
               match find_string_index_signature(obj_type.index_signatures) {
-                Some(sig) => (sig.return_type, checker)
+                Some(sig) =>
+                  if no_unchecked {
+                    add_undefined_to_type(checker, sig.return_type)
+                  } else {
+                    (sig.return_type, checker)
+                  }
                 None => any_type(checker)
               }
           }
@@ -3135,7 +3238,14 @@ fn infer_element_access_type(
         elem.argument_expression,
       )
       match prop_type_opt {
-        Some(prop_type) => (prop_type, checker)
+        Some(prop_type) =>
+          // For TypeReference, we need to add undefined for index signature access
+          // The lookup function doesn't distinguish, so we add undefined conservatively
+          if no_unchecked {
+            add_undefined_to_type(checker, prop_type)
+          } else {
+            (prop_type, checker)
+          }
         None => any_type(checker)
       }
     }
@@ -3161,11 +3271,17 @@ fn infer_element_access_type(
         }
       }
       if all_accessible && element_types.length() > 0 {
-        if element_types.length() == 1 {
-          (element_types[0], checker)
+        let result_type = if element_types.length() == 1 {
+          element_types[0]
         } else {
-          let (union_elem_type, checker) = union_type(checker, element_types)
-          (union_elem_type, checker)
+          let (union_elem_type, c) = union_type(checker, element_types)
+          checker = c
+          union_elem_type
+        }
+        if no_unchecked {
+          add_undefined_to_type(checker, result_type)
+        } else {
+          (result_type, checker)
         }
       } else {
         any_type(checker)
@@ -3183,7 +3299,12 @@ fn infer_element_access_type(
         )
         checker = c
         match elem_type_opt {
-          Some(elem_type) => return (elem_type, checker)
+          Some(elem_type) =>
+            if no_unchecked {
+              return add_undefined_to_type(checker, elem_type)
+            } else {
+              return (elem_type, checker)
+            }
           None => continue
         }
       }

@@ -4682,3 +4682,105 @@ test "exactOptionalPropertyTypes - string value allowed" {
     }
   }
 }
+
+// ============================================================================
+// noUncheckedIndexedAccess Tests
+// ============================================================================
+
+///|
+/// Helper to parse, bind, and check source code with noUncheckedIndexedAccess enabled
+fn parse_bind_and_check_with_no_unchecked_indexed_access(
+  source : String,
+) -> CheckResult {
+  let tokens = tokens_from_source(source)
+  match parse_source_file(tokens, "test.ts") {
+    Ok(source_file) =>
+      match bind_source_file(source_file) {
+        Ok(bound) => check_source_file_with_options(bound, true)
+        Err(diagnostics) => Err(diagnostics)
+      }
+    Err(diagnostics) => Err(diagnostics)
+  }
+}
+
+///|
+test "noUncheckedIndexedAccess - array access compiles with option enabled" {
+  let source =
+    #|const arr: number[] = [1, 2, 3];
+    #|const x = arr[0];
+  let result = parse_bind_and_check_with_no_unchecked_indexed_access(source)
+  match result {
+    Ok(_) => {
+      println("noUncheckedIndexedAccess array access test passed")
+    }
+    Err(diagnostics) => {
+      println("noUncheckedIndexedAccess test failed with errors:")
+      for i = 0; i < diagnostics.length(); i = i + 1 {
+        println("  \{diagnostics[i].message}")
+      }
+      assert_true(false)
+    }
+  }
+}
+
+///|
+test "noUncheckedIndexedAccess - array access compiles without option" {
+  let source =
+    #|const arr: number[] = [1, 2, 3];
+    #|const x = arr[0];
+  let result = parse_bind_and_check(source)
+  match result {
+    Ok(_) => {
+      println("noUncheckedIndexedAccess disabled test passed")
+    }
+    Err(diagnostics) => {
+      println("noUncheckedIndexedAccess disabled test failed with errors:")
+      for i = 0; i < diagnostics.length(); i = i + 1 {
+        println("  \{diagnostics[i].message}")
+      }
+      assert_true(false)
+    }
+  }
+}
+
+///|
+test "noUncheckedIndexedAccess - object index signature access compiles" {
+  let source =
+    #|interface StringMap { [key: string]: number; }
+    #|const obj: StringMap = { a: 1 };
+    #|const x = obj["key"];
+  let result = parse_bind_and_check_with_no_unchecked_indexed_access(source)
+  match result {
+    Ok(_) => {
+      println("noUncheckedIndexedAccess object index signature test passed")
+    }
+    Err(diagnostics) => {
+      println("noUncheckedIndexedAccess object test failed with errors:")
+      for i = 0; i < diagnostics.length(); i = i + 1 {
+        println("  \{diagnostics[i].message}")
+      }
+      assert_true(false)
+    }
+  }
+}
+
+///|
+test "noUncheckedIndexedAccess - known property access should work" {
+  let source =
+    #|interface Person { name: string; age: number; }
+    #|const p: Person = { name: "Alice", age: 30 };
+    #|const name = p["name"];
+  let result = parse_bind_and_check_with_no_unchecked_indexed_access(source)
+  match result {
+    Ok(_) => {
+      println("noUncheckedIndexedAccess known property test passed")
+    }
+    Err(diagnostics) => {
+      println("noUncheckedIndexedAccess known property test failed with errors:")
+      for i = 0; i < diagnostics.length(); i = i + 1 {
+        println("  \{diagnostics[i].message}")
+      }
+      assert_true(false)
+    }
+  }
+}

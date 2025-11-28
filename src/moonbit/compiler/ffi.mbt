@@ -13,6 +13,7 @@ pub(all) struct CompileOptions {
   strict : Bool
   isolated_modules : Bool // Ensures each file can be transpiled independently
   exact_optional_property_types : Bool // Differentiates between undefined and missing properties
+  no_unchecked_indexed_access : Bool // Adds undefined to indexed access types (arr[i] becomes T | undefined)
 } derive(Show)
 
 ///|
@@ -25,6 +26,7 @@ pub fn CompileOptions::default() -> CompileOptions {
     strict: false,
     isolated_modules: false,
     exact_optional_property_types: false,
+    no_unchecked_indexed_access: false,
   }
 }
 
