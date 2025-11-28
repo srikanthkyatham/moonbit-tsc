@@ -29,6 +29,13 @@ pub(all) struct CompileOptions {
   no_emit : Bool // Only run type checking, don't emit JavaScript or declaration files
   es_module_interop : Bool // Emit helpers for CommonJS/ES module interoperability
   no_implicit_any : Bool // Error on expressions and declarations with an implied 'any' type
+  strict_null_checks : Bool // Enable strict null checks
+  no_implicit_this : Bool // Error on 'this' expressions with an implied 'any' type
+  no_unused_locals : Bool // Report errors on unused local variables
+  no_unused_parameters : Bool // Report errors on unused parameters
+  no_implicit_returns : Bool // Report error when not all code paths return a value
+  no_fallthrough_cases_in_switch : Bool // Report errors for fallthrough cases in switch statements
+  strict_property_initialization : Bool // Ensure class properties are initialized in constructor
 } derive(Show)
 
 ///|
@@ -50,6 +57,13 @@ pub fn CompileOptions::default() -> CompileOptions {
     no_emit: false,
     es_module_interop: false,
     no_implicit_any: false,
+    strict_null_checks: false,
+    no_implicit_this: false,
+    no_unused_locals: false,
+    no_unused_parameters: false,
+    no_implicit_returns: false,
+    no_fallthrough_cases_in_switch: false,
+    strict_property_initialization: false,
   }
 }
 

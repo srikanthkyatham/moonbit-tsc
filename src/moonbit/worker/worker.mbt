@@ -54,7 +54,14 @@ fn process_request(json_str : String) -> @protocol.CompileResponse {
     verbatim_module_syntax: false,
     no_emit: false,
     es_module_interop: request.es_module_interop,
-    no_implicit_any: false, // TODO: wire through from request
+    no_implicit_any: false,
+    strict_null_checks: false,
+    no_implicit_this: false,
+    no_unused_locals: false,
+    no_unused_parameters: false,
+    no_implicit_returns: false,
+    no_fallthrough_cases_in_switch: false,
+    strict_property_initialization: false,
   }
 
   // Measure compilation time

@@ -4898,6 +4898,13 @@ test "noEmit - returns empty JavaScript when enabled" {
     no_emit: true,
     es_module_interop: false,
     no_implicit_any: false,
+    strict_null_checks: false,
+    no_implicit_this: false,
+    no_unused_locals: false,
+    no_unused_parameters: false,
+    no_implicit_returns: false,
+    no_fallthrough_cases_in_switch: false,
+    strict_property_initialization: false,
   }
   let result = compile_source(source, "test.ts", options)
   assert_true(result.success)
@@ -4928,6 +4935,13 @@ test "noEmit - type checking still runs" {
     no_emit: true,
     es_module_interop: false,
     no_implicit_any: false,
+    strict_null_checks: false,
+    no_implicit_this: false,
+    no_unused_locals: false,
+    no_unused_parameters: false,
+    no_implicit_returns: false,
+    no_fallthrough_cases_in_switch: false,
+    strict_property_initialization: false,
   }
   let result = compile_source(source, "test.ts", options)
   // noEmit still runs type checking - diagnostics should be present
@@ -4956,6 +4970,13 @@ test "noEmit disabled - JavaScript is emitted" {
     no_emit: false,
     es_module_interop: false,
     no_implicit_any: false,
+    strict_null_checks: false,
+    no_implicit_this: false,
+    no_unused_locals: false,
+    no_unused_parameters: false,
+    no_implicit_returns: false,
+    no_fallthrough_cases_in_switch: false,
+    strict_property_initialization: false,
   }
   let result = compile_source(source, "test.ts", options)
   assert_true(result.success)
@@ -4984,6 +5005,13 @@ test "noEmit - declaration not generated even if requested" {
     no_emit: true,
     es_module_interop: false,
     no_implicit_any: false,
+    strict_null_checks: false,
+    no_implicit_this: false,
+    no_unused_locals: false,
+    no_unused_parameters: false,
+    no_implicit_returns: false,
+    no_fallthrough_cases_in_switch: false,
+    strict_property_initialization: false,
   }
   let result = compile_source(source, "test.ts", options)
   assert_true(result.success)

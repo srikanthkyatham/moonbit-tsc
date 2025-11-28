@@ -2050,6 +2050,13 @@ fn compile_with_source_map(source : String) -> CompileResult {
     no_emit: false,
     es_module_interop: false,
     no_implicit_any: false,
+    strict_null_checks: false,
+    no_implicit_this: false,
+    no_unused_locals: false,
+    no_unused_parameters: false,
+    no_implicit_returns: false,
+    no_fallthrough_cases_in_switch: false,
+    strict_property_initialization: false,
   }
   compile_source(source, "test.ts", options)
 }
@@ -2073,6 +2080,13 @@ fn compile_with_inline_sources(source : String) -> CompileResult {
     no_emit: false,
     es_module_interop: false,
     no_implicit_any: false,
+    strict_null_checks: false,
+    no_implicit_this: false,
+    no_unused_locals: false,
+    no_unused_parameters: false,
+    no_implicit_returns: false,
+    no_fallthrough_cases_in_switch: false,
+    strict_property_initialization: false,
   }
   compile_source(source, "test.ts", options)
 }
@@ -2152,6 +2166,13 @@ test "inline source map flag enables source map generation" {
     no_emit: false,
     es_module_interop: false,
     no_implicit_any: false,
+    strict_null_checks: false,
+    no_implicit_this: false,
+    no_unused_locals: false,
+    no_unused_parameters: false,
+    no_implicit_returns: false,
+    no_fallthrough_cases_in_switch: false,
+    strict_property_initialization: false,
   }
   let result = compile_source("const y = 99;", "test.ts", options)
   assert_true(result.success)
@@ -2183,6 +2204,13 @@ test "esModuleInterop option accepted" {
     no_emit: false,
     es_module_interop: true, // Enable esModuleInterop
     no_implicit_any: false,
+    strict_null_checks: false,
+    no_implicit_this: false,
+    no_unused_locals: false,
+    no_unused_parameters: false,
+    no_implicit_returns: false,
+    no_fallthrough_cases_in_switch: false,
+    strict_property_initialization: false,
   }
   let source = "import foo from './bar';"
   let result = compile_source(source, "test.ts", options)
