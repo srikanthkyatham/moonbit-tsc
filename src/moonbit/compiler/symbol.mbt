@@ -573,6 +573,7 @@ pub struct BoundSourceFile {
   ambient_modules : AmbientModuleRegistry // Ambient module declarations (declare module "pattern")
   module_augmentations : Array[ModuleAugmentation] // Module augmentations (declare module in module files)
   global_augmentations : Array[GlobalAugmentation] // Global augmentations (declare global { })
+  triple_slash_directives : Array[TripleSlashDirective] // Triple-slash directives (/// <reference ...>)
 } derive(Show)
 
 ///|
@@ -1031,6 +1032,217 @@ pub struct GlobalAugmentation {
   /// Location of the augmentation
   location : SourceLocation
 } derive(Show)
+
+///|
+/// Triple-slash directive kind
+pub enum TripleSlashDirectiveKind {
+  /// `/// <reference path="./file.ts" />`
+  ReferencePath(String)
+  /// `/// <reference types="node" />`
+  ReferenceTypes(String)
+  /// `/// <reference lib="es2015" />`
+  ReferenceLib(String)
+  /// `/// <reference no-default-lib="true" />`
+  NoDefaultLib(Bool)
+  /// `/// <amd-module name="..." />`
+  AmdModule(String)
+  /// `/// <amd-dependency path="..." />`
+  AmdDependency(String)
+} derive(Show, Eq)
+
+///|
+/// Triple-slash directive
+pub struct TripleSlashDirective {
+  /// The kind and value of the directive
+  kind : TripleSlashDirectiveKind
+  /// Location in source
+  location : SourceLocation
+} derive(Show)
+
+///|
+/// Parse a triple-slash directive from content (after ///)
+/// Returns None if content is not a valid directive
+pub fn parse_triple_slash_directive(
+  content : String,
+  location : SourceLocation,
+) -> TripleSlashDirective? {
+  let trimmed = trim_whitespace(content)
+
+  // Must start with <reference or <amd-
+  if not(trimmed.has_prefix("<")) {
+    return None
+  }
+
+  // Try to parse reference directive
+  // Format: <reference path="..." /> or <reference types="..." /> etc.
+  if trimmed.has_prefix("<reference") {
+    // Extract attribute
+    match extract_attribute(trimmed, "path") {
+      Some(path) =>
+        return Some(
+          TripleSlashDirective::{ kind: ReferencePath(path), location },
+        )
+      None => ()
+    }
+    match extract_attribute(trimmed, "types") {
+      Some(types) =>
+        return Some(
+          TripleSlashDirective::{ kind: ReferenceTypes(types), location },
+        )
+      None => ()
+    }
+    // Check no-default-lib BEFORE lib (lib is a substring of no-default-lib)
+    match extract_attribute(trimmed, "no-default-lib") {
+      Some(no_default) => {
+        let value = no_default == "true"
+        return Some(
+          TripleSlashDirective::{ kind: NoDefaultLib(value), location },
+        )
+      }
+      None => ()
+    }
+    match extract_attribute(trimmed, "lib") {
+      Some(lib) =>
+        return Some(
+          TripleSlashDirective::{ kind: ReferenceLib(lib), location },
+        )
+      None => ()
+    }
+  }
+
+  // Try to parse amd-module directive
+  if trimmed.has_prefix("<amd-module") {
+    match extract_attribute(trimmed, "name") {
+      Some(name) =>
+        return Some(TripleSlashDirective::{ kind: AmdModule(name), location })
+      None => ()
+    }
+  }
+
+  // Try to parse amd-dependency directive
+  if trimmed.has_prefix("<amd-dependency") {
+    match extract_attribute(trimmed, "path") {
+      Some(path) =>
+        return Some(
+          TripleSlashDirective::{ kind: AmdDependency(path), location },
+        )
+      None => ()
+    }
+  }
+
+  None
+}
+
+///|
+/// Trim whitespace from start and end of string
+fn trim_whitespace(s : String) -> String {
+  if s.length() == 0 {
+    return ""
+  }
+  let chars = s.to_array()
+  let len = chars.length()
+  if len == 0 {
+    return ""
+  }
+  let mut start = 0
+  let mut end = len
+  // Skip leading whitespace
+  while start < end && (chars[start] == ' ' || chars[start] == '\t') {
+    start = start + 1
+  }
+  // Skip trailing whitespace
+  while end > start && (chars[end - 1] == ' ' || chars[end - 1] == '\t') {
+    end = end - 1
+  }
+  // Build result string
+  let result = StringBuilder::new()
+  for i = start; i < end; i = i + 1 {
+    result.write_char(chars[i])
+  }
+  result.to_string()
+}
+
+///|
+/// Extract attribute value from XML-like tag
+/// e.g., extract_attribute("<reference path=\"foo.ts\" />", "path") => Some("foo.ts")
+fn extract_attribute(tag : String, attr_name : String) -> String? {
+  // Early return for empty or short strings
+  if tag.length() == 0 || attr_name.length() == 0 {
+    return None
+  }
+
+  // Look for attr_name="value" or attr_name='value'
+  let search_double = attr_name + "=\""
+  let search_single = attr_name + "='"
+  let tag_chars = tag.to_array()
+  let tag_len = tag_chars.length()
+
+  // Try double quotes first
+  let mut start_idx = -1
+  let search_len = search_double.length()
+  if tag_len >= search_len {
+    let search_chars = search_double.to_array()
+    let max_i = tag_len - search_len
+    for i = 0; i <= max_i; i = i + 1 {
+      let mut matches = true
+      for j = 0; j < search_len; j = j + 1 {
+        if tag_chars[i + j] != search_chars[j] {
+          matches = false
+          break
+        }
+      }
+      if matches {
+        start_idx = i + search_len
+        break
+      }
+    }
+  }
+
+  if start_idx >= 0 {
+    // Find closing double quote
+    let value = StringBuilder::new()
+    for i = start_idx; i < tag_len; i = i + 1 {
+      if tag_chars[i] == '"' {
+        return Some(value.to_string())
+      }
+      value.write_char(tag_chars[i])
+    }
+  }
+
+  // Try single quotes
+  start_idx = -1
+  let search_len2 = search_single.length()
+  if tag_len >= search_len2 {
+    let search_chars2 = search_single.to_array()
+    let max_i2 = tag_len - search_len2
+    for i = 0; i <= max_i2; i = i + 1 {
+      let mut matches = true
+      for j = 0; j < search_len2; j = j + 1 {
+        if tag_chars[i + j] != search_chars2[j] {
+          matches = false
+          break
+        }
+      }
+      if matches {
+        start_idx = i + search_len2
+        break
+      }
+    }
+  }
+
+  if start_idx >= 0 {
+    // Find closing single quote
+    let value = StringBuilder::new()
+    for i = start_idx; i < tag_chars.length(); i = i + 1 {
+      if tag_chars[i] == '\'' {
+        return Some(value.to_string())
+      }
+      value.write_char(tag_chars[i])
+    }
+  }
+
+  None
+}
 
 ///|
 /// Match a module specifier against an ambient module pattern

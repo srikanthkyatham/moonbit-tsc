@@ -137,6 +137,8 @@ pub struct SourceFile {
   statements : Array[Node]
   end_of_file_token : Token
   has_no_default_lib : Bool
+  /// Raw triple-slash directive tokens (content after ///)
+  directive_tokens : Array[(String, SourceLocation)]
 } derive(Show)
 
 ///|

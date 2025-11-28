@@ -1634,11 +1634,12 @@ test "bind unreachable after throw in if branch" {
 ///|
 test "ambient module wildcard pattern" {
   let result = parse_and_bind(
-    #|declare module "*.css" {
-    #|  const styles: { [key: string]: string };
-    #|  export default styles;
-    #|}
-    ,
+    (
+      #|declare module "*.css" {
+      #|  const styles: { [key: string]: string };
+      #|  export default styles;
+      #|}
+    ),
   )
   match result {
     Ok(bound) => {
@@ -1667,11 +1668,12 @@ test "ambient module wildcard pattern" {
 ///|
 test "ambient module exact match" {
   let result = parse_and_bind(
-    #|declare module "express" {
-    #|  interface Request { body: any; }
-    #|  interface Response { send(data: any): void; }
-    #|}
-    ,
+    (
+      #|declare module "express" {
+      #|  interface Request { body: any; }
+      #|  interface Response { send(data: any): void; }
+      #|}
+    ),
   )
   match result {
     Ok(bound) => {
@@ -1696,13 +1698,14 @@ test "ambient module exact match" {
 ///|
 test "ambient module scoped package" {
   let result = parse_and_bind(
-    #|declare module "@types/lodash" {
-    #|  export function map<T, U>(arr: T[], fn: (x: T) => U): U[];
-    #|}
-    ,
+    (
+      #|declare module "@types/lodash" {
+      #|  export function map<T, U>(arr: T[], fn: (x: T) => U): U[];
+      #|}
+    ),
   )
   match result {
-    Ok(bound) => {
+    Ok(bound) =>
       match bound.ambient_modules.lookup("@types/lodash") {
         Some(info) => {
           assert_eq(info.pattern, "@types/lodash")
@@ -1710,7 +1713,6 @@ test "ambient module scoped package" {
         }
         None => assert_true(false)
       }
-    }
     Err(_) => assert_true(false)
   }
 }
@@ -1718,11 +1720,12 @@ test "ambient module scoped package" {
 ///|
 test "ambient module json pattern" {
   let result = parse_and_bind(
-    #|declare module "*.json" {
-    #|  const value: any;
-    #|  export default value;
-    #|}
-    ,
+    (
+      #|declare module "*.json" {
+      #|  const value: any;
+      #|  export default value;
+      #|}
+    ),
   )
   match result {
     Ok(bound) => {
@@ -1748,10 +1751,11 @@ test "ambient module json pattern" {
 ///|
 test "regular namespace not treated as ambient" {
   let result = parse_and_bind(
-    #|namespace MyNamespace {
-    #|  export const value = 42;
-    #|}
-    ,
+    (
+      #|namespace MyNamespace {
+      #|  export const value = 42;
+      #|}
+    ),
   )
   match result {
     Ok(bound) => {
@@ -1799,10 +1803,9 @@ test "ambient module in script file stays ambient" {
     #|}
   let result = parse_and_bind(source)
   match result {
-    Ok(bound) => {
+    Ok(bound) =>
       // Should be in ambient_modules, not module_augmentations
       assert_eq(bound.module_augmentations.length(), 0)
-    }
     Err(_) => assert_true(false)
   }
 }
@@ -1842,3 +1845,142 @@ test "multiple module augmentations in same file" {
   }
 }
 
+// ============================================================================
+// Triple-Slash Directive Tests
+// ============================================================================
+
+///|
+test "triple-slash reference path directive" {
+  let source =
+    #|/// <reference path="./types.d.ts" />
+    #|const x = 1;
+  let result = parse_and_bind(source)
+  match result {
+    Ok(bound) => {
+      assert_eq(bound.triple_slash_directives.length(), 1)
+      match bound.triple_slash_directives[0].kind {
+        ReferencePath(path) => assert_eq(path, "./types.d.ts")
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "triple-slash reference types directive" {
+  let source =
+    #|/// <reference types="node" />
+    #|const fs = require('fs');
+  let result = parse_and_bind(source)
+  match result {
+    Ok(bound) => {
+      assert_eq(bound.triple_slash_directives.length(), 1)
+      match bound.triple_slash_directives[0].kind {
+        ReferenceTypes(types) => assert_eq(types, "node")
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "triple-slash reference lib directive" {
+  let source =
+    #|/// <reference lib="es2015" />
+    #|const x = Promise.resolve(1);
+  let result = parse_and_bind(source)
+  match result {
+    Ok(bound) => {
+      assert_eq(bound.triple_slash_directives.length(), 1)
+      match bound.triple_slash_directives[0].kind {
+        ReferenceLib(lib) => assert_eq(lib, "es2015")
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "triple-slash no-default-lib directive" {
+  let source =
+    #|/// <reference no-default-lib="true" />
+    #|const x = 1;
+  let result = parse_and_bind(source)
+  match result {
+    Ok(bound) => {
+      assert_eq(bound.triple_slash_directives.length(), 1)
+      match bound.triple_slash_directives[0].kind {
+        NoDefaultLib(value) => assert_eq(value, true)
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "triple-slash amd-module directive" {
+  let source =
+    #|/// <amd-module name="myModule" />
+    #|export const x = 1;
+  let result = parse_and_bind(source)
+  match result {
+    Ok(bound) => {
+      assert_eq(bound.triple_slash_directives.length(), 1)
+      match bound.triple_slash_directives[0].kind {
+        AmdModule(name) => assert_eq(name, "myModule")
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "triple-slash amd-dependency directive" {
+  let source =
+    #|/// <amd-dependency path="legacy/module" />
+    #|const x = 1;
+  let result = parse_and_bind(source)
+  match result {
+    Ok(bound) => {
+      assert_eq(bound.triple_slash_directives.length(), 1)
+      match bound.triple_slash_directives[0].kind {
+        AmdDependency(path) => assert_eq(path, "legacy/module")
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "multiple triple-slash directives" {
+  let source =
+    #|/// <reference types="node" />
+    #|/// <reference lib="es2015" />
+    #|/// <reference path="./utils.d.ts" />
+    #|const x = 1;
+  let result = parse_and_bind(source)
+  match result {
+    Ok(bound) => {
+      assert_eq(bound.triple_slash_directives.length(), 3)
+      match bound.triple_slash_directives[0].kind {
+        ReferenceTypes(types) => assert_eq(types, "node")
+        _ => assert_true(false)
+      }
+      match bound.triple_slash_directives[1].kind {
+        ReferenceLib(lib) => assert_eq(lib, "es2015")
+        _ => assert_true(false)
+      }
+      match bound.triple_slash_directives[2].kind {
+        ReferencePath(path) => assert_eq(path, "./utils.d.ts")
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}

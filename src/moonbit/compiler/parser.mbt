@@ -320,7 +320,22 @@ pub fn parse_source_file(
   tokens : Array[Token],
   file_path : String,
 ) -> ParseResult[SourceFile] {
-  let parser = Parser::new(tokens)
+  // Extract triple-slash directive tokens and filter out comment tokens
+  let directive_tokens : Array[(String, SourceLocation)] = []
+  let filtered_tokens : Array[Token] = []
+  for i = 0; i < tokens.length(); i = i + 1 {
+    match tokens[i] {
+      CommentDirective(TripleSlashRef, content, loc) => {
+        directive_tokens.push((content, loc))
+        // Don't add to filtered_tokens - skip directive tokens during parsing
+      }
+      CommentDirective(_, _, _) => ()  // Skip other comment directives
+      JSDocComment(_, _) => ()  // Skip JSDoc comments - handled separately
+      token => filtered_tokens.push(token)
+    }
+  }
+
+  let parser = Parser::new(filtered_tokens)
   // Enable JSX mode for .tsx and .jsx files
   let parser = if file_path.has_suffix(".tsx") || file_path.has_suffix(".jsx") {
     { ..parser, context: { ..parser.context, in_jsx: true } }
@@ -337,6 +352,7 @@ pub fn parse_source_file(
       statements,
       end_of_file_token: eof_token,
       has_no_default_lib: false,
+      directive_tokens,
     })
   }
 }

@@ -4398,3 +4398,82 @@ test "check discriminated union not-equals narrowing" {
     }
   }
 }
+
+// ============================================================================
+// Triple-Slash Directive Tests
+// ============================================================================
+
+///|
+test "check code with triple-slash reference path directive" {
+  let source =
+    #|/// <reference path="./types.d.ts" />
+    #|const x: number = 42;
+  let result = parse_bind_and_check(source)
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "check code with triple-slash reference types directive" {
+  let source =
+    #|/// <reference types="node" />
+    #|const fs = require('fs');
+  let result = parse_bind_and_check(source)
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "check code with triple-slash reference lib directive" {
+  let source =
+    #|/// <reference lib="es2015" />
+    #|const promise = Promise.resolve(1);
+  let result = parse_bind_and_check(source)
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "check code with triple-slash no-default-lib directive" {
+  let source =
+    #|/// <reference no-default-lib="true" />
+    #|const x = 1;
+  let result = parse_bind_and_check(source)
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "check code with triple-slash amd-module directive" {
+  let source =
+    #|/// <amd-module name="myModule" />
+    #|export const x = 1;
+  let result = parse_bind_and_check(source)
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "check code with multiple triple-slash directives" {
+  let source =
+    #|/// <reference types="node" />
+    #|/// <reference lib="es2015" />
+    #|/// <reference path="./utils.d.ts" />
+    #|const x: number = 42;
+    #|const y: string = "hello";
+  let result = parse_bind_and_check(source)
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false)
+  }
+}

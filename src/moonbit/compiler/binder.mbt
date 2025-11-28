@@ -21,6 +21,7 @@ pub struct Binder {
   ambient_modules : AmbientModuleRegistry // Registry for ambient module declarations
   module_augmentations : Array[ModuleAugmentation] // Module augmentations (for module files)
   global_augmentations : Array[GlobalAugmentation] // Global augmentations (declare global)
+  triple_slash_directives : Array[TripleSlashDirective] // Triple-slash directives
   is_external_module : Bool // Track if this file is a module (has imports/exports)
 } derive(Show)
 
@@ -47,6 +48,7 @@ fn Binder::new(file_path : String) -> Binder {
     ambient_modules: AmbientModuleRegistry::new(),
     module_augmentations: [],
     global_augmentations: [],
+    triple_slash_directives: [],
     is_external_module: false,
   }
 }
@@ -95,6 +97,16 @@ pub fn bind_source_file(source_file : SourceFile) -> BindResult {
   let binder = Binder::new(source_file.file_path)
   // Pre-scan to detect if this is a module file (affects ambient module handling)
   let binder = { ..binder, is_external_module: is_module_file(source_file.statements) }
+
+  // Parse triple-slash directives from raw tokens
+  for i = 0; i < source_file.directive_tokens.length(); i = i + 1 {
+    let (content, location) = source_file.directive_tokens[i]
+    match parse_triple_slash_directive(content, location) {
+      Some(directive) => binder.triple_slash_directives.push(directive)
+      None => ()
+    }
+  }
+
   let binder = bind_statements(binder, source_file.statements)
 
   // Get global scope
@@ -121,6 +133,7 @@ pub fn bind_source_file(source_file : SourceFile) -> BindResult {
       ambient_modules: binder.ambient_modules,
       module_augmentations: binder.module_augmentations,
       global_augmentations: binder.global_augmentations,
+      triple_slash_directives: binder.triple_slash_directives,
     })
   }
 }

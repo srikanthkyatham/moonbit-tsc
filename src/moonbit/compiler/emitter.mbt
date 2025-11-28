@@ -257,6 +257,7 @@ pub fn compile_source_file(
     statements: sf.statements,
     end_of_file_token: sf.end_of_file_token,
     has_no_default_lib: sf.has_no_default_lib,
+    directive_tokens: sf.directive_tokens,
   })
   // Transform and emit
   let transformed = transform(sf_node, ctx)
