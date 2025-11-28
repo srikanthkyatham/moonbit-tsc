@@ -21,8 +21,8 @@
 // - Arrow functions → Function expressions
 // - const/let declarations → var declarations
 // - Template literals → String concatenation
-// - for-of loops → Traditional for loops (TODO - complex transformation)
-// - Spread in arrays → Array.concat() (TODO - complex transformation)
+// - for-of loops → Traditional indexed for loops
+// - Spread in arrays → Array.concat() calls
 //
 // < ES2016:
 // - Exponentiation operator (**) → Math.pow() calls
@@ -1576,6 +1576,12 @@ fn transform_array_literal_expression(
   ale : ArrayLiteralExpression,
   ctx : TransformerContext,
 ) -> Node {
+  // For ES5, need to transform spread elements to .concat() calls
+  // e.g., [1, ...arr, 2] => [1].concat(arr, [2])
+  if ctx.target == ES5 && has_spread_element(ale.elements) {
+    return transform_array_with_spread_es5(ale, ctx)
+  }
+
   let transformed_elements : Array[Node?] = []
   for element in ale.elements {
     match element {
@@ -1586,6 +1592,111 @@ fn transform_array_literal_expression(
   ArrayLiteralExpression({
     elements: transformed_elements,
     location: ale.location,
+  })
+}
+
+///|
+/// Check if array elements contain any spread expressions
+fn has_spread_element(elements : Array[Node?]) -> Bool {
+  for element in elements {
+    match element {
+      Some(SpreadExpression(_)) => return true
+      _ => ()
+    }
+  }
+  false
+}
+
+///|
+/// Transform array with spread elements to ES5 .concat() calls
+/// [1, ...arr, 2] => [1].concat(arr, [2])
+/// [...arr1, ...arr2] => [].concat(arr1, arr2)
+fn transform_array_with_spread_es5(
+  ale : ArrayLiteralExpression,
+  ctx : TransformerContext,
+) -> Node {
+  let loc = ale.location
+
+  // Build segments: each segment is either:
+  // - A group of non-spread elements (becomes an array literal)
+  // - A spread element (becomes a direct argument to concat)
+  let segments : Array[Node] = []
+  let current_group : Array[Node?] = []
+
+  for element in ale.elements {
+    match element {
+      Some(SpreadExpression(se)) => {
+        // Flush current group as array literal
+        if current_group.length() > 0 {
+          segments.push(
+            ArrayLiteralExpression({
+              elements: current_group.copy(),
+              location: loc,
+            }),
+          )
+          current_group.clear()
+        }
+        // Add spread expression's inner expression directly
+        segments.push(transform(se.expression, ctx))
+      }
+      Some(e) => {
+        current_group.push(Some(transform(e, ctx)))
+      }
+      None => {
+        // Hole in array
+        current_group.push(None)
+      }
+    }
+  }
+
+  // Flush remaining group
+  if current_group.length() > 0 {
+    segments.push(
+      ArrayLiteralExpression({ elements: current_group.copy(), location: loc }),
+    )
+  }
+
+  // If no segments, return empty array
+  if segments.length() == 0 {
+    return ArrayLiteralExpression({ elements: [], location: loc })
+  }
+
+  // If only one segment and it's already an array literal, return it
+  if segments.length() == 1 {
+    match segments[0] {
+      ArrayLiteralExpression(_) => return segments[0]
+      _ => ()
+    }
+  }
+
+  // Build: first_segment.concat(rest_segments...)
+  // If first segment is a spread, start with empty array: [].concat(...)
+  let (base, concat_args) : (Node, Array[Node]) = match segments[0] {
+    ArrayLiteralExpression(_) => {
+      let rest : Array[Node] = []
+      for i in 1..<segments.length() {
+        rest.push(segments[i])
+      }
+      (segments[0], rest)
+    }
+    _ => {
+      // First segment is spread result, use empty array as base
+      (ArrayLiteralExpression({ elements: [], location: loc }), segments)
+    }
+  }
+
+  // Create: base.concat(arg1, arg2, ...)
+  let concat_access = PropertyAccessExpression({
+    expression: base,
+    name: "concat",
+    location: loc,
+  })
+
+  CallExpression({
+    expression: concat_access,
+    type_arguments: [],
+    arguments: concat_args,
+    location: loc,
   })
 }
 

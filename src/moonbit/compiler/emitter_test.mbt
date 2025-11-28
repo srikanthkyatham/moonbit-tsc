@@ -1815,3 +1815,65 @@ test "emit for-of to for loop ES5 - complex expression" {
   assert_true(js.contains("getItems()"))
   assert_true(js.contains("process(item)"))
 }
+
+// ============================================================================
+// Spread in Arrays ES5 Downleveling Tests
+// ============================================================================
+
+///|
+/// Test: spread in arrays ES5 - two arrays
+test "emit spread in arrays ES5 - two arrays" {
+  let js = compile_to_es5("const merged = [...arr1, ...arr2];")
+  println("Spread in arrays ES5 (two arrays):\n\{js}")
+  // Should convert to .concat() call
+  assert_true(js.contains(".concat("))
+  assert_true(js.contains("arr1"))
+  assert_true(js.contains("arr2"))
+  // Should NOT contain spread syntax
+  assert_false(js.contains("..."))
+}
+
+///|
+/// Test: spread in arrays ES5 - mixed elements
+test "emit spread in arrays ES5 - mixed elements" {
+  let js = compile_to_es5("const result = [1, ...arr, 2];")
+  println("Spread in arrays ES5 (mixed):\n\{js}")
+  // Should convert to [1].concat(arr, [2])
+  assert_true(js.contains(".concat("))
+  assert_true(js.contains("[1]"))
+  assert_true(js.contains("arr"))
+  assert_true(js.contains("[2]"))
+}
+
+///|
+/// Test: spread in arrays ES5 - spread at start
+test "emit spread in arrays ES5 - spread at start" {
+  let js = compile_to_es5("const result = [...arr, 1, 2];")
+  println("Spread in arrays ES5 (spread at start):\n\{js}")
+  // Should convert to [].concat(arr, [1, 2])
+  assert_true(js.contains(".concat("))
+  assert_true(js.contains("arr"))
+}
+
+///|
+/// Test: spread in arrays ES2015+ should NOT be downleveled
+test "emit spread in arrays ES2015 - no downleveling" {
+  let js = compile_to_js("const merged = [...arr1, ...arr2];")
+  println("Spread in arrays ES2015+ (no downleveling):\n\{js}")
+  // Should keep spread syntax
+  assert_true(js.contains("...arr1"))
+  assert_true(js.contains("...arr2"))
+  // Should NOT have .concat()
+  assert_false(js.contains(".concat("))
+}
+
+///|
+/// Test: spread in arrays ES5 - function call result
+test "emit spread in arrays ES5 - function call" {
+  let js = compile_to_es5("const result = [...getItems(), ...getMoreItems()];")
+  println("Spread in arrays ES5 (function calls):\n\{js}")
+  // Should convert to .concat()
+  assert_true(js.contains(".concat("))
+  assert_true(js.contains("getItems()"))
+  assert_true(js.contains("getMoreItems()"))
+}
