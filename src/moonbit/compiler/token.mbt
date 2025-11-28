@@ -78,6 +78,8 @@ pub enum Token {
   KeywordAsync(SourceLocation)
   KeywordAwait(SourceLocation)
   KeywordDeclare(SourceLocation)
+  KeywordAccessor(SourceLocation) // auto-accessor (TS 4.9+)
+  KeywordUsing(SourceLocation) // using declaration (TS 5.2+)
 
   // Other Keywords
   KeywordNew(SourceLocation)
@@ -277,6 +279,8 @@ pub fn Token::location(self : Token) -> SourceLocation {
     | KeywordAsync(loc)
     | KeywordAwait(loc)
     | KeywordDeclare(loc)
+    | KeywordAccessor(loc)
+    | KeywordUsing(loc)
     | KeywordNew(loc)
     | KeywordThis(loc)
     | KeywordSuper(loc)
@@ -420,6 +424,8 @@ pub fn Token::is_keyword(self : Token) -> Bool {
     | KeywordAsync(_)
     | KeywordAwait(_)
     | KeywordDeclare(_)
+    | KeywordAccessor(_)
+    | KeywordUsing(_)
     | KeywordNew(_)
     | KeywordThis(_)
     | KeywordSuper(_)

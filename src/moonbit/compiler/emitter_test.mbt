@@ -1672,3 +1672,67 @@ test "emit function with only this parameter - empty params" {
   // The output should have empty parameter list
   assert_true(js.contains("function getSelf()"))
 }
+
+// ============================================================================
+// Auto-Accessor Tests (TS 4.9+)
+// ============================================================================
+
+///|
+/// Test: auto-accessor in class
+test "emit auto-accessor in class" {
+  let js = compile_to_js("class Person { accessor name: string = ''; }")
+  println("Auto-accessor in class:\n\{js}")
+  // Should emit as `accessor name`
+  assert_true(js.contains("accessor name"))
+}
+
+///|
+/// Test: static auto-accessor in class
+test "emit static auto-accessor in class" {
+  let js = compile_to_js("class Config { static accessor version = '1.0'; }")
+  println("Static auto-accessor in class:\n\{js}")
+  // Should emit as `static accessor version`
+  assert_true(js.contains("static accessor version"))
+}
+
+///|
+/// Test: auto-accessor without initializer
+test "emit auto-accessor without initializer" {
+  let js = compile_to_js("class Person { accessor name: string; }")
+  println("Auto-accessor without initializer:\n\{js}")
+  // Should emit as `accessor name;`
+  assert_true(js.contains("accessor name;"))
+}
+
+// ============================================================================
+// Using Statement Tests (TS 5.2+)
+// ============================================================================
+
+///|
+/// Test: using statement
+test "emit using statement" {
+  let js = compile_to_js("using resource = getResource();")
+  println("Using statement:\n\{js}")
+  // Should emit as `using resource = ...`
+  assert_true(js.contains("using resource = getResource()"))
+}
+
+///|
+/// Test: await using statement
+test "emit await using statement" {
+  let js = compile_to_js("await using resource = getAsyncResource();")
+  println("Await using statement:\n\{js}")
+  // Should emit as `await using resource = ...`
+  assert_true(js.contains("await using resource = getAsyncResource()"))
+}
+
+///|
+/// Test: using statement with type annotation stripped
+test "emit using statement - type annotation stripped" {
+  let js = compile_to_js("using resource: Disposable = getResource();")
+  println("Using with type annotation:\n\{js}")
+  // Type annotation should be stripped
+  assert_true(js.contains("using resource = getResource()"))
+  // Type annotation should NOT be in output
+  assert_false(js.contains("Disposable"))
+}

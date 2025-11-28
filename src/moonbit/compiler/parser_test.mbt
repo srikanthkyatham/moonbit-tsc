@@ -3937,6 +3937,153 @@ test "parse tuple with leading types and spread" {
   }
 }
 
+// ===== Auto-Accessor Tests (TS 4.9+) =====
+
+///|
+test "parse auto-accessor in class" {
+  let tokens = tokens_from_source(
+    "class Person { accessor name: string = ''; }",
+  )
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        ClassDeclaration(cd) => {
+          assert_eq(cd.members.length(), 1)
+          match cd.members[0] {
+            AutoAccessor(aa) => {
+              assert_eq(aa.name, "name")
+              match aa.type_annotation {
+                Some(_) => ()
+                None => assert_true(false)
+              }
+              match aa.initializer {
+                Some(_) => ()
+                None => assert_true(false)
+              }
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse static auto-accessor in class" {
+  let tokens = tokens_from_source(
+    "class Config { static accessor version = '1.0'; }",
+  )
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        ClassDeclaration(cd) => {
+          assert_eq(cd.members.length(), 1)
+          match cd.members[0] {
+            AutoAccessor(aa) => {
+              assert_eq(aa.name, "version")
+              // Check for static modifier
+              let mut has_static = false
+              for modifier in aa.modifiers {
+                match modifier {
+                  Static => {
+                    has_static = true
+                    break
+                  }
+                  _ => ()
+                }
+              }
+              assert_true(has_static)
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+// ===== Using Statement Tests (TS 5.2+) =====
+
+///|
+test "parse using statement" {
+  let tokens = tokens_from_source("using resource = getResource();")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        UsingStatement(us) => {
+          assert_eq(us.is_await, false)
+          assert_eq(us.declarations.length(), 1)
+          match us.declarations[0].name {
+            Identifier(id) => assert_eq(id.name, "resource")
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse await using statement" {
+  let tokens = tokens_from_source("await using resource = getAsyncResource();")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        UsingStatement(us) => {
+          assert_eq(us.is_await, true)
+          assert_eq(us.declarations.length(), 1)
+          match us.declarations[0].name {
+            Identifier(id) => assert_eq(id.name, "resource")
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse using statement with type annotation" {
+  let tokens = tokens_from_source(
+    "using resource: Disposable = getResource();",
+  )
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        UsingStatement(us) => {
+          assert_eq(us.is_await, false)
+          assert_eq(us.declarations.length(), 1)
+          match us.declarations[0].type_annotation {
+            Some(_) => ()
+            None => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
 // ============================================================================
 // Parser Error Code Tests
 // ============================================================================

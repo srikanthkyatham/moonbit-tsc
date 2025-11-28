@@ -56,6 +56,8 @@ fn get_jsx_attribute_name_from_token(token : Token) -> (String, SourceLocation)?
     KeywordAsync(loc) => Some(("async", loc))
     KeywordAwait(loc) => Some(("await", loc))
     KeywordDeclare(loc) => Some(("declare", loc))
+    KeywordAccessor(loc) => Some(("accessor", loc))
+    KeywordUsing(loc) => Some(("using", loc))
     // Other Keywords
     KeywordNew(loc) => Some(("new", loc))
     KeywordThis(loc) => Some(("this", loc))

@@ -510,6 +510,18 @@ fn parse_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
     // Declare (ambient) declaration
     KeywordDeclare(_) => parse_declare_declaration(parser)
 
+    // Using statement (TS 5.2+): using x = expr;
+    KeywordUsing(start_loc) => parse_using_statement(parser, start_loc, false)
+
+    // Await using statement (TS 5.2+): await using x = expr;
+    KeywordAwait(_) => {
+      let parser = advance_parser(parser)
+      match current_token(parser) {
+        KeywordUsing(loc) => parse_using_statement(parser, loc, true)
+        _ => parse_expression_statement(parser)
+      }
+    }
+
     // Control flow
     KeywordIf(_) => parse_if_statement(parser)
     KeywordSwitch(_) => parse_switch_statement(parser)
@@ -646,6 +658,92 @@ fn parse_variable_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
     }
     Err(parser) => Err(parser)
   }
+}
+
+///|
+/// Parse using statement (TS 5.2+)
+/// `using x = expr;` or `await using x = expr;`
+fn parse_using_statement(
+  parser : Parser,
+  start_loc : SourceLocation,
+  is_await : Bool,
+) -> Result[(Node, Parser), Parser] {
+  let parser = advance_parser(parser) // consume 'using'
+
+  // Parse declarations
+  let declarations : Array[VariableDeclaration] = []
+  let mut parser = parser
+  let mut first = true
+
+  while true {
+    if not(first) {
+      // Check for comma to continue
+      match current_token(parser) {
+        Comma(_) => parser = advance_parser(parser)
+        _ => break
+      }
+    }
+    first = false
+
+    // Parse identifier
+    match parse_identifier(parser) {
+      Ok((id, p)) => {
+        parser = p
+        let name = Node::Identifier(id)
+
+        // Optional type annotation
+        let (type_annotation, p2) = match current_token(parser) {
+          Colon(_) => {
+            let p = advance_parser(parser)
+            match parse_type(p) {
+              Ok((ty, p3)) => (Some(ty), p3)
+              Err(p3) => (None, p3)
+            }
+          }
+          _ => (None, parser)
+        }
+        parser = p2
+
+        // Initializer (required for using)
+        let (initializer, p3) = match current_token(parser) {
+          Equals(_) => {
+            let p = advance_parser(parser)
+            match parse_assignment_expression(p) {
+              Ok((expr, p4)) => (Some(expr), p4)
+              Err(p4) => (None, p4)
+            }
+          }
+          _ => (None, parser)
+        }
+        parser = p3
+
+        declarations.push(VariableDeclaration::{
+          name,
+          type_annotation,
+          initializer,
+          location: id.location,
+        })
+      }
+      Err(p) => {
+        parser = p
+        break
+      }
+    }
+  }
+
+  // Consume semicolon
+  let parser = expect_semicolon(parser)
+
+  Ok(
+    (
+      Node::UsingStatement(UsingStatement::{
+        declarations,
+        is_await,
+        location: start_loc,
+      }),
+      parser,
+    ),
+  )
 }
 
 ///|
@@ -1675,6 +1773,53 @@ fn parse_class_member_with_decorators(
             }
           }
         }
+        // Static accessor: static accessor name = value;
+        KeywordAccessor(accessor_loc) => {
+          let parser = advance_parser(parser)
+          match current_token(parser) {
+            Identifier(name, _) => {
+              let parser = advance_parser(parser)
+              // Optional type annotation
+              let (type_annotation, parser) = match current_token(parser) {
+                Colon(_) => {
+                  let parser = advance_parser(parser)
+                  match parse_type(parser) {
+                    Ok((ty, p)) => (Some(ty), p)
+                    Err(p) => (None, p)
+                  }
+                }
+                _ => (None, parser)
+              }
+              // Optional initializer
+              let (initializer, parser) = match current_token(parser) {
+                Equals(_) => {
+                  let parser = advance_parser(parser)
+                  match parse_assignment_expression(parser) {
+                    Ok((expr, p)) => (Some(expr), p)
+                    Err(p) => (None, p)
+                  }
+                }
+                _ => (None, parser)
+              }
+              acc.push(
+                Node::AutoAccessor(AutoAccessor::{
+                  name,
+                  type_annotation,
+                  initializer,
+                  decorators,
+                  modifiers: [Modifier::Static],
+                  location: accessor_loc,
+                }),
+              )
+              let parser = match current_token(parser) {
+                Semicolon(_) => advance_parser(parser)
+                _ => parser
+              }
+              parse_class_members_aux(parser, acc)
+            }
+            _ => parse_class_members_aux(parser, acc)
+          }
+        }
         _ => parse_class_members_aux(parser, acc)
       }
     }
@@ -1870,6 +2015,54 @@ fn parse_class_member_with_decorators(
             }
             _ => parse_class_members_aux(parser, acc)
           }
+        }
+        _ => parse_class_members_aux(parser, acc)
+      }
+    }
+
+    // Auto-accessor: accessor name = value;
+    KeywordAccessor(start_loc) => {
+      let parser = advance_parser(parser)
+      match current_token(parser) {
+        Identifier(name, _) => {
+          let parser = advance_parser(parser)
+          // Optional type annotation
+          let (type_annotation, parser) = match current_token(parser) {
+            Colon(_) => {
+              let parser = advance_parser(parser)
+              match parse_type(parser) {
+                Ok((ty, p)) => (Some(ty), p)
+                Err(p) => (None, p)
+              }
+            }
+            _ => (None, parser)
+          }
+          // Optional initializer
+          let (initializer, parser) = match current_token(parser) {
+            Equals(_) => {
+              let parser = advance_parser(parser)
+              match parse_assignment_expression(parser) {
+                Ok((expr, p)) => (Some(expr), p)
+                Err(p) => (None, p)
+              }
+            }
+            _ => (None, parser)
+          }
+          acc.push(
+            Node::AutoAccessor(AutoAccessor::{
+              name,
+              type_annotation,
+              initializer,
+              decorators,
+              modifiers: [],
+              location: start_loc,
+            }),
+          )
+          let parser = match current_token(parser) {
+            Semicolon(_) => advance_parser(parser)
+            _ => parser
+          }
+          parse_class_members_aux(parser, acc)
         }
         _ => parse_class_members_aux(parser, acc)
       }
@@ -2152,6 +2345,53 @@ fn parse_class_member_with_modifiers(
       let parser = advance_parser(parser)
       modifiers.push(Modifier::Async)
       parse_class_member_with_modifiers(parser, acc, decorators, modifiers)
+    }
+    // Auto-accessor with modifiers: static accessor name = value;
+    KeywordAccessor(start_loc) => {
+      let parser = advance_parser(parser)
+      match current_token(parser) {
+        Identifier(name, _) => {
+          let parser = advance_parser(parser)
+          // Optional type annotation
+          let (type_annotation, parser) = match current_token(parser) {
+            Colon(_) => {
+              let parser = advance_parser(parser)
+              match parse_type(parser) {
+                Ok((ty, p)) => (Some(ty), p)
+                Err(p) => (None, p)
+              }
+            }
+            _ => (None, parser)
+          }
+          // Optional initializer
+          let (initializer, parser) = match current_token(parser) {
+            Equals(_) => {
+              let parser = advance_parser(parser)
+              match parse_assignment_expression(parser) {
+                Ok((expr, p)) => (Some(expr), p)
+                Err(p) => (None, p)
+              }
+            }
+            _ => (None, parser)
+          }
+          acc.push(
+            Node::AutoAccessor(AutoAccessor::{
+              name,
+              type_annotation,
+              initializer,
+              decorators,
+              modifiers,
+              location: start_loc,
+            }),
+          )
+          let parser = match current_token(parser) {
+            Semicolon(_) => advance_parser(parser)
+            _ => parser
+          }
+          parse_class_members_aux(parser, acc)
+        }
+        _ => parse_class_members_aux(parser, acc)
+      }
     }
     Identifier(name, loc) => {
       let parser = advance_parser(parser)

@@ -141,6 +141,8 @@ fn keyword_token(text : String, loc : SourceLocation) -> Token {
     "delete" => KeywordDelete(loc)
     "debugger" => KeywordDebugger(loc)
     "declare" => KeywordDeclare(loc)
+    "accessor" => KeywordAccessor(loc)
+    "using" => KeywordUsing(loc)
     _ => Identifier(text, loc)
   }
 }

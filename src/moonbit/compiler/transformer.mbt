@@ -372,6 +372,41 @@ pub fn transform(node : Node, ctx : TransformerContext) -> Node {
       })
     Decorator(d) => Decorator(d) // Keep decorators as-is
 
+    // Auto-accessor - pass through (native ES2022+)
+    AutoAccessor(aa) =>
+      AutoAccessor(AutoAccessor::{
+        name: aa.name,
+        type_annotation: None, // Strip type annotation
+        initializer: match aa.initializer {
+          Some(init) => Some(transform(init, ctx))
+          None => None
+        },
+        decorators: aa.decorators,
+        modifiers: aa.modifiers,
+        location: aa.location,
+      })
+
+    // Using statement - pass through (native ES2024+)
+    UsingStatement(us) => {
+      let transformed_decls : Array[VariableDeclaration] = []
+      for decl in us.declarations {
+        transformed_decls.push(VariableDeclaration::{
+          name: transform(decl.name, ctx),
+          type_annotation: None, // Strip type annotation
+          initializer: match decl.initializer {
+            Some(init) => Some(transform(init, ctx))
+            None => None
+          },
+          location: decl.location,
+        })
+      }
+      UsingStatement(UsingStatement::{
+        declarations: transformed_decls,
+        is_await: us.is_await,
+        location: us.location,
+      })
+    }
+
     // Module declaration
     ModuleDeclaration(md) => transform_module_declaration(md, ctx)
 

@@ -223,6 +223,8 @@ pub fn emit(node : Node, ctx : EmitterContext) -> String {
     SetAccessor(sa) => emit_set_accessor(sa, ctx)
     StaticBlock(sb) => emit_static_block(sb, ctx)
     Decorator(_) => "" // Decorators are handled separately
+    AutoAccessor(aa) => emit_auto_accessor(aa, ctx)
+    UsingStatement(us) => emit_using_statement(us, ctx)
     ModuleDeclaration(md) => emit_module_declaration(md, ctx)
 
     // JSX - transform to React.createElement calls
@@ -2485,4 +2487,70 @@ fn escape_jsx_text(s : String) -> String {
   .replace(old="\n", new="\\n")
   .replace(old="\r", new="\\r")
   .replace(old="\t", new="\\t")
+}
+
+///|
+/// Emit auto-accessor (TS 4.9+)
+/// `accessor name = value;` compiles to private field with getter/setter
+fn emit_auto_accessor(aa : AutoAccessor, ctx : EmitterContext) -> String {
+  let result = StringBuilder::new()
+
+  // Emit modifiers (static)
+  for modifier in aa.modifiers {
+    match modifier {
+      Static => result.write_string("static ")
+      _ => ()
+    }
+  }
+
+  // Emit the accessor (as native JS, ES2022+)
+  result.write_string("accessor ")
+  result.write_string(aa.name)
+
+  // Emit initializer if present
+  match aa.initializer {
+    Some(init) => {
+      result.write_string(" = ")
+      result.write_string(emit(init, ctx))
+    }
+    None => ()
+  }
+
+  result.write_string(";")
+  result.to_string()
+}
+
+///|
+/// Emit using statement (TS 5.2+)
+/// `using resource = expr;` for explicit resource management
+fn emit_using_statement(us : UsingStatement, ctx : EmitterContext) -> String {
+  let result = StringBuilder::new()
+
+  // Emit `using` or `await using`
+  if us.is_await {
+    result.write_string("await using ")
+  } else {
+    result.write_string("using ")
+  }
+
+  // Emit declarations
+  let mut first = true
+  for decl in us.declarations {
+    if not(first) {
+      result.write_string(", ")
+    }
+    first = false
+
+    result.write_string(emit(decl.name, ctx))
+    match decl.initializer {
+      Some(init) => {
+        result.write_string(" = ")
+        result.write_string(emit(init, ctx))
+      }
+      None => ()
+    }
+  }
+
+  result.write_string(";")
+  result.to_string()
 }

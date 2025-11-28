@@ -112,6 +112,8 @@ pub enum Node {
   SetAccessor(SetAccessor)
   StaticBlock(StaticBlock)
   Decorator(Decorator)
+  AutoAccessor(AutoAccessor) // accessor keyword (TS 4.9+)
+  UsingStatement(UsingStatement) // using/await using (TS 5.2+)
 
   // JSX
   JsxElement(JsxElement)
@@ -1081,6 +1083,28 @@ pub struct Decorator {
   location : SourceLocation
 } derive(Show)
 
+///|
+/// Auto-accessor (TS 4.9+)
+/// `accessor name = value;` creates a private backing field with getter/setter
+pub struct AutoAccessor {
+  name : String
+  type_annotation : Node?
+  initializer : Node?
+  decorators : Array[Node]
+  modifiers : Array[Modifier]
+  location : SourceLocation
+} derive(Show)
+
+///|
+/// Using statement (TS 5.2+)
+/// `using resource = getResource();` - explicit resource management
+/// `await using resource = getAsyncResource();` - async resource management
+pub struct UsingStatement {
+  declarations : Array[VariableDeclaration]
+  is_await : Bool // `await using` vs `using`
+  location : SourceLocation
+} derive(Show)
+
 // ============================================================================
 // JSX Types
 // ============================================================================
@@ -1540,6 +1564,8 @@ pub fn get_location(node : Node) -> SourceLocation {
     SetAccessor(s) => s.location
     StaticBlock(sb) => sb.location
     Decorator(d) => d.location
+    AutoAccessor(a) => a.location
+    UsingStatement(u) => u.location
     JsxElement(j) => j.location
     JsxSelfClosingElement(j) => j.location
     JsxFragment(j) => j.location
