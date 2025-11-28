@@ -213,6 +213,8 @@ pub fn emit(node : Node, ctx : EmitterContext) -> String {
     TypeOperator(_) => ""
     InferType(_) => ""
     TemplateLiteralType(_) => ""
+    TypeLiteral(_) => "" // Type-only, no JS emission
+    TypeLiteralProperty(_) => "" // Type-only, no JS emission
 
     // Other
     Parameter(p) => emit_parameter(p, ctx)

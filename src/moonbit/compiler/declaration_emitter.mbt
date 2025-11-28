@@ -940,6 +940,8 @@ fn emit_decl_type_node(node : Node, ctx : DeclarationEmitterContext) -> String {
     TypeOperator(type_op) => emit_decl_type_operator(type_op, ctx)
     TemplateLiteralType(tlt) => emit_decl_template_literal_type(tlt, ctx)
     NamedTupleMember(ntm) => emit_decl_named_tuple_member(ntm, ctx)
+    TypeLiteral(tl) => emit_decl_type_literal(tl, ctx)
+    TypeLiteralProperty(prop) => emit_decl_type_literal_property(prop, ctx)
     _ => "any"
   }
 }
@@ -981,6 +983,68 @@ fn emit_decl_named_tuple_member(
 ) -> String {
   let optional_marker = if ntm.is_optional { "?" } else { "" }
   ntm.name + optional_marker + ": " + emit_decl_type_node(ntm.element_type, ctx)
+}
+
+///|
+/// Emit a type literal: { prop: type; [key: string]: type }
+fn emit_decl_type_literal(
+  tl : TypeLiteral,
+  ctx : DeclarationEmitterContext,
+) -> String {
+  if tl.members.length() == 0 {
+    return "{}"
+  }
+  let mut output = "{ "
+  for i = 0; i < tl.members.length(); i = i + 1 {
+    if i > 0 {
+      output = output + "; "
+    }
+    match tl.members[i] {
+      TypeLiteralProperty(prop) =>
+        output = output + emit_decl_type_literal_property(prop, ctx)
+      IndexSignatureDeclaration(idx) =>
+        output = output + emit_decl_index_signature_inline(idx, ctx)
+      _ => ()
+    }
+  }
+  output + " }"
+}
+
+///|
+/// Emit a type literal property: name: type or name?: type
+fn emit_decl_type_literal_property(
+  prop : TypeLiteralProperty,
+  ctx : DeclarationEmitterContext,
+) -> String {
+  let mut output = ""
+  if prop.is_readonly {
+    output = output + "readonly "
+  }
+  output = output + prop.name
+  if prop.is_optional {
+    output = output + "?"
+  }
+  match prop.type_node {
+    Some(type_node) => output = output + ": " + emit_decl_type_node(type_node, ctx)
+    None => ()
+  }
+  output
+}
+
+///|
+/// Emit an index signature inline (for type literals): [key: string]: type
+fn emit_decl_index_signature_inline(
+  idx : IndexSignatureDeclaration,
+  ctx : DeclarationEmitterContext,
+) -> String {
+  let mut output = ""
+  if idx.is_readonly {
+    output = output + "readonly "
+  }
+  output = output + "[" + idx.parameter_name + ": " +
+    emit_decl_type_node(idx.parameter_type, ctx) + "]: " +
+    emit_decl_type_node(idx.return_type, ctx)
+  output
 }
 
 ///|

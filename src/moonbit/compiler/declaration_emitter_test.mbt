@@ -1176,3 +1176,134 @@ test "emit labeled tuple in function" {
     }
   }
 }
+
+///|
+/// Test: Index signature in type alias
+test "emit type alias with index signature" {
+  let source = "type StringMap = { [key: string]: string };"
+  let tokens = scan_all_v2(source, "test.ts")
+  match parse_source_file(tokens, "test.ts") {
+    Ok(source_file) => {
+      let ctx = DeclarationEmitterContext::default()
+      let output = emit_declaration_file(source_file, ctx)
+      println("\nIndex signature type alias output:")
+      println(output)
+
+      // Should contain the index signature
+      assert_true(output.contains("type StringMap"))
+      assert_true(output.contains("[key: string]: string"))
+    }
+    Err(diagnostics) => {
+      println("Parse error:")
+      for i = 0; i < diagnostics.length(); i = i + 1 {
+        println("  " + diagnostics[i].message)
+      }
+      assert_true(false)
+    }
+  }
+}
+
+///|
+/// Test: Index signature with number key
+test "emit type alias with number index signature" {
+  let source = "type NumberArray = { [index: number]: string };"
+  let tokens = scan_all_v2(source, "test.ts")
+  match parse_source_file(tokens, "test.ts") {
+    Ok(source_file) => {
+      let ctx = DeclarationEmitterContext::default()
+      let output = emit_declaration_file(source_file, ctx)
+      println("\nNumber index signature type alias output:")
+      println(output)
+
+      // Should contain the index signature with number key
+      assert_true(output.contains("type NumberArray"))
+      assert_true(output.contains("[index: number]: string"))
+    }
+    Err(diagnostics) => {
+      println("Parse error:")
+      for i = 0; i < diagnostics.length(); i = i + 1 {
+        println("  " + diagnostics[i].message)
+      }
+      assert_true(false)
+    }
+  }
+}
+
+///|
+/// Test: Type literal with properties and index signature
+test "emit type literal with properties and index signature" {
+  let source = "type Config = { name: string; [key: string]: string | number };"
+  let tokens = scan_all_v2(source, "test.ts")
+  match parse_source_file(tokens, "test.ts") {
+    Ok(source_file) => {
+      let ctx = DeclarationEmitterContext::default()
+      let output = emit_declaration_file(source_file, ctx)
+      println("\nType literal with properties and index signature output:")
+      println(output)
+
+      // Should contain both property and index signature
+      assert_true(output.contains("type Config"))
+      assert_true(output.contains("name: string"))
+      assert_true(output.contains("[key: string]:"))
+    }
+    Err(diagnostics) => {
+      println("Parse error:")
+      for i = 0; i < diagnostics.length(); i = i + 1 {
+        println("  " + diagnostics[i].message)
+      }
+      assert_true(false)
+    }
+  }
+}
+
+///|
+/// Test: Recursive type with index signature (JSON-like)
+test "emit recursive type with index signature" {
+  let source = "type JsonObject = { [key: string]: string | number | JsonObject };"
+  let tokens = scan_all_v2(source, "test.ts")
+  match parse_source_file(tokens, "test.ts") {
+    Ok(source_file) => {
+      let ctx = DeclarationEmitterContext::default()
+      let output = emit_declaration_file(source_file, ctx)
+      println("\nRecursive type with index signature output:")
+      println(output)
+
+      // Should contain the recursive type with index signature
+      assert_true(output.contains("type JsonObject"))
+      assert_true(output.contains("[key: string]:"))
+    }
+    Err(diagnostics) => {
+      println("Parse error:")
+      for i = 0; i < diagnostics.length(); i = i + 1 {
+        println("  " + diagnostics[i].message)
+      }
+      assert_true(false)
+    }
+  }
+}
+
+///|
+/// Test: Readonly index signature
+test "emit readonly index signature" {
+  let source = "type ReadonlyMap = { readonly [key: string]: number };"
+  let tokens = scan_all_v2(source, "test.ts")
+  match parse_source_file(tokens, "test.ts") {
+    Ok(source_file) => {
+      let ctx = DeclarationEmitterContext::default()
+      let output = emit_declaration_file(source_file, ctx)
+      println("\nReadonly index signature output:")
+      println(output)
+
+      // Should contain readonly index signature
+      assert_true(output.contains("type ReadonlyMap"))
+      assert_true(output.contains("readonly [key: string]: number"))
+    }
+    Err(diagnostics) => {
+      println("Parse error:")
+      for i = 0; i < diagnostics.length(); i = i + 1 {
+        println("  " + diagnostics[i].message)
+      }
+      assert_true(false)
+    }
+  }
+}

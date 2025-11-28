@@ -102,6 +102,8 @@ pub enum Node {
   TypeOperator(TypeOperator)
   InferType(InferType)
   TemplateLiteralType(TemplateLiteralType)
+  TypeLiteral(TypeLiteral) // Object type literal: { prop: type; [key: string]: type }
+  TypeLiteralProperty(TypeLiteralProperty) // Property in type literal: name: type
 
   // Other
   Parameter(Parameter)
@@ -1002,6 +1004,23 @@ pub struct TemplateLiteralTypeSpan {
 } derive(Show)
 
 ///|
+/// Object type literal: { prop: type; [key: string]: type }
+pub struct TypeLiteral {
+  members : Array[Node] // PropertySignature, IndexSignatureDeclaration, MethodSignature, etc.
+  location : SourceLocation
+} derive(Show)
+
+///|
+/// Property in type literal: name: type or name?: type
+pub struct TypeLiteralProperty {
+  name : String
+  type_node : Node?
+  is_optional : Bool
+  is_readonly : Bool
+  location : SourceLocation
+} derive(Show)
+
+///|
 /// Parameter
 pub struct Parameter {
   name : Node
@@ -1567,6 +1586,8 @@ pub fn get_location(node : Node) -> SourceLocation {
     TypeOperator(to) => to.location
     InferType(it) => it.location
     TemplateLiteralType(t) => t.location
+    TypeLiteral(tl) => tl.location
+    TypeLiteralProperty(tlp) => tlp.location
     Parameter(p) => p.location
     PropertyDeclaration(p) => p.location
     IndexSignatureDeclaration(i) => i.location

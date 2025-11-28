@@ -799,23 +799,88 @@ fn parse_primary_type_with_readonly(
         _ => parser = saved_parser_start
       }
 
-      // Parse as regular object type literal: { prop: type, ... }
-      let properties = []
+      // Parse as regular object type literal: { prop: type, [key: string]: type, ... }
+      let members : Array[Node] = []
       let mut parser = parser
       while true {
+        let member_loc = current_token(parser).location()
         match current_token(parser) {
           CloseBrace(_) => {
             parser = advance_parser(parser)
             break
           }
-          Identifier(name, _) => {
+          // Handle index signature: [key: string]: type
+          OpenBracket(_) => {
+            parser = advance_parser(parser)
+            // Parse parameter name
+            match current_token(parser) {
+              Identifier(param_name, _) => {
+                parser = advance_parser(parser)
+                // Expect :
+                match current_token(parser) {
+                  Colon(_) => {
+                    parser = advance_parser(parser)
+                    // Parse key type (string or number)
+                    match parse_type(parser) {
+                      Ok((key_type, p)) => {
+                        parser = p
+                        // Expect ]
+                        match current_token(parser) {
+                          CloseBracket(_) => {
+                            parser = advance_parser(parser)
+                            // Expect :
+                            match current_token(parser) {
+                              Colon(_) => {
+                                parser = advance_parser(parser)
+                                // Parse value type
+                                match parse_type(parser) {
+                                  Ok((value_type, p)) => {
+                                    members.push(
+                                      Node::IndexSignatureDeclaration(
+                                        IndexSignatureDeclaration::{
+                                          parameter_name: param_name,
+                                          parameter_type: key_type,
+                                          return_type: value_type,
+                                          is_readonly: false,
+                                          location: member_loc,
+                                        },
+                                      ),
+                                    )
+                                    parser = p
+                                    // Optional comma or semicolon
+                                    match current_token(parser) {
+                                      Comma(_) | Semicolon(_) =>
+                                        parser = advance_parser(parser)
+                                      _ => ()
+                                    }
+                                  }
+                                  Err(p) => return Err(p)
+                                }
+                              }
+                              _ => break
+                            }
+                          }
+                          _ => break
+                        }
+                      }
+                      Err(p) => return Err(p)
+                    }
+                  }
+                  _ => break
+                }
+              }
+              _ => break
+            }
+          }
+          Identifier(name, _) | StringLiteral(name, _) => {
             parser = advance_parser(parser)
             // Check for optional property marker (?)
-            match current_token(parser) {
-              Question(_) =>
-                // Optional property - consume ?
+            let is_optional = match current_token(parser) {
+              Question(_) => {
                 parser = advance_parser(parser)
-              _ => ()
+                true
+              }
+              _ => false
             }
             // Expect :
             match current_token(parser) {
@@ -823,7 +888,15 @@ fn parse_primary_type_with_readonly(
                 parser = advance_parser(parser)
                 match parse_type(parser) {
                   Ok((prop_type, p)) => {
-                    properties.push((name, prop_type))
+                    members.push(
+                      Node::TypeLiteralProperty(TypeLiteralProperty::{
+                        name,
+                        type_node: Some(prop_type),
+                        is_optional,
+                        is_readonly: false,
+                        location: member_loc,
+                      }),
+                    )
                     parser = p
                     // Optional comma or semicolon
                     match current_token(parser) {
@@ -899,19 +972,114 @@ fn parse_primary_type_with_readonly(
               _ => break
             }
           }
+          // Handle readonly modifier
+          KeywordReadonly(_) => {
+            parser = advance_parser(parser)
+            match current_token(parser) {
+              // readonly [key: string]: type
+              OpenBracket(_) => {
+                parser = advance_parser(parser)
+                match current_token(parser) {
+                  Identifier(param_name, _) => {
+                    parser = advance_parser(parser)
+                    match current_token(parser) {
+                      Colon(_) => {
+                        parser = advance_parser(parser)
+                        match parse_type(parser) {
+                          Ok((key_type, p)) => {
+                            parser = p
+                            match current_token(parser) {
+                              CloseBracket(_) => {
+                                parser = advance_parser(parser)
+                                match current_token(parser) {
+                                  Colon(_) => {
+                                    parser = advance_parser(parser)
+                                    match parse_type(parser) {
+                                      Ok((value_type, p)) => {
+                                        members.push(
+                                          Node::IndexSignatureDeclaration(
+                                            IndexSignatureDeclaration::{
+                                              parameter_name: param_name,
+                                              parameter_type: key_type,
+                                              return_type: value_type,
+                                              is_readonly: true,
+                                              location: member_loc,
+                                            },
+                                          ),
+                                        )
+                                        parser = p
+                                        match current_token(parser) {
+                                          Comma(_) | Semicolon(_) =>
+                                            parser = advance_parser(parser)
+                                          _ => ()
+                                        }
+                                      }
+                                      Err(p) => return Err(p)
+                                    }
+                                  }
+                                  _ => break
+                                }
+                              }
+                              _ => break
+                            }
+                          }
+                          Err(p) => return Err(p)
+                        }
+                      }
+                      _ => break
+                    }
+                  }
+                  _ => break
+                }
+              }
+              // readonly prop: type
+              Identifier(name, _) => {
+                parser = advance_parser(parser)
+                let is_optional = match current_token(parser) {
+                  Question(_) => {
+                    parser = advance_parser(parser)
+                    true
+                  }
+                  _ => false
+                }
+                match current_token(parser) {
+                  Colon(_) => {
+                    parser = advance_parser(parser)
+                    match parse_type(parser) {
+                      Ok((prop_type, p)) => {
+                        members.push(
+                          Node::TypeLiteralProperty(TypeLiteralProperty::{
+                            name,
+                            type_node: Some(prop_type),
+                            is_optional,
+                            is_readonly: true,
+                            location: member_loc,
+                          }),
+                        )
+                        parser = p
+                        match current_token(parser) {
+                          Comma(_) | Semicolon(_) =>
+                            parser = advance_parser(parser)
+                          _ => ()
+                        }
+                      }
+                      Err(p) => return Err(p)
+                    }
+                  }
+                  _ => break
+                }
+              }
+              _ => break
+            }
+          }
           _ => break
         }
       }
 
-      // For now, return a simple type reference representing the object type
-      // A full implementation would create a proper ObjectType node
+      // Return TypeLiteral node with parsed members
       Ok(
         (
-          Node::TypeReference(TypeReference::{
-            type_name: "object",
-            type_arguments: [],
-            location: loc,
-          }),
+          Node::TypeLiteral(TypeLiteral::{ members, location: loc }),
           parser,
         ),
       )

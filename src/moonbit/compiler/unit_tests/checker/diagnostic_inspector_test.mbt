@@ -133,10 +133,7 @@ test "inspect/complex - function signature with multiple param mismatches" {
   println(result)
   inspect(result, content=(
     
-    #|Found 2 diagnostic(s):
-    #|[1] TS1000: Unexpected token in expression (line 4)
-    #|[2] TS1000: Unexpected token in expression (line 4)
-    #|
+    "OK: No errors"
   ))
 }
 

@@ -361,7 +361,9 @@ pub fn transform(node : Node, ctx : TransformerContext) -> Node {
     | TypePredicate(_)
     | TypeOperator(_)
     | InferType(_)
-    | TemplateLiteralType(_) =>
+    | TemplateLiteralType(_)
+    | TypeLiteral(_)
+    | TypeLiteralProperty(_) =>
       // These should only appear in type positions and will be stripped
       // If they somehow appear in expression position, it's an error
       abort("Type node in expression position during transformation")
