@@ -524,3 +524,96 @@ test "parse_tsconfig_text - full realistic config" {
   }
   assert_eq(excl.length(), 3)
 }
+
+///|
+test "parse_tsconfig_text - handles single-line comments" {
+  let json =
+    #|{
+    #|  "compilerOptions": {
+    #|    // This is a comment
+    #|    "target": "es2020"
+    #|  }
+    #|}
+  let config = parse_tsconfig_text(json, "tsconfig.json")
+  guard config.compiler_options is Some(opts) else {
+    assert_true(false)
+    return
+  }
+  assert_eq(opts.target, Some(ScriptTarget::ES2020))
+}
+
+///|
+test "parse_tsconfig_text - handles multi-line comments" {
+  let json =
+    #|{
+    #|  "compilerOptions": {
+    #|    /* This setting controls
+    #|       the ECMAScript target */
+    #|    "target": "es2020"
+    #|  }
+    #|}
+  let config = parse_tsconfig_text(json, "tsconfig.json")
+  guard config.compiler_options is Some(opts) else {
+    assert_true(false)
+    return
+  }
+  assert_eq(opts.target, Some(ScriptTarget::ES2020))
+}
+
+///|
+test "parse_tsconfig_text - handles trailing comments" {
+  let json =
+    #|{
+    #|  "compilerOptions": {
+    #|    "target": "es2020" // Set the target
+    #|  }
+    #|}
+  let config = parse_tsconfig_text(json, "tsconfig.json")
+  guard config.compiler_options is Some(opts) else {
+    assert_true(false)
+    return
+  }
+  assert_eq(opts.target, Some(ScriptTarget::ES2020))
+}
+
+///|
+test "parse_tsconfig_text - real world config with comments" {
+  // This matches the actual tsconfig.json that was causing issues
+  let json =
+    #|{
+    #|  "include": [
+    #|    "**/*.ts",
+    #|    "**/*.tsx"
+    #|  ],
+    #|  "compilerOptions": {
+    #|    "lib": ["DOM", "ES2022"],
+    #|    "types": ["vite/client"],
+    #|    "isolatedModules": true,
+    #|    "esModuleInterop": true,
+    #|    "jsx": "react-jsx",
+    #|    "module": "ESNext",
+    #|    "moduleResolution": "Bundler",
+    #|    "resolveJsonModule": true,
+    #|    "target": "ES2022",
+    #|    "strict": true,
+    #|    "allowJs": true,
+    #|    "skipLibCheck": true,
+    #|    "baseUrl": ".",
+    #|    "paths": {
+    #|      "~/*": ["./app/*"]
+    #|    },
+    #|
+    #|    // Vite takes care of building everything, not tsc.
+    #|    "noEmit": true
+    #|  }
+    #|}
+  let config = parse_tsconfig_text(json, "tsconfig.json")
+  guard config.compiler_options is Some(opts) else {
+    assert_true(false)
+    return
+  }
+  assert_eq(opts.target, Some(ScriptTarget::ES2022))
+  assert_eq(opts.no_emit, Some(true))
+  assert_eq(opts.jsx, Some(JsxEmit::ReactJSX))
+  assert_eq(opts.isolated_modules, Some(true))
+}

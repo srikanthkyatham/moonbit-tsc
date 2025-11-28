@@ -48,8 +48,91 @@ pub fn parse_tsconfig_text(
   json_text : String,
   _file_path : String,
 ) -> TSConfig raise {
-  let json = @json.parse(json_text)
+  // Strip comments before parsing (tsconfig.json supports JSON5 comments)
+  let cleaned_text = strip_json_comments(json_text)
+  let json = @json.parse(cleaned_text)
   parse_tsconfig_json(json)
+}
+
+///|
+/// Strip single-line (//) and multi-line (/* */) comments from JSON text
+/// This allows parsing tsconfig.json files which use JSON5-style comments
+fn strip_json_comments(text : String) -> String {
+  let result = StringBuilder::new()
+  let len = text.length()
+  let mut i = 0
+  let mut in_string = false
+  let mut escape_next = false
+  let slash = '/'.to_int()
+  let backslash = '\\'.to_int()
+  let quote = '"'.to_int()
+  let newline = '\n'.to_int()
+  let star = '*'.to_int()
+
+  while i < len {
+    let c = text[i]
+
+    // Handle string state (don't strip comments inside strings)
+    if in_string {
+      result.write_char(c.unsafe_to_char())
+      if escape_next {
+        escape_next = false
+      } else if c == backslash {
+        escape_next = true
+      } else if c == quote {
+        in_string = false
+      }
+      i = i + 1
+      continue
+    }
+
+    // Check for string start
+    if c == quote {
+      in_string = true
+      result.write_char(c.unsafe_to_char())
+      i = i + 1
+      continue
+    }
+
+    // Check for single-line comment //
+    if c == slash && i + 1 < len && text[i + 1] == slash {
+      // Skip until end of line
+      i = i + 2
+      while i < len && text[i] != newline {
+        i = i + 1
+      }
+      // Keep the newline for proper line counting
+      if i < len {
+        result.write_char('\n')
+        i = i + 1
+      }
+      continue
+    }
+
+    // Check for multi-line comment /* */
+    if c == slash && i + 1 < len && text[i + 1] == star {
+      i = i + 2
+      // Skip until */
+      while i + 1 < len {
+        if text[i] == star && text[i + 1] == slash {
+          i = i + 2
+          break
+        }
+        // Preserve newlines for line counting
+        if text[i] == newline {
+          result.write_char('\n')
+        }
+        i = i + 1
+      }
+      continue
+    }
+
+    // Regular character
+    result.write_char(c.unsafe_to_char())
+    i = i + 1
+  }
+
+  result.to_string()
 }
 
 ///|
