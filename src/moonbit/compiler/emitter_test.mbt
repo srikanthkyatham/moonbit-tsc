@@ -19,6 +19,20 @@ fn compile_to_js(source : String) -> String {
 }
 
 ///|
+/// Helper to parse, transform, and emit TypeScript code with ES5 target
+fn compile_to_es5(source : String) -> String {
+  let tokens = get_tokens_from_source(source)
+  match parse_source_file(tokens, "test.ts") {
+    Ok(source_file) => {
+      let ctx = TransformerContext::es5()
+      let emit_ctx = EmitterContext::default()
+      compile_source_file(source_file, ctx, emit_ctx)
+    }
+    Err(_) => abort("Failed to parse source")
+  }
+}
+
+///|
 /// Helper to parse source and get tokens
 fn get_tokens_from_source(source : String) -> Array[Token] {
   scan_all_v2(source, "test.ts")
@@ -1735,4 +1749,69 @@ test "emit using statement - type annotation stripped" {
   assert_true(js.contains("using resource = getResource()"))
   // Type annotation should NOT be in output
   assert_false(js.contains("Disposable"))
+}
+
+// ============================================================================
+// For-of Loop ES5 Downleveling Tests
+// ============================================================================
+
+///|
+/// Test: for-of loop downleveling to ES5 with const
+test "emit for-of to for loop ES5 - const" {
+  let js = compile_to_es5("for (const item of items) { console.log(item); }")
+  println("For-of ES5 downleveled (const):\n\{js}")
+  // Should convert to traditional for loop
+  assert_true(js.contains("for (var"))
+  assert_true(js.contains("_i$0"))
+  assert_true(js.contains("_arr$1"))
+  assert_true(js.contains(".length"))
+  assert_true(js.contains("var item = _arr$1[_i$0]"))
+  assert_true(js.contains("console.log(item)"))
+  // Should NOT contain for-of syntax
+  assert_false(js.contains(" of "))
+}
+
+///|
+/// Test: for-of loop downleveling to ES5 with let
+test "emit for-of to for loop ES5 - let" {
+  let js = compile_to_es5("for (let value of values) { total += value; }")
+  println("For-of ES5 downleveled (let):\n\{js}")
+  // Should convert to traditional for loop
+  assert_true(js.contains("for (var"))
+  assert_true(js.contains("var value = "))
+  assert_true(js.contains("total += value"))
+}
+
+///|
+/// Test: for-of loop downleveling to ES5 with var
+test "emit for-of to for loop ES5 - var" {
+  let js = compile_to_es5("for (var x of arr) { result.push(x); }")
+  println("For-of ES5 downleveled (var):\n\{js}")
+  // Should convert to traditional for loop
+  assert_true(js.contains("for (var"))
+  assert_true(js.contains("var x = "))
+  assert_true(js.contains("result.push(x)"))
+}
+
+///|
+/// Test: for-of loop ES2015+ should NOT be downleveled
+test "emit for-of loop ES2015 - no downleveling" {
+  let js = compile_to_js("for (const item of items) { console.log(item); }")
+  println("For-of ES2015+ (no downleveling):\n\{js}")
+  // Should keep for-of syntax
+  assert_true(js.contains("for (const item of items)"))
+  // Should NOT have index variables
+  assert_false(js.contains("_i$"))
+  assert_false(js.contains("_arr$"))
+}
+
+///|
+/// Test: for-of loop ES5 with complex expression
+test "emit for-of to for loop ES5 - complex expression" {
+  let js = compile_to_es5("for (const item of getItems()) { process(item); }")
+  println("For-of ES5 with complex expression:\n\{js}")
+  // Should store expression result in temp variable
+  assert_true(js.contains("_arr$"))
+  assert_true(js.contains("getItems()"))
+  assert_true(js.contains("process(item)"))
 }

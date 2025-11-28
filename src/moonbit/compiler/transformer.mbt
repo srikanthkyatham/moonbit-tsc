@@ -61,6 +61,15 @@ pub struct TransformerContext {
   in_decorated_class : Bool // True if we're inside a class with decorators
   const_enums : Map[String, Map[String, Node]] // Const enum name -> member name -> value
   jsx_transform : JsxTransform // JSX transformation mode
+  temp_counter : Ref[Int] // Counter for generating unique temporary variable names
+}
+
+///|
+/// Generate a unique temporary variable name
+fn gen_temp_name(ctx : TransformerContext, prefix : String) -> String {
+  let count = ctx.temp_counter.val
+  ctx.temp_counter.val = count + 1
+  prefix + count.to_string()
 }
 
 ///|
@@ -107,25 +116,25 @@ pub fn Target::older_than(self : Target, version : Target) -> Bool {
 ///|
 /// Create a new transformer context
 pub fn TransformerContext::new(target : Target) -> TransformerContext {
-  { target, in_decorated_class: false, const_enums: Map::new(), jsx_transform: Preserve }
+  { target, in_decorated_class: false, const_enums: Map::new(), jsx_transform: Preserve, temp_counter: Ref::new(0) }
 }
 
 ///|
 /// Create a new transformer context with JSX options
 pub fn TransformerContext::with_jsx(target : Target, jsx_transform : JsxTransform) -> TransformerContext {
-  { target, in_decorated_class: false, const_enums: Map::new(), jsx_transform }
+  { target, in_decorated_class: false, const_enums: Map::new(), jsx_transform, temp_counter: Ref::new(0) }
 }
 
 ///|
 /// Create default transformer context (ES2015 target)
 pub fn TransformerContext::default() -> TransformerContext {
-  { target: ES2015, in_decorated_class: false, const_enums: Map::new(), jsx_transform: Preserve }
+  { target: ES2015, in_decorated_class: false, const_enums: Map::new(), jsx_transform: Preserve, temp_counter: Ref::new(0) }
 }
 
 ///|
 /// Create transformer context for ES5 target
 pub fn TransformerContext::es5() -> TransformerContext {
-  { target: ES5, in_decorated_class: false, const_enums: Map::new(), jsx_transform: Preserve }
+  { target: ES5, in_decorated_class: false, const_enums: Map::new(), jsx_transform: Preserve, temp_counter: Ref::new(0) }
 }
 
 ///|
@@ -134,49 +143,49 @@ fn TransformerContext::with_decorated_class(
   self : TransformerContext,
   decorated : Bool,
 ) -> TransformerContext {
-  { target: self.target, in_decorated_class: decorated, const_enums: self.const_enums, jsx_transform: self.jsx_transform }
+  { target: self.target, in_decorated_class: decorated, const_enums: self.const_enums, jsx_transform: self.jsx_transform, temp_counter: self.temp_counter }
 }
 
 ///|
 /// Create transformer context for ES2015 target
 pub fn TransformerContext::es2015() -> TransformerContext {
-  { target: ES2015, in_decorated_class: false, const_enums: Map::new(), jsx_transform: Preserve }
+  { target: ES2015, in_decorated_class: false, const_enums: Map::new(), jsx_transform: Preserve, temp_counter: Ref::new(0) }
 }
 
 ///|
 /// Create transformer context for ES2016 target
 pub fn TransformerContext::es2016() -> TransformerContext {
-  { target: ES2016, in_decorated_class: false, const_enums: Map::new(), jsx_transform: Preserve }
+  { target: ES2016, in_decorated_class: false, const_enums: Map::new(), jsx_transform: Preserve, temp_counter: Ref::new(0) }
 }
 
 ///|
 /// Create transformer context for ES2017 target
 pub fn TransformerContext::es2017() -> TransformerContext {
-  { target: ES2017, in_decorated_class: false, const_enums: Map::new(), jsx_transform: Preserve }
+  { target: ES2017, in_decorated_class: false, const_enums: Map::new(), jsx_transform: Preserve, temp_counter: Ref::new(0) }
 }
 
 ///|
 /// Create transformer context for ES2018 target
 pub fn TransformerContext::es2018() -> TransformerContext {
-  { target: ES2018, in_decorated_class: false, const_enums: Map::new(), jsx_transform: Preserve }
+  { target: ES2018, in_decorated_class: false, const_enums: Map::new(), jsx_transform: Preserve, temp_counter: Ref::new(0) }
 }
 
 ///|
 /// Create transformer context for ES2019 target
 pub fn TransformerContext::es2019() -> TransformerContext {
-  { target: ES2019, in_decorated_class: false, const_enums: Map::new(), jsx_transform: Preserve }
+  { target: ES2019, in_decorated_class: false, const_enums: Map::new(), jsx_transform: Preserve, temp_counter: Ref::new(0) }
 }
 
 ///|
 /// Create transformer context for ES2020 target
 pub fn TransformerContext::es2020() -> TransformerContext {
-  { target: ES2020, in_decorated_class: false, const_enums: Map::new(), jsx_transform: Preserve }
+  { target: ES2020, in_decorated_class: false, const_enums: Map::new(), jsx_transform: Preserve, temp_counter: Ref::new(0) }
 }
 
 ///|
 /// Create transformer context for ESNext target
 pub fn TransformerContext::esnext() -> TransformerContext {
-  { target: ESNext, in_decorated_class: false, const_enums: Map::new(), jsx_transform: Preserve }
+  { target: ESNext, in_decorated_class: false, const_enums: Map::new(), jsx_transform: Preserve, temp_counter: Ref::new(0) }
 }
 
 ///|
@@ -1061,25 +1070,143 @@ fn transform_for_of_statement(
   fos : ForOfStatement,
   ctx : TransformerContext,
 ) -> Node {
-  // For ES5, we would convert for-of to traditional for loop with index
-  // for (const item of array) becomes:
-  // for (var _i = 0; _i < array.length; _i++) { var item = array[_i]; ...body }
-  //
-  // This is a complex transformation requiring:
-  // 1. Generate unique variable names for index and array reference
-  // 2. Extract variable name from initializer
-  // 3. Create new variable declaration in loop body
-  // 4. Rewrite to traditional for loop
-  //
-  // For now, we preserve for-of and mark with TODO for full ES5 transformation
-  // ES2015+ supports for-of natively, so this works for most targets
+  // ES2015+ supports for-of natively
+  if ctx.target != ES5 {
+    return ForOfStatement({
+      await_modifier: fos.await_modifier,
+      initializer: transform(fos.initializer, ctx),
+      expression: transform(fos.expression, ctx),
+      statement: transform(fos.statement, ctx),
+      location: fos.location,
+    })
+  }
 
-  ForOfStatement({
-    await_modifier: fos.await_modifier,
-    initializer: transform(fos.initializer, ctx),
-    expression: transform(fos.expression, ctx),
-    statement: transform(fos.statement, ctx),
-    location: fos.location,
+  // For ES5, convert for-of to traditional for loop with index
+  // for (const item of array) becomes:
+  // for (var _i = 0, _arr = array; _i < _arr.length; _i++) { var item = _arr[_i]; ...body }
+
+  // Generate unique variable names
+  let index_name = gen_temp_name(ctx, "_i$")
+  let arr_name = gen_temp_name(ctx, "_arr$")
+  let loc = fos.location
+
+  // Extract variable name from initializer
+  let var_name : String = match fos.initializer {
+    VariableStatement(vs) =>
+      if vs.declarations.length() > 0 {
+        match vs.declarations[0].name {
+          Identifier(id) => id.name
+          _ => "_item"
+        }
+      } else {
+        "_item"
+      }
+    Identifier(id) => id.name
+    _ => "_item"
+  }
+
+  // Transform the expression (the array being iterated)
+  let transformed_expr = transform(fos.expression, ctx)
+
+  // Create identifier nodes for our temp variables
+  let index_id = Node::Identifier(Identifier::{ name: index_name, location: loc })
+  let arr_id = Node::Identifier(Identifier::{ name: arr_name, location: loc })
+  let var_id = Node::Identifier(Identifier::{ name: var_name, location: loc })
+
+  // Create initializer: var _i = 0, _arr = array
+  let init_decls = [
+    VariableDeclaration::{
+      name: index_id,
+      type_annotation: None,
+      initializer: Some(Node::NumericLiteral(NumericLiteral::{ value: "0", location: loc })),
+      location: loc,
+    },
+    VariableDeclaration::{
+      name: arr_id,
+      type_annotation: None,
+      initializer: Some(transformed_expr),
+      location: loc,
+    },
+  ]
+  let initializer = Node::VariableStatement(VariableStatement::{
+    declarations: init_decls,
+    is_const: false,
+    is_let: false,
+    modifiers: [],
+    location: loc,
+  })
+
+  // Create condition: _i < _arr.length
+  let condition = Node::BinaryExpression(BinaryExpression::{
+    left: index_id,
+    operator: LessThan,
+    right: Node::PropertyAccessExpression(PropertyAccessExpression::{
+      expression: arr_id,
+      name: "length",
+      location: loc,
+    }),
+    location: loc,
+  })
+
+  // Create incrementor: _i++
+  let incrementor = Node::UnaryExpression(UnaryExpression::{
+    operator: Increment,
+    operand: index_id,
+    is_prefix: false,
+    location: loc,
+  })
+
+  // Create variable declaration for loop body: var item = _arr[_i];
+  let item_decl = Node::VariableStatement(VariableStatement::{
+    declarations: [
+      VariableDeclaration::{
+        name: var_id,
+        type_annotation: None,
+        initializer: Some(Node::ElementAccessExpression(ElementAccessExpression::{
+          expression: arr_id,
+          argument_expression: index_id,
+          location: loc,
+        })),
+        location: loc,
+      },
+    ],
+    is_const: false,
+    is_let: false,
+    modifiers: [],
+    location: loc,
+  })
+
+  // Transform the original body
+  let transformed_body = transform(fos.statement, ctx)
+
+  // Create new body with item declaration prepended
+  let new_body = match transformed_body {
+    BlockStatement(bs) => {
+      let new_statements : Array[Node] = [item_decl]
+      for stmt in bs.statements {
+        new_statements.push(stmt)
+      }
+      Node::BlockStatement(BlockStatement::{
+        statements: new_statements,
+        location: bs.location,
+      })
+    }
+    _ => {
+      // Wrap in block if not already a block
+      Node::BlockStatement(BlockStatement::{
+        statements: [item_decl, transformed_body],
+        location: loc,
+      })
+    }
+  }
+
+  // Create the for loop
+  ForStatement(ForStatement::{
+    initializer: Some(initializer),
+    condition: Some(condition),
+    incrementor: Some(incrementor),
+    statement: new_body,
+    location: loc,
   })
 }
 
