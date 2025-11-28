@@ -516,3 +516,42 @@ test "e2e: playwright nested describe blocks" {
   assert_true(js.contains("test.describe"))
   assert_true(js.contains("Admin"))
 }
+
+// ============================================================================
+// Hashbang (Shebang) Tests
+// ============================================================================
+
+///|
+/// Helper to compile TypeScript source with hashbang support using compile_source_file
+fn e2e_compile_with_hashbang(source : String) -> String {
+  let tokens = scan_all_v2(source, "test.ts")
+  match parse_source_file(tokens, "test.ts") {
+    Ok(source_file) => {
+      let transform_ctx = TransformerContext::default()
+      let emit_ctx = EmitterContext::default()
+      // Use compile_source_file which properly handles hashbang
+      compile_source_file(source_file, transform_ctx, emit_ctx)
+    }
+    Err(_) => ""
+  }
+}
+
+///|
+test "e2e: hashbang is preserved in output" {
+  let js = e2e_compile_with_hashbang("#!/usr/bin/env node\nconst x = 1;")
+  assert_true(js.contains("#!/usr/bin/env node"))
+  assert_true(js.contains("const x = 1"))
+}
+
+///|
+test "e2e: hashbang at start of output" {
+  let js = e2e_compile_with_hashbang("#!/usr/bin/env node\nconst x = 1;")
+  assert_true(js.starts_with("#!/usr/bin/env node"))
+}
+
+///|
+test "e2e: file without hashbang works" {
+  let js = e2e_compile_with_hashbang("const x = 1;")
+  assert_false(js.contains("#!"))
+  assert_true(js.contains("const x = 1"))
+}

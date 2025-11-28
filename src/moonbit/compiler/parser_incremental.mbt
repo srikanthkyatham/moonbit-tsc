@@ -40,6 +40,7 @@ pub fn parse_incremental(
             end_of_file_token: EOF(eof_loc),
             has_no_default_lib: false,
             directive_tokens: [],
+            hashbang: None,
           }
           IncrementalParseResult::{
             source_file: Node::SourceFile(empty_sf),
@@ -89,6 +90,7 @@ fn try_incremental_parse(
           end_of_file_token: EOF(eof_loc),
           has_no_default_lib: false,
           directive_tokens: [],
+          hashbang: None,
         }
         IncrementalParseResult::{
           source_file: Node::SourceFile(empty_sf),
@@ -119,6 +121,7 @@ fn try_incremental_parse(
         end_of_file_token: EOF(eof_loc),
         has_no_default_lib: false,
         directive_tokens: [],
+        hashbang: None,
       }
       IncrementalParseResult::{
         source_file: Node::SourceFile(empty_sf),

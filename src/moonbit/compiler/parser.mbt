@@ -320,11 +320,13 @@ pub fn parse_source_file(
   tokens : Array[Token],
   file_path : String,
 ) -> ParseResult[SourceFile] {
-  // Extract triple-slash directive tokens and filter out comment tokens
+  // Extract triple-slash directive tokens, hashbang, and filter out comment tokens
   let directive_tokens : Array[(String, SourceLocation)] = []
   let filtered_tokens : Array[Token] = []
+  let mut hashbang : String? = None
   for i = 0; i < tokens.length(); i = i + 1 {
     match tokens[i] {
+      Hashbang(content, _) => hashbang = Some(content)  // Extract hashbang
       CommentDirective(TripleSlashRef, content, loc) => {
         directive_tokens.push((content, loc))
         // Don't add to filtered_tokens - skip directive tokens during parsing
@@ -353,6 +355,7 @@ pub fn parse_source_file(
       end_of_file_token: eof_token,
       has_no_default_lib: false,
       directive_tokens,
+      hashbang,
     })
   }
 }

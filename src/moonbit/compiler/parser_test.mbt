@@ -4216,3 +4216,48 @@ test "parse using statement with type annotation" {
 // ============================================================================
 // Note: ParserErrorCode enum variants are tested internally in the parser module.
 // External tests cannot construct enum values due to MoonBit's read-only access.
+
+// ============================================================================
+// Hashbang (Shebang) Tests
+// ============================================================================
+
+///|
+test "parse hashbang at start of file" {
+  let tokens = tokens_from_source("#!/usr/bin/env node\nconst x = 1;")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      // Check hashbang is preserved
+      match source_file.hashbang {
+        Some(hashbang) => assert_eq(hashbang, "#!/usr/bin/env node")
+        None => {
+          println("Expected hashbang to be present")
+          assert_true(false)
+        }
+      }
+      // Check statement is parsed correctly
+      assert_eq(source_file.statements.length(), 1)
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse file without hashbang" {
+  let tokens = tokens_from_source("const x = 1;")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      // Check no hashbang
+      match source_file.hashbang {
+        Some(_) => {
+          println("Expected no hashbang")
+          assert_true(false)
+        }
+        None => ()
+      }
+      assert_eq(source_file.statements.length(), 1)
+    }
+    Err(_) => assert_true(false)
+  }
+}

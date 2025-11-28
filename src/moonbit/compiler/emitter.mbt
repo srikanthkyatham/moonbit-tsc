@@ -258,6 +258,7 @@ pub fn compile_source_file(
     end_of_file_token: sf.end_of_file_token,
     has_no_default_lib: sf.has_no_default_lib,
     directive_tokens: sf.directive_tokens,
+    hashbang: sf.hashbang,
   })
   // Transform and emit
   let transformed = transform(sf_node, ctx)
@@ -268,6 +269,16 @@ pub fn compile_source_file(
 /// Emit source file
 fn emit_source_file(sf : SourceFile, ctx : EmitterContext) -> String {
   let mut result = ""
+
+  // Emit hashbang (shebang) if present
+  match sf.hashbang {
+    Some(hashbang) => {
+      result = result + hashbang + "\n"
+      ctx.emit_text(hashbang)
+      ctx.emit_newline()
+    }
+    None => ()
+  }
 
   // Emit helper functions if decorators are used
   let uses_decorators = source_file_uses_decorators(sf)

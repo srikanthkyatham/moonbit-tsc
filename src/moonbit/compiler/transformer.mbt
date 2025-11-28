@@ -249,6 +249,7 @@ pub fn transform(node : Node, ctx : TransformerContext) -> Node {
         end_of_file_token: sf.end_of_file_token,
         has_no_default_lib: sf.has_no_default_lib,
         directive_tokens: sf.directive_tokens,
+        hashbang: sf.hashbang,
       })
     }
 

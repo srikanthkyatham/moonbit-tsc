@@ -139,6 +139,8 @@ pub struct SourceFile {
   has_no_default_lib : Bool
   /// Raw triple-slash directive tokens (content after ///)
   directive_tokens : Array[(String, SourceLocation)]
+  /// Hashbang (shebang) line if present (e.g., "#!/usr/bin/env node")
+  hashbang : String?
 } derive(Show)
 
 ///|
