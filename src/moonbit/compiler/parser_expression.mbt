@@ -3,6 +3,90 @@
 // NOTE: Core expression logic moved to parser_v2_expression.mbt
 
 ///|
+/// Parse an identifier or keyword as a property name for member access expressions.
+/// This is necessary because in JavaScript/TypeScript, keywords can be used as property names.
+/// For example: `field.type`, `field.string`, `obj.class` are all valid.
+fn parse_identifier_or_keyword_name(
+  parser : Parser,
+) -> Result[(String, Parser), Parser] {
+  let token = current_token(parser)
+  let loc = token.location()
+  match token {
+    Identifier(name, _) => Ok((name, advance_parser(parser)))
+    // Type keywords
+    KeywordAny(_) => Ok(("any", advance_parser(parser)))
+    KeywordBoolean(_) => Ok(("boolean", advance_parser(parser)))
+    KeywordNumber(_) => Ok(("number", advance_parser(parser)))
+    KeywordString(_) => Ok(("string", advance_parser(parser)))
+    KeywordSymbol(_) => Ok(("symbol", advance_parser(parser)))
+    KeywordObject(_) => Ok(("object", advance_parser(parser)))
+    KeywordVoid(_) => Ok(("void", advance_parser(parser)))
+    KeywordUnknown(_) => Ok(("unknown", advance_parser(parser)))
+    KeywordNever(_) => Ok(("never", advance_parser(parser)))
+    KeywordUndefined(_) => Ok(("undefined", advance_parser(parser)))
+    KeywordNull(_) => Ok(("null", advance_parser(parser)))
+    // Declaration keywords
+    KeywordLet(_) => Ok(("let", advance_parser(parser)))
+    KeywordConst(_) => Ok(("const", advance_parser(parser)))
+    KeywordVar(_) => Ok(("var", advance_parser(parser)))
+    KeywordFunction(_) => Ok(("function", advance_parser(parser)))
+    KeywordClass(_) => Ok(("class", advance_parser(parser)))
+    KeywordInterface(_) => Ok(("interface", advance_parser(parser)))
+    KeywordEnum(_) => Ok(("enum", advance_parser(parser)))
+    KeywordType(_) => Ok(("type", advance_parser(parser)))
+    KeywordNamespace(_) => Ok(("namespace", advance_parser(parser)))
+    KeywordModule(_) => Ok(("module", advance_parser(parser)))
+    // Control flow keywords
+    KeywordIf(_) => Ok(("if", advance_parser(parser)))
+    KeywordElse(_) => Ok(("else", advance_parser(parser)))
+    KeywordSwitch(_) => Ok(("switch", advance_parser(parser)))
+    KeywordCase(_) => Ok(("case", advance_parser(parser)))
+    KeywordDefault(_) => Ok(("default", advance_parser(parser)))
+    KeywordFor(_) => Ok(("for", advance_parser(parser)))
+    KeywordWhile(_) => Ok(("while", advance_parser(parser)))
+    KeywordDo(_) => Ok(("do", advance_parser(parser)))
+    KeywordBreak(_) => Ok(("break", advance_parser(parser)))
+    KeywordContinue(_) => Ok(("continue", advance_parser(parser)))
+    KeywordReturn(_) => Ok(("return", advance_parser(parser)))
+    KeywordThrow(_) => Ok(("throw", advance_parser(parser)))
+    KeywordTry(_) => Ok(("try", advance_parser(parser)))
+    KeywordCatch(_) => Ok(("catch", advance_parser(parser)))
+    KeywordFinally(_) => Ok(("finally", advance_parser(parser)))
+    // Modifier keywords
+    KeywordPublic(_) => Ok(("public", advance_parser(parser)))
+    KeywordPrivate(_) => Ok(("private", advance_parser(parser)))
+    KeywordProtected(_) => Ok(("protected", advance_parser(parser)))
+    KeywordStatic(_) => Ok(("static", advance_parser(parser)))
+    KeywordReadonly(_) => Ok(("readonly", advance_parser(parser)))
+    KeywordAbstract(_) => Ok(("abstract", advance_parser(parser)))
+    KeywordAsync(_) => Ok(("async", advance_parser(parser)))
+    KeywordAwait(_) => Ok(("await", advance_parser(parser)))
+    KeywordDeclare(_) => Ok(("declare", advance_parser(parser)))
+    KeywordAccessor(_) => Ok(("accessor", advance_parser(parser)))
+    KeywordUsing(_) => Ok(("using", advance_parser(parser)))
+    // Other keywords
+    KeywordNew(_) => Ok(("new", advance_parser(parser)))
+    KeywordThis(_) => Ok(("this", advance_parser(parser)))
+    KeywordSuper(_) => Ok(("super", advance_parser(parser)))
+    KeywordImport(_) => Ok(("import", advance_parser(parser)))
+    KeywordExport(_) => Ok(("export", advance_parser(parser)))
+    KeywordFrom(_) => Ok(("from", advance_parser(parser)))
+    KeywordAs(_) => Ok(("as", advance_parser(parser)))
+    KeywordSatisfies(_) => Ok(("satisfies", advance_parser(parser)))
+    KeywordExtends(_) => Ok(("extends", advance_parser(parser)))
+    KeywordImplements(_) => Ok(("implements", advance_parser(parser)))
+    KeywordYield(_) => Ok(("yield", advance_parser(parser)))
+    KeywordIn(_) => Ok(("in", advance_parser(parser)))
+    KeywordOf(_) => Ok(("of", advance_parser(parser)))
+    KeywordInstanceOf(_) => Ok(("instanceof", advance_parser(parser)))
+    KeywordTypeOf(_) => Ok(("typeof", advance_parser(parser)))
+    KeywordDelete(_) => Ok(("delete", advance_parser(parser)))
+    KeywordDebugger(_) => Ok(("debugger", advance_parser(parser)))
+    _ => Err(add_error(parser, "Expected identifier or keyword", loc))
+  }
+}
+
+///|
 /// Parse expression (delegates to v2 implementation)
 fn parse_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
   parse_expression_v2(parser)
@@ -395,9 +479,9 @@ fn parse_postfix_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
       Dot(_) => {
         let start_loc = get_location(left)
         parser = advance_parser(parser)
-        match parse_identifier(parser) {
-          Ok((id, next_parser)) => {
-            left = make_property_access(left, id.name, start_loc)
+        match parse_identifier_or_keyword_name(parser) {
+          Ok((name, next_parser)) => {
+            left = make_property_access(left, name, start_loc)
             parser = next_parser
           }
           Err(p) => return Err(p)
@@ -414,9 +498,9 @@ fn parse_postfix_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
           location: start_loc,
         })
         // Then parse the property access
-        match parse_identifier(parser) {
-          Ok((id, next_parser)) => {
-            left = make_property_access(non_null_expr, id.name, start_loc)
+        match parse_identifier_or_keyword_name(parser) {
+          Ok((name, next_parser)) => {
+            left = make_property_access(non_null_expr, name, start_loc)
             parser = next_parser
           }
           Err(p) => return Err(p)
@@ -454,11 +538,11 @@ fn parse_postfix_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
           }
           // Optional property access: obj?.prop
           _ =>
-            match parse_identifier(parser) {
-              Ok((id, next_parser)) => {
+            match parse_identifier_or_keyword_name(parser) {
+              Ok((name, next_parser)) => {
                 left = Node::OptionalChain(OptionalChain::{
                   expression: left,
-                  chain: OptionalChainKind::Property(id.name),
+                  chain: OptionalChainKind::Property(name),
                   location: start_loc,
                 })
                 parser = next_parser

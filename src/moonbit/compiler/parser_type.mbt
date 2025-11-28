@@ -2,6 +2,87 @@
 // Contains all type-related parsing functions
 
 ///|
+/// Try to extract a property name from a token.
+/// This handles identifiers, string literals, and keywords that can be used as property names.
+/// Returns None if the token cannot be used as a property name.
+fn try_get_property_name(token : Token) -> (String, SourceLocation)? {
+  match token {
+    Identifier(name, loc) => Some((name, loc))
+    StringLiteral(name, loc) => Some((name, loc))
+    // Type keywords
+    KeywordAny(loc) => Some(("any", loc))
+    KeywordBoolean(loc) => Some(("boolean", loc))
+    KeywordNumber(loc) => Some(("number", loc))
+    KeywordString(loc) => Some(("string", loc))
+    KeywordSymbol(loc) => Some(("symbol", loc))
+    KeywordObject(loc) => Some(("object", loc))
+    KeywordVoid(loc) => Some(("void", loc))
+    KeywordUnknown(loc) => Some(("unknown", loc))
+    KeywordNever(loc) => Some(("never", loc))
+    KeywordUndefined(loc) => Some(("undefined", loc))
+    KeywordNull(loc) => Some(("null", loc))
+    // Declaration keywords
+    KeywordLet(loc) => Some(("let", loc))
+    KeywordConst(loc) => Some(("const", loc))
+    KeywordVar(loc) => Some(("var", loc))
+    KeywordFunction(loc) => Some(("function", loc))
+    KeywordClass(loc) => Some(("class", loc))
+    KeywordInterface(loc) => Some(("interface", loc))
+    KeywordEnum(loc) => Some(("enum", loc))
+    KeywordType(loc) => Some(("type", loc))
+    KeywordNamespace(loc) => Some(("namespace", loc))
+    KeywordModule(loc) => Some(("module", loc))
+    // Control flow keywords
+    KeywordIf(loc) => Some(("if", loc))
+    KeywordElse(loc) => Some(("else", loc))
+    KeywordSwitch(loc) => Some(("switch", loc))
+    KeywordCase(loc) => Some(("case", loc))
+    KeywordDefault(loc) => Some(("default", loc))
+    KeywordFor(loc) => Some(("for", loc))
+    KeywordWhile(loc) => Some(("while", loc))
+    KeywordDo(loc) => Some(("do", loc))
+    KeywordBreak(loc) => Some(("break", loc))
+    KeywordContinue(loc) => Some(("continue", loc))
+    KeywordReturn(loc) => Some(("return", loc))
+    KeywordThrow(loc) => Some(("throw", loc))
+    KeywordTry(loc) => Some(("try", loc))
+    KeywordCatch(loc) => Some(("catch", loc))
+    KeywordFinally(loc) => Some(("finally", loc))
+    // Modifier keywords
+    KeywordPublic(loc) => Some(("public", loc))
+    KeywordPrivate(loc) => Some(("private", loc))
+    KeywordProtected(loc) => Some(("protected", loc))
+    KeywordStatic(loc) => Some(("static", loc))
+    KeywordReadonly(loc) => Some(("readonly", loc))
+    KeywordAbstract(loc) => Some(("abstract", loc))
+    KeywordAsync(loc) => Some(("async", loc))
+    KeywordAwait(loc) => Some(("await", loc))
+    KeywordDeclare(loc) => Some(("declare", loc))
+    KeywordAccessor(loc) => Some(("accessor", loc))
+    KeywordUsing(loc) => Some(("using", loc))
+    // Other keywords
+    KeywordNew(loc) => Some(("new", loc))
+    KeywordThis(loc) => Some(("this", loc))
+    KeywordSuper(loc) => Some(("super", loc))
+    KeywordImport(loc) => Some(("import", loc))
+    KeywordExport(loc) => Some(("export", loc))
+    KeywordFrom(loc) => Some(("from", loc))
+    KeywordAs(loc) => Some(("as", loc))
+    KeywordSatisfies(loc) => Some(("satisfies", loc))
+    KeywordExtends(loc) => Some(("extends", loc))
+    KeywordImplements(loc) => Some(("implements", loc))
+    KeywordYield(loc) => Some(("yield", loc))
+    KeywordIn(loc) => Some(("in", loc))
+    KeywordOf(loc) => Some(("of", loc))
+    KeywordInstanceOf(loc) => Some(("instanceof", loc))
+    KeywordTypeOf(loc) => Some(("typeof", loc))
+    KeywordDelete(loc) => Some(("delete", loc))
+    KeywordDebugger(loc) => Some(("debugger", loc))
+    _ => None
+  }
+}
+
+///|
 /// Parse type (enhanced with union support)
 fn parse_type(parser : Parser) -> Result[(Node, Parser), Parser] {
   // Check for readonly modifier (readonly number[], readonly [T, U])
@@ -872,44 +953,6 @@ fn parse_primary_type_with_readonly(
               _ => break
             }
           }
-          Identifier(name, _) | StringLiteral(name, _) => {
-            parser = advance_parser(parser)
-            // Check for optional property marker (?)
-            let is_optional = match current_token(parser) {
-              Question(_) => {
-                parser = advance_parser(parser)
-                true
-              }
-              _ => false
-            }
-            // Expect :
-            match current_token(parser) {
-              Colon(_) => {
-                parser = advance_parser(parser)
-                match parse_type(parser) {
-                  Ok((prop_type, p)) => {
-                    members.push(
-                      Node::TypeLiteralProperty(TypeLiteralProperty::{
-                        name,
-                        type_node: Some(prop_type),
-                        is_optional,
-                        is_readonly: false,
-                        location: member_loc,
-                      }),
-                    )
-                    parser = p
-                    // Optional comma or semicolon
-                    match current_token(parser) {
-                      Comma(_) | Semicolon(_) => parser = advance_parser(parser)
-                      _ => ()
-                    }
-                  }
-                  Err(p) => return Err(p)
-                }
-              }
-              _ => break
-            }
-          }
           // Handle call signature: (): type
           OpenParen(_) => {
             let call_start = current_token(parser).location()
@@ -1072,7 +1115,49 @@ fn parse_primary_type_with_readonly(
               _ => break
             }
           }
-          _ => break
+          _ =>
+            // Try to parse as identifier or keyword property name
+            match try_get_property_name(current_token(parser)) {
+              Some((name, _)) => {
+                parser = advance_parser(parser)
+                // Check for optional property marker (?)
+                let is_optional = match current_token(parser) {
+                  Question(_) => {
+                    parser = advance_parser(parser)
+                    true
+                  }
+                  _ => false
+                }
+                // Expect :
+                match current_token(parser) {
+                  Colon(_) => {
+                    parser = advance_parser(parser)
+                    match parse_type(parser) {
+                      Ok((prop_type, p)) => {
+                        members.push(
+                          Node::TypeLiteralProperty(TypeLiteralProperty::{
+                            name,
+                            type_node: Some(prop_type),
+                            is_optional,
+                            is_readonly: false,
+                            location: member_loc,
+                          }),
+                        )
+                        parser = p
+                        // Optional comma or semicolon
+                        match current_token(parser) {
+                          Comma(_) | Semicolon(_) => parser = advance_parser(parser)
+                          _ => ()
+                        }
+                      }
+                      Err(p) => return Err(p)
+                    }
+                  }
+                  _ => break
+                }
+              }
+              None => break
+            }
         }
       }
 

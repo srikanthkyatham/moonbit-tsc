@@ -870,3 +870,121 @@ test "parse interface with readonly optional property" {
     Err(_) => assert_true(false)
   }
 }
+
+///|
+test "parse type alias with keyword property names in object type" {
+  // Test that keywords like 'string', 'number', 'type' can be used as property names
+  let tokens = tokens_from_source(
+    "type FieldInfo = { type: string; string: () => string | null; number: number }",
+  )
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        TypeAliasDeclaration(decl) => {
+          assert_eq(decl.name, "FieldInfo")
+          // The type should be a TypeLiteral with 3 members
+          match decl.type_node {
+            TypeLiteral(tl) => {
+              assert_eq(tl.members.length(), 3)
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse function with inline object type using keyword property names" {
+  // Test the original issue: inline object type with 'string' as property name
+  let source =
+    #|function typeCast(
+    #|  field: {
+    #|    type: string
+    #|    string: () => string | null
+    #|  },
+    #|  next: () => void
+    #|): void { }
+  let tokens = tokens_from_source(source)
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        FunctionDeclaration(decl) => {
+          // Check function name
+          match decl.name {
+            Some(Identifier(id)) => assert_eq(id.name, "typeCast")
+            _ => assert_true(false)
+          }
+          // Should have 2 parameters
+          assert_eq(decl.parameters.length(), 2)
+          // First parameter should have an inline object type
+          match decl.parameters[0] {
+            Parameter(param) => {
+              // The type annotation should be a TypeLiteral
+              match param.type_annotation {
+                Some(TypeLiteral(tl)) => {
+                  // Should have 2 properties: type and string
+                  assert_eq(tl.members.length(), 2)
+                }
+                _ => assert_true(false)
+              }
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse type with various keyword property names" {
+  // Test multiple different keyword property names
+  let tokens = tokens_from_source(
+    "type KeywordProps = { void: string; null: number; undefined: boolean; never: any }",
+  )
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        TypeAliasDeclaration(decl) => {
+          match decl.type_node {
+            TypeLiteral(tl) => {
+              assert_eq(tl.members.length(), 4)
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse member access with keyword property names" {
+  // Test that keywords can be used as property names in member access expressions
+  // e.g., field.type, field.string(), obj.class
+  let tokens = tokens_from_source(
+    "const x = field.type; const y = field.string(); const z = obj.class;",
+  )
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      // Should have 3 variable statements
+      assert_eq(source_file.statements.length(), 3)
+    }
+    Err(_) => assert_true(false)
+  }
+}
