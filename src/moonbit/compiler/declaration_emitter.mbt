@@ -962,6 +962,13 @@ fn emit_decl_type_operator(
 }
 
 ///|
+/// Helper to get dollar-brace string (workaround for JS template literal compilation)
+fn dollar_brace() -> String {
+  // Build "${" using character codes to avoid issues with JS template literal compilation
+  (36).unsafe_to_char().to_string() + (123).unsafe_to_char().to_string()
+}
+
+///|
 /// Emit a template literal type (`prefix${Type}suffix`)
 fn emit_decl_template_literal_type(
   tlt : TemplateLiteralType,
@@ -969,7 +976,7 @@ fn emit_decl_template_literal_type(
 ) -> String {
   let mut output = "`" + tlt.head
   for span in tlt.spans {
-    output = output + "${" + emit_decl_type_node(span.type_node, ctx) + "}" +
+    output = output + dollar_brace() + emit_decl_type_node(span.type_node, ctx) + "}" +
       span.literal
   }
   output + "`"

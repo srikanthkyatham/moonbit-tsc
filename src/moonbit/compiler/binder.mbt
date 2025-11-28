@@ -19,6 +19,8 @@ pub struct Binder {
   file_path : String
   diagnostics : Array[Diagnostic]
   ambient_modules : AmbientModuleRegistry // Registry for ambient module declarations
+  module_augmentations : Array[ModuleAugmentation] // Module augmentations (for module files)
+  is_external_module : Bool // Track if this file is a module (has imports/exports)
 } derive(Show)
 
 ///|
@@ -42,13 +44,55 @@ fn Binder::new(file_path : String) -> Binder {
     file_path,
     diagnostics: [],
     ambient_modules: AmbientModuleRegistry::new(),
+    module_augmentations: [],
+    is_external_module: false,
   }
+}
+
+///|
+/// Pre-scan to check if file is a module (has imports/exports)
+fn is_module_file(statements : Array[Node]) -> Bool {
+  for i = 0; i < statements.length(); i = i + 1 {
+    match statements[i] {
+      ImportDeclaration(_) => return true
+      ExportDeclaration(_) => return true
+      ExportAssignment(_) => return true
+      FunctionDeclaration(f) =>
+        if binder_has_export_modifier(f.modifiers) {
+          return true
+        }
+      ClassDeclaration(c) =>
+        if binder_has_export_modifier(c.modifiers) {
+          return true
+        }
+      VariableStatement(v) =>
+        if binder_has_export_modifier(v.modifiers) {
+          return true
+        }
+      InterfaceDeclaration(i) =>
+        if binder_has_export_modifier(i.modifiers) {
+          return true
+        }
+      TypeAliasDeclaration(t) =>
+        if binder_has_export_modifier(t.modifiers) {
+          return true
+        }
+      EnumDeclaration(e) =>
+        if binder_has_export_modifier(e.modifiers) {
+          return true
+        }
+      _ => ()
+    }
+  }
+  false
 }
 
 ///|
 /// Main entry point: bind a source file
 pub fn bind_source_file(source_file : SourceFile) -> BindResult {
   let binder = Binder::new(source_file.file_path)
+  // Pre-scan to detect if this is a module file (affects ambient module handling)
+  let binder = { ..binder, is_external_module: is_module_file(source_file.statements) }
   let binder = bind_statements(binder, source_file.statements)
 
   // Get global scope
@@ -73,6 +117,7 @@ pub fn bind_source_file(source_file : SourceFile) -> BindResult {
       module_info,
       control_flow_graph,
       ambient_modules: binder.ambient_modules,
+      module_augmentations: binder.module_augmentations,
     })
   }
 }
@@ -837,7 +882,7 @@ fn bind_module_declaration(
   // Check if this is an ambient module declaration (declare module "pattern" { })
   // The parser sets is_ambient=true when the name was a string literal
   if mod_decl.is_ambient {
-    // For ambient modules, bind the body in a new scope and register in the ambient module registry
+    // Bind the body in a new scope
     let binder = push_scope(binder)
     let binder = push_container(binder, ContainerKind::Module)
 
@@ -847,17 +892,31 @@ fn bind_module_declaration(
       None => binder
     }
 
-    // Get the exports from the module scope
-    let module_scope = binder.scopes[binder.current_scope_id]
-    let exports = module_scope.symbols
+    // Get the declarations from the module scope
+    let module_scope = current_scope(binder)
+    let declarations = module_scope.symbols
 
-    // Register the ambient module
-    binder.ambient_modules.register(
-      mod_decl.name,
-      exports,
-      mod_decl.body,
-      mod_decl.location,
-    )
+    // Determine if this is a module augmentation or ambient module declaration
+    // In a module file (has imports/exports), declare module is an augmentation
+    // In a script file (no imports/exports), declare module creates an ambient module
+    if binder.is_external_module {
+      // Module augmentation - extends an existing module
+      let augmentation = ModuleAugmentation::{
+        module_name: mod_decl.name,
+        declarations,
+        body: mod_decl.body,
+        location: mod_decl.location,
+      }
+      binder.module_augmentations.push(augmentation)
+    } else {
+      // Ambient module declaration - creates a new module type
+      binder.ambient_modules.register(
+        mod_decl.name,
+        declarations,
+        mod_decl.body,
+        mod_decl.location,
+      )
+    }
 
     // Pop container and scope
     let binder = pop_container(binder)

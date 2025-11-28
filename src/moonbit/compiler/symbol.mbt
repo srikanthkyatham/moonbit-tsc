@@ -571,6 +571,7 @@ pub struct BoundSourceFile {
   module_info : ModuleInfo
   control_flow_graph : ControlFlowGraph
   ambient_modules : AmbientModuleRegistry // Ambient module declarations (declare module "pattern")
+  module_augmentations : Array[ModuleAugmentation] // Module augmentations (declare module in module files)
 } derive(Show)
 
 ///|
@@ -999,6 +1000,24 @@ pub fn AmbientModuleRegistry::lookup(
 
   None
 }
+
+// ============================================================================
+// Module Augmentation
+// ============================================================================
+
+///|
+/// Information about a module augmentation (declare module in a module file)
+/// Module augmentations extend existing modules rather than creating new ones
+pub struct ModuleAugmentation {
+  /// The module being augmented (e.g., "express", "lodash")
+  module_name : String
+  /// The declarations to merge into the module
+  declarations : SymbolTable
+  /// The AST body for later processing
+  body : Node?
+  /// Location of the augmentation
+  location : SourceLocation
+} derive(Show)
 
 ///|
 /// Match a module specifier against an ambient module pattern
