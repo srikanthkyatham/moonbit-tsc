@@ -251,6 +251,7 @@ pub struct EnumMember {
 pub struct ModuleDeclaration {
   name : String
   body : Node?
+  is_ambient : Bool // True if name was a string literal (declare module "foo")
   location : SourceLocation
 } derive(Show)
 

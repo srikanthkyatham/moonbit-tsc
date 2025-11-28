@@ -2169,6 +2169,7 @@ fn transform_module_declaration(
       Some(b) => Some(transform(b, ctx))
       None => None
     },
+    is_ambient: md.is_ambient,
     location: md.location,
   })
 }

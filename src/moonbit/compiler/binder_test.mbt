@@ -1626,3 +1626,143 @@ test "bind unreachable after throw in if branch" {
     Err(_) => assert_true(false)
   }
 }
+
+// ============================================================================
+// Ambient Module Declaration Tests
+// ============================================================================
+
+///|
+test "ambient module wildcard pattern" {
+  let result = parse_and_bind(
+    #|declare module "*.css" {
+    #|  const styles: { [key: string]: string };
+    #|  export default styles;
+    #|}
+    ,
+  )
+  match result {
+    Ok(bound) => {
+      // Check that the ambient module was registered
+      match bound.ambient_modules.lookup("*.css") {
+        Some(info) => {
+          assert_eq(info.pattern, "*.css")
+          assert_eq(info.is_wildcard, true)
+        }
+        None => assert_true(false)
+      }
+      // Check that the pattern matches actual CSS files
+      match bound.ambient_modules.lookup("styles.css") {
+        Some(_) => assert_true(true)
+        None => assert_true(false)
+      }
+      match bound.ambient_modules.lookup("theme/dark.css") {
+        Some(_) => assert_true(true)
+        None => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "ambient module exact match" {
+  let result = parse_and_bind(
+    #|declare module "express" {
+    #|  interface Request { body: any; }
+    #|  interface Response { send(data: any): void; }
+    #|}
+    ,
+  )
+  match result {
+    Ok(bound) => {
+      // Check that the ambient module was registered
+      match bound.ambient_modules.lookup("express") {
+        Some(info) => {
+          assert_eq(info.pattern, "express")
+          assert_eq(info.is_wildcard, false)
+        }
+        None => assert_true(false)
+      }
+      // Should not match partial names
+      match bound.ambient_modules.lookup("express-validator") {
+        None => assert_true(true)
+        Some(_) => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "ambient module scoped package" {
+  let result = parse_and_bind(
+    #|declare module "@types/lodash" {
+    #|  export function map<T, U>(arr: T[], fn: (x: T) => U): U[];
+    #|}
+    ,
+  )
+  match result {
+    Ok(bound) => {
+      match bound.ambient_modules.lookup("@types/lodash") {
+        Some(info) => {
+          assert_eq(info.pattern, "@types/lodash")
+          assert_eq(info.is_wildcard, false)
+        }
+        None => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "ambient module json pattern" {
+  let result = parse_and_bind(
+    #|declare module "*.json" {
+    #|  const value: any;
+    #|  export default value;
+    #|}
+    ,
+  )
+  match result {
+    Ok(bound) => {
+      // Check pattern matching
+      match bound.ambient_modules.lookup("config.json") {
+        Some(_) => assert_true(true)
+        None => assert_true(false)
+      }
+      match bound.ambient_modules.lookup("data/settings.json") {
+        Some(_) => assert_true(true)
+        None => assert_true(false)
+      }
+      // Should not match non-json files
+      match bound.ambient_modules.lookup("config.js") {
+        None => assert_true(true)
+        Some(_) => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "regular namespace not treated as ambient" {
+  let result = parse_and_bind(
+    #|namespace MyNamespace {
+    #|  export const value = 42;
+    #|}
+    ,
+  )
+  match result {
+    Ok(bound) => {
+      // Regular namespace should be in global scope
+      assert_true(bound.global_scope.symbols.contains("MyNamespace"))
+      // Should not be in ambient modules registry
+      match bound.ambient_modules.lookup("MyNamespace") {
+        None => assert_true(true)
+        Some(_) => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}

@@ -18,6 +18,7 @@ pub struct Binder {
   next_container_id : Int
   file_path : String
   diagnostics : Array[Diagnostic]
+  ambient_modules : AmbientModuleRegistry // Registry for ambient module declarations
 } derive(Show)
 
 ///|
@@ -40,6 +41,7 @@ fn Binder::new(file_path : String) -> Binder {
     next_container_id: 1,
     file_path,
     diagnostics: [],
+    ambient_modules: AmbientModuleRegistry::new(),
   }
 }
 
@@ -70,6 +72,7 @@ pub fn bind_source_file(source_file : SourceFile) -> BindResult {
       diagnostics: binder.diagnostics,
       module_info,
       control_flow_graph,
+      ambient_modules: binder.ambient_modules,
     })
   }
 }
@@ -831,27 +834,58 @@ fn bind_module_declaration(
   binder : Binder,
   mod_decl : ModuleDeclaration,
 ) -> Binder {
-  let symbol = Symbol::new(
-    mod_decl.name,
-    SymbolKind::Module,
-    binder.next_symbol_id,
-  )
-  let symbol = symbol.add_declaration(Node::ModuleDeclaration(mod_decl))
-  let binder = declare_symbol(binder, mod_decl.name, symbol)
+  // Check if this is an ambient module declaration (declare module "pattern" { })
+  // The parser sets is_ambient=true when the name was a string literal
+  if mod_decl.is_ambient {
+    // For ambient modules, bind the body in a new scope and register in the ambient module registry
+    let binder = push_scope(binder)
+    let binder = push_container(binder, ContainerKind::Module)
 
-  // Push scope and container for module body
-  let binder = push_scope(binder)
-  let binder = push_container(binder, ContainerKind::Module)
+    // Bind module body if present
+    let binder = match mod_decl.body {
+      Some(body) => bind_statement(binder, body)
+      None => binder
+    }
 
-  // Bind module body if present
-  let binder = match mod_decl.body {
-    Some(body) => bind_statement(binder, body)
-    None => binder
+    // Get the exports from the module scope
+    let module_scope = binder.scopes[binder.current_scope_id]
+    let exports = module_scope.symbols
+
+    // Register the ambient module
+    binder.ambient_modules.register(
+      mod_decl.name,
+      exports,
+      mod_decl.body,
+      mod_decl.location,
+    )
+
+    // Pop container and scope
+    let binder = pop_container(binder)
+    pop_scope(binder)
+  } else {
+    // Regular namespace declaration
+    let symbol = Symbol::new(
+      mod_decl.name,
+      SymbolKind::Module,
+      binder.next_symbol_id,
+    )
+    let symbol = symbol.add_declaration(Node::ModuleDeclaration(mod_decl))
+    let binder = declare_symbol(binder, mod_decl.name, symbol)
+
+    // Push scope and container for module body
+    let binder = push_scope(binder)
+    let binder = push_container(binder, ContainerKind::Module)
+
+    // Bind module body if present
+    let binder = match mod_decl.body {
+      Some(body) => bind_statement(binder, body)
+      None => binder
+    }
+
+    // Pop container and scope
+    let binder = pop_container(binder)
+    pop_scope(binder)
   }
-
-  // Pop container and scope
-  let binder = pop_container(binder)
-  pop_scope(binder)
 }
 
 ///|

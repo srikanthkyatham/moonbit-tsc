@@ -570,6 +570,7 @@ pub struct BoundSourceFile {
   diagnostics : Array[Diagnostic]
   module_info : ModuleInfo
   control_flow_graph : ControlFlowGraph
+  ambient_modules : AmbientModuleRegistry // Ambient module declarations (declare module "pattern")
 } derive(Show)
 
 ///|
@@ -916,4 +917,123 @@ pub fn SymbolLinks::default() -> SymbolLinks {
     is_referenced: false,
     is_assigned: false,
   }
+}
+
+// ============================================================================
+// Ambient Module Registry
+// ============================================================================
+
+///|
+/// Information about an ambient module declaration
+pub struct AmbientModuleInfo {
+  /// Module specifier pattern (e.g., "*.css", "lodash", "express")
+  pattern : String
+  /// Is this a wildcard pattern?
+  is_wildcard : Bool
+  /// The symbol table for this module's exports
+  exports : SymbolTable
+  /// The bound AST body of the module (for later analysis)
+  body : Node?
+  /// Location of the declaration
+  location : SourceLocation
+} derive(Show)
+
+///|
+/// Registry of ambient module declarations
+pub struct AmbientModuleRegistry {
+  /// Exact module matches (e.g., "lodash", "express")
+  exact_modules : Map[String, AmbientModuleInfo]
+  /// Wildcard patterns (e.g., "*.css", "*.json")
+  wildcard_patterns : Array[AmbientModuleInfo]
+} derive(Show)
+
+///|
+/// Create an empty ambient module registry
+pub fn AmbientModuleRegistry::new() -> AmbientModuleRegistry {
+  { exact_modules: Map::new(), wildcard_patterns: [] }
+}
+
+///|
+/// Register an ambient module
+pub fn AmbientModuleRegistry::register(
+  self : AmbientModuleRegistry,
+  pattern : String,
+  exports : SymbolTable,
+  body : Node?,
+  location : SourceLocation,
+) -> Unit {
+  let is_wildcard = pattern.contains("*")
+  let info = AmbientModuleInfo::{
+    pattern,
+    is_wildcard,
+    exports,
+    body,
+    location,
+  }
+  if is_wildcard {
+    self.wildcard_patterns.push(info)
+  } else {
+    self.exact_modules[pattern] = info
+  }
+}
+
+///|
+/// Look up an ambient module by specifier
+/// Returns the exports symbol table if found
+pub fn AmbientModuleRegistry::lookup(
+  self : AmbientModuleRegistry,
+  specifier : String,
+) -> AmbientModuleInfo? {
+  // Try exact match first
+  match self.exact_modules.get(specifier) {
+    Some(info) => return Some(info)
+    None => ()
+  }
+
+  // Try wildcard patterns
+  for info in self.wildcard_patterns {
+    if match_ambient_pattern(info.pattern, specifier) {
+      return Some(info)
+    }
+  }
+
+  None
+}
+
+///|
+/// Match a module specifier against an ambient module pattern
+/// Supports wildcard patterns like "*.css", "*.json", "images/*"
+fn match_ambient_pattern(pattern : String, specifier : String) -> Bool {
+  // Find the * in the pattern
+  let mut star_idx = -1
+  for i = 0; i < pattern.length(); i = i + 1 {
+    if pattern[i] == '*' {
+      star_idx = i
+      break
+    }
+  }
+
+  if star_idx == -1 {
+    // No wildcard, exact match
+    return pattern == specifier
+  }
+
+  // Split pattern into prefix and suffix around *
+  let prefix = @utils.substr(pattern, start=0, end=star_idx)
+  let suffix = if star_idx + 1 < pattern.length() {
+    @utils.substr(pattern, start=star_idx + 1)
+  } else {
+    ""
+  }
+
+  // Check if specifier matches prefix....*....suffix
+  if not(specifier.has_prefix(prefix)) {
+    return false
+  }
+  if suffix.length() > 0 && not(specifier.has_suffix(suffix)) {
+    return false
+  }
+
+  // Ensure there's at least one character between prefix and suffix
+  specifier.length() >= prefix.length() + suffix.length()
 }

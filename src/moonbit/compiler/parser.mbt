@@ -3220,9 +3220,9 @@ fn parse_module_declaration_body(
   start_loc : SourceLocation,
 ) -> Result[(Node, Parser), Parser] {
   // Parse namespace/module name
-  let (name, parser) = match current_token(parser) {
-    Identifier(n, _) => (n, advance_parser(parser))
-    StringLiteral(s, _) => (s, advance_parser(parser)) // For ambient modules like declare module "fs"
+  let (name, is_ambient, parser) = match current_token(parser) {
+    Identifier(n, _) => (n, false, advance_parser(parser))
+    StringLiteral(s, _) => (s, true, advance_parser(parser)) // For ambient modules like declare module "fs"
     _ =>
       return Err(
         add_error(
@@ -3245,6 +3245,7 @@ fn parse_module_declaration_body(
               Node::ModuleDeclaration(ModuleDeclaration::{
                 name,
                 body: Some(body),
+                is_ambient,
                 location: SourceLocation::new(
                   start_loc.file_path,
                   start_loc.start,
@@ -3269,6 +3270,7 @@ fn parse_module_declaration_body(
               Node::ModuleDeclaration(ModuleDeclaration::{
                 name,
                 body: Some(nested),
+                is_ambient: false, // Dotted names are not ambient
                 location: SourceLocation::new(
                   start_loc.file_path,
                   start_loc.start,
@@ -3290,6 +3292,7 @@ fn parse_module_declaration_body(
           Node::ModuleDeclaration(ModuleDeclaration::{
             name,
             body: None,
+            is_ambient,
             location: start_loc,
           }),
           parser,
