@@ -1014,3 +1014,165 @@ test "emit interface with optional properties and methods" {
     }
   }
 }
+
+// ============================================================================
+// Mapped Type Key Remapping Tests (Computed Property Names)
+// ============================================================================
+
+///|
+/// Test: Mapped type with key remapping (as clause)
+test "emit mapped type with key remapping" {
+  let source = "type Getters<T> = { [K in keyof T as `get${string}`]: () => T[K] };"
+  let tokens = scan_all_v2(source, "test.ts")
+  match parse_source_file(tokens, "test.ts") {
+    Ok(source_file) => {
+      let ctx = DeclarationEmitterContext::default()
+      let output = emit_declaration_file(source_file, ctx)
+      println("\nMapped type with key remapping output:")
+      println(output)
+
+      // Should contain 'as' clause
+      assert_true(output.contains(" as "))
+      assert_true(output.contains("[K in keyof T as"))
+    }
+    Err(diagnostics) => {
+      println("Parse error:")
+      for i = 0; i < diagnostics.length(); i = i + 1 {
+        println("  " + diagnostics[i].message)
+      }
+      assert_true(false)
+    }
+  }
+}
+
+///|
+/// Test: Mapped type with readonly modifier
+test "emit mapped type with readonly" {
+  let source = "type ReadonlyRecord<K, V> = { readonly [P in K]: V };"
+  let tokens = scan_all_v2(source, "test.ts")
+  match parse_source_file(tokens, "test.ts") {
+    Ok(source_file) => {
+      let ctx = DeclarationEmitterContext::default()
+      let output = emit_declaration_file(source_file, ctx)
+      println("\nMapped type with readonly output:")
+      println(output)
+
+      // Should contain readonly modifier
+      assert_true(output.contains("readonly [P in K]"))
+    }
+    Err(diagnostics) => {
+      println("Parse error:")
+      for i = 0; i < diagnostics.length(); i = i + 1 {
+        println("  " + diagnostics[i].message)
+      }
+      assert_true(false)
+    }
+  }
+}
+
+///|
+/// Test: Mapped type with optional modifier
+test "emit mapped type with optional" {
+  let source = "type Optional<T> = { [P in keyof T]?: T[P] };"
+  let tokens = scan_all_v2(source, "test.ts")
+  match parse_source_file(tokens, "test.ts") {
+    Ok(source_file) => {
+      let ctx = DeclarationEmitterContext::default()
+      let output = emit_declaration_file(source_file, ctx)
+      println("\nMapped type with optional output:")
+      println(output)
+
+      // Should contain optional modifier after ]
+      assert_true(output.contains("]?:"))
+    }
+    Err(diagnostics) => {
+      println("Parse error:")
+      for i = 0; i < diagnostics.length(); i = i + 1 {
+        println("  " + diagnostics[i].message)
+      }
+      assert_true(false)
+    }
+  }
+}
+
+// ============================================================================
+// Labeled Tuple Elements Tests
+// ============================================================================
+
+///|
+/// Test: Labeled tuple type
+test "emit labeled tuple type" {
+  let source = "type Point = [x: number, y: number];"
+  let tokens = scan_all_v2(source, "test.ts")
+  match parse_source_file(tokens, "test.ts") {
+    Ok(source_file) => {
+      let ctx = DeclarationEmitterContext::default()
+      let output = emit_declaration_file(source_file, ctx)
+      println("\nLabeled tuple type output:")
+      println(output)
+
+      // Should contain labeled tuple syntax
+      assert_true(output.contains("x: number"))
+      assert_true(output.contains("y: number"))
+    }
+    Err(diagnostics) => {
+      println("Parse error:")
+      for i = 0; i < diagnostics.length(); i = i + 1 {
+        println("  " + diagnostics[i].message)
+      }
+      assert_true(false)
+    }
+  }
+}
+
+///|
+/// Test: Labeled tuple with optional element
+test "emit labeled tuple with optional" {
+  let source = "type Result = [success: boolean, data?: string];"
+  let tokens = scan_all_v2(source, "test.ts")
+  match parse_source_file(tokens, "test.ts") {
+    Ok(source_file) => {
+      let ctx = DeclarationEmitterContext::default()
+      let output = emit_declaration_file(source_file, ctx)
+      println("\nLabeled tuple with optional output:")
+      println(output)
+
+      // Should contain labeled tuple syntax with optional
+      assert_true(output.contains("success: boolean"))
+      assert_true(output.contains("data?: string"))
+    }
+    Err(diagnostics) => {
+      println("Parse error:")
+      for i = 0; i < diagnostics.length(); i = i + 1 {
+        println("  " + diagnostics[i].message)
+      }
+      assert_true(false)
+    }
+  }
+}
+
+///|
+/// Test: Labeled tuple in function signature
+test "emit labeled tuple in function" {
+  let source = "function getPoint(): [x: number, y: number] { return [0, 0]; }"
+  let tokens = scan_all_v2(source, "test.ts")
+  match parse_source_file(tokens, "test.ts") {
+    Ok(source_file) => {
+      let ctx = DeclarationEmitterContext::default()
+      let output = emit_declaration_file(source_file, ctx)
+      println("\nLabeled tuple in function output:")
+      println(output)
+
+      // Should contain labeled tuple as return type
+      assert_true(output.contains("x: number"))
+      assert_true(output.contains("y: number"))
+    }
+    Err(diagnostics) => {
+      println("Parse error:")
+      for i = 0; i < diagnostics.length(); i = i + 1 {
+        println("  " + diagnostics[i].message)
+      }
+      assert_true(false)
+    }
+  }
+}

@@ -680,6 +680,23 @@ fn parse_primary_type_with_readonly(
                   match parse_type(parser) {
                     Ok((constraint_type, p)) => {
                       parser = p
+
+                      // Check for 'as' clause (key remapping)
+                      // e.g., { [K in keyof T as `get${K}`]: V }
+                      let name_type : Node? = match current_token(parser) {
+                        KeywordAs(_) => {
+                          parser = advance_parser(parser) // consume 'as'
+                          match parse_type(parser) {
+                            Ok((nt, p2)) => {
+                              parser = p2
+                              Some(nt)
+                            }
+                            Err(_) => None
+                          }
+                        }
+                        _ => None
+                      }
+
                       // Expect ]
                       match current_token(parser) {
                         CloseBracket(_) => {
@@ -746,6 +763,7 @@ fn parse_primary_type_with_readonly(
                                               is_const: false,
                                               location: param_loc,
                                             },
+                                            name_type,
                                             type_node: Some(value_type),
                                             readonly_modifier,
                                             optional_modifier,
@@ -955,34 +973,45 @@ fn parse_primary_type_with_readonly(
               _ => false
             }
 
-            // Parse type (ignoring optional name: prefix for now)
+            // Parse type element - can be "name: type", "name?: type", or just type
             let (elem_type, new_parser) = match current_token(parser) {
-              Identifier(_, _) => {
-                // Could be "name: type" or just a type reference
+              Identifier(name, name_loc) => {
+                // Could be "name: type", "name?: type", or just a type reference
                 let saved_parser = parser
                 parser = advance_parser(parser)
                 match current_token(parser) {
                   Colon(_) => {
-                    // It's a named tuple element, skip the name and parse the type
+                    // It's a named tuple element: name: type
                     parser = advance_parser(parser)
                     match parse_type(parser) {
-                      Ok((t, p)) => (t, p)
+                      Ok((t, p)) => {
+                        let named_member = Node::NamedTupleMember(NamedTupleMember::{
+                          name,
+                          element_type: t,
+                          is_optional: false,
+                          location: name_loc,
+                        })
+                        (named_member, p)
+                      }
                       Err(p) => return Err(p)
                     }
                   }
                   Question(_) => {
-                    // named?: type - named optional element
+                    // name?: type - named optional element
                     parser = advance_parser(parser) // consume ?
                     match current_token(parser) {
                       Colon(_) => {
                         parser = advance_parser(parser)
                         match parse_type(parser) {
                           Ok((t, p)) => {
-                            let opt_type = Node::OptionalType(OptionalType::{
+                            // Create a NamedTupleMember with is_optional = true
+                            let named_member = Node::NamedTupleMember(NamedTupleMember::{
+                              name,
                               element_type: t,
-                              location: get_location(t),
+                              is_optional: true,
+                              location: name_loc,
                             })
-                            (opt_type, p)
+                            (named_member, p)
                           }
                           Err(p) => return Err(p)
                         }

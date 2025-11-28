@@ -97,6 +97,7 @@ pub enum Node {
   IndexedAccessType(IndexedAccessType)
   OptionalType(OptionalType)
   RestType(RestType)
+  NamedTupleMember(NamedTupleMember)
   TypePredicate(TypePredicate)
   TypeOperator(TypeOperator)
   InferType(InferType)
@@ -906,6 +907,7 @@ pub enum MappedTypeModifier {
 ///|
 pub struct MappedType {
   type_parameter : TypeParameter
+  name_type : Node? // Key remapping: { [K in keyof T as NewKey]: V }
   type_node : Node?
   readonly_modifier : MappedTypeModifier
   optional_modifier : MappedTypeModifier
@@ -948,6 +950,15 @@ pub struct TypePredicate {
   parameter_name : String
   type_node : Node? // The type in "x is type" - None for "asserts x"
   is_asserts : Bool // True for "asserts x" or "asserts x is type"
+  location : SourceLocation
+} derive(Show)
+
+///|
+/// Named tuple member (labeled element in tuple type): [x: number, y: string]
+pub struct NamedTupleMember {
+  name : String
+  element_type : Node
+  is_optional : Bool // name?: type
   location : SourceLocation
 } derive(Show)
 
@@ -1551,6 +1562,7 @@ pub fn get_location(node : Node) -> SourceLocation {
     IndexedAccessType(i) => i.location
     OptionalType(o) => o.location
     RestType(r) => r.location
+    NamedTupleMember(ntm) => ntm.location
     TypePredicate(tp) => tp.location
     TypeOperator(to) => to.location
     InferType(it) => it.location

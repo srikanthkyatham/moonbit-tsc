@@ -208,6 +208,7 @@ pub fn emit(node : Node, ctx : EmitterContext) -> String {
     IndexedAccessType(_) => ""
     OptionalType(_) => ""
     RestType(_) => ""
+    NamedTupleMember(_) => ""
     TypePredicate(_) => ""
     TypeOperator(_) => ""
     InferType(_) => ""

@@ -357,6 +357,7 @@ pub fn transform(node : Node, ctx : TransformerContext) -> Node {
     | IndexedAccessType(_)
     | OptionalType(_)
     | RestType(_)
+    | NamedTupleMember(_)
     | TypePredicate(_)
     | TypeOperator(_)
     | InferType(_)

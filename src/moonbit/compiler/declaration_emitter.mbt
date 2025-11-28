@@ -937,8 +937,50 @@ fn emit_decl_type_node(node : Node, ctx : DeclarationEmitterContext) -> String {
     IndexedAccessType(indexed) => emit_decl_indexed_access_type(indexed, ctx)
     ConditionalType(cond) => emit_decl_conditional_type(cond, ctx)
     MappedType(mapped) => emit_decl_mapped_type(mapped, ctx)
+    TypeOperator(type_op) => emit_decl_type_operator(type_op, ctx)
+    TemplateLiteralType(tlt) => emit_decl_template_literal_type(tlt, ctx)
+    NamedTupleMember(ntm) => emit_decl_named_tuple_member(ntm, ctx)
     _ => "any"
   }
+}
+
+///|
+/// Emit a type operator (keyof T, typeof x, readonly T, unique symbol)
+fn emit_decl_type_operator(
+  type_op : TypeOperator,
+  ctx : DeclarationEmitterContext,
+) -> String {
+  let keyword = match type_op.operator {
+    TypeOperatorKind::KeyOf => "keyof"
+    TypeOperatorKind::TypeOf => "typeof"
+    TypeOperatorKind::Unique => "unique"
+    TypeOperatorKind::Readonly => "readonly"
+  }
+  keyword + " " + emit_decl_type_node(type_op.type_node, ctx)
+}
+
+///|
+/// Emit a template literal type (`prefix${Type}suffix`)
+fn emit_decl_template_literal_type(
+  tlt : TemplateLiteralType,
+  ctx : DeclarationEmitterContext,
+) -> String {
+  let mut output = "`" + tlt.head
+  for span in tlt.spans {
+    output = output + "${" + emit_decl_type_node(span.type_node, ctx) + "}" +
+      span.literal
+  }
+  output + "`"
+}
+
+///|
+/// Emit a named tuple member (name: type or name?: type)
+fn emit_decl_named_tuple_member(
+  ntm : NamedTupleMember,
+  ctx : DeclarationEmitterContext,
+) -> String {
+  let optional_marker = if ntm.is_optional { "?" } else { "" }
+  ntm.name + optional_marker + ": " + emit_decl_type_node(ntm.element_type, ctx)
 }
 
 ///|
@@ -1077,18 +1119,43 @@ fn emit_decl_mapped_type(
   mapped : MappedType,
   ctx : DeclarationEmitterContext,
 ) -> String {
-  let mut output = "{ [" + mapped.type_parameter.name + " in "
+  let mut output = "{ "
+
+  // Emit readonly modifier
+  match mapped.readonly_modifier {
+    MappedTypeModifier::Plus => output = output + "readonly "
+    MappedTypeModifier::Minus => output = output + "-readonly "
+    MappedTypeModifier::Unchanged => ()
+  }
+
+  output = output + "[" + mapped.type_parameter.name + " in "
   match mapped.type_parameter.constraint {
     Some(constraint) => output = output + emit_decl_type_node(constraint, ctx)
     None => output = output + "any"
   }
+
+  // Emit 'as' clause for key remapping
+  match mapped.name_type {
+    Some(name_type) =>
+      output = output + " as " + emit_decl_type_node(name_type, ctx)
+    None => ()
+  }
+
   output = output + "]"
+
+  // Emit optional modifier
+  match mapped.optional_modifier {
+    MappedTypeModifier::Plus => output = output + "?"
+    MappedTypeModifier::Minus => output = output + "-?"
+    MappedTypeModifier::Unchanged => ()
+  }
+
   match mapped.type_node {
     Some(type_node) =>
       output = output + ": " + emit_decl_type_node(type_node, ctx)
     None => output = output + ": any"
   }
-  output + " }"
+  output + "; }"
 }
 
 ///|
