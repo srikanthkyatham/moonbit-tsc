@@ -1,5 +1,52 @@
 // Type Error System - Rich Error Types and Formatting
 // Provides detailed error messages with path tracking and suggestions
+// Inspired by Elm's friendly compiler and Rust's helpful diagnostics
+
+// ============================================================================
+// Documentation Links - TypeScript Error Reference
+// ============================================================================
+
+///|
+/// Get the documentation URL for a TypeScript error code
+pub fn get_error_doc_url(code : Int) -> String {
+  "https://typescript.tv/errors/#TS" + code.to_string()
+}
+
+///|
+/// Get the TypeScript handbook URL for common topics
+pub fn get_handbook_url(topic : String) -> String {
+  "https://www.typescriptlang.org/docs/handbook/" + topic + ".html"
+}
+
+// ============================================================================
+// Detailed Error Structure - Elm/Rust Inspired
+// ============================================================================
+
+///|
+/// A detailed, user-friendly error message inspired by Elm and Rust compilers.
+///
+/// Elm's philosophy: "Compiler errors should be a dialogue, not a wall of text"
+/// Rust's philosophy: "Every error should tell you what, where, why, and how to fix"
+pub struct DetailedError {
+  /// The main error title (short, actionable)
+  title : String
+  /// Error code for lookup (e.g., TS2322)
+  code : Int
+  /// Where the error occurred (file, line, column)
+  location : String
+  /// The problematic code snippet with highlighting
+  code_snippet : String
+  /// What went wrong - clear explanation of the issue
+  what_went_wrong : String
+  /// Why this is an error - educational context
+  why_error : String
+  /// How to fix it - actionable suggestions with examples
+  how_to_fix : Array[String]
+  /// Link to documentation
+  doc_link : String
+  /// Related errors (for complex type mismatches)
+  related : Array[DetailedError]
+} derive(Show)
 
 ///|
 /// Rich error type with path tracking, nested errors, and suggestions
@@ -613,4 +660,588 @@ fn levenshtein_distance(a : String, b : String) -> Int {
     }
   }
   prev[n]
+}
+
+// ============================================================================
+// Elm/Rust-Inspired Error Explanations
+// ============================================================================
+
+///|
+/// Get a friendly error title based on the mismatch reason (Elm-style)
+pub fn get_friendly_title(reason : MismatchReason) -> String {
+  match reason {
+    IncompatibleTypes => "TYPE MISMATCH"
+    MissingProperty(name) => "MISSING PROPERTY '" + name + "'"
+    ExcessProperty(name) => "UNEXPECTED PROPERTY '" + name + "'"
+    PropertyTypeMismatch(name) => "WRONG TYPE FOR '" + name + "'"
+    ParamCountMismatch(_, _) => "WRONG NUMBER OF ARGUMENTS"
+    ParamTypeMismatch(_, name) => "WRONG TYPE FOR PARAMETER '" + name + "'"
+    ReturnTypeMismatch => "RETURN TYPE MISMATCH"
+    NoUnionMemberMatches => "NO MATCHING UNION MEMBER"
+    TypeArgMismatch(name, _) => "TYPE ARGUMENT MISMATCH: " + name
+    ConstraintNotSatisfied(name, _) => "CONSTRAINT NOT SATISFIED: " + name
+    CannotInfer(name) => "CANNOT INFER TYPE: " + name
+    ReadonlyMutation(name) => "CANNOT MODIFY READONLY '" + name + "'"
+    OptionalToRequired(name) => "OPTIONAL VS REQUIRED: '" + name + "'"
+    IndexSignatureMismatch => "INDEX SIGNATURE MISMATCH"
+    LiteralMismatch(_, _) => "LITERAL TYPE MISMATCH"
+    LiteralToWide => "LITERAL TYPE TOO WIDE"
+    CircularReference => "CIRCULAR TYPE REFERENCE"
+    ExcessiveDepth => "TYPE TOO DEEPLY NESTED"
+    NotCallable => "TYPE IS NOT CALLABLE"
+    NotConstructable => "TYPE IS NOT CONSTRUCTABLE"
+    UnboundVariable(name) => "CANNOT FIND NAME '" + name + "'"
+    UnboundType(name) => "CANNOT FIND TYPE '" + name + "'"
+    IntersectionNotSatisfied(_) => "INTERSECTION TYPE NOT SATISFIED"
+  }
+}
+
+///|
+/// Get a "why this happens" explanation (educational context like Elm provides)
+pub fn get_why_explanation(reason : MismatchReason) -> String {
+  match reason {
+    IncompatibleTypes =>
+      "TypeScript uses structural typing, which means types are compatible based on their structure (properties and methods), not their names. I found that the structure of these two types doesn't match."
+    MissingProperty(name) =>
+      "The target type requires a property named '" +
+      name +
+      "', but it's not present in the source type. TypeScript needs all required properties to be defined."
+    ExcessProperty(_) =>
+      "When using object literals, TypeScript performs 'excess property checking' to catch typos and unintended properties. This is stricter than normal structural typing because object literals are more likely to contain mistakes."
+    PropertyTypeMismatch(name) =>
+      "The property '" +
+      name +
+      "' exists in both types, but with different types. For structural compatibility, matching properties must have compatible types."
+    ParamCountMismatch(expected, actual) =>
+      "The function expects " +
+      expected.to_string() +
+      " argument(s), but " +
+      actual.to_string() +
+      " were provided. Function calls must pass the correct number of arguments."
+    ParamTypeMismatch(index, name) =>
+      "Parameter '" +
+      name +
+      "' (at position " +
+      index.to_string() +
+      ") has an incompatible type. Function parameters must match the expected types."
+    ReturnTypeMismatch =>
+      "The function's return type doesn't match what's expected. When a function is used in a context expecting a specific return type, the actual return must be compatible."
+    NoUnionMemberMatches =>
+      "Union types (A | B | C) require the value to match at least one member. I checked each member but none were compatible with the provided type."
+    TypeArgMismatch(name, _) =>
+      "Generic type parameter '" +
+      name +
+      "' was instantiated with incompatible types. When using generics, the type arguments must be consistent throughout."
+    ConstraintNotSatisfied(name, _) =>
+      "Generic type parameter '" +
+      name +
+      "' has a constraint that must be satisfied. The provided type doesn't meet this requirement."
+    CannotInfer(name) =>
+      "I couldn't automatically determine what type '" +
+      name +
+      "' should be. This usually happens when there's not enough context to infer the type."
+    ReadonlyMutation(_) =>
+      "Properties marked as 'readonly' cannot be reassigned after initialization. This is a TypeScript feature to prevent accidental mutations."
+    OptionalToRequired(_) =>
+      "Optional properties (with ?) may be undefined, but required properties must always have a value. Assigning an optional to a required property could cause runtime errors."
+    IndexSignatureMismatch =>
+      "Index signatures define the types of properties accessed by index (like obj[key]). The source and target have incompatible index signatures."
+    LiteralMismatch(expected, actual) =>
+      "Literal types are exact values, not just their primitive type. The literal '" +
+      actual +
+      "' is different from the expected literal '" +
+      expected +
+      "'."
+    LiteralToWide =>
+      "A literal type is being assigned where a more general type is expected. This might cause the literal type information to be lost."
+    CircularReference =>
+      "I detected a circular reference in the type definition. The type refers to itself in a way that creates an infinite loop."
+    ExcessiveDepth =>
+      "The type nesting is too deep for me to analyze safely. This might indicate an overly complex type or a bug in the type definition."
+    NotCallable =>
+      "You're trying to call something as a function, but it doesn't have a call signature. Only functions, methods, and callable objects can be called with ()."
+    NotConstructable =>
+      "You're trying to use 'new' on something that isn't a constructor. Only classes and constructor functions can be instantiated with 'new'."
+    UnboundVariable(name) =>
+      "I cannot find any variable, function, or value named '" +
+      name +
+      "' in the current scope. This could be a typo or the value might need to be imported/declared."
+    UnboundType(name) =>
+      "I cannot find any type named '" +
+      name +
+      "' in the current scope. This could be a typo or the type might need to be imported/declared."
+    IntersectionNotSatisfied(_) =>
+      "Intersection types (A & B) require the value to satisfy all member types simultaneously. The provided value doesn't meet all requirements."
+  }
+}
+
+///|
+/// Get detailed "how to fix" suggestions with code examples
+pub fn get_how_to_fix(
+  reason : MismatchReason,
+  actual : TypeV2,
+  expected : TypeV2,
+) -> Array[String] {
+  let fixes : Array[String] = []
+  match reason {
+    IncompatibleTypes => {
+      fixes.push(
+        "Option 1: Ensure the source value has the correct structure to match the expected type.",
+      )
+      fixes.push("Option 2: Use a type assertion if you're certain the types are compatible:")
+      fixes.push("          value as ExpectedType")
+      fixes.push(
+        "Option 3: Check if there's a type mismatch in your function parameters or return values.",
+      )
+    }
+    MissingProperty(name) => {
+      fixes.push(
+        "Add the missing property '" + name + "' to your object:",
+      )
+      fixes.push(
+        "    { ...existingObj, " + name + ": /* value */ }",
+      )
+      fixes.push("")
+      fixes.push(
+        "Or mark the property as optional in the target type using '?':",
+      )
+      fixes.push("    interface Target { " + name + "?: SomeType; }")
+    }
+    ExcessProperty(name) => {
+      fixes.push(
+        "Option 1: Remove the extra property '" + name + "' from your object literal.",
+      )
+      fixes.push("")
+      fixes.push(
+        "Option 2: If you need the property, add it to the target type definition.",
+      )
+      fixes.push("")
+      fixes.push("Option 3: Use a type assertion to bypass excess property checking:")
+      fixes.push("    const obj = { " + name + ": value } as TargetType;")
+      fixes.push("")
+      fixes.push("Option 4: Add an index signature to allow additional properties:")
+      fixes.push("    interface Target { [key: string]: unknown; }")
+    }
+    PropertyTypeMismatch(name) => {
+      fixes.push(
+        "Fix the type of property '" + name + "' in your source value to match the expected type.",
+      )
+      fixes.push("")
+      fixes.push("If you're certain the types are compatible, use a type assertion:")
+      fixes.push(
+        "    { " + name + ": value as ExpectedPropertyType }",
+      )
+    }
+    ParamCountMismatch(expected_count, actual_count) =>
+      if actual_count > expected_count {
+        fixes.push(
+          "You're passing too many arguments. Remove " +
+          (actual_count - expected_count).to_string() +
+          " argument(s).",
+        )
+      } else {
+        fixes.push(
+          "You're passing too few arguments. Add " +
+          (expected_count - actual_count).to_string() +
+          " more argument(s).",
+        )
+        fixes.push("")
+        fixes.push(
+          "Or check if some parameters should be optional in the function definition:",
+        )
+        fixes.push("    function fn(required: A, optional?: B) { ... }")
+      }
+    ParamTypeMismatch(index, name) => {
+      fixes.push(
+        "Fix the type of argument at position " + index.to_string() + " ('" + name + "').",
+      )
+      fixes.push("")
+      fixes.push("Example:")
+      fixes.push("    // Instead of: fn(wrongValue)")
+      fixes.push("    // Use:        fn(correctValue as ExpectedType)")
+    }
+    ReturnTypeMismatch => {
+      fixes.push(
+        "Ensure your function returns a value of the expected type.",
+      )
+      fixes.push("")
+      fixes.push("Example fix:")
+      fixes.push("    function example(): ExpectedType {")
+      fixes.push("        return correctValue; // Make sure this matches ExpectedType")
+      fixes.push("    }")
+    }
+    NoUnionMemberMatches =>
+      match expected {
+        TUnion(members) => {
+          fixes.push("Your value must be one of these types:")
+          for m in members {
+            fixes.push("  - " + format_type_v2(m))
+          }
+          fixes.push("")
+          fixes.push("Transform your value to match one of the union members.")
+        }
+        _ =>
+          fixes.push(
+            "Transform your value to match one of the union's member types.",
+          )
+      }
+    TypeArgMismatch(name, _) => {
+      fixes.push(
+        "Ensure the type argument for '" + name + "' is consistent throughout your code.",
+      )
+      fixes.push("")
+      fixes.push("Example:")
+      fixes.push(
+        "    // If you have: const arr: Array<number> = [1, 2, 3];",
+      )
+      fixes.push(
+        "    // Don't do:   arr.push('string'); // Type argument mismatch!",
+      )
+    }
+    ConstraintNotSatisfied(_, constraint) => {
+      fixes.push(
+        "Your type must satisfy this constraint: " + format_type_v2(constraint),
+      )
+      fixes.push("")
+      fixes.push(
+        "Example: if the constraint is 'extends { id: number }', your type must have an 'id' property of type 'number'.",
+      )
+    }
+    CannotInfer(name) => {
+      fixes.push("Provide an explicit type argument for '" + name + "':")
+      fixes.push("    genericFunction<ExplicitType>(value)")
+      fixes.push("")
+      fixes.push("Or ensure the context provides enough information for inference.")
+    }
+    ReadonlyMutation(name) => {
+      fixes.push(
+        "The property '" + name + "' is readonly and cannot be changed.",
+      )
+      fixes.push("")
+      fixes.push("Options:")
+      fixes.push(
+        "1. Create a new object with the updated value instead of mutating:",
+      )
+      fixes.push(
+        "       const updated = { ...original, " + name + ": newValue };",
+      )
+      fixes.push("2. Remove 'readonly' from the property definition if mutation is needed.")
+    }
+    OptionalToRequired(name) => {
+      fixes.push(
+        "Ensure '" + name + "' is always defined before using it as a required value:",
+      )
+      fixes.push("    if (obj." + name + " !== undefined) {")
+      fixes.push("        useAsRequired(obj." + name + ");")
+      fixes.push("    }")
+      fixes.push("")
+      fixes.push("Or provide a default value:")
+      fixes.push("    const value = obj." + name + " ?? defaultValue;")
+    }
+    IndexSignatureMismatch => {
+      fixes.push(
+        "Ensure the index signature types match between source and target.",
+      )
+      fixes.push("")
+      fixes.push(
+        "If source has [key: string]: A and target expects [key: string]: B,",
+      )
+      fixes.push("then A must be assignable to B.")
+    }
+    LiteralMismatch(expected_lit, actual_lit) => {
+      fixes.push(
+        "The literal value '" +
+        actual_lit +
+        "' doesn't match the expected '" +
+        expected_lit +
+        "'.",
+      )
+      fixes.push("")
+      fixes.push("Either change your value or update the type to accept both literals:")
+      fixes.push(
+        "    type AllowedValues = '" + expected_lit + "' | '" + actual_lit + "';",
+      )
+    }
+    LiteralToWide => {
+      fixes.push("To preserve the literal type, use 'as const':")
+      fixes.push("    const value = 'literal' as const;")
+      fixes.push("")
+      fixes.push("Or use a const assertion on the whole object:")
+      fixes.push("    const obj = { key: 'value' } as const;")
+    }
+    CircularReference => {
+      fixes.push("Break the circular reference by using a type alias or interface:")
+      fixes.push("    type Node = { next?: Node };  // OK: optional breaks cycle")
+      fixes.push("")
+      fixes.push("Or restructure your types to avoid self-reference.")
+    }
+    ExcessiveDepth => {
+      fixes.push("Simplify your type structure. Consider:")
+      fixes.push("1. Breaking down deeply nested types into smaller parts")
+      fixes.push("2. Using type aliases to reduce repetition")
+      fixes.push("3. Checking for accidentally recursive types")
+    }
+    NotCallable => {
+      fixes.push("This value cannot be called as a function.")
+      fixes.push("")
+      match actual {
+        TObject(_) => {
+          fixes.push("If this is an object, check if you meant to access a method:")
+          fixes.push("    // Instead of: obj()")
+          fixes.push("    // Try:        obj.methodName()")
+        }
+        TUndefined | TNull => {
+          fixes.push("The value might be undefined or null. Add a check:")
+          fixes.push("    if (fn !== undefined) { fn(); }")
+        }
+        _ => fixes.push("Verify that you have the correct variable or import.")
+      }
+    }
+    NotConstructable => {
+      fixes.push(
+        "Only classes and constructor functions can be used with 'new'.",
+      )
+      fixes.push("")
+      fixes.push("If this is a function, call it directly without 'new':")
+      fixes.push("    // Instead of: new myFunction()")
+      fixes.push("    // Try:        myFunction()")
+    }
+    UnboundVariable(name) => {
+      fixes.push("'" + name + "' is not defined in this scope.")
+      fixes.push("")
+      fixes.push("Possible solutions:")
+      fixes.push("1. Check for typos in the variable name")
+      fixes.push("2. Import it from another module:")
+      fixes.push("       import { " + name + " } from './module';")
+      fixes.push("3. Declare it before use:")
+      fixes.push("       const " + name + " = /* value */;")
+    }
+    UnboundType(name) => {
+      fixes.push("Type '" + name + "' is not defined in this scope.")
+      fixes.push("")
+      fixes.push("Possible solutions:")
+      fixes.push("1. Check for typos in the type name")
+      fixes.push("2. Import the type from another module:")
+      fixes.push("       import type { " + name + " } from './types';")
+      fixes.push("3. Define the type:")
+      fixes.push("       type " + name + " = { /* properties */ };")
+      fixes.push("       // or")
+      fixes.push("       interface " + name + " { /* properties */ }")
+    }
+    IntersectionNotSatisfied(_) => {
+      fixes.push(
+        "Your value must satisfy all types in the intersection simultaneously.",
+      )
+      fixes.push("")
+      fixes.push("For an intersection type A & B, your value needs:")
+      fixes.push("- All properties from type A")
+      fixes.push("- All properties from type B")
+      fixes.push("- All methods from both types")
+    }
+  }
+  fixes
+}
+
+///|
+/// Get the appropriate TypeScript error code for a mismatch reason
+pub fn get_error_code(reason : MismatchReason) -> Int {
+  match reason {
+    IncompatibleTypes | PropertyTypeMismatch(_) | LiteralMismatch(_, _) | LiteralToWide =>
+      2322
+    MissingProperty(_) | ExcessProperty(_) | OptionalToRequired(_) | IndexSignatureMismatch =>
+      2322
+    ParamCountMismatch(_, _) => 2554
+    ParamTypeMismatch(_, _) => 2345
+    ReturnTypeMismatch => 2355
+    NoUnionMemberMatches => 2322
+    TypeArgMismatch(_, _) => 2344
+    ConstraintNotSatisfied(_, _) => 2344
+    CannotInfer(_) => 2558
+    ReadonlyMutation(_) => 2588
+    NotCallable => 2349
+    NotConstructable => 2511
+    UnboundVariable(_) | UnboundType(_) => 2304
+    CircularReference | ExcessiveDepth => 2322
+    IntersectionNotSatisfied(_) => 2322
+  }
+}
+
+// ============================================================================
+// Elm/Rust-Style Error Formatting
+// ============================================================================
+
+///|
+/// Format error in Elm/Rust style with helpful context
+/// This produces human-friendly output that helps developers understand AND fix the issue
+pub fn format_detailed_error(
+  error : TypeMismatchError,
+  file_path : String,
+  line : Int,
+  column : Int,
+  source_line : String,
+) -> String {
+  let mut output = ""
+  let code = get_error_code(error.reason)
+
+  // ── Header (Elm style) ──────────────────────────────────────────────────
+  let title = get_friendly_title(error.reason)
+  output = output + "-- " + title + " "
+  output = output + string_repeat("-", 60 - title.length()) + " "
+  output = output + file_path + "\n\n"
+
+  // ── Location & Code Snippet ─────────────────────────────────────────────
+  let line_num_str = line.to_string()
+  let padding = string_repeat(" ", line_num_str.length())
+
+  output = output + padding + " |\n"
+  output = output + line_num_str + " | " + source_line + "\n"
+  output = output + padding + " | " + string_repeat(" ", column - 1) + "^"
+
+  // Add wavy underline for multi-character issues
+  output = output + "~~~\n\n"
+
+  // ── What Went Wrong (Rust style) ────────────────────────────────────────
+  output = output + "I found a type error:\n\n"
+  output = output +
+    "    Expected: " +
+    format_type_v2(error.expected) +
+    "\n"
+  output = output + "    Found:    " + format_type_v2(error.actual) + "\n\n"
+
+  // ── Why This Happens (Elm educational style) ────────────────────────────
+  output = output + "WHY THIS HAPPENS:\n"
+  output = output + "    " + get_why_explanation(error.reason) + "\n\n"
+
+  // ── How To Fix (Rust suggestion style) ──────────────────────────────────
+  output = output + "HOW TO FIX:\n"
+  let fixes = get_how_to_fix(error.reason, error.actual, error.expected)
+  for fix in fixes {
+    output = output + "    " + fix + "\n"
+  }
+
+  // ── Additional Suggestions ──────────────────────────────────────────────
+  if error.suggestions.length() > 0 {
+    output = output + "\nHINTS:\n"
+    for suggestion in error.suggestions {
+      output = output + "    - " + suggestion + "\n"
+    }
+  }
+
+  // ── Child Errors (for nested issues) ────────────────────────────────────
+  if error.children.length() > 0 {
+    output = output + "\nRELATED ISSUES:\n"
+    for child in error.children {
+      output = output +
+        "    - " +
+        get_friendly_title(child.reason) +
+        "\n"
+      output = output +
+        "      " +
+        format_type_v2(child.actual) +
+        " vs " +
+        format_type_v2(child.expected) +
+        "\n"
+    }
+  }
+
+  // ── Documentation Link ──────────────────────────────────────────────────
+  output = output + "\nLEARN MORE:\n"
+  output = output + "    Error TS" + code.to_string() + ": " + get_error_doc_url(code) + "\n"
+  output = output +
+    "    TypeScript Handbook: " +
+    get_handbook_url("2/types-from-types") +
+    "\n"
+
+  output
+}
+
+///|
+/// Convert TypeMismatchError to DetailedError for structured error handling
+pub fn to_detailed_error(
+  error : TypeMismatchError,
+  file_path : String,
+  line : Int,
+  column : Int,
+  source_line : String,
+) -> DetailedError {
+  let code = get_error_code(error.reason)
+  let related : Array[DetailedError] = []
+
+  // Convert children recursively
+  for child in error.children {
+    related.push(
+      to_detailed_error(child, file_path, line, column, ""),
+    )
+  }
+
+  {
+    title: get_friendly_title(error.reason),
+    code,
+    location: file_path + ":" + line.to_string() + ":" + column.to_string(),
+    code_snippet: source_line,
+    what_went_wrong: "Expected " +
+      format_type_v2(error.expected) +
+      ", found " +
+      format_type_v2(error.actual),
+    why_error: get_why_explanation(error.reason),
+    how_to_fix: get_how_to_fix(error.reason, error.actual, error.expected),
+    doc_link: get_error_doc_url(code),
+    related,
+  }
+}
+
+///|
+/// Format a simple one-line error for compact output (like Rust's short form)
+pub fn format_compact_error(
+  error : TypeMismatchError,
+  file_path : String,
+  line : Int,
+  column : Int,
+) -> String {
+  let code = get_error_code(error.reason)
+  let title = string_to_lower(get_friendly_title(error.reason))
+  "error[TS" +
+  code.to_string() +
+  "]: " +
+  file_path +
+  ":" +
+  line.to_string() +
+  ":" +
+  column.to_string() +
+  " - " +
+  title +
+  ": expected `" +
+  format_type_v2(error.expected) +
+  "`, found `" +
+  format_type_v2(error.actual) +
+  "`"
+}
+
+///|
+/// Simple string lowercase helper for error formatting
+pub fn string_to_lower(s : String) -> String {
+  let result : Array[Char] = []
+  for c in s {
+    let code = c.to_int()
+    if code >= 65 && code <= 90 {
+      result.push(Int::unsafe_to_char(code + 32))
+    } else {
+      result.push(c)
+    }
+  }
+  let mut output = ""
+  for ch in result {
+    output = output + ch.to_string()
+  }
+  output
+}
+
+///|
+/// Simple string repeat helper for error formatting
+pub fn string_repeat(s : String, n : Int) -> String {
+  let mut result = ""
+  for _ in 0..<n {
+    result = result + s
+  }
+  result
 }

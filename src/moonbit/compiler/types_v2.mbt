@@ -71,6 +71,64 @@ pub fn ObjectTypeV2::empty() -> ObjectTypeV2 {
   }
 }
 
+// ============================================================================
+// Factory Functions for Type Creation (for testing and external use)
+// ============================================================================
+
+///|
+/// Create a string type
+pub fn create_string_type() -> TypeV2 {
+  TString
+}
+
+///|
+/// Create a number type
+pub fn create_number_type() -> TypeV2 {
+  TNumber
+}
+
+///|
+/// Create a boolean type
+pub fn create_boolean_type() -> TypeV2 {
+  TBoolean
+}
+
+///|
+/// Create an any type
+pub fn create_any_type() -> TypeV2 {
+  TAny
+}
+
+///|
+/// Create a void type
+pub fn create_void_type() -> TypeV2 {
+  TVoid
+}
+
+///|
+/// Create a null type
+pub fn create_null_type() -> TypeV2 {
+  TNull
+}
+
+///|
+/// Create an undefined type
+pub fn create_undefined_type() -> TypeV2 {
+  TUndefined
+}
+
+///|
+/// Create an empty object type
+pub fn create_empty_object_type() -> TypeV2 {
+  TObject(ObjectTypeV2::empty())
+}
+
+///|
+/// Create an error type (for invalid types)
+pub fn create_error_type() -> TypeV2 {
+  TError
+}
+
 ///|
 /// Field/property information
 pub struct FieldInfoV2 {

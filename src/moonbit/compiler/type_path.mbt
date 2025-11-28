@@ -23,6 +23,12 @@ pub enum TypePath {
 } derive(Show, Eq)
 
 ///|
+/// Create a root TypePath (factory function for external use)
+pub fn TypePath::root() -> TypePath {
+  PRoot
+}
+
+///|
 /// Convert TypePath to human-readable string for error messages
 pub fn TypePath::to_string(self : TypePath) -> String {
   match self {
