@@ -1826,31 +1826,17 @@ test "module augmentation with export modifier" {
 
 ///|
 test "multiple module augmentations in same file" {
-  println("DEBUG: Starting multiple module augmentations test")
   // File can have multiple augmentations
   let source =
     #|import { x } from "something";
     #|declare module "express" { interface Request { session?: any; } }
     #|declare module "koa" { interface Context { user?: string; } }
-  println("DEBUG: Source created, length: " + source.length().to_string())
-  println("DEBUG: About to scan")
-  let tokens = @compiler.scan_all_v2(source, "test.ts")
-  println("DEBUG: Scan complete, tokens: " + tokens.length().to_string())
-  println("DEBUG: About to parse")
-  match @compiler.parse_source_file(tokens, "test.ts") {
-    Ok(source_file) => {
-      println("DEBUG: Parse succeeded, statements: " + source_file.statements.length().to_string())
-      println("DEBUG: About to bind")
-      match @compiler.bind_source_file(source_file) {
-        Ok(bound) => {
-          println("DEBUG: Binding succeeded, augmentations: " + bound.module_augmentations.length().to_string())
-          assert_eq(bound.module_augmentations.length(), 2)
-          assert_eq(bound.module_augmentations[0].module_name, "express")
-          assert_eq(bound.module_augmentations[1].module_name, "koa")
-          println("DEBUG: All assertions passed")
-        }
-        Err(_) => assert_true(false)
-      }
+  let result = parse_and_bind(source)
+  match result {
+    Ok(bound) => {
+      assert_eq(bound.module_augmentations.length(), 2)
+      assert_eq(bound.module_augmentations[0].module_name, "express")
+      assert_eq(bound.module_augmentations[1].module_name, "koa")
     }
     Err(_) => assert_true(false)
   }
