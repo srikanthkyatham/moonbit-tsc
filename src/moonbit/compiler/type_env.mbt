@@ -383,6 +383,26 @@ pub fn TypeEnv::apply_narrowing(
             self.with_narrowing(name, new_ty)
           }
       }
+    NPropertyEquality(obj_name, prop_name, value_type) =>
+      match self.lookup_base(obj_name) {
+        None => self
+        Some(current_ty) => {
+          let new_ty = apply_property_equality_narrowing(
+            current_ty, prop_name, value_type,
+          )
+          self.with_narrowing(obj_name, new_ty)
+        }
+      }
+    NPropertyInequality(obj_name, prop_name, value_type) =>
+      match self.lookup_base(obj_name) {
+        None => self
+        Some(current_ty) => {
+          let new_ty = apply_property_inequality_narrowing(
+            current_ty, prop_name, value_type,
+          )
+          self.with_narrowing(obj_name, new_ty)
+        }
+      }
     NAnd(a, b) => {
       let env1 = self.apply_narrowing(a)
       env1.apply_narrowing(b)

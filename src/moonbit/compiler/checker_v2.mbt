@@ -842,6 +842,17 @@ fn extract_narrowing_v2(bin : BinaryExpression) -> Narrowing {
       }
     _ => ()
   }
+
+  // Property access equality checks: obj.prop === "value"
+  match is_property_equality_check(bin.operator, bin.left, bin.right) {
+    Some((obj_name, prop_name, value_type, is_equals)) =>
+      if is_equals {
+        return NPropertyEquality(obj_name, prop_name, value_type)
+      } else {
+        return NPropertyInequality(obj_name, prop_name, value_type)
+      }
+    None => ()
+  }
   NNone
 }
 

@@ -4275,3 +4275,126 @@ test "check chained element and property access" {
     Err(_) => assert_true(false)
   }
 }
+
+// ============================================================================
+// Discriminated Union Narrowing Tests
+// ============================================================================
+
+///|
+/// Test: Basic discriminated union narrowing with string literal
+test "check discriminated union narrowing" {
+  let source =
+    #|type Success = { kind: "success"; data: string };
+    #|type Error = { kind: "error"; error: string };
+    #|type Result = Success | Error;
+    #|
+    #|function handle(result: Result) {
+    #|  if (result.kind === "success") {
+    #|    const data = result.data;
+    #|  }
+    #|}
+  let result = parse_bind_and_check(source)
+  match result {
+    Ok(typed) => {
+      println("Discriminated union narrowing test passed")
+      assert_eq(typed.file_path, "test.ts")
+    }
+    Err(diagnostics) => {
+      println("Discriminated union narrowing test failed:")
+      for diag in diagnostics {
+        println("  " + diag.message)
+      }
+      // Test should pass - narrowing should work
+      assert_true(false)
+    }
+  }
+}
+
+///|
+/// Test: Discriminated union narrowing in else branch
+test "check discriminated union narrowing else branch" {
+  let source =
+    #|type Success = { kind: "success"; data: string };
+    #|type Error = { kind: "error"; error: string };
+    #|type Result = Success | Error;
+    #|
+    #|function handle(result: Result) {
+    #|  if (result.kind === "success") {
+    #|    const data = result.data;
+    #|  } else {
+    #|    const err = result.error;
+    #|  }
+    #|}
+  let result = parse_bind_and_check(source)
+  match result {
+    Ok(typed) => {
+      println("Discriminated union else branch test passed")
+      assert_eq(typed.file_path, "test.ts")
+    }
+    Err(diagnostics) => {
+      println("Discriminated union else branch test failed:")
+      for diag in diagnostics {
+        println("  " + diag.message)
+      }
+      assert_true(false)
+    }
+  }
+}
+
+///|
+/// Test: Discriminated union with boolean literal
+test "check discriminated union with boolean" {
+  let source =
+    #|type Loading = { done: false };
+    #|type Loaded = { done: true; data: string };
+    #|type State = Loading | Loaded;
+    #|
+    #|function render(state: State) {
+    #|  if (state.done === true) {
+    #|    const data = state.data;
+    #|  }
+    #|}
+  let result = parse_bind_and_check(source)
+  match result {
+    Ok(typed) => {
+      println("Discriminated union boolean test passed")
+      assert_eq(typed.file_path, "test.ts")
+    }
+    Err(diagnostics) => {
+      println("Discriminated union boolean test failed:")
+      for diag in diagnostics {
+        println("  " + diag.message)
+      }
+      assert_true(false)
+    }
+  }
+}
+
+///|
+/// Test: Discriminated union with not-equals narrowing
+test "check discriminated union not-equals narrowing" {
+  let source =
+    #|type Success = { kind: "success"; data: string };
+    #|type Error = { kind: "error"; error: string };
+    #|type Result = Success | Error;
+    #|
+    #|function handle(result: Result) {
+    #|  if (result.kind !== "error") {
+    #|    const data = result.data;
+    #|  }
+    #|}
+  let result = parse_bind_and_check(source)
+  match result {
+    Ok(typed) => {
+      println("Discriminated union not-equals test passed")
+      assert_eq(typed.file_path, "test.ts")
+    }
+    Err(diagnostics) => {
+      println("Discriminated union not-equals test failed:")
+      for diag in diagnostics {
+        println("  " + diag.message)
+      }
+      assert_true(false)
+    }
+  }
+}

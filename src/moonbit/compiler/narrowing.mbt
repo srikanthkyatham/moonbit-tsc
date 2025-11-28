@@ -11,6 +11,8 @@ pub enum Narrowing {
   NEquality(String, TypeV2) // x === value
   NInequality(String, TypeV2) // x !== value
   NHasProperty(String, String) // "prop" in obj
+  NPropertyEquality(String, String, TypeV2) // obj.prop === value (obj_name, prop_name, value_type)
+  NPropertyInequality(String, String, TypeV2) // obj.prop !== value
   NAnd(Narrowing, Narrowing) // && - both narrowings apply
   NOr(Narrowing, Narrowing) // || - either narrowing applies
   NNot(Narrowing) // ! - invert narrowing
@@ -43,6 +45,8 @@ pub fn invert_narrowing(narrowing : Narrowing) -> Narrowing {
     NEquality(name, ty) => NInequality(name, ty)
     NInequality(name, ty) => NEquality(name, ty)
     NHasProperty(name, prop) => NNot(NHasProperty(name, prop))
+    NPropertyEquality(obj, prop, ty) => NPropertyInequality(obj, prop, ty)
+    NPropertyInequality(obj, prop, ty) => NPropertyEquality(obj, prop, ty)
     NNullCheck(name, is_null) => NNullCheck(name, not(is_null))
     NUndefinedCheck(name, is_undef) => NUndefinedCheck(name, not(is_undef))
   }
@@ -196,6 +200,71 @@ pub fn apply_has_property_narrowing(ty : TypeV2, prop : String) -> TypeV2 {
     }
     TObject(obj) => if obj.fields.contains(prop) { ty } else { TNever }
     _ => ty // Can't narrow non-objects
+  }
+}
+
+///|
+/// Apply property equality narrowing to a union type
+/// Narrows `obj` to only union members where `prop` has `value_type`
+/// e.g., for `type Result = {kind: "success", data: string} | {kind: "error", error: string}`
+/// if `result.kind === "success"`, narrow to `{kind: "success", data: string}`
+pub fn apply_property_equality_narrowing(
+  ty : TypeV2,
+  prop : String,
+  value_type : TypeV2,
+) -> TypeV2 {
+  match ty {
+    TUnion(types) => {
+      let filtered = types.filter(fn(t) {
+        match t {
+          TObject(obj) =>
+            match obj.fields.get(prop) {
+              Some(field_info) => types_v2_equal(field_info.ty, value_type)
+              None => false
+            }
+          _ => false
+        }
+      })
+      simplify_union(filtered)
+    }
+    TObject(obj) =>
+      match obj.fields.get(prop) {
+        Some(field_info) =>
+          if types_v2_equal(field_info.ty, value_type) { ty } else { TNever }
+        None => TNever
+      }
+    _ => ty
+  }
+}
+
+///|
+/// Apply property inequality narrowing - exclude union members where prop has value_type
+pub fn apply_property_inequality_narrowing(
+  ty : TypeV2,
+  prop : String,
+  value_type : TypeV2,
+) -> TypeV2 {
+  match ty {
+    TUnion(types) => {
+      let filtered = types.filter(fn(t) {
+        match t {
+          TObject(obj) =>
+            match obj.fields.get(prop) {
+              Some(field_info) => not(types_v2_equal(field_info.ty, value_type))
+              None => true // Keep members that don't have the property
+            }
+          _ => true
+        }
+      })
+      simplify_union(filtered)
+    }
+    TObject(obj) =>
+      match obj.fields.get(prop) {
+        Some(field_info) =>
+          if types_v2_equal(field_info.ty, value_type) { TNever } else { ty }
+        None => ty
+      }
+    _ => ty
   }
 }
 
@@ -365,6 +434,60 @@ pub fn is_in_check(left : Node, right : Node) -> (String, String)? {
 pub fn is_instanceof_check(left : Node, right : Node) -> (String, String)? {
   match (left, right) {
     (Identifier(obj), Identifier(ctor)) => Some((obj.name, ctor.name))
+    _ => None
+  }
+}
+
+///|
+/// Check if expression is a property equality check: obj.prop === "value"
+/// Returns (obj_name, prop_name, value_type, is_equals)
+pub fn is_property_equality_check(
+  op : BinaryOperator,
+  left : Node,
+  right : Node,
+) -> (String, String, TypeV2, Bool)? {
+  // Check operator
+  let is_equals = match op {
+    StrictEquals | Equals => true
+    StrictNotEquals | NotEquals => false
+    _ => return None
+  }
+
+  // Helper to extract from property access
+  fn extract_prop_access(prop_access : PropertyAccessExpression) -> (String, String)? {
+    match prop_access.expression {
+      Identifier(obj) => Some((obj.name, prop_access.name))
+      _ => None
+    }
+  }
+
+  // Helper to get literal type from right-hand side
+  fn get_literal_type(node : Node) -> TypeV2? {
+    match node {
+      StringLiteral(lit) => Some(TLiteralString(lit.value))
+      BooleanLiteral(lit) => Some(TLiteralBool(lit.value))
+      // For numbers, we just use TNumber since parsing floats is complex
+      // This still enables narrowing for string discriminants which is the common case
+      NumericLiteral(_) => None // Skip numeric for now
+      _ => None
+    }
+  }
+
+  // Check for: obj.prop === "literal"
+  match (left, right) {
+    (PropertyAccessExpression(prop_access), _) =>
+      match (extract_prop_access(prop_access), get_literal_type(right)) {
+        (Some((obj_name, prop_name)), Some(lit_type)) =>
+          Some((obj_name, prop_name, lit_type, is_equals))
+        _ => None
+      }
+    // Reversed: "literal" === obj.prop
+    (_, PropertyAccessExpression(prop_access)) =>
+      match (extract_prop_access(prop_access), get_literal_type(left)) {
+        (Some((obj_name, prop_name)), Some(lit_type)) =>
+          Some((obj_name, prop_name, lit_type, is_equals))
+        _ => None
+      }
     _ => None
   }
 }
