@@ -12,6 +12,7 @@ pub(all) struct CompileOptions {
   declaration : Bool
   strict : Bool
   isolated_modules : Bool // Ensures each file can be transpiled independently
+  exact_optional_property_types : Bool // Differentiates between undefined and missing properties
 } derive(Show)
 
 ///|
@@ -23,6 +24,7 @@ pub fn CompileOptions::default() -> CompileOptions {
     declaration: false,
     strict: false,
     isolated_modules: false,
+    exact_optional_property_types: false,
   }
 }
 

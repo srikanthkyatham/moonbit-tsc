@@ -5526,3 +5526,154 @@ pub fn validate_isolated_modules(
 
   diagnostics
 }
+
+///|
+/// Helper function to check if a type node includes undefined
+fn exact_opt_type_includes_undefined(type_node : Node) -> Bool {
+  match type_node {
+    KeywordType(kt) => kt.kind == TypeKeyword::Undefined
+    UnionType(ut) => {
+      for i = 0; i < ut.types.length(); i = i + 1 {
+        if exact_opt_type_includes_undefined(ut.types[i]) {
+          return true
+        }
+      }
+      false
+    }
+    _ => false
+  }
+}
+
+///|
+/// Helper to check if an expression is the undefined keyword
+fn exact_opt_is_undefined_literal(expr : Node) -> Bool {
+  match expr {
+    Identifier(id) => id.name == "undefined"
+    _ => false
+  }
+}
+
+///|
+/// Property info for exactOptionalPropertyTypes checking
+struct ExactOptPropertyInfo {
+  is_optional : Bool
+  type_node : Node?
+}
+
+///|
+/// Helper to find the target interface type from a type annotation
+fn exact_opt_find_interface_properties(
+  bound : BoundSourceFile,
+  type_name : String,
+) -> Map[String, ExactOptPropertyInfo] {
+  // Returns map of property name -> property info
+  let props : Map[String, ExactOptPropertyInfo] = Map::new()
+
+  for stmt in bound.statements {
+    match stmt {
+      InterfaceDeclaration(iface) =>
+        if iface.name == type_name {
+          for member in iface.members {
+            match member {
+              PropertyDeclaration(prop_decl) =>
+                props.set(
+                  prop_decl.name,
+                  {
+                    is_optional: prop_decl.is_optional,
+                    type_node: prop_decl.type_annotation,
+                  },
+                )
+              _ => ()
+            }
+          }
+        }
+      TypeAliasDeclaration(type_alias) =>
+        if type_alias.name == type_name {
+          // Handle type alias to object type
+          match type_alias.type_node {
+            TypeLiteral(tl) =>
+              for member in tl.members {
+                match member {
+                  PropertyDeclaration(prop_decl) =>
+                    props.set(
+                      prop_decl.name,
+                      {
+                        is_optional: prop_decl.is_optional,
+                        type_node: prop_decl.type_annotation,
+                      },
+                    )
+                  _ => ()
+                }
+              }
+            _ => ()
+          }
+        }
+      _ => ()
+    }
+  }
+  props
+}
+
+///|
+/// Validate exactOptionalPropertyTypes constraints
+/// TS2412: Type 'undefined' is not assignable to type 'X' with
+/// 'exactOptionalPropertyTypes' enabled.
+pub fn validate_exact_optional_property_types(
+  bound : BoundSourceFile,
+  _file_path : String,
+) -> Array[Diagnostic] {
+  let diagnostics : Array[Diagnostic] = []
+
+  // Check variable declarations with object literal initializers
+  for stmt in bound.statements {
+    match stmt {
+      VariableStatement(vs) =>
+        for decl in vs.declarations {
+          match (decl.type_annotation, decl.initializer) {
+            (Some(TypeReference(type_ref)), Some(ObjectLiteralExpression(obj))) => {
+              // Get the interface properties
+              let interface_props = exact_opt_find_interface_properties(
+                bound, type_ref.type_name,
+              )
+
+              // Check each property in the object literal
+              for prop in obj.properties {
+                match prop {
+                  PropertyAssignment(prop_name, value, location) =>
+                    if exact_opt_is_undefined_literal(value) {
+                      // Check if this is an optional property
+                      match interface_props.get(prop_name) {
+                        Some(prop_info) =>
+                          if prop_info.is_optional {
+                            // Check if the type includes undefined
+                            let includes_undefined = match prop_info.type_node {
+                              Some(tn) => exact_opt_type_includes_undefined(tn)
+                              None => false
+                            }
+                            if not(includes_undefined) {
+                              diagnostics.push(
+                                Diagnostic::{
+                                  code: 2412,
+                                  category: DiagnosticCategory::Error,
+                                  message: "Type 'undefined' is not assignable to type with 'exactOptionalPropertyTypes' enabled. Consider adding 'undefined' to the type of the target.",
+                                  location,
+                                },
+                              )
+                            }
+                          }
+                        None => ()
+                      }
+                    }
+                  _ => ()
+                }
+              }
+            }
+            _ => ()
+          }
+        }
+      _ => ()
+    }
+  }
+
+  diagnostics
+}

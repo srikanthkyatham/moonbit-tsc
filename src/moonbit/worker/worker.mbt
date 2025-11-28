@@ -39,6 +39,8 @@ fn process_request(json_str : String) -> @protocol.CompileResponse {
     source_map: request.source_map,
     declaration: request.declaration,
     strict: false,
+    isolated_modules: false,
+    exact_optional_property_types: false,
   }
 
   // Measure compilation time

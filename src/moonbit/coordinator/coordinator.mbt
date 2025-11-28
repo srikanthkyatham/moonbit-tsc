@@ -145,6 +145,8 @@ fn compile_single(
     source_map: options.source_map,
     declaration: options.declaration,
     strict: false,
+    isolated_modules: false,
+    exact_optional_property_types: false,
   }
 
   let start_time = @async.now()

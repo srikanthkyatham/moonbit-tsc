@@ -4601,3 +4601,84 @@ test "isolatedModules - import statement makes file a module" {
     }
   }
 }
+
+// ============================================================================
+// exactOptionalPropertyTypes Validation Tests
+// ============================================================================
+
+///|
+test "exactOptionalPropertyTypes TS2412 - undefined assigned to optional property" {
+  let source =
+    #|interface Settings {
+    #|  theme?: string;
+    #|}
+    #|const s: Settings = { theme: undefined };
+  match parse_bind_for_isolated_modules(source) {
+    Err(_) => assert_true(false)
+    Ok(bound) => {
+      let diagnostics = validate_exact_optional_property_types(bound, "test.ts")
+      // Should have TS2412 error - undefined not allowed for optional property
+      assert_eq(diagnostics.length(), 1)
+      assert_eq(diagnostics[0].code, 2412)
+      assert_true(
+        diagnostics[0].message.contains("exactOptionalPropertyTypes"),
+      )
+      println("exactOptionalPropertyTypes TS2412 test passed")
+    }
+  }
+}
+
+///|
+test "exactOptionalPropertyTypes - optional property with undefined in union allowed" {
+  let source =
+    #|interface Settings {
+    #|  theme?: string | undefined;
+    #|}
+    #|const s: Settings = { theme: undefined };
+  match parse_bind_for_isolated_modules(source) {
+    Err(_) => assert_true(false)
+    Ok(bound) => {
+      let diagnostics = validate_exact_optional_property_types(bound, "test.ts")
+      // Should have no errors - undefined is in the type
+      assert_eq(diagnostics.length(), 0)
+      println("exactOptionalPropertyTypes union with undefined test passed")
+    }
+  }
+}
+
+///|
+test "exactOptionalPropertyTypes - non-optional property not checked" {
+  let source =
+    #|interface Settings {
+    #|  theme: string;
+    #|}
+    #|const s: Settings = { theme: undefined };
+  match parse_bind_for_isolated_modules(source) {
+    Err(_) => assert_true(false)
+    Ok(bound) => {
+      let diagnostics = validate_exact_optional_property_types(bound, "test.ts")
+      // exactOptionalPropertyTypes only checks optional properties
+      // Non-optional properties with undefined are a different error
+      assert_eq(diagnostics.length(), 0)
+      println("exactOptionalPropertyTypes non-optional test passed")
+    }
+  }
+}
+
+///|
+test "exactOptionalPropertyTypes - string value allowed" {
+  let source =
+    #|interface Settings {
+    #|  theme?: string;
+    #|}
+    #|const s: Settings = { theme: "dark" };
+  match parse_bind_for_isolated_modules(source) {
+    Err(_) => assert_true(false)
+    Ok(bound) => {
+      let diagnostics = validate_exact_optional_property_types(bound, "test.ts")
+      // Should have no errors - assigning string to optional string property
+      assert_eq(diagnostics.length(), 0)
+      println("exactOptionalPropertyTypes string value test passed")
+    }
+  }
+}
