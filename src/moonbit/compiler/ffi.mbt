@@ -15,6 +15,7 @@ pub(all) struct CompileOptions {
   exact_optional_property_types : Bool // Differentiates between undefined and missing properties
   no_unchecked_indexed_access : Bool // Adds undefined to indexed access types (arr[i] becomes T | undefined)
   verbatim_module_syntax : Bool // Requires type-only imports/exports to use explicit type syntax
+  no_emit : Bool // Only run type checking, don't emit JavaScript or declaration files
 } derive(Show)
 
 ///|
@@ -29,6 +30,7 @@ pub fn CompileOptions::default() -> CompileOptions {
     exact_optional_property_types: false,
     no_unchecked_indexed_access: false,
     verbatim_module_syntax: false,
+    no_emit: false,
   }
 }
 
@@ -121,6 +123,17 @@ pub fn compile_source(
           let type_diagnostics = match check_result {
             Ok(typed_file) => typed_file.diagnostics
             Err(diags) => diags
+          }
+
+          // If noEmit is enabled, skip all emit phases and return type check results only
+          if options.no_emit {
+            return {
+              success: true,
+              javascript: "",
+              source_map: None,
+              declaration: None,
+              diagnostics: type_diagnostics,
+            }
           }
 
           // Phase 5: Transform AST (remove types, downlevel features)

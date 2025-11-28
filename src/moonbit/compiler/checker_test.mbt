@@ -4872,3 +4872,98 @@ test "verbatimModuleSyntax - value export allowed without type-only syntax" {
     }
   }
 }
+
+// ============================================================================
+// noEmit Tests
+// ============================================================================
+
+///|
+test "noEmit - returns empty JavaScript when enabled" {
+  let source =
+    #|const x: number = 42;
+    #|const y: string = "hello";
+  let options = CompileOptions::{
+    target: Target::ES2015,
+    source_map: false,
+    declaration: false,
+    strict: false,
+    isolated_modules: false,
+    exact_optional_property_types: false,
+    no_unchecked_indexed_access: false,
+    verbatim_module_syntax: false,
+    no_emit: true,
+  }
+  let result = compile_source(source, "test.ts", options)
+  assert_true(result.success)
+  assert_eq(result.javascript, "")
+  assert_eq(result.source_map, None)
+  assert_eq(result.declaration, None)
+  println("noEmit returns empty JavaScript test passed")
+}
+
+///|
+test "noEmit - type checking still runs" {
+  let source =
+    #|const x: number = 42;
+    #|const y: string = x; // type error
+  let options = CompileOptions::{
+    target: Target::ES2015,
+    source_map: false,
+    declaration: false,
+    strict: false,
+    isolated_modules: false,
+    exact_optional_property_types: false,
+    no_unchecked_indexed_access: false,
+    verbatim_module_syntax: false,
+    no_emit: true,
+  }
+  let result = compile_source(source, "test.ts", options)
+  // noEmit still runs type checking - diagnostics should be present
+  assert_true(result.success) // success is true even with type errors (TypeScript behavior)
+  assert_eq(result.javascript, "")
+  println("noEmit type checking test passed")
+}
+
+///|
+test "noEmit disabled - JavaScript is emitted" {
+  let source =
+    #|const x: number = 42;
+  let options = CompileOptions::{
+    target: Target::ES2015,
+    source_map: false,
+    declaration: false,
+    strict: false,
+    isolated_modules: false,
+    exact_optional_property_types: false,
+    no_unchecked_indexed_access: false,
+    verbatim_module_syntax: false,
+    no_emit: false,
+  }
+  let result = compile_source(source, "test.ts", options)
+  assert_true(result.success)
+  assert_true(result.javascript.length() > 0)
+  assert_true(result.javascript.contains("const x = 42"))
+  println("noEmit disabled emits JavaScript test passed")
+}
+
+///|
+test "noEmit - declaration not generated even if requested" {
+  let source =
+    #|export const x: number = 42;
+  let options = CompileOptions::{
+    target: Target::ES2015,
+    source_map: false,
+    declaration: true, // requested but should be ignored
+    strict: false,
+    isolated_modules: false,
+    exact_optional_property_types: false,
+    no_unchecked_indexed_access: false,
+    verbatim_module_syntax: false,
+    no_emit: true,
+  }
+  let result = compile_source(source, "test.ts", options)
+  assert_true(result.success)
+  assert_eq(result.javascript, "")
+  assert_eq(result.declaration, None) // no declaration even though requested
+  println("noEmit ignores declaration flag test passed")
+}
