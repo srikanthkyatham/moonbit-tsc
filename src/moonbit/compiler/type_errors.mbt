@@ -98,6 +98,10 @@ pub enum MismatchReason {
   NotConstructable
   UnboundVariable(String)
   UnboundType(String)
+
+  // Overloads
+  NoOverloadMatches(Int) // number of overloads tried
+  OverloadCandidateFailed(Int) // index of failed overload
 } derive(Show, Eq)
 
 // ============================================================================
@@ -453,6 +457,18 @@ pub fn format_type_error(error : TypeMismatchError, depth : Int) -> String {
         "' is not assignable to literal '" +
         expected +
         "'\n"
+    NoOverloadMatches(count) =>
+      output = output +
+        indent +
+        "  No overload matches this call. Tried " +
+        count.to_string() +
+        " overload(s).\n"
+    OverloadCandidateFailed(index) =>
+      output = output +
+        indent +
+        "  Overload " +
+        index.to_string() +
+        " gave the following error:\n"
     _ => ()
   }
 
@@ -693,6 +709,9 @@ pub fn get_friendly_title(reason : MismatchReason) -> String {
     UnboundVariable(name) => "CANNOT FIND NAME '" + name + "'"
     UnboundType(name) => "CANNOT FIND TYPE '" + name + "'"
     IntersectionNotSatisfied(_) => "INTERSECTION TYPE NOT SATISFIED"
+    NoOverloadMatches(count) =>
+      "NO OVERLOAD MATCHES (" + count.to_string() + " tried)"
+    OverloadCandidateFailed(index) => "OVERLOAD " + index.to_string() + " FAILED"
   }
 }
 
@@ -772,6 +791,14 @@ pub fn get_why_explanation(reason : MismatchReason) -> String {
       "' in the current scope. This could be a typo or the type might need to be imported/declared."
     IntersectionNotSatisfied(_) =>
       "Intersection types (A & B) require the value to satisfy all member types simultaneously. The provided value doesn't meet all requirements."
+    NoOverloadMatches(count) =>
+      "I tried to match " +
+      count.to_string() +
+      " overload signature(s) for this function call, but none of them matched the arguments you provided. Each overload has specific parameter types it expects."
+    OverloadCandidateFailed(index) =>
+      "Overload candidate " +
+      index.to_string() +
+      " didn't match because the argument types weren't compatible with its parameter types."
   }
 }
 
@@ -1038,6 +1065,28 @@ pub fn get_how_to_fix(
       fixes.push("- All properties from type B")
       fixes.push("- All methods from both types")
     }
+    NoOverloadMatches(count) => {
+      fixes.push(
+        "None of the " +
+        count.to_string() +
+        " overload(s) match your call.",
+      )
+      fixes.push("")
+      fixes.push("Options to fix:")
+      fixes.push(
+        "1. Check the argument types and count match one of the overloads",
+      )
+      fixes.push("2. Check for typos in the function name")
+      fixes.push("3. Add a type annotation to help TypeScript select the right overload:")
+      fixes.push("       functionName<ExplicitType>(...args)")
+    }
+    OverloadCandidateFailed(_) => {
+      fixes.push("This overload candidate didn't match. Check the error above for details.")
+      fixes.push("")
+      fixes.push(
+        "If you expected this overload to match, ensure argument types are compatible.",
+      )
+    }
   }
   fixes
 }
@@ -1063,6 +1112,7 @@ pub fn get_error_code(reason : MismatchReason) -> Int {
     UnboundVariable(_) | UnboundType(_) => 2304
     CircularReference | ExcessiveDepth => 2322
     IntersectionNotSatisfied(_) => 2322
+    NoOverloadMatches(_) | OverloadCandidateFailed(_) => 2769 // TS2769: No overload matches this call
   }
 }
 

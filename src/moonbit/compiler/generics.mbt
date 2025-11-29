@@ -773,3 +773,254 @@ fn check_call_arguments_v2(
 ) -> Array[TypeMismatchError] {
   check_call_arguments(env, func, arguments)
 }
+
+// ============================================================================
+// Function Overload Resolution
+// ============================================================================
+
+///|
+/// Result of overload resolution
+pub struct OverloadResolutionResult {
+  /// The matched overload (if any)
+  matched_overload : FunctionTypeV2?
+  /// Index of the matched overload in the overloads array
+  matched_index : Int
+  /// Return type of the matched overload
+  return_type : TypeV2
+  /// Errors from the resolution process
+  errors : Array[TypeMismatchError]
+} derive(Show)
+
+///|
+/// Resolve function call against multiple overload signatures
+/// TypeScript uses first-match semantics: try overloads in order, return first match
+pub fn resolve_overload(
+  env : TypeEnv,
+  overloads : Array[FunctionTypeV2],
+  explicit_type_args : Array[Node],
+  arguments : Array[Node],
+) -> OverloadResolutionResult {
+  // If no overloads, return error
+  if overloads.is_empty() {
+    return {
+      matched_overload: None,
+      matched_index: -1,
+      return_type: TError,
+      errors: [
+        TypeMismatchError::{
+          path: PRoot,
+          expected: TFunction(FunctionTypeV2::any()),
+          actual: TError,
+          reason: NotCallable,
+          children: [],
+          suggestions: [],
+        },
+      ],
+    }
+  }
+
+  // If only one overload, use it directly (with detailed error reporting)
+  if overloads.length() == 1 {
+    let result = check_generic_call(env, overloads[0], explicit_type_args, arguments)
+    return {
+      matched_overload: Some(overloads[0]),
+      matched_index: 0,
+      return_type: result.return_type,
+      errors: result.errors,
+    }
+  }
+
+  // Multiple overloads - try each one in order
+  let all_overload_errors : Array[Array[TypeMismatchError]] = []
+  let arg_types = arguments.map(fn(arg) { infer_expr_type(env, arg) })
+
+  for i, overload in overloads {
+    // Convert explicit type arguments
+    let explicit_args = explicit_type_args.map(fn(node) {
+      ast_type_to_v2(env, node)
+    })
+
+    // Try to match this overload
+    let match_result = try_match_overload(env, overload, arg_types, explicit_args)
+
+    if match_result.is_match {
+      // Found a matching overload - use it
+      let result = check_generic_call(env, overload, explicit_type_args, arguments)
+      return {
+        matched_overload: Some(overload),
+        matched_index: i,
+        return_type: result.return_type,
+        errors: result.errors,
+      }
+    } else {
+      // Collect errors for this overload attempt
+      all_overload_errors.push(match_result.errors)
+    }
+  }
+
+  // No overload matched - create TS2769 error
+  let child_errors = create_overload_error_children(overloads, all_overload_errors)
+  {
+    matched_overload: None,
+    matched_index: -1,
+    return_type: TError,
+    errors: [
+      TypeMismatchError::{
+        path: PRoot,
+        expected: TFunction(overloads[0]),
+        actual: TAny,
+        reason: NoOverloadMatches(overloads.length()),
+        children: child_errors,
+        suggestions: [
+          "No overload matches this call.",
+          "The call has " + arguments.length().to_string() + " argument(s).",
+        ],
+      },
+    ],
+  }
+}
+
+///|
+/// Result of trying to match a single overload
+priv struct OverloadMatchResult {
+  is_match : Bool
+  errors : Array[TypeMismatchError]
+}
+
+///|
+/// Try to match arguments against a single overload signature
+fn try_match_overload(
+  _env : TypeEnv,
+  overload : FunctionTypeV2,
+  arg_types : Array[TypeV2],
+  explicit_type_args : Array[TypeV2],
+) -> OverloadMatchResult {
+  let errors : Array[TypeMismatchError] = []
+
+  // Check argument count
+  let required_params = overload.params.filter(fn(p) { not(p.optional) }).length()
+  let max_params = if overload.rest_param is Some(_) {
+    2147483647 // Effectively unlimited with rest param
+  } else {
+    overload.params.length()
+  }
+
+  if arg_types.length() < required_params {
+    errors.push(TypeMismatchError::{
+      path: PRoot,
+      expected: TFunction(overload),
+      actual: TAny,
+      reason: ParamCountMismatch(required_params, arg_types.length()),
+      children: [],
+      suggestions: [],
+    })
+    return { is_match: false, errors }
+  }
+
+  if arg_types.length() > max_params {
+    errors.push(TypeMismatchError::{
+      path: PRoot,
+      expected: TFunction(overload),
+      actual: TAny,
+      reason: ParamCountMismatch(max_params, arg_types.length()),
+      children: [],
+      suggestions: [],
+    })
+    return { is_match: false, errors }
+  }
+
+  // Try to infer type arguments
+  let inference = infer_generic_type_args(overload, arg_types, explicit_type_args)
+  if not(inference.errors.is_empty()) {
+    return { is_match: false, errors: inference.errors }
+  }
+
+  // Build type arguments array
+  let type_args : Array[TypeV2] = overload.type_params.map(fn(param) {
+    match inference.inferred_args.get(param.name) {
+      Some(ty) => ty
+      None =>
+        match param.default_type {
+          Some(d) => d
+          None => TAny
+        }
+    }
+  })
+
+  // Check constraints
+  let constraint_errors = check_all_constraints(overload.type_params, type_args)
+  if not(constraint_errors.is_empty()) {
+    return { is_match: false, errors: constraint_errors }
+  }
+
+  // Instantiate the overload with type arguments
+  let instantiated = instantiate_function(overload, type_args)
+
+  // Check each argument against corresponding parameter
+  for i, arg_ty in arg_types {
+    if i < instantiated.params.length() {
+      let param = instantiated.params[i]
+      if not(is_assignable_to(arg_ty, param.ty)) {
+        errors.push(TypeMismatchError::{
+          path: PParameter(PRoot, i, param.name),
+          expected: param.ty,
+          actual: arg_ty,
+          reason: ParamTypeMismatch(i, param.name),
+          children: [],
+          suggestions: [],
+        })
+      }
+    } else if instantiated.rest_param is Some(_) {
+      // Check against rest parameter type
+      let rest = instantiated.rest_param.unwrap()
+      match rest.ty {
+        TArray(elem_ty) =>
+          if not(is_assignable_to(arg_ty, elem_ty)) {
+            errors.push(TypeMismatchError::{
+              path: PParameter(PRoot, i, rest.name),
+              expected: elem_ty,
+              actual: arg_ty,
+              reason: ParamTypeMismatch(i, rest.name),
+              children: [],
+              suggestions: [],
+            })
+          }
+        _ => ()
+      }
+    }
+  }
+
+  { is_match: errors.is_empty(), errors }
+}
+
+///|
+/// Check if source type is assignable to target type (simplified)
+fn is_assignable_to(source : TypeV2, target : TypeV2) -> Bool {
+  // Use the existing subtype check
+  is_subtype_of(source, target)
+}
+
+///|
+/// Create child errors showing why each overload didn't match
+fn create_overload_error_children(
+  overloads : Array[FunctionTypeV2],
+  all_errors : Array[Array[TypeMismatchError]],
+) -> Array[TypeMismatchError] {
+  let children : Array[TypeMismatchError] = []
+  for i, _overload in overloads {
+    if i < all_errors.length() && not(all_errors[i].is_empty()) {
+      // Take first error from this overload attempt
+      let err = all_errors[i][0]
+      children.push(TypeMismatchError::{
+        path: POverload(i),
+        expected: err.expected,
+        actual: err.actual,
+        reason: OverloadCandidateFailed(i),
+        children: all_errors[i],
+        suggestions: [],
+      })
+    }
+  }
+  children
+}
+

@@ -378,3 +378,118 @@ test "unit/generics/alias - generic utility type usage" {
     Err(_) => assert_true(false)
   }
 }
+
+// ============================================================================
+// Function Overload Resolution Tests
+// ============================================================================
+
+///|
+test "unit/overloads/basic - single overload matches" {
+  let result = parse_bind_check_v2(
+    "function foo(x: number): number; function foo(x: string): string; function foo(x: any): any { return x; } const n = foo(42);",
+  )
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/overloads/basic - second overload matches" {
+  let result = parse_bind_check_v2(
+    "function foo(x: number): number; function foo(x: string): string; function foo(x: any): any { return x; } const s = foo('hello');",
+  )
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/overloads/generic - generic overload with inference" {
+  let result = parse_bind_check_v2(
+    "function identity<T>(x: T): T; function identity(x: any): any { return x; } const n = identity(42);",
+  )
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/overloads/array - array overload variants" {
+  let result = parse_bind_check_v2(
+    "function process(arr: number[]): number; function process(arr: string[]): string; function process(arr: any[]): any { return arr[0]; } const n = process([1, 2, 3]);",
+  )
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/overloads/param-count - different parameter counts" {
+  let result = parse_bind_check_v2(
+    "function add(a: number): number; function add(a: number, b: number): number; function add(a: number, b?: number): number { return a + (b ?? 0); } const sum = add(1, 2);",
+  )
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/overloads/first-match - first matching overload wins" {
+  let result = parse_bind_check_v2(
+    "function fn(x: 'a'): 1; function fn(x: string): number; function fn(x: any): any { return x; } const result = fn('a');",
+  )
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/overloads/object - object type overloads" {
+  // Simpler object overload without discriminated union literal types
+  let result = parse_bind_check_v2(
+    "function create(opts: { x: number }): number; function create(opts: { y: string }): string; function create(opts: any): any { return opts; } const n = create({ x: 5 });",
+  )
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/overloads/callback - callback parameter overloads" {
+  let result = parse_bind_check_v2(
+    "function process(cb: (x: number) => void): void; function process(cb: (x: string) => void): void; function process(cb: any): void { cb(42); } process((x: number) => {});",
+  )
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/overloads/constructor - class constructor overloads" {
+  let result = parse_bind_check_v2(
+    "class Foo { constructor(x: number); constructor(x: string); constructor(x: any) {} } const f = new Foo(42);",
+  )
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/overloads/method - method overloads" {
+  let result = parse_bind_check_v2(
+    "class Calculator { add(x: number): number; add(x: string): string; add(x: any): any { return x; } } const c = new Calculator(); const n = c.add(5);",
+  )
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false)
+  }
+}

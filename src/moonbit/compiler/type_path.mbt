@@ -20,6 +20,7 @@ pub enum TypePath {
   PIndexSignature(TypePath) // Index signature [key: T]: U
   PRestParam(TypePath) // Rest parameter ...args
   PTupleElement(TypePath, Int, String?) // Tuple element with optional label
+  POverload(Int) // Overload candidate at index
 } derive(Show, Eq)
 
 ///|
@@ -158,6 +159,7 @@ pub fn TypePath::to_string(self : TypePath) -> String {
         p + suffix
       }
     }
+    POverload(i) => "(overload " + i.to_string() + ")"
   }
 }
 
@@ -189,6 +191,7 @@ pub fn TypePath::parent(self : TypePath) -> TypePath? {
     | PIndexSignature(p)
     | PRestParam(p)
     | PTupleElement(p, _, _) => Some(p)
+    POverload(_) => Some(PRoot)
   }
 }
 
@@ -211,6 +214,7 @@ pub fn TypePath::depth(self : TypePath) -> Int {
     | PIndexSignature(p)
     | PRestParam(p)
     | PTupleElement(p, _, _) => p.depth() + 1
+    POverload(_) => 1
   }
 }
 
