@@ -3146,10 +3146,127 @@ fn parse_interface_declaration(
                   Err(p) => return Err(p)
                 }
               }
+              LessThan(_) => {
+                // Generic method signature: name<T>(params): returnType
+                let (type_params, p) = parse_type_parameters(parser)
+                parser = p
+
+                // Must have '(' after type parameters
+                match current_token(parser) {
+                  OpenParen(_) => {
+                    parser = advance_parser(parser)
+                    let (params, p) = parse_parameter_list(parser)
+                    parser = p
+
+                    // Parse return type
+                    let return_type = match current_token(parser) {
+                      Colon(_) => {
+                        parser = advance_parser(parser)
+                        match parse_type(parser) {
+                          Ok((t, p)) => {
+                            parser = p
+                            Some(t)
+                          }
+                          Err(_) => None
+                        }
+                      }
+                      _ => None
+                    }
+
+                    // Create generic method declaration
+                    members.push(
+                      Node::MethodDeclaration(MethodDeclaration::{
+                        name: prop_name,
+                        type_parameters: type_params,
+                        parameters: params,
+                        return_type,
+                        body: None,
+                        decorators: [],
+                        modifiers: [],
+                        is_async: false,
+                        is_generator: false,
+                        is_optional,
+                        location: prop_loc,
+                      }),
+                    )
+
+                    // Optional semicolon or comma
+                    match current_token(parser) {
+                      Semicolon(_) | Comma(_) => parser = advance_parser(parser)
+                      _ => ()
+                    }
+                  }
+                  _ =>
+                    return Err(
+                      add_error(
+                        parser, "Expected '(' after type parameters", current_token(parser).location(),
+                      ),
+                    )
+                }
+              }
               _ =>
                 return Err(
                   add_error(
                     parser, "Expected ':' or '(' after property name", prop_loc,
+                  ),
+                )
+            }
+          }
+          // Generic call signature: <T>(x: T): void
+          LessThan(_) => {
+            let call_loc = current_token(parser).location()
+            let (type_params, p) = parse_type_parameters(parser)
+            parser = p
+
+            // Must have '(' after type parameters
+            match current_token(parser) {
+              OpenParen(_) => {
+                parser = advance_parser(parser)
+                let (params, p) = parse_parameter_list(parser)
+                parser = p
+
+                // Parse return type
+                let return_type = match current_token(parser) {
+                  Colon(_) => {
+                    parser = advance_parser(parser)
+                    match parse_type(parser) {
+                      Ok((t, p)) => {
+                        parser = p
+                        Some(t)
+                      }
+                      Err(_) => None
+                    }
+                  }
+                  _ => None
+                }
+
+                // Create generic call signature as a method with empty name
+                members.push(
+                  Node::MethodDeclaration(MethodDeclaration::{
+                    name: "",
+                    type_parameters: type_params,
+                    parameters: params,
+                    return_type,
+                    body: None,
+                    decorators: [],
+                    modifiers: [],
+                    is_async: false,
+                    is_generator: false,
+                    is_optional: false,
+                    location: call_loc,
+                  }),
+                )
+
+                // Optional semicolon or comma
+                match current_token(parser) {
+                  Semicolon(_) | Comma(_) => parser = advance_parser(parser)
+                  _ => ()
+                }
+              }
+              _ =>
+                return Err(
+                  add_error(
+                    parser, "Expected '(' after type parameters", current_token(parser).location(),
                   ),
                 )
             }

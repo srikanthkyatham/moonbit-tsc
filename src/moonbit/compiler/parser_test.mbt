@@ -1009,6 +1009,100 @@ test "parse generic interface" {
 }
 
 ///|
+test "parse interface with generic call signature" {
+  // Based on recursiveTypeIdentity.ts
+  let tokens = tokens_from_source(
+    "interface A { <T extends A>(x: T): void; }",
+  )
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        InterfaceDeclaration(iface) => {
+          assert_eq(iface.name, "A")
+          assert_eq(iface.members.length(), 1)
+          // The generic call signature is represented as a MethodDeclaration with empty name
+          match iface.members[0] {
+            MethodDeclaration(method) => {
+              assert_eq(method.name, "")
+              assert_eq(method.type_parameters.length(), 1)
+              assert_eq(method.type_parameters[0].name, "T")
+              assert_eq(method.parameters.length(), 1)
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse interface with generic method signature" {
+  let tokens = tokens_from_source(
+    "interface Container<T> { map<U>(f: (x: T) => U): Container<U>; }",
+  )
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        InterfaceDeclaration(iface) => {
+          assert_eq(iface.name, "Container")
+          assert_eq(iface.type_parameters.length(), 1)
+          assert_eq(iface.members.length(), 1)
+          match iface.members[0] {
+            MethodDeclaration(method) => {
+              assert_eq(method.name, "map")
+              assert_eq(method.type_parameters.length(), 1)
+              assert_eq(method.type_parameters[0].name, "U")
+              assert_eq(method.parameters.length(), 1)
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse interface with multiple generic call signatures" {
+  // Based on recursiveTypeIdentity.ts - interface C with multiple call signatures
+  let tokens = tokens_from_source(
+    "interface C { (x: A): void; (x: B): void; }",
+  )
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        InterfaceDeclaration(iface) => {
+          assert_eq(iface.name, "C")
+          assert_eq(iface.members.length(), 2)
+          // Both are call signatures (MethodDeclaration with empty name)
+          match iface.members[0] {
+            MethodDeclaration(method) => assert_eq(method.name, "")
+            _ => assert_true(false)
+          }
+          match iface.members[1] {
+            MethodDeclaration(method) => assert_eq(method.name, "")
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
 test "parse arrow function type" {
   let tokens = tokens_from_source("type Handler = (event: string) => void;")
   let result = parse_source_file(tokens, "test.ts")

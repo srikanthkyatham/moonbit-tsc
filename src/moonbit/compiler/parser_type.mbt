@@ -576,7 +576,27 @@ fn parse_primary_type_with_readonly(
           Err(p) => Err(p)
         }
       } else {
-        let parser = advance_parser(parser)
+        let mut parser = advance_parser(parser)
+        let mut qualified_name = name
+
+        // Handle qualified names like Foo.Bar.Baz
+        while true {
+          match current_token(parser) {
+            Dot(_) => {
+              // Check if next token is an identifier
+              let next_parser = advance_parser(parser)
+              match current_token(next_parser) {
+                Identifier(next_name, _) => {
+                  qualified_name = qualified_name + "." + next_name
+                  parser = advance_parser(next_parser)
+                }
+                _ => break
+              }
+            }
+            _ => break
+          }
+        }
+
         // Check for generic type arguments
         let (type_arguments, parser) = match current_token(parser) {
           LessThan(_) =>
@@ -589,7 +609,7 @@ fn parse_primary_type_with_readonly(
         Ok(
           (
             Node::TypeReference(TypeReference::{
-              type_name: name,
+              type_name: qualified_name,
               type_arguments,
               location: loc,
             }),
