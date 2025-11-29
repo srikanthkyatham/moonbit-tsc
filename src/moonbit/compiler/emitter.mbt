@@ -10,6 +10,7 @@ pub struct EmitterContext {
   module_kind : ModuleKind // ESModule or CommonJS
   always_strict : Bool // Whether to emit "use strict" directive
   es_module_interop : Bool // Emit __importDefault/__importStar helpers for CommonJS interop
+  emit_decorator_metadata : Bool // Whether to emit design-time type information for decorators
   source_map_builder : SourceMapBuilder? // Optional source map builder
   source_file : String? // Source file name for mappings
   mut generated_line : Int // Current generated line (0-based)
@@ -26,6 +27,7 @@ pub fn EmitterContext::default() -> EmitterContext {
     module_kind: ESModule,
     always_strict: false,
     es_module_interop: false,
+    emit_decorator_metadata: true, // Default to true for backwards compatibility
     source_map_builder: None,
     source_file: None,
     generated_line: 0,
@@ -46,6 +48,7 @@ pub fn EmitterContext::with_source_map(
     module_kind: ESModule,
     always_strict: false,
     es_module_interop: false,
+    emit_decorator_metadata: true,
     source_map_builder: Some(builder),
     source_file: Some(source_file),
     generated_line: 0,
@@ -66,6 +69,7 @@ pub fn EmitterContext::with_options(
     module_kind,
     always_strict,
     es_module_interop: false,
+    emit_decorator_metadata: true,
     source_map_builder: None,
     source_file: None,
     generated_line: 0,
@@ -88,6 +92,7 @@ pub fn EmitterContext::with_options_and_source_map(
     module_kind,
     always_strict,
     es_module_interop: false,
+    emit_decorator_metadata: true,
     source_map_builder: Some(builder),
     source_file: Some(source_file),
     generated_line: 0,
@@ -105,6 +110,7 @@ pub fn EmitterContext::indent(self : EmitterContext) -> EmitterContext {
     module_kind: self.module_kind,
     always_strict: self.always_strict,
     es_module_interop: self.es_module_interop,
+    emit_decorator_metadata: self.emit_decorator_metadata,
     source_map_builder: self.source_map_builder,
     source_file: self.source_file,
     generated_line: self.generated_line,

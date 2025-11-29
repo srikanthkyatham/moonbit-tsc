@@ -1594,3 +1594,129 @@ pub fn string_repeat(s : String, n : Int) -> String {
   }
   result
 }
+
+// ============================================================================
+// Decorator Errors
+// ============================================================================
+
+///|
+/// Error: Decorators are not enabled (TS1219)
+/// "Decorators are only available when 'experimentalDecorators' option is set."
+pub fn decorator_not_enabled_error(
+  location : String,
+  decorator_name : String,
+) -> DetailedError {
+  {
+    title: "Decorator Not Enabled",
+    code: 1219,
+    location,
+    code_snippet: "@" + decorator_name,
+    what_went_wrong: "Decorators require the 'experimentalDecorators' compiler option to be enabled.",
+    why_error: "TypeScript decorators are an experimental feature. They are not part of the standard JavaScript specification yet (though Stage 3 decorators are being finalized). To use decorators, you must explicitly enable them in your tsconfig.json.",
+    how_to_fix: [
+      "Add \"experimentalDecorators\": true to your tsconfig.json compilerOptions",
+      "Example: { \"compilerOptions\": { \"experimentalDecorators\": true } }",
+    ],
+    doc_link: get_error_doc_url(1219),
+    related: [],
+  }
+}
+
+///|
+/// Error: Invalid decorator target (TS1206)
+/// "Decorators can only decorate class declarations, class methods, accessors, properties, or parameters."
+pub fn invalid_decorator_target_error(
+  location : String,
+  target : String,
+) -> DetailedError {
+  {
+    title: "Invalid Decorator Target",
+    code: 1206,
+    location,
+    code_snippet: "@decorator on " + target,
+    what_went_wrong: "Decorators can only be applied to specific targets: class declarations, methods, accessors, properties, or parameters.",
+    why_error: "You've placed a decorator on something that cannot be decorated. In TypeScript, only certain elements can have decorators applied to them.",
+    how_to_fix: [
+      "Move the decorator to a valid target (class, method, accessor, property, or parameter)",
+      "If decorating a function, consider wrapping it in a class method",
+    ],
+    doc_link: get_error_doc_url(1206),
+    related: [],
+  }
+}
+
+///|
+/// Error: Decorator must return value (TS1241)
+/// "A decorator must return a value that can be used at runtime."
+pub fn decorator_must_return_value_error(
+  location : String,
+  decorator_name : String,
+) -> DetailedError {
+  {
+    title: "Decorator Must Return Value",
+    code: 1241,
+    location,
+    code_snippet: "@" + decorator_name,
+    what_went_wrong: "The decorator function does not return a valid value.",
+    why_error: "Decorators are functions that receive the target (class, method, etc.) and optionally return a replacement or modified version. A decorator that returns nothing will have no effect.",
+    how_to_fix: [
+      "Ensure your decorator function returns a value",
+      "For class decorators, return a class constructor",
+      "For method decorators, return a property descriptor or undefined",
+    ],
+    doc_link: get_error_doc_url(1241),
+    related: [],
+  }
+}
+
+///|
+/// Error: Decorator cannot be applied to parameter (TS1239)
+/// "Decorators are not valid here."
+pub fn decorator_invalid_position_error(
+  location : String,
+  position : String,
+) -> DetailedError {
+  {
+    title: "Invalid Decorator Position",
+    code: 1239,
+    location,
+    code_snippet: "@decorator in " + position,
+    what_went_wrong: "A decorator has been placed in an invalid position.",
+    why_error: "Decorators must appear immediately before the declaration they modify. They cannot be placed inside expressions or in other invalid positions.",
+    how_to_fix: [
+      "Move the decorator directly before the class, method, property, or parameter it should decorate",
+    ],
+    doc_link: get_error_doc_url(1239),
+    related: [],
+  }
+}
+
+///|
+/// Error: Decorator signature mismatch (TS1270)
+/// "Decorator function does not match expected signature."
+pub fn decorator_signature_mismatch_error(
+  location : String,
+  decorator_name : String,
+  expected : String,
+  actual : String,
+) -> DetailedError {
+  {
+    title: "Decorator Signature Mismatch",
+    code: 1270,
+    location,
+    code_snippet: "@" + decorator_name,
+    what_went_wrong: "The decorator function signature does not match what's expected for this target.",
+    why_error: "Different decorator types have different signatures:\n" +
+      "- Class: (target: Function) => Function\n" +
+      "- Method: (target: Object, propertyKey: string, descriptor: PropertyDescriptor) => PropertyDescriptor\n" +
+      "- Property: (target: Object, propertyKey: string) => void\n" +
+      "- Parameter: (target: Object, propertyKey: string, parameterIndex: number) => void",
+    how_to_fix: [
+      "Expected signature: " + expected,
+      "Actual signature: " + actual,
+      "Update your decorator to match the expected signature",
+    ],
+    doc_link: get_error_doc_url(1270),
+    related: [],
+  }
+}
