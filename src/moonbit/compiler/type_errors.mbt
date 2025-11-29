@@ -112,6 +112,14 @@ pub enum MismatchReason {
   OverrideParamCountMismatch(String, Int, Int) // method_name, base_required, derived_required
   OverrideParamTypeMismatch(String, Int, String) // method_name, param_index, param_name
   OverrideAccessibilityMismatch(String, String, String) // member_name, base_accessibility, derived_accessibility
+
+  // Super call validation (TS17009, TS2337)
+  ThisBeforeSuperCall // TS17009: 'super' must be called before accessing 'this'
+  SuperCallRequired(String) // TS2377: Constructors for derived classes must contain a 'super' call
+  SuperCallOutsideConstructor // TS2337: 'super' can only be called in a constructor
+  SuperPropertyOutsideClass // TS2335: 'super' can only be referenced in a derived class
+  SuperCallInStaticMethod // Super call in static method
+  SuperPropertyAccess(String) // TS2339: Property does not exist on type 'super'
 } derive(Show, Eq)
 
 // ============================================================================
@@ -735,6 +743,13 @@ pub fn get_friendly_title(reason : MismatchReason) -> String {
       "OVERRIDE PARAMETER TYPE MISMATCH '" + name + "'"
     OverrideAccessibilityMismatch(name, _, _) =>
       "OVERRIDE ACCESSIBILITY MISMATCH '" + name + "'"
+    // Super call validation
+    ThisBeforeSuperCall => "'THIS' BEFORE 'SUPER' CALL"
+    SuperCallRequired(class_name) => "MISSING 'SUPER' CALL IN '" + class_name + "'"
+    SuperCallOutsideConstructor => "'SUPER' CALL OUTSIDE CONSTRUCTOR"
+    SuperPropertyOutsideClass => "'SUPER' OUTSIDE DERIVED CLASS"
+    SuperCallInStaticMethod => "'SUPER' CALL IN STATIC METHOD"
+    SuperPropertyAccess(name) => "PROPERTY '" + name + "' NOT ON 'SUPER'"
   }
 }
 
@@ -874,6 +889,23 @@ pub fn get_why_explanation(reason : MismatchReason) -> String {
       " to " +
       derived_acc +
       ". Override members cannot be more restrictive than the base member's accessibility."
+    // Super call validation
+    ThisBeforeSuperCall =>
+      "In TypeScript, when a derived class constructor uses 'this', it must first call 'super()' to initialize the base class. This ensures the parent class properties are set up before the child class accesses them."
+    SuperCallRequired(class_name) =>
+      "Class '" +
+      class_name +
+      "' extends a base class but its constructor doesn't call 'super()'. TypeScript requires derived class constructors to call their parent constructor."
+    SuperCallOutsideConstructor =>
+      "'super()' can only be called inside a constructor. If you want to access parent class methods, use 'super.methodName()' instead of 'super()'."
+    SuperPropertyOutsideClass =>
+      "'super' can only be used inside a class that extends another class. It refers to the parent class's prototype and is not available outside of derived classes."
+    SuperCallInStaticMethod =>
+      "'super()' cannot be called in a static method because static methods don't have access to instance-level inheritance. Static methods belong to the class itself, not to instances."
+    SuperPropertyAccess(name) =>
+      "The property '" +
+      name +
+      "' doesn't exist on the parent class. Check that the parent class defines this property or method."
   }
 }
 
@@ -1229,6 +1261,54 @@ pub fn get_how_to_fix(
       fixes.push("")
       fixes.push("Keep or widen accessibility to: " + base_acc)
     }
+    // Super call validation
+    ThisBeforeSuperCall => {
+      fixes.push("Call 'super()' before using 'this' in the constructor:")
+      fixes.push("    constructor() {")
+      fixes.push("        super();  // Call this first!")
+      fixes.push("        this.property = value;  // Now you can use 'this'")
+      fixes.push("    }")
+    }
+    SuperCallRequired(class_name) => {
+      fixes.push("Add a 'super()' call to the constructor of '" + class_name + "':")
+      fixes.push("    constructor() {")
+      fixes.push("        super();  // Required in derived classes")
+      fixes.push("        // ... rest of constructor")
+      fixes.push("    }")
+    }
+    SuperCallOutsideConstructor => {
+      fixes.push("Move the 'super()' call inside the constructor.")
+      fixes.push("")
+      fixes.push("If you meant to call a parent method, use 'super.methodName()' instead:")
+      fixes.push("    someMethod() {")
+      fixes.push("        super.someMethod();  // Call parent's method")
+      fixes.push("    }")
+    }
+    SuperPropertyOutsideClass => {
+      fixes.push("'super' can only be used inside a derived class.")
+      fixes.push("")
+      fixes.push("Make sure your class extends a base class:")
+      fixes.push("    class Derived extends Base {")
+      fixes.push("        method() { super.method(); }  // OK")
+      fixes.push("    }")
+    }
+    SuperCallInStaticMethod => {
+      fixes.push("Remove the 'super()' call from the static method.")
+      fixes.push("")
+      fixes.push("Static methods cannot use 'super()' because they don't have instance context.")
+      fixes.push("If you need parent class static methods, call them by name:")
+      fixes.push("    static method() {")
+      fixes.push("        ParentClass.staticMethod();")
+      fixes.push("    }")
+    }
+    SuperPropertyAccess(name) => {
+      fixes.push("The property '" + name + "' doesn't exist on the parent class.")
+      fixes.push("")
+      fixes.push("Options:")
+      fixes.push("1. Check the property name for typos")
+      fixes.push("2. Add the property/method to the base class")
+      fixes.push("3. Use 'this." + name + "' if accessing a property defined in this class")
+    }
   }
   fixes
 }
@@ -1263,6 +1343,13 @@ pub fn get_error_code(reason : MismatchReason) -> Int {
     | OverrideParamTypeMismatch(_, _, _)
     | OverrideParamCountMismatch(_, _, _) => 2416 // TS2416: Property is not assignable to base type
     OverrideAccessibilityMismatch(_, _, _) => 2415 // TS2415: Class incorrectly extends base class
+    // Super call validation
+    ThisBeforeSuperCall => 17009 // TS17009: 'super' must be called before accessing 'this'
+    SuperCallRequired(_) => 2377 // TS2377: Constructors for derived classes must contain a 'super' call
+    SuperCallOutsideConstructor => 2337 // TS2337: 'super' can only be called in a constructor
+    SuperPropertyOutsideClass => 2335 // TS2335: 'super' can only be referenced in a derived class
+    SuperCallInStaticMethod => 2337 // Reuse TS2337
+    SuperPropertyAccess(_) => 2339 // TS2339: Property does not exist on type
   }
 }
 
