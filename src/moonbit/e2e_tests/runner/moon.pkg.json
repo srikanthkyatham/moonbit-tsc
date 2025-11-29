@@ -1,0 +1,10 @@
+{
+  "import": [
+    "moonbit-ts-compiler/compiler",
+    "moonbitlang/async/fs",
+    "moonbitlang/async/io"
+  ],
+  "targets": {
+    "*.mbt": ["native"]
+  }
+}
