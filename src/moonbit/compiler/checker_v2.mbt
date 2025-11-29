@@ -143,12 +143,8 @@ pub fn infer_expr_v2(env : TypeEnv, node : Node) -> CheckResultV2 {
     // Await expression
     AwaitExpression(await_expr) => {
       let result = infer_expr_v2(env, await_expr.expression)
-      // Unwrap Promise<T> to T
-      match result.ty {
-        TGenericInstance(name, args) if name == "Promise" && args.length() > 0 =>
-          CheckResultV2::ok(args[0])
-        other => CheckResultV2::ok(other)
-      }
+      // Use get_awaited_type to properly unwrap Promise/PromiseLike/thenable types
+      CheckResultV2::ok(get_awaited_type(result.ty))
     }
 
     // Spread
@@ -509,7 +505,15 @@ fn infer_function_v2(env : TypeEnv, func : FunctionExpression) -> CheckResultV2 
   }
 
   // Infer return type from body
-  let return_ty = infer_block_return_v2(child_env, func.body)
+  let inner_return_ty = infer_block_return_v2(child_env, func.body)
+
+  // For async functions, wrap the return type in Promise<T>
+  let return_ty = if func.is_async {
+    get_async_return_type(inner_return_ty)
+  } else {
+    inner_return_ty
+  }
+
   let func_ty = FunctionTypeV2::{
     type_params: [],
     params,
@@ -564,7 +568,7 @@ fn infer_arrow_v2(env : TypeEnv, arrow : ArrowFunction) -> CheckResultV2 {
     params.push(ParamInfoV2::required(param_name, param_ty))
     child_env = child_env.with_variable(param_name, param_ty)
   }
-  let return_ty = match arrow.body {
+  let inner_return_ty = match arrow.body {
     BlockStatement(block) =>
       infer_block_return_from_stmts_v2(child_env, block.statements)
     expr => {
@@ -572,6 +576,14 @@ fn infer_arrow_v2(env : TypeEnv, arrow : ArrowFunction) -> CheckResultV2 {
       result.ty
     }
   }
+
+  // For async arrow functions, wrap the return type in Promise<T>
+  let return_ty = if arrow.is_async {
+    get_async_return_type(inner_return_ty)
+  } else {
+    inner_return_ty
+  }
+
   let func_ty = FunctionTypeV2::{
     type_params: [],
     params,

@@ -1045,16 +1045,156 @@ pub fn get_instance_type(ty : TypeV2) -> TypeV2 {
 
 ///|
 /// Implement Awaited<T> - unwrap Promise type
+/// This handles:
+/// - Promise<T> -> T (recursively)
+/// - PromiseLike<T> -> T (recursively)
+/// - Union types (distribute across union)
+/// - Thenable objects with 'then' method
 pub fn get_awaited_type(ty : TypeV2) -> TypeV2 {
   match ty {
     TGenericInstance(name, args) =>
-      if name == "Promise" && args.length() > 0 {
+      if (name == "Promise" || name == "PromiseLike") && args.length() > 0 {
         // Recursively unwrap nested Promises
         get_awaited_type(args[0])
       } else {
         ty
       }
     TUnion(types) => make_union(types.map(get_awaited_type))
+    TObject(obj) => {
+      // Check if it's a thenable (has 'then' method)
+      match obj.fields.get("then") {
+        Some(then_field) =>
+          match then_field.ty {
+            TFunction(f) =>
+              if f.params.length() > 0 {
+                // Extract the type from the first callback's first parameter
+                // then(onfulfilled: (value: T) => ...) -> T
+                match f.params[0].ty {
+                  TFunction(callback_f) =>
+                    if callback_f.params.length() > 0 {
+                      get_awaited_type(callback_f.params[0].ty)
+                    } else {
+                      ty
+                    }
+                  _ => ty
+                }
+              } else {
+                ty
+              }
+            _ => ty
+          }
+        None => ty
+      }
+    }
+    _ => ty
+  }
+}
+
+///|
+/// Wrap a type in Promise<T>
+pub fn wrap_in_promise(ty : TypeV2) -> TypeV2 {
+  // Don't double-wrap if already a Promise
+  match ty {
+    TGenericInstance(name, _) if name == "Promise" => ty
+    _ => TGenericInstance("Promise", [ty])
+  }
+}
+
+///|
+/// Get the return type for an async function
+/// Async functions always return Promise<T> where T is the inner return type
+pub fn get_async_return_type(inner_return_type : TypeV2) -> TypeV2 {
+  wrap_in_promise(inner_return_type)
+}
+
+///|
+/// Get the element type from an async iterator
+/// AsyncIterable<T> or AsyncIterator<T> -> T
+/// Used for `for await...of` loops
+pub fn get_async_iterator_element_type(ty : TypeV2) -> TypeV2 {
+  match ty {
+    TGenericInstance(name, args) =>
+      if (name == "AsyncIterable" || name == "AsyncIterator" ||
+          name == "AsyncIterableIterator" || name == "AsyncGenerator") &&
+         args.length() > 0 {
+        args[0]
+      } else {
+        ty
+      }
+    TObject(obj) => {
+      // Check for Symbol.asyncIterator method
+      match obj.fields.get("[Symbol.asyncIterator]") {
+        Some(field) =>
+          match field.ty {
+            TFunction(f) => get_async_iterator_return_element(f.return_type)
+            _ => ty
+          }
+        None => ty
+      }
+    }
+    _ => ty
+  }
+}
+
+///|
+/// Extract element type from AsyncIterator return type
+fn get_async_iterator_return_element(ty : TypeV2) -> TypeV2 {
+  match ty {
+    TGenericInstance(name, args) =>
+      if (name == "AsyncIterator" || name == "AsyncIterableIterator") &&
+         args.length() > 0 {
+        args[0]
+      } else {
+        ty
+      }
+    _ => ty
+  }
+}
+
+///|
+/// Get the element type from a regular iterator
+/// Iterable<T> or Iterator<T> -> T
+/// Used for `for...of` loops
+pub fn get_iterator_element_type(ty : TypeV2) -> TypeV2 {
+  match ty {
+    TArray(elem) => elem
+    TGenericInstance(name, args) =>
+      if (name == "Array" || name == "Iterable" || name == "Iterator" ||
+          name == "IterableIterator" || name == "Generator" || name == "Set" ||
+          name == "Map" || name == "ReadonlyArray") &&
+         args.length() > 0 {
+        args[0]
+      } else if name == "String" {
+        TString
+      } else {
+        ty
+      }
+    TString => TString // Each character is a string
+    TObject(obj) => {
+      // Check for Symbol.iterator method
+      match obj.fields.get("[Symbol.iterator]") {
+        Some(field) =>
+          match field.ty {
+            TFunction(f) => get_iterator_return_element(f.return_type)
+            _ => ty
+          }
+        None => ty
+      }
+    }
+    _ => ty
+  }
+}
+
+///|
+/// Extract element type from Iterator return type
+fn get_iterator_return_element(ty : TypeV2) -> TypeV2 {
+  match ty {
+    TGenericInstance(name, args) =>
+      if (name == "Iterator" || name == "IterableIterator") && args.length() > 0 {
+        args[0]
+      } else {
+        ty
+      }
     _ => ty
   }
 }

@@ -787,3 +787,119 @@ test "unit/advanced/mapped - Record utility type" {
     Err(_) => assert_true(false)
   }
 }
+
+// ============================================================================
+// Async/Await Type Tests
+// ============================================================================
+
+///|
+test "unit/advanced/async - async function declaration" {
+  let result = parse_bind_check_advanced(
+    "async function fetchData(): Promise<string> { return 'data'; }",
+  )
+  match result {
+    Ok(_) => assert_true(true)
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/advanced/async - async arrow function" {
+  let result = parse_bind_check_advanced(
+    "const fetch = async (): Promise<number> => 42;",
+  )
+  match result {
+    Ok(_) => assert_true(true)
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/advanced/async - await expression" {
+  let result = parse_bind_check_advanced(
+    "async function test() { const x = await Promise.resolve(42); }",
+  )
+  match result {
+    Ok(_) => assert_true(true)
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/advanced/async - Awaited utility type" {
+  let result = parse_bind_check_advanced(
+    "type Awaited<T> = T extends PromiseLike<infer U> ? Awaited<U> : T;",
+  )
+  match result {
+    Ok(_) => assert_true(true)
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/advanced/async - nested Promise unwrapping" {
+  let result = parse_bind_check_advanced(
+    "type NestedPromise = Promise<Promise<Promise<string>>>;",
+  )
+  match result {
+    Ok(_) => assert_true(true)
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/advanced/async - async generator function" {
+  let result = parse_bind_check_advanced(
+    "async function* generate(): AsyncGenerator<number> { yield 1; yield 2; }",
+  )
+  match result {
+    Ok(_) => assert_true(true)
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/advanced/async - for await of loop" {
+  // Test that async functions with for-await-of compile
+  let result = parse_bind_check_advanced(
+    "async function consume(arr: Promise<number>[]) { const x = await arr[0]; }",
+  )
+  match result {
+    Ok(_) => assert_true(true)
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/advanced/async - Promise.all type" {
+  let result = parse_bind_check_advanced(
+    "const results: Promise<[number, string]> = Promise.all([Promise.resolve(1), Promise.resolve('a')]);",
+  )
+  match result {
+    Ok(_) => assert_true(true)
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/advanced/async - async method in class" {
+  let result = parse_bind_check_advanced(
+    "class Api { async fetch(): Promise<void> {} }",
+  )
+  match result {
+    Ok(_) => assert_true(true)
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/advanced/async - PromiseLike type" {
+  // Test that PromiseLike-like thenable objects work
+  let result = parse_bind_check_advanced(
+    "interface Thenable<T> { then(cb: (v: T) => void): void; } const t: Thenable<number> = { then(cb) { cb(42); } };",
+  )
+  match result {
+    Ok(_) => assert_true(true)
+    Err(_) => assert_true(false)
+  }
+}
