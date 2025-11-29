@@ -988,3 +988,27 @@ test "parse member access with keyword property names" {
     Err(_) => assert_true(false)
   }
 }
+
+///|
+test "parse super call expression" {
+  let tokens = tokens_from_source("super(scope, id, props)")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        ExpressionStatement(es) =>
+          match es.expression {
+            CallExpression(ce) =>
+              match ce.expression {
+                SuperExpression(_) => ()
+                _ => assert_true(false)
+              }
+            _ => assert_true(false)
+          }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}

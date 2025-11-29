@@ -5019,3 +5019,29 @@ test "noEmit - declaration not generated even if requested" {
   assert_eq(result.declaration, None) // no declaration even though requested
   println("noEmit ignores declaration flag test passed")
 }
+
+// ============================================================================
+// Super Expression Tests
+// ============================================================================
+
+///|
+test "check super call in constructor" {
+  let result = parse_bind_and_check(
+    "class Parent { constructor(x: number) {} } class Child extends Parent { constructor() { super(42); } }",
+  )
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "check super method call" {
+  let result = parse_bind_and_check(
+    "class Parent { greet() { return 'hello'; } } class Child extends Parent { greet() { return super.greet() + ' world'; } }",
+  )
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false)
+  }
+}

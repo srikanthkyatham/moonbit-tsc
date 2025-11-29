@@ -1984,3 +1984,35 @@ test "multiple triple-slash directives" {
     Err(_) => assert_true(false)
   }
 }
+
+// ============================================================================
+// Super Expression Tests
+// ============================================================================
+
+///|
+test "bind class with super call in constructor" {
+  let result = parse_and_bind(
+    "class Parent { constructor(x: number) {} } class Child extends Parent { constructor() { super(42); } }",
+  )
+  match result {
+    Ok(bound) => {
+      assert_true(bound.global_scope.symbols.contains("Parent"))
+      assert_true(bound.global_scope.symbols.contains("Child"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "bind class with super method call" {
+  let result = parse_and_bind(
+    "class Parent { greet() { return 'hello'; } } class Child extends Parent { greet() { return super.greet(); } }",
+  )
+  match result {
+    Ok(bound) => {
+      assert_true(bound.global_scope.symbols.contains("Parent"))
+      assert_true(bound.global_scope.symbols.contains("Child"))
+    }
+    Err(_) => assert_true(false)
+  }
+}

@@ -2219,3 +2219,17 @@ test "esModuleInterop option accepted" {
   assert_true(result.javascript.contains("require"))
   println("esModuleInterop option test passed")
 }
+
+///|
+/// Test: Emit super call expression
+test "emit super call expression" {
+  let js = compile_to_js("class Child extends Parent { constructor() { super(1, 2, 3); } }")
+  assert_true(js.contains("super(1, 2, 3)"))
+}
+
+///|
+/// Test: Emit super property access
+test "emit super property access" {
+  let js = compile_to_js("class Child extends Parent { method() { return super.method(); } }")
+  assert_true(js.contains("super.method()"))
+}
