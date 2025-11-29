@@ -18,6 +18,7 @@ pub enum Narrowing {
   NNot(Narrowing) // ! - invert narrowing
   NNullCheck(String, Bool) // x === null or x !== null (true = is null)
   NUndefinedCheck(String, Bool) // x === undefined or x !== undefined
+  NIsArray(String) // Array.isArray(x) - narrows to array type
   NNone // No narrowing possible
 } derive(Show, Eq)
 
@@ -49,6 +50,7 @@ pub fn invert_narrowing(narrowing : Narrowing) -> Narrowing {
     NPropertyInequality(obj, prop, ty) => NPropertyEquality(obj, prop, ty)
     NNullCheck(name, is_null) => NNullCheck(name, not(is_null))
     NUndefinedCheck(name, is_undef) => NUndefinedCheck(name, not(is_undef))
+    NIsArray(name) => NNot(NIsArray(name))
   }
 }
 
@@ -265,6 +267,32 @@ pub fn apply_property_inequality_narrowing(
         None => ty
       }
     _ => ty
+  }
+}
+
+///|
+/// Apply Array.isArray() narrowing
+/// Narrows union types to only array members, or narrows unknown/any to any[]
+pub fn apply_is_array_narrowing(ty : TypeV2) -> TypeV2 {
+  match ty {
+    TUnion(types) => {
+      let filtered = types.filter(fn(t) {
+        match t {
+          TArray(_) => true
+          _ => false
+        }
+      })
+      if filtered.is_empty() {
+        // No array types in union, but Array.isArray returned true
+        // Type is narrowed to any[]
+        TArray(TAny)
+      } else {
+        simplify_union(filtered)
+      }
+    }
+    TArray(_) => ty // Already an array
+    TAny | TUnknown => TArray(TAny) // Narrow to any[]
+    _ => TNever // Non-array, non-union, non-any - can't be array
   }
 }
 

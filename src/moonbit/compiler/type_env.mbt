@@ -403,6 +403,14 @@ pub fn TypeEnv::apply_narrowing(
           self.with_narrowing(obj_name, new_ty)
         }
       }
+    NIsArray(name) =>
+      match self.lookup_base(name) {
+        None => self
+        Some(current_ty) => {
+          let new_ty = apply_is_array_narrowing(current_ty)
+          self.with_narrowing(name, new_ty)
+        }
+      }
     NAnd(a, b) => {
       let env1 = self.apply_narrowing(a)
       env1.apply_narrowing(b)

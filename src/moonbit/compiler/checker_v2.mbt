@@ -613,10 +613,39 @@ fn check_arrow_v2(
 }
 
 ///|
+/// Extract narrowing from a call expression (e.g., Array.isArray(x))
+fn extract_call_narrowing(call : CallExpression) -> Narrowing {
+  // Check for Array.isArray(x)
+  match call.expression {
+    PropertyAccessExpression(prop) =>
+      if prop.name == "isArray" {
+        match prop.expression {
+          Identifier(id) if id.name == "Array" => {
+            // This is Array.isArray(...)
+            if call.arguments.length() == 1 {
+              match call.arguments[0] {
+                Identifier(arg_id) => return NIsArray(arg_id.name)
+                _ => ()
+              }
+            }
+          }
+          _ => ()
+        }
+      }
+    _ => ()
+  }
+  NNone
+}
+
+///|
 /// Infer call expression type
 /// Supports generic function calls with type argument inference and constraint checking
 fn infer_call_v2(env : TypeEnv, call : CallExpression) -> CheckResultV2 {
   let callee_result = infer_expr_v2(env, call.expression)
+
+  // Extract narrowing from special call patterns like Array.isArray()
+  let call_narrowing = extract_call_narrowing(call)
+
   match callee_result.ty {
     TFunction(func) => {
       let all_errors : Array[TypeMismatchError] = []
@@ -643,14 +672,14 @@ fn infer_call_v2(env : TypeEnv, call : CallExpression) -> CheckResultV2 {
             }
           }
         }
-        { ty: func.return_type, narrowing: NNone, errors: all_errors }
+        { ty: func.return_type, narrowing: call_narrowing, errors: all_errors }
       } else {
         // Generic function call - use full generic handling
         let generic_result = check_generic_call(
           env, func, call.type_arguments, call.arguments,
         )
         all_errors.append(generic_result.errors)
-        { ty: generic_result.return_type, narrowing: NNone, errors: all_errors }
+        { ty: generic_result.return_type, narrowing: call_narrowing, errors: all_errors }
       }
     }
     TObject(obj) =>
@@ -661,19 +690,19 @@ fn infer_call_v2(env : TypeEnv, call : CallExpression) -> CheckResultV2 {
         // Use first call signature - check for generics
         let sig = obj.call_signatures[0]
         if sig.type_params.is_empty() && call.type_arguments.is_empty() {
-          { ty: sig.return_type, narrowing: NNone, errors: callee_result.errors }
+          { ty: sig.return_type, narrowing: call_narrowing, errors: callee_result.errors }
         } else {
           let generic_result = check_generic_call(
             env, sig, call.type_arguments, call.arguments,
           )
           {
             ty: generic_result.return_type,
-            narrowing: NNone,
+            narrowing: call_narrowing,
             errors: generic_result.errors,
           }
         }
       }
-    TAny => CheckResultV2::ok(TAny)
+    TAny => { ty: TAny, narrowing: call_narrowing, errors: [] }
     other => CheckResultV2::error(TError, not_callable_error(PRoot, other))
   }
 }
