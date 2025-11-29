@@ -102,6 +102,16 @@ pub enum MismatchReason {
   // Overloads
   NoOverloadMatches(Int) // number of overloads tried
   OverloadCandidateFailed(Int) // index of failed overload
+
+  // Class/OOP
+  PrivateMemberAccess(String, String) // member_name, declared_in_class
+  ProtectedMemberAccess(String, String) // member_name, declared_in_class
+  AbstractClassInstantiation(String) // class_name
+  AbstractMemberNotImplemented(String, String) // member_name, base_class
+  OverrideReturnTypeMismatch(String, String) // method_name, base_class
+  OverrideParamCountMismatch(String, Int, Int) // method_name, base_required, derived_required
+  OverrideParamTypeMismatch(String, Int, String) // method_name, param_index, param_name
+  OverrideAccessibilityMismatch(String, String, String) // member_name, base_accessibility, derived_accessibility
 } derive(Show, Eq)
 
 // ============================================================================
@@ -712,6 +722,19 @@ pub fn get_friendly_title(reason : MismatchReason) -> String {
     NoOverloadMatches(count) =>
       "NO OVERLOAD MATCHES (" + count.to_string() + " tried)"
     OverloadCandidateFailed(index) => "OVERLOAD " + index.to_string() + " FAILED"
+    PrivateMemberAccess(name, _) => "PRIVATE MEMBER '" + name + "'"
+    ProtectedMemberAccess(name, _) => "PROTECTED MEMBER '" + name + "'"
+    AbstractClassInstantiation(name) => "CANNOT INSTANTIATE ABSTRACT CLASS '" + name + "'"
+    AbstractMemberNotImplemented(name, _) =>
+      "ABSTRACT MEMBER '" + name + "' NOT IMPLEMENTED"
+    OverrideReturnTypeMismatch(name, _) =>
+      "OVERRIDE RETURN TYPE MISMATCH '" + name + "'"
+    OverrideParamCountMismatch(name, _, _) =>
+      "OVERRIDE PARAMETER COUNT MISMATCH '" + name + "'"
+    OverrideParamTypeMismatch(name, _, _) =>
+      "OVERRIDE PARAMETER TYPE MISMATCH '" + name + "'"
+    OverrideAccessibilityMismatch(name, _, _) =>
+      "OVERRIDE ACCESSIBILITY MISMATCH '" + name + "'"
   }
 }
 
@@ -799,6 +822,58 @@ pub fn get_why_explanation(reason : MismatchReason) -> String {
       "Overload candidate " +
       index.to_string() +
       " didn't match because the argument types weren't compatible with its parameter types."
+    PrivateMemberAccess(name, declared_in) =>
+      "The property '" +
+      name +
+      "' is marked as private in class '" +
+      declared_in +
+      "'. Private members can only be accessed from within the class where they are declared."
+    ProtectedMemberAccess(name, declared_in) =>
+      "The property '" +
+      name +
+      "' is marked as protected in class '" +
+      declared_in +
+      "'. Protected members can only be accessed from within the class and its subclasses."
+    AbstractClassInstantiation(name) =>
+      "Class '" +
+      name +
+      "' is abstract and cannot be instantiated directly. Abstract classes are meant to be extended by concrete classes that implement their abstract members."
+    AbstractMemberNotImplemented(name, base_class) =>
+      "The abstract member '" +
+      name +
+      "' from base class '" +
+      base_class +
+      "' must be implemented by the derived class. Abstract members define a contract that derived classes must fulfill."
+    OverrideReturnTypeMismatch(name, base_class) =>
+      "The override of method '" +
+      name +
+      "' has a return type that is not compatible with the base method in '" +
+      base_class +
+      "'. Override methods must have a return type that is assignable to the base method's return type (covariance)."
+    OverrideParamCountMismatch(name, base_required, derived_required) =>
+      "The override of method '" +
+      name +
+      "' requires " +
+      derived_required.to_string() +
+      " parameters, but the base method requires only " +
+      base_required.to_string() +
+      ". Override methods cannot require more parameters than the base method."
+    OverrideParamTypeMismatch(name, param_idx, param_name) =>
+      "Parameter '" +
+      param_name +
+      "' at position " +
+      param_idx.to_string() +
+      " in override method '" +
+      name +
+      "' has an incompatible type. Parameter types in override methods must be compatible with the base method (contravariance)."
+    OverrideAccessibilityMismatch(name, base_acc, derived_acc) =>
+      "The override of member '" +
+      name +
+      "' changes accessibility from " +
+      base_acc +
+      " to " +
+      derived_acc +
+      ". Override members cannot be more restrictive than the base member's accessibility."
   }
 }
 
@@ -1087,6 +1162,73 @@ pub fn get_how_to_fix(
         "If you expected this overload to match, ensure argument types are compatible.",
       )
     }
+    PrivateMemberAccess(name, declared_in) => {
+      fixes.push(
+        "Property '" + name + "' is private to class '" + declared_in + "'.",
+      )
+      fixes.push("")
+      fixes.push("Options to fix:")
+      fixes.push("1. Access this property from within the class methods only")
+      fixes.push("2. Add a public getter method:")
+      fixes.push("       public get" + name + "() { return this." + name + "; }")
+      fixes.push("3. Change the property to public or protected if appropriate")
+    }
+    ProtectedMemberAccess(name, declared_in) => {
+      fixes.push(
+        "Property '" + name + "' is protected in class '" + declared_in + "'.",
+      )
+      fixes.push("")
+      fixes.push("Options to fix:")
+      fixes.push("1. Access this property from a subclass or within the class")
+      fixes.push("2. Add a public method that exposes the functionality")
+      fixes.push("3. Change the property to public if appropriate")
+    }
+    AbstractClassInstantiation(name) => {
+      fixes.push("Cannot instantiate abstract class '" + name + "'.")
+      fixes.push("")
+      fixes.push("Options to fix:")
+      fixes.push("1. Create a concrete class that extends the abstract class:")
+      fixes.push("       class Concrete" + name + " extends " + name + " {")
+      fixes.push("         // implement abstract members")
+      fixes.push("       }")
+      fixes.push("2. Instantiate the concrete class instead")
+    }
+    AbstractMemberNotImplemented(name, base_class) => {
+      fixes.push(
+        "Abstract member '" + name + "' from '" + base_class + "' must be implemented.",
+      )
+      fixes.push("")
+      fixes.push("Add the implementation in your class:")
+      fixes.push("       " + name + "(...) { /* implementation */ }")
+    }
+    OverrideReturnTypeMismatch(name, _) => {
+      fixes.push("Override method '" + name + "' has incompatible return type.")
+      fixes.push("")
+      fixes.push("Ensure the return type is assignable to the base method's return type.")
+    }
+    OverrideParamCountMismatch(name, base_count, _) => {
+      fixes.push(
+        "Override method '" +
+        name +
+        "' requires more parameters than base method.",
+      )
+      fixes.push("")
+      fixes.push(
+        "Make extra parameters optional or reduce to " +
+        base_count.to_string() +
+        " required parameters.",
+      )
+    }
+    OverrideParamTypeMismatch(name, _, _) => {
+      fixes.push("Override method '" + name + "' has incompatible parameter type.")
+      fixes.push("")
+      fixes.push("Ensure parameter types are compatible with the base method.")
+    }
+    OverrideAccessibilityMismatch(name, base_acc, _) => {
+      fixes.push("Override member '" + name + "' is more restrictive than base.")
+      fixes.push("")
+      fixes.push("Keep or widen accessibility to: " + base_acc)
+    }
   }
   fixes
 }
@@ -1113,6 +1255,14 @@ pub fn get_error_code(reason : MismatchReason) -> Int {
     CircularReference | ExcessiveDepth => 2322
     IntersectionNotSatisfied(_) => 2322
     NoOverloadMatches(_) | OverloadCandidateFailed(_) => 2769 // TS2769: No overload matches this call
+    PrivateMemberAccess(_, _) => 2341 // TS2341: Property 'x' is private
+    ProtectedMemberAccess(_, _) => 2445 // TS2445: Property 'x' is protected
+    AbstractClassInstantiation(_) => 2511 // TS2511: Cannot create an instance of abstract class
+    AbstractMemberNotImplemented(_, _) => 2515 // TS2515: Non-abstract class does not implement inherited abstract member
+    OverrideReturnTypeMismatch(_, _)
+    | OverrideParamTypeMismatch(_, _, _)
+    | OverrideParamCountMismatch(_, _, _) => 2416 // TS2416: Property is not assignable to base type
+    OverrideAccessibilityMismatch(_, _, _) => 2415 // TS2415: Class incorrectly extends base class
   }
 }
 
