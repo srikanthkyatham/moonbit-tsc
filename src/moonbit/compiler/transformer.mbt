@@ -265,6 +265,7 @@ pub fn transform(node : Node, ctx : TransformerContext) -> Node {
 
     // Import/Export - keep as-is but transform any embedded expressions
     ImportDeclaration(id) => ImportDeclaration(id)
+    ImportEqualsDeclaration(ied) => ImportEqualsDeclaration(ied)
     ExportDeclaration(ed) => ExportDeclaration(ed)
     ExportAssignment(ea) =>
       ExportAssignment({

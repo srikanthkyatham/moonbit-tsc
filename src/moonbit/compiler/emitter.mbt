@@ -173,6 +173,7 @@ pub fn emit(node : Node, ctx : EmitterContext) -> String {
     TypeAliasDeclaration(_) => "" // Removed by transformer
     EnumDeclaration(_) => "" // Transformed to VariableStatement
     ImportDeclaration(id) => emit_import_declaration(id, ctx)
+    ImportEqualsDeclaration(ied) => emit_import_equals_declaration(ied, ctx)
     ExportDeclaration(ed) => emit_export_declaration(ed, ctx)
     ExportAssignment(ea) => emit_export_assignment(ea, ctx)
 
@@ -1597,6 +1598,23 @@ fn emit_static_block(sb : StaticBlock, ctx : EmitterContext) -> String {
   let mut result = ctx.get_indent() + "static "
   result = result + emit(sb.body, ctx)
   result
+}
+
+///|
+/// Emit import equals declaration: import X = M.N
+/// For namespaces, this emits nothing if the namespace is empty
+/// or emits var X; only if needed for side effects
+fn emit_import_equals_declaration(
+  ied : ImportEqualsDeclaration,
+  ctx : EmitterContext,
+) -> String {
+  // For internal module references (M.X), typically emits nothing
+  // because the namespace alias is erased at runtime
+  // Only emit if the reference is to an external module (require)
+  // For now, emit nothing for internal namespace aliases
+  ignore(ied)
+  ignore(ctx)
+  ""
 }
 
 ///|

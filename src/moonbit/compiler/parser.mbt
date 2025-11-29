@@ -1491,6 +1491,53 @@ fn parse_identifier(parser : Parser) -> Result[(Identifier, Parser), Parser] {
   }
 }
 
+///|
+/// Parse an entity name (qualified name like M, M.N, M.N.O)
+/// Used for import equals declarations: import X = M.N
+fn parse_entity_name(parser : Parser) -> (Node, Parser) {
+  // Start with an identifier
+  match current_token(parser) {
+    Identifier(name, loc) => {
+      let mut parser = advance_parser(parser)
+      let mut result : Node = Node::Identifier(Identifier::{ name, location: loc })
+      // Parse any following .identifier chains
+      while true {
+        match current_token(parser) {
+          Dot(_) => {
+            parser = advance_parser(parser) // consume '.'
+            match current_token(parser) {
+              Identifier(prop_name, prop_loc) => {
+                parser = advance_parser(parser)
+                let start_loc = get_node_location(result)
+                result = Node::PropertyAccessExpression(PropertyAccessExpression::{
+                  expression: result,
+                  name: prop_name,
+                  location: SourceLocation::new(
+                    start_loc.file_path,
+                    start_loc.start,
+                    prop_loc.end,
+                  ),
+                })
+              }
+              _ => break
+            }
+          }
+          _ => break
+        }
+      }
+      (result, parser)
+    }
+    _ => {
+      // Return empty identifier as fallback
+      let loc = current_token(parser).location()
+      (
+        Node::Identifier(Identifier::{ name: "", location: loc }),
+        parser,
+      )
+    }
+  }
+}
+
 // ============================================================================
 // Stub implementations for declarations (to be implemented)
 // ============================================================================
@@ -3464,12 +3511,40 @@ fn parse_import_declaration(parser : Parser) -> Result[(Node, Parser), Parser] {
   }
 
   // Parse import clause (default and/or named imports)
+  // First, check for import equals declaration: import X = M.N
   let (default_import, parser) = match current_token(parser) {
     Identifier(name, _) => {
       let parser = advance_parser(parser)
-      // Check if there's a comma for mixed import
+      // Check for import equals declaration: import X = M.N
       match current_token(parser) {
+        Equals(_) => {
+          // This is an import equals declaration
+          let parser = advance_parser(parser) // consume '='
+          let (module_reference, parser) = parse_entity_name(parser)
+          // Consume optional semicolon
+          let parser = match current_token(parser) {
+            Semicolon(_) => advance_parser(parser)
+            _ => parser
+          }
+          let end_loc = current_token(parser).location()
+          return Ok(
+            (
+              Node::ImportEqualsDeclaration(ImportEqualsDeclaration::{
+                name,
+                module_reference,
+                is_export: false,
+                location: SourceLocation::new(
+                  start_loc.file_path,
+                  start_loc.start,
+                  end_loc.end,
+                ),
+              }),
+              parser,
+            ),
+          )
+        }
         Comma(_) => {
+          // Mixed import: import foo, { bar } from 'mod'
           let parser = advance_parser(parser)
           (Some(name), parser)
         }
@@ -4122,6 +4197,13 @@ fn add_export_modifier(node : Node) -> Node {
         location: ed.location,
       })
     }
+    ImportEqualsDeclaration(ied) =>
+      Node::ImportEqualsDeclaration(ImportEqualsDeclaration::{
+        name: ied.name,
+        module_reference: ied.module_reference,
+        is_export: true,
+        location: ied.location,
+      })
     _ => node // For other nodes, return as-is
   }
 }

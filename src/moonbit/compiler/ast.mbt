@@ -16,6 +16,7 @@ pub enum Node {
   EnumDeclaration(EnumDeclaration)
   ModuleDeclaration(ModuleDeclaration)
   ImportDeclaration(ImportDeclaration)
+  ImportEqualsDeclaration(ImportEqualsDeclaration) // import X = M.N
   ExportDeclaration(ExportDeclaration)
   ExportAssignment(ExportAssignment)
 
@@ -266,6 +267,15 @@ pub struct ImportDeclaration {
   import_clause : ImportClause?
   module_specifier : String
   is_type_only : Bool // True for "import type { ... }" syntax
+  location : SourceLocation
+} derive(Show)
+
+///|
+/// Import equals declaration: import X = M.N or export import X = N
+pub struct ImportEqualsDeclaration {
+  name : String
+  module_reference : Node // Can be Identifier or PropertyAccessExpression (e.g., M.N)
+  is_export : Bool // True for "export import X = N"
   location : SourceLocation
 } derive(Show)
 
@@ -1521,6 +1531,7 @@ pub fn get_location(node : Node) -> SourceLocation {
     EnumDeclaration(e) => e.location
     ModuleDeclaration(m) => m.location
     ImportDeclaration(i) => i.location
+    ImportEqualsDeclaration(i) => i.location
     ExportDeclaration(e) => e.location
     ExportAssignment(e) => e.location
     IfStatement(i) => i.location
