@@ -614,41 +614,64 @@ fn check_arrow_v2(
 
 ///|
 /// Infer call expression type
+/// Supports generic function calls with type argument inference and constraint checking
 fn infer_call_v2(env : TypeEnv, call : CallExpression) -> CheckResultV2 {
   let callee_result = infer_expr_v2(env, call.expression)
   match callee_result.ty {
     TFunction(func) => {
-      // Check arguments against parameters
       let all_errors : Array[TypeMismatchError] = []
       all_errors.append(callee_result.errors)
-      for i, arg in call.arguments {
-        if i < func.params.length() {
-          let expected_param = func.params[i]
-          let arg_result = check_against_v2(env, arg, expected_param.ty)
-          if arg_result.has_errors() {
-            for err in arg_result.errors {
-              all_errors.push(TypeMismatchError::{
-                path: PParameter(err.path, i, expected_param.name),
-                expected: err.expected,
-                actual: err.actual,
-                reason: err.reason,
-                children: err.children,
-                suggestions: err.suggestions,
-              })
+
+      // Check if this is a generic function call
+      if func.type_params.is_empty() && call.type_arguments.is_empty() {
+        // Non-generic call - check arguments directly
+        for i, arg in call.arguments {
+          if i < func.params.length() {
+            let expected_param = func.params[i]
+            let arg_result = check_against_v2(env, arg, expected_param.ty)
+            if arg_result.has_errors() {
+              for err in arg_result.errors {
+                all_errors.push(TypeMismatchError::{
+                  path: PParameter(err.path, i, expected_param.name),
+                  expected: err.expected,
+                  actual: err.actual,
+                  reason: err.reason,
+                  children: err.children,
+                  suggestions: err.suggestions,
+                })
+              }
             }
           }
         }
+        { ty: func.return_type, narrowing: NNone, errors: all_errors }
+      } else {
+        // Generic function call - use full generic handling
+        let generic_result = check_generic_call(
+          env, func, call.type_arguments, call.arguments,
+        )
+        all_errors.append(generic_result.errors)
+        { ty: generic_result.return_type, narrowing: NNone, errors: all_errors }
       }
-      { ty: func.return_type, narrowing: NNone, errors: all_errors }
     }
     TObject(obj) =>
       // Check for call signatures
       if obj.call_signatures.is_empty() {
         CheckResultV2::error(TError, not_callable_error(PRoot, TObject(obj)))
       } else {
-        // Use first call signature (simplified)
+        // Use first call signature - check for generics
         let sig = obj.call_signatures[0]
-        { ty: sig.return_type, narrowing: NNone, errors: callee_result.errors }
+        if sig.type_params.is_empty() && call.type_arguments.is_empty() {
+          { ty: sig.return_type, narrowing: NNone, errors: callee_result.errors }
+        } else {
+          let generic_result = check_generic_call(
+            env, sig, call.type_arguments, call.arguments,
+          )
+          {
+            ty: generic_result.return_type,
+            narrowing: NNone,
+            errors: generic_result.errors,
+          }
+        }
       }
     TAny => CheckResultV2::ok(TAny)
     other => CheckResultV2::error(TError, not_callable_error(PRoot, other))

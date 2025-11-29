@@ -1,0 +1,775 @@
+// Generic Type System - Type Argument Inference and Constraint Checking
+// Implements Phase 1 of the TypeScript compiler feature gap:
+// 1. Generic type instantiation
+// 2. Type argument inference from call arguments
+// 3. Constraint checking (T extends Base)
+
+// ============================================================================
+// AST Type Node to TypeV2 Conversion
+// ============================================================================
+
+///|
+/// Convert an AST type node to TypeV2
+pub fn ast_type_to_v2(env : TypeEnv, node : Node) -> TypeV2 {
+  match node {
+    // Keyword types (number, string, boolean, etc.)
+    KeywordType(kt) =>
+      match kt.kind {
+        Any => TAny
+        Unknown => TUnknown
+        Never => TNever
+        Void => TVoid
+        Undefined => TUndefined
+        Null => TNull
+        Boolean => TBoolean
+        Number => TNumber
+        String => TString
+        Symbol => TSymbol
+        Object => TObject(ObjectTypeV2::empty())
+        Const => TAny // as const is handled elsewhere
+      }
+
+    // Type reference (e.g., Array<T>, MyType, T)
+    TypeReference(tr) => {
+      // First check if it's a type parameter in scope
+      match env.lookup_type_param(tr.type_name) {
+        Some(param) => TTypeParam(param.name, param.constraint)
+        None => {
+          // Convert type arguments
+          let type_args : Array[TypeV2] = tr.type_arguments.map(fn(arg) {
+            ast_type_to_v2(env, arg)
+          })
+
+          // Check for type alias
+          match env.resolve_type_alias(tr.type_name, type_args) {
+            Some(resolved) => resolved
+            None =>
+              // Check for interface
+              match env.lookup_interface(tr.type_name) {
+                Some(obj) => TObject(obj)
+                None =>
+                  // Return as generic instance if it has type args, otherwise as type param
+                  if type_args.is_empty() {
+                    // Could be an unresolved type reference
+                    TGenericInstance(tr.type_name, [])
+                  } else {
+                    TGenericInstance(tr.type_name, type_args)
+                  }
+              }
+          }
+        }
+      }
+    }
+
+    // Union type (A | B | C)
+    UnionType(ut) => {
+      let types = ut.types.map(fn(t) { ast_type_to_v2(env, t) })
+      make_union(types)
+    }
+
+    // Intersection type (A & B)
+    IntersectionType(it) => {
+      let types = it.types.map(fn(t) { ast_type_to_v2(env, t) })
+      make_intersection(types)
+    }
+
+    // Array type (T[])
+    ArrayType(at) => TArray(ast_type_to_v2(env, at.element_type))
+
+    // Tuple type ([A, B, C])
+    TupleType(tt) => {
+      let elements = tt.element_types.map(fn(elem) {
+        match elem {
+          NamedTupleMember(ntm) =>
+            TupleElementV2::{
+              ty: ast_type_to_v2(env, ntm.element_type),
+              optional: ntm.is_optional,
+              is_rest: false,
+              label: Some(ntm.name),
+            }
+          OptionalType(ot) =>
+            TupleElementV2::{
+              ty: ast_type_to_v2(env, ot.element_type),
+              optional: true,
+              is_rest: false,
+              label: None,
+            }
+          RestType(rt) =>
+            TupleElementV2::{
+              ty: ast_type_to_v2(env, rt.element_type),
+              optional: false,
+              is_rest: true,
+              label: None,
+            }
+          other =>
+            TupleElementV2::{
+              ty: ast_type_to_v2(env, other),
+              optional: false,
+              is_rest: false,
+              label: None,
+            }
+        }
+      })
+      TTuple(elements)
+    }
+
+    // Function type ((a: A, b: B) => R)
+    FunctionType(ft) => {
+      // Convert type parameters
+      let type_params = ft.type_parameters.map(fn(tp) {
+        TypeParamV2::{
+          name: tp.name,
+          constraint: match tp.constraint {
+            Some(c) => Some(ast_type_to_v2(env, c))
+            None => None
+          },
+          default_type: match tp.default {
+            Some(d) => Some(ast_type_to_v2(env, d))
+            None => None
+          },
+        }
+      })
+
+      // Create child env with type params in scope
+      let child_env = env.with_type_params(type_params)
+
+      // Convert parameters
+      let params = ft.parameters.map(fn(p) {
+        match p {
+          Parameter(param) =>
+            ParamInfoV2::{
+              name: get_param_name(param.name),
+              ty: match param.type_annotation {
+                Some(t) => ast_type_to_v2(child_env, t)
+                None => TAny
+              },
+              optional: param.is_optional,
+              is_rest: param.is_rest,
+            }
+          _ => ParamInfoV2::required("unknown", TAny)
+        }
+      })
+
+      let return_type = ast_type_to_v2(child_env, ft.return_type)
+
+      TFunction(FunctionTypeV2::{ type_params, params, rest_param: None, return_type })
+    }
+
+    // Literal type
+    LiteralType(lt) =>
+      match lt.literal {
+        StringLiteral(s) => TLiteralString(s.value)
+        NumericLiteral(n) => {
+          let num_val = @strconv.parse_double(n.value) catch { _ => 0.0 }
+          TLiteralNumber(num_val)
+        }
+        BooleanLiteral(b) => TLiteralBool(b.value)
+        NullLiteral(_) => TNull
+        _ => TAny
+      }
+
+    // Type literal (object type)
+    TypeLiteral(tl) => {
+      let fields : Map[String, FieldInfoV2] = Map::new()
+      for member in tl.members {
+        match member {
+          TypeLiteralProperty(prop) => {
+            let prop_ty = match prop.type_node {
+              Some(t) => ast_type_to_v2(env, t)
+              None => TAny
+            }
+            fields.set(prop.name, FieldInfoV2::{
+              ty: prop_ty,
+              optional: prop.is_optional,
+              is_readonly: prop.is_readonly,
+            })
+          }
+          _ => ()
+        }
+      }
+      TObject(ObjectTypeV2::{
+        fields,
+        call_signatures: [],
+        construct_signatures: [],
+        index_signature: None,
+        is_class: false,
+        class_name: None,
+      })
+    }
+
+    // Conditional type (T extends U ? X : Y)
+    ConditionalType(ct) =>
+      TConditional(ConditionalTypeV2::{
+        check_type: ast_type_to_v2(env, ct.check_type),
+        extends_type: ast_type_to_v2(env, ct.extends_type),
+        true_type: ast_type_to_v2(env, ct.true_type),
+        false_type: ast_type_to_v2(env, ct.false_type),
+      })
+
+    // Indexed access type (T[K])
+    IndexedAccessType(ia) =>
+      TIndexAccess(IndexAccessTypeV2::{
+        object_type: ast_type_to_v2(env, ia.object_type),
+        index_type: ast_type_to_v2(env, ia.index_type),
+      })
+
+    // Type operator (keyof T, typeof x, etc.)
+    TypeOperator(to) =>
+      match to.operator {
+        KeyOf => {
+          let inner = ast_type_to_v2(env, to.type_node)
+          // For keyof, we'd need to extract the keys - simplified here
+          match inner {
+            TObject(obj) => {
+              let keys : Array[TypeV2] = []
+              for kv in obj.fields {
+                keys.push(TLiteralString(kv.0))
+              }
+              make_union(keys)
+            }
+            _ => TString // Simplified
+          }
+        }
+        TypeOf => TAny // Would need runtime value resolution
+        Unique => TSymbol
+        Readonly => ast_type_to_v2(env, to.type_node) // TODO: mark as readonly
+      }
+
+    // Infer type (infer R)
+    InferType(it) => TInfer(it.type_parameter)
+
+    // Template literal type
+    TemplateLiteralType(tlt) => {
+      let texts : Array[String] = [tlt.head]
+      let types : Array[TypeV2] = []
+      for span in tlt.spans {
+        texts.push(span.literal)
+        types.push(ast_type_to_v2(env, span.type_node))
+      }
+      TTemplateLiteral(TemplateLiteralTypeV2::{ texts, types })
+    }
+
+    // Fallback
+    _ => TAny
+  }
+}
+
+///|
+/// Helper to get parameter name from node
+fn get_param_name(node : Node) -> String {
+  match node {
+    Identifier(id) => id.name
+    _ => "param"
+  }
+}
+
+// ============================================================================
+// Type Argument Inference
+// ============================================================================
+
+///|
+/// Result of type argument inference
+pub struct InferenceResult {
+  inferred_args : Map[String, TypeV2]
+  errors : Array[TypeMismatchError]
+} derive(Show)
+
+///|
+/// Infer type arguments from function call arguments
+/// Given a generic function and actual arguments, infer what type arguments should be
+pub fn infer_generic_type_args(
+  func : FunctionTypeV2,
+  arg_types : Array[TypeV2],
+  explicit_type_args : Array[TypeV2],
+) -> InferenceResult {
+  let inferred : Map[String, TypeV2] = Map::new()
+  let errors : Array[TypeMismatchError] = []
+
+  // First, use any explicit type arguments
+  for i, param in func.type_params {
+    if i < explicit_type_args.length() {
+      inferred.set(param.name, explicit_type_args[i])
+    }
+  }
+
+  // Then, try to infer remaining type parameters from argument types
+  for i, arg_ty in arg_types {
+    if i < func.params.length() {
+      let param_ty = func.params[i].ty
+      do_infer_from_types(param_ty, arg_ty, inferred)
+    }
+  }
+
+  // Fill in defaults for any uninferred type parameters
+  for param in func.type_params {
+    if not(inferred.contains(param.name)) {
+      match param.default_type {
+        Some(default_ty) => inferred.set(param.name, default_ty)
+        None =>
+          // Could not infer type - report error
+          errors.push(TypeMismatchError::{
+            path: PRoot,
+            expected: TTypeParam(param.name, param.constraint),
+            actual: TUnknown,
+            reason: CannotInfer(param.name),
+            children: [],
+            suggestions: [
+              "Provide an explicit type argument: func<" + param.name + ">()",
+            ],
+          })
+      }
+    }
+  }
+
+  { inferred_args: inferred, errors }
+}
+
+///|
+/// Infer type parameter bindings by comparing parameter type with argument type
+fn do_infer_from_types(
+  param_ty : TypeV2,
+  arg_ty : TypeV2,
+  inferred : Map[String, TypeV2],
+) -> Unit {
+  match param_ty {
+    // Direct type parameter - infer from argument
+    TTypeParam(name, _) =>
+      if not(inferred.contains(name)) {
+        inferred.set(name, arg_ty)
+      }
+
+    // Array type - infer from array element
+    TArray(elem_ty) =>
+      match arg_ty {
+        TArray(arg_elem) => do_infer_from_types(elem_ty, arg_elem, inferred)
+        _ => ()
+      }
+
+    // Tuple type - infer from each element
+    TTuple(elems) =>
+      match arg_ty {
+        TTuple(arg_elems) =>
+          for i, elem in elems {
+            if i < arg_elems.length() {
+              do_infer_from_types(elem.ty, arg_elems[i].ty, inferred)
+            }
+          }
+        _ => ()
+      }
+
+    // Object type - infer from matching properties
+    TObject(obj) =>
+      match arg_ty {
+        TObject(arg_obj) =>
+          for kv in obj.fields {
+            let prop_name = kv.0
+            let field = kv.1
+            match arg_obj.fields.get(prop_name) {
+              Some(arg_field) => do_infer_from_types(field.ty, arg_field.ty, inferred)
+              None => ()
+            }
+          }
+        _ => ()
+      }
+
+    // Function type - infer from return type and parameters
+    TFunction(func) =>
+      match arg_ty {
+        TFunction(arg_func) => {
+          // Infer from return type
+          do_infer_from_types(func.return_type, arg_func.return_type, inferred)
+          // Infer from parameters (contravariant)
+          for i, param in func.params {
+            if i < arg_func.params.length() {
+              do_infer_from_types(param.ty, arg_func.params[i].ty, inferred)
+            }
+          }
+        }
+        _ => ()
+      }
+
+    // Generic instance - infer from type arguments
+    TGenericInstance(gen_name, args) =>
+      match arg_ty {
+        TGenericInstance(arg_name, arg_args) if gen_name == arg_name =>
+          for i, arg in args {
+            if i < arg_args.length() {
+              do_infer_from_types(arg, arg_args[i], inferred)
+            }
+          }
+        _ => ()
+      }
+
+    // Union type - try each member
+    TUnion(types) =>
+      match arg_ty {
+        TUnion(arg_types) =>
+          // For unions, we need to find matching members
+          for ty in types {
+            for arg in arg_types {
+              do_infer_from_types(ty, arg, inferred)
+            }
+          }
+        single =>
+          // Argument is a single type that should match one union member
+          for ty in types {
+            do_infer_from_types(ty, single, inferred)
+          }
+      }
+
+    // Intersection type - infer from all members
+    TIntersection(types) =>
+      for ty in types {
+        do_infer_from_types(ty, arg_ty, inferred)
+      }
+
+    // Other types - no inference needed
+    _ => ()
+  }
+}
+
+// ============================================================================
+// Constraint Checking
+// ============================================================================
+
+///|
+/// Check if type argument satisfies the constraint of a type parameter
+pub fn check_constraint(
+  type_param : TypeParamV2,
+  type_arg : TypeV2,
+) -> Array[TypeMismatchError] {
+  match type_param.constraint {
+    None => [] // No constraint to check
+    Some(constraint) =>
+      if is_subtype_of(type_arg, constraint) {
+        []
+      } else {
+        [
+          TypeMismatchError::{
+            path: PRoot,
+            expected: constraint,
+            actual: type_arg,
+            reason: ConstraintNotSatisfied(type_param.name, constraint),
+            children: [],
+            suggestions: [],
+          },
+        ]
+      }
+  }
+}
+
+///|
+/// Check all type arguments against their constraints
+pub fn check_all_constraints(
+  type_params : Array[TypeParamV2],
+  type_args : Array[TypeV2],
+) -> Array[TypeMismatchError] {
+  let errors : Array[TypeMismatchError] = []
+  for i, param in type_params {
+    if i < type_args.length() {
+      errors.append(check_constraint(param, type_args[i]))
+    }
+  }
+  errors
+}
+
+///|
+/// Check if `source` is a subtype of `target` (simplified structural check)
+fn is_subtype_of(source : TypeV2, target : TypeV2) -> Bool {
+  // Same type
+  if source == target {
+    return true
+  }
+
+  // Any is subtype of everything (except never) and everything is subtype of any
+  match (source, target) {
+    (TAny, _) => true
+    (_, TAny) => true
+    (_, TUnknown) => true // Everything is subtype of unknown
+    (TNever, _) => true // Never is subtype of everything
+
+    // Literal types are subtypes of their base types
+    (TLiteralString(_), TString) => true
+    (TLiteralNumber(_), TNumber) => true
+    (TLiteralBool(_), TBoolean) => true
+    (TLiteralBigInt(_), TBigInt) => true
+
+    // Union: source must be subtype of at least one target member
+    (src, TUnion(target_types)) =>
+      target_types.iter().any(fn(t) { is_subtype_of(src, t) })
+
+    // Source union: all members must be subtypes of target
+    (TUnion(source_types), tgt) =>
+      source_types.iter().all(fn(s) { is_subtype_of(s, tgt) })
+
+    // Intersection target: source must be subtype of all members
+    (src, TIntersection(target_types)) =>
+      target_types.iter().all(fn(t) { is_subtype_of(src, t) })
+
+    // Source intersection: at least one member must be subtype of target
+    (TIntersection(source_types), tgt) =>
+      source_types.iter().any(fn(s) { is_subtype_of(s, tgt) })
+
+    // Array types - covariant
+    (TArray(src_elem), TArray(tgt_elem)) => is_subtype_of(src_elem, tgt_elem)
+
+    // Object types - structural subtyping
+    (TObject(src_obj), TObject(tgt_obj)) =>
+      is_object_subtype(src_obj, tgt_obj)
+
+    // Function types - contravariant params, covariant return
+    (TFunction(src_func), TFunction(tgt_func)) =>
+      is_function_subtype(src_func, tgt_func)
+
+    // Generic instances
+    (TGenericInstance(src_name, src_args), TGenericInstance(tgt_name, tgt_args)) =>
+      if src_name != tgt_name || src_args.length() != tgt_args.length() {
+        false
+      } else {
+        let mut all_match = true
+        for i, src_arg in src_args {
+          if i < tgt_args.length() {
+            if not(is_subtype_of(src_arg, tgt_args[i])) {
+              all_match = false
+              break
+            }
+          }
+        }
+        all_match
+      }
+
+    // Tuple types
+    (TTuple(src_elems), TTuple(tgt_elems)) => {
+      if src_elems.length() < tgt_elems.length() {
+        return false
+      }
+      for i, tgt_elem in tgt_elems {
+        if i >= src_elems.length() {
+          if not(tgt_elem.optional) {
+            return false
+          }
+        } else if not(is_subtype_of(src_elems[i].ty, tgt_elem.ty)) {
+          return false
+        }
+      }
+      true
+    }
+
+    // Default - not a subtype
+    _ => false
+  }
+}
+
+///|
+/// Check if source object type is subtype of target
+fn is_object_subtype(source : ObjectTypeV2, target : ObjectTypeV2) -> Bool {
+  // All required properties in target must exist in source with compatible types
+  for kv in target.fields {
+    let name = kv.0
+    let tgt_field = kv.1
+    match source.fields.get(name) {
+      None =>
+        if not(tgt_field.optional) {
+          return false
+        }
+      Some(src_field) =>
+        if not(is_subtype_of(src_field.ty, tgt_field.ty)) {
+          return false
+        }
+    }
+  }
+  true
+}
+
+///|
+/// Check if source function type is subtype of target
+fn is_function_subtype(source : FunctionTypeV2, target : FunctionTypeV2) -> Bool {
+  // Return type is covariant
+  if not(is_subtype_of(source.return_type, target.return_type)) {
+    return false
+  }
+
+  // Parameters are contravariant (target params must be subtypes of source params)
+  // Also, source can have fewer required params
+  for i, tgt_param in target.params {
+    if i >= source.params.length() {
+      // Source has fewer params - OK if remaining target params are optional
+      if not(tgt_param.optional) {
+        return false
+      }
+    } else {
+      let src_param = source.params[i]
+      // Contravariance: target param type must be subtype of source param type
+      if not(is_subtype_of(tgt_param.ty, src_param.ty)) {
+        return false
+      }
+    }
+  }
+  true
+}
+
+// ============================================================================
+// Generic Function Call Checking
+// ============================================================================
+
+///|
+/// Result of checking a generic function call
+pub struct GenericCallResult {
+  return_type : TypeV2
+  errors : Array[TypeMismatchError]
+} derive(Show)
+
+///|
+/// Check a call to a generic function
+/// Handles explicit type arguments, inference, and constraint checking
+pub fn check_generic_call(
+  env : TypeEnv,
+  func : FunctionTypeV2,
+  explicit_type_args : Array[Node],
+  arguments : Array[Node],
+) -> GenericCallResult {
+  let all_errors : Array[TypeMismatchError] = []
+
+  // If no type parameters, just do regular call checking
+  if func.type_params.is_empty() {
+    let arg_errors = check_call_arguments(env, func, arguments)
+    return { return_type: func.return_type, errors: arg_errors }
+  }
+
+  // Convert explicit type arguments from AST
+  let explicit_args = explicit_type_args.map(fn(node) {
+    ast_type_to_v2(env, node)
+  })
+
+  // Check explicit type argument count
+  if explicit_args.length() > func.type_params.length() {
+    all_errors.push(TypeMismatchError::{
+      path: PRoot,
+      expected: TFunction(func),
+      actual: TAny,
+      reason: TypeArgMismatch("type arguments", explicit_args.length()),
+      children: [],
+      suggestions: [
+        "Expected " +
+        func.type_params.length().to_string() +
+        " type arguments, got " +
+        explicit_args.length().to_string(),
+      ],
+    })
+  }
+
+  // Infer argument types
+  let arg_types = arguments.map(fn(arg) { infer_expr_type(env, arg) })
+
+  // Infer type arguments
+  let inference = infer_generic_type_args(func, arg_types, explicit_args)
+  all_errors.append(inference.errors)
+
+  // Build the type argument array for substitution
+  let type_args : Array[TypeV2] = func.type_params.map(fn(param) {
+    match inference.inferred_args.get(param.name) {
+      Some(ty) => ty
+      None =>
+        match param.default_type {
+          Some(d) => d
+          None => TAny // Fallback
+        }
+    }
+  })
+
+  // Check constraints
+  let constraint_errors = check_all_constraints(func.type_params, type_args)
+  all_errors.append(constraint_errors)
+
+  // Substitute type arguments into function type
+  let instantiated = instantiate_function(func, type_args)
+
+  // Check arguments against instantiated parameter types
+  let arg_errors = check_call_arguments_v2(env, instantiated, arguments)
+  all_errors.append(arg_errors)
+
+  { return_type: instantiated.return_type, errors: all_errors }
+}
+
+///|
+/// Helper to infer expression type (delegates to checker)
+fn infer_expr_type(env : TypeEnv, node : Node) -> TypeV2 {
+  let result = infer_expr_v2(env, node)
+  result.ty
+}
+
+///|
+/// Instantiate a generic function with type arguments
+pub fn instantiate_function(
+  func : FunctionTypeV2,
+  type_args : Array[TypeV2],
+) -> FunctionTypeV2 {
+  // Build substitution map
+  let subst : Map[String, TypeV2] = Map::new()
+  for i, param in func.type_params {
+    if i < type_args.length() {
+      subst.set(param.name, type_args[i])
+    }
+  }
+
+  // Apply substitution
+  FunctionTypeV2::{
+    type_params: [], // Instantiated function has no more type params
+    params: func.params.map(fn(p) {
+      ParamInfoV2::{
+        name: p.name,
+        ty: subst_in_type_v2(p.ty, subst),
+        optional: p.optional,
+        is_rest: p.is_rest,
+      }
+    }),
+    rest_param: match func.rest_param {
+      None => None
+      Some(r) =>
+        Some(ParamInfoV2::{
+          name: r.name,
+          ty: subst_in_type_v2(r.ty, subst),
+          optional: r.optional,
+          is_rest: r.is_rest,
+        })
+    },
+    return_type: subst_in_type_v2(func.return_type, subst),
+  }
+}
+
+///|
+/// Check call arguments against function parameters
+fn check_call_arguments(
+  env : TypeEnv,
+  func : FunctionTypeV2,
+  arguments : Array[Node],
+) -> Array[TypeMismatchError] {
+  let errors : Array[TypeMismatchError] = []
+  for i, arg in arguments {
+    if i < func.params.length() {
+      let param = func.params[i]
+      let result = check_against_v2(env, arg, param.ty)
+      for err in result.errors {
+        errors.push(TypeMismatchError::{
+          path: PParameter(err.path, i, param.name),
+          expected: err.expected,
+          actual: err.actual,
+          reason: err.reason,
+          children: err.children,
+          suggestions: err.suggestions,
+        })
+      }
+    }
+  }
+  errors
+}
+
+///|
+/// Check call arguments against instantiated function parameters (V2)
+fn check_call_arguments_v2(
+  env : TypeEnv,
+  func : FunctionTypeV2,
+  arguments : Array[Node],
+) -> Array[TypeMismatchError] {
+  check_call_arguments(env, func, arguments)
+}
