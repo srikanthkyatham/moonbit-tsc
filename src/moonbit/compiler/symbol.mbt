@@ -348,7 +348,10 @@ pub enum DiagnosticCode {
   TS2558 // Expected X type arguments, but got Y
   TS2588 // Cannot assign to 'X' because it is a constant
 
-  // Overload Errors (2700-2799)
+  // Overload Errors (2300-2399 and 2700-2799)
+  TS2383 // Overload signatures must all be ambient or non-ambient
+  TS2391 // Function implementation is missing or not immediately following the declaration
+  TS2394 // Overload signature is not compatible with function implementation
   TS2769 // No overload matches this call
 
   // Unreachable Code (7000-7099)
@@ -371,6 +374,9 @@ pub fn DiagnosticCode::to_int(self : DiagnosticCode) -> Int {
     TS2554 => 2554
     TS2558 => 2558
     TS2588 => 2588
+    TS2383 => 2383
+    TS2391 => 2391
+    TS2394 => 2394
     TS2769 => 2769
     TS7027 => 7027
   }
@@ -392,6 +398,9 @@ pub fn DiagnosticCode::from_int(code : Int) -> DiagnosticCode? {
     2554 => Some(TS2554)
     2558 => Some(TS2558)
     2588 => Some(TS2588)
+    2383 => Some(TS2383)
+    2391 => Some(TS2391)
+    2394 => Some(TS2394)
     2769 => Some(TS2769)
     7027 => Some(TS7027)
     _ => None

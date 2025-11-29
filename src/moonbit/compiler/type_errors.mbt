@@ -102,6 +102,9 @@ pub enum MismatchReason {
   // Overloads
   NoOverloadMatches(Int) // number of overloads tried
   OverloadCandidateFailed(Int) // index of failed overload
+  OverloadNotCompatibleWithImpl(Int) // TS2394: overload index not compatible with implementation
+  OverloadMissingImplementation(String) // TS2391: function name missing implementation
+  OverloadAmbientMismatch(String) // TS2383: ambient/non-ambient mismatch
 
   // Class/OOP
   PrivateMemberAccess(String, String) // member_name, declared_in_class
@@ -730,6 +733,12 @@ pub fn get_friendly_title(reason : MismatchReason) -> String {
     NoOverloadMatches(count) =>
       "NO OVERLOAD MATCHES (" + count.to_string() + " tried)"
     OverloadCandidateFailed(index) => "OVERLOAD " + index.to_string() + " FAILED"
+    OverloadNotCompatibleWithImpl(index) =>
+      "OVERLOAD " + index.to_string() + " NOT COMPATIBLE WITH IMPLEMENTATION"
+    OverloadMissingImplementation(name) =>
+      "FUNCTION '" + name + "' MISSING IMPLEMENTATION"
+    OverloadAmbientMismatch(name) =>
+      "OVERLOAD AMBIENT MISMATCH FOR '" + name + "'"
     PrivateMemberAccess(name, _) => "PRIVATE MEMBER '" + name + "'"
     ProtectedMemberAccess(name, _) => "PROTECTED MEMBER '" + name + "'"
     AbstractClassInstantiation(name) => "CANNOT INSTANTIATE ABSTRACT CLASS '" + name + "'"
@@ -837,6 +846,18 @@ pub fn get_why_explanation(reason : MismatchReason) -> String {
       "Overload candidate " +
       index.to_string() +
       " didn't match because the argument types weren't compatible with its parameter types."
+    OverloadNotCompatibleWithImpl(index) =>
+      "Overload signature " +
+      index.to_string() +
+      " is not compatible with the function implementation. The implementation must be able to handle all cases defined by the overload signatures."
+    OverloadMissingImplementation(name) =>
+      "Function '" +
+      name +
+      "' has overload signatures but no implementation. An overloaded function must have an implementation body that follows the overload signatures."
+    OverloadAmbientMismatch(name) =>
+      "Overload signatures for '" +
+      name +
+      "' mix ambient and non-ambient declarations. All overload signatures must either all be ambient (in a .d.ts file or declare context) or all be non-ambient."
     PrivateMemberAccess(name, declared_in) =>
       "The property '" +
       name +
@@ -1194,6 +1215,44 @@ pub fn get_how_to_fix(
         "If you expected this overload to match, ensure argument types are compatible.",
       )
     }
+    OverloadNotCompatibleWithImpl(index) => {
+      fixes.push(
+        "Overload signature " +
+        index.to_string() +
+        " is not compatible with implementation.",
+      )
+      fixes.push("")
+      fixes.push("The implementation must be able to handle all overload signatures.")
+      fixes.push("Make sure the implementation's parameter types are supertypes of all overloads':")
+      fixes.push("    function foo(x: string): string;       // overload 1")
+      fixes.push("    function foo(x: number): number;       // overload 2")
+      fixes.push("    function foo(x: string | number): string | number { // impl")
+      fixes.push("      return x;")
+      fixes.push("    }")
+    }
+    OverloadMissingImplementation(name) => {
+      fixes.push("Function '" + name + "' has overload signatures but no implementation.")
+      fixes.push("")
+      fixes.push("Add an implementation after the overload signatures:")
+      fixes.push("    function " + name + "(x: string): string;  // overload")
+      fixes.push("    function " + name + "(x: number): number;  // overload")
+      fixes.push("    function " + name + "(x: string | number): string | number {")
+      fixes.push("      // implementation goes here")
+      fixes.push("      return x;")
+      fixes.push("    }")
+    }
+    OverloadAmbientMismatch(name) => {
+      fixes.push("Overload signatures for '" + name + "' mix ambient and non-ambient.")
+      fixes.push("")
+      fixes.push("Either all overloads should be ambient (in a .d.ts file or declare context):")
+      fixes.push("    declare function " + name + "(x: string): string;")
+      fixes.push("    declare function " + name + "(x: number): number;")
+      fixes.push("")
+      fixes.push("Or all should be non-ambient with an implementation:")
+      fixes.push("    function " + name + "(x: string): string;")
+      fixes.push("    function " + name + "(x: number): number;")
+      fixes.push("    function " + name + "(x: string | number) { ... }")
+    }
     PrivateMemberAccess(name, declared_in) => {
       fixes.push(
         "Property '" + name + "' is private to class '" + declared_in + "'.",
@@ -1335,6 +1394,9 @@ pub fn get_error_code(reason : MismatchReason) -> Int {
     CircularReference | ExcessiveDepth => 2322
     IntersectionNotSatisfied(_) => 2322
     NoOverloadMatches(_) | OverloadCandidateFailed(_) => 2769 // TS2769: No overload matches this call
+    OverloadNotCompatibleWithImpl(_) => 2394 // TS2394: Overload signature is not compatible with function implementation
+    OverloadMissingImplementation(_) => 2391 // TS2391: Function implementation is missing or not immediately following the declaration
+    OverloadAmbientMismatch(_) => 2383 // TS2383: Overload signatures must all be ambient or non-ambient
     PrivateMemberAccess(_, _) => 2341 // TS2341: Property 'x' is private
     ProtectedMemberAccess(_, _) => 2445 // TS2445: Property 'x' is protected
     AbstractClassInstantiation(_) => 2511 // TS2511: Cannot create an instance of abstract class
