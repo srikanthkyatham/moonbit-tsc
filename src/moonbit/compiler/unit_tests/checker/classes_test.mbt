@@ -434,3 +434,74 @@ test "unit/classes/override - override with covariant return" {
     Err(_) => assert_true(false)
   }
 }
+
+// ============================================================================
+// Circular Reference Tests
+// ============================================================================
+
+///|
+test "unit/classes/circular - static property self-reference" {
+  // Class with static property that instantiates itself
+  let result = parse_bind_check_class(
+    "class Point { static origin = new Point(0, 0); constructor(public x: number, public y: number) {} }",
+  )
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/classes/circular - static method returning self" {
+  let result = parse_bind_check_class(
+    "class Singleton { private static instance: Singleton; static getInstance(): Singleton { return Singleton.instance; } }",
+  )
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/classes/circular - instance property with class type" {
+  let result = parse_bind_check_class(
+    "class Node { value: number; next: Node; }",
+  )
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/classes/circular - static inheritance" {
+  let result = parse_bind_check_class(
+    "function doThing(x: { n: string }) { } class A { static n: string; p = doThing(A); } class B extends A { p1 = doThing(A); p2 = doThing(B); }",
+  )
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/classes/circular - forward ref in class properties" {
+  let result = parse_bind_check_class(
+    "class Test { _b = this._a; _a = 3; }",
+  )
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/classes/circular - static property referencing static" {
+  let result = parse_bind_check_class(
+    "class X { static data = 13; static ref = X.data; }",
+  )
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false)
+  }
+}

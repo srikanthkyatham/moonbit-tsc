@@ -267,6 +267,7 @@ pub struct TypeChecker {
   global_scope : Scope? // Global scope for symbol lookup
   current_this_type : Type? // Type of 'this' in current scope (for class methods/constructors)
   no_unchecked_indexed_access : Bool // Adds undefined to indexed access types
+  resolving_symbols : Map[Int, Bool] // Symbol IDs currently being resolved (for cycle detection)
 } derive(Show)
 
 ///|
@@ -309,6 +310,7 @@ pub fn TypeChecker::new_with_options(
     global_scope,
     current_this_type: None,
     no_unchecked_indexed_access,
+    resolving_symbols: Map::new(),
   }
 }
 
@@ -1484,9 +1486,34 @@ fn infer_class_declaration_type(
   class_decl : ClassDeclaration,
   symbol : Symbol,
 ) -> (Type, TypeChecker) {
+  // Check if already cached
+  match checker.symbol_types.get(symbol.id) {
+    Some(cached_type) => return (cached_type, checker)
+    None => ()
+  }
+
+  // Check for circular reference (class referring to itself in initializer)
+  if checker.resolving_symbols.get(symbol.id).is_some() {
+    // Circular reference detected - return a placeholder object type
+    // This allows `static origin = new Point(0, 0)` to work
+    let (info, checker) = create_type_info(checker)
+    let placeholder_type = Type::Object({
+      properties: Map::new(),
+      call_signatures: [],
+      construct_signatures: [],
+      index_signatures: [],
+      info,
+    })
+    return (placeholder_type, checker)
+  }
+
+  // Mark symbol as being resolved
+  let resolving = checker.resolving_symbols
+  resolving.set(symbol.id, true)
+  let mut checker = { ..checker, resolving_symbols: resolving }
+
   // Build object type for the class instance
   let properties : Map[String, PropertySignature] = Map::new()
-  let mut checker = checker
   for class_member in class_decl.members {
     match class_member {
       PropertyDeclaration(prop) => {
@@ -1525,6 +1552,12 @@ fn infer_class_declaration_type(
       _ => ()
     }
   }
+
+  // Unmark symbol as being resolved
+  let resolving = checker.resolving_symbols
+  resolving.remove(symbol.id)
+  checker = { ..checker, resolving_symbols: resolving }
+
   let (info, checker) = create_type_info(checker)
   let class_type = Type::Object({
     properties,
