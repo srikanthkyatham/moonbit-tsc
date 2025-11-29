@@ -249,6 +249,56 @@ pub fn ast_type_to_v2(env : TypeEnv, node : Node) -> TypeV2 {
       TTemplateLiteral(TemplateLiteralTypeV2::{ texts, types })
     }
 
+    // Mapped type ({ [K in keyof T]: T[K] })
+    MappedType(mt) => {
+      // Convert type parameter
+      let type_param = TypeParamV2::{
+        name: mt.type_parameter.name,
+        constraint: match mt.type_parameter.constraint {
+          Some(c) => Some(ast_type_to_v2(env, c))
+          None => None
+        },
+        default_type: match mt.type_parameter.default {
+          Some(d) => Some(ast_type_to_v2(env, d))
+          None => None
+        },
+      }
+
+      // Create child env with type param in scope
+      let child_env = env.with_type_params([type_param])
+
+      // Get the constraint type (usually keyof T or a union of keys)
+      let constraint = match mt.type_parameter.constraint {
+        Some(c) => ast_type_to_v2(env, c)
+        None => TString // Default to string keys
+      }
+
+      // Convert name type (for key remapping: { [K in keyof T as NewKey]: V })
+      let name_type = match mt.name_type {
+        Some(n) => Some(ast_type_to_v2(child_env, n))
+        None => None
+      }
+
+      // Convert template type
+      let template_type = match mt.type_node {
+        Some(t) => ast_type_to_v2(child_env, t)
+        None => TAny
+      }
+
+      // Convert modifiers
+      let readonly_modifier = convert_mapped_modifier_v2(mt.readonly_modifier)
+      let optional_modifier = convert_mapped_modifier_v2(mt.optional_modifier)
+
+      TMapped(MappedTypeV2::{
+        type_param,
+        constraint,
+        name_type,
+        template_type,
+        readonly_modifier,
+        optional_modifier,
+      })
+    }
+
     // Fallback
     _ => TAny
   }
@@ -260,6 +310,16 @@ fn get_param_name(node : Node) -> String {
   match node {
     Identifier(id) => id.name
     _ => "param"
+  }
+}
+
+///|
+/// Convert AST mapped type modifier to TypeV2 modifier
+fn convert_mapped_modifier_v2(modifier : MappedTypeModifier) -> MappedModifierV2 {
+  match modifier {
+    Unchanged => MappedModifierV2::Unchanged
+    Plus => MappedModifierV2::Add
+    Minus => MappedModifierV2::Remove
   }
 }
 
