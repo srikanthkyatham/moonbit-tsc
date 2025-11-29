@@ -130,6 +130,30 @@ pub fn create_error_type() -> TypeV2 {
 }
 
 ///|
+/// Create a literal string type
+pub fn create_literal_string_type(value : String) -> TypeV2 {
+  TLiteralString(value)
+}
+
+///|
+/// Create a literal number type
+pub fn create_literal_number_type(value : Double) -> TypeV2 {
+  TLiteralNumber(value)
+}
+
+///|
+/// Create a literal boolean type
+pub fn create_literal_bool_type(value : Bool) -> TypeV2 {
+  TLiteralBool(value)
+}
+
+///|
+/// Create a union type from an array of types
+pub fn create_union_type(types : Array[TypeV2]) -> TypeV2 {
+  TUnion(types)
+}
+
+///|
 /// Field/property information
 pub struct FieldInfoV2 {
   ty : TypeV2
@@ -315,9 +339,18 @@ pub struct IndexAccessTypeV2 {
 ///|
 /// Template literal type (`${string}-${number}`)
 pub struct TemplateLiteralTypeV2 {
-  texts : Array[String] // Static text parts
-  types : Array[TypeV2] // Interpolated types
+  pub texts : Array[String] // Static text parts
+  pub types : Array[TypeV2] // Interpolated types
 } derive(Show, Eq)
+
+///|
+/// Create a template literal type
+pub fn TemplateLiteralTypeV2::new(
+  texts : Array[String],
+  types : Array[TypeV2],
+) -> TemplateLiteralTypeV2 {
+  { texts, types }
+}
 
 // ============================================================================
 // Type Utilities

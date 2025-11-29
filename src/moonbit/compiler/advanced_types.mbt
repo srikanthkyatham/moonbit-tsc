@@ -973,3 +973,278 @@ pub fn get_keyof_type(ty : TypeV2) -> TypeV2 {
     _ => TString // Default to string for unknown types
   }
 }
+
+// ============================================================================
+// Template Literal Type Evaluation
+// ============================================================================
+
+///|
+/// Evaluate a template literal type: `prefix${T}suffix`
+/// This implements TypeScript's template literal type semantics including:
+/// - Distribution over unions
+/// - Intrinsic string manipulation types (Uppercase, Lowercase, Capitalize, Uncapitalize)
+/// - Reduction to string when types are too broad
+pub fn evaluate_template_literal_type_v2(
+  env : TypeEnv,
+  tl : TemplateLiteralTypeV2,
+) -> TypeV2 {
+  // Resolve all interpolated types
+  let resolved_types = tl.types.map(fn(t) { resolve_type(env, t) })
+
+  // Check if any interpolation contains a broad type (string, number)
+  // that would make the result too broad to enumerate
+  for ty in resolved_types {
+    if is_broad_string_type(ty) {
+      return TString
+    }
+  }
+
+  // Get all literal combinations from each interpolation position
+  let all_combos = get_literal_combinations(resolved_types)
+
+  // If no valid combinations, return string type
+  if all_combos.is_empty() {
+    return TString
+  }
+
+  // Build all possible template strings
+  let results : Array[TypeV2] = []
+  for combo in all_combos {
+    let result = build_template_string(tl.texts, combo)
+    results.push(TLiteralString(result))
+  }
+
+  // Return union of all combinations or single literal
+  if results.length() == 1 {
+    results[0]
+  } else {
+    make_union(results)
+  }
+}
+
+///|
+/// Check if a type is too broad to enumerate (string, number, any)
+fn is_broad_string_type(ty : TypeV2) -> Bool {
+  match ty {
+    TString | TNumber | TAny => true
+    TUnion(types) => types.iter().any(is_broad_string_type)
+    _ => false
+  }
+}
+
+///|
+/// Get all literal string combinations from array of types
+/// Each type position can have multiple literal values (from unions)
+fn get_literal_combinations(types : Array[TypeV2]) -> Array[Array[String]] {
+  if types.is_empty() {
+    return [[]]
+  }
+
+  // Get literals for first type
+  let first_literals = extract_literal_strings(types[0])
+  if first_literals.is_empty() {
+    return []
+  }
+
+  // Recursively get combinations for rest
+  let rest_types : Array[TypeV2] = []
+  for i = 1; i < types.length(); i = i + 1 {
+    rest_types.push(types[i])
+  }
+  let rest_combos = get_literal_combinations(rest_types)
+
+  // Combine first with rest (cartesian product)
+  let results : Array[Array[String]] = []
+  for first in first_literals {
+    for rest in rest_combos {
+      let combo : Array[String] = [first]
+      for r in rest {
+        combo.push(r)
+      }
+      results.push(combo)
+    }
+  }
+  results
+}
+
+///|
+/// Extract literal strings from a type
+/// Handles string literals, number literals, boolean literals, and unions
+fn extract_literal_strings(ty : TypeV2) -> Array[String] {
+  match ty {
+    TLiteralString(s) => [s]
+    TLiteralNumber(n) => [format_number_literal(n)]
+    TLiteralBool(b) => [if b { "true" } else { "false" }]
+    TNull => ["null"]
+    TUndefined => ["undefined"]
+    TUnion(types) => {
+      let results : Array[String] = []
+      for t in types {
+        let literals = extract_literal_strings(t)
+        for lit in literals {
+          if not(results.contains(lit)) {
+            results.push(lit)
+          }
+        }
+      }
+      results
+    }
+    _ => []
+  }
+}
+
+///|
+/// Format a number literal for template string
+fn format_number_literal(n : Double) -> String {
+  // Check if it's an integer
+  let int_val = n.to_int()
+  if int_val.to_double() == n {
+    int_val.to_string()
+  } else {
+    n.to_string()
+  }
+}
+
+///|
+/// Build a template string from texts and interpolated values
+fn build_template_string(texts : Array[String], values : Array[String]) -> String {
+  let mut result = ""
+  for i in 0..<texts.length() {
+    result = result + texts[i]
+    if i < values.length() {
+      result = result + values[i]
+    }
+  }
+  result
+}
+
+// ============================================================================
+// Intrinsic String Manipulation Types
+// ============================================================================
+
+///|
+/// Evaluate Uppercase<T> intrinsic type
+pub fn evaluate_uppercase_type(ty : TypeV2) -> TypeV2 {
+  match ty {
+    TLiteralString(s) => TLiteralString(string_to_uppercase(s))
+    TUnion(types) => make_union(types.map(evaluate_uppercase_type))
+    TString => TString // Can't uppercase unknown string
+    _ => ty
+  }
+}
+
+///|
+/// Evaluate Lowercase<T> intrinsic type
+pub fn evaluate_lowercase_type(ty : TypeV2) -> TypeV2 {
+  match ty {
+    TLiteralString(s) => TLiteralString(string_to_lowercase(s))
+    TUnion(types) => make_union(types.map(evaluate_lowercase_type))
+    TString => TString
+    _ => ty
+  }
+}
+
+///|
+/// Evaluate Capitalize<T> intrinsic type
+pub fn evaluate_capitalize_type(ty : TypeV2) -> TypeV2 {
+  match ty {
+    TLiteralString(s) => TLiteralString(string_capitalize(s))
+    TUnion(types) => make_union(types.map(evaluate_capitalize_type))
+    TString => TString
+    _ => ty
+  }
+}
+
+///|
+/// Evaluate Uncapitalize<T> intrinsic type
+pub fn evaluate_uncapitalize_type(ty : TypeV2) -> TypeV2 {
+  match ty {
+    TLiteralString(s) => TLiteralString(string_uncapitalize(s))
+    TUnion(types) => make_union(types.map(evaluate_uncapitalize_type))
+    TString => TString
+    _ => ty
+  }
+}
+
+///|
+/// Convert string to uppercase
+fn string_to_uppercase(s : String) -> String {
+  let chars : Array[Char] = s.to_array()
+  let result : Array[Char] = []
+  for c in chars {
+    result.push(char_to_uppercase(c))
+  }
+  String::from_array(result)
+}
+
+///|
+/// Convert string to lowercase
+fn string_to_lowercase(s : String) -> String {
+  let chars : Array[Char] = s.to_array()
+  let result : Array[Char] = []
+  for c in chars {
+    result.push(char_to_lowercase(c))
+  }
+  String::from_array(result)
+}
+
+///|
+/// Capitalize first character
+fn string_capitalize(s : String) -> String {
+  if s.length() == 0 {
+    return s
+  }
+  let chars : Array[Char] = s.to_array()
+  chars[0] = char_to_uppercase(chars[0])
+  String::from_array(chars)
+}
+
+///|
+/// Uncapitalize first character
+fn string_uncapitalize(s : String) -> String {
+  if s.length() == 0 {
+    return s
+  }
+  let chars : Array[Char] = s.to_array()
+  chars[0] = char_to_lowercase(chars[0])
+  String::from_array(chars)
+}
+
+///|
+/// Convert a character to uppercase
+fn char_to_uppercase(c : Char) -> Char {
+  let code = c.to_int()
+  if code >= 97 && code <= 122 {
+    // 'a' to 'z' -> 'A' to 'Z'
+    (code - 32).unsafe_to_char()
+  } else {
+    c
+  }
+}
+
+///|
+/// Convert a character to lowercase
+fn char_to_lowercase(c : Char) -> Char {
+  let code = c.to_int()
+  if code >= 65 && code <= 90 {
+    // 'A' to 'Z' -> 'a' to 'z'
+    (code + 32).unsafe_to_char()
+  } else {
+    c
+  }
+}
+
+///|
+/// Evaluate intrinsic string manipulation type by name
+pub fn evaluate_intrinsic_string_type(
+  name : String,
+  type_arg : TypeV2,
+) -> TypeV2? {
+  match name {
+    "Uppercase" => Some(evaluate_uppercase_type(type_arg))
+    "Lowercase" => Some(evaluate_lowercase_type(type_arg))
+    "Capitalize" => Some(evaluate_capitalize_type(type_arg))
+    "Uncapitalize" => Some(evaluate_uncapitalize_type(type_arg))
+    _ => None
+  }
+}
