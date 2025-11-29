@@ -504,3 +504,109 @@ test "unit/recursive/edge - self-referential intersection" {
     Err(_) => assert_true(false)
   }
 }
+
+// ============================================================================
+// Interface Recursive Type Tests (Cycle Detection)
+// ============================================================================
+
+test "unit/recursive/interface - self-referential interface" {
+  // Interface with self-referential property
+  let source =
+    #|interface Node {
+    #|  value: number;
+    #|  next: Node;
+    #|}
+  let result = parse_bind_check_recursive(source)
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false)
+  }
+}
+
+test "unit/recursive/interface - infinitely expanding base types" {
+  // Based on infinitelyExpandingBaseTypes2.ts
+  let source =
+    #|interface A<T> {
+    #|  x: A<()=>T>;
+    #|}
+    #|interface B<T> {
+    #|  x: B<()=>T>;
+    #|}
+    #|var a: A<string>;
+    #|var b: B<string> = a;
+  let result = parse_bind_check_recursive(source)
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false)
+  }
+}
+
+test "unit/recursive/interface - mutually recursive interfaces" {
+  // Based on mutrec.ts
+  let source =
+    #|interface List<T> {
+    #|  data: T;
+    #|  next: List<T>;
+    #|  owner: List<List<T>>;
+    #|}
+    #|interface MyList<T> {
+    #|  data: T;
+    #|  next: MyList<T>;
+    #|  owner: MyList<MyList<T>>;
+    #|}
+    #|var l: List<number>;
+    #|var m: MyList<number>;
+  let result = parse_bind_check_recursive(source)
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false)
+  }
+}
+
+test "unit/recursive/interface - nested infinitely expanding types" {
+  // Based on nestedInfinitelyExpandedRecursiveTypes.ts
+  let source =
+    #|interface A<T> {
+    #|  x: A<{ y: A<T> }>;
+    #|}
+    #|var a: A<string>;
+  let result = parse_bind_check_recursive(source)
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false)
+  }
+}
+
+test "unit/recursive/interface - recursive type comparison" {
+  // Based on recursiveTypeComparison.ts
+  let source =
+    #|interface Box<T> {
+    #|  value: T;
+    #|  nested: Box<T>;
+    #|}
+    #|interface Container<T> {
+    #|  value: T;
+    #|  nested: Container<T>;
+    #|}
+    #|function compare<T>(box: Box<T>, container: Container<T>) {}
+  let result = parse_bind_check_recursive(source)
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false)
+  }
+}
+
+test "unit/recursive/interface - wrapped recursive generic" {
+  // Based on wrappedRecursiveGenericType.ts
+  let source =
+    #|interface Wrapper<T> {
+    #|  inner: T;
+    #|  wrapped: Wrapper<Wrapper<T>>;
+    #|}
+    #|var w: Wrapper<number>;
+  let result = parse_bind_check_recursive(source)
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false)
+  }
+}

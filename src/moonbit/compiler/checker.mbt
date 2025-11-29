@@ -5487,13 +5487,35 @@ fn resolve_interface_type(
   checker : TypeChecker,
   interface_symbol : Symbol,
 ) -> (Type?, TypeChecker) {
+  // Check for circular reference (interface referring to itself in members)
+  if checker.resolving_symbols.get(interface_symbol.id) is Some(_) {
+    // Circular reference detected - return a placeholder empty Object type
+    let (info, checker) = create_type_info(checker)
+    return (
+      Some(
+        Type::Object({
+          properties: Map::new(),
+          call_signatures: [],
+          construct_signatures: [],
+          index_signatures: [],
+          info,
+        }),
+      ),
+      checker,
+    )
+  }
+
+  // Mark symbol as being resolved
+  let resolving = checker.resolving_symbols
+  resolving.set(interface_symbol.id, true)
+  let mut checker = { ..checker, resolving_symbols: resolving }
+
   // Get the interface declaration from the symbol
-  match interface_symbol.value_declaration {
+  let result = match interface_symbol.value_declaration {
     Some(InterfaceDeclaration(interface_decl)) => {
       // Build property map from interface members
       let properties : Map[String, PropertySignature] = Map::new()
       let index_signatures : Array[IndexSignature] = []
-      let mut checker = checker
       for i = 0; i < interface_decl.members.length(); i = i + 1 {
         match interface_decl.members[i] {
           PropertyDeclaration(prop) => {
@@ -5548,22 +5570,27 @@ fn resolve_interface_type(
           _ => () // Skip other member types
         }
       }
-      let (info, checker) = create_type_info(checker)
-      (
-        Some(
-          Object({
-            properties,
-            call_signatures: [],
-            construct_signatures: [],
-            index_signatures,
-            info,
-          }),
-        ),
-        checker,
+      let (info, c) = create_type_info(checker)
+      checker = c
+      Some(
+        Type::Object({
+          properties,
+          call_signatures: [],
+          construct_signatures: [],
+          index_signatures,
+          info,
+        }),
       )
     }
-    _ => (None, checker)
+    _ => None
   }
+
+  // Unmark symbol as being resolved
+  let resolving = checker.resolving_symbols
+  resolving.remove(interface_symbol.id)
+  checker = { ..checker, resolving_symbols: resolving }
+
+  (result, checker)
 }
 
 // ============================================================================

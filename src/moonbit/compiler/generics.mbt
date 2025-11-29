@@ -613,14 +613,40 @@ pub fn check_all_constraints(
 
 ///|
 /// Check if `source` is a subtype of `target` (simplified structural check)
+/// Entry point - creates a fresh context for cycle detection
 fn is_subtype_of(source : TypeV2, target : TypeV2) -> Bool {
+  let ctx = RecursiveComparisonContext::new()
+  is_subtype_of_with_ctx(source, target, ctx)
+}
+
+///|
+/// Check if `source` is a subtype of `target` with cycle detection context
+fn is_subtype_of_with_ctx(
+  source : TypeV2,
+  target : TypeV2,
+  ctx : RecursiveComparisonContext,
+) -> Bool {
   // Same type
   if source == target {
     return true
   }
 
+  // Check for cycle - if we're already comparing these types, assume true
+  if ctx.is_comparing(source, target) {
+    return true
+  }
+
+  // Check recursion depth
+  match ctx.child() {
+    None => return true // Depth limit exceeded, assume compatible
+    Some(_) => ()
+  }
+
+  // Mark as being compared
+  let ctx = ctx.start_comparing(source, target)
+
   // Any is subtype of everything (except never) and everything is subtype of any
-  match (source, target) {
+  let result = match (source, target) {
     (TAny, _) => true
     (_, TAny) => true
     (_, TUnknown) => true // Everything is subtype of unknown
@@ -634,30 +660,31 @@ fn is_subtype_of(source : TypeV2, target : TypeV2) -> Bool {
 
     // Union: source must be subtype of at least one target member
     (src, TUnion(target_types)) =>
-      target_types.iter().any(fn(t) { is_subtype_of(src, t) })
+      target_types.iter().any(fn(t) { is_subtype_of_with_ctx(src, t, ctx) })
 
     // Source union: all members must be subtypes of target
     (TUnion(source_types), tgt) =>
-      source_types.iter().all(fn(s) { is_subtype_of(s, tgt) })
+      source_types.iter().all(fn(s) { is_subtype_of_with_ctx(s, tgt, ctx) })
 
     // Intersection target: source must be subtype of all members
     (src, TIntersection(target_types)) =>
-      target_types.iter().all(fn(t) { is_subtype_of(src, t) })
+      target_types.iter().all(fn(t) { is_subtype_of_with_ctx(src, t, ctx) })
 
     // Source intersection: at least one member must be subtype of target
     (TIntersection(source_types), tgt) =>
-      source_types.iter().any(fn(s) { is_subtype_of(s, tgt) })
+      source_types.iter().any(fn(s) { is_subtype_of_with_ctx(s, tgt, ctx) })
 
     // Array types - covariant
-    (TArray(src_elem), TArray(tgt_elem)) => is_subtype_of(src_elem, tgt_elem)
+    (TArray(src_elem), TArray(tgt_elem)) =>
+      is_subtype_of_with_ctx(src_elem, tgt_elem, ctx)
 
     // Object types - structural subtyping
     (TObject(src_obj), TObject(tgt_obj)) =>
-      is_object_subtype(src_obj, tgt_obj)
+      is_object_subtype_with_ctx(src_obj, tgt_obj, ctx)
 
     // Function types - contravariant params, covariant return
     (TFunction(src_func), TFunction(tgt_func)) =>
-      is_function_subtype(src_func, tgt_func)
+      is_function_subtype_with_ctx(src_func, tgt_func, ctx)
 
     // Generic instances
     (TGenericInstance(src_name, src_args), TGenericInstance(tgt_name, tgt_args)) =>
@@ -667,7 +694,7 @@ fn is_subtype_of(source : TypeV2, target : TypeV2) -> Bool {
         let mut all_match = true
         for i, src_arg in src_args {
           if i < tgt_args.length() {
-            if not(is_subtype_of(src_arg, tgt_args[i])) {
+            if not(is_subtype_of_with_ctx(src_arg, tgt_args[i], ctx)) {
               all_match = false
               break
             }
@@ -679,23 +706,29 @@ fn is_subtype_of(source : TypeV2, target : TypeV2) -> Bool {
     // Tuple types
     (TTuple(src_elems), TTuple(tgt_elems)) => {
       if src_elems.length() < tgt_elems.length() {
-        return false
-      }
-      for i, tgt_elem in tgt_elems {
-        if i >= src_elems.length() {
-          if not(tgt_elem.optional) {
-            return false
+        false
+      } else {
+        let mut result = true
+        for i, tgt_elem in tgt_elems {
+          if i >= src_elems.length() {
+            if not(tgt_elem.optional) {
+              result = false
+              break
+            }
+          } else if not(is_subtype_of_with_ctx(src_elems[i].ty, tgt_elem.ty, ctx)) {
+            result = false
+            break
           }
-        } else if not(is_subtype_of(src_elems[i].ty, tgt_elem.ty)) {
-          return false
         }
+        result
       }
-      true
     }
 
     // Default - not a subtype
     _ => false
   }
+
+  result
 }
 
 ///|
@@ -706,10 +739,68 @@ fn is_object_subtype(source : ObjectTypeV2, target : ObjectTypeV2) -> Bool {
 }
 
 ///|
+/// Check if source object type is subtype of target with cycle detection context
+fn is_object_subtype_with_ctx(
+  source : ObjectTypeV2,
+  target : ObjectTypeV2,
+  ctx : RecursiveComparisonContext,
+) -> Bool {
+  // All required properties in target must exist in source with compatible types
+  for kv in target.fields {
+    let name = kv.0
+    let tgt_field = kv.1
+    match source.fields.get(name) {
+      None =>
+        // If property is missing and not optional, check index signature
+        if not(tgt_field.optional) {
+          match source.index_signature {
+            Some(src_sig) =>
+              match get_index_key_type(src_sig.key_type) {
+                Some(StringKey) =>
+                  if not(is_subtype_of_with_ctx(src_sig.value_type, tgt_field.ty, ctx)) {
+                    return false
+                  }
+                _ => return false
+              }
+            None => return false
+          }
+        }
+      Some(src_field) =>
+        if not(is_subtype_of_with_ctx(src_field.ty, tgt_field.ty, ctx)) {
+          return false
+        }
+    }
+  }
+
+  // Check index signature compatibility
+  match (source.index_signature, target.index_signature) {
+    (Some(src_sig), Some(tgt_sig)) =>
+      if not(is_subtype_of_with_ctx(src_sig.value_type, tgt_sig.value_type, ctx)) {
+        return false
+      }
+    (None, Some(_)) => ()
+    _ => ()
+  }
+
+  true
+}
+
+///|
 /// Check if source function type is subtype of target
 fn is_function_subtype(source : FunctionTypeV2, target : FunctionTypeV2) -> Bool {
+  let ctx = RecursiveComparisonContext::new()
+  is_function_subtype_with_ctx(source, target, ctx)
+}
+
+///|
+/// Check if source function type is subtype of target with cycle detection context
+fn is_function_subtype_with_ctx(
+  source : FunctionTypeV2,
+  target : FunctionTypeV2,
+  ctx : RecursiveComparisonContext,
+) -> Bool {
   // Return type is covariant
-  if not(is_subtype_of(source.return_type, target.return_type)) {
+  if not(is_subtype_of_with_ctx(source.return_type, target.return_type, ctx)) {
     return false
   }
 
@@ -724,7 +815,7 @@ fn is_function_subtype(source : FunctionTypeV2, target : FunctionTypeV2) -> Bool
     } else {
       let src_param = source.params[i]
       // Contravariance: target param type must be subtype of source param type
-      if not(is_subtype_of(tgt_param.ty, src_param.ty)) {
+      if not(is_subtype_of_with_ctx(tgt_param.ty, src_param.ty, ctx)) {
         return false
       }
     }
