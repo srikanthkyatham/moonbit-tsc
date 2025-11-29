@@ -571,6 +571,22 @@ fn subst_in_type_v2(ty : TypeV2, subst : Map[String, TypeV2]) -> TypeV2 {
         object_type: subst_in_type_v2(ia.object_type, subst),
         index_type: subst_in_type_v2(ia.index_type, subst),
       })
+    TMapped(m) =>
+      TMapped(MappedTypeV2::{
+        type_param: m.type_param,
+        constraint: subst_in_type_v2(m.constraint, subst),
+        name_type: match m.name_type {
+          Some(n) => Some(subst_in_type_v2(n, subst))
+          None => None
+        },
+        template_type: subst_in_type_v2(m.template_type, subst),
+        readonly_modifier: m.readonly_modifier,
+        optional_modifier: m.optional_modifier,
+        source_type: match m.source_type {
+          Some(s) => Some(subst_in_type_v2(s, subst))
+          None => None
+        },
+      })
     // Primitives and literals don't change
     _ => ty
   }

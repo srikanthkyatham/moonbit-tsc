@@ -433,6 +433,7 @@ pub struct MappedTypeV2 {
   template_type : TypeV2
   readonly_modifier : MappedModifierV2
   optional_modifier : MappedModifierV2
+  source_type : TypeV2? // Original object type for homomorphic mapped types
 } derive(Show, Eq)
 
 ///|

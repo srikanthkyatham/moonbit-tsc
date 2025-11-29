@@ -485,6 +485,39 @@ fn resolve_type(env : TypeEnv, ty : TypeV2) -> TypeV2 {
             None => ty
           }
       }
+    // Handle generic instances (e.g., DeepReadonly<T[K]> for recursive mapped types)
+    TGenericInstance(name, args) => {
+      // Resolve all type arguments first
+      let resolved_args = args.map(fn(a) { resolve_type(env, a) })
+      // Try to resolve the type alias with the resolved arguments
+      match env.resolve_type_alias(name, resolved_args) {
+        Some(resolved) => resolve_type(env, resolved) // Recursively resolve
+        None => TGenericInstance(name, resolved_args)
+      }
+    }
+    // Handle union and intersection types recursively
+    TUnion(types) => {
+      let resolved = types.map(fn(t) { resolve_type(env, t) })
+      make_union(resolved)
+    }
+    TIntersection(types) => {
+      let resolved = types.map(fn(t) { resolve_type(env, t) })
+      make_intersection(resolved)
+    }
+    // Handle array types
+    TArray(elem) => TArray(resolve_type(env, elem))
+    // Handle tuple types
+    TTuple(elems) =>
+      TTuple(
+        elems.map(fn(e) {
+          TupleElementV2::{
+            ty: resolve_type(env, e.ty),
+            optional: e.optional,
+            is_rest: e.is_rest,
+            label: e.label,
+          }
+        }),
+      )
     _ => ty
   }
 }
@@ -503,8 +536,28 @@ pub fn evaluate_mapped_type_v2(env : TypeEnv, mapped : MappedTypeV2) -> TypeV2 {
   // Resolve the constraint to get the keys
   let constraint = resolve_type(env, mapped.constraint)
 
+  // Resolve source type for homomorphic mapped types
+  let source_obj = match mapped.source_type {
+    Some(st) =>
+      match resolve_type(env, st) {
+        TObject(obj) => Some(obj)
+        _ => None
+      }
+    None => None
+  }
+
   // Get the keys to iterate over
-  let keys = get_keys_from_constraint(constraint)
+  let keys = match source_obj {
+    Some(obj) => {
+      // Use keys from source object for homomorphic mapped types
+      let ks : Array[TypeV2] = []
+      for kv in obj.fields {
+        ks.push(TLiteralString(kv.0))
+      }
+      ks
+    }
+    None => get_keys_from_constraint(constraint)
+  }
 
   if keys.is_empty() {
     // Can't evaluate without concrete keys
@@ -543,17 +596,33 @@ pub fn evaluate_mapped_type_v2(env : TypeEnv, mapped : MappedTypeV2) -> TypeV2 {
     let value_type = apply_substitution(mapped.template_type, subst)
     let resolved_value = resolve_type(env, value_type)
 
-    // Apply modifiers
+    // Get original field info for homomorphic mapped types
+    let original_field = match source_obj {
+      Some(obj) => obj.fields.get(key_name)
+      None => None
+    }
+
+    // Apply modifiers (preserving original modifiers for homomorphic mapped types)
     let is_optional = match mapped.optional_modifier {
       Add => true
       Remove => false
-      Unchanged => false // Default to required
+      Unchanged =>
+        // Homomorphic: preserve original modifier
+        match original_field {
+          Some(f) => f.optional
+          None => false
+        }
     }
 
     let is_readonly = match mapped.readonly_modifier {
       Add => true
       Remove => false
-      Unchanged => false // Default to mutable
+      Unchanged =>
+        // Homomorphic: preserve original modifier
+        match original_field {
+          Some(f) => f.is_readonly
+          None => false
+        }
     }
 
     fields.set(actual_key, FieldInfoV2::{

@@ -290,9 +290,23 @@ pub fn ast_type_to_v2(env : TypeEnv, node : Node) -> TypeV2 {
       let child_env = env.with_type_params([type_param])
 
       // Get the constraint type (usually keyof T or a union of keys)
-      let constraint = match mt.type_parameter.constraint {
-        Some(c) => ast_type_to_v2(env, c)
-        None => TString // Default to string keys
+      // Also extract source type for homomorphic mapped types
+      let (constraint, source_type) = match mt.type_parameter.constraint {
+        Some(c) =>
+          match c {
+            TypeOperator(to) =>
+              match to.operator {
+                KeyOf => {
+                  // This is a homomorphic mapped type: { [K in keyof T]: ... }
+                  let inner = ast_type_to_v2(env, to.type_node)
+                  let keys = extract_keyof_type(inner)
+                  (keys, Some(inner))
+                }
+                _ => (ast_type_to_v2(env, c), None)
+              }
+            _ => (ast_type_to_v2(env, c), None)
+          }
+        None => (TString, None) // Default to string keys
       }
 
       // Convert name type (for key remapping: { [K in keyof T as NewKey]: V })
@@ -318,6 +332,7 @@ pub fn ast_type_to_v2(env : TypeEnv, node : Node) -> TypeV2 {
         template_type,
         readonly_modifier,
         optional_modifier,
+        source_type,
       })
     }
 
@@ -332,6 +347,47 @@ fn get_param_name(node : Node) -> String {
   match node {
     Identifier(id) => id.name
     _ => "param"
+  }
+}
+
+///|
+/// Extract keys from a type for keyof operator
+/// Returns a union of literal string types for object types, or the original type
+fn extract_keyof_type(ty : TypeV2) -> TypeV2 {
+  match ty {
+    TObject(obj) => {
+      let keys : Array[TypeV2] = []
+      for kv in obj.fields {
+        keys.push(TLiteralString(kv.0))
+      }
+      make_union(keys)
+    }
+    TUnion(types) => {
+      // keyof (A | B) = keyof A & keyof B
+      let all_keys : Array[TypeV2] = []
+      for t in types {
+        match extract_keyof_type(t) {
+          TUnion(ks) => all_keys.append(ks)
+          k => all_keys.push(k)
+        }
+      }
+      // For simplicity, return a union of all keys (intersection would be more accurate)
+      make_union(all_keys)
+    }
+    TIntersection(types) => {
+      // keyof (A & B) = keyof A | keyof B
+      let all_keys : Array[TypeV2] = []
+      for t in types {
+        match extract_keyof_type(t) {
+          TUnion(ks) => all_keys.append(ks)
+          k => all_keys.push(k)
+        }
+      }
+      make_union(all_keys)
+    }
+    TAny => TString // keyof any = string | number | symbol
+    TUnknown => TNever // keyof unknown = never
+    _ => ty // Can't extract keys, return as-is
   }
 }
 

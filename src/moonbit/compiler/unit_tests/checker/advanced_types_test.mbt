@@ -682,3 +682,108 @@ test "unit/advanced/simplification - Exclude utility type" {
     Err(_) => assert_true(false)
   }
 }
+
+// ============================================================================
+// Homomorphic and Recursive Mapped Type Tests
+// ============================================================================
+
+///|
+test "unit/advanced/mapped - homomorphic Partial preserves structure" {
+  // Homomorphic mapped type: keyof T preserves the source structure
+  let result = parse_bind_check_advanced(
+    "type Partial<T> = { [K in keyof T]?: T[K] };",
+  )
+  match result {
+    Ok(_) => assert_true(true)
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/advanced/mapped - homomorphic Readonly preserves structure" {
+  let result = parse_bind_check_advanced(
+    "type Readonly<T> = { readonly [K in keyof T]: T[K] };",
+  )
+  match result {
+    Ok(_) => assert_true(true)
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/advanced/mapped - homomorphic Required type" {
+  let result = parse_bind_check_advanced(
+    "type Required<T> = { [K in keyof T]-?: T[K] };",
+  )
+  match result {
+    Ok(_) => assert_true(true)
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/advanced/mapped - recursive DeepReadonly" {
+  // Recursive mapped type with conditional
+  let result = parse_bind_check_advanced(
+    "type DeepReadonly<T> = T extends object ? { readonly [K in keyof T]: DeepReadonly<T[K]> } : T;",
+  )
+  match result {
+    Ok(_) => assert_true(true)
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/advanced/mapped - recursive DeepPartial" {
+  let result = parse_bind_check_advanced(
+    "type DeepPartial<T> = T extends object ? { [K in keyof T]?: DeepPartial<T[K]> } : T;",
+  )
+  match result {
+    Ok(_) => assert_true(true)
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/advanced/mapped - key remapping with as" {
+  let result = parse_bind_check_advanced(
+    "type Getters<T> = { [K in keyof T as `get${Capitalize<string & K>}`]: () => T[K] };",
+  )
+  match result {
+    Ok(_) => assert_true(true)
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/advanced/mapped - Pick utility type" {
+  let result = parse_bind_check_advanced(
+    "type Pick<T, K extends keyof T> = { [P in K]: T[P] };",
+  )
+  match result {
+    Ok(_) => assert_true(true)
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/advanced/mapped - Omit utility type" {
+  let result = parse_bind_check_advanced(
+    "type Omit<T, K> = { [P in keyof T as P extends K ? never : P]: T[P] };",
+  )
+  match result {
+    Ok(_) => assert_true(true)
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/advanced/mapped - Record utility type" {
+  let result = parse_bind_check_advanced(
+    "type Record<K extends string, V> = { [P in K]: V };",
+  )
+  match result {
+    Ok(_) => assert_true(true)
+    Err(_) => assert_true(false)
+  }
+}

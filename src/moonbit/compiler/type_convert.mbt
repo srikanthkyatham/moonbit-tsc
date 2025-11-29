@@ -84,6 +84,7 @@ pub fn type_to_v2(ty : Type) -> TypeV2 {
         template_type: type_to_v2(mapped.template_type),
         readonly_modifier: mapped_modifier_to_v2(mapped.readonly_modifier),
         optional_modifier: mapped_modifier_to_v2(mapped.optional_modifier),
+        source_type: None, // Not available from old Type system
       })
 
     // Template literal type
