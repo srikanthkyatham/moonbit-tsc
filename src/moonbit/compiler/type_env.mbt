@@ -47,6 +47,50 @@ pub fn TypeEnv::child(self : TypeEnv) -> TypeEnv {
 }
 
 ///|
+/// Create a closure child environment that inherits narrowings from parent
+/// This implements control flow narrowing in nested closures.
+/// When a closure captures a variable that has been narrowed, the narrowing
+/// persists inside the closure (assuming the variable isn't reassigned).
+///
+/// Example:
+///   function example(x: string | number) {
+///     if (typeof x === "string") {
+///       const fn = () => {
+///         x.toUpperCase(); // x is narrowed to string here
+///       };
+///     }
+///   }
+pub fn TypeEnv::closure_child(self : TypeEnv) -> TypeEnv {
+  // Collect all narrowings from the entire parent chain
+  let inherited_narrowings : Map[String, TypeV2] = Map::new()
+  let mut current : TypeEnv? = Some(self)
+  while true {
+    match current {
+      Some(env) => {
+        // Copy narrowings from this level (don't overwrite existing ones)
+        for kv in env.narrowings {
+          let name = kv.0
+          let ty = kv.1
+          if not(inherited_narrowings.contains(name)) {
+            inherited_narrowings.set(name, ty)
+          }
+        }
+        current = env.parent
+      }
+      None => break
+    }
+  }
+  {
+    variables: Map::new(),
+    type_aliases: Map::new(),
+    interfaces: Map::new(),
+    type_params: Map::new(),
+    narrowings: inherited_narrowings,
+    parent: Some(self),
+  }
+}
+
+///|
 /// Look up a variable type in the environment chain
 pub fn TypeEnv::lookup(self : TypeEnv, name : String) -> TypeV2? {
   // First check narrowings (narrowed types take precedence)

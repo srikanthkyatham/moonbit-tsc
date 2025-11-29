@@ -497,7 +497,8 @@ fn check_object_literal_v2(
 /// Infer function type
 fn infer_function_v2(env : TypeEnv, func : FunctionExpression) -> CheckResultV2 {
   let params : Array[ParamInfoV2] = []
-  let mut child_env = env.child()
+  // Use closure_child to inherit narrowings from outer scope
+  let mut child_env = env.closure_child()
 
   // Add parameters to environment
   for param in func.parameters {
@@ -526,7 +527,8 @@ fn check_function_v2(
   func : FunctionExpression,
   expected : FunctionTypeV2,
 ) -> CheckResultV2 {
-  let mut child_env = env.child()
+  // Use closure_child to inherit narrowings from outer scope
+  let mut child_env = env.closure_child()
   let all_errors : Array[TypeMismatchError] = []
 
   // Add parameters with expected types
@@ -554,7 +556,8 @@ fn check_function_v2(
 /// Infer arrow function type
 fn infer_arrow_v2(env : TypeEnv, arrow : ArrowFunction) -> CheckResultV2 {
   let params : Array[ParamInfoV2] = []
-  let mut child_env = env.child()
+  // Use closure_child to inherit narrowings from outer scope
+  let mut child_env = env.closure_child()
   for param in arrow.parameters {
     let param_name = get_param_name_v2(param)
     let param_ty = TAny
@@ -586,7 +589,8 @@ fn check_arrow_v2(
   arrow : ArrowFunction,
   expected : FunctionTypeV2,
 ) -> CheckResultV2 {
-  let mut child_env = env.child()
+  // Use closure_child to inherit narrowings from outer scope
+  let mut child_env = env.closure_child()
   let all_errors : Array[TypeMismatchError] = []
   for i, param in arrow.parameters {
     let param_name = get_param_name_v2(param)

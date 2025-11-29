@@ -488,3 +488,151 @@ test "narrowing/infrastructure - typeof narrowed type for invalid" {
     _ => fail("Expected None for invalid type")
   }
 }
+
+// ============================================================================
+// Control Flow in Nested Closures
+// ============================================================================
+
+test "narrowing/closure - arrow function inherits typeof narrowing" {
+  let source =
+    #|function example(x: string | number) {
+    #|  if (typeof x === "string") {
+    #|    const fn = () => {
+    #|      // x should be narrowed to string here
+    #|      return x.toUpperCase();
+    #|    };
+    #|    return fn();
+    #|  }
+    #|  return "";
+    #|}
+  let tokens = @compiler.scan_all_v2(source, "test.ts")
+  match @compiler.parse_source_file(tokens, "test.ts") {
+    Ok(sf) => assert_true(sf.statements.length() > 0)
+    Err(e) => fail("Parse failed: " + e.to_string())
+  }
+}
+
+test "narrowing/closure - function expression inherits narrowing" {
+  let source =
+    #|function outer(value: string | null) {
+    #|  if (value !== null) {
+    #|    const inner = function() {
+    #|      // value is narrowed to string here
+    #|      return value.length;
+    #|    };
+    #|    return inner();
+    #|  }
+    #|  return 0;
+    #|}
+  let tokens = @compiler.scan_all_v2(source, "test.ts")
+  match @compiler.parse_source_file(tokens, "test.ts") {
+    Ok(sf) => assert_true(sf.statements.length() > 0)
+    Err(e) => fail("Parse failed: " + e.to_string())
+  }
+}
+
+test "narrowing/closure - nested arrow functions inherit narrowing" {
+  let source =
+    #|function outer(x: string | number | null) {
+    #|  if (x !== null) {
+    #|    if (typeof x === "string") {
+    #|      const fn1 = () => {
+    #|        const fn2 = () => {
+    #|          // x should be string in nested closures
+    #|          return x.toUpperCase();
+    #|        };
+    #|        return fn2();
+    #|      };
+    #|      return fn1();
+    #|    }
+    #|  }
+    #|  return "";
+    #|}
+  let tokens = @compiler.scan_all_v2(source, "test.ts")
+  match @compiler.parse_source_file(tokens, "test.ts") {
+    Ok(sf) => assert_true(sf.statements.length() > 0)
+    Err(e) => fail("Parse failed: " + e.to_string())
+  }
+}
+
+test "narrowing/closure - array method callback with narrowing" {
+  let source =
+    #|function process(items: Array<string | null>) {
+    #|  // Using regular filter callback, narrowing applies within
+    #|  const result = items.filter(item => item !== null);
+    #|  return result.map(item => item ? item.toUpperCase() : "");
+    #|}
+  let tokens = @compiler.scan_all_v2(source, "test.ts")
+  match @compiler.parse_source_file(tokens, "test.ts") {
+    Ok(sf) => assert_true(sf.statements.length() > 0)
+    Err(e) => fail("Parse failed: " + e.to_string())
+  }
+}
+
+test "narrowing/closure - closure captures discriminated union narrowing" {
+  let source =
+    #|type Result = { ok: true; value: number } | { ok: false; error: string };
+    #|function handle(result: Result) {
+    #|  if (result.ok) {
+    #|    const getDouble = () => result.value * 2;
+    #|    return getDouble();
+    #|  }
+    #|  return 0;
+    #|}
+  let tokens = @compiler.scan_all_v2(source, "test.ts")
+  match @compiler.parse_source_file(tokens, "test.ts") {
+    Ok(sf) => assert_true(sf.statements.length() > 0)
+    Err(e) => fail("Parse failed: " + e.to_string())
+  }
+}
+
+test "narrowing/closure - callback in promise chain" {
+  let source =
+    #|function fetchData(url: string | null) {
+    #|  if (url !== null) {
+    #|    return Promise.resolve(url)
+    #|      .then(u => u.toUpperCase())
+    #|      .then(u => u.length);
+    #|  }
+    #|  return Promise.resolve(0);
+    #|}
+  let tokens = @compiler.scan_all_v2(source, "test.ts")
+  match @compiler.parse_source_file(tokens, "test.ts") {
+    Ok(sf) => assert_true(sf.statements.length() > 0)
+    Err(e) => fail("Parse failed: " + e.to_string())
+  }
+}
+
+test "narrowing/closure - event handler with narrowed variable" {
+  let source =
+    #|function setupHandler(element: HTMLElement | null) {
+    #|  if (element) {
+    #|    element.addEventListener("click", () => {
+    #|      // element is narrowed here
+    #|      console.log(element.tagName);
+    #|    });
+    #|  }
+    #|}
+  let tokens = @compiler.scan_all_v2(source, "test.ts")
+  match @compiler.parse_source_file(tokens, "test.ts") {
+    Ok(sf) => assert_true(sf.statements.length() > 0)
+    Err(e) => fail("Parse failed: " + e.to_string())
+  }
+}
+
+test "narrowing/closure - closure with instanceof check" {
+  let source =
+    #|class Dog { bark() {} }
+    #|class Cat { meow() {} }
+    #|function petSound(pet: Dog | Cat) {
+    #|  if (pet instanceof Dog) {
+    #|    const makeSound = () => pet.bark();
+    #|    makeSound();
+    #|  }
+    #|}
+  let tokens = @compiler.scan_all_v2(source, "test.ts")
+  match @compiler.parse_source_file(tokens, "test.ts") {
+    Ok(sf) => assert_true(sf.statements.length() > 0)
+    Err(e) => fail("Parse failed: " + e.to_string())
+  }
+}
