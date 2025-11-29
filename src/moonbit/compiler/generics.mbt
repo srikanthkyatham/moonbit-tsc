@@ -152,9 +152,27 @@ pub fn ast_type_to_v2(env : TypeEnv, node : Node) -> TypeV2 {
         }
       })
 
-      let return_type = ast_type_to_v2(child_env, ft.return_type)
+      // Check if return type is a type predicate
+      let (return_type, type_predicate) : (TypeV2, TypePredicateV2?) = match ft.return_type {
+        TypePredicate(tp) => {
+          // Type predicate: "x is Type" or "asserts x is Type"
+          let predicate_type = match tp.type_node {
+            Some(tn) => ast_type_to_v2(child_env, tn)
+            None => TAny // "asserts x" without type
+          }
+          let tp_v2 : TypePredicateV2 = {
+            parameter_name: tp.parameter_name,
+            predicate_type,
+            is_asserts: tp.is_asserts,
+          }
+          // Return type is boolean for type guards, void for assertion functions
+          let ret_ty = if tp.is_asserts { TVoid } else { TBoolean }
+          (ret_ty, Some(tp_v2))
+        }
+        other => (ast_type_to_v2(child_env, other), None)
+      }
 
-      TFunction(FunctionTypeV2::{ type_params, params, rest_param: None, return_type })
+      TFunction(FunctionTypeV2::{ type_params, params, rest_param: None, return_type, type_predicate })
     }
 
     // Literal type
@@ -798,6 +816,7 @@ pub fn instantiate_function(
         })
     },
     return_type: subst_in_type_v2(func.return_type, subst),
+    type_predicate: func.type_predicate,
   }
 }
 

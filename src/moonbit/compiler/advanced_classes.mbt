@@ -441,6 +441,7 @@ fn substitute_this_type(
           None => None
         },
         return_type: substitute_this_type(func.return_type, class_name, type_params),
+        type_predicate: func.type_predicate,
       })
 
     // Other types pass through unchanged
@@ -538,6 +539,7 @@ fn build_class_expression_constructor_type(class_info : ClassTypeInfo) -> TypeV2
     params: [],
     rest_param: None,
     return_type: instance_type,
+    type_predicate: None,
   })
 }
 

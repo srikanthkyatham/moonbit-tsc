@@ -216,18 +216,28 @@ pub fn FieldInfoV2::make_readonly(ty : TypeV2) -> FieldInfoV2 {
 }
 
 ///|
+/// Type predicate for user-defined type guards
+/// Represents "x is Type" or "asserts x is Type"
+pub struct TypePredicateV2 {
+  parameter_name : String // The parameter being narrowed
+  predicate_type : TypeV2 // The type to narrow to
+  is_asserts : Bool // True for assertion functions (asserts x is Type)
+} derive(Show, Eq)
+
+///|
 /// Function type
 pub struct FunctionTypeV2 {
   type_params : Array[TypeParamV2]
   params : Array[ParamInfoV2]
   rest_param : ParamInfoV2?
   return_type : TypeV2
+  type_predicate : TypePredicateV2? // For type guards (x is Type, asserts x is Type)
 } derive(Show, Eq)
 
 ///|
 /// Default function type (any => any)
 pub fn FunctionTypeV2::any() -> FunctionTypeV2 {
-  { type_params: [], params: [], rest_param: None, return_type: TAny }
+  { type_params: [], params: [], rest_param: None, return_type: TAny, type_predicate: None }
 }
 
 ///|
@@ -243,6 +253,7 @@ pub fn FunctionTypeV2::simple(
     }),
     rest_param: None,
     return_type,
+    type_predicate: None,
   }
 }
 

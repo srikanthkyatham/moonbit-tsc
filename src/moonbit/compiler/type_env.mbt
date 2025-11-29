@@ -411,6 +411,40 @@ pub fn TypeEnv::apply_narrowing(
           self.with_narrowing(name, new_ty)
         }
       }
+    NTypePredicate(name, predicate_ty) =>
+      // User-defined type guard: x is Type
+      // Narrows the variable to the predicate type
+      match self.lookup_base(name) {
+        None => self
+        Some(current_ty) => {
+          // Intersect current type with predicate type
+          let new_ty = intersect_types(current_ty, predicate_ty)
+          self.with_narrowing(name, new_ty)
+        }
+      }
+    NAsserts(name, maybe_ty) =>
+      // Assertion function: asserts x, asserts x is Type
+      // Narrows after the assertion (only in then branch, not else)
+      match maybe_ty {
+        None =>
+          // asserts x - just truthy narrowing
+          match self.lookup_base(name) {
+            None => self
+            Some(current_ty) => {
+              let new_ty = apply_truthy_narrowing(current_ty)
+              self.with_narrowing(name, new_ty)
+            }
+          }
+        Some(predicate_ty) =>
+          // asserts x is Type - narrow to predicate type
+          match self.lookup_base(name) {
+            None => self
+            Some(current_ty) => {
+              let new_ty = intersect_types(current_ty, predicate_ty)
+              self.with_narrowing(name, new_ty)
+            }
+          }
+      }
     NAnd(a, b) => {
       let env1 = self.apply_narrowing(a)
       env1.apply_narrowing(b)
@@ -561,6 +595,7 @@ fn subst_in_function_v2(
         })
     },
     return_type: subst_in_type_v2(f.return_type, subst),
+    type_predicate: f.type_predicate,
   }
 }
 
@@ -665,6 +700,7 @@ pub fn TypeEnv::with_builtins() -> TypeEnv {
         params: [],
         rest_param: Some(ParamInfoV2::rest("args", TAny)),
         return_type: TVoid,
+        type_predicate: None,
       }),
     ),
   )
@@ -676,6 +712,7 @@ pub fn TypeEnv::with_builtins() -> TypeEnv {
         params: [],
         rest_param: Some(ParamInfoV2::rest("args", TAny)),
         return_type: TVoid,
+        type_predicate: None,
       }),
     ),
   )
@@ -687,6 +724,7 @@ pub fn TypeEnv::with_builtins() -> TypeEnv {
         params: [],
         rest_param: Some(ParamInfoV2::rest("args", TAny)),
         return_type: TVoid,
+        type_predicate: None,
       }),
     ),
   )

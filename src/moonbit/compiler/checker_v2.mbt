@@ -514,6 +514,7 @@ fn infer_function_v2(env : TypeEnv, func : FunctionExpression) -> CheckResultV2 
     params,
     rest_param: None,
     return_type: return_ty,
+    type_predicate: None,
   }
   CheckResultV2::ok(TFunction(func_ty))
 }
@@ -573,6 +574,7 @@ fn infer_arrow_v2(env : TypeEnv, arrow : ArrowFunction) -> CheckResultV2 {
     params,
     rest_param: None,
     return_type: return_ty,
+    type_predicate: None,
   }
   CheckResultV2::ok(TFunction(func_ty))
 }
@@ -638,18 +640,71 @@ fn extract_call_narrowing(call : CallExpression) -> Narrowing {
 }
 
 ///|
+/// Extract narrowing from a type predicate function call
+/// For a call like `isString(x)` where isString has type predicate `x is string`,
+/// this returns NTypePredicate("x", TString)
+fn extract_type_predicate_narrowing(
+  func : FunctionTypeV2,
+  call : CallExpression,
+) -> Narrowing {
+  match func.type_predicate {
+    None => NNone
+    Some(tp) => {
+      // Find the argument corresponding to the predicate's parameter
+      // by matching parameter name with function parameters
+      let mut arg_index = -1
+      for i, param in func.params {
+        if param.name == tp.parameter_name {
+          arg_index = i
+          break
+        }
+      }
+      if arg_index < 0 || arg_index >= call.arguments.length() {
+        return NNone
+      }
+      // Get the argument at that position
+      let arg = call.arguments[arg_index]
+      // Check if the argument is an identifier
+      match arg {
+        Identifier(arg_id) => {
+          // Create appropriate narrowing based on whether it's an assertion
+          if tp.is_asserts {
+            NAsserts(arg_id.name, Some(tp.predicate_type))
+          } else {
+            NTypePredicate(arg_id.name, tp.predicate_type)
+          }
+        }
+        _ => NNone // Can only narrow identifiers
+      }
+    }
+  }
+}
+
+///|
 /// Infer call expression type
 /// Supports generic function calls with type argument inference and constraint checking
 fn infer_call_v2(env : TypeEnv, call : CallExpression) -> CheckResultV2 {
   let callee_result = infer_expr_v2(env, call.expression)
 
   // Extract narrowing from special call patterns like Array.isArray()
-  let call_narrowing = extract_call_narrowing(call)
+  let base_narrowing = extract_call_narrowing(call)
 
   match callee_result.ty {
     TFunction(func) => {
       let all_errors : Array[TypeMismatchError] = []
       all_errors.append(callee_result.errors)
+
+      // Extract type predicate narrowing from function type
+      let predicate_narrowing = extract_type_predicate_narrowing(func, call)
+
+      // Combine base narrowing with predicate narrowing
+      let call_narrowing = if base_narrowing.is_none() {
+        predicate_narrowing
+      } else if predicate_narrowing.is_none() {
+        base_narrowing
+      } else {
+        combine_and(base_narrowing, predicate_narrowing)
+      }
 
       // Check if this is a generic function call
       if func.type_params.is_empty() && call.type_arguments.is_empty() {
@@ -689,6 +744,15 @@ fn infer_call_v2(env : TypeEnv, call : CallExpression) -> CheckResultV2 {
       } else {
         // Use first call signature - check for generics
         let sig = obj.call_signatures[0]
+        // Extract type predicate narrowing from call signature
+        let predicate_narrowing = extract_type_predicate_narrowing(sig, call)
+        let call_narrowing = if base_narrowing.is_none() {
+          predicate_narrowing
+        } else if predicate_narrowing.is_none() {
+          base_narrowing
+        } else {
+          combine_and(base_narrowing, predicate_narrowing)
+        }
         if sig.type_params.is_empty() && call.type_arguments.is_empty() {
           { ty: sig.return_type, narrowing: call_narrowing, errors: callee_result.errors }
         } else {
@@ -702,7 +766,7 @@ fn infer_call_v2(env : TypeEnv, call : CallExpression) -> CheckResultV2 {
           }
         }
       }
-    TAny => { ty: TAny, narrowing: call_narrowing, errors: [] }
+    TAny => { ty: TAny, narrowing: base_narrowing, errors: [] }
     other => CheckResultV2::error(TError, not_callable_error(PRoot, other))
   }
 }

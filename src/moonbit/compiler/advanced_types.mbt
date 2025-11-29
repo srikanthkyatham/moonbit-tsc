@@ -400,6 +400,7 @@ fn substitute_inferred(
             })
         },
         return_type: substitute_inferred(env, f.return_type, inferred),
+        type_predicate: f.type_predicate,
       })
 
     TConditional(c) =>
@@ -609,6 +610,7 @@ fn apply_substitution(ty : TypeV2, subst : Map[String, TypeV2]) -> TypeV2 {
             })
         },
         return_type: apply_substitution(f.return_type, subst),
+        type_predicate: f.type_predicate,
       })
 
     TGenericInstance(name, args) =>

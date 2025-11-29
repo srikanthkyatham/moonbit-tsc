@@ -19,6 +19,8 @@ pub enum Narrowing {
   NNullCheck(String, Bool) // x === null or x !== null (true = is null)
   NUndefinedCheck(String, Bool) // x === undefined or x !== undefined
   NIsArray(String) // Array.isArray(x) - narrows to array type
+  NTypePredicate(String, TypeV2) // User-defined type guard: x is Type (param_name, predicate_type)
+  NAsserts(String, TypeV2?) // Assertion function: asserts x, asserts x is Type
   NNone // No narrowing possible
 } derive(Show, Eq)
 
@@ -51,6 +53,8 @@ pub fn invert_narrowing(narrowing : Narrowing) -> Narrowing {
     NNullCheck(name, is_null) => NNullCheck(name, not(is_null))
     NUndefinedCheck(name, is_undef) => NUndefinedCheck(name, not(is_undef))
     NIsArray(name) => NNot(NIsArray(name))
+    NTypePredicate(name, ty) => NNot(NTypePredicate(name, ty))
+    NAsserts(_, _) => NNone // Assertion functions don't have an else branch
   }
 }
 
