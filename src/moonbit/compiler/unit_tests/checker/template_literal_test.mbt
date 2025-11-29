@@ -545,3 +545,241 @@ test "unit/template-literal/eval - three interpolations" {
     _ => assert_true(false)
   }
 }
+
+// ============================================================================
+// Template Literal Pattern Matching Tests
+// ============================================================================
+
+///|
+test "unit/template-literal/match - simple prefix pattern" {
+  // Match "onClick" against `on${string}`
+  let pattern = @compiler.TemplateLiteralTypeV2::new(
+    ["on", ""],
+    [@compiler.create_string_type()],
+  )
+  let result = @compiler.matches_template_literal_pattern("onClick", pattern)
+  assert_true(result)
+}
+
+///|
+test "unit/template-literal/match - simple prefix no match" {
+  // "handleClick" doesn't match `on${string}`
+  let pattern = @compiler.TemplateLiteralTypeV2::new(
+    ["on", ""],
+    [@compiler.create_string_type()],
+  )
+  let result = @compiler.matches_template_literal_pattern("handleClick", pattern)
+  assert_false(result)
+}
+
+///|
+test "unit/template-literal/match - prefix and suffix pattern" {
+  // Match "onClick_handler" against `on${string}_handler`
+  let pattern = @compiler.TemplateLiteralTypeV2::new(
+    ["on", "_handler"],
+    [@compiler.create_string_type()],
+  )
+  let result = @compiler.matches_template_literal_pattern(
+    "onClick_handler",
+    pattern,
+  )
+  assert_true(result)
+}
+
+///|
+test "unit/template-literal/match - exact literal match" {
+  // Match "hello" against `hello`
+  let pattern = @compiler.TemplateLiteralTypeV2::new(["hello"], [])
+  let result = @compiler.matches_template_literal_pattern("hello", pattern)
+  assert_true(result)
+}
+
+///|
+test "unit/template-literal/match - exact literal no match" {
+  // "world" doesn't match `hello`
+  let pattern = @compiler.TemplateLiteralTypeV2::new(["hello"], [])
+  let result = @compiler.matches_template_literal_pattern("world", pattern)
+  assert_false(result)
+}
+
+///|
+test "unit/template-literal/match - multiple interpolations" {
+  // Match "user_123_admin" against `user_${string}_admin`
+  let pattern = @compiler.TemplateLiteralTypeV2::new(
+    ["user_", "_admin"],
+    [@compiler.create_string_type()],
+  )
+  let result = @compiler.matches_template_literal_pattern(
+    "user_123_admin",
+    pattern,
+  )
+  assert_true(result)
+}
+
+///|
+test "unit/template-literal/match - number interpolation" {
+  // Match "item-42" against `item-${number}` (number pattern)
+  let pattern = @compiler.TemplateLiteralTypeV2::new(
+    ["item-", ""],
+    [@compiler.create_number_type()],
+  )
+  let result = @compiler.matches_template_literal_pattern("item-42", pattern)
+  assert_true(result)
+}
+
+///|
+test "unit/template-literal/match - number interpolation negative" {
+  // Match "item--5" against `item-${number}` (negative number)
+  let pattern = @compiler.TemplateLiteralTypeV2::new(
+    ["item-", ""],
+    [@compiler.create_number_type()],
+  )
+  let result = @compiler.matches_template_literal_pattern("item--5", pattern)
+  assert_true(result)
+}
+
+///|
+test "unit/template-literal/match - number interpolation non-numeric fails" {
+  // "item-abc" doesn't match `item-${number}`
+  let pattern = @compiler.TemplateLiteralTypeV2::new(
+    ["item-", ""],
+    [@compiler.create_number_type()],
+  )
+  let result = @compiler.matches_template_literal_pattern("item-abc", pattern)
+  assert_false(result)
+}
+
+// ============================================================================
+// Template Literal Assignment Compatibility Tests
+// ============================================================================
+
+///|
+test "unit/template-literal/assign - literal to template with string" {
+  // "onClick" is assignable to `on${string}`
+  let pattern = @compiler.TemplateLiteralTypeV2::new(
+    ["on", ""],
+    [@compiler.create_string_type()],
+  )
+  let source = @compiler.create_literal_string_type("onClick")
+  let result = @compiler.is_assignable_to_template_literal(source, pattern)
+  assert_true(result)
+}
+
+///|
+test "unit/template-literal/assign - literal not matching template" {
+  // "handleClick" is not assignable to `on${string}`
+  let pattern = @compiler.TemplateLiteralTypeV2::new(
+    ["on", ""],
+    [@compiler.create_string_type()],
+  )
+  let source = @compiler.create_literal_string_type("handleClick")
+  let result = @compiler.is_assignable_to_template_literal(source, pattern)
+  assert_false(result)
+}
+
+///|
+test "unit/template-literal/assign - string to broad template" {
+  // string is assignable to `${string}` (broad template)
+  let pattern = @compiler.TemplateLiteralTypeV2::new(
+    ["", ""],
+    [@compiler.create_string_type()],
+  )
+  let source = @compiler.create_string_type()
+  let result = @compiler.is_assignable_to_template_literal(source, pattern)
+  assert_true(result)
+}
+
+///|
+test "unit/template-literal/assign - union all matching" {
+  // "onClick" | "onFocus" is assignable to `on${string}`
+  let pattern = @compiler.TemplateLiteralTypeV2::new(
+    ["on", ""],
+    [@compiler.create_string_type()],
+  )
+  let source = @compiler.create_union_type(
+    [
+      @compiler.create_literal_string_type("onClick"),
+      @compiler.create_literal_string_type("onFocus"),
+    ],
+  )
+  let result = @compiler.is_assignable_to_template_literal(source, pattern)
+  assert_true(result)
+}
+
+///|
+test "unit/template-literal/assign - union partial matching fails" {
+  // "onClick" | "handleFocus" is NOT assignable to `on${string}`
+  let pattern = @compiler.TemplateLiteralTypeV2::new(
+    ["on", ""],
+    [@compiler.create_string_type()],
+  )
+  let source = @compiler.create_union_type(
+    [
+      @compiler.create_literal_string_type("onClick"),
+      @compiler.create_literal_string_type("handleFocus"),
+    ],
+  )
+  let result = @compiler.is_assignable_to_template_literal(source, pattern)
+  assert_false(result)
+}
+
+// ============================================================================
+// Template Literal Type Compatibility Tests
+// ============================================================================
+
+///|
+test "unit/template-literal/compat - same templates are compatible" {
+  let tl1 = @compiler.TemplateLiteralTypeV2::new(
+    ["prefix-", "-suffix"],
+    [@compiler.create_string_type()],
+  )
+  let tl2 = @compiler.TemplateLiteralTypeV2::new(
+    ["prefix-", "-suffix"],
+    [@compiler.create_string_type()],
+  )
+  let result = @compiler.are_template_literals_compatible(tl1, tl2)
+  assert_true(result)
+}
+
+///|
+test "unit/template-literal/compat - different texts not compatible" {
+  let tl1 = @compiler.TemplateLiteralTypeV2::new(
+    ["prefix-", "-suffix"],
+    [@compiler.create_string_type()],
+  )
+  let tl2 = @compiler.TemplateLiteralTypeV2::new(
+    ["other-", "-suffix"],
+    [@compiler.create_string_type()],
+  )
+  let result = @compiler.are_template_literals_compatible(tl1, tl2)
+  assert_false(result)
+}
+
+///|
+test "unit/template-literal/compat - literal assignable to string position" {
+  // `prefix-${"value"}-suffix` compatible with `prefix-${string}-suffix`
+  let tl1 = @compiler.TemplateLiteralTypeV2::new(
+    ["prefix-", "-suffix"],
+    [@compiler.create_literal_string_type("value")],
+  )
+  let tl2 = @compiler.TemplateLiteralTypeV2::new(
+    ["prefix-", "-suffix"],
+    [@compiler.create_string_type()],
+  )
+  let result = @compiler.are_template_literals_compatible(tl1, tl2)
+  assert_true(result)
+}
+
+///|
+test "unit/template-literal/compat - different interpolation count not compatible" {
+  let tl1 = @compiler.TemplateLiteralTypeV2::new(
+    ["a", "b"],
+    [@compiler.create_string_type()],
+  )
+  let tl2 = @compiler.TemplateLiteralTypeV2::new(
+    ["a", "b", "c"],
+    [@compiler.create_string_type(), @compiler.create_string_type()],
+  )
+  let result = @compiler.are_template_literals_compatible(tl1, tl2)
+  assert_false(result)
+}

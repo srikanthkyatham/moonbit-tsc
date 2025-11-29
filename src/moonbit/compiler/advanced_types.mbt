@@ -1507,3 +1507,422 @@ pub fn evaluate_intrinsic_string_type(
     _ => None
   }
 }
+
+// ============================================================================
+// Template Literal Pattern Matching
+// ============================================================================
+
+///|
+/// Result of matching a string against a template literal pattern
+pub struct TemplateLiteralMatchResult {
+  matched : Bool
+  inferred_types : Map[String, TypeV2] // infer variable name -> inferred type
+} derive(Show)
+
+///|
+/// Match a literal string against a template literal pattern
+/// Used for type inference in conditional types like:
+///   T extends `${infer First}_${infer Rest}` ? [First, Rest] : never
+///
+/// Returns matched=true and the inferred types if the string matches the pattern
+pub fn match_template_literal_pattern(
+  value : String,
+  pattern : TemplateLiteralTypeV2,
+  infer_names : Array[String], // Names of infer type variables at each position
+) -> TemplateLiteralMatchResult {
+  let inferred : Map[String, TypeV2] = Map::new()
+
+  // Simple case: no interpolations, just match the static text
+  if pattern.types.is_empty() {
+    if pattern.texts.length() == 1 && value == pattern.texts[0] {
+      return { matched: true, inferred_types: inferred }
+    } else {
+      return { matched: false, inferred_types: inferred }
+    }
+  }
+
+  // Try to match the pattern against the value
+  let match_result = try_match_template_pattern(
+    value,
+    pattern.texts,
+    pattern.types,
+    infer_names,
+  )
+
+  match match_result {
+    Some(inferred_values) => {
+      for i, name in infer_names {
+        if i < inferred_values.length() {
+          inferred.set(name, TLiteralString(inferred_values[i]))
+        }
+      }
+      { matched: true, inferred_types: inferred }
+    }
+    None => { matched: false, inferred_types: inferred }
+  }
+}
+
+///|
+/// Try to match a string against template pattern parts
+/// Returns the inferred string values for each interpolation position
+fn try_match_template_pattern(
+  value : String,
+  texts : Array[String],
+  types : Array[TypeV2],
+  infer_names : Array[String],
+) -> Array[String]? {
+  let mut remaining = value
+  let inferred_values : Array[String] = []
+
+  // Process each text segment and interpolation
+  for i in 0..<texts.length() {
+    let text = texts[i]
+
+    // First text segment must be a prefix
+    if i == 0 {
+      if not(tl_string_starts_with(remaining, text)) {
+        return None
+      }
+      remaining = tl_string_substring(remaining, text.length())
+    } else {
+      // Find where the text segment occurs in the remaining string
+      let text_pos = tl_string_index_of(remaining, text)
+      if text_pos < 0 {
+        return None
+      }
+
+      // The inferred value is everything before the text segment
+      let inferred = tl_string_substring_range(remaining, 0, text_pos)
+
+      // Check if the inferred value matches the expected type constraint
+      if i - 1 < types.length() {
+        if not(inferred_value_matches_type(inferred, types[i - 1])) {
+          return None
+        }
+      }
+
+      inferred_values.push(inferred)
+      remaining = tl_string_substring(remaining, text_pos + text.length())
+    }
+  }
+
+  // Handle the final interpolation (after the last text segment)
+  if texts.length() <= types.length() {
+    // There's still an interpolation to match
+    // The rest of the string is the inferred value
+    if types.length() > 0 {
+      let last_idx = types.length() - 1
+      if inferred_value_matches_type(remaining, types[last_idx]) {
+        inferred_values.push(remaining)
+      } else {
+        return None
+      }
+    }
+  }
+
+  // Verify we have the right number of inferred values
+  if inferred_values.length() != infer_names.length() {
+    // If we have fewer inferred values, the match failed
+    if inferred_values.length() < infer_names.length() {
+      return None
+    }
+  }
+
+  Some(inferred_values)
+}
+
+///|
+/// Check if an inferred string value matches the expected type constraint
+fn inferred_value_matches_type(value : String, ty : TypeV2) -> Bool {
+  match ty {
+    TString => true // string matches any string
+    TInfer(_) => true // infer matches any string
+    TLiteralString(expected) => value == expected
+    TNumber => is_numeric_string(value)
+    TUnion(types) => types.iter().any(fn(t) { inferred_value_matches_type(value, t) })
+    _ => true // Be permissive for other types
+  }
+}
+
+///|
+/// Check if a string represents a valid number
+fn is_numeric_string(s : String) -> Bool {
+  if s.length() == 0 {
+    return false
+  }
+  let mut has_digit = false
+  let mut has_dot = false
+  let mut i = 0
+
+  // Handle leading minus
+  if s.length() > 0 && s[0] == '-' {
+    i = 1
+  }
+
+  while i < s.length() {
+    let c = s[i].unsafe_to_char()
+    if c >= '0' && c <= '9' {
+      has_digit = true
+    } else if c == '.' && not(has_dot) {
+      has_dot = true
+    } else {
+      return false
+    }
+    i = i + 1
+  }
+  has_digit
+}
+
+// ============================================================================
+// Template Literal Assignment Compatibility
+// ============================================================================
+
+///|
+/// Check if a string literal type is assignable to a template literal type
+/// For example: "hello_world" assignable to `hello_${string}`
+pub fn is_assignable_to_template_literal(
+  source : TypeV2,
+  target : TemplateLiteralTypeV2,
+) -> Bool {
+  match source {
+    TLiteralString(value) => matches_template_literal_pattern(value, target)
+    TString =>
+      // string is only assignable if template reduces to string
+      is_template_literal_broad(target)
+    TUnion(types) =>
+      // All union members must be assignable
+      types.iter().all(fn(t) { is_assignable_to_template_literal(t, target) })
+    _ => false
+  }
+}
+
+///|
+/// Check if a template literal type is "broad" (equivalent to string)
+fn is_template_literal_broad(tl : TemplateLiteralTypeV2) -> Bool {
+  // A template is broad if any interpolation is string/number/any
+  for ty in tl.types {
+    match ty {
+      TString | TNumber | TAny => return true
+      _ => ()
+    }
+  }
+  false
+}
+
+///|
+/// Check if a concrete string value matches a template literal pattern
+pub fn matches_template_literal_pattern(
+  value : String,
+  pattern : TemplateLiteralTypeV2,
+) -> Bool {
+  // Empty pattern (just texts)
+  if pattern.types.is_empty() {
+    return pattern.texts.length() == 1 && value == pattern.texts[0]
+  }
+
+  // Try to match the pattern
+  let mut remaining = value
+
+  for i in 0..<pattern.texts.length() {
+    let text = pattern.texts[i]
+
+    if i == 0 {
+      // First text must be prefix
+      if not(tl_string_starts_with(remaining, text)) {
+        return false
+      }
+      remaining = tl_string_substring(remaining, text.length())
+    } else {
+      // Handle empty text segment at the end specially
+      if text.length() == 0 && i == pattern.texts.length() - 1 {
+        // Empty suffix means capture everything remaining
+        if i - 1 < pattern.types.length() {
+          if not(string_matches_interpolation_type(remaining, pattern.types[i - 1])) {
+            return false
+          }
+        }
+        remaining = ""
+      } else {
+        // Find this text segment
+        let pos = tl_string_index_of(remaining, text)
+        if pos < 0 {
+          return false
+        }
+
+        // Check that the value before matches the expected type
+        if i - 1 < pattern.types.length() {
+          let captured = tl_string_substring_range(remaining, 0, pos)
+          if not(string_matches_interpolation_type(captured, pattern.types[i - 1])) {
+            return false
+          }
+        }
+
+        remaining = tl_string_substring(remaining, pos + text.length())
+      }
+    }
+  }
+
+  // Check final interpolation if exists
+  if pattern.texts.length() <= pattern.types.length() && remaining.length() > 0 {
+    let last_type = pattern.types[pattern.types.length() - 1]
+    if not(string_matches_interpolation_type(remaining, last_type)) {
+      return false
+    }
+    remaining = ""
+  }
+
+  // All remaining string should be consumed
+  remaining.length() == 0 || is_template_literal_broad(pattern)
+}
+
+///|
+/// Check if a captured string matches the expected interpolation type
+fn string_matches_interpolation_type(captured : String, ty : TypeV2) -> Bool {
+  match ty {
+    TString => true
+    TNumber => is_numeric_string(captured)
+    TAny => true
+    TLiteralString(expected) => captured == expected
+    TLiteralNumber(n) => captured == format_number_literal(n)
+    TLiteralBool(b) => captured == (if b { "true" } else { "false" })
+    TNull => captured == "null"
+    TUndefined => captured == "undefined"
+    TUnion(types) =>
+      types.iter().any(fn(t) { string_matches_interpolation_type(captured, t) })
+    TInfer(_) => true // Infer matches anything
+    _ => true // Be permissive
+  }
+}
+
+// ============================================================================
+// String Utility Functions for Template Literal Pattern Matching
+// ============================================================================
+
+///|
+/// Check if string starts with prefix (for template literal matching)
+fn tl_string_starts_with(s : String, prefix : String) -> Bool {
+  if prefix.length() > s.length() {
+    return false
+  }
+  let s_chars = s.to_array()
+  let p_chars = prefix.to_array()
+  for i in 0..<p_chars.length() {
+    if s_chars[i] != p_chars[i] {
+      return false
+    }
+  }
+  true
+}
+
+///|
+/// Get substring from start index to end (for template literal matching)
+fn tl_string_substring(s : String, start : Int) -> String {
+  if start >= s.length() {
+    return ""
+  }
+  let result = StringBuilder::new()
+  for i = start; i < s.length(); i = i + 1 {
+    result.write_char(s[i].unsafe_to_char())
+  }
+  result.to_string()
+}
+
+///|
+/// Get substring from start to end index (exclusive) (for template literal matching)
+fn tl_string_substring_range(s : String, start : Int, end_idx : Int) -> String {
+  if start >= s.length() || start >= end_idx {
+    return ""
+  }
+  let actual_end = if end_idx > s.length() { s.length() } else { end_idx }
+  let result = StringBuilder::new()
+  for i = start; i < actual_end; i = i + 1 {
+    result.write_char(s[i].unsafe_to_char())
+  }
+  result.to_string()
+}
+
+///|
+/// Find index of substring in string, returns -1 if not found (for template literal matching)
+fn tl_string_index_of(s : String, substr : String) -> Int {
+  if substr.length() == 0 {
+    return 0
+  }
+  if substr.length() > s.length() {
+    return -1
+  }
+
+  let s_chars = s.to_array()
+  let sub_chars = substr.to_array()
+  let max_start = s_chars.length() - sub_chars.length()
+
+  for i in 0..=max_start {
+    let mut found = true
+    for j in 0..<sub_chars.length() {
+      if s_chars[i + j] != sub_chars[j] {
+        found = false
+        break
+      }
+    }
+    if found {
+      return i
+    }
+  }
+  -1
+}
+
+// ============================================================================
+// Template Literal Type Compatibility in Type Checker
+// ============================================================================
+
+///|
+/// Check if two template literal types are compatible
+/// Source is assignable to target if source produces subset of target's values
+pub fn are_template_literals_compatible(
+  source : TemplateLiteralTypeV2,
+  target : TemplateLiteralTypeV2,
+) -> Bool {
+  // Same structure check
+  if source.texts.length() != target.texts.length() {
+    return false
+  }
+  if source.types.length() != target.types.length() {
+    return false
+  }
+
+  // Check text segments match
+  for i in 0..<source.texts.length() {
+    if source.texts[i] != target.texts[i] {
+      return false
+    }
+  }
+
+  // Check interpolation types are compatible
+  for i in 0..<source.types.length() {
+    if not(is_interpolation_type_assignable(source.types[i], target.types[i])) {
+      return false
+    }
+  }
+
+  true
+}
+
+///|
+/// Check if source interpolation type is assignable to target
+fn is_interpolation_type_assignable(source : TypeV2, target : TypeV2) -> Bool {
+  match (source, target) {
+    (_, TAny) => true
+    (_, TString) => true // Any string-like type is assignable to string position
+    (_, TNumber) =>
+      match source {
+        TNumber | TLiteralNumber(_) => true
+        _ => false
+      }
+    (TLiteralString(s1), TLiteralString(s2)) => s1 == s2
+    (TLiteralNumber(n1), TLiteralNumber(n2)) => n1 == n2
+    (TUnion(src_types), _) =>
+      src_types.iter().all(fn(t) { is_interpolation_type_assignable(t, target) })
+    (_, TUnion(tgt_types)) =>
+      tgt_types.iter().any(fn(t) { is_interpolation_type_assignable(source, t) })
+    _ => source == target
+  }
+}
