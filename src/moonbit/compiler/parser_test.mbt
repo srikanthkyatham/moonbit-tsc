@@ -1103,6 +1103,68 @@ test "parse interface with multiple generic call signatures" {
 }
 
 ///|
+test "parse qualified type name in function type" {
+  // Test qualified names like Sample.Thing.IWidget in function types
+  let tokens = tokens_from_source(
+    "type F = (widget: Foo.Bar.Baz) => void;",
+  )
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        TypeAliasDeclaration(type_alias) => {
+          assert_eq(type_alias.name, "F")
+          match type_alias.type_node {
+            FunctionType(func_type) => {
+              assert_eq(func_type.parameters.length(), 1)
+              // Check the parameter type is a qualified name
+              match func_type.parameters[0].type_annotation {
+                Some(TypeReference(tr)) => {
+                  assert_eq(tr.type_name, "Foo.Bar.Baz")
+                }
+                _ => assert_true(false)
+              }
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse qualified type name with type arguments" {
+  // Test qualified names with generic type arguments
+  let tokens = tokens_from_source(
+    "type F = Sample.Thing.Container<string>;",
+  )
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        TypeAliasDeclaration(type_alias) => {
+          assert_eq(type_alias.name, "F")
+          match type_alias.type_node {
+            TypeReference(tr) => {
+              assert_eq(tr.type_name, "Sample.Thing.Container")
+              assert_eq(tr.type_arguments.length(), 1)
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
 test "parse arrow function type" {
   let tokens = tokens_from_source("type Handler = (event: string) => void;")
   let result = parse_source_file(tokens, "test.ts")
