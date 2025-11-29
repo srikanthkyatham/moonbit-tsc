@@ -1309,6 +1309,10 @@ fn infer_type(checker : TypeChecker, expr : Node) -> (Type, TypeChecker) {
     TypeAssertionExpression(tae) => infer_type_assertion_type(checker, tae)
     ParenthesizedExpression(pe) => infer_type(checker, pe.expression)
     FunctionExpression(fe) => infer_function_expression_type(checker, fe)
+    // JSX elements
+    JsxElement(je) => infer_jsx_element_type(checker, je)
+    JsxSelfClosingElement(jsce) => infer_jsx_self_closing_type(checker, jsce)
+    JsxFragment(jf) => infer_jsx_fragment_type(checker, jf)
     _ => any_type(checker) // Fallback for unhandled expressions
   }
 }
