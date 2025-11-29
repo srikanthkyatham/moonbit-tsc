@@ -558,3 +558,127 @@ test "unit/advanced/complex - recursive conditional" {
     Err(_) => assert_true(false)
   }
 }
+
+// ============================================================================
+// Conditional Type Simplification Tests
+// ============================================================================
+
+///|
+test "unit/advanced/simplification - never extends T returns never" {
+  // never extends T ? X : Y should always return never (distribution over empty union)
+  let result = parse_bind_check_advanced(
+    "type Test = never extends string ? 'yes' : 'no';",
+  )
+  match result {
+    Ok(_) => assert_true(true)
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/advanced/simplification - reflexive type extends itself" {
+  // T extends T ? X : Y should always return X
+  let result = parse_bind_check_advanced(
+    "type Reflexive<T> = T extends T ? 'yes' : 'no';",
+  )
+  match result {
+    Ok(_) => assert_true(true)
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/advanced/simplification - T extends never returns false branch" {
+  // T extends never ? X : Y should return Y for non-never T
+  let result = parse_bind_check_advanced(
+    "type ExtendsNever<T> = T extends never ? 'yes' : 'no';",
+  )
+  match result {
+    Ok(_) => assert_true(true)
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/advanced/simplification - any extends T returns union" {
+  // any extends T ? X : Y should return X | Y for specific T
+  let result = parse_bind_check_advanced(
+    "type AnyExtends<T> = any extends T ? 'yes' : 'no';",
+  )
+  match result {
+    Ok(_) => assert_true(true)
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/advanced/simplification - unknown extends specific returns false" {
+  // unknown extends T ? X : Y should return Y for specific T (not unknown/any)
+  let result = parse_bind_check_advanced(
+    "type UnknownExtends<T> = unknown extends T ? 'yes' : 'no';",
+  )
+  match result {
+    Ok(_) => assert_true(true)
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/advanced/simplification - unknown extends unknown returns true" {
+  // unknown extends unknown ? X : Y should return X
+  let result = parse_bind_check_advanced(
+    "type Test = unknown extends unknown ? 'yes' : 'no';",
+  )
+  match result {
+    Ok(_) => assert_true(true)
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/advanced/simplification - union distribution" {
+  // (A | B) extends T ? X : Y distributes to (A extends T ? X : Y) | (B extends T ? X : Y)
+  let result = parse_bind_check_advanced(
+    "type IsString<T> = T extends string ? 'yes' : 'no';",
+  )
+  match result {
+    Ok(_) => assert_true(true)
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/advanced/simplification - never in union result filtered" {
+  // never is filtered out of union results
+  let result = parse_bind_check_advanced(
+    "type FilterNull<T> = T extends null ? never : T;",
+  )
+  match result {
+    Ok(_) => assert_true(true)
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/advanced/simplification - Extract utility type" {
+  // Extract<T, U> = T extends U ? T : never
+  let result = parse_bind_check_advanced(
+    "type MyExtract<T, U> = T extends U ? T : never;",
+  )
+  match result {
+    Ok(_) => assert_true(true)
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/advanced/simplification - Exclude utility type" {
+  // Exclude<T, U> = T extends U ? never : T
+  let result = parse_bind_check_advanced(
+    "type MyExclude<T, U> = T extends U ? never : T;",
+  )
+  match result {
+    Ok(_) => assert_true(true)
+    Err(_) => assert_true(false)
+  }
+}

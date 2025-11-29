@@ -22,6 +22,54 @@ pub fn evaluate_conditional_type_v2(
   let check_type = resolve_type(env, cond.check_type)
   let extends_type = resolve_type(env, cond.extends_type)
 
+  // ========================================================================
+  // Conditional Type Simplifications
+  // ========================================================================
+
+  // 1. Never check type simplification:
+  // never extends T ? X : Y => never (distribution over empty union is never)
+  // This is TypeScript's behavior: never distributes to an empty result
+  if check_type == TNever {
+    return TNever
+  }
+
+  // 2. Reflexive simplification:
+  // T extends T ? X : Y => X (type always extends itself)
+  if check_type == extends_type {
+    return resolve_type(env, cond.true_type)
+  }
+
+  // 3. Extends never simplification:
+  // T extends never ? X : Y => Y (for non-never T)
+  // Only never extends never, all other types don't
+  if extends_type == TNever {
+    return resolve_type(env, cond.false_type)
+  }
+
+  // 4. Any check type simplification:
+  // any extends T ? X : Y => X | Y (any can be both true and false)
+  if check_type == TAny && extends_type != TAny && extends_type != TUnknown {
+    let true_result = resolve_type(env, cond.true_type)
+    let false_result = resolve_type(env, cond.false_type)
+    return make_union([true_result, false_result])
+  }
+
+  // 5. Unknown check type with specific extends:
+  // unknown extends T ? X : Y => Y (for T other than unknown/any)
+  // unknown only extends unknown and any
+  match check_type {
+    TUnknown =>
+      match extends_type {
+        TUnknown | TAny => return resolve_type(env, cond.true_type)
+        _ => return resolve_type(env, cond.false_type)
+      }
+    _ => ()
+  }
+
+  // ========================================================================
+  // Distribution over unions
+  // ========================================================================
+
   // Distributive conditional types: if check_type is a union, distribute
   match check_type {
     TUnion(types) =>
