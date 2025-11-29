@@ -1307,3 +1307,213 @@ test "emit readonly index signature" {
     }
   }
 }
+
+// ============================================================================
+// Declaration Merging Tests
+// ============================================================================
+
+///|
+/// Test: Declaration merging - multiple interfaces with same name
+test "emit declaration merging - interfaces" {
+  let source = "interface User { name: string; } interface User { age: number; }"
+  let tokens = scan_all_v2(source, "test.ts")
+  match parse_source_file(tokens, "test.ts") {
+    Ok(source_file) => {
+      let ctx = DeclarationEmitterContext::default()
+      let output = emit_declaration_file(source_file, ctx)
+      println("\nDeclaration merging - interfaces output:")
+      println(output)
+
+      // Should merge both interface declarations
+      assert_true(output.contains("interface User"))
+      assert_true(output.contains("name: string"))
+      assert_true(output.contains("age: number"))
+      // Should only have one interface User declaration
+      let count = count_occurrences(output, "interface User")
+      assert_true(count == 1)
+    }
+    Err(diagnostics) => {
+      println("Parse error:")
+      for d in diagnostics {
+        println("  " + d.message)
+      }
+      assert_true(false)
+    }
+  }
+}
+
+///|
+/// Test: Declaration merging - three interfaces with same name
+test "emit declaration merging - three interfaces" {
+  let source = "interface Config { host: string; } interface Config { port: number; } interface Config { ssl: boolean; }"
+  let tokens = scan_all_v2(source, "test.ts")
+  match parse_source_file(tokens, "test.ts") {
+    Ok(source_file) => {
+      let ctx = DeclarationEmitterContext::default()
+      let output = emit_declaration_file(source_file, ctx)
+      println("\nDeclaration merging - three interfaces output:")
+      println(output)
+
+      // Should merge all three interface declarations
+      assert_true(output.contains("interface Config"))
+      assert_true(output.contains("host: string"))
+      assert_true(output.contains("port: number"))
+      assert_true(output.contains("ssl: boolean"))
+      // Should only have one interface Config declaration
+      let count = count_occurrences(output, "interface Config")
+      assert_true(count == 1)
+    }
+    Err(diagnostics) => {
+      println("Parse error:")
+      for d in diagnostics {
+        println("  " + d.message)
+      }
+      assert_true(false)
+    }
+  }
+}
+
+// ============================================================================
+// Private Member Stripping Tests
+// ============================================================================
+
+///|
+/// Test: Private member stripping - class with private property
+test "emit private member stripping - property" {
+  let source = "class User { private secret: string; public name: string; }"
+  let tokens = scan_all_v2(source, "test.ts")
+  match parse_source_file(tokens, "test.ts") {
+    Ok(source_file) => {
+      let ctx = DeclarationEmitterContext::default()
+      let output = emit_declaration_file(source_file, ctx)
+      println("\nPrivate member stripping - property output:")
+      println(output)
+
+      // Should strip private property
+      assert_false(output.contains("secret"))
+      // Should keep public property
+      assert_true(output.contains("name"))
+    }
+    Err(diagnostics) => {
+      println("Parse error:")
+      for d in diagnostics {
+        println("  " + d.message)
+      }
+      assert_true(false)
+    }
+  }
+}
+
+///|
+/// Test: Private member stripping - class with private method
+test "emit private member stripping - method" {
+  let source = "class Api { private doAuth(): void {} public fetch(): void {} }"
+  let tokens = scan_all_v2(source, "test.ts")
+  match parse_source_file(tokens, "test.ts") {
+    Ok(source_file) => {
+      let ctx = DeclarationEmitterContext::default()
+      let output = emit_declaration_file(source_file, ctx)
+      println("\nPrivate member stripping - method output:")
+      println(output)
+
+      // Should strip private method
+      assert_false(output.contains("doAuth"))
+      // Should keep public method
+      assert_true(output.contains("fetch"))
+    }
+    Err(diagnostics) => {
+      println("Parse error:")
+      for d in diagnostics {
+        println("  " + d.message)
+      }
+      assert_true(false)
+    }
+  }
+}
+
+// ============================================================================
+// TypeV2 to TypeScript String Conversion Tests (via factory functions)
+// ============================================================================
+
+///|
+/// Test: TypeV2 to string - using factory functions
+test "type_v2_to_ts_string via factories" {
+  // Test primitives via factory functions
+  assert_eq(type_v2_to_ts_string(create_string_type()), "string")
+  assert_eq(type_v2_to_ts_string(create_number_type()), "number")
+  assert_eq(type_v2_to_ts_string(create_boolean_type()), "boolean")
+  assert_eq(type_v2_to_ts_string(create_any_type()), "any")
+  assert_eq(type_v2_to_ts_string(create_void_type()), "void")
+  assert_eq(type_v2_to_ts_string(create_null_type()), "null")
+  assert_eq(type_v2_to_ts_string(create_undefined_type()), "undefined")
+  println("TypeV2 to string via factories passed")
+}
+
+///|
+/// Test: TypeV2 to string - literal types
+test "type_v2_to_ts_string literals via factories" {
+  assert_eq(type_v2_to_ts_string(create_literal_string_type("hello")), "\"hello\"")
+  assert_eq(type_v2_to_ts_string(create_literal_number_type(42.0)), "42")
+  assert_eq(type_v2_to_ts_string(create_literal_bool_type(true)), "true")
+  assert_eq(type_v2_to_ts_string(create_literal_bool_type(false)), "false")
+  println("TypeV2 literals to string passed")
+}
+
+///|
+/// Test: TypeV2 to string - union types
+test "type_v2_to_ts_string union via factories" {
+  let union = create_union_type([create_string_type(), create_number_type()])
+  assert_eq(type_v2_to_ts_string(union), "string | number")
+  println("TypeV2 union to string passed")
+}
+
+///|
+/// Test: TypeV2 to string - array types
+test "type_v2_to_ts_string array via factories" {
+  let arr = create_array_type(create_string_type())
+  assert_eq(type_v2_to_ts_string(arr), "string[]")
+  println("TypeV2 array to string passed")
+}
+
+///|
+/// Test: TypeV2 to string - generic instance
+test "type_v2_to_ts_string generic via factories" {
+  let generic = create_generic_instance("Promise", [create_string_type()])
+  assert_eq(type_v2_to_ts_string(generic), "Promise<string>")
+  let map_type = create_generic_instance("Map", [create_string_type(), create_number_type()])
+  assert_eq(type_v2_to_ts_string(map_type), "Map<string, number>")
+  println("TypeV2 generic to string passed")
+}
+
+///|
+/// Test: TypeV2 to string - type parameter
+test "type_v2_to_ts_string type_param via factories" {
+  let type_param = create_type_param("T", None)
+  assert_eq(type_v2_to_ts_string(type_param), "T")
+  println("TypeV2 type param to string passed")
+}
+
+// Helper function to count occurrences of a substring
+fn count_occurrences(haystack : String, needle : String) -> Int {
+  let mut count = 0
+  let mut pos = 0
+  let haystack_len = haystack.length()
+  let needle_len = needle.length()
+  while pos <= haystack_len - needle_len {
+    let found = check_substring_at(haystack, needle, pos)
+    if found {
+      count = count + 1
+      pos = pos + needle_len
+    } else {
+      pos = pos + 1
+    }
+  }
+  count
+}
+
+// Helper to check if a substring exists at a position
+fn check_substring_at(haystack : String, needle : String, pos : Int) -> Bool {
+  let needle_len = needle.length()
+  let sub = @utils.substr(haystack, start=pos, end=pos + needle_len)
+  sub == needle
+}

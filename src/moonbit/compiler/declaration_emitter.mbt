@@ -8,6 +8,9 @@ pub struct DeclarationEmitterContext {
   indent_string : String
   emit_comments : Bool
   strip_internal : Bool // Strip declarations marked as @internal
+  type_env : TypeEnv? // Type environment for inferring types of unannotated exports
+  strip_private : Bool // Strip private members from classes
+  type_only_imports : Map[String, Bool] // Track which imports are type-only
 }
 
 ///|
@@ -18,6 +21,9 @@ pub fn DeclarationEmitterContext::default() -> DeclarationEmitterContext {
     indent_string: "  ",
     emit_comments: true,
     strip_internal: true,
+    type_env: None,
+    strip_private: true,
+    type_only_imports: Map::new(),
   }
 }
 
@@ -27,7 +33,31 @@ pub fn DeclarationEmitterContext::new(
   emit_comments : Bool,
   strip_internal : Bool,
 ) -> DeclarationEmitterContext {
-  { indent_level: 0, indent_string: "  ", emit_comments, strip_internal }
+  {
+    indent_level: 0,
+    indent_string: "  ",
+    emit_comments,
+    strip_internal,
+    type_env: None,
+    strip_private: true,
+    type_only_imports: Map::new(),
+  }
+}
+
+///|
+/// Create declaration emitter context with type environment for type inference
+pub fn DeclarationEmitterContext::with_type_env(
+  type_env : TypeEnv,
+) -> DeclarationEmitterContext {
+  {
+    indent_level: 0,
+    indent_string: "  ",
+    emit_comments: true,
+    strip_internal: true,
+    type_env: Some(type_env),
+    strip_private: true,
+    type_only_imports: Map::new(),
+  }
 }
 
 ///|
@@ -40,6 +70,9 @@ pub fn DeclarationEmitterContext::indent(
     indent_string: self.indent_string,
     emit_comments: self.emit_comments,
     strip_internal: self.strip_internal,
+    type_env: self.type_env,
+    strip_private: self.strip_private,
+    type_only_imports: self.type_only_imports,
   }
 }
 
@@ -57,6 +90,9 @@ pub fn DeclarationEmitterContext::dedent(
     indent_string: self.indent_string,
     emit_comments: self.emit_comments,
     strip_internal: self.strip_internal,
+    type_env: self.type_env,
+    strip_private: self.strip_private,
+    type_only_imports: self.type_only_imports,
   }
 }
 
@@ -103,6 +139,567 @@ fn type_keyword_to_string(keyword : TypeKeyword) -> String {
 }
 
 ///|
+/// Convert TypeV2 to TypeScript type string
+/// Used for emitting inferred types in declaration files
+pub fn type_v2_to_ts_string(ty : TypeV2) -> String {
+  match ty {
+    // Primitives
+    TNumber => "number"
+    TString => "string"
+    TBoolean => "boolean"
+    TNull => "null"
+    TUndefined => "undefined"
+    TVoid => "void"
+    TNever => "never"
+    TAny => "any"
+    TUnknown => "unknown"
+    TSymbol => "symbol"
+    TBigInt => "bigint"
+    // Literals - widen to base types in declarations
+    TLiteralString(s) => "\"" + s + "\""
+    TLiteralNumber(n) =>
+      if n == n.floor() {
+        n.to_int().to_string()
+      } else {
+        n.to_string()
+      }
+    TLiteralBool(b) => if b { "true" } else { "false" }
+    TLiteralBigInt(s) => s + "n"
+    // Union types
+    TUnion(types) => {
+      let parts : Array[String] = []
+      for t in types {
+        parts.push(type_v2_to_ts_string(t))
+      }
+      parts.join(" | ")
+    }
+    // Intersection types
+    TIntersection(types) => {
+      let parts : Array[String] = []
+      for t in types {
+        parts.push(type_v2_to_ts_string(t))
+      }
+      parts.join(" & ")
+    }
+    // Array type
+    TArray(elem) => type_v2_to_ts_string(elem) + "[]"
+    // Tuple type
+    TTuple(elements) => {
+      let parts : Array[String] = []
+      for elem in elements {
+        let elem_str = type_v2_to_ts_string(elem.ty)
+        if elem.optional {
+          parts.push(elem_str + "?")
+        } else if elem.is_rest {
+          parts.push("..." + elem_str)
+        } else {
+          parts.push(elem_str)
+        }
+      }
+      "[" + parts.join(", ") + "]"
+    }
+    // Object type
+    TObject(obj) => type_v2_object_to_ts_string(obj)
+    // Function type
+    TFunction(func) => type_v2_function_to_ts_string(func)
+    // Generic instance (e.g., Array<number>)
+    TGenericInstance(name, args) =>
+      if args.length() == 0 {
+        name
+      } else {
+        let arg_strs : Array[String] = []
+        for arg in args {
+          arg_strs.push(type_v2_to_ts_string(arg))
+        }
+        name + "<" + arg_strs.join(", ") + ">"
+      }
+    // Type parameter
+    TTypeParam(name, _) => name
+    // Conditional type
+    TConditional(cond) =>
+      type_v2_to_ts_string(cond.check_type) +
+      " extends " +
+      type_v2_to_ts_string(cond.extends_type) +
+      " ? " +
+      type_v2_to_ts_string(cond.true_type) +
+      " : " +
+      type_v2_to_ts_string(cond.false_type)
+    // Mapped type
+    TMapped(mapped) => {
+      let mut output = "{ "
+      match mapped.readonly_modifier {
+        MappedModifierV2::Add => output = output + "readonly "
+        MappedModifierV2::Remove => output = output + "-readonly "
+        MappedModifierV2::Unchanged => ()
+      }
+      output = output + "[" + mapped.type_param.name + " in "
+      match mapped.type_param.constraint {
+        Some(c) => output = output + type_v2_to_ts_string(c)
+        None => output = output + "any"
+      }
+      output = output + "]"
+      match mapped.optional_modifier {
+        MappedModifierV2::Add => output = output + "?"
+        MappedModifierV2::Remove => output = output + "-?"
+        MappedModifierV2::Unchanged => ()
+      }
+      output = output + ": " + type_v2_to_ts_string(mapped.template_type) + "; }"
+      output
+    }
+    // Indexed access type
+    TIndexAccess(idx) =>
+      type_v2_to_ts_string(idx.object_type) +
+      "[" +
+      type_v2_to_ts_string(idx.index_type) +
+      "]"
+    // Template literal type
+    TTemplateLiteral(tlt) => {
+      let mut output = "`"
+      for i, text in tlt.texts {
+        output = output + text
+        if i < tlt.types.length() {
+          output = output + "${" + type_v2_to_ts_string(tlt.types[i]) + "}"
+        }
+      }
+      output + "`"
+    }
+    // Infer type
+    TInfer(name) => "infer " + name
+    // Error type - emit as any
+    TError => "any"
+  }
+}
+
+///|
+/// Convert ObjectTypeV2 to TypeScript string
+fn type_v2_object_to_ts_string(obj : ObjectTypeV2) -> String {
+  // If it's a named class, just use the class name
+  match obj.class_name {
+    Some(name) => return name
+    None => ()
+  }
+  // Build object literal type
+  let parts : Array[String] = []
+  // Fields
+  for kv in obj.fields {
+    let name = kv.0
+    let field = kv.1
+    let mut prop = ""
+    if field.is_readonly {
+      prop = prop + "readonly "
+    }
+    prop = prop + name
+    if field.optional {
+      prop = prop + "?"
+    }
+    prop = prop + ": " + type_v2_to_ts_string(field.ty)
+    parts.push(prop)
+  }
+  // Call signatures
+  for sig in obj.call_signatures {
+    parts.push(type_v2_function_to_ts_string(sig))
+  }
+  // Index signature
+  match obj.index_signature {
+    Some(idx) => {
+      let key_type = match idx.key_type {
+        TString => "string"
+        TNumber => "number"
+        TSymbol => "symbol"
+        _ => "string"
+      }
+      parts.push("[key: " + key_type + "]: " + type_v2_to_ts_string(idx.value_type))
+    }
+    None => ()
+  }
+  if parts.length() == 0 {
+    "{}"
+  } else {
+    "{ " + parts.join("; ") + " }"
+  }
+}
+
+///|
+/// Convert FunctionTypeV2 to TypeScript string
+fn type_v2_function_to_ts_string(func : FunctionTypeV2) -> String {
+  let mut output = "("
+  for i, param in func.params {
+    if i > 0 {
+      output = output + ", "
+    }
+    output = output + param.name
+    if param.optional {
+      output = output + "?"
+    }
+    output = output + ": " + type_v2_to_ts_string(param.ty)
+  }
+  output + ") => " + type_v2_to_ts_string(func.return_type)
+}
+
+///|
+/// Check if a modifier indicates private visibility
+fn is_private_modifier(modifier : Modifier) -> Bool {
+  match modifier {
+    Modifier::Private => true
+    _ => false
+  }
+}
+
+///|
+/// Check if modifiers contain private modifier
+fn has_private_modifier(modifiers : Array[Modifier]) -> Bool {
+  for m in modifiers {
+    if is_private_modifier(m) {
+      return true
+    }
+  }
+  false
+}
+
+// ============================================================================
+// Declaration Merging Support
+// ============================================================================
+
+///|
+/// Merge interfaces with the same name for declaration merging
+fn merge_interface_declarations(
+  statements : Array[Node],
+) -> (Array[Node], Map[String, InterfaceDeclaration]) {
+  // Collect interfaces by name
+  let interface_map : Map[String, Array[InterfaceDeclaration]] = Map::new()
+  let other_statements : Array[Node] = []
+  for stmt in statements {
+    match stmt {
+      InterfaceDeclaration(iface) => {
+        match interface_map.get(iface.name) {
+          Some(arr) => arr.push(iface)
+          None => interface_map.set(iface.name, [iface])
+        }
+      }
+      _ => other_statements.push(stmt)
+    }
+  }
+  // Merge interfaces with the same name
+  let merged_interfaces : Map[String, InterfaceDeclaration] = Map::new()
+  for kv in interface_map {
+    let name = kv.0
+    let interfaces = kv.1
+    if interfaces.length() == 1 {
+      merged_interfaces.set(name, interfaces[0])
+    } else {
+      // Merge multiple interfaces
+      let merged = merge_interfaces(interfaces)
+      merged_interfaces.set(name, merged)
+    }
+  }
+  (other_statements, merged_interfaces)
+}
+
+///|
+/// Merge multiple interface declarations into one
+fn merge_interfaces(interfaces : Array[InterfaceDeclaration]) -> InterfaceDeclaration {
+  // Use first interface as base
+  let base = interfaces[0]
+  let merged_members : Array[Node] = []
+  // Collect all members from all interfaces
+  for iface in interfaces {
+    for m in iface.members {
+      merged_members.push(m)
+    }
+  }
+  // Merge type parameters (take union)
+  let merged_type_params : Array[TypeParameter] = []
+  let seen_params : Map[String, Bool] = Map::new()
+  for iface in interfaces {
+    for param in iface.type_parameters {
+      if not(seen_params.contains(param.name)) {
+        merged_type_params.push(param)
+        seen_params.set(param.name, true)
+      }
+    }
+  }
+  // Merge heritage clauses
+  let merged_heritage : Array[HeritageClause] = []
+  for iface in interfaces {
+    for heritage in iface.heritage_clauses {
+      merged_heritage.push(heritage)
+    }
+  }
+  {
+    name: base.name,
+    type_parameters: merged_type_params,
+    heritage_clauses: merged_heritage,
+    members: merged_members,
+    modifiers: base.modifiers,
+    location: base.location,
+  }
+}
+
+// ============================================================================
+// Re-export Flattening Support
+// ============================================================================
+
+///|
+/// Flatten re-exports by collecting exported names
+/// Returns a map of exported names to their declarations (if available)
+fn collect_reexports(statements : Array[Node]) -> Map[String, String?] {
+  let exports : Map[String, String?] = Map::new()
+  for stmt in statements {
+    match stmt {
+      ExportDeclaration(exp) =>
+        match exp.export_clause {
+          Some(NamedExports(specifiers, _)) =>
+            for spec in specifiers {
+              // Map property_name to name (for aliased exports)
+              match spec.property_name {
+                Some(prop) => exports.set(spec.name, Some(prop))
+                None => exports.set(spec.name, None)
+              }
+            }
+          Some(NamespaceExport(ns_name, _)) => exports.set(ns_name, None)
+          None => ()
+        }
+      _ => ()
+    }
+  }
+  exports
+}
+
+///|
+/// Emit flattened re-export (expand to actual type when possible)
+fn emit_flattened_export(
+  spec_name : String,
+  original_name : String?,
+  ctx : DeclarationEmitterContext,
+) -> String {
+  let indent = ctx.get_indent()
+  // If we have access to type environment, try to emit the actual type
+  match ctx.type_env {
+    Some(env) => {
+      let lookup_name = match original_name {
+        Some(n) => n
+        None => spec_name
+      }
+      match env.lookup(lookup_name) {
+        Some(ty) => {
+          // Emit as type alias for the exported type
+          indent + "export type " + spec_name + " = " + type_v2_to_ts_string(ty) +
+          ";"
+        }
+        None =>
+          // Fall back to regular export
+          indent + "export { " + spec_name + " };"
+      }
+    }
+    None => indent + "export { " + spec_name + " };"
+  }
+}
+
+// ============================================================================
+// Import Elision Support
+// ============================================================================
+
+///|
+/// Extract base type name (part before first dot, if any)
+fn extract_base_type_name(type_name : String) -> String {
+  let mut result = ""
+  for c in type_name {
+    if c == '.' {
+      break
+    }
+    result = result + c.to_string()
+  }
+  if result.length() == 0 { type_name } else { result }
+}
+
+///|
+/// Check if an import is type-only (import type {} or import type X from)
+fn is_type_only_import(imp : ImportDeclaration) -> Bool {
+  imp.is_type_only
+}
+
+///|
+/// Collect used type references from statements
+/// This helps identify which imports are actually used
+fn collect_used_type_refs(statements : Array[Node]) -> Map[String, Bool] {
+  let used : Map[String, Bool] = Map::new()
+  for stmt in statements {
+    collect_type_refs_from_node(stmt, used)
+  }
+  used
+}
+
+///|
+/// Recursively collect type references from a node
+fn collect_type_refs_from_node(node : Node, used : Map[String, Bool]) -> Unit {
+  match node {
+    TypeReference(type_ref) => {
+      // Extract the base type name (before any dots)
+      let base_name = extract_base_type_name(type_ref.type_name)
+      used.set(base_name, true)
+      // Also collect refs from type arguments
+      for arg in type_ref.type_arguments {
+        collect_type_refs_from_node(arg, used)
+      }
+    }
+    FunctionDeclaration(func) => {
+      match func.return_type {
+        Some(rt) => collect_type_refs_from_node(rt, used)
+        None => ()
+      }
+      for param in func.parameters {
+        collect_type_refs_from_node(param, used)
+      }
+    }
+    ClassDeclaration(cls) =>
+      for m in cls.members {
+        collect_type_refs_from_node(m, used)
+      }
+    InterfaceDeclaration(iface) =>
+      for m in iface.members {
+        collect_type_refs_from_node(m, used)
+      }
+    PropertyDeclaration(prop) =>
+      match prop.type_annotation {
+        Some(ta) => collect_type_refs_from_node(ta, used)
+        None => ()
+      }
+    MethodDeclaration(meth) => {
+      match meth.return_type {
+        Some(rt) => collect_type_refs_from_node(rt, used)
+        None => ()
+      }
+      for param in meth.parameters {
+        collect_type_refs_from_node(param, used)
+      }
+    }
+    Parameter(param) =>
+      match param.type_annotation {
+        Some(ta) => collect_type_refs_from_node(ta, used)
+        None => ()
+      }
+    VariableStatement(var_stmt) =>
+      for decl in var_stmt.declarations {
+        match decl.type_annotation {
+          Some(ta) => collect_type_refs_from_node(ta, used)
+          None => ()
+        }
+      }
+    UnionType(union) =>
+      for t in union.types {
+        collect_type_refs_from_node(t, used)
+      }
+    IntersectionType(intersection) =>
+      for t in intersection.types {
+        collect_type_refs_from_node(t, used)
+      }
+    ArrayType(arr) => collect_type_refs_from_node(arr.element_type, used)
+    _ => ()
+  }
+}
+
+///|
+/// Filter imports to only include used type imports (import elision)
+fn filter_imports_for_declaration(
+  statements : Array[Node],
+) -> (Array[ImportDeclaration], Array[Node]) {
+  let used_types = collect_used_type_refs(statements)
+  let kept_imports : Array[ImportDeclaration] = []
+  let other_statements : Array[Node] = []
+  for stmt in statements {
+    match stmt {
+      ImportDeclaration(imp) => {
+        // Keep type-only imports as-is
+        if is_type_only_import(imp) {
+          kept_imports.push(imp)
+        } else {
+          // For regular imports, check if any imported names are used as types
+          match imp.import_clause {
+            Some(clause) => {
+              let mut has_used = false
+              // Check default import
+              match clause.name {
+                Some(name) =>
+                  if used_types.contains(name) {
+                    has_used = true
+                  }
+                None => ()
+              }
+              // Check named imports
+              match clause.named_bindings {
+                Some(NamedImports(specifiers, _)) =>
+                  for spec in specifiers {
+                    if used_types.contains(spec.name) {
+                      has_used = true
+                    }
+                  }
+                Some(NamespaceImport(name, _)) =>
+                  if used_types.contains(name) {
+                    has_used = true
+                  }
+                None => ()
+              }
+              if has_used {
+                kept_imports.push(imp)
+              }
+            }
+            None => ()
+          }
+        }
+      }
+      _ => other_statements.push(stmt)
+    }
+  }
+  (kept_imports, other_statements)
+}
+
+// ============================================================================
+// Inline Type Expansion Support
+// ============================================================================
+
+///|
+/// Check if a type alias should be inlined (simple types, small unions, etc.)
+fn should_inline_type_alias(ty : TypeV2) -> Bool {
+  match ty {
+    // Primitives are always inlinable
+    TNumber | TString | TBoolean | TNull | TUndefined | TVoid | TNever | TAny |
+    TUnknown | TSymbol | TBigInt => true
+    // Literals are inlinable
+    TLiteralString(_) | TLiteralNumber(_) | TLiteralBool(_) |
+    TLiteralBigInt(_) => true
+    // Small unions (up to 3 members) can be inlined
+    TUnion(types) => types.length() <= 3
+    // Type params should not be inlined
+    TTypeParam(_, _) => false
+    // Generic instances are usually named types, don't inline
+    TGenericInstance(_, _) => false
+    // Complex types should not be inlined
+    _ => false
+  }
+}
+
+///|
+/// Expand a type alias if it should be inlined
+fn expand_type_if_inline(
+  type_name : String,
+  ctx : DeclarationEmitterContext,
+) -> String? {
+  match ctx.type_env {
+    Some(env) =>
+      match env.lookup_type_alias(type_name) {
+        Some(alias_info) =>
+          if should_inline_type_alias(alias_info.body) {
+            Some(type_v2_to_ts_string(alias_info.body))
+          } else {
+            None
+          }
+        None => None
+      }
+    None => None
+  }
+}
+
+///|
 /// Emit a source file as a declaration file
 pub fn emit_declaration_file(
   source_file : SourceFile,
@@ -114,12 +711,22 @@ pub fn emit_declaration_file(
   output = output + "// Type definitions for " + source_file.file_path + "\n"
   output = output + "// Generated by MoonBit TypeScript Compiler\n\n"
 
-  // Emit each top-level statement that is a declaration
-  for i = 0; i < source_file.statements.length(); i = i + 1 {
-    let stmt = source_file.statements[i]
+  // Apply declaration merging for interfaces
+  let (other_stmts, merged_ifaces) = merge_interface_declarations(
+    source_file.statements,
+  )
+
+  // Emit merged interfaces first
+  for kv in merged_ifaces {
+    let iface = kv.1
+    output = output + emit_decl_interface(iface, ctx) + "\n"
+  }
+
+  // Emit other statements
+  for stmt in other_stmts {
     match emit_decl_statement(stmt, ctx) {
       Some(decl) => output = output + decl + "\n"
-      None => () // Skip non-declaration statements
+      None => ()
     }
   }
   output
@@ -186,13 +793,24 @@ fn emit_decl_variable_declarator(
   decl : VariableDeclaration,
   ctx : DeclarationEmitterContext,
 ) -> String {
-  let mut output = emit_decl_binding_name(decl.name)
+  let var_name = emit_decl_binding_name(decl.name)
+  let mut output = var_name
 
-  // Add type annotation
+  // Add type annotation - prefer explicit, then inferred, then any
   match decl.type_annotation {
     Some(type_node) =>
       output = output + ": " + emit_decl_type_node(type_node, ctx)
-    None => output = output + ": any" // Default to any if no type annotation
+    None =>
+      // Try to get inferred type from type environment
+      match ctx.type_env {
+        Some(env) =>
+          match env.lookup(var_name) {
+            Some(inferred_ty) =>
+              output = output + ": " + type_v2_to_ts_string(inferred_ty)
+            None => output = output + ": any"
+          }
+        None => output = output + ": any"
+      }
   }
   output
 }
@@ -358,6 +976,28 @@ fn emit_decl_class_member(
   node : Node,
   ctx : DeclarationEmitterContext,
 ) -> String? {
+  // Strip private members when strip_private is enabled
+  if ctx.strip_private {
+    match node {
+      PropertyDeclaration(prop) =>
+        if has_private_modifier(prop.modifiers) {
+          return None
+        }
+      MethodDeclaration(meth) =>
+        if has_private_modifier(meth.modifiers) {
+          return None
+        }
+      GetAccessor(getter) =>
+        if has_private_modifier(getter.modifiers) {
+          return None
+        }
+      SetAccessor(setter) =>
+        if has_private_modifier(setter.modifiers) {
+          return None
+        }
+      _ => ()
+    }
+  }
   match node {
     PropertyDeclaration(prop) => Some(emit_decl_property(prop, ctx))
     MethodDeclaration(meth) => Some(emit_decl_method(meth, ctx))
