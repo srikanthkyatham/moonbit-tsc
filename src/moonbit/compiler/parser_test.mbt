@@ -1119,10 +1119,13 @@ test "parse qualified type name in function type" {
             FunctionType(func_type) => {
               assert_eq(func_type.parameters.length(), 1)
               // Check the parameter type is a qualified name
-              match func_type.parameters[0].type_annotation {
-                Some(TypeReference(tr)) => {
-                  assert_eq(tr.type_name, "Foo.Bar.Baz")
-                }
+              match func_type.parameters[0] {
+                Parameter(param) =>
+                  match param.type_annotation {
+                    Some(TypeReference(tr)) =>
+                      assert_eq(tr.type_name, "Foo.Bar.Baz")
+                    _ => assert_true(false)
+                  }
                 _ => assert_true(false)
               }
             }
