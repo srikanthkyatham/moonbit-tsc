@@ -701,22 +701,8 @@ fn is_subtype_of(source : TypeV2, target : TypeV2) -> Bool {
 ///|
 /// Check if source object type is subtype of target
 fn is_object_subtype(source : ObjectTypeV2, target : ObjectTypeV2) -> Bool {
-  // All required properties in target must exist in source with compatible types
-  for kv in target.fields {
-    let name = kv.0
-    let tgt_field = kv.1
-    match source.fields.get(name) {
-      None =>
-        if not(tgt_field.optional) {
-          return false
-        }
-      Some(src_field) =>
-        if not(is_subtype_of(src_field.ty, tgt_field.ty)) {
-          return false
-        }
-    }
-  }
-  true
+  // Use the enhanced index signature aware subtype checking
+  is_object_subtype_with_index(source, target)
 }
 
 ///|

@@ -1842,3 +1842,173 @@ pub fn enum_circular_reference_error(
     related: [],
   }
 }
+
+// ============================================================================
+// Index Signature Errors
+// ============================================================================
+
+///|
+/// Error: Numeric index type not assignable to string index type (TS2413)
+/// "Numeric index type 'T1' is not assignable to string index type 'T2'."
+pub fn numeric_index_not_assignable_error(
+  location : String,
+  numeric_type : String,
+  string_type : String,
+) -> DetailedError {
+  {
+    title: "Numeric Index Type Mismatch",
+    code: 2413,
+    location,
+    code_snippet: "[key: number]: " + numeric_type,
+    what_went_wrong: "Numeric index type '" +
+      numeric_type +
+      "' is not assignable to string index type '" +
+      string_type +
+      "'.",
+    why_error: "In JavaScript, numeric property keys are converted to strings (e.g., obj[0] is the same as obj['0']). Therefore, the type returned by numeric indexing must be a subtype of the type returned by string indexing.",
+    how_to_fix: [
+      "Make the numeric index type a subtype of the string index type",
+      "Change: { [n: number]: T1; [s: string]: T2 } where T1 extends T2",
+      "Or use a common base type for both index signatures",
+    ],
+    doc_link: get_error_doc_url(2413),
+    related: [],
+  }
+}
+
+///|
+/// Error: Invalid index signature key type (TS1023)
+/// "An index signature parameter type must be 'string', 'number', or 'symbol'."
+pub fn invalid_index_key_type_error(
+  location : String,
+  key_type : String,
+) -> DetailedError {
+  {
+    title: "Invalid Index Signature Parameter Type",
+    code: 1023,
+    location,
+    code_snippet: "[key: " + key_type + "]",
+    what_went_wrong: "An index signature parameter type must be 'string', 'number', or 'symbol'. Got '" +
+      key_type +
+      "'.",
+    why_error: "TypeScript only supports three types of index signatures: string, number, and symbol. These correspond to JavaScript's property access mechanisms.",
+    how_to_fix: [
+      "Use 'string' for string key access: [key: string]: T",
+      "Use 'number' for array-like access: [key: number]: T",
+      "Use 'symbol' for symbol key access: [key: symbol]: T",
+    ],
+    doc_link: get_error_doc_url(1023),
+    related: [],
+  }
+}
+
+///|
+/// Error: Index signature value type mismatch (TS2411)
+/// "Property 'x' of type 'T1' is not assignable to string index type 'T2'."
+pub fn property_not_assignable_to_index_error(
+  location : String,
+  property_name : String,
+  property_type : String,
+  index_type : String,
+) -> DetailedError {
+  {
+    title: "Property Not Assignable to Index Type",
+    code: 2411,
+    location,
+    code_snippet: property_name + ": " + property_type,
+    what_went_wrong: "Property '" +
+      property_name +
+      "' of type '" +
+      property_type +
+      "' is not assignable to string index type '" +
+      index_type +
+      "'.",
+    why_error: "When an interface has an index signature, all explicitly declared properties must have types that are assignable to the index signature's value type.",
+    how_to_fix: [
+      "Change the property type to be compatible with the index signature",
+      "Use a union type in the index signature: [key: string]: T1 | T2",
+      "Remove the index signature if not all properties should conform to it",
+    ],
+    doc_link: get_error_doc_url(2411),
+    related: [],
+  }
+}
+
+///|
+/// Error: Missing index signature (TS2536)
+/// "Type 'string' cannot be used to index type 'T'."
+pub fn missing_index_signature_error(
+  location : String,
+  key_type : String,
+  object_type : String,
+) -> DetailedError {
+  {
+    title: "Missing Index Signature",
+    code: 2536,
+    location,
+    code_snippet: object_type + "[" + key_type + "]",
+    what_went_wrong: "Type '" +
+      key_type +
+      "' cannot be used to index type '" +
+      object_type +
+      "'.",
+    why_error: "The object type doesn't have an index signature that allows accessing properties with the given key type. Index signatures explicitly declare that arbitrary keys of a certain type are allowed.",
+    how_to_fix: [
+      "Add an index signature: { [key: string]: T }",
+      "Use a specific property name instead of a dynamic key",
+      "Cast the object to Record<string, T> if you're sure it has arbitrary string keys",
+    ],
+    doc_link: get_error_doc_url(2536),
+    related: [],
+  }
+}
+
+///|
+/// Error: Readonly index signature assignment (TS2542)
+/// "Index signature in type is 'readonly' and cannot be assigned to the mutable index signature in target type."
+pub fn readonly_index_mismatch_error(location : String) -> DetailedError {
+  {
+    title: "Readonly Index Signature Mismatch",
+    code: 2542,
+    location,
+    code_snippet: "readonly [key: string]: T",
+    what_went_wrong: "Cannot assign from a mutable index signature to a readonly index signature.",
+    why_error: "A readonly index signature guarantees that values cannot be modified through indexing. Allowing assignment from a mutable source would violate this guarantee.",
+    how_to_fix: [
+      "Make the source index signature readonly as well",
+      "Remove the readonly modifier from the target if mutation is needed",
+      "Use a type assertion if you're sure the mutation is safe",
+    ],
+    doc_link: get_error_doc_url(2542),
+    related: [],
+  }
+}
+
+///|
+/// Error: Element implicitly has 'any' type (TS7053)
+/// "Element implicitly has an 'any' type because expression of type 'T' can't be used to index type 'U'."
+pub fn element_implicit_any_error(
+  location : String,
+  key_type : String,
+  object_type : String,
+) -> DetailedError {
+  {
+    title: "Element Implicitly Has 'any' Type",
+    code: 7053,
+    location,
+    code_snippet: object_type + "[" + key_type + "]",
+    what_went_wrong: "Element implicitly has an 'any' type because expression of type '" +
+      key_type +
+      "' can't be used to index type '" +
+      object_type +
+      "'.",
+    why_error: "With noImplicitAny enabled, TypeScript requires explicit types when accessing properties with dynamic keys. This helps catch potential runtime errors.",
+    how_to_fix: [
+      "Add an index signature to the type: { [key: string]: T }",
+      "Use keyof typeof obj to ensure the key is valid",
+      "Add a type assertion if you're sure the access is valid",
+    ],
+    doc_link: get_error_doc_url(7053),
+    related: [],
+  }
+}
