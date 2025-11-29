@@ -685,6 +685,70 @@ test "emit const enum auto-increment" {
 }
 
 ///|
+/// Test: String enum is emitted correctly
+test "emit string enum" {
+  let js = compile_to_js("enum Direction { Up = 'UP', Down = 'DOWN', Left = 'LEFT', Right = 'RIGHT' }")
+  println("String enum output:\n\{js}")
+  // String enum should be emitted as a const object
+  assert_true(js.contains("const Direction"))
+  assert_true(js.contains("\"UP\""))
+  assert_true(js.contains("\"DOWN\""))
+}
+
+///|
+/// Test: Enum with computed values
+test "emit enum with computed values" {
+  let js = compile_to_js("enum Bits { One = 1, Two = 1 + 1, Four = 2 + 2 }")
+  println("Computed enum output:\n\{js}")
+  // Computed values should be preserved in the output
+  assert_true(js.contains("const Bits"))
+}
+
+///|
+/// Test: Enum with bitwise operations
+test "emit enum with bitwise operations" {
+  let js = compile_to_js("enum Flags { None = 0, Read = 1, Write = 2, Execute = 4, All = 7 }")
+  println("Bitwise enum output:\n\{js}")
+  assert_true(js.contains("const Flags"))
+}
+
+///|
+/// Test: Ambient (declare) enum is not emitted
+test "emit declare enum" {
+  let js = compile_to_js("declare enum ExternalEnum { A, B, C }")
+  println("Declare enum output:\n\{js}")
+  // Ambient enums should NOT be emitted - they describe external values
+  assert_false(js.contains("const ExternalEnum"))
+  assert_false(js.contains("ExternalEnum"))
+}
+
+///|
+/// Test: Const enum with string values is inlined
+test "emit const string enum inlined" {
+  let js = compile_to_js("const enum Status { Active = 'active', Inactive = 'inactive' }; let s = Status.Active;")
+  println("Const string enum output:\n\{js}")
+  // Const string enum should be inlined
+  assert_true(js.contains("let s = \"active\""))
+}
+
+///|
+/// Test: Regular enum auto-increment after explicit value
+test "emit enum auto-increment after explicit" {
+  let js = compile_to_js("enum Numbers { Zero, One, Ten = 10, Eleven, Twelve }")
+  println("Enum auto-increment after explicit:\n\{js}")
+  assert_true(js.contains("const Numbers"))
+}
+
+///|
+/// Test: Const enum with negative value
+test "emit const enum negative" {
+  let js = compile_to_js("const enum Offset { Minus1 = -1, Zero = 0, Plus1 = 1 }; let x = Offset.Minus1;")
+  println("Const enum negative output:\n\{js}")
+  // Should inline -1
+  assert_true(js.contains("let x = -1"))
+}
+
+///|
 /// Test: Non-null assertion property access (!.) strips assertion
 test "emit non-null assertion property access" {
   let js = compile_to_js("const x = obj!.property;")

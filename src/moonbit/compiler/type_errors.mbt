@@ -1720,3 +1720,125 @@ pub fn decorator_signature_mismatch_error(
     related: [],
   }
 }
+
+// ============================================================================
+// Enum Errors
+// ============================================================================
+
+///|
+/// Error: Enum member must have initializer (TS1061)
+/// "In an enum with computed member values, a member without an initializer must be preceded by a member with a numeric constant."
+pub fn enum_member_needs_initializer_error(
+  location : String,
+  member_name : String,
+) -> DetailedError {
+  {
+    title: "Enum Member Needs Initializer",
+    code: 1061,
+    location,
+    code_snippet: member_name,
+    what_went_wrong: "This enum member needs an explicit initializer because it follows a computed or string member.",
+    why_error: "In TypeScript enums, auto-incrementing only works for numeric enums. When you have a computed value or string enum member, subsequent members must have explicit initializers because the compiler cannot auto-increment from them.",
+    how_to_fix: [
+      "Add an explicit value: " + member_name + " = <value>",
+      "If using string enums, provide a string value",
+      "If using numeric enums, provide a number value",
+    ],
+    doc_link: get_error_doc_url(1061),
+    related: [],
+  }
+}
+
+///|
+/// Error: Const enum member initializer not constant (TS2474)
+/// "const enum member initializers can only contain literal values and other computed enum values."
+pub fn const_enum_non_constant_error(
+  location : String,
+  member_name : String,
+) -> DetailedError {
+  {
+    title: "Const Enum Non-Constant Value",
+    code: 2474,
+    location,
+    code_snippet: member_name,
+    what_went_wrong: "Const enum members can only have constant initializers.",
+    why_error: "Const enums are completely inlined at compile time. This means their values must be computable at compile time - no function calls, variables, or complex expressions are allowed.",
+    how_to_fix: [
+      "Use only literal values (numbers, strings)",
+      "Use simple arithmetic expressions (1 + 2, 10 * 2)",
+      "Reference other const enum members from the same enum",
+    ],
+    doc_link: get_error_doc_url(2474),
+    related: [],
+  }
+}
+
+///|
+/// Error: Ambient enum cannot have computed member (TS1066)
+/// "In ambient enum declarations member initializer must be a constant expression."
+pub fn ambient_enum_computed_error(
+  location : String,
+  member_name : String,
+) -> DetailedError {
+  {
+    title: "Ambient Enum Computed Value",
+    code: 1066,
+    location,
+    code_snippet: member_name,
+    what_went_wrong: "Ambient (declare) enum members can only have constant initializers.",
+    why_error: "Ambient enums describe external values that already exist. Their values must be constant so TypeScript knows what values to expect at runtime.",
+    how_to_fix: [
+      "Use only literal numbers or strings",
+      "Remove the complex expression",
+    ],
+    doc_link: get_error_doc_url(1066),
+    related: [],
+  }
+}
+
+///|
+/// Error: Heterogeneous enum not allowed (TS2553)
+/// "Computed values are not permitted in an enum with string valued members."
+pub fn heterogeneous_enum_error(
+  location : String,
+  enum_name : String,
+) -> DetailedError {
+  {
+    title: "Heterogeneous Enum",
+    code: 2553,
+    location,
+    code_snippet: "enum " + enum_name,
+    what_went_wrong: "This enum mixes string and numeric values incorrectly.",
+    why_error: "While TypeScript allows heterogeneous enums (mixing strings and numbers), you cannot have auto-incrementing numeric members after string members, and you cannot have computed values in string enums.",
+    how_to_fix: [
+      "Use only string values throughout the enum",
+      "Use only numeric values throughout the enum",
+      "If mixing, ensure all members after string values have explicit initializers",
+    ],
+    doc_link: get_error_doc_url(2553),
+    related: [],
+  }
+}
+
+///|
+/// Error: Enum member cannot reference itself (TS2477)
+/// "A const enum member can only be accessed using a string literal."
+pub fn enum_circular_reference_error(
+  location : String,
+  member_name : String,
+) -> DetailedError {
+  {
+    title: "Enum Circular Reference",
+    code: 2477,
+    location,
+    code_snippet: member_name,
+    what_went_wrong: "Enum member cannot reference itself or create a circular dependency.",
+    why_error: "Enum values are computed in order. A member cannot reference itself or later members because their values haven't been computed yet.",
+    how_to_fix: [
+      "Only reference members defined earlier in the enum",
+      "Use a literal value instead",
+    ],
+    doc_link: get_error_doc_url(2477),
+    related: [],
+  }
+}

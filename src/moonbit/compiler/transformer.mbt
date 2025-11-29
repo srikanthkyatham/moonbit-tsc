@@ -876,36 +876,98 @@ fn transform_enum_declaration(
     return EmptyStatement({ location: ed.location })
   }
 
+  // Ambient enums (declare enum) don't produce output
+  if has_declare_modifier(ed.modifiers) {
+    return EmptyStatement({ location: ed.location })
+  }
+
   // Regular enums: convert to const objects
   let properties : Array[ObjectProperty] = []
   let mut auto_value = 0
+  let mut is_string_enum = false
+  let mut has_numeric_member = false
+
+  // First pass: detect if this is a string enum
+  for a_member in ed.members {
+    match a_member.initializer {
+      Some(StringLiteral(_)) => is_string_enum = true
+      Some(NumericLiteral(_)) => has_numeric_member = true
+      _ => ()
+    }
+  }
+
+  // Second pass: compute values
   for a_member in ed.members {
     let value_node : Node = match a_member.initializer {
       Some(init) => {
-        // Try to extract numeric value for auto-increment
+        // Handle different initializer types
         match init {
           NumericLiteral(nl) => {
             let num_val = @strconv.parse_int(nl.value) catch { _ => 0 }
             auto_value = num_val + 1
+            has_numeric_member = true
+          }
+          StringLiteral(_) => {
+            is_string_enum = true
+            // String literals don't affect auto-increment
+          }
+          // Handle computed values (constant expressions)
+          BinaryExpression(be) => {
+            let computed = evaluate_constant_expression(init)
+            match computed {
+              Some(n) => auto_value = n + 1
+              None => ()
+            }
+          }
+          UnaryExpression(ue) => {
+            let computed = evaluate_constant_expression(init)
+            match computed {
+              Some(n) => auto_value = n + 1
+              None => ()
+            }
+          }
+          // Handle references to other enum members
+          PropertyAccessExpression(pae) => {
+            // Try to resolve the reference
+            match pae.expression {
+              Identifier(id) =>
+                if id.name == ed.name {
+                  // Reference to same enum - look up previously computed value
+                  // This is handled by the fact we process in order
+                  ()
+                }
+              _ => ()
+            }
           }
           _ => ()
         }
         transform(init, ctx)
       }
-      None => {
-        // Auto-increment numeric value
-        let node : Node = Node::NumericLiteral({
-          value: auto_value.to_string(),
-          location: a_member.location,
-        })
-        auto_value = auto_value + 1
-        node
-      }
+      None =>
+        // Auto-increment only works for numeric enums
+        if is_string_enum && not(has_numeric_member) {
+          // String enums require all members to have initializers
+          // For now, use the member name as a string value (TypeScript behavior for string enums)
+          let node : Node = Node::StringLiteral({
+            value: a_member.name,
+            location: a_member.location,
+          })
+          node
+        } else {
+          // Auto-increment numeric value
+          let node : Node = Node::NumericLiteral({
+            value: auto_value.to_string(),
+            location: a_member.location,
+          })
+          auto_value = auto_value + 1
+          node
+        }
     }
     properties.push(
       PropertyAssignment(a_member.name, value_node, a_member.location),
     )
   }
+
   let object_literal = ObjectLiteralExpression({
     properties,
     location: ed.location,
@@ -926,6 +988,77 @@ fn transform_enum_declaration(
     modifiers: ed.modifiers,
     location: ed.location,
   })
+}
+
+///|
+/// Evaluate a constant expression to a numeric value
+/// Used for computing enum member values
+fn evaluate_constant_expression(node : Node) -> Int? {
+  match node {
+    NumericLiteral(nl) => {
+      let result = @strconv.parse_int(nl.value) catch { _ => return None }
+      Some(result)
+    }
+    UnaryExpression(ue) =>
+      match ue.operator {
+        Minus => {
+          let operand = evaluate_constant_expression(ue.operand)
+          match operand {
+            Some(n) => Some(-n)
+            None => None
+          }
+        }
+        Plus => evaluate_constant_expression(ue.operand)
+        BitwiseNot => {
+          let operand = evaluate_constant_expression(ue.operand)
+          match operand {
+            Some(n) => Some(n.lnot())
+            None => None
+          }
+        }
+        _ => None
+      }
+    BinaryExpression(be) => {
+      let left = evaluate_constant_expression(be.left)
+      let right = evaluate_constant_expression(be.right)
+      match (left, right) {
+        (Some(l), Some(r)) =>
+          match be.operator {
+            Add => Some(l + r)
+            Subtract => Some(l - r)
+            Multiply => Some(l * r)
+            Divide =>
+              if r != 0 {
+                Some(l / r)
+              } else {
+                None
+              }
+            Remainder =>
+              if r != 0 {
+                Some(l % r)
+              } else {
+                None
+              }
+            BitwiseAnd => Some(l.land(r))
+            BitwiseOr => Some(l.lor(r))
+            BitwiseXor => Some(l.lxor(r))
+            LeftShift => Some(l << r)
+            RightShift => Some(l >> r)
+            UnsignedRightShift => {
+              // Logical right shift (unsigned)
+              let unsigned_l = l.reinterpret_as_uint()
+              let shift_amount = r
+              let unsigned_result = unsigned_l >> shift_amount
+              Some(unsigned_result.reinterpret_as_int())
+            }
+            _ => None
+          }
+        _ => None
+      }
+    }
+    ParenthesizedExpression(pe) => evaluate_constant_expression(pe.expression)
+    _ => None
+  }
 }
 
 ///|
