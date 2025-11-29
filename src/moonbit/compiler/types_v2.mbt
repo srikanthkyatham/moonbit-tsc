@@ -154,6 +154,42 @@ pub fn create_union_type(types : Array[TypeV2]) -> TypeV2 {
 }
 
 ///|
+/// Create an array type
+pub fn create_array_type(element_type : TypeV2) -> TypeV2 {
+  TArray(element_type)
+}
+
+///|
+/// Create a tuple type
+pub fn create_tuple_type(elements : Array[TupleElementV2]) -> TypeV2 {
+  TTuple(elements)
+}
+
+///|
+/// Create a type parameter type
+pub fn create_type_param(name : String, constraint : TypeV2?) -> TypeV2 {
+  TTypeParam(name, constraint)
+}
+
+///|
+/// Create a generic instance type
+pub fn create_generic_instance(name : String, type_args : Array[TypeV2]) -> TypeV2 {
+  TGenericInstance(name, type_args)
+}
+
+///|
+/// Create a function type wrapper
+pub fn create_function_type(func : FunctionTypeV2) -> TypeV2 {
+  TFunction(func)
+}
+
+///|
+/// Create an object type wrapper
+pub fn create_object_type(obj : ObjectTypeV2) -> TypeV2 {
+  TObject(obj)
+}
+
+///|
 /// Field/property information
 pub struct FieldInfoV2 {
   ty : TypeV2
@@ -238,17 +274,30 @@ pub fn ParamInfoV2::rest(name : String, ty : TypeV2) -> ParamInfoV2 {
 }
 
 ///|
+/// Variance of a type parameter
+/// Determines how type parameters behave in subtyping relationships
+#valtype
+pub enum Variance {
+  Covariant // out - can only appear in output positions (return types)
+  Contravariant // in - can only appear in input positions (parameters)
+  Invariant // in out - appears in both input and output positions
+  Bivariant // special case - both covariant and contravariant
+} derive(Show, Eq)
+
+///|
 /// Type parameter (generic)
 pub struct TypeParamV2 {
   name : String
   constraint : TypeV2?
   default_type : TypeV2?
+  is_const : Bool // const type parameter (TS 5.0+): function foo<const T>()
+  variance : Variance? // Optional variance annotation
 } derive(Show, Eq)
 
 ///|
 /// Create a simple type parameter (no constraint)
 pub fn TypeParamV2::simple(name : String) -> TypeParamV2 {
-  { name, constraint: None, default_type: None }
+  { name, constraint: None, default_type: None, is_const: false, variance: None }
 }
 
 ///|
@@ -257,7 +306,61 @@ pub fn TypeParamV2::constrained(
   name : String,
   constraint : TypeV2,
 ) -> TypeParamV2 {
-  { name, constraint: Some(constraint), default_type: None }
+  {
+    name,
+    constraint: Some(constraint),
+    default_type: None,
+    is_const: false,
+    variance: None,
+  }
+}
+
+///|
+/// Create a const type parameter (TS 5.0+)
+pub fn TypeParamV2::const_param(name : String) -> TypeParamV2 {
+  { name, constraint: None, default_type: None, is_const: true, variance: None }
+}
+
+///|
+/// Create a const type parameter with constraint
+pub fn TypeParamV2::const_constrained(
+  name : String,
+  constraint : TypeV2,
+) -> TypeParamV2 {
+  {
+    name,
+    constraint: Some(constraint),
+    default_type: None,
+    is_const: true,
+    variance: None,
+  }
+}
+
+///|
+/// Create a type parameter with explicit variance
+pub fn TypeParamV2::with_variance(
+  name : String,
+  variance : Variance,
+) -> TypeParamV2 {
+  {
+    name,
+    constraint: None,
+    default_type: None,
+    is_const: false,
+    variance: Some(variance),
+  }
+}
+
+///|
+/// Create a full type parameter with all options
+pub fn TypeParamV2::full(
+  name : String,
+  constraint : TypeV2?,
+  default_type : TypeV2?,
+  is_const : Bool,
+  variance : Variance?,
+) -> TypeParamV2 {
+  { name, constraint, default_type, is_const, variance }
 }
 
 ///|

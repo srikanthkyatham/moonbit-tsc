@@ -213,6 +213,8 @@ fn type_param_to_v2(tp : CheckerTypeParameter) -> TypeParamV2 {
       Some(d) => Some(type_to_v2(d))
       None => None
     },
+    is_const: false, // CheckerTypeParameter doesn't track this yet
+    variance: None,
   }
 }
 

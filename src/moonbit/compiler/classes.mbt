@@ -488,6 +488,8 @@ pub fn build_class_info(
           Some(d) => Some(ast_type_to_v2(env, d))
           None => None
         },
+        is_const: tp.is_const,
+        variance: None,
       }
     }),
     base_class: None,
@@ -758,6 +760,8 @@ fn build_method_type(env : TypeEnv, md : MethodDeclaration) -> FunctionTypeV2 {
         Some(d) => Some(ast_type_to_v2(env, d))
         None => None
       },
+      is_const: tp.is_const,
+      variance: None,
     }
   })
 

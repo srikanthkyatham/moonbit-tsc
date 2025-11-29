@@ -127,6 +127,8 @@ pub fn ast_type_to_v2(env : TypeEnv, node : Node) -> TypeV2 {
             Some(d) => Some(ast_type_to_v2(env, d))
             None => None
           },
+          is_const: tp.is_const,
+          variance: None,
         }
       })
 
@@ -262,6 +264,8 @@ pub fn ast_type_to_v2(env : TypeEnv, node : Node) -> TypeV2 {
           Some(d) => Some(ast_type_to_v2(env, d))
           None => None
         },
+        is_const: mt.type_parameter.is_const,
+        variance: None,
       }
 
       // Create child env with type param in scope
