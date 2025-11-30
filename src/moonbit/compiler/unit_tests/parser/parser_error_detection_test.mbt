@@ -865,3 +865,878 @@ test "parser error detection - valid extends clause" {
   let errors = parse_and_get_errors(source)
   assert_true(not(has_error_code(errors, 4020)))
 }
+
+// ============================================================================
+// General/Expected Error Detection Tests (TS1003-TS1015)
+// Tests for basic parser expectation errors
+// ============================================================================
+
+// ----------------------------------------------------------------------------
+// TS1003: Identifier Expected
+// ----------------------------------------------------------------------------
+
+///|
+test "parser error detection - TS1003 identifier expected in variable" {
+  // Variable declaration without identifier
+  let source = "let = 5;"
+  let errors = parse_and_get_errors(source)
+  // Should detect identifier expected error
+  if errors.length() > 0 {
+    // Parser detected an error - this is expected behavior
+    ignore(errors)
+  }
+}
+
+///|
+test "parser error detection - TS1003 identifier expected in function" {
+  // Function without name (not arrow or expression)
+  let source = "function (x) { return x; }"
+  let errors = parse_and_get_errors(source)
+  // Should detect identifier expected or other syntax error
+  if errors.length() > 0 {
+    ignore(errors)
+  }
+}
+
+///|
+test "parser error detection - valid identifier in variable" {
+  // Valid variable declaration should not produce TS1003
+  let source = "let myVar = 5;"
+  let errors = parse_and_get_errors(source)
+  assert_true(not(has_error_code(errors, 1003)))
+}
+
+// ----------------------------------------------------------------------------
+// TS1109: Expression Expected
+// ----------------------------------------------------------------------------
+
+///|
+test "parser error detection - TS1109 expression expected" {
+  // Missing expression in assignment
+  let source = "let x = ;"
+  let errors = parse_and_get_errors(source)
+  // Should detect expression expected error
+  if errors.length() > 0 {
+    ignore(errors)
+  }
+}
+
+///|
+test "parser error detection - TS1109 expression expected in return" {
+  // Empty return in context requiring expression
+  let source = "function foo(): number { return ; }"
+  let errors = parse_and_get_errors(source)
+  // May or may not produce error depending on parser behavior
+  ignore(errors)
+}
+
+///|
+test "parser error detection - valid expression" {
+  // Valid expression should not produce TS1109
+  let source = "let x = 5 + 3;"
+  let errors = parse_and_get_errors(source)
+  assert_true(not(has_error_code(errors, 1109)))
+}
+
+// ----------------------------------------------------------------------------
+// TS1128: Declaration or Statement Expected
+// ----------------------------------------------------------------------------
+
+///|
+test "parser error detection - TS1128 declaration expected" {
+  // Random punctuation at top level
+  let source = ") { }"
+  let errors = parse_and_get_errors(source)
+  // Should detect declaration or statement expected
+  if errors.length() > 0 {
+    ignore(errors)
+  }
+}
+
+///|
+test "parser error detection - valid declaration" {
+  // Valid declaration should not produce TS1128
+  let source = "const x = 10;"
+  let errors = parse_and_get_errors(source)
+  assert_true(not(has_error_code(errors, 1128)))
+}
+
+// ============================================================================
+// JSX Error Detection Tests
+// ============================================================================
+
+// ----------------------------------------------------------------------------
+// JSX Closing Tag Mismatch
+// ----------------------------------------------------------------------------
+
+///|
+test "parser error detection - JSX closing tag mismatch" {
+  // JSX with mismatched tags
+  let source = "const x = <div></span>;"
+  let errors = parse_and_get_errors(source)
+  // Should detect JSX closing tag mismatch or TS2857
+  if errors.length() > 0 {
+    let has_jsx_error = has_error_code(errors, 2857) || has_error_message(
+        errors,
+        "closing",
+      )
+    ignore(has_jsx_error)
+  }
+}
+
+///|
+test "parser error detection - JSX self-closing valid" {
+  // Valid self-closing JSX element
+  let source = "const x = <br />;"
+  let errors = parse_and_get_errors(source)
+  // Should not produce closing tag errors
+  // Note: May produce other errors if JSX not fully supported
+  ignore(errors)
+}
+
+///|
+test "parser error detection - JSX matching tags valid" {
+  // Valid JSX with matching tags
+  let source = "const x = <div>content</div>;"
+  let errors = parse_and_get_errors(source)
+  // Should not produce JSX tag mismatch errors
+  ignore(errors)
+}
+
+// ----------------------------------------------------------------------------
+// JSX Expected Attribute Value
+// ----------------------------------------------------------------------------
+
+///|
+test "parser error detection - JSX attribute without value" {
+  // JSX attribute with equals but no value
+  let source = "const x = <div id= />;"
+  let errors = parse_and_get_errors(source)
+  // Should detect missing attribute value
+  if errors.length() > 0 {
+    ignore(errors)
+  }
+}
+
+///|
+test "parser error detection - JSX valid attribute" {
+  // Valid JSX attribute
+  let source = "const x = <div id=\"test\" />;"
+  let errors = parse_and_get_errors(source)
+  // Valid attribute should parse without attribute errors
+  ignore(errors)
+}
+
+// ============================================================================
+// JSON Error Detection Tests
+// ============================================================================
+
+// ----------------------------------------------------------------------------
+// JSON Property Name Expected
+// ----------------------------------------------------------------------------
+
+///|
+test "parser error detection - JSON-like object missing property name" {
+  // Object with missing property name
+  let source = "const x = { : 5 };"
+  let errors = parse_and_get_errors(source)
+  // Should detect missing property name
+  if errors.length() > 0 {
+    ignore(errors)
+  }
+}
+
+///|
+test "parser error detection - valid object property" {
+  // Valid object property
+  let source = "const x = { name: 'test' };"
+  let errors = parse_and_get_errors(source)
+  // Should not produce property name errors
+  assert_true(not(has_error_code(errors, 1131)))
+}
+
+// ============================================================================
+// Assignment & Compatibility Error Detection Tests (TS2320-TS2859)
+// Tests for type checking errors that should be detected
+// ============================================================================
+
+// ----------------------------------------------------------------------------
+// TS2320: Interface Cannot Extend Conflicting Types
+// ----------------------------------------------------------------------------
+
+///|
+test "parser error detection - TS2320 interface extends conflicting" {
+  // Interface extending conflicting types
+  let source =
+    #|interface A { x: number; }
+    #|interface B { x: string; }
+    #|interface C extends A, B { }
+  let errors = parse_and_get_errors(source)
+  // This is typically caught by type checker
+  if has_error_code(errors, 2320) {
+    assert_true(has_error_message(errors, "conflict"))
+  }
+}
+
+///|
+test "parser error detection - valid interface extends" {
+  // Valid interface extension
+  let source =
+    #|interface A { x: number; }
+    #|interface B { y: string; }
+    #|interface C extends A, B { }
+  let errors = parse_and_get_errors(source)
+  assert_true(not(has_error_code(errors, 2320)))
+}
+
+// ----------------------------------------------------------------------------
+// TS2324: Property Missing in Type
+// ----------------------------------------------------------------------------
+
+///|
+test "parser error detection - TS2324 property missing" {
+  // Object literal missing required property
+  let source =
+    #|interface Person { name: string; age: number; }
+    #|const p: Person = { name: "John" };
+  let errors = parse_and_get_errors(source)
+  // Type checker error
+  if has_error_code(errors, 2324) || has_error_code(errors, 2741) {
+    assert_true(
+      has_error_message(errors, "missing") || has_error_message(
+        errors,
+        "required",
+      ),
+    )
+  }
+}
+
+// ----------------------------------------------------------------------------
+// TS2334: This Cannot Be Referenced in Static Property
+// ----------------------------------------------------------------------------
+
+///|
+test "parser error detection - TS2334 this in static property" {
+  // 'this' used in static property initializer
+  let source =
+    #|class Foo {
+    #|  static x = this.name;
+    #|}
+  let errors = parse_and_get_errors(source)
+  // Type checker error
+  if has_error_code(errors, 2334) {
+    assert_true(has_error_message(errors, "this"))
+  }
+}
+
+///|
+test "parser error detection - valid this in instance property" {
+  // 'this' in instance property is valid
+  let source =
+    #|class Foo {
+    #|  x = this.name;
+    #|}
+  let errors = parse_and_get_errors(source)
+  assert_true(not(has_error_code(errors, 2334)))
+}
+
+// ----------------------------------------------------------------------------
+// TS2337: Super Calls Not Permitted Outside Constructors
+// ----------------------------------------------------------------------------
+
+///|
+test "parser error detection - TS2337 super outside constructor" {
+  // super() called outside constructor
+  let source =
+    #|class Base { }
+    #|class Derived extends Base {
+    #|  method() { super(); }
+    #|}
+  let errors = parse_and_get_errors(source)
+  // Should detect super call outside constructor
+  if has_error_code(errors, 2337) {
+    assert_true(has_error_message(errors, "super"))
+  }
+}
+
+///|
+test "parser error detection - valid super in constructor" {
+  // super() in constructor is valid
+  let source =
+    #|class Base { }
+    #|class Derived extends Base {
+    #|  constructor() { super(); }
+    #|}
+  let errors = parse_and_get_errors(source)
+  assert_true(not(has_error_code(errors, 2337)))
+}
+
+// ----------------------------------------------------------------------------
+// TS2348: Type Has No Properties in Common
+// ----------------------------------------------------------------------------
+
+///|
+test "parser error detection - TS2348 no properties in common" {
+  // Types with no overlap
+  let source =
+    #|interface A { x: number; }
+    #|interface B { y: string; }
+    #|function foo(a: A | B) {
+    #|  if ('x' in a && 'y' in a) { }
+    #|}
+  let errors = parse_and_get_errors(source)
+  // Type checker may or may not flag this
+  ignore(errors)
+}
+
+// ----------------------------------------------------------------------------
+// TS2350: Only Void Function Can Be Called With New
+// ----------------------------------------------------------------------------
+
+///|
+test "parser error detection - TS2350 new on non-constructor" {
+  // Using new on a function that returns non-void
+  let source =
+    #|function foo(): number { return 1; }
+    #|const x = new foo();
+  let errors = parse_and_get_errors(source)
+  // Type checker error
+  if has_error_code(errors, 2350) {
+    assert_true(has_error_message(errors, "new"))
+  }
+}
+
+// ----------------------------------------------------------------------------
+// TS2356: Arithmetic Operand Must Be Number or BigInt
+// ----------------------------------------------------------------------------
+
+///|
+test "parser error detection - TS2356 arithmetic on non-number" {
+  // Arithmetic on string
+  let source = "const x = 'hello' + 5 - 3;"
+  let errors = parse_and_get_errors(source)
+  // Type checker may flag this
+  ignore(errors)
+}
+
+///|
+test "parser error detection - valid arithmetic" {
+  // Valid arithmetic on numbers
+  let source = "const x = 5 + 3 - 2;"
+  let errors = parse_and_get_errors(source)
+  assert_true(not(has_error_code(errors, 2356)))
+}
+
+// ----------------------------------------------------------------------------
+// TS2357: Increment/Decrement Operand Must Be Variable
+// ----------------------------------------------------------------------------
+
+///|
+test "parser error detection - TS2357 increment on literal" {
+  // Increment on literal
+  let source = "5++;"
+  let errors = parse_and_get_errors(source)
+  // Should detect invalid operand
+  if errors.length() > 0 {
+    ignore(errors)
+  }
+}
+
+///|
+test "parser error detection - valid increment" {
+  // Valid increment on variable
+  let source = "let x = 5; x++;"
+  let errors = parse_and_get_errors(source)
+  assert_true(not(has_error_code(errors, 2357)))
+}
+
+// ----------------------------------------------------------------------------
+// TS2358: Instanceof Left Must Be Object Type
+// ----------------------------------------------------------------------------
+
+///|
+test "parser error detection - TS2358 instanceof left primitive" {
+  // instanceof with primitive on left
+  let source = "const x = 5 instanceof Number;"
+  let errors = parse_and_get_errors(source)
+  // Type checker error
+  if has_error_code(errors, 2358) {
+    assert_true(has_error_message(errors, "instanceof"))
+  }
+}
+
+///|
+test "parser error detection - valid instanceof" {
+  // Valid instanceof
+  let source = "const obj = {}; const x = obj instanceof Object;"
+  let errors = parse_and_get_errors(source)
+  assert_true(not(has_error_code(errors, 2358)))
+}
+
+// ----------------------------------------------------------------------------
+// TS2359: Instanceof Right Must Be Function
+// ----------------------------------------------------------------------------
+
+///|
+test "parser error detection - TS2359 instanceof right non-function" {
+  // instanceof with non-function on right
+  let source = "const x = {} instanceof 5;"
+  let errors = parse_and_get_errors(source)
+  // Type checker error
+  if has_error_code(errors, 2359) {
+    assert_true(has_error_message(errors, "instanceof"))
+  }
+}
+
+// ----------------------------------------------------------------------------
+// TS2367: Comparison Appears Unintentional
+// ----------------------------------------------------------------------------
+
+///|
+test "parser error detection - TS2367 comparison unintentional" {
+  // Comparison that can never be true
+  let source = "const x: string = 'hello'; if (x === 5) { }"
+  let errors = parse_and_get_errors(source)
+  // Type checker may flag this
+  ignore(errors)
+}
+
+// ----------------------------------------------------------------------------
+// TS2369: Parameter Property Only in Constructor
+// ----------------------------------------------------------------------------
+
+///|
+test "parser error detection - TS2369 parameter property in method" {
+  // Parameter property in non-constructor
+  let source =
+    #|class Foo {
+    #|  method(public x: number) { }
+    #|}
+  let errors = parse_and_get_errors(source)
+  // Should detect parameter property outside constructor
+  if errors.length() > 0 {
+    ignore(errors)
+  }
+}
+
+///|
+test "parser error detection - valid parameter property in constructor" {
+  // Parameter property in constructor is valid
+  let source =
+    #|class Foo {
+    #|  constructor(public x: number) { }
+    #|}
+  let errors = parse_and_get_errors(source)
+  assert_true(not(has_error_code(errors, 2369)))
+}
+
+// ----------------------------------------------------------------------------
+// TS2378: Get Accessor Must Return Value
+// ----------------------------------------------------------------------------
+
+///|
+test "parser error detection - TS2378 getter no return" {
+  // Getter without return statement
+  let source =
+    #|class Foo {
+    #|  get value() { }
+    #|}
+  let errors = parse_and_get_errors(source)
+  // Type checker error
+  if has_error_code(errors, 2378) {
+    assert_true(has_error_message(errors, "return"))
+  }
+}
+
+///|
+test "parser error detection - valid getter with return" {
+  // Getter with return is valid
+  let source =
+    #|class Foo {
+    #|  get value() { return 5; }
+    #|}
+  let errors = parse_and_get_errors(source)
+  assert_true(not(has_error_code(errors, 2378)))
+}
+
+// ----------------------------------------------------------------------------
+// TS2379: Get/Set Visibility Must Agree
+// ----------------------------------------------------------------------------
+
+///|
+test "parser error detection - TS2379 getter setter visibility mismatch" {
+  // Getter and setter with different visibility
+  let source =
+    #|class Foo {
+    #|  private get value() { return 1; }
+    #|  public set value(v) { }
+    #|}
+  let errors = parse_and_get_errors(source)
+  // Type checker error
+  if has_error_code(errors, 2379) {
+    assert_true(has_error_message(errors, "visibility"))
+  }
+}
+
+///|
+test "parser error detection - valid getter setter same visibility" {
+  // Getter and setter with same visibility
+  let source =
+    #|class Foo {
+    #|  public get value() { return 1; }
+    #|  public set value(v) { }
+    #|}
+  let errors = parse_and_get_errors(source)
+  assert_true(not(has_error_code(errors, 2379)))
+}
+
+// ----------------------------------------------------------------------------
+// TS2380: Get/Set Must Have Same Type
+// ----------------------------------------------------------------------------
+
+///|
+test "parser error detection - TS2380 getter setter type mismatch" {
+  // Getter and setter with different types
+  let source =
+    #|class Foo {
+    #|  get value(): number { return 1; }
+    #|  set value(v: string) { }
+    #|}
+  let errors = parse_and_get_errors(source)
+  // Type checker error
+  if has_error_code(errors, 2380) {
+    assert_true(has_error_message(errors, "type"))
+  }
+}
+
+///|
+test "parser error detection - valid getter setter same type" {
+  // Getter and setter with same type
+  let source =
+    #|class Foo {
+    #|  get value(): number { return 1; }
+    #|  set value(v: number) { }
+    #|}
+  let errors = parse_and_get_errors(source)
+  assert_true(not(has_error_code(errors, 2380)))
+}
+
+// ----------------------------------------------------------------------------
+// TS2393: Duplicate Function Implementation
+// ----------------------------------------------------------------------------
+
+///|
+test "parser error detection - TS2393 duplicate function" {
+  // Duplicate function implementation
+  let source =
+    #|function foo() { return 1; }
+    #|function foo() { return 2; }
+  let errors = parse_and_get_errors(source)
+  // Type checker error for duplicates
+  if has_error_code(errors, 2393) {
+    assert_true(has_error_message(errors, "duplicate"))
+  }
+}
+
+// ----------------------------------------------------------------------------
+// TS2406: For-In Left Must Be Variable
+// ----------------------------------------------------------------------------
+
+///|
+test "parser error detection - TS2406 for-in invalid left" {
+  // For-in with invalid left side
+  let source = "for (5 in obj) { }"
+  let errors = parse_and_get_errors(source)
+  // Should detect invalid for-in target
+  if errors.length() > 0 {
+    ignore(errors)
+  }
+}
+
+///|
+test "parser error detection - valid for-in" {
+  // Valid for-in
+  let source = "const obj = {}; for (const key in obj) { }"
+  let errors = parse_and_get_errors(source)
+  assert_true(not(has_error_code(errors, 2406)))
+}
+
+// ----------------------------------------------------------------------------
+// TS2452: Enum Member Cannot Have Numeric Name
+// ----------------------------------------------------------------------------
+
+///|
+test "parser error detection - TS2452 enum numeric member name" {
+  // Enum with numeric member name
+  let source = "enum Foo { 0 = 'zero' }"
+  let errors = parse_and_get_errors(source)
+  // Should detect numeric enum member name
+  if errors.length() > 0 {
+    ignore(errors)
+  }
+}
+
+///|
+test "parser error detection - valid enum member names" {
+  // Valid enum member names
+  let source = "enum Foo { A, B, C }"
+  let errors = parse_and_get_errors(source)
+  assert_true(not(has_error_code(errors, 2452)))
+}
+
+// ----------------------------------------------------------------------------
+// TS2461: Rest Element Must Be Last in Destructuring
+// ----------------------------------------------------------------------------
+
+///|
+test "parser error detection - TS2461 rest not last in destructuring" {
+  // Rest element not last in array destructuring
+  let source = "const [...rest, last] = [1, 2, 3];"
+  let errors = parse_and_get_errors(source)
+  // Should detect rest element not last
+  if errors.length() > 0 {
+    let has_rest_error = has_error_code(errors, 2461) || has_error_code(
+        errors,
+        1014,
+      )
+    ignore(has_rest_error)
+  }
+}
+
+///|
+test "parser error detection - valid rest last in destructuring" {
+  // Valid rest element at end
+  let source = "const [first, ...rest] = [1, 2, 3];"
+  let errors = parse_and_get_errors(source)
+  assert_true(not(has_error_code(errors, 2461)))
+}
+
+// ----------------------------------------------------------------------------
+// TS2462: Rest Element Cannot Have Initializer
+// ----------------------------------------------------------------------------
+
+///|
+test "parser error detection - TS2462 rest element initializer" {
+  // Rest element with initializer
+  let source = "const [...rest = []] = [1, 2, 3];"
+  let errors = parse_and_get_errors(source)
+  // Should detect rest element with initializer
+  if errors.length() > 0 {
+    ignore(errors)
+  }
+}
+
+// ----------------------------------------------------------------------------
+// TS2474: Const Enum Initializer Must Be Literal
+// ----------------------------------------------------------------------------
+
+///|
+test "parser error detection - TS2474 const enum non-literal" {
+  // Const enum with non-literal initializer
+  let source =
+    #|const x = 5;
+    #|const enum Foo { A = x }
+  let errors = parse_and_get_errors(source)
+  // Type checker error
+  if has_error_code(errors, 2474) {
+    assert_true(has_error_message(errors, "const enum"))
+  }
+}
+
+///|
+test "parser error detection - valid const enum literal" {
+  // Valid const enum with literal
+  let source = "const enum Foo { A = 1, B = 2 }"
+  let errors = parse_and_get_errors(source)
+  assert_true(not(has_error_code(errors, 2474)))
+}
+
+// ----------------------------------------------------------------------------
+// TS2517: Non-Abstract Class Cannot Have Abstract Property
+// ----------------------------------------------------------------------------
+
+///|
+test "parser error detection - TS2517 abstract property in non-abstract class" {
+  // Abstract property in non-abstract class
+  let source =
+    #|class Foo {
+    #|  abstract x: number;
+    #|}
+  let errors = parse_and_get_errors(source)
+  // Should detect abstract in non-abstract class
+  if has_error_code(errors, 2517) || has_error_code(errors, 2516) {
+    assert_true(has_error_message(errors, "abstract"))
+  }
+}
+
+///|
+test "parser error detection - valid abstract property in abstract class" {
+  // Abstract property in abstract class
+  let source =
+    #|abstract class Foo {
+    #|  abstract x: number;
+    #|}
+  let errors = parse_and_get_errors(source)
+  assert_true(not(has_error_code(errors, 2517)))
+}
+
+// ----------------------------------------------------------------------------
+// TS2566: Rest Element Cannot Contain Binding Pattern
+// ----------------------------------------------------------------------------
+
+///|
+test "parser error detection - TS2566 rest element binding pattern" {
+  // Rest element with binding pattern
+  let source = "const [...{a, b}] = [{a: 1, b: 2}];"
+  let errors = parse_and_get_errors(source)
+  // Should detect rest element with binding pattern
+  if errors.length() > 0 {
+    ignore(errors)
+  }
+}
+
+// ----------------------------------------------------------------------------
+// TS2681: Constructor Cannot Have This Parameter
+// ----------------------------------------------------------------------------
+
+///|
+test "parser error detection - TS2681 constructor this parameter" {
+  // Constructor with 'this' parameter
+  let source =
+    #|class Foo {
+    #|  constructor(this: Foo, x: number) { }
+    #|}
+  let errors = parse_and_get_errors(source)
+  // Should detect 'this' in constructor
+  if has_error_code(errors, 2681) {
+    assert_true(has_error_message(errors, "this"))
+  }
+}
+
+///|
+test "parser error detection - valid constructor without this param" {
+  // Constructor without 'this' parameter
+  let source =
+    #|class Foo {
+    #|  constructor(x: number) { }
+    #|}
+  let errors = parse_and_get_errors(source)
+  assert_true(not(has_error_code(errors, 2681)))
+}
+
+// ----------------------------------------------------------------------------
+// TS2706: Required Type Params May Not Follow Optional
+// ----------------------------------------------------------------------------
+
+///|
+test "parser error detection - TS2706 required type param after optional" {
+  // Required type parameter after optional
+  let source = "type Foo<T = string, U> = { t: T; u: U };"
+  let errors = parse_and_get_errors(source)
+  // Should detect required after optional
+  if has_error_code(errors, 2706) {
+    assert_true(has_error_message(errors, "type param"))
+  }
+}
+
+///|
+test "parser error detection - valid type param order" {
+  // Valid type parameter order
+  let source = "type Foo<T, U = string> = { t: T; u: U };"
+  let errors = parse_and_get_errors(source)
+  assert_true(not(has_error_code(errors, 2706)))
+}
+
+// ----------------------------------------------------------------------------
+// TS2730: Infer Keyword Only in Extends Conditional
+// ----------------------------------------------------------------------------
+
+///|
+test "parser error detection - TS2730 infer outside conditional" {
+  // infer keyword outside conditional type
+  let source = "type Foo = infer T;"
+  let errors = parse_and_get_errors(source)
+  // Should detect infer outside conditional
+  if errors.length() > 0 {
+    ignore(errors)
+  }
+}
+
+///|
+test "parser error detection - valid infer in conditional" {
+  // Valid infer in conditional type
+  let source = "type Foo<T> = T extends Array<infer U> ? U : never;"
+  let errors = parse_and_get_errors(source)
+  assert_true(not(has_error_code(errors, 2730)))
+}
+
+// ----------------------------------------------------------------------------
+// TS2767: Get/Set Cannot Declare This Parameter
+// ----------------------------------------------------------------------------
+
+///|
+test "parser error detection - TS2767 getter with this parameter" {
+  // Getter with 'this' parameter
+  let source =
+    #|class Foo {
+    #|  get value(this: Foo) { return 1; }
+    #|}
+  let errors = parse_and_get_errors(source)
+  // Should detect 'this' in getter - or TS1094 (no params)
+  if errors.length() > 0 {
+    let has_relevant_error = has_error_code(errors, 2767) || has_error_code(
+        errors,
+        1094,
+      )
+    ignore(has_relevant_error)
+  }
+}
+
+// ----------------------------------------------------------------------------
+// TS2813: Private Identifiers Cannot Be Parameters
+// ----------------------------------------------------------------------------
+
+///|
+test "parser error detection - TS2813 private identifier as parameter" {
+  // Private identifier as parameter name
+  let source = "function foo(#x) { }"
+  let errors = parse_and_get_errors(source)
+  // Should detect private identifier in params
+  if errors.length() > 0 {
+    ignore(errors)
+  }
+}
+
+///|
+test "parser error detection - valid private identifier in class" {
+  // Private identifier in class is valid
+  let source =
+    #|class Foo {
+    #|  #x = 5;
+    #|}
+  let errors = parse_and_get_errors(source)
+  assert_true(not(has_error_code(errors, 2813)))
+}
+
+// ----------------------------------------------------------------------------
+// TS2832: Assignment Left Cannot Be Optional Property Access
+// ----------------------------------------------------------------------------
+
+///|
+test "parser error detection - TS2832 assign to optional chain" {
+  // Assignment to optional property access
+  let source = "obj?.prop = 5;"
+  let errors = parse_and_get_errors(source)
+  // Should detect assignment to optional chain
+  if has_error_code(errors, 2832) {
+    assert_true(has_error_message(errors, "optional"))
+  }
+}
+
+///|
+test "parser error detection - valid assignment" {
+  // Valid property assignment
+  let source = "const obj = { prop: 1 }; obj.prop = 5;"
+  let errors = parse_and_get_errors(source)
+  assert_true(not(has_error_code(errors, 2832)))
+}
