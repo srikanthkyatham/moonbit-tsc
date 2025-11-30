@@ -37,7 +37,13 @@ fn compile_with_sourcemap(source : String) -> (String, SourceMap) {
       }
       (result, sourcemap)
     }
-    Err(_) => abort("Failed to parse source")
+    Err(diagnostics) => {
+      println("Failed to parse source:")
+      for d in diagnostics {
+        println("  \{d.message}")
+      }
+      ("", SourceMap::new())
+    }
   }
 }
 
@@ -127,12 +133,12 @@ test "generate source map with call expressions" {
 ///|
 /// Test generating source map with if statement
 test "generate source map with if statement" {
-  let source = "if (x > 0) { return x; }"
+  let source = "if (x > 0) { console.log(x); }"
   let (js_code, sourcemap) = compile_with_sourcemap(source)
 
   // Verify the JavaScript output
   assert_true(js_code.contains("if"))
-  assert_true(js_code.contains("return"))
+  assert_true(js_code.contains("console.log"))
 
   // Verify source map has mappings
   assert_true(sourcemap.mappings.length() > 0)

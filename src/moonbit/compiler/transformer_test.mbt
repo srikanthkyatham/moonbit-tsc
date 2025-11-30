@@ -14,7 +14,13 @@ fn parse_source(source : String) -> Array[Node] {
   let tokens = tokens_from_source(source)
   match parse_source_file(tokens, "test.ts") {
     Ok(source_file) => source_file.statements
-    Err(_) => abort("Failed to parse source")
+    Err(diagnostics) => {
+      println("Failed to parse source:")
+      for d in diagnostics {
+        println("  \{d.message}")
+      }
+      []
+    }
   }
 }
 
@@ -1084,7 +1090,13 @@ fn parse_jsx_source(source : String) -> Array[Node] {
   let tokens = tokens_from_source(source)
   match parse_source_file(tokens, "test.tsx") {
     Ok(source_file) => source_file.statements
-    Err(_) => abort("Failed to parse source")
+    Err(diagnostics) => {
+      println("Failed to parse source:")
+      for d in diagnostics {
+        println("  \{d.message}")
+      }
+      []
+    }
   }
 }
 

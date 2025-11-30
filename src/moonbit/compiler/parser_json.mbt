@@ -21,11 +21,10 @@ pub fn parse_json(
       // Check for trailing content
       if not(is_at_end(parser)) {
         let loc = current_token(parser).location()
-        let parser = add_error_with_code(
+        let parser = add_error(
           parser,
-          UnexpectedToken.to_message(),
+          "Unexpected token",
           loc,
-          UnexpectedToken,
         )
         Err(parser.diagnostics)
       } else if parser.diagnostics.length() > 0 {
@@ -265,11 +264,10 @@ fn parse_json_object(parser : Parser) -> Result[(Node, Parser), Parser] {
           _ => {
             let loc = current_token(parser).location()
             return Err(
-              add_error_with_code(
+              add_error(
                 parser,
-                UnexpectedToken.to_message(),
+                "Unexpected token",
                 loc,
-                UnexpectedToken,
               ),
             )
           }
@@ -383,11 +381,10 @@ fn parse_json_array(parser : Parser) -> Result[(Node, Parser), Parser] {
       _ => {
         let loc = current_token(parser).location()
         return Err(
-          add_error_with_code(
+          add_error(
             parser,
-            UnexpectedToken.to_message(),
+            "Unexpected token",
             loc,
-            UnexpectedToken,
           ),
         )
       }

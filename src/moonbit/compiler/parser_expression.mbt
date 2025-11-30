@@ -378,11 +378,10 @@ fn parse_unary_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
             }
             _ =>
               Err(
-                add_error_with_code(
+                add_error(
                   parser,
-                  UnexpectedToken.to_message(),
+                  "Unexpected token",
                   current_token(parser).location(),
-                  UnexpectedToken,
                 ),
               )
           }
@@ -733,11 +732,10 @@ fn parse_postfix_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
                     }
                     _ =>
                       return Err(
-                        add_error_with_code(
+                        add_error(
                           current_parser,
-                          UnexpectedToken.to_message(),
+                          "Unexpected token",
                           current_token(current_parser).location(),
-                          UnexpectedToken,
                         ),
                       )
                   }
@@ -927,11 +925,10 @@ fn parse_primary_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
                   }
                   _ =>
                     return Err(
-                      add_error_with_code(
+                      add_error(
                         parser,
-                        UnexpectedToken.to_message(),
+                        "Unexpected token",
                         current_token(parser).location(),
-                        UnexpectedToken,
                       ),
                     )
                 }
@@ -1035,11 +1032,10 @@ fn parse_primary_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
             }
             _ =>
               Err(
-                add_error_with_code(
+                add_error(
                   parser,
-                  UnexpectedToken.to_message(),
+                  "Unexpected token",
                   current_token(parser).location(),
-                  UnexpectedToken,
                 ),
               )
           }
@@ -1185,11 +1181,10 @@ fn parse_primary_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
         }
         _ =>
           Err(
-            add_error_with_code(
+            add_error(
               parser,
-              UnexpectedToken.to_message(),
+              "Unexpected token",
               current_token(parser).location(),
-              UnexpectedToken,
             ),
           )
       }
@@ -1223,11 +1218,10 @@ fn parse_primary_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
             }
             _ =>
               Err(
-                add_error_with_code(
+                add_error(
                   parser,
-                  UnexpectedToken.to_message(),
+                  "Unexpected token",
                   current_token(parser).location(),
-                  UnexpectedToken,
                 ),
               )
           }
@@ -1266,11 +1260,10 @@ fn parse_primary_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
         }
         _ =>
           Err(
-            add_error_with_code(
+            add_error(
               parser,
-              UnexpectedToken.to_message(),
+              "Unexpected token",
               current_token(parser).location(),
-              UnexpectedToken,
             ),
           )
       }
@@ -1278,11 +1271,10 @@ fn parse_primary_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
 
     _ =>
       Err(
-        add_error_with_code(
+        add_error(
           parser,
-          UnexpectedToken.to_message(),
+          "Unexpected token",
           token.location(),
-          UnexpectedToken,
         ),
       )
   }

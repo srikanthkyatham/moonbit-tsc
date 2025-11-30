@@ -121,11 +121,10 @@ fn parse_jsx_element_or_fragment(
       parse_jsx_element(parser, start_loc)
     _ =>
       Err(
-        add_error_with_code(
+        add_error(
           parser,
-          UnexpectedToken.to_message(),
+          "Unexpected token",
           start_loc,
-          UnexpectedToken,
         ),
       )
   }
@@ -196,11 +195,10 @@ fn parse_jsx_element(
     }
     _ =>
       Err(
-        add_error_with_code(
+        add_error(
           parser,
-          UnexpectedToken.to_message(),
+          "Unexpected token",
           start_loc,
-          UnexpectedToken,
         ),
       )
   }
@@ -605,11 +603,10 @@ fn parse_jsx_closing_element(
     GreaterThan(_) => advance_parser(parser)
     _ =>
       return Err(
-        add_error_with_code(
+        add_error(
           parser,
-          UnexpectedToken.to_message(),
+          "Unexpected token",
           start_loc,
-          UnexpectedToken,
         ),
       )
   }
@@ -650,11 +647,10 @@ fn parse_jsx_fragment(
     GreaterThan(_) => advance_parser(parser)
     _ =>
       return Err(
-        add_error_with_code(
+        add_error(
           parser,
-          UnexpectedToken.to_message(),
+          "Unexpected token",
           start_loc,
-          UnexpectedToken,
         ),
       )
   }
@@ -680,11 +676,10 @@ fn parse_jsx_fragment(
     GreaterThan(_) => advance_parser(parser)
     _ =>
       return Err(
-        add_error_with_code(
+        add_error(
           parser,
-          UnexpectedToken.to_message(),
+          "Unexpected token",
           start_loc,
-          UnexpectedToken,
         ),
       )
   }

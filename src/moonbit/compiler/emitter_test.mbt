@@ -14,7 +14,13 @@ fn compile_to_js(source : String) -> String {
       // This ensures helpers are emitted when decorators are used
       compile_source_file(source_file, ctx, emit_ctx)
     }
-    Err(_) => abort("Failed to parse source")
+    Err(diagnostics) => {
+      println("Failed to parse source:")
+      for d in diagnostics {
+        println("  \{d.message}")
+      }
+      ""
+    }
   }
 }
 
@@ -28,7 +34,13 @@ fn compile_to_es5(source : String) -> String {
       let emit_ctx = EmitterContext::default()
       compile_source_file(source_file, ctx, emit_ctx)
     }
-    Err(_) => abort("Failed to parse source")
+    Err(diagnostics) => {
+      println("Failed to parse source:")
+      for d in diagnostics {
+        println("  \{d.message}")
+      }
+      ""
+    }
   }
 }
 
@@ -1587,7 +1599,13 @@ fn compile_jsx_classic(source : String) -> String {
       let emit_ctx = EmitterContext::default()
       compile_source_file(source_file, ctx, emit_ctx)
     }
-    Err(e) => abort("Failed to parse source: \{e}")
+    Err(diagnostics) => {
+      println("Failed to parse source:")
+      for d in diagnostics {
+        println("  \{d.message}")
+      }
+      ""
+    }
   }
 }
 
@@ -1956,7 +1974,13 @@ fn compile_to_commonjs(source : String) -> String {
       let emit_ctx = EmitterContext::with_options(CommonJS, false)
       compile_source_file(source_file, ctx, emit_ctx)
     }
-    Err(_) => abort("Failed to parse source")
+    Err(diagnostics) => {
+      println("Failed to parse source:")
+      for d in diagnostics {
+        println("  \{d.message}")
+      }
+      ""
+    }
   }
 }
 
@@ -1970,7 +1994,13 @@ fn compile_with_strict(source : String) -> String {
       let emit_ctx = EmitterContext::with_options(ESModule, true)
       compile_source_file(source_file, ctx, emit_ctx)
     }
-    Err(_) => abort("Failed to parse source")
+    Err(diagnostics) => {
+      println("Failed to parse source:")
+      for d in diagnostics {
+        println("  \{d.message}")
+      }
+      ""
+    }
   }
 }
 

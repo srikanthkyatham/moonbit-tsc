@@ -143,45 +143,35 @@ fn add_error_checked(
 /// Parser error codes
 /// Aligned with TypeScript's official diagnostic codes where applicable
 pub enum ParserErrorCode {
-  // General
-  UnexpectedToken
-  UnexpectedEOF
-
-  // Declarations
-  ExpectedIdentifier
-  ExpectedTypeAnnotation
-  ExpectedExpression
-  ExpectedStatement
-
-  // Punctuation
-  ExpectedSemicolon
-  ExpectedComma
-  ExpectedColon
-  ExpectedOpenParen
-  ExpectedCloseParen
-  ExpectedOpenBrace
-  ExpectedCloseBrace
-  ExpectedOpenBracket
-  ExpectedCloseBracket
-
-  // Keywords
-  ExpectedFunctionKeyword
-  ExpectedClassKeyword
-  ExpectedEquals
-
-  // JSX
-  JSXClosingTagMismatch
-  JSXExpectedClosingTag
-  JSXExpectedAttributeValue
-
-  // JSON
-  JSONExpectedPropertyName
-  JSONExpectedValue
-  JSONTrailingComma
-
-  // JSDoc
-  JSDocInvalidTag
-  JSDocInvalidType
+  // ============================================================================
+  // Internal Parser Errors (no official TS codes)
+  // Used for basic syntax errors without official TypeScript equivalents
+  // ============================================================================
+  UnexpectedEOF // Internal: Unexpected end of file
+  ExpectedIdentifier // Internal: Identifier expected (TS1003)
+  ExpectedTypeAnnotation // Internal: Type annotation expected
+  ExpectedExpression // Internal: Expression expected (TS1109)
+  ExpectedStatement // Internal: Statement expected (TS1128)
+  ExpectedSemicolon // Internal: ';' expected
+  ExpectedComma // Internal: ',' expected
+  ExpectedColon // Internal: ':' expected
+  ExpectedOpenParen // Internal: '(' expected
+  ExpectedCloseParen // Internal: ')' expected
+  ExpectedOpenBrace // Internal: '{' expected
+  ExpectedCloseBrace // Internal: '}' expected
+  ExpectedOpenBracket // Internal: '[' expected
+  ExpectedCloseBracket // Internal: ']' expected
+  ExpectedFunctionKeyword // Internal: 'function' expected
+  ExpectedClassKeyword // Internal: 'class' expected
+  ExpectedEquals // Internal: '=' expected
+  JSXClosingTagMismatch // Internal: JSX closing tag mismatch
+  JSXExpectedClosingTag // Internal: JSX closing tag expected
+  JSXExpectedAttributeValue // Internal: JSX attribute value expected
+  JSONExpectedPropertyName // Internal: JSON property name expected
+  JSONExpectedValue // Internal: JSON value expected
+  JSONTrailingComma // Internal: JSON trailing comma
+  JSDocInvalidTag // Internal: Invalid JSDoc tag
+  JSDocInvalidType // Internal: Invalid JSDoc type
 
   // ============================================================================
   // Critical Parser Errors (TS1000-1185)
@@ -571,43 +561,34 @@ pub enum ParserErrorCode {
 /// Returns official TypeScript diagnostic codes where applicable
 pub fn ParserErrorCode::to_int(self : ParserErrorCode) -> Int {
   match self {
-    // General errors (custom codes for internal use)
-    UnexpectedToken => 1012 // Aligns with TS1012: Unexpected token
-    UnexpectedEOF => 1002 // Aligns with TS1002: Unterminated string literal (general EOF)
-
-    // Declaration errors (custom codes)
-    ExpectedIdentifier => 1003 // TS1003: Identifier expected
-    ExpectedTypeAnnotation => 1004 // Custom
-    ExpectedExpression => 1109 // TS1109: Expression expected
-    ExpectedStatement => 1128 // TS1128: Declaration or statement expected
-
-    // Punctuation errors (custom codes)
-    ExpectedSemicolon => 1007 // Custom
-    ExpectedComma => 1008 // Custom
-    ExpectedColon => 1009 // Custom (close to TS1009)
-    ExpectedOpenParen => 1010 // Custom
-    ExpectedCloseParen => 1011 // Custom
-    ExpectedOpenBrace => 1012 // Custom (close to TS1012)
-    ExpectedCloseBrace => 1013 // Custom
-    ExpectedOpenBracket => 1014 // Custom
-    ExpectedCloseBracket => 1015 // Custom
-    ExpectedFunctionKeyword => 1016 // Custom
-    ExpectedClassKeyword => 1017 // Custom
-    ExpectedEquals => 1018 // Custom
-
-    // JSX errors
-    JSXClosingTagMismatch => 1100 // Custom
-    JSXExpectedClosingTag => 1101 // Custom
-    JSXExpectedAttributeValue => 1102 // Custom
-
-    // JSON errors
-    JSONExpectedPropertyName => 1200 // Custom
-    JSONExpectedValue => 1201 // Custom
-    JSONTrailingComma => 1202 // Custom
-
-    // JSDoc errors
-    JSDocInvalidTag => 1300 // Custom
-    JSDocInvalidType => 1301 // Custom
+    // ============================================================================
+    // Internal Parser Errors (no official TS codes)
+    // ============================================================================
+    UnexpectedEOF => 1002
+    ExpectedIdentifier => 1003
+    ExpectedTypeAnnotation => 1004
+    ExpectedExpression => 1109
+    ExpectedStatement => 1128
+    ExpectedSemicolon => 1007
+    ExpectedComma => 1008
+    ExpectedColon => 1009
+    ExpectedOpenParen => 1010
+    ExpectedCloseParen => 1011
+    ExpectedOpenBrace => 1012
+    ExpectedCloseBrace => 1013
+    ExpectedOpenBracket => 1014
+    ExpectedCloseBracket => 1015
+    ExpectedFunctionKeyword => 1016
+    ExpectedClassKeyword => 1017
+    ExpectedEquals => 1018
+    JSXClosingTagMismatch => 1100
+    JSXExpectedClosingTag => 1101
+    JSXExpectedAttributeValue => 1102
+    JSONExpectedPropertyName => 1200
+    JSONExpectedValue => 1201
+    JSONTrailingComma => 1202
+    JSDocInvalidTag => 1300
+    JSDocInvalidType => 1301
 
     // ============================================================================
     // Critical Parser Errors - Official TypeScript Error Codes
@@ -997,17 +978,14 @@ pub fn ParserErrorCode::to_int(self : ParserErrorCode) -> Int {
 /// Messages are aligned with official TypeScript diagnostic messages
 pub fn ParserErrorCode::to_message(self : ParserErrorCode) -> String {
   match self {
-    // General errors
-    UnexpectedToken => "Unexpected token"
+    // ============================================================================
+    // Internal Parser Errors
+    // ============================================================================
     UnexpectedEOF => "Unexpected end of file"
-
-    // Declaration errors
     ExpectedIdentifier => "Identifier expected"
     ExpectedTypeAnnotation => "Type annotation expected"
     ExpectedExpression => "Expression expected"
     ExpectedStatement => "Statement expected"
-
-    // Punctuation errors
     ExpectedSemicolon => "';' expected"
     ExpectedComma => "',' expected"
     ExpectedColon => "':' expected"
@@ -1020,18 +998,12 @@ pub fn ParserErrorCode::to_message(self : ParserErrorCode) -> String {
     ExpectedFunctionKeyword => "'function' expected"
     ExpectedClassKeyword => "'class' expected"
     ExpectedEquals => "'=' expected"
-
-    // JSX errors
     JSXClosingTagMismatch => "JSX closing tag mismatch"
     JSXExpectedClosingTag => "JSX closing tag expected"
     JSXExpectedAttributeValue => "JSX attribute value expected"
-
-    // JSON errors
     JSONExpectedPropertyName => "Property name expected"
     JSONExpectedValue => "Value expected"
     JSONTrailingComma => "Trailing comma not allowed in JSON"
-
-    // JSDoc errors
     JSDocInvalidTag => "Invalid JSDoc tag"
     JSDocInvalidType => "Invalid JSDoc type"
 
@@ -2775,9 +2747,8 @@ fn parse_variable_declaration(
         Ok((id, p)) => (Node::Identifier(id), p)
         Err(p) =>
           return Err(
-            add_error_with_code(
-              p, ExpectedIdentifier.to_message(), start_loc,
-              ExpectedIdentifier,
+            add_error(
+              p, "Identifier expected", start_loc,
             ),
           )
       }
@@ -2936,11 +2907,10 @@ fn parse_object_binding_pattern(
                 }
               _ =>
                 return Err(
-                  add_error_with_code(
+                  add_error(
                     p2,
-                    ExpectedIdentifier.to_message(),
+                    "Identifier expected",
                     prop_loc,
-                    ExpectedIdentifier,
                   ),
                 )
             }
@@ -3036,7 +3006,7 @@ fn parse_return_type(parser : Parser) -> Result[(Node, Parser), Parser] {
           return Err(
             add_error_with_code(
               parser,
-              ExpectedIdentifier.to_message(),
+              "Identifier expected",
               current_token(parser).location(),
               ExpectedIdentifier,
             ),
@@ -3650,7 +3620,7 @@ fn parse_identifier(parser : Parser) -> Result[(Identifier, Parser), Parser] {
       Err(
         add_error_with_code(
           parser,
-          ExpectedIdentifier.to_message(),
+          "Identifier expected",
           loc,
           ExpectedIdentifier,
         ),
@@ -4890,7 +4860,7 @@ fn parse_interface_declaration(
       return Err(
         add_error_with_code(
           parser,
-          ExpectedIdentifier.to_message(),
+          "Identifier expected",
           current_token(parser).location(),
           ExpectedIdentifier,
         ),
@@ -4950,7 +4920,7 @@ fn parse_interface_declaration(
                 return Err(
                   add_error_with_code(
                     parser,
-                    ExpectedIdentifier.to_message(),
+                    "Identifier expected",
                     current_token(parser).location(),
                     ExpectedIdentifier,
                   ),
@@ -5045,7 +5015,7 @@ fn parse_interface_declaration(
                     return Err(
                       add_error_with_code(
                         parser,
-                        ExpectedIdentifier.to_message(),
+                        "Identifier expected",
                         current_token(parser).location(),
                         ExpectedIdentifier,
                       ),
@@ -5177,7 +5147,7 @@ fn parse_interface_declaration(
                 return Err(
                   add_error_with_code(
                     parser,
-                    ExpectedIdentifier.to_message(),
+                    "Identifier expected",
                     current_token(parser).location(),
                     ExpectedIdentifier,
                   ),
@@ -5548,7 +5518,7 @@ fn parse_type_alias_declaration(
       return Err(
         add_error_with_code(
           parser,
-          ExpectedIdentifier.to_message(),
+          "Identifier expected",
           current_token(parser).location(),
           ExpectedIdentifier,
         ),
@@ -5621,7 +5591,7 @@ fn parse_enum_declaration(
       return Err(
         add_error_with_code(
           parser,
-          ExpectedIdentifier.to_message(),
+          "Identifier expected",
           current_token(parser).location(),
           ExpectedIdentifier,
         ),
@@ -5743,7 +5713,7 @@ fn parse_module_declaration_body(
       return Err(
         add_error_with_code(
           parser,
-          ExpectedIdentifier.to_message(),
+          "Identifier expected",
           current_token(parser).location(),
           ExpectedIdentifier,
         ),
@@ -5934,7 +5904,7 @@ fn parse_import_declaration(parser : Parser) -> Result[(Node, Parser), Parser] {
               return Err(
                 add_error_with_code(
                   parser,
-                  ExpectedIdentifier.to_message(),
+                  "Identifier expected",
                   current_token(parser).location(),
                   ExpectedIdentifier,
                 ),
@@ -5943,11 +5913,10 @@ fn parse_import_declaration(parser : Parser) -> Result[(Node, Parser), Parser] {
         }
         _ =>
           return Err(
-            add_error_with_code(
+            add_error(
               parser,
-              UnexpectedToken.to_message(),
+              "Unexpected token",
               current_token(parser).location(),
-              UnexpectedToken,
             ),
           )
       }
@@ -5980,11 +5949,10 @@ fn parse_import_declaration(parser : Parser) -> Result[(Node, Parser), Parser] {
     KeywordFrom(_) => advance_parser(parser)
     _ =>
       return Err(
-        add_error_with_code(
+        add_error(
           parser,
-          UnexpectedToken.to_message(),
+          "Unexpected token",
           current_token(parser).location(),
-          UnexpectedToken,
         ),
       )
   }
@@ -6344,22 +6312,20 @@ fn parse_export_declaration(parser : Parser) -> Result[(Node, Parser), Parser] {
                     }
                     _ =>
                       Err(
-                        add_error_with_code(
+                        add_error(
                           parser,
-                          UnexpectedToken.to_message(),
+                          "Unexpected token",
                           current_token(parser).location(),
-                          UnexpectedToken,
                         ),
                       )
                   }
                 }
                 _ =>
                   Err(
-                    add_error_with_code(
+                    add_error(
                       parser,
-                      UnexpectedToken.to_message(),
+                      "Unexpected token",
                       current_token(parser).location(),
-                      UnexpectedToken,
                     ),
                   )
               }
@@ -6368,7 +6334,7 @@ fn parse_export_declaration(parser : Parser) -> Result[(Node, Parser), Parser] {
               Err(
                 add_error_with_code(
                   parser,
-                  ExpectedIdentifier.to_message(),
+                  "Identifier expected",
                   current_token(parser).location(),
                   ExpectedIdentifier,
                 ),
@@ -6405,22 +6371,20 @@ fn parse_export_declaration(parser : Parser) -> Result[(Node, Parser), Parser] {
             }
             _ =>
               Err(
-                add_error_with_code(
+                add_error(
                   parser,
-                  UnexpectedToken.to_message(),
+                  "Unexpected token",
                   current_token(parser).location(),
-                  UnexpectedToken,
                 ),
               )
           }
         }
         _ =>
           Err(
-            add_error_with_code(
+            add_error(
               parser,
-              UnexpectedToken.to_message(),
+              "Unexpected token",
               current_token(parser).location(),
-              UnexpectedToken,
             ),
           )
       }
@@ -6447,11 +6411,10 @@ fn parse_export_declaration(parser : Parser) -> Result[(Node, Parser), Parser] {
                       (Some(spec), advance_parser(parser))
                     _ =>
                       return Err(
-                        add_error_with_code(
+                        add_error(
                           parser,
-                          UnexpectedToken.to_message(),
+                          "Unexpected token",
                           current_token(parser).location(),
-                          UnexpectedToken,
                         ),
                       )
                   }
@@ -6521,11 +6484,10 @@ fn parse_export_declaration(parser : Parser) -> Result[(Node, Parser), Parser] {
                 StringLiteral(spec, _) => (Some(spec), advance_parser(parser))
                 _ =>
                   return Err(
-                    add_error_with_code(
+                    add_error(
                       parser,
-                      UnexpectedToken.to_message(),
+                      "Unexpected token",
                       current_token(parser).location(),
-                      UnexpectedToken,
                     ),
                   )
               }
@@ -7488,11 +7450,10 @@ fn parse_do_while_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
     KeywordWhile(_) => advance_parser(parser)
     _ =>
       return Err(
-        add_error_with_code(
+        add_error(
           parser,
-          UnexpectedToken.to_message(),
+          "Unexpected token",
           current_token(parser).location(),
-          UnexpectedToken,
         ),
       )
   }
@@ -7796,11 +7757,10 @@ fn parse_try_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
   // Must have either catch or finally
   if catch_clause is None && finally_block is None {
     return Err(
-      add_error_with_code(
+      add_error(
         parser,
-        UnexpectedToken.to_message(),
+        "Unexpected token",
         current_token(parser).location(),
-        UnexpectedToken,
       ),
     )
   }
@@ -8124,11 +8084,10 @@ fn check_depth(parser : Parser) -> Result[Parser, Parser] {
   if parser.depth > max_expression_depth {
     let loc = current_token(parser).location()
     Err(
-      add_error_with_code(
+      add_error(
         parser,
         "Expression too deeply nested (stack overflow prevention)",
         loc,
-        UnexpectedToken,
       ),
     )
   } else {
