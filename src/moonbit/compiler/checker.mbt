@@ -5167,6 +5167,76 @@ fn check_interface_declaration(
     }
     None => ()
   }
+  // TS2746: Check for conflicting property declarations in extended interfaces
+  checker = check_interface_heritage_conflicts(checker, iface_decl)
+  checker
+}
+
+///|
+/// Check for conflicting property declarations in interface extends clause
+fn check_interface_heritage_conflicts(
+  checker : TypeChecker,
+  iface_decl : InterfaceDeclaration,
+) -> TypeChecker {
+  let mut checker = checker
+  // Collect properties from all base interfaces
+  let base_properties : Map[String, (Type, String)] = Map::new() // name -> (type, source_interface)
+  for heritage_clause in iface_decl.heritage_clauses {
+    if heritage_clause.kind == Extends {
+      for base_type_node in heritage_clause.types {
+        // Get the interface name from the type node
+        let base_name = match base_type_node {
+          Identifier(id) => Some(id.name)
+          TypeReference(type_ref) => Some(type_ref.type_name)
+          _ => None
+        }
+        match base_name {
+          Some(name) => {
+            // Look up the interface symbol
+            match lookup_symbol(checker, name) {
+              Some(symbol) => {
+                // Resolve the interface type
+                let (base_type_opt, c) = resolve_interface_type(checker, symbol)
+                checker = c
+                match base_type_opt {
+                  Some(Object(obj_type)) => {
+                    // Check each property against already collected properties
+                    for prop_entry in obj_type.properties {
+                      let (prop_name, prop_sig) = prop_entry
+                      match base_properties.get(prop_name) {
+                        Some((existing_type, existing_source)) => {
+                          // Check if types are compatible
+                          if not(is_simple_type_compatible(prop_sig.prop_type, existing_type)) &&
+                            not(is_simple_type_compatible(existing_type, prop_sig.prop_type)) {
+                            checker = add_diagnostic_with_code(
+                              checker,
+                              "Property '\{prop_name}' has conflicting declarations and is inaccessible in type '\{iface_decl.name}' (from '\{existing_source}' and '\{name}')",
+                              iface_decl.location,
+                              TS2746,
+                            )
+                          }
+                        }
+                        None => {
+                          // First time seeing this property
+                          base_properties.set(
+                            prop_name,
+                            (prop_sig.prop_type, name),
+                          )
+                        }
+                      }
+                    }
+                  }
+                  _ => ()
+                }
+              }
+              None => ()
+            }
+          }
+          None => ()
+        }
+      }
+    }
+  }
   checker
 }
 
