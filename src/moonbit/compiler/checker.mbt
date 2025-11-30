@@ -265,9 +265,16 @@ pub struct TypeChecker {
   diagnostics : Array[Diagnostic]
   file_path : String
   global_scope : Scope? // Global scope for symbol lookup
+  local_scopes : Array[LocalScope] // Stack of local scopes (innermost last)
   current_this_type : Type? // Type of 'this' in current scope (for class methods/constructors)
   no_unchecked_indexed_access : Bool // Adds undefined to indexed access types
   resolving_symbols : Map[Int, Bool] // Symbol IDs currently being resolved (for cycle detection)
+} derive(Show)
+
+///|
+/// Local scope for tracking variable types in function bodies
+pub struct LocalScope {
+  variables : Map[String, Type] // Variable name -> Type
 } derive(Show)
 
 ///|
@@ -308,6 +315,7 @@ pub fn TypeChecker::new_with_options(
     diagnostics: [],
     file_path,
     global_scope,
+    local_scopes: [],
     current_this_type: None,
     no_unchecked_indexed_access,
     resolving_symbols: Map::new(),
@@ -319,6 +327,157 @@ pub fn TypeChecker::new_with_options(
 fn next_type_id(checker : TypeChecker) -> (Int, TypeChecker) {
   let id = checker.next_type_id
   (id, { ..checker, next_type_id: id + 1 })
+}
+
+///|
+/// Push a new local scope onto the scope stack
+fn push_local_scope(checker : TypeChecker) -> TypeChecker {
+  let scopes = checker.local_scopes
+  scopes.push(LocalScope::{ variables: Map::new() })
+  { ..checker, local_scopes: scopes }
+}
+
+///|
+/// Pop the current local scope from the scope stack
+fn pop_local_scope(checker : TypeChecker) -> TypeChecker {
+  let scopes = checker.local_scopes
+  if scopes.length() > 0 {
+    let _ = scopes.pop()
+  }
+  { ..checker, local_scopes: scopes }
+}
+
+///|
+/// Add a variable to the current local scope
+fn add_local_variable(
+  checker : TypeChecker,
+  name : String,
+  var_type : Type,
+) -> TypeChecker {
+  let scopes = checker.local_scopes
+  if scopes.length() > 0 {
+    scopes[scopes.length() - 1].variables.set(name, var_type)
+  }
+  { ..checker, local_scopes: scopes }
+}
+
+///|
+/// Look up a variable type in local scopes (innermost first)
+fn lookup_local_variable(checker : TypeChecker, name : String) -> Type? {
+  // Search from innermost scope to outermost
+  let scopes = checker.local_scopes
+  for i = scopes.length() - 1; i >= 0; i = i - 1 {
+    match scopes[i].variables.get(name) {
+      Some(t) => return Some(t)
+      None => ()
+    }
+  }
+  None
+}
+
+///|
+/// Add a function parameter to the current local scope
+fn add_parameter_to_scope(checker : TypeChecker, param : Node) -> TypeChecker {
+  match param {
+    Parameter(p) => {
+      // Get the parameter name
+      let name = match p.name {
+        Identifier(id) => Some(id.name)
+        _ => None // Binding patterns would need recursive handling
+      }
+      match name {
+        Some(n) => {
+          // Get the parameter type from type annotation, or any if not specified
+          let (param_type, checker) = match p.type_annotation {
+            Some(type_node) =>
+              match get_type_from_type_node(checker, type_node) {
+                (Some(t), c) => (t, c)
+                (None, c) => any_type(c)
+              }
+            None => any_type(checker)
+          }
+          add_local_variable(checker, n, param_type)
+        }
+        None => checker
+      }
+    }
+    _ => checker
+  }
+}
+
+///|
+/// Check if a type is array-like (array, tuple, or has numeric index signature)
+fn is_array_like_type(t : Type) -> Bool {
+  match t {
+    Array(_) => true
+    Tuple(_) => true
+    String(_) => true // Strings are iterable in TypeScript
+    Any(_) | Unknown(_) => true // Any/unknown can be array-like
+    Union(union_type) =>
+      // All members of union must be array-like
+      union_type.types.iter().all(fn(member) { is_array_like_type(member) })
+    Object(obj_type) =>
+      // Check if has numeric index signature
+      obj_type.index_signatures.iter().any(fn(idx_sig) {
+        match idx_sig.parameter_type {
+          Number(_) => true
+          _ => false
+        }
+      })
+    TypeReference(_) => true // Type references might be arrays
+    _ => false
+  }
+}
+
+///|
+/// Add array binding pattern elements to local scope
+fn add_array_binding_elements_to_scope(
+  checker : TypeChecker,
+  arr_pat : ArrayBindingPattern,
+  _arr_type : Type,
+) -> TypeChecker {
+  let mut checker = checker
+  for elem in arr_pat.elements {
+    match elem {
+      Some(element) =>
+        match element {
+          Identifier(id) => {
+            // Get the element type from array, or any if unknown
+            let (elem_type, c) = any_type(checker)
+            checker = add_local_variable(c, id.name, elem_type)
+          }
+          _ => ()
+        }
+      None => () // Hole in array pattern
+    }
+  }
+  checker
+}
+
+///|
+/// Add object binding pattern elements to local scope
+fn add_object_binding_elements_to_scope(
+  checker : TypeChecker,
+  obj_pat : ObjectBindingPattern,
+  _obj_type : Type,
+) -> TypeChecker {
+  let mut checker = checker
+  for prop in obj_pat.properties {
+    // property_name is empty string if shorthand, otherwise the aliased name
+    let name : String = if prop.property_name == "" {
+      match prop.name {
+        Identifier(id) => id.name
+        _ => ""
+      }
+    } else {
+      prop.property_name
+    }
+    if name != "" {
+      let (prop_type, c) = any_type(checker)
+      checker = add_local_variable(c, name, prop_type)
+    }
+  }
+  checker
 }
 
 ///|
@@ -1154,7 +1313,11 @@ pub fn check_source_file_with_options(
     Some(bound.global_scope),
     no_unchecked_indexed_access,
   )
+  // Push a top-level scope for the source file so local variables are tracked
+  let checker = push_local_scope(checker)
   let checker = check_statements(checker, bound.statements)
+  // Pop the top-level scope
+  let checker = pop_local_scope(checker)
 
   // Return result
   let typed_file : TypedFile = {
@@ -1258,6 +1421,48 @@ fn check_variable_declaration(
       check_assignment_compatibility(checker, init_t, decl_t, decl.location)
     _ => checker
   }
+
+  // Check for array destructuring on non-array type (TS2461)
+  let checker = match (decl.name, init_type) {
+    (ArrayBindingPattern(_), Some(init_t)) =>
+      if not(is_array_like_type(init_t)) {
+        add_diagnostic_with_code(
+          checker,
+          "Type is not an array type",
+          decl.location,
+          TS2461,
+        )
+      } else {
+        checker
+      }
+    _ => checker
+  }
+
+  // Add variable to local scope if we're in a local scope
+  // Determine the final type: declared type takes precedence, then inferred type, then any
+  let var_type = match declared_type {
+    Some(t) => t
+    None =>
+      match init_type {
+        Some(t) => t
+        None => {
+          let (t, _) = any_type(checker)
+          t
+        }
+      }
+  }
+
+  // Get the variable name and add to local scope
+  let checker = match decl.name {
+    Identifier(id) => add_local_variable(checker, id.name, var_type)
+    ArrayBindingPattern(arr_pat) =>
+      // For array destructuring, add each element's name to scope
+      add_array_binding_elements_to_scope(checker, arr_pat, var_type)
+    ObjectBindingPattern(obj_pat) =>
+      // For object destructuring, add each property to scope
+      add_object_binding_elements_to_scope(checker, obj_pat, var_type)
+    _ => checker
+  }
   checker
 }
 
@@ -1331,30 +1536,25 @@ fn infer_identifier_type(
   match get_narrowed_type(checker, id.name) {
     Some(narrowed) => (narrowed, checker)
     None =>
-      // Look up symbol in scope chain
-      match lookup_symbol(checker, id.name) {
-        Some(symbol) =>
-          // Get type from symbol
-          match get_symbol_type(checker, symbol) {
-            (Some(t), c) => (t, c)
-            (None, c) =>
-              // Symbol exists but type not yet computed - infer from declaration
-              infer_symbol_type(c, symbol)
+      // Check local scopes first (for local variables and function parameters)
+      match lookup_local_variable(checker, id.name) {
+        Some(local_type) => (local_type, checker)
+        None =>
+          // Fall back to global scope lookup
+          match lookup_symbol(checker, id.name) {
+            Some(symbol) =>
+              // Get type from symbol
+              match get_symbol_type(checker, symbol) {
+                (Some(t), c) => (t, c)
+                (None, c) =>
+                  // Symbol exists but type not yet computed - infer from declaration
+                  infer_symbol_type(c, symbol)
+              }
+            None => {
+              // Variable not found in any scope
+              any_type(checker)
+            }
           }
-        None => {
-          // TODO: Enable TS2304 error once proper scope chain is implemented
-          // Currently lookup_symbol only checks global_scope, missing function
-          // parameters and local variables. Need to implement current_scope
-          // tracking that walks up the scope chain.
-          // let message = "Cannot find name '\{id.name}'."
-          // let checker = add_diagnostic_with_code(
-          //   checker,
-          //   message,
-          //   id.location,
-          //   TS2304,
-          // )
-          any_type(checker)
-        }
       }
   }
 }
@@ -3881,7 +4081,63 @@ fn infer_object_literal_type(
           }
         }
       }
-      _ => ()
+      MethodDeclaration(name, func_expr, _) => {
+        // Shorthand method declaration: { method() { ... } }
+        let (method_type, c) = infer_function_expression_type(checker, func_expr)
+        properties.set(name, {
+          name,
+          prop_type: method_type,
+          is_optional: false,
+          is_readonly: false,
+        })
+        checker = c
+      }
+      GetAccessor(name, func_expr, _) => {
+        // Getter accessor: { get prop() { ... } }
+        let (getter_type, c) = infer_function_expression_type(checker, func_expr)
+        // The property type is the return type of the getter
+        let prop_type = match getter_type {
+          Function(func_type) => func_type.return_type
+          _ => getter_type
+        }
+        properties.set(name, {
+          name,
+          prop_type,
+          is_optional: false,
+          is_readonly: true, // Getters are read-only unless there's also a setter
+        })
+        checker = c
+      }
+      SetAccessor(name, func_expr, _) => {
+        // Setter accessor: { set prop(value) { ... } }
+        let (setter_type, c) = infer_function_expression_type(checker, func_expr)
+        // The property type is the parameter type of the setter
+        let prop_type = match setter_type {
+          Function(func_type) =>
+            if func_type.parameters.length() > 0 {
+              func_type.parameters[0].param_type
+            } else {
+              let (t, _) = any_type(checker)
+              t
+            }
+          _ => {
+            let (t, _) = any_type(checker)
+            t
+          }
+        }
+        // Check if property already exists (from a getter)
+        match properties.get(name) {
+          Some(_) => () // Setter adds to existing getter, keep the getter's type
+          None =>
+            properties.set(name, {
+              name,
+              prop_type,
+              is_optional: false,
+              is_readonly: false,
+            })
+        }
+        checker = c
+      }
     }
   }
   let (info, checker) = create_type_info(checker)
@@ -3903,7 +4159,10 @@ fn infer_arrow_function_type(
   checker : TypeChecker,
   arrow : ArrowFunction,
 ) -> (Type, TypeChecker) {
-  // Build parameter list
+  // Push a new local scope for the arrow function
+  let checker = push_local_scope(checker)
+
+  // Build parameter list and add parameters to local scope
   let parameters = []
   let mut checker = checker
   for i = 0; i < arrow.parameters.length(); i = i + 1 {
@@ -3924,6 +4183,9 @@ fn infer_arrow_function_type(
           is_optional: param.is_optional,
           is_rest: param.is_rest,
         })
+        // Add parameter to local scope
+        let param_name = get_parameter_name(param.name)
+        checker = add_local_variable(checker, param_name, param_type)
       }
       _ => ()
     }
@@ -3942,6 +4204,10 @@ fn infer_arrow_function_type(
       (t, c)
     }
   }
+
+  // Pop the local scope
+  let checker = pop_local_scope(checker)
+
   let (info, checker) = create_type_info(checker)
   (Function({ parameters, return_type, info }), checker)
 }
@@ -4857,11 +5123,23 @@ fn check_function_declaration(
   let saved_narrowed_types = checker.narrowed_types
   let checker = clear_narrowed_types(checker)
 
+  // Push a new local scope for the function
+  let checker = push_local_scope(checker)
+
+  // Add function parameters to the local scope
+  let mut checker = checker
+  for param in func.parameters {
+    checker = add_parameter_to_scope(checker, param)
+  }
+
   // Check function body
   let checker = match func.body {
     Some(body) => check_statement(checker, body)
     None => checker
   }
+
+  // Pop the local scope
+  let checker = pop_local_scope(checker)
 
   // Restore narrowed types after exiting function
   { ..checker, narrowed_types: saved_narrowed_types }
@@ -5733,6 +6011,85 @@ fn get_type_from_type_node(
       )
       (Some(t), c)
     }
+    TypeLiteral(type_literal) => {
+      // Handle object type literals: { prop: type; }
+      let mut checker = checker
+      let properties : Map[String, PropertySignature] = Map::new()
+      let call_signatures : Array[CheckerSignature] = []
+      let construct_signatures : Array[CheckerSignature] = []
+      let index_signatures : Array[IndexSignature] = []
+
+      for member in type_literal.members {
+        match member {
+          PropertyDeclaration(prop_decl) => {
+            // Get property type
+            let (prop_type, c) = match prop_decl.type_annotation {
+              Some(type_node) =>
+                match get_type_from_type_node(checker, type_node) {
+                  (Some(t), c2) => (t, c2)
+                  (None, c2) => any_type(c2)
+                }
+              None => any_type(checker)
+            }
+            checker = c
+            // Check if readonly modifier is present
+            let is_readonly = prop_decl.modifiers.contains(Modifier::Readonly)
+            properties.set(prop_decl.name, {
+              name: prop_decl.name,
+              prop_type,
+              is_optional: prop_decl.is_optional,
+              is_readonly,
+            })
+          }
+          IndexSignatureDeclaration(idx_sig) => {
+            // Get parameter type (string or number)
+            let (param_type, c) = match get_type_from_type_node(checker, idx_sig.parameter_type) {
+              (Some(t), c2) => (t, c2)
+              (None, c2) => any_type(c2)
+            }
+            checker = c
+            // Get return type (return_type is Node, not Node?)
+            let (return_type, c) = match get_type_from_type_node(checker, idx_sig.return_type) {
+              (Some(t), c2) => (t, c2)
+              (None, c2) => any_type(c2)
+            }
+            checker = c
+            index_signatures.push({
+              parameter_name: idx_sig.parameter_name,
+              parameter_type: param_type,
+              return_type,
+              is_readonly: idx_sig.is_readonly,
+            })
+          }
+          MethodDeclaration(method_decl) => {
+            // Handle method signatures
+            let (method_type, c) = get_method_signature_type(checker, method_decl)
+            checker = c
+            properties.set(method_decl.name, {
+              name: method_decl.name,
+              prop_type: method_type,
+              is_optional: method_decl.is_optional,
+              is_readonly: false,
+            })
+          }
+          _ => ()
+        }
+      }
+
+      let (info, checker) = create_type_info(checker)
+      (
+        Some(
+          Object({
+            properties,
+            call_signatures,
+            construct_signatures,
+            index_signatures,
+            info,
+          }),
+        ),
+        checker,
+      )
+    }
     _ => (None, checker)
   }
 }
@@ -5745,6 +6102,53 @@ fn convert_mapped_modifier(ast_mod : MappedTypeModifier) -> MappedModifier {
     Plus => MappedModifier::Add
     Minus => MappedModifier::Remove
   }
+}
+
+///|
+/// Get type for a method signature in type literal
+fn get_method_signature_type(
+  checker : TypeChecker,
+  method_decl : MethodDeclaration,
+) -> (Type, TypeChecker) {
+  // Build parameters
+  let mut checker = checker
+  let parameters : Array[CheckerParameter] = []
+
+  for param in method_decl.parameters {
+    match param {
+      Parameter(p) => {
+        let (param_type, c) = match p.type_annotation {
+          Some(type_node) =>
+            match get_type_from_type_node(checker, type_node) {
+              (Some(t), c2) => (t, c2)
+              (None, c2) => any_type(c2)
+            }
+          None => any_type(checker)
+        }
+        checker = c
+        parameters.push({
+          name: get_parameter_name(p.name),
+          param_type,
+          is_optional: p.is_optional,
+          is_rest: p.is_rest,
+        })
+      }
+      _ => ()
+    }
+  }
+
+  // Get return type
+  let (return_type, checker) = match method_decl.return_type {
+    Some(rt) =>
+      match get_type_from_type_node(checker, rt) {
+        (Some(t), c) => (t, c)
+        (None, c) => any_type(c)
+      }
+    None => any_type(checker)
+  }
+
+  let (info, checker) = create_type_info(checker)
+  (Function({ parameters, return_type, info }), checker)
 }
 
 ///|
