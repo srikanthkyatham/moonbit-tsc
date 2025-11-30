@@ -330,6 +330,9 @@ pub enum DiagnosticCategory {
 /// TypeScript diagnostic error codes
 /// These codes match the official TypeScript compiler error codes
 pub enum DiagnosticCode {
+  // Name Resolution Errors (2300-2309)
+  TS2304 // Cannot find name 'X'
+
   // Type Assignment Errors (2300-2399)
   TS2314 // Generic type requires more type arguments
   TS2322 // Type 'X' is not assignable to type 'Y'
@@ -364,6 +367,7 @@ pub enum DiagnosticCode {
 /// Convert DiagnosticCode to its numeric value
 pub fn DiagnosticCode::to_int(self : DiagnosticCode) -> Int {
   match self {
+    TS2304 => 2304
     TS2314 => 2314
     TS2322 => 2322
     TS2344 => 2344
@@ -390,6 +394,7 @@ pub fn DiagnosticCode::to_int(self : DiagnosticCode) -> Int {
 /// Convert numeric code to DiagnosticCode (if valid)
 pub fn DiagnosticCode::from_int(code : Int) -> DiagnosticCode? {
   match code {
+    2304 => Some(TS2304)
     2314 => Some(TS2314)
     2322 => Some(TS2322)
     2344 => Some(TS2344)

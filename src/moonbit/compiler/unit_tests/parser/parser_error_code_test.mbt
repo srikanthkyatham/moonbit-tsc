@@ -393,12 +393,7 @@ test "ParserErrorCode::to_message - unknown error returns message" {
 
 ///|
 test "ParserErrorCode::to_int - name resolution errors" {
-  // TS2304: Cannot find name
-  assert_eq(@compiler.get_parser_error_int("CannotFindName"), 2304)
-  // TS2305: Module has no exported member
-  assert_eq(@compiler.get_parser_error_int("ModuleHasNoExportedMember"), 2305)
-  // TS2306: File is not a module
-  assert_eq(@compiler.get_parser_error_int("FileIsNotModule"), 2306)
+  // Note: TS2304-TS2306 are now in DiagnosticCode for the type checker
   // TS2307: Cannot find module
   assert_eq(@compiler.get_parser_error_int("CannotFindModule"), 2307)
   // TS2315: Type is not generic
@@ -531,10 +526,7 @@ test "ParserErrorCode::to_int - property initialization errors" {
 
 ///|
 test "ParserErrorCode::to_message - name resolution errors" {
-  assert_eq(
-    @compiler.get_parser_error_message_with_arg("CannotFindName", Some("foo")),
-    "Cannot find name 'foo'.",
-  )
+  // Note: TS2304 (CannotFindName) is now in DiagnosticCode for the type checker
   assert_eq(
     @compiler.get_parser_error_message_with_arg("CannotFindModule", Some("./module")),
     "Cannot find module './module'.",

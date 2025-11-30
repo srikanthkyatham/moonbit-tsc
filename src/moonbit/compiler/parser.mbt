@@ -268,11 +268,9 @@ pub enum ParserErrorCode {
   ESMImportExportNotValid // TS1486
 
   // ============================================================================
-  // Assignment & Compatibility Errors (TS2304-TS2859)
+  // Assignment & Compatibility Errors (TS2307-TS2859)
+  // Note: TS2304-TS2306 are in DiagnosticCode for the type checker
   // ============================================================================
-  CannotFindName(String) // TS2304
-  ModuleHasNoExportedMember(String, String) // TS2305
-  FileIsNotModule(String) // TS2306
   CannotFindModule(String) // TS2307
   TypeIsNotGeneric(String) // TS2315
   CannotFindGlobalType(String) // TS2318
@@ -684,11 +682,8 @@ pub fn ParserErrorCode::to_int(self : ParserErrorCode) -> Int {
     ESMImportExportNotValid => 1486
 
     // ============================================================================
-    // Assignment & Compatibility Errors (TS2304-TS2859)
+    // Assignment & Compatibility Errors (TS2307-TS2859)
     // ============================================================================
-    CannotFindName(_) => 2304
-    ModuleHasNoExportedMember(_, _) => 2305
-    FileIsNotModule(_) => 2306
     CannotFindModule(_) => 2307
     TypeIsNotGeneric(_) => 2315
     CannotFindGlobalType(_) => 2318
@@ -1147,12 +1142,8 @@ pub fn ParserErrorCode::to_message(self : ParserErrorCode) -> String {
       "This file has an import or export that cannot be used outside of ECMAScript modules."
 
     // ============================================================================
-    // Assignment & Compatibility Errors (TS2304-TS2859)
+    // Assignment & Compatibility Errors (TS2307-TS2859)
     // ============================================================================
-    CannotFindName(name) => "Cannot find name '\{name}'."
-    ModuleHasNoExportedMember(module, member) =>
-      "Module '\{module}' has no exported member '\{member}'."
-    FileIsNotModule(file) => "File '\{file}' is not a module."
     CannotFindModule(module) => "Cannot find module '\{module}'."
     TypeIsNotGeneric(t) => "Type '\{t}' is not generic."
     CannotFindGlobalType(t) => "Cannot find global type '\{t}'."
@@ -1787,11 +1778,7 @@ pub fn get_parser_error_int_with_arg(name : String, arg : String?) -> Int {
     "UsingDeclarationsRequireAwait" => UsingDeclarationsRequireAwait.to_int()
     "UsingDeclarationNotInParameter" => UsingDeclarationNotInParameter.to_int()
     "ESMImportExportNotValid" => ESMImportExportNotValid.to_int()
-    // Assignment & Compatibility error codes (TS2304-TS2859)
-    "CannotFindName" => CannotFindName(arg.unwrap_or("")).to_int()
-    "ModuleHasNoExportedMember" =>
-      ModuleHasNoExportedMember(arg.unwrap_or(""), "").to_int()
-    "FileIsNotModule" => FileIsNotModule(arg.unwrap_or("")).to_int()
+    // Assignment & Compatibility error codes (TS2307-TS2859)
     "CannotFindModule" => CannotFindModule(arg.unwrap_or("")).to_int()
     "TypeIsNotGeneric" => TypeIsNotGeneric(arg.unwrap_or("")).to_int()
     "CannotFindGlobalType" => CannotFindGlobalType(arg.unwrap_or("")).to_int()
@@ -1996,11 +1983,7 @@ pub fn get_parser_error_message_with_arg(name : String, arg : String?) -> String
     "UsingDeclarationNotInParameter" =>
       UsingDeclarationNotInParameter.to_message()
     "ESMImportExportNotValid" => ESMImportExportNotValid.to_message()
-    // Assignment & Compatibility error codes (TS2304-TS2859)
-    "CannotFindName" => CannotFindName(arg.unwrap_or("")).to_message()
-    "ModuleHasNoExportedMember" =>
-      ModuleHasNoExportedMember(arg.unwrap_or(""), "").to_message()
-    "FileIsNotModule" => FileIsNotModule(arg.unwrap_or("")).to_message()
+    // Assignment & Compatibility error codes (TS2307-TS2859)
     "CannotFindModule" => CannotFindModule(arg.unwrap_or("")).to_message()
     "TypeIsNotGeneric" => TypeIsNotGeneric(arg.unwrap_or("")).to_message()
     "CannotFindGlobalType" => CannotFindGlobalType(arg.unwrap_or("")).to_message()

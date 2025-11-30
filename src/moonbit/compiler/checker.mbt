@@ -1339,10 +1339,20 @@ fn infer_identifier_type(
               // Symbol exists but type not yet computed - infer from declaration
               infer_symbol_type(c, symbol)
           }
-        None =>
-          // Undeclared identifier - return any type without error
-          // (error would be too strict for current implementation)
+        None => {
+          // TODO: Enable TS2304 error once proper scope chain is implemented
+          // Currently lookup_symbol only checks global_scope, missing function
+          // parameters and local variables. Need to implement current_scope
+          // tracking that walks up the scope chain.
+          // let message = "Cannot find name '\{id.name}'."
+          // let checker = add_diagnostic_with_code(
+          //   checker,
+          //   message,
+          //   id.location,
+          //   TS2304,
+          // )
           any_type(checker)
+        }
       }
   }
 }
