@@ -210,6 +210,14 @@ pub enum MismatchReason {
   RestElementTypeMustBeArray(String) // TS2574: A rest element type must be an array type
   NoOverloadExpectsNArgs(Int) // TS2575: No overload expects {0} arguments
   TypeCanOnlyBeIteratedWithDownlevel(String) // TS2802: Type '{0}' can only be iterated through when using '--downlevelIteration'
+
+  // Spread & Rest errors
+  PropertyUsedBeforeAssigned(String) // TS2565: Property '{0}' is used before being assigned
+  RestElementCannotContainBindingPattern // TS2566: A rest element cannot contain a binding pattern
+  RestTypesMustBeFromObjectTypes(String) // TS2700: Rest types may only be created from object types
+  ObjectRestAssignmentMustBeVariable(String) // TS2701: The target of an object rest assignment must be a variable or a property access
+  ObjectRestAssignmentNotOptional(String) // TS2702: A rest element cannot have a property name and cannot be optional
+  SpreadTypesMustBeFromObjectTypes(String) // TS2762: Spread types may only be created from object types
 } derive(Show, Eq)
 
 // ============================================================================
@@ -1033,6 +1041,19 @@ pub fn get_friendly_title(reason : MismatchReason) -> String {
       "NO OVERLOAD EXPECTS " + n.to_string() + " ARGUMENTS"
     TypeCanOnlyBeIteratedWithDownlevel(typ) =>
       "TYPE '" + typ + "' CAN ONLY BE ITERATED WITH --DOWNLEVELITERATION"
+    // Spread & Rest errors
+    PropertyUsedBeforeAssigned(prop) =>
+      "PROPERTY '" + prop + "' USED BEFORE BEING ASSIGNED"
+    RestElementCannotContainBindingPattern =>
+      "REST ELEMENT CANNOT CONTAIN A BINDING PATTERN"
+    RestTypesMustBeFromObjectTypes(typ) =>
+      "REST TYPES MAY ONLY BE CREATED FROM OBJECT TYPES (GOT '" + typ + "')"
+    ObjectRestAssignmentMustBeVariable(target) =>
+      "OBJECT REST ASSIGNMENT TARGET '" + target + "' MUST BE A VARIABLE"
+    ObjectRestAssignmentNotOptional(prop) =>
+      "OBJECT REST ASSIGNMENT PROPERTY '" + prop + "' CANNOT BE OPTIONAL"
+    SpreadTypesMustBeFromObjectTypes(typ) =>
+      "SPREAD TYPES MAY ONLY BE CREATED FROM OBJECT TYPES (GOT '" + typ + "')"
   }
 }
 
@@ -1571,6 +1592,29 @@ pub fn get_why_explanation(reason : MismatchReason) -> String {
       "Type '" +
       typ +
       "' can only be iterated through when using the '--downlevelIteration' compiler option. This type implements the iterable protocol but requires special handling when targeting older JavaScript versions."
+    // Spread & Rest errors
+    PropertyUsedBeforeAssigned(prop) =>
+      "Property '" +
+      prop +
+      "' is being used before it has been assigned a value. TypeScript tracks definite assignment to ensure all properties are initialized before they're accessed. This helps prevent runtime errors."
+    RestElementCannotContainBindingPattern =>
+      "A rest element cannot contain a binding pattern. When using rest syntax (...rest), the rest variable must be a simple identifier, not a destructuring pattern like { a, b } or [x, y]."
+    RestTypesMustBeFromObjectTypes(typ) =>
+      "Rest types can only be created from object types, but got '" +
+      typ +
+      "'. When using spread in a type position (like { ...T }), T must be an object type so its properties can be spread."
+    ObjectRestAssignmentMustBeVariable(target) =>
+      "The target of an object rest assignment must be a variable or a property access. '" +
+      target +
+      "' is not a valid assignment target. Rest elements collect the remaining properties into a single variable."
+    ObjectRestAssignmentNotOptional(prop) =>
+      "Rest element '" +
+      prop +
+      "' cannot be optional. Rest elements collect all remaining properties, so they always have a value (even if it's an empty object). The '?' modifier is not allowed."
+    SpreadTypesMustBeFromObjectTypes(typ) =>
+      "Spread types can only be created from object types, but got '" +
+      typ +
+      "'. When spreading in a type (like { ...T, extra: number }), T must be an object type whose properties can be enumerated."
   }
 }
 
@@ -2660,6 +2704,74 @@ pub fn get_how_to_fix(
       fixes.push("")
       fixes.push("Or convert to array: Array.from(" + typ + ")")
     }
+    // Spread & Rest errors
+    PropertyUsedBeforeAssigned(prop) => {
+      fixes.push("Initialize the property before using it:")
+      fixes.push("")
+      fixes.push("Option 1: Assign in the declaration:")
+      fixes.push("    class MyClass {")
+      fixes.push("        " + prop + " = initialValue;")
+      fixes.push("    }")
+      fixes.push("")
+      fixes.push("Option 2: Assign in constructor before use:")
+      fixes.push("    constructor() {")
+      fixes.push("        this." + prop + " = value;")
+      fixes.push("        this.use" + prop + "();  // now safe")
+      fixes.push("    }")
+    }
+    RestElementCannotContainBindingPattern => {
+      fixes.push("Use a simple identifier for the rest element:")
+      fixes.push("")
+      fixes.push("Instead of:")
+      fixes.push("    const [first, ...{ a, b }] = arr;  // error")
+      fixes.push("")
+      fixes.push("Use:")
+      fixes.push("    const [first, ...rest] = arr;")
+      fixes.push("    const { a, b } = rest;  // separate destructuring")
+    }
+    RestTypesMustBeFromObjectTypes(typ) => {
+      fixes.push("Ensure the type being spread is an object type.")
+      fixes.push("Current type: " + typ)
+      fixes.push("")
+      fixes.push("Rest types require object types:")
+      fixes.push("    type Valid = { ...T };  // T must be an object type")
+      fixes.push("")
+      fixes.push("Use a constraint if needed:")
+      fixes.push("    type Spread<T extends object> = { ...T };")
+    }
+    ObjectRestAssignmentMustBeVariable(target) => {
+      fixes.push("Use a variable as the rest target:")
+      fixes.push("Invalid target: " + target)
+      fixes.push("")
+      fixes.push("Valid examples:")
+      fixes.push("    const { a, ...rest } = obj;  // rest is a variable")
+      fixes.push("    const { a, ...obj.prop } = source;  // property access OK")
+      fixes.push("")
+      fixes.push("Invalid:")
+      fixes.push("    const { a, ...fn() } = obj;  // function call not allowed")
+    }
+    ObjectRestAssignmentNotOptional(prop) => {
+      fixes.push("Remove the optional modifier from the rest element:")
+      fixes.push("")
+      fixes.push("Instead of:")
+      fixes.push("    const { a, ..." + prop + "? } = obj;  // error")
+      fixes.push("")
+      fixes.push("Use:")
+      fixes.push("    const { a, ..." + prop + " } = obj;  // correct")
+      fixes.push("")
+      fixes.push("Rest elements always collect remaining properties.")
+    }
+    SpreadTypesMustBeFromObjectTypes(typ) => {
+      fixes.push("Ensure the type being spread is an object type.")
+      fixes.push("Current type: " + typ)
+      fixes.push("")
+      fixes.push("Valid spread types:")
+      fixes.push("    type A = { x: number };")
+      fixes.push("    type B = { ...A, y: string };  // OK")
+      fixes.push("")
+      fixes.push("Use a constraint for generics:")
+      fixes.push("    type Extend<T extends object> = { ...T, extra: number };")
+    }
   }
   fixes
 }
@@ -2783,6 +2895,13 @@ pub fn get_error_code(reason : MismatchReason) -> Int {
     RestElementTypeMustBeArray(_) => 2574 // TS2574: A rest element type must be an array type
     NoOverloadExpectsNArgs(_) => 2575 // TS2575: No overload expects N arguments
     TypeCanOnlyBeIteratedWithDownlevel(_) => 2802 // TS2802: Type can only be iterated with downlevelIteration
+    // Spread & Rest errors
+    PropertyUsedBeforeAssigned(_) => 2565 // TS2565: Property used before being assigned
+    RestElementCannotContainBindingPattern => 2566 // TS2566: Rest element cannot contain binding pattern
+    RestTypesMustBeFromObjectTypes(_) => 2700 // TS2700: Rest types may only be created from object types
+    ObjectRestAssignmentMustBeVariable(_) => 2701 // TS2701: Object rest assignment target must be variable
+    ObjectRestAssignmentNotOptional(_) => 2702 // TS2702: Object rest assignment may not be optional
+    SpreadTypesMustBeFromObjectTypes(_) => 2762 // TS2762: Spread types may only be created from object types
   }
 }
 

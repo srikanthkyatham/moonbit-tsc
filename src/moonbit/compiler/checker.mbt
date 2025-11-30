@@ -3198,6 +3198,22 @@ fn infer_element_access_type(
   let no_unchecked = checker.no_unchecked_indexed_access
   match object_type {
     Array(arr_type) => {
+      // Check if index type is valid (number or string for arrays)
+      let checker = match index_type {
+        Number(_) | NumberLiteral(_, _) | String(_) | StringLiteral(_, _) |
+        Any(_) | Unknown(_) => checker
+        Boolean(_) | BooleanLiteral(_, _) | Object(_) | Void(_) | Null(_) |
+        Undefined(_) => {
+          // TS2538: Type cannot be used as an index type
+          add_diagnostic_with_code(
+            checker,
+            "Type '\{type_to_string(index_type)}' cannot be used as an index type",
+            get_node_location(elem.argument_expression),
+            TS2538,
+          )
+        }
+        _ => checker
+      }
       // Array access - add undefined if noUncheckedIndexedAccess is enabled
       // because the index might be out of bounds
       let element_type = arr_type.element_type
@@ -3263,6 +3279,17 @@ fn infer_element_access_type(
                   }
                 None => any_type(checker)
               }
+            Boolean(_) | BooleanLiteral(_, _) | Object(_) | Array(_) | Void(_) |
+            Null(_) | Undefined(_) => {
+              // TS2538: Type cannot be used as an index type
+              let checker = add_diagnostic_with_code(
+                checker,
+                "Type '\{type_to_string(index_type)}' cannot be used as an index type",
+                get_node_location(elem.argument_expression),
+                TS2538,
+              )
+              any_type(checker)
+            }
             _ =>
               // Unknown index type: try string index signature, then any
               match find_string_index_signature(obj_type.index_signatures) {
@@ -3466,6 +3493,32 @@ fn infer_new_expression_type(
         checker = c
       }
     None => ()
+  }
+
+  // Check if the target has a construct signature (TS2747)
+  let checker = match expr_type {
+    Object(obj_type) =>
+      if obj_type.construct_signatures.length() == 0 &&
+        obj_type.call_signatures.length() > 0 {
+        // Has call signatures but no construct signatures
+        add_diagnostic_with_code(
+          checker,
+          "'new' expression, whose target lacks a construct signature, implicitly has an 'any' type",
+          get_node_location(new_expr.expression),
+          TS2747,
+        )
+      } else {
+        checker
+      }
+    Function(_) =>
+      // Plain function type without construct signature
+      add_diagnostic_with_code(
+        checker,
+        "'new' expression, whose target lacks a construct signature, implicitly has an 'any' type",
+        get_node_location(new_expr.expression),
+        TS2747,
+      )
+    _ => checker
   }
 
   // Return the constructed instance type
@@ -3750,6 +3803,41 @@ fn infer_object_literal_type(
           is_readonly: false,
         })
         checker = c
+      }
+      SpreadAssignment(spread_expr, loc) => {
+        let (spread_type, c) = infer_type(checker, spread_expr)
+        checker = c
+        // Check if spread type is an object type
+        match spread_type {
+          Object(obj_type) =>
+            // Merge properties from spread object
+            for entry in obj_type.properties {
+              let (prop_name, prop_info) = entry
+              properties.set(prop_name, prop_info)
+            }
+          Any(_) | Unknown(_) => () // Allow spreading any/unknown
+          Intersection(_) => () // Allow spreading intersections (may contain objects)
+          Union(_) => () // Allow spreading unions (may contain objects)
+          TypeReference(_) => {
+            // TS2762: Spread types may only be created from object types
+            // Type parameter T might not be an object type
+            checker = add_diagnostic_with_code(
+              checker,
+              "Spread types may only be created from object types",
+              loc,
+              TS2762,
+            )
+          }
+          _ => {
+            // TS2762: Spread types may only be created from object types
+            checker = add_diagnostic_with_code(
+              checker,
+              "Spread types may only be created from object types",
+              loc,
+              TS2762,
+            )
+          }
+        }
       }
       _ => ()
     }
