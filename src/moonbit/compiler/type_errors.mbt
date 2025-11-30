@@ -187,6 +187,19 @@ pub enum MismatchReason {
   ForInLeftMustBeVariable(String) // TS2406: The left-hand side of a 'for...in' statement must be a variable or a property access
   ForInRightMustBeObject(String) // TS2407: The right-hand side of a 'for...in' statement must be of type 'any', an object type or a type parameter
   ForOfLeftMustBeVariable(String) // TS2487: The left-hand side of a 'for...of' statement must be a variable or a property access
+
+  // Property & Index errors
+  TypeHasNoPropertyAndNoStringIndex(String, String) // TS2459: Type '{0}' has no property '{1}' and no string index signature
+  TypeIsNotArrayType(String) // TS2460: Type '{0}' is not an array type
+  TypeCannotBeUsedAsIndex(String) // TS2538: Type '{0}' cannot be used as an index type
+  IndexSignatureOnlyPermitsReading(String) // TS2542: Index signature in type '{0}' only permits reading
+  IndexSignatureParamTypeMustBe(String) // TS2716: An index signature parameter type must be 'string', 'number', 'symbol', or a template literal type
+  PropertyUsedBeforeInit(String) // TS2729: Property '{0}' is used before being assigned
+  PropertyIncompatibleWithIndexSig(String, String, String) // TS2745: Property '{0}' of type '{1}' is not assignable to '{2}' index type '{3}'
+  PropertyHasConflictingDeclarations(String) // TS2746: Property '{0}' has conflicting declarations and is inaccessible in type
+  NewExprTargetLacksConstructSig(String) // TS2747: 'new' expression, whose target lacks a construct signature, implicitly has an 'any' type
+  CannotAccessBeforeInit(String) // TS2748: '{0}' cannot be accessed before initialization
+  PropertyCanOnlyBeAssignedWithThis(String) // TS2810: Property '{0}' can only be assigned using 'this' access
 } derive(Show, Eq)
 
 // ============================================================================
@@ -970,6 +983,29 @@ pub fn get_friendly_title(reason : MismatchReason) -> String {
       "FOR...IN RIGHT-HAND SIDE MUST BE OBJECT (GOT '" + typ + "')"
     ForOfLeftMustBeVariable(expr) =>
       "FOR...OF LEFT-HAND SIDE MUST BE VARIABLE (GOT '" + expr + "')"
+    // Property & Index errors
+    TypeHasNoPropertyAndNoStringIndex(typ, prop) =>
+      "TYPE '" + typ + "' HAS NO PROPERTY '" + prop + "' AND NO STRING INDEX"
+    TypeIsNotArrayType(typ) =>
+      "TYPE '" + typ + "' IS NOT AN ARRAY TYPE"
+    TypeCannotBeUsedAsIndex(typ) =>
+      "TYPE '" + typ + "' CANNOT BE USED AS INDEX TYPE"
+    IndexSignatureOnlyPermitsReading(typ) =>
+      "INDEX SIGNATURE IN '" + typ + "' ONLY PERMITS READING"
+    IndexSignatureParamTypeMustBe(typ) =>
+      "INDEX SIGNATURE PARAM TYPE '" + typ + "' MUST BE STRING/NUMBER/SYMBOL"
+    PropertyUsedBeforeInit(prop) =>
+      "PROPERTY '" + prop + "' USED BEFORE INITIALIZATION"
+    PropertyIncompatibleWithIndexSig(prop, prop_type, index_type) =>
+      "PROPERTY '" + prop + "' OF TYPE '" + prop_type + "' INCOMPATIBLE WITH INDEX TYPE '" + index_type + "'"
+    PropertyHasConflictingDeclarations(prop) =>
+      "PROPERTY '" + prop + "' HAS CONFLICTING DECLARATIONS"
+    NewExprTargetLacksConstructSig(typ) =>
+      "'NEW' EXPRESSION TARGET '" + typ + "' LACKS CONSTRUCT SIGNATURE"
+    CannotAccessBeforeInit(name) =>
+      "'" + name + "' CANNOT BE ACCESSED BEFORE INITIALIZATION"
+    PropertyCanOnlyBeAssignedWithThis(prop) =>
+      "PROPERTY '" + prop + "' CAN ONLY BE ASSIGNED USING 'THIS'"
   }
 }
 
@@ -1416,6 +1452,57 @@ pub fn get_why_explanation(reason : MismatchReason) -> String {
       "The left-hand side of a 'for...of' loop must be a variable declaration or a simple variable/property reference. You used '" +
       expr +
       "' which is not a valid assignment target. The 'for...of' loop iterates over the values of an iterable (like arrays, strings, etc.)."
+    // Property & Index errors
+    TypeHasNoPropertyAndNoStringIndex(typ, prop) =>
+      "You tried to access property '" +
+      prop +
+      "' on type '" +
+      typ +
+      "', but this type doesn't have that property and doesn't have a string index signature that would allow arbitrary property access. TypeScript requires either an explicit property declaration or an index signature like [key: string]: T."
+    TypeIsNotArrayType(typ) =>
+      "You're trying to use '" +
+      typ +
+      "' as an array, but it's not an array type. Array destructuring and spread operations require the value to be an array type (T[]) or a tuple type."
+    TypeCannotBeUsedAsIndex(typ) =>
+      "Type '" +
+      typ +
+      "' cannot be used as an index type. TypeScript only allows specific types as index types: string, number, symbol, or template literal types. The type you provided doesn't fall into these categories."
+    IndexSignatureOnlyPermitsReading(typ) =>
+      "The index signature in type '" +
+      typ +
+      "' is readonly, which means you can read values using index access but cannot write to them. This is a design choice to prevent accidental mutations."
+    IndexSignatureParamTypeMustBe(typ) =>
+      "Index signature parameter type '" +
+      typ +
+      "' is not valid. TypeScript requires index signature parameters to be of type 'string', 'number', 'symbol', or a template literal type. These are the only types that can be used as property keys in JavaScript."
+    PropertyUsedBeforeInit(prop) =>
+      "Property '" +
+      prop +
+      "' is being used before it has been assigned a value. TypeScript tracks definite assignment to ensure properties have values before they're accessed. This helps prevent runtime errors from accessing undefined values."
+    PropertyIncompatibleWithIndexSig(prop, prop_type, index_type) =>
+      "Property '" +
+      prop +
+      "' has type '" +
+      prop_type +
+      "' which is not assignable to the index signature type '" +
+      index_type +
+      "'. When an interface has an index signature, all named properties must have types that are assignable to the index signature's type."
+    PropertyHasConflictingDeclarations(prop) =>
+      "Property '" +
+      prop +
+      "' has multiple conflicting declarations in the type hierarchy. This typically happens when extending or implementing types that declare the same property with incompatible types. TypeScript cannot determine a single consistent type for this property."
+    NewExprTargetLacksConstructSig(typ) =>
+      "You're using 'new' with type '" +
+      typ +
+      "' but it doesn't have a construct signature. The 'new' keyword requires a type with a construct signature (declared using 'new(): T' or by being a class). This means the type can be called as a constructor."
+    CannotAccessBeforeInit(name) =>
+      "'" +
+      name +
+      "' is being accessed before it has been initialized. This typically happens with class fields that are accessed in the constructor before they're assigned, or with variables in the temporal dead zone (TDZ) when using 'let' or 'const'."
+    PropertyCanOnlyBeAssignedWithThis(prop) =>
+      "Property '" +
+      prop +
+      "' can only be assigned using a 'this.' access. This restriction exists for readonly properties in a class constructor - they can only be assigned using 'this.propertyName = value', not through destructuring or other indirect means."
   }
 }
 
@@ -2282,6 +2369,148 @@ pub fn get_how_to_fix(
       fixes.push("    for (const [key, value] of entries) { ... }")
       fixes.push("    for (const { name, age } of people) { ... }")
     }
+    // Property & Index errors
+    TypeHasNoPropertyAndNoStringIndex(typ, prop) => {
+      fixes.push("Option 1: Add the property to the type definition:")
+      fixes.push("    interface MyType {")
+      fixes.push("        " + prop + ": SomeType;")
+      fixes.push("    }")
+      fixes.push("")
+      fixes.push("Option 2: Add a string index signature to allow arbitrary properties:")
+      fixes.push("    interface MyType {")
+      fixes.push("        [key: string]: any;")
+      fixes.push("    }")
+      fixes.push("")
+      fixes.push("Option 3: Check if '" + prop + "' is spelled correctly.")
+    }
+    TypeIsNotArrayType(typ) => {
+      fixes.push("Ensure the value is an array type.")
+      fixes.push("Current type: " + typ)
+      fixes.push("")
+      fixes.push("For array destructuring:")
+      fixes.push("    const arr: number[] = [1, 2, 3];")
+      fixes.push("    const [first, second] = arr;")
+      fixes.push("")
+      fixes.push("For spread operations:")
+      fixes.push("    const combined = [...arr1, ...arr2];")
+    }
+    TypeCannotBeUsedAsIndex(typ) => {
+      fixes.push("Use a valid index type: string, number, or symbol.")
+      fixes.push("Current type: " + typ)
+      fixes.push("")
+      fixes.push("Convert to a valid index type:")
+      fixes.push("    obj[String(value)]  // convert to string")
+      fixes.push("    obj[Number(value)]  // convert to number")
+      fixes.push("")
+      fixes.push("Or use a type assertion if you're certain:")
+      fixes.push("    obj[value as string]")
+    }
+    IndexSignatureOnlyPermitsReading(typ) => {
+      fixes.push("The index signature is readonly and cannot be modified.")
+      fixes.push("")
+      fixes.push("Option 1: Remove 'readonly' from the index signature:")
+      fixes.push("    interface Writable {")
+      fixes.push("        [key: string]: SomeType;  // without readonly")
+      fixes.push("    }")
+      fixes.push("")
+      fixes.push("Option 2: Create a mutable copy of the object:")
+      fixes.push("    const mutable = { ...readonly };")
+    }
+    IndexSignatureParamTypeMustBe(typ) => {
+      fixes.push("Index signature parameter must be string, number, or symbol.")
+      fixes.push("Invalid type: " + typ)
+      fixes.push("")
+      fixes.push("Valid index signatures:")
+      fixes.push("    [key: string]: ValueType")
+      fixes.push("    [index: number]: ValueType")
+      fixes.push("    [sym: symbol]: ValueType")
+      fixes.push("")
+      fixes.push("For template literal types:")
+      fixes.push("    [key: `prefix_${string}`]: ValueType")
+    }
+    PropertyUsedBeforeInit(prop) => {
+      fixes.push("Initialize the property before using it:")
+      fixes.push("")
+      fixes.push("In a class constructor:")
+      fixes.push("    class MyClass {")
+      fixes.push("        " + prop + ": SomeType;")
+      fixes.push("        constructor() {")
+      fixes.push("            this." + prop + " = initialValue; // Initialize first")
+      fixes.push("            this.use" + prop + "(); // Then use")
+      fixes.push("        }")
+      fixes.push("    }")
+      fixes.push("")
+      fixes.push("Or use the definite assignment assertion (!) if you're certain:")
+      fixes.push("    " + prop + "!: SomeType;")
+    }
+    PropertyIncompatibleWithIndexSig(prop, prop_type, index_type) => {
+      fixes.push("Property '" + prop + "' type must be assignable to index type.")
+      fixes.push("")
+      fixes.push("Option 1: Change the property type to match the index:")
+      fixes.push("    interface Fixed {")
+      fixes.push("        [key: string]: " + index_type + ";")
+      fixes.push("        " + prop + ": " + index_type + ";  // compatible type")
+      fixes.push("    }")
+      fixes.push("")
+      fixes.push("Option 2: Widen the index signature type:")
+      fixes.push("    [key: string]: " + prop_type + " | " + index_type + ";")
+    }
+    PropertyHasConflictingDeclarations(prop) => {
+      fixes.push("Resolve the conflicting declarations of '" + prop + "':")
+      fixes.push("")
+      fixes.push("Ensure all interfaces/types declare the same type:")
+      fixes.push("    interface A { " + prop + ": string; }")
+      fixes.push("    interface B extends A { " + prop + ": string; }  // same type")
+      fixes.push("")
+      fixes.push("Or use compatible types (e.g., narrower in derived interface):")
+      fixes.push("    interface A { " + prop + ": string | number; }")
+      fixes.push("    interface B extends A { " + prop + ": string; }  // narrower OK")
+    }
+    NewExprTargetLacksConstructSig(typ) => {
+      fixes.push("Ensure the target has a construct signature:")
+      fixes.push("")
+      fixes.push("Use a class:")
+      fixes.push("    class MyClass { }")
+      fixes.push("    const instance = new MyClass();")
+      fixes.push("")
+      fixes.push("Or add a construct signature to the type:")
+      fixes.push("    interface Constructor {")
+      fixes.push("        new(): SomeType;")
+      fixes.push("    }")
+      fixes.push("")
+      fixes.push("Or call as a function if not a constructor:")
+      fixes.push("    const result = myFunc();  // without 'new'")
+    }
+    CannotAccessBeforeInit(name) => {
+      fixes.push("Initialize '" + name + "' before accessing it:")
+      fixes.push("")
+      fixes.push("For class fields, assign in constructor before use:")
+      fixes.push("    class MyClass {")
+      fixes.push("        " + name + ": SomeType;")
+      fixes.push("        constructor() {")
+      fixes.push("            this." + name + " = value;  // assign first")
+      fixes.push("        }")
+      fixes.push("    }")
+      fixes.push("")
+      fixes.push("For let/const variables, ensure declaration is before use:")
+      fixes.push("    let " + name + " = value;  // initialize")
+      fixes.push("    console.log(" + name + ");  // then access")
+    }
+    PropertyCanOnlyBeAssignedWithThis(prop) => {
+      fixes.push("Assign readonly property using 'this' access:")
+      fixes.push("")
+      fixes.push("In the constructor:")
+      fixes.push("    class MyClass {")
+      fixes.push("        readonly " + prop + ": SomeType;")
+      fixes.push("        constructor(value: SomeType) {")
+      fixes.push("            this." + prop + " = value;  // direct 'this' access")
+      fixes.push("        }")
+      fixes.push("    }")
+      fixes.push("")
+      fixes.push("Cannot use destructuring for readonly properties:")
+      fixes.push("    // This won't work:")
+      fixes.push("    // const { " + prop + " } = this; " + prop + " = value;")
+    }
   }
   fixes
 }
@@ -2384,6 +2613,18 @@ pub fn get_error_code(reason : MismatchReason) -> Int {
     ForInLeftMustBeVariable(_) => 2406 // TS2406: Left-hand side of for...in must be variable
     ForInRightMustBeObject(_) => 2407 // TS2407: Right-hand side of for...in must be object type
     ForOfLeftMustBeVariable(_) => 2487 // TS2487: Left-hand side of for...of must be variable
+    // Property & Index errors
+    TypeHasNoPropertyAndNoStringIndex(_, _) => 2459 // TS2459: Type has no property and no string index
+    TypeIsNotArrayType(_) => 2460 // TS2460: Type is not an array type
+    TypeCannotBeUsedAsIndex(_) => 2538 // TS2538: Type cannot be used as index type
+    IndexSignatureOnlyPermitsReading(_) => 2542 // TS2542: Index signature only permits reading
+    IndexSignatureParamTypeMustBe(_) => 2716 // TS2716: Index signature parameter type must be string/number/symbol
+    PropertyUsedBeforeInit(_) => 2729 // TS2729: Property used before initialization
+    PropertyIncompatibleWithIndexSig(_, _, _) => 2745 // TS2745: Property incompatible with index signature
+    PropertyHasConflictingDeclarations(_) => 2746 // TS2746: Property has conflicting declarations
+    NewExprTargetLacksConstructSig(_) => 2747 // TS2747: new expression target lacks construct signature
+    CannotAccessBeforeInit(_) => 2748 // TS2748: Cannot access before initialization
+    PropertyCanOnlyBeAssignedWithThis(_) => 2810 // TS2810: Property can only be assigned using 'this'
   }
 }
 

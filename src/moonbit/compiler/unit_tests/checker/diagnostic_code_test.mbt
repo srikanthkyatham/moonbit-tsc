@@ -3443,3 +3443,475 @@ test "DiagnosticCode - valid for-of with Map entries" {
     }
   }
 }
+
+// =============================================================================
+// Property & Index Errors Tests
+// =============================================================================
+
+///|
+test "DiagnosticCode - TS2459: type has no property and no string index" {
+  let source =
+    #|interface Strict {
+    #|  name: string;
+    #|}
+    #|const obj: Strict = { name: "test" };
+    #|const value = obj.nonexistent;
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(false) // Should detect missing property access
+    Err(diagnostics) => {
+      // Should produce TS2339 for missing property or TS2459
+      assert_true(has_error(diagnostics, 2339) || has_error(diagnostics, 2459))
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - valid property access with string index" {
+  let source =
+    #|interface Flexible {
+    #|  name: string;
+    #|  [key: string]: any;
+    #|}
+    #|const obj: Flexible = { name: "test" };
+    #|const value = obj.anything;
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => {
+      assert_true(not(has_error(diagnostics, 2459)))
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - TS2460: type is not an array type - destructuring" {
+  let source =
+    #|const notArray: { a: number } = { a: 1 };
+    #|const [first] = notArray;
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(false) // Should detect non-array destructuring
+    Err(diagnostics) => {
+      // Should produce TS2460 or TS2461
+      assert_true(has_error(diagnostics, 2460) || has_error(diagnostics, 2461))
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - valid array destructuring" {
+  let source =
+    #|const arr: number[] = [1, 2, 3];
+    #|const [first, second] = arr;
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => {
+      assert_true(not(has_error(diagnostics, 2460)))
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - TS2538: type cannot be used as index type - object" {
+  let source =
+    #|const obj: { [key: string]: number } = { a: 1 };
+    #|const key: { x: number } = { x: 1 };
+    #|const value = obj[key];
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(false) // Should detect invalid index type
+    Err(diagnostics) => {
+      // Should produce TS2538 or TS2536
+      assert_true(has_error(diagnostics, 2538) || has_error(diagnostics, 2536))
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - TS2538: type cannot be used as index type - boolean" {
+  let source =
+    #|const arr: number[] = [1, 2, 3];
+    #|const idx: boolean = true;
+    #|const value = arr[idx];
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(false) // Should detect boolean as invalid index
+    Err(diagnostics) => {
+      assert_true(has_error(diagnostics, 2538) || has_error(diagnostics, 2322))
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - valid index access with number" {
+  let source =
+    #|const arr: number[] = [1, 2, 3];
+    #|const idx: number = 0;
+    #|const value = arr[idx];
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => {
+      assert_true(not(has_error(diagnostics, 2538)))
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - valid index access with string" {
+  let source =
+    #|const obj: { [key: string]: number } = { a: 1 };
+    #|const key: string = "a";
+    #|const value = obj[key];
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => {
+      assert_true(not(has_error(diagnostics, 2538)))
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - TS2542: index signature only permits reading" {
+  let source =
+    #|interface ReadonlyObj {
+    #|  readonly [key: string]: number;
+    #|}
+    #|const obj: ReadonlyObj = { a: 1 };
+    #|obj["b"] = 2;
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(false) // Should detect readonly index write
+    Err(diagnostics) => {
+      // Should produce TS2542 or TS2540
+      assert_true(has_error(diagnostics, 2542) || has_error(diagnostics, 2540))
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - valid writable index signature" {
+  let source =
+    #|interface WritableObj {
+    #|  [key: string]: number;
+    #|}
+    #|const obj: WritableObj = { a: 1 };
+    #|obj["b"] = 2;
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => {
+      assert_true(not(has_error(diagnostics, 2542)))
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - TS2716: index signature parameter type must be string/number/symbol" {
+  let source =
+    #|interface BadIndex {
+    #|  [key: boolean]: number;
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(false) // Should detect invalid index param type
+    Err(diagnostics) => {
+      assert_true(has_error(diagnostics, 2716) || has_error(diagnostics, 1023))
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - TS2716: index signature with object type" {
+  let source =
+    #|interface BadIndex {
+    #|  [key: { id: number }]: string;
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(false) // Should detect invalid index param type
+    Err(diagnostics) => {
+      assert_true(has_error(diagnostics, 2716) || has_error(diagnostics, 1023))
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - valid index signature with string" {
+  let source =
+    #|interface GoodIndex {
+    #|  [key: string]: number;
+    #|}
+    #|const obj: GoodIndex = { a: 1, b: 2 };
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => {
+      assert_true(not(has_error(diagnostics, 2716)))
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - valid index signature with number" {
+  let source =
+    #|interface GoodIndex {
+    #|  [index: number]: string;
+    #|}
+    #|const arr: GoodIndex = ["a", "b", "c"];
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => {
+      assert_true(not(has_error(diagnostics, 2716)))
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - valid property initialized before use" {
+  let source =
+    #|class Example {
+    #|  value: number;
+    #|  getValue() {
+    #|    return this.value;
+    #|  }
+    #|  constructor() {
+    #|    this.value = 42;
+    #|    this.getValue();
+    #|  }
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => {
+      assert_true(not(has_error(diagnostics, 2729)))
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - TS2745: property incompatible with index signature" {
+  let source =
+    #|interface Mixed {
+    #|  [key: string]: number;
+    #|  name: string;
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(false) // Should detect property/index incompatibility
+    Err(diagnostics) => {
+      // Should produce TS2745 or TS2411
+      assert_true(has_error(diagnostics, 2745) || has_error(diagnostics, 2411))
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - valid property compatible with index signature" {
+  let source =
+    #|interface Mixed {
+    #|  [key: string]: number;
+    #|  count: number;
+    #|  size: number;
+    #|}
+    #|const obj: Mixed = { count: 1, size: 2 };
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => {
+      assert_true(not(has_error(diagnostics, 2745)))
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - TS2746: property has conflicting declarations" {
+  let source =
+    #|interface A {
+    #|  prop: string;
+    #|}
+    #|interface B {
+    #|  prop: number;
+    #|}
+    #|interface C extends A, B {}
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(false) // Should detect conflicting declarations
+    Err(diagnostics) => {
+      // Should produce TS2746 or TS2320
+      assert_true(has_error(diagnostics, 2746) || has_error(diagnostics, 2320))
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - valid interface extending compatible types" {
+  let source =
+    #|interface A {
+    #|  prop: string;
+    #|}
+    #|interface B {
+    #|  prop: string;
+    #|}
+    #|interface C extends A, B {}
+    #|const obj: C = { prop: "test" };
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => {
+      assert_true(not(has_error(diagnostics, 2746)))
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - TS2747: new expression target lacks construct signature" {
+  let source =
+    #|const notConstructable: () => void = () => {};
+    #|const instance = new notConstructable();
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(false) // Should detect missing construct signature
+    Err(diagnostics) => {
+      // Should produce TS2747 or TS2351
+      assert_true(has_error(diagnostics, 2747) || has_error(diagnostics, 2351))
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - TS2747: new with interface without construct signature" {
+  let source =
+    #|interface NotConstructable {
+    #|  method(): void;
+    #|}
+    #|declare const obj: NotConstructable;
+    #|const instance = new obj();
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(false) // Should detect missing construct signature
+    Err(diagnostics) => {
+      assert_true(has_error(diagnostics, 2747) || has_error(diagnostics, 2351))
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - valid new with class" {
+  let source =
+    #|class MyClass {
+    #|  value: number;
+    #|  constructor() {
+    #|    this.value = 42;
+    #|  }
+    #|}
+    #|const instance = new MyClass();
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => {
+      assert_true(not(has_error(diagnostics, 2747)))
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - valid new with construct signature" {
+  let source =
+    #|interface Constructable {
+    #|  new(): { value: number };
+    #|}
+    #|declare const Factory: Constructable;
+    #|const instance = new Factory();
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => {
+      assert_true(not(has_error(diagnostics, 2747)))
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - TS2748: cannot access before initialization - let" {
+  let source =
+    #|console.log(x);
+    #|let x = 5;
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(false) // Should detect TDZ access
+    Err(diagnostics) => {
+      // Should produce TS2748, TS2454, or TS2304
+      assert_true(has_error(diagnostics, 2748) || has_error(diagnostics, 2454) || has_error(diagnostics, 2304))
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - TS2748: cannot access before initialization - const" {
+  let source =
+    #|console.log(y);
+    #|const y = 10;
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(false) // Should detect TDZ access
+    Err(diagnostics) => {
+      assert_true(has_error(diagnostics, 2748) || has_error(diagnostics, 2454) || has_error(diagnostics, 2304))
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - valid variable access after declaration" {
+  let source =
+    #|let x = 5;
+    #|console.log(x);
+    #|const y = 10;
+    #|console.log(y);
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => {
+      assert_true(not(has_error(diagnostics, 2748)))
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - valid readonly property assignment with this" {
+  let source =
+    #|class Example {
+    #|  readonly value: number;
+    #|  constructor() {
+    #|    this.value = 42;
+    #|  }
+    #|}
+    #|const obj = new Example();
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => {
+      assert_true(not(has_error(diagnostics, 2810)))
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - valid readonly with parameter property" {
+  let source =
+    #|class Example {
+    #|  constructor(readonly value: number) {}
+    #|}
+    #|const obj = new Example(42);
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => {
+      assert_true(not(has_error(diagnostics, 2810)))
+    }
+  }
+}
