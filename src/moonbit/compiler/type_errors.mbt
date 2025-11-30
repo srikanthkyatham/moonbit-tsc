@@ -173,6 +173,7 @@ pub enum MismatchReason {
   // Function & Parameter errors
   TypeParamNameCannotBe(String) // TS2368: Type parameter name cannot be '{0}'
   ParamPropertyOnlyInConstructor(String) // TS2369: A parameter property is only allowed in a constructor implementation
+  RestParamMustBeArray // TS2370: A rest parameter must be of an array type
   ParamInitializerOnlyInFunctionOrConstructor(String) // TS2371: A parameter initializer is only allowed in a function or constructor implementation
   ParamCannotReferenceSelf(String) // TS2372: Parameter '{0}' cannot reference itself
   OverloadSignaturesAmbientMismatch(String) // TS2383: Overload signatures must all be ambient or non-ambient
@@ -976,6 +977,7 @@ pub fn get_friendly_title(reason : MismatchReason) -> String {
       "TYPE PARAMETER NAME CANNOT BE '" + name + "'"
     ParamPropertyOnlyInConstructor(param) =>
       "PARAMETER PROPERTY '" + param + "' ONLY ALLOWED IN CONSTRUCTOR"
+    RestParamMustBeArray => "A rest parameter must be of an array type"
     ParamInitializerOnlyInFunctionOrConstructor(param) =>
       "PARAMETER INITIALIZER FOR '" + param + "' ONLY IN FUNCTION/CONSTRUCTOR"
     ParamCannotReferenceSelf(param) =>
@@ -1445,6 +1447,8 @@ pub fn get_why_explanation(reason : MismatchReason) -> String {
       "' or 'private " +
       param +
       "') can only be used in class constructors. They provide a shorthand for declaring and initializing class members directly from constructor parameters."
+    RestParamMustBeArray =>
+      "Rest parameters must have an array type because they collect multiple arguments into an array. Use '...args: T[]' instead of '...args: T'."
     ParamInitializerOnlyInFunctionOrConstructor(param) =>
       "Default parameter values (like '" +
       param +
@@ -2357,6 +2361,13 @@ pub fn get_how_to_fix(
       fixes.push("        method(prop: Type) { this.prop = prop; }")
       fixes.push("    }")
     }
+    RestParamMustBeArray => {
+      fixes.push("Change the rest parameter type to an array type:")
+      fixes.push("    function fn(...args: number[]): void { }")
+      fixes.push("")
+      fixes.push("Or use Array<T> syntax:")
+      fixes.push("    function fn(...args: Array<number>): void { }")
+    }
     ParamInitializerOnlyInFunctionOrConstructor(_) => {
       fixes.push("Remove the default value from the type declaration.")
       fixes.push("Default values can only appear in implementations.")
@@ -2861,6 +2872,7 @@ pub fn get_error_code(reason : MismatchReason) -> Int {
     // Function & Parameter errors
     TypeParamNameCannotBe(_) => 2368 // TS2368: Type parameter name cannot be X
     ParamPropertyOnlyInConstructor(_) => 2369 // TS2369: Parameter property only in constructor
+    RestParamMustBeArray => 2370 // TS2370: A rest parameter must be of an array type
     ParamInitializerOnlyInFunctionOrConstructor(_) => 2371 // TS2371: Parameter initializer only in function/constructor
     ParamCannotReferenceSelf(_) => 2372 // TS2372: Parameter cannot reference itself
     OverloadSignaturesAmbientMismatch(_) => 2383 // TS2383: Overload signatures must all be ambient or non-ambient

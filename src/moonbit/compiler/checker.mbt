@@ -5143,9 +5143,41 @@ fn check_function_declaration(
   let checker = push_local_scope(checker)
 
   // Add function parameters to the local scope
+  // Also check rest parameters have array type (TS2370)
   let mut checker = checker
   for param in func.parameters {
     checker = add_parameter_to_scope(checker, param)
+    // Check TS2370: rest parameter must have array type
+    match param {
+      Parameter(p) =>
+        if p.is_rest {
+          match p.type_annotation {
+            Some(type_node) =>
+              match get_type_from_type_node(checker, type_node) {
+                (Some(param_type), c) => {
+                  checker = c
+                  // Check if type is array
+                  let is_array = match param_type {
+                    Array(_) => true
+                    TypeReference(ref_type) => ref_type.name == "Array"
+                    _ => false
+                  }
+                  if not(is_array) {
+                    checker = add_diagnostic_with_code(
+                      checker,
+                      "A rest parameter must be of an array type",
+                      p.location,
+                      TS2370,
+                    )
+                  }
+                }
+                (None, c) => checker = c
+              }
+            None => ()
+          }
+        }
+      _ => ()
+    }
   }
 
   // Check function body
@@ -6456,6 +6488,8 @@ fn resolve_interface_type(
       // Build property map from interface members
       let properties : Map[String, PropertySignature] = Map::new()
       let index_signatures : Array[IndexSignature] = []
+      let call_signatures : Array[CheckerSignature] = []
+      let construct_signatures : Array[CheckerSignature] = []
       for i = 0; i < interface_decl.members.length(); i = i + 1 {
         match interface_decl.members[i] {
           PropertyDeclaration(prop) => {
@@ -6478,6 +6512,59 @@ fn resolve_interface_type(
               is_optional: false,
               is_readonly: false,
             })
+          }
+          MethodDeclaration(meth) => {
+            // Convert method parameters to CheckerParameter array
+            let parameters : Array[CheckerParameter] = []
+            for param_node in meth.parameters {
+              match param_node {
+                Parameter(p) => {
+                  let (param_type, c) = match p.type_annotation {
+                    Some(type_node) =>
+                      match get_type_from_type_node(checker, type_node) {
+                        (Some(t), c2) => (t, c2)
+                        (None, c2) => any_type(c2)
+                      }
+                    None => any_type(checker)
+                  }
+                  checker = c
+                  parameters.push({
+                    name: get_parameter_name(p.name),
+                    param_type,
+                    is_optional: p.is_optional,
+                    is_rest: p.is_rest,
+                  })
+                }
+                _ => ()
+              }
+            }
+            // Get return type
+            let (return_type, c) = match meth.return_type {
+              Some(type_node) =>
+                match get_type_from_type_node(checker, type_node) {
+                  (Some(t), c2) => (t, c2)
+                  (None, c2) => any_type(c2)
+                }
+              None => any_type(checker)
+            }
+            checker = c
+            let func_sig : CheckerSignature = { parameters, return_type, type_parameters: [] }
+            // Check if this is a construct signature (name "new") or call signature (name "")
+            if meth.name == "new" {
+              construct_signatures.push(func_sig)
+            } else if meth.name == "" {
+              call_signatures.push(func_sig)
+            } else {
+              // Regular method - add as property with function type
+              let (info, c) = create_type_info(checker)
+              checker = c
+              properties.set(meth.name, {
+                name: meth.name,
+                prop_type: Type::Function({ parameters, return_type, info }),
+                is_optional: meth.is_optional,
+                is_readonly: false,
+              })
+            }
           }
           IndexSignatureDeclaration(idx_sig) => {
             // Get the parameter type (key type)
@@ -6526,8 +6613,8 @@ fn resolve_interface_type(
       Some(
         Type::Object({
           properties,
-          call_signatures: [],
-          construct_signatures: [],
+          call_signatures,
+          construct_signatures,
           index_signatures,
           info,
         }),

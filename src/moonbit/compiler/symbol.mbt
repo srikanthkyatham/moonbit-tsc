@@ -376,6 +376,7 @@ pub enum DiagnosticCode {
   TS2367 // This condition will always return '{0}' since the types '{1}' and '{2}' have no overlap
   TS2368 // Type parameter name cannot be '{0}'
   TS2369 // A parameter property is only allowed in a constructor implementation
+  TS2370 // A rest parameter must be of an array type
   TS2371 // A parameter initializer is only allowed in a function or constructor implementation
   TS2372 // Parameter '{0}' cannot reference itself
   TS2376 // A 'super' call must be the first statement in the constructor
@@ -733,6 +734,7 @@ pub fn DiagnosticCode::to_int(self : DiagnosticCode) -> Int {
     TS2367 => 2367
     TS2368 => 2368
     TS2369 => 2369
+    TS2370 => 2370
     TS2371 => 2371
     TS2372 => 2372
     TS2376 => 2376

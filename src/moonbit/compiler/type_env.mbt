@@ -917,7 +917,7 @@ fn interface_declaration_to_object_type(
         })
       }
       MethodDeclaration(meth) => {
-        // Convert method to function type and add as field
+        // Convert method to function type
         let params = meth.parameters.map(fn(p) {
           match p {
             Parameter(param) => {
@@ -942,19 +942,29 @@ fn interface_declaration_to_object_type(
           Some(type_node) => ast_type_to_v2(env, type_node)
           None => TAny
         }
-        let func_ty = TFunction(FunctionTypeV2::{
+        let func_type = FunctionTypeV2::{
           type_params: [],
           params,
           rest_param: None,
           return_type: return_ty,
           type_predicate: None,
           this_type: None,
-        })
-        fields.set(meth.name, FieldInfoV2::{
-          ty: func_ty,
-          optional: meth.is_optional,
-          is_readonly: false,
-        })
+        }
+        // Check if this is a construct signature (name "new") or call signature (name "")
+        if meth.name == "new" {
+          // Construct signature - add to construct_signatures
+          construct_signatures.push(func_type)
+        } else if meth.name == "" {
+          // Call signature - add to call_signatures
+          call_signatures.push(func_type)
+        } else {
+          // Regular method - add as field
+          fields.set(meth.name, FieldInfoV2::{
+            ty: TFunction(func_type),
+            optional: meth.is_optional,
+            is_readonly: false,
+          })
+        }
       }
       IndexSignatureDeclaration(idx) => {
         let key_ty = ast_type_to_v2(env, idx.parameter_type)
