@@ -386,3 +386,253 @@ test "ParserErrorCode::to_message - unknown error returns message" {
     "Unknown error",
   )
 }
+
+// ============================================================================
+// Tests for Assignment & Compatibility Error Codes (TS2304-TS2859)
+// ============================================================================
+
+///|
+test "ParserErrorCode::to_int - name resolution errors" {
+  // TS2304: Cannot find name
+  assert_eq(@compiler.get_parser_error_int("CannotFindName"), 2304)
+  // TS2305: Module has no exported member
+  assert_eq(@compiler.get_parser_error_int("ModuleHasNoExportedMember"), 2305)
+  // TS2306: File is not a module
+  assert_eq(@compiler.get_parser_error_int("FileIsNotModule"), 2306)
+  // TS2307: Cannot find module
+  assert_eq(@compiler.get_parser_error_int("CannotFindModule"), 2307)
+  // TS2315: Type is not generic
+  assert_eq(@compiler.get_parser_error_int("TypeIsNotGeneric"), 2315)
+  // TS2318: Cannot find global type
+  assert_eq(@compiler.get_parser_error_int("CannotFindGlobalType"), 2318)
+}
+
+///|
+test "ParserErrorCode::to_int - property and member access errors" {
+  // TS2339: Property does not exist on type
+  assert_eq(@compiler.get_parser_error_int("PropertyDoesNotExistOnType"), 2339)
+  // TS2341: Property is private
+  assert_eq(@compiler.get_parser_error_int("PropertyIsPrivate"), 2341)
+  // TS2345: Argument not assignable to parameter
+  assert_eq(
+    @compiler.get_parser_error_int("ArgumentNotAssignableToParameter"),
+    2345,
+  )
+}
+
+///|
+test "ParserErrorCode::to_int - this and super errors" {
+  // TS2332: this cannot be referenced
+  assert_eq(@compiler.get_parser_error_int("ThisCannotBeReferenced"), 2332)
+  // TS2335: super only valid in derived class
+  assert_eq(@compiler.get_parser_error_int("SuperOnlyInDerivedClass"), 2335)
+  // TS2376: super call must be first
+  assert_eq(@compiler.get_parser_error_int("SuperCallMustBeFirst"), 2376)
+}
+
+///|
+test "ParserErrorCode::to_int - null safety errors" {
+  // TS2531: Object possibly null
+  assert_eq(@compiler.get_parser_error_int("ObjectPossiblyNull"), 2531)
+  // TS2532: Object possibly undefined
+  assert_eq(@compiler.get_parser_error_int("ObjectPossiblyUndefined"), 2532)
+  // TS2533: Object possibly null or undefined
+  assert_eq(
+    @compiler.get_parser_error_int("ObjectPossiblyNullOrUndefined"),
+    2533,
+  )
+  // TS2571: Object is of type unknown
+  assert_eq(@compiler.get_parser_error_int("ObjectIsOfTypeUnknown"), 2571)
+}
+
+///|
+test "ParserErrorCode::to_int - assignment and readonly errors" {
+  // TS2540: Cannot assign to readonly
+  assert_eq(@compiler.get_parser_error_int("CannotAssignToReadonly"), 2540)
+  // TS2364: Left side of assignment must be a variable
+  assert_eq(@compiler.get_parser_error_int("AssignmentLeftMustBeVariable"), 2364)
+}
+
+///|
+test "ParserErrorCode::to_int - async and generator errors" {
+  // TS2465: await only in async function
+  assert_eq(@compiler.get_parser_error_int("AwaitOnlyInAsyncFunction"), 2465)
+  // TS2466: yield only in generator
+  assert_eq(@compiler.get_parser_error_int("YieldOnlyInGenerator"), 2466)
+}
+
+///|
+test "ParserErrorCode::to_int - duplicate and scope errors" {
+  // TS2761: Duplicate identifier
+  assert_eq(@compiler.get_parser_error_int("DuplicateIdentifier"), 2761)
+  // TS2448: Block-scoped var used before declaration
+  assert_eq(
+    @compiler.get_parser_error_int("BlockScopedVarUsedBeforeDeclaration"),
+    2448,
+  )
+  // TS2451: Cannot redeclare block-scoped variable
+  assert_eq(@compiler.get_parser_error_int("CannotRedeclareBlockScoped"), 2451)
+  // TS2454: Variable used before assignment
+  assert_eq(@compiler.get_parser_error_int("VariableUsedBeforeAssigned"), 2454)
+}
+
+///|
+test "ParserErrorCode::to_int - type complexity errors" {
+  // TS2589: Type instantiation too deep
+  assert_eq(@compiler.get_parser_error_int("TypeInstantiationTooDeep"), 2589)
+  // TS2590: Union type too complex
+  assert_eq(@compiler.get_parser_error_int("UnionTypeTooComplex"), 2590)
+  // TS2456: Type alias circularly references
+  assert_eq(
+    @compiler.get_parser_error_int("TypeAliasCircularlyReferences"),
+    2456,
+  )
+}
+
+///|
+test "ParserErrorCode::to_int - callable errors" {
+  // TS2834: Expression not callable
+  assert_eq(@compiler.get_parser_error_int("ExpressionNotCallable"), 2834)
+  // TS2351: Expression not constructable
+  assert_eq(@compiler.get_parser_error_int("ExpressionNotConstructable"), 2351)
+}
+
+///|
+test "ParserErrorCode::to_int - class and this errors" {
+  // TS2683: this implicitly has type any
+  assert_eq(@compiler.get_parser_error_int("ThisImplicitlyHasTypeAny"), 2683)
+  // TS2377: Derived class must call super
+  assert_eq(@compiler.get_parser_error_int("DerivedClassMustHaveSuper"), 2377)
+  // TS2516: Abstract member only in abstract class
+  assert_eq(
+    @compiler.get_parser_error_int("AbstractMethodOnlyInAbstractClass"),
+    2516,
+  )
+  // TS2515: Non-abstract class missing abstract member
+  assert_eq(
+    @compiler.get_parser_error_int("NonAbstractClassMissingAbstractMember"),
+    2515,
+  )
+}
+
+///|
+test "ParserErrorCode::to_int - property initialization errors" {
+  // TS2564: Property has no initializer
+  assert_eq(@compiler.get_parser_error_int("PropertyHasNoInitializer"), 2564)
+  // TS2565: Property used before assigned
+  assert_eq(@compiler.get_parser_error_int("PropertyUsedBeforeAssigned"), 2565)
+  // TS2366: Function lacks ending return
+  assert_eq(@compiler.get_parser_error_int("FunctionLacksEndingReturn"), 2366)
+}
+
+// ============================================================================
+// Tests for Assignment & Compatibility Error Messages
+// ============================================================================
+
+///|
+test "ParserErrorCode::to_message - name resolution errors" {
+  assert_eq(
+    @compiler.get_parser_error_message_with_arg("CannotFindName", Some("foo")),
+    "Cannot find name 'foo'.",
+  )
+  assert_eq(
+    @compiler.get_parser_error_message_with_arg("CannotFindModule", Some("./module")),
+    "Cannot find module './module'.",
+  )
+}
+
+///|
+test "ParserErrorCode::to_message - this and super errors" {
+  assert_eq(
+    @compiler.get_parser_error_message("ThisCannotBeReferenced"),
+    "'this' cannot be referenced in current location.",
+  )
+  assert_eq(
+    @compiler.get_parser_error_message("SuperOnlyInDerivedClass"),
+    "'super' can only be referenced in a derived class.",
+  )
+}
+
+///|
+test "ParserErrorCode::to_message - null safety errors" {
+  assert_eq(
+    @compiler.get_parser_error_message("ObjectPossiblyNull"),
+    "Object is possibly 'null'.",
+  )
+  assert_eq(
+    @compiler.get_parser_error_message("ObjectPossiblyUndefined"),
+    "Object is possibly 'undefined'.",
+  )
+  assert_eq(
+    @compiler.get_parser_error_message("ObjectPossiblyNullOrUndefined"),
+    "Object is possibly 'null' or 'undefined'.",
+  )
+}
+
+///|
+test "ParserErrorCode::to_message - async generator errors" {
+  assert_eq(
+    @compiler.get_parser_error_message("AwaitOnlyInAsyncFunction"),
+    "'await' expression is only allowed within async function.",
+  )
+  assert_eq(
+    @compiler.get_parser_error_message("YieldOnlyInGenerator"),
+    "'yield' expression is only allowed within a generator body.",
+  )
+}
+
+///|
+test "ParserErrorCode::to_message - callable errors" {
+  assert_eq(
+    @compiler.get_parser_error_message("ExpressionNotCallable"),
+    "This expression is not callable.",
+  )
+  assert_eq(
+    @compiler.get_parser_error_message("ExpressionNotConstructable"),
+    "This expression is not constructable.",
+  )
+}
+
+///|
+test "ParserErrorCode::to_message - class errors" {
+  assert_eq(
+    @compiler.get_parser_error_message("ThisImplicitlyHasTypeAny"),
+    "'this' implicitly has type 'any' because it does not have a type annotation.",
+  )
+  assert_eq(
+    @compiler.get_parser_error_message("DerivedClassMustHaveSuper"),
+    "Constructors for derived classes must contain a 'super' call.",
+  )
+  assert_eq(
+    @compiler.get_parser_error_message("AbstractMethodOnlyInAbstractClass"),
+    "Abstract methods can only appear within an abstract class.",
+  )
+}
+
+///|
+test "ParserErrorCode::to_message - variable errors" {
+  assert_eq(
+    @compiler.get_parser_error_message("AssignmentLeftMustBeVariable"),
+    "The left-hand side of an assignment expression must be a variable.",
+  )
+  assert_eq(
+    @compiler.get_parser_error_message("FunctionLacksEndingReturn"),
+    "Function lacks ending return statement.",
+  )
+}
+
+///|
+test "ParserErrorCode::to_message - type errors" {
+  assert_eq(
+    @compiler.get_parser_error_message("ObjectIsOfTypeUnknown"),
+    "Object is of type 'unknown'.",
+  )
+  assert_eq(
+    @compiler.get_parser_error_message("TypeInstantiationTooDeep"),
+    "Type instantiation is excessively deep and possibly infinite.",
+  )
+  assert_eq(
+    @compiler.get_parser_error_message("UnionTypeTooComplex"),
+    "Expression produces a union type that is too complex to represent.",
+  )
+}

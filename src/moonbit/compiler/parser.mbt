@@ -268,6 +268,267 @@ pub enum ParserErrorCode {
   UsingDeclarationsRequireAwait // TS1463
   UsingDeclarationNotInParameter // TS1484
   ESMImportExportNotValid // TS1486
+
+  // ============================================================================
+  // Assignment & Compatibility Errors (TS2304-TS2859)
+  // ============================================================================
+  CannotFindName(String) // TS2304
+  ModuleHasNoExportedMember(String, String) // TS2305
+  FileIsNotModule(String) // TS2306
+  CannotFindModule(String) // TS2307
+  TypeIsNotGeneric(String) // TS2315
+  CannotFindGlobalType(String) // TS2318
+  InterfaceCannotExtendConflictingTypes(String, String, String) // TS2320
+  PropertyMissingInType(String, String) // TS2324
+  ParameterTypesIncompatible(String, String) // TS2326
+  PropertyTypesIncompatible(String) // TS2328
+  IndexSignatureMissingInType(String) // TS2329
+  ThisCannotBeReferenced // TS2332
+  ThisCannotBeReferencedInStaticProperty // TS2334
+  SuperOnlyInDerivedClass // TS2335
+  SuperCallsNotPermittedOutsideConstructors // TS2337
+  PropertyDoesNotExistOnType(String, String) // TS2339
+  PropertyIsPrivate(String, String) // TS2341
+  ArgumentNotAssignableToParameter(String, String) // TS2345
+  TypeHasNoPropertiesInCommon(String, String) // TS2348
+  OnlyVoidFunctionCanBeCalledWithNew // TS2350
+  ExpressionNotConstructable // TS2351
+  ConversionMayBeMistake(String, String) // TS2352
+  ImportedHelperNotFound // TS2354
+  ArithmeticOperandMustBeNumberOrBigInt // TS2356
+  IncrementDecrementOperandMustBeVariable // TS2357
+  InstanceofLeftMustBeObjectType // TS2358
+  InstanceofRightMustBeFunction // TS2359
+  ArithmeticLeftMustBeNumber // TS2362
+  AssignmentLeftMustBeVariable // TS2364
+  FunctionLacksEndingReturn // TS2366
+  ComparisonAppearUnintentional // TS2367
+  TypeParameterNameCannotBe(String) // TS2368
+  ParameterPropertyOnlyInConstructor // TS2369
+  ParameterInitializerOnlyInImplementation // TS2371
+  ParameterCannotReferenceSelf(String) // TS2372
+  SuperCallMustBeFirst // TS2376
+  DerivedClassMustHaveSuper // TS2377
+  GetAccessorMustReturnValue // TS2378
+  GetSetVisibilityMustAgree // TS2379
+  GetSetMustHaveSameType // TS2380
+  FunctionImplementationNameMismatch // TS2388
+  FunctionSignatureIncompatibleWithOverload // TS2389
+  ConstructorImplementationMissing // TS2390
+  DuplicateFunctionImplementation // TS2393
+  MergedDeclarationExportMismatch // TS2395
+  SubsequentVariableMustHaveSameType // TS2403
+  ForInLeftMustBeVariable // TS2406
+  ForInRightMustBeObject // TS2407
+  ClassIncorrectlyImplementsInterface(String, String) // TS2410
+  IndexTypeNotAssignable(String, String, String, String) // TS2411
+  TypeNotAssignableWithExactOptionalProperties(String, String) // TS2412
+  ClassIncorrectlyExtendsBase(String, String) // TS2415
+  PropertyNotAssignableToBaseProperty(String, String) // TS2416
+  ClassStaticSideIncorrectlyExtendsBase(String, String) // TS2417
+  ClassIncorrectlyImplementsInterface2(String, String) // TS2420
+  InterfaceIncorrectlyExtendsInterface(String, String) // TS2430
+  PropertyIsProtected(String, String) // TS2445
+  PropertyProtectedNotDerived(String, String, String) // TS2446
+  BlockScopedVarUsedBeforeDeclaration(String) // TS2448
+  CannotRedeclareBlockScoped(String) // TS2451
+  EnumMemberCannotHaveNumericName // TS2452
+  VariableUsedBeforeAssigned(String) // TS2454
+  TypeAliasCircularlyReferences(String) // TS2456
+  TypeHasNoPropertyAndNoIndexSignature(String, String) // TS2459
+  VoidIsNotArrayType // TS2460
+  RestElementMustBeLastInDestructuring // TS2461
+  RestElementCannotHaveInitializer // TS2462
+  ComputedPropertyMustBeStringOrNumber // TS2464
+  AwaitOnlyInAsyncFunction // TS2465
+  YieldOnlyInGenerator // TS2466
+  CatchVariableMustBeAnyOrUnknown // TS2467
+  ConstEnumInitializerMustBeLiteral // TS2474
+  ConstEnumNotAllowedInIsolatedModules // TS2475
+  ConstEnumMemberOnlyStringLiteral // TS2476
+  ExportDeclarationConflicts(String) // TS2484
+  ForOfLeftMustBeVariable // TS2487
+  TupleHasNoElementAtIndex(String, String, String) // TS2493
+  UsingPrivateName(String) // TS2494
+  ArgumentsObjectCannotBeReferenced // TS2496
+  CannotInvokePossiblyNull // TS2497
+  CircularBaseExpression(String) // TS2502
+  NoBaseConstructorWithTypeArguments // TS2508
+  BaseConstructorsMustHaveSameReturnType // TS2510
+  NonAbstractClassMissingAbstractMember(String, String) // TS2515
+  AbstractMethodOnlyInAbstractClass // TS2516
+  NonAbstractClassCannotHaveAbstractProperty // TS2517
+  AbstractModifierOnlyOnClassMethodProperty // TS2520
+  InferredTypeReferencesInaccessible(String, String) // TS2527
+  ModuleCannotHaveMultipleDefaultExports // TS2528
+  ObjectPossiblyNull // TS2531
+  ObjectPossiblyUndefined // TS2532
+  ObjectPossiblyNullOrUndefined // TS2533
+  TypeCannotBeUsedToIndex(String, String) // TS2536
+  TypeCannotBeUsedAsIndex(String) // TS2538
+  CannotAssignToReadonly(String) // TS2540
+  IndexSignatureOnlyPermitsReading(String) // TS2542
+  TypeNotArrayOrString(String) // TS2548
+  TypeNotArrayOrStringOrIterator(String) // TS2549
+  ParameterHasNameButNoType // TS2550
+  PropertyDoesNotExistDidYouMean(String, String, String) // TS2551
+  CannotFindNameDidYouMean(String, String) // TS2552
+  ComputedValuesNotPermittedInStringEnum // TS2553
+  ExpectedAtLeastArguments(Int, Int) // TS2555
+  SpreadArgumentMustBeTupleOrRest // TS2556
+  ExpectedArgumentsButGotMore(Int, Int) // TS2557
+  TypeHasNoPropertiesInCommon2(String, String) // TS2559
+  ObjectLiteralMayOnlySpecifyKnownProperties // TS2561
+  PropertyHasNoInitializer(String) // TS2564
+  PropertyUsedBeforeAssigned(String) // TS2565
+  RestElementCannotContainBindingPattern // TS2566
+  ObjectIsOfTypeUnknown // TS2571
+  RestElementTypeMustBeArray // TS2574
+  NoOverloadExpectsArguments(Int) // TS2575
+  PropertyDoesNotExistOnType2(String, String) // TS2576
+  UnusedTsExpectError // TS2578
+  CannotFindNameNeedTypeDefinitions(String) // TS2579
+  CannotFindNameNeedTargetLibrary(String) // TS2580
+  CannotFindNameNeedTarget(String) // TS2584
+  TypeInstantiationTooDeep // TS2589
+  UnionTypeTooComplex // TS2590
+  CannotImportTypeDeclarationFiles // TS2591
+  CannotAugmentNonModule(String) // TS2593
+  MergedDeclarationMustAllBeExported // TS2595
+  JSXElementImplicitlyHasTypeAny // TS2602
+  JSXElementTypeNoSignatures(String) // TS2604
+  JSXElementClassDoesNotSupportAttributes // TS2607
+  CannotUseJSXWithoutFlag // TS2608
+  ComputedPropertyValueNotAssignable(String, String) // TS2615
+  DeclarationEmitRequiresTypeResolution // TS2617
+  CannotAssignAbstractConstructorToNonAbstract // TS2630
+  ConditionAlwaysReturns(String) // TS2631
+  TypeHasSeparatePrivatePropertyDeclarations(String) // TS2632
+  TypeHasOrUsesPrivateName(String) // TS2633
+  DuplicateIdentifierCompilerReserves(String, String) // TS2637
+  CannotAugmentModuleWithValueExports(String) // TS2649
+  EnumMemberCannotReferencePrecedingMembers // TS2651
+  DuplicateIdentifierAsyncHelper(String) // TS2652
+  ExpressionResolvesToCompilerDeclaration(String) // TS2653
+  CallSignaturesIncompatible // TS2655
+  ConstructSignaturesIncompatible // TS2656
+  JSXExpressionsMustHaveOneParent // TS2657
+  SuperOnlyInObjectLiteral // TS2659
+  SuperPropertyAccessOnlyInConstructor // TS2660
+  DerivedConstructorMustReturnObjectOrUndefined // TS2673
+  VoidTypeNotValidForMappedTypes // TS2674
+  CannotInitializeOuterScopedVariable // TS2675
+  AssertionsRequireExplicitTypeAnnotation // TS2676
+  TypeLiteralPropertyCannotHaveInitializer // TS2677
+  DeclareInAmbientContext2 // TS2678
+  ConstructorCannotHaveThisParameter // TS2681
+  ThisImplicitlyHasTypeAny // TS2683
+  ThisContextNotAssignable(String) // TS2684
+  ThisTypesOfSignaturesIncompatible // TS2685
+  RefersToUMDGlobal(String) // TS2686
+  ClassNameCannotBeObject // TS2687
+  CannotFindTypeDefinition(String) // TS2688
+  CannotExtendInterfaceWithImplements(String) // TS2689
+  TypeOnlyRefersToType(String) // TS2690
+  ImportPathCannotEndWithTs // TS2691
+  TypeCannotBeUsedAsTypeParameter(String) // TS2692
+  CannotFindNameNeedTypeAnnotation(String) // TS2693
+  NamespaceHasNoExportedMember(String, String) // TS2694
+  ForInLeftCannotBeDestructuring // TS2695
+  RestTypesOnlyFromObjects // TS2700
+  ObjectRestTargetMustBeVariable // TS2701
+  ObjectRestCannotBeOptionalPropertyAccess // TS2702
+  ObjectRestCannotContainComputedProperty // TS2703
+  IteratorMustHaveNextMethod // TS2704
+  RequiredTypeParamsMayNotFollowOptional // TS2706
+  GenericTypeRequiresTypeArguments(String, Int, Int) // TS2707
+  CannotUseNamespaceAsType(String) // TS2709
+  CannotUseNamespaceAsValue(String) // TS2710
+  ObjectLiteralPropertyDoesNotExist(String) // TS2711
+  CannotInvokeExpressionWithoutCallSignature // TS2713
+  InstanceofRightMustBeCallable // TS2714
+  MappedObjectTypeImplicitlyAny // TS2715
+  IndexSignatureParameterTypeMustBeStringOrNumber // TS2716
+  TypeCannotBeAssigned(String, String) // TS2717
+  SuperCannotBeCalledBeforeSuperCall // TS2718
+  CannotInvokePossiblyUndefined // TS2722
+  CannotInvokePossiblyNullOrUndefined // TS2723
+  PropertyUsedBeforeInitialization(String) // TS2729
+  InferKeywordOnlyInExtendsConditional // TS2730
+  ThisBasedTypeGuardNotCompatible // TS2732
+  PropertyAlsoDeclaredHere(String) // TS2733
+  MissingSemicolon // TS2734
+  BigIntLiteralsNotAvailable // TS2737
+  TypeMissingProperties(String, String, String) // TS2739
+  TypeMissingPropertiesAndMore(String, String, String, Int) // TS2740
+  PropertyMissingInTypeButRequired(String, String, String) // TS2741
+  InferredTypeCannotBeNamed(String) // TS2742
+  TypeDoesNotSatisfyConstraint(String, String) // TS2744
+  PropertyIncompatibleWithIndexSignature(String) // TS2745
+  PropertyHasConflictingDeclarations(String) // TS2746
+  BaseClassIncludesPrivateProperty // TS2747
+  CannotAccessBeforeInitialization(String) // TS2748
+  RefersToValueUsedAsType(String) // TS2749
+  BaseClassCannotHaveStaticAbstractMembers // TS2750
+  CannotAssignAbstractClassConstructor // TS2751
+  CannotUseAsValueExportType(String) // TS2752
+  CannotUseAsValueImportType(String) // TS2753
+  AsyncFunctionReturnTypeMustBePromise // TS2754
+  InferredTypeExceedsMaxLength // TS2755
+  TypeNotAssignableDifferentNames(String, String) // TS2757
+  PropertyTypesIncompatible2(String) // TS2758
+  DuplicateIdentifier(String) // TS2761
+  SpreadTypesOnlyFromObjects // TS2762
+  YieldExpressionImplicitlyAny // TS2764
+  ParameterNameNoTypeDidYouMean(String, String) // TS2765
+  CannotFindModule2(String) // TS2766
+  GetSetCannotDeclareThisParameter // TS2767
+  YieldOperandMustBeAwaited // TS2770
+  TypeReferencesItselfInAnnotation // TS2771
+  CannotUseInOperator(String, String) // TS2772
+  ConditionAlwaysTrueNoOverlap // TS2773
+  UnionTypeTooComplex2 // TS2774
+  ThisCannotBeUsedAsType // TS2775
+  CannotReadPrivateMemberOutsideClass(String) // TS2776
+  DeleteOperandMustBeOptional // TS2790
+  CannotFindModuleNeedResolveJsonModule(String) // TS2792
+  FileNotUnderRootDir(String, String) // TS2793
+  ExpectedArgumentsDidYouForgetVoid(Int, Int) // TS2794
+  NewExpressionWithTypeLackingConstructSignature // TS2795
+  NewExpressionCannotBeInvoked // TS2796
+  NewExpressionOnlyInValidContext // TS2797
+  NewExpressionImplicitlyYieldsAny // TS2799
+  OperatorCannotBeApplied(String, String, String) // TS2800
+  TypeCanOnlyBeIteratedWithDownlevelIteration(String) // TS2802
+  CannotAssignToPrivateMethod(String) // TS2803
+  ExpectedTypeArgumentsOverloads(Int, Int) // TS2804
+  VoidNotValidDestructuringTarget // TS2806
+  OptionalElementCannotFollowRest // TS2807
+  RequiredElementCannotFollowOptional // TS2808
+  IndexSignatureMustHaveTypeAnnotation // TS2809
+  CanOnlyWritePropertyOnThisValue(String) // TS2810
+  PrivateIdentifiersCannotBeParameters // TS2813
+  SyntaxReservedInMtsCtc // TS2815
+  AwaitExpressionRequiresPromise // TS2816
+  TypeNotArrayOrHasIterator(String) // TS2817
+  ForAwaitOfCannotIterateTypes // TS2820
+  CouldNotFindDeclarationFile(String) // TS2821
+  IndexSignatureIncompatibleWithOptionalProperty(String) // TS2825
+  AssignmentLeftCannotBeOptionalPropertyAccess // TS2832
+  CannotAssignToGetOnlyProperty(String) // TS2833
+  ExpressionNotCallable // TS2834
+  UnionTypeNoMatchingNewSignature(String) // TS2835
+  TypeNoNewSignatures(String) // TS2836
+  ImportNeverUsedAsValue // TS2839
+  DecoratorUsedOnUnknownField // TS2840
+  CannotCallSuperFromNonDerivedConstructor // TS2841
+  UniqueSymbolPropertyMustBeReadonly // TS2845
+  CannotAssignToImport(String) // TS2848
+  OperatorCannotBeApplied2(String, String, String) // TS2851
+  NoValueExistsForShorthandProperty(String) // TS2855
+  ClassesMayNotHaveConstructorField // TS2856
+  JSXElementNoClosingTag(String) // TS2857
+  SuperCallMustBeRootLevel // TS2859
 } derive(Show, Eq)
 
 ///|
@@ -400,6 +661,267 @@ pub fn ParserErrorCode::to_int(self : ParserErrorCode) -> Int {
     UsingDeclarationsRequireAwait => 1463
     UsingDeclarationNotInParameter => 1484
     ESMImportExportNotValid => 1486
+
+    // ============================================================================
+    // Assignment & Compatibility Errors (TS2304-TS2859)
+    // ============================================================================
+    CannotFindName(_) => 2304
+    ModuleHasNoExportedMember(_, _) => 2305
+    FileIsNotModule(_) => 2306
+    CannotFindModule(_) => 2307
+    TypeIsNotGeneric(_) => 2315
+    CannotFindGlobalType(_) => 2318
+    InterfaceCannotExtendConflictingTypes(_, _, _) => 2320
+    PropertyMissingInType(_, _) => 2324
+    ParameterTypesIncompatible(_, _) => 2326
+    PropertyTypesIncompatible(_) => 2328
+    IndexSignatureMissingInType(_) => 2329
+    ThisCannotBeReferenced => 2332
+    ThisCannotBeReferencedInStaticProperty => 2334
+    SuperOnlyInDerivedClass => 2335
+    SuperCallsNotPermittedOutsideConstructors => 2337
+    PropertyDoesNotExistOnType(_, _) => 2339
+    PropertyIsPrivate(_, _) => 2341
+    ArgumentNotAssignableToParameter(_, _) => 2345
+    TypeHasNoPropertiesInCommon(_, _) => 2348
+    OnlyVoidFunctionCanBeCalledWithNew => 2350
+    ExpressionNotConstructable => 2351
+    ConversionMayBeMistake(_, _) => 2352
+    ImportedHelperNotFound => 2354
+    ArithmeticOperandMustBeNumberOrBigInt => 2356
+    IncrementDecrementOperandMustBeVariable => 2357
+    InstanceofLeftMustBeObjectType => 2358
+    InstanceofRightMustBeFunction => 2359
+    ArithmeticLeftMustBeNumber => 2362
+    AssignmentLeftMustBeVariable => 2364
+    FunctionLacksEndingReturn => 2366
+    ComparisonAppearUnintentional => 2367
+    TypeParameterNameCannotBe(_) => 2368
+    ParameterPropertyOnlyInConstructor => 2369
+    ParameterInitializerOnlyInImplementation => 2371
+    ParameterCannotReferenceSelf(_) => 2372
+    SuperCallMustBeFirst => 2376
+    DerivedClassMustHaveSuper => 2377
+    GetAccessorMustReturnValue => 2378
+    GetSetVisibilityMustAgree => 2379
+    GetSetMustHaveSameType => 2380
+    FunctionImplementationNameMismatch => 2388
+    FunctionSignatureIncompatibleWithOverload => 2389
+    ConstructorImplementationMissing => 2390
+    DuplicateFunctionImplementation => 2393
+    MergedDeclarationExportMismatch => 2395
+    SubsequentVariableMustHaveSameType => 2403
+    ForInLeftMustBeVariable => 2406
+    ForInRightMustBeObject => 2407
+    ClassIncorrectlyImplementsInterface(_, _) => 2410
+    IndexTypeNotAssignable(_, _, _, _) => 2411
+    TypeNotAssignableWithExactOptionalProperties(_, _) => 2412
+    ClassIncorrectlyExtendsBase(_, _) => 2415
+    PropertyNotAssignableToBaseProperty(_, _) => 2416
+    ClassStaticSideIncorrectlyExtendsBase(_, _) => 2417
+    ClassIncorrectlyImplementsInterface2(_, _) => 2420
+    InterfaceIncorrectlyExtendsInterface(_, _) => 2430
+    PropertyIsProtected(_, _) => 2445
+    PropertyProtectedNotDerived(_, _, _) => 2446
+    BlockScopedVarUsedBeforeDeclaration(_) => 2448
+    CannotRedeclareBlockScoped(_) => 2451
+    EnumMemberCannotHaveNumericName => 2452
+    VariableUsedBeforeAssigned(_) => 2454
+    TypeAliasCircularlyReferences(_) => 2456
+    TypeHasNoPropertyAndNoIndexSignature(_, _) => 2459
+    VoidIsNotArrayType => 2460
+    RestElementMustBeLastInDestructuring => 2461
+    RestElementCannotHaveInitializer => 2462
+    ComputedPropertyMustBeStringOrNumber => 2464
+    AwaitOnlyInAsyncFunction => 2465
+    YieldOnlyInGenerator => 2466
+    CatchVariableMustBeAnyOrUnknown => 2467
+    ConstEnumInitializerMustBeLiteral => 2474
+    ConstEnumNotAllowedInIsolatedModules => 2475
+    ConstEnumMemberOnlyStringLiteral => 2476
+    ExportDeclarationConflicts(_) => 2484
+    ForOfLeftMustBeVariable => 2487
+    TupleHasNoElementAtIndex(_, _, _) => 2493
+    UsingPrivateName(_) => 2494
+    ArgumentsObjectCannotBeReferenced => 2496
+    CannotInvokePossiblyNull => 2497
+    CircularBaseExpression(_) => 2502
+    NoBaseConstructorWithTypeArguments => 2508
+    BaseConstructorsMustHaveSameReturnType => 2510
+    NonAbstractClassMissingAbstractMember(_, _) => 2515
+    AbstractMethodOnlyInAbstractClass => 2516
+    NonAbstractClassCannotHaveAbstractProperty => 2517
+    AbstractModifierOnlyOnClassMethodProperty => 2520
+    InferredTypeReferencesInaccessible(_, _) => 2527
+    ModuleCannotHaveMultipleDefaultExports => 2528
+    ObjectPossiblyNull => 2531
+    ObjectPossiblyUndefined => 2532
+    ObjectPossiblyNullOrUndefined => 2533
+    TypeCannotBeUsedToIndex(_, _) => 2536
+    TypeCannotBeUsedAsIndex(_) => 2538
+    CannotAssignToReadonly(_) => 2540
+    IndexSignatureOnlyPermitsReading(_) => 2542
+    TypeNotArrayOrString(_) => 2548
+    TypeNotArrayOrStringOrIterator(_) => 2549
+    ParameterHasNameButNoType => 2550
+    PropertyDoesNotExistDidYouMean(_, _, _) => 2551
+    CannotFindNameDidYouMean(_, _) => 2552
+    ComputedValuesNotPermittedInStringEnum => 2553
+    ExpectedAtLeastArguments(_, _) => 2555
+    SpreadArgumentMustBeTupleOrRest => 2556
+    ExpectedArgumentsButGotMore(_, _) => 2557
+    TypeHasNoPropertiesInCommon2(_, _) => 2559
+    ObjectLiteralMayOnlySpecifyKnownProperties => 2561
+    PropertyHasNoInitializer(_) => 2564
+    PropertyUsedBeforeAssigned(_) => 2565
+    RestElementCannotContainBindingPattern => 2566
+    ObjectIsOfTypeUnknown => 2571
+    RestElementTypeMustBeArray => 2574
+    NoOverloadExpectsArguments(_) => 2575
+    PropertyDoesNotExistOnType2(_, _) => 2576
+    UnusedTsExpectError => 2578
+    CannotFindNameNeedTypeDefinitions(_) => 2579
+    CannotFindNameNeedTargetLibrary(_) => 2580
+    CannotFindNameNeedTarget(_) => 2584
+    TypeInstantiationTooDeep => 2589
+    UnionTypeTooComplex => 2590
+    CannotImportTypeDeclarationFiles => 2591
+    CannotAugmentNonModule(_) => 2593
+    MergedDeclarationMustAllBeExported => 2595
+    JSXElementImplicitlyHasTypeAny => 2602
+    JSXElementTypeNoSignatures(_) => 2604
+    JSXElementClassDoesNotSupportAttributes => 2607
+    CannotUseJSXWithoutFlag => 2608
+    ComputedPropertyValueNotAssignable(_, _) => 2615
+    DeclarationEmitRequiresTypeResolution => 2617
+    CannotAssignAbstractConstructorToNonAbstract => 2630
+    ConditionAlwaysReturns(_) => 2631
+    TypeHasSeparatePrivatePropertyDeclarations(_) => 2632
+    TypeHasOrUsesPrivateName(_) => 2633
+    DuplicateIdentifierCompilerReserves(_, _) => 2637
+    CannotAugmentModuleWithValueExports(_) => 2649
+    EnumMemberCannotReferencePrecedingMembers => 2651
+    DuplicateIdentifierAsyncHelper(_) => 2652
+    ExpressionResolvesToCompilerDeclaration(_) => 2653
+    CallSignaturesIncompatible => 2655
+    ConstructSignaturesIncompatible => 2656
+    JSXExpressionsMustHaveOneParent => 2657
+    SuperOnlyInObjectLiteral => 2659
+    SuperPropertyAccessOnlyInConstructor => 2660
+    DerivedConstructorMustReturnObjectOrUndefined => 2673
+    VoidTypeNotValidForMappedTypes => 2674
+    CannotInitializeOuterScopedVariable => 2675
+    AssertionsRequireExplicitTypeAnnotation => 2676
+    TypeLiteralPropertyCannotHaveInitializer => 2677
+    DeclareInAmbientContext2 => 2678
+    ConstructorCannotHaveThisParameter => 2681
+    ThisImplicitlyHasTypeAny => 2683
+    ThisContextNotAssignable(_) => 2684
+    ThisTypesOfSignaturesIncompatible => 2685
+    RefersToUMDGlobal(_) => 2686
+    ClassNameCannotBeObject => 2687
+    CannotFindTypeDefinition(_) => 2688
+    CannotExtendInterfaceWithImplements(_) => 2689
+    TypeOnlyRefersToType(_) => 2690
+    ImportPathCannotEndWithTs => 2691
+    TypeCannotBeUsedAsTypeParameter(_) => 2692
+    CannotFindNameNeedTypeAnnotation(_) => 2693
+    NamespaceHasNoExportedMember(_, _) => 2694
+    ForInLeftCannotBeDestructuring => 2695
+    RestTypesOnlyFromObjects => 2700
+    ObjectRestTargetMustBeVariable => 2701
+    ObjectRestCannotBeOptionalPropertyAccess => 2702
+    ObjectRestCannotContainComputedProperty => 2703
+    IteratorMustHaveNextMethod => 2704
+    RequiredTypeParamsMayNotFollowOptional => 2706
+    GenericTypeRequiresTypeArguments(_, _, _) => 2707
+    CannotUseNamespaceAsType(_) => 2709
+    CannotUseNamespaceAsValue(_) => 2710
+    ObjectLiteralPropertyDoesNotExist(_) => 2711
+    CannotInvokeExpressionWithoutCallSignature => 2713
+    InstanceofRightMustBeCallable => 2714
+    MappedObjectTypeImplicitlyAny => 2715
+    IndexSignatureParameterTypeMustBeStringOrNumber => 2716
+    TypeCannotBeAssigned(_, _) => 2717
+    SuperCannotBeCalledBeforeSuperCall => 2718
+    CannotInvokePossiblyUndefined => 2722
+    CannotInvokePossiblyNullOrUndefined => 2723
+    PropertyUsedBeforeInitialization(_) => 2729
+    InferKeywordOnlyInExtendsConditional => 2730
+    ThisBasedTypeGuardNotCompatible => 2732
+    PropertyAlsoDeclaredHere(_) => 2733
+    MissingSemicolon => 2734
+    BigIntLiteralsNotAvailable => 2737
+    TypeMissingProperties(_, _, _) => 2739
+    TypeMissingPropertiesAndMore(_, _, _, _) => 2740
+    PropertyMissingInTypeButRequired(_, _, _) => 2741
+    InferredTypeCannotBeNamed(_) => 2742
+    TypeDoesNotSatisfyConstraint(_, _) => 2744
+    PropertyIncompatibleWithIndexSignature(_) => 2745
+    PropertyHasConflictingDeclarations(_) => 2746
+    BaseClassIncludesPrivateProperty => 2747
+    CannotAccessBeforeInitialization(_) => 2748
+    RefersToValueUsedAsType(_) => 2749
+    BaseClassCannotHaveStaticAbstractMembers => 2750
+    CannotAssignAbstractClassConstructor => 2751
+    CannotUseAsValueExportType(_) => 2752
+    CannotUseAsValueImportType(_) => 2753
+    AsyncFunctionReturnTypeMustBePromise => 2754
+    InferredTypeExceedsMaxLength => 2755
+    TypeNotAssignableDifferentNames(_, _) => 2757
+    PropertyTypesIncompatible2(_) => 2758
+    DuplicateIdentifier(_) => 2761
+    SpreadTypesOnlyFromObjects => 2762
+    YieldExpressionImplicitlyAny => 2764
+    ParameterNameNoTypeDidYouMean(_, _) => 2765
+    CannotFindModule2(_) => 2766
+    GetSetCannotDeclareThisParameter => 2767
+    YieldOperandMustBeAwaited => 2770
+    TypeReferencesItselfInAnnotation => 2771
+    CannotUseInOperator(_, _) => 2772
+    ConditionAlwaysTrueNoOverlap => 2773
+    UnionTypeTooComplex2 => 2774
+    ThisCannotBeUsedAsType => 2775
+    CannotReadPrivateMemberOutsideClass(_) => 2776
+    DeleteOperandMustBeOptional => 2790
+    CannotFindModuleNeedResolveJsonModule(_) => 2792
+    FileNotUnderRootDir(_, _) => 2793
+    ExpectedArgumentsDidYouForgetVoid(_, _) => 2794
+    NewExpressionWithTypeLackingConstructSignature => 2795
+    NewExpressionCannotBeInvoked => 2796
+    NewExpressionOnlyInValidContext => 2797
+    NewExpressionImplicitlyYieldsAny => 2799
+    OperatorCannotBeApplied(_, _, _) => 2800
+    TypeCanOnlyBeIteratedWithDownlevelIteration(_) => 2802
+    CannotAssignToPrivateMethod(_) => 2803
+    ExpectedTypeArgumentsOverloads(_, _) => 2804
+    VoidNotValidDestructuringTarget => 2806
+    OptionalElementCannotFollowRest => 2807
+    RequiredElementCannotFollowOptional => 2808
+    IndexSignatureMustHaveTypeAnnotation => 2809
+    CanOnlyWritePropertyOnThisValue(_) => 2810
+    PrivateIdentifiersCannotBeParameters => 2813
+    SyntaxReservedInMtsCtc => 2815
+    AwaitExpressionRequiresPromise => 2816
+    TypeNotArrayOrHasIterator(_) => 2817
+    ForAwaitOfCannotIterateTypes => 2820
+    CouldNotFindDeclarationFile(_) => 2821
+    IndexSignatureIncompatibleWithOptionalProperty(_) => 2825
+    AssignmentLeftCannotBeOptionalPropertyAccess => 2832
+    CannotAssignToGetOnlyProperty(_) => 2833
+    ExpressionNotCallable => 2834
+    UnionTypeNoMatchingNewSignature(_) => 2835
+    TypeNoNewSignatures(_) => 2836
+    ImportNeverUsedAsValue => 2839
+    DecoratorUsedOnUnknownField => 2840
+    CannotCallSuperFromNonDerivedConstructor => 2841
+    UniqueSymbolPropertyMustBeReadonly => 2845
+    CannotAssignToImport(_) => 2848
+    OperatorCannotBeApplied2(_, _, _) => 2851
+    NoValueExistsForShorthandProperty(_) => 2855
+    ClassesMayNotHaveConstructorField => 2856
+    JSXElementNoClosingTag(_) => 2857
+    SuperCallMustBeRootLevel => 2859
   }
 }
 
@@ -579,6 +1101,485 @@ pub fn ParserErrorCode::to_message(self : ParserErrorCode) -> String {
       "A 'using' declaration may not be declared in a parameter."
     ESMImportExportNotValid =>
       "This file has an import or export that cannot be used outside of ECMAScript modules."
+
+    // ============================================================================
+    // Assignment & Compatibility Errors (TS2304-TS2859)
+    // ============================================================================
+    CannotFindName(name) => "Cannot find name '\{name}'."
+    ModuleHasNoExportedMember(module, member) =>
+      "Module '\{module}' has no exported member '\{member}'."
+    FileIsNotModule(file) => "File '\{file}' is not a module."
+    CannotFindModule(module) => "Cannot find module '\{module}'."
+    TypeIsNotGeneric(t) => "Type '\{t}' is not generic."
+    CannotFindGlobalType(t) => "Cannot find global type '\{t}'."
+    InterfaceCannotExtendConflictingTypes(iface, t1, t2) =>
+      "Interface '\{iface}' cannot simultaneously extend types '\{t1}' and '\{t2}'."
+    PropertyMissingInType(prop, t) => "Property '\{prop}' is missing in type '\{t}'."
+    ParameterTypesIncompatible(p1, p2) =>
+      "Types of parameters '\{p1}' and '\{p2}' are incompatible."
+    PropertyTypesIncompatible(prop) => "Types of property '\{prop}' are incompatible."
+    IndexSignatureMissingInType(t) => "Index signature is missing in type '\{t}'."
+    ThisCannotBeReferenced => "'this' cannot be referenced in current location."
+    ThisCannotBeReferencedInStaticProperty =>
+      "'this' cannot be referenced in a static property initializer."
+    SuperOnlyInDerivedClass => "'super' can only be referenced in a derived class."
+    SuperCallsNotPermittedOutsideConstructors =>
+      "Super calls are not permitted outside constructors."
+    PropertyDoesNotExistOnType(prop, t) =>
+      "Property '\{prop}' does not exist on type '\{t}'."
+    PropertyIsPrivate(prop, cls) =>
+      "Property '\{prop}' is private and only accessible within class '\{cls}'."
+    ArgumentNotAssignableToParameter(arg, param) =>
+      "Argument of type '\{arg}' is not assignable to parameter of type '\{param}'."
+    TypeHasNoPropertiesInCommon(t1, t2) =>
+      "Value of type '\{t1}' has no properties in common with type '\{t2}'."
+    OnlyVoidFunctionCanBeCalledWithNew =>
+      "Only 'void' function can be called with 'new' keyword."
+    ExpressionNotConstructable => "This expression is not constructable."
+    ConversionMayBeMistake(t1, t2) =>
+      "Conversion of type '\{t1}' to type '\{t2}' may be a mistake."
+    ImportedHelperNotFound =>
+      "This syntax requires an imported helper but none found."
+    ArithmeticOperandMustBeNumberOrBigInt =>
+      "An arithmetic operand must be of type 'any', 'number', 'bigint' or enum."
+    IncrementDecrementOperandMustBeVariable =>
+      "The operand of an increment or decrement operator must be a variable."
+    InstanceofLeftMustBeObjectType =>
+      "The left-hand side of an 'instanceof' expression must be 'any', object type, or type parameter."
+    InstanceofRightMustBeFunction =>
+      "The right-hand side of an 'instanceof' expression must be 'any' or of type 'Function'."
+    ArithmeticLeftMustBeNumber =>
+      "The left-hand side of an arithmetic operation must be 'any', 'number', 'bigint' or enum."
+    AssignmentLeftMustBeVariable =>
+      "The left-hand side of an assignment expression must be a variable."
+    FunctionLacksEndingReturn => "Function lacks ending return statement."
+    ComparisonAppearUnintentional =>
+      "This comparison appears to be unintentional (always true/false)."
+    TypeParameterNameCannotBe(name) => "Type parameter name cannot be '\{name}'."
+    ParameterPropertyOnlyInConstructor =>
+      "A parameter property is only allowed in a constructor implementation."
+    ParameterInitializerOnlyInImplementation =>
+      "A parameter initializer is only allowed in a function/constructor implementation."
+    ParameterCannotReferenceSelf(name) => "Parameter '\{name}' cannot reference itself."
+    SuperCallMustBeFirst =>
+      "A 'super' call must be the first statement in the constructor."
+    DerivedClassMustHaveSuper =>
+      "Constructors for derived classes must contain a 'super' call."
+    GetAccessorMustReturnValue => "A 'get' accessor must return a value."
+    GetSetVisibilityMustAgree =>
+      "Getter and setter accessors do not agree in visibility."
+    GetSetMustHaveSameType => "'get' and 'set' accessor must have the same type."
+    FunctionImplementationNameMismatch =>
+      "Function implementation name must match function name."
+    FunctionSignatureIncompatibleWithOverload =>
+      "Function implementation signature must be compatible with overload."
+    ConstructorImplementationMissing => "Constructor implementation is missing."
+    DuplicateFunctionImplementation => "Duplicate function implementation."
+    MergedDeclarationExportMismatch =>
+      "Individual declarations in merged declaration must be all exported or not."
+    SubsequentVariableMustHaveSameType =>
+      "Subsequent variable declarations must have the same type."
+    ForInLeftMustBeVariable =>
+      "The left-hand side of a 'for...in' statement must be a variable."
+    ForInRightMustBeObject =>
+      "The right-hand side of a 'for...in' statement must be an object."
+    ClassIncorrectlyImplementsInterface(cls, iface) =>
+      "Class '\{cls}' incorrectly implements interface '\{iface}'."
+    IndexTypeNotAssignable(idx1, t1, idx2, t2) =>
+      "'\{idx1}' index type '\{t1}' is not assignable to '\{idx2}' index type '\{t2}'."
+    TypeNotAssignableWithExactOptionalProperties(t1, t2) =>
+      "Type '\{t1}' is not assignable to type '\{t2}' with 'exactOptionalPropertyTypes'."
+    ClassIncorrectlyExtendsBase(cls, base) =>
+      "Class '\{cls}' incorrectly extends base class '\{base}'."
+    PropertyNotAssignableToBaseProperty(prop, base) =>
+      "Property '\{prop}' in type is not assignable to same property in base type '\{base}'."
+    ClassStaticSideIncorrectlyExtendsBase(cls, base) =>
+      "Class static side '\{cls}' incorrectly extends base class static side '\{base}'."
+    ClassIncorrectlyImplementsInterface2(cls, iface) =>
+      "Class '\{cls}' incorrectly implements interface '\{iface}'."
+    InterfaceIncorrectlyExtendsInterface(iface1, iface2) =>
+      "Interface '\{iface1}' incorrectly extends interface '\{iface2}'."
+    PropertyIsProtected(prop, cls) =>
+      "Property '\{prop}' is protected and only accessible within class '\{cls}'."
+    PropertyProtectedNotDerived(prop, t, base) =>
+      "Property '\{prop}' is protected but type '\{t}' is not derived from '\{base}'."
+    BlockScopedVarUsedBeforeDeclaration(name) =>
+      "Block-scoped variable '\{name}' used before its declaration."
+    CannotRedeclareBlockScoped(name) =>
+      "Cannot redeclare block-scoped variable '\{name}'."
+    EnumMemberCannotHaveNumericName =>
+      "An enum member cannot have a numeric name."
+    VariableUsedBeforeAssigned(name) =>
+      "Variable '\{name}' is used before being assigned."
+    TypeAliasCircularlyReferences(name) =>
+      "Type alias '\{name}' circularly references itself."
+    TypeHasNoPropertyAndNoIndexSignature(t, prop) =>
+      "Type '\{t}' has no property '\{prop}' and no string index signature."
+    VoidIsNotArrayType => "Type 'void' is not an array type."
+    RestElementMustBeLastInDestructuring =>
+      "A rest element must be last in a destructuring pattern."
+    RestElementCannotHaveInitializer => "A rest element cannot have an initializer."
+    ComputedPropertyMustBeStringOrNumber =>
+      "A computed property name must be of type 'string', 'number', 'symbol', or 'any'."
+    AwaitOnlyInAsyncFunction =>
+      "'await' expression is only allowed within async function."
+    YieldOnlyInGenerator =>
+      "'yield' expression is only allowed within a generator body."
+    CatchVariableMustBeAnyOrUnknown =>
+      "The type of a 'catch' clause variable must be 'any' or 'unknown'."
+    ConstEnumInitializerMustBeLiteral =>
+      "const enum member initializers can only contain literal values."
+    ConstEnumNotAllowedInIsolatedModules =>
+      "'const' enum not allowed in isolatedModules."
+    ConstEnumMemberOnlyStringLiteral =>
+      "A const enum member can only be accessed using string literal."
+    ExportDeclarationConflicts(name) =>
+      "Export declaration conflicts with exported declaration of '\{name}'."
+    ForOfLeftMustBeVariable =>
+      "The left-hand side of a 'for...of' statement must be a variable."
+    TupleHasNoElementAtIndex(tuple, len, idx) =>
+      "Tuple type '\{tuple}' of length '\{len}' has no element at index '\{idx}'."
+    UsingPrivateName(name) => "Using private name '\{name}'."
+    ArgumentsObjectCannotBeReferenced =>
+      "The 'arguments' object cannot be referenced."
+    CannotInvokePossiblyNull =>
+      "Cannot invoke an object which is possibly 'null'."
+    CircularBaseExpression(name) =>
+      "'\{name}' is referenced directly or indirectly in its own base expression."
+    NoBaseConstructorWithTypeArguments =>
+      "No base constructor has the specified number of type arguments."
+    BaseConstructorsMustHaveSameReturnType =>
+      "Base constructors must all have the same return type."
+    NonAbstractClassMissingAbstractMember(cls, member) =>
+      "Non-abstract class '\{cls}' does not implement inherited abstract member '\{member}'."
+    AbstractMethodOnlyInAbstractClass =>
+      "Abstract methods can only appear within an abstract class."
+    NonAbstractClassCannotHaveAbstractProperty =>
+      "A non-abstract class cannot have an abstract property."
+    AbstractModifierOnlyOnClassMethodProperty =>
+      "'abstract' modifier can only appear on a class, method, or property."
+    InferredTypeReferencesInaccessible(name, t) =>
+      "The inferred type of '\{name}' references an inaccessible '\{t}' type."
+    ModuleCannotHaveMultipleDefaultExports =>
+      "A module cannot have multiple default exports."
+    ObjectPossiblyNull => "Object is possibly 'null'."
+    ObjectPossiblyUndefined => "Object is possibly 'undefined'."
+    ObjectPossiblyNullOrUndefined => "Object is possibly 'null' or 'undefined'."
+    TypeCannotBeUsedToIndex(t1, t2) =>
+      "Type '\{t1}' cannot be used to index type '\{t2}'."
+    TypeCannotBeUsedAsIndex(t) => "Type '\{t}' cannot be used as an index type."
+    CannotAssignToReadonly(prop) =>
+      "Cannot assign to '\{prop}' because it is a read-only property."
+    IndexSignatureOnlyPermitsReading(t) =>
+      "Index signature in type '\{t}' only permits reading."
+    TypeNotArrayOrString(t) => "Type '\{t}' is not an array type or a string type."
+    TypeNotArrayOrStringOrIterator(t) =>
+      "Type '\{t}' is not an array type or a string type or does not have '[Symbol.iterator]'."
+    ParameterHasNameButNoType => "Parameter has a name but no type."
+    PropertyDoesNotExistDidYouMean(prop, t, suggestion) =>
+      "Property '\{prop}' does not exist on type '\{t}'. Did you mean '\{suggestion}'?"
+    CannotFindNameDidYouMean(name, suggestion) =>
+      "Cannot find name '\{name}'. Did you mean '\{suggestion}'?"
+    ComputedValuesNotPermittedInStringEnum =>
+      "Computed values are not permitted in enum with string members."
+    ExpectedAtLeastArguments(expected, got) =>
+      "Expected at least \{expected} arguments, but got \{got}."
+    SpreadArgumentMustBeTupleOrRest =>
+      "A spread argument must either have a tuple type or be passed to a rest parameter."
+    ExpectedArgumentsButGotMore(expected, got) =>
+      "Expected \{expected} arguments, but got \{got} or more."
+    TypeHasNoPropertiesInCommon2(t1, t2) =>
+      "Type '\{t1}' has no properties in common with type '\{t2}'."
+    ObjectLiteralMayOnlySpecifyKnownProperties =>
+      "Object literal may only specify known properties."
+    PropertyHasNoInitializer(prop) =>
+      "Property '\{prop}' has no initializer and is not definitely assigned."
+    PropertyUsedBeforeAssigned(prop) =>
+      "Property '\{prop}' is used before being assigned."
+    RestElementCannotContainBindingPattern =>
+      "A rest element cannot contain a binding pattern."
+    ObjectIsOfTypeUnknown => "Object is of type 'unknown'."
+    RestElementTypeMustBeArray => "A rest element type must be an array type."
+    NoOverloadExpectsArguments(count) => "No overload expects \{count} arguments."
+    PropertyDoesNotExistOnType2(prop, t) =>
+      "Property '\{prop}' does not exist on type '\{t}'..."
+    UnusedTsExpectError => "Unused '@ts-expect-error' directive."
+    CannotFindNameNeedTypeDefinitions(name) =>
+      "Cannot find name '\{name}'. Do you need to install type definitions?"
+    CannotFindNameNeedTargetLibrary(name) =>
+      "Cannot find name '\{name}'. Do you need to change target library?"
+    CannotFindNameNeedTarget(name) =>
+      "Cannot find name '\{name}'. Do you need to change target?"
+    TypeInstantiationTooDeep =>
+      "Type instantiation is excessively deep and possibly infinite."
+    UnionTypeTooComplex =>
+      "Expression produces a union type that is too complex to represent."
+    CannotImportTypeDeclarationFiles => "Cannot import type declaration files."
+    CannotAugmentNonModule(module) =>
+      "Cannot augment module '\{module}' with value exports because it resolves to a non-module."
+    MergedDeclarationMustAllBeExported =>
+      "Individual declarations in merged declaration must be all exported."
+    JSXElementImplicitlyHasTypeAny => "JSX element implicitly has type 'any'."
+    JSXElementTypeNoSignatures(t) =>
+      "JSX element type '\{t}' does not have any construct/call signatures."
+    JSXElementClassDoesNotSupportAttributes =>
+      "JSX element class does not support attributes."
+    CannotUseJSXWithoutFlag =>
+      "Cannot use JSX unless '--jsx' flag is provided."
+    ComputedPropertyValueNotAssignable(t1, t2) =>
+      "Type of computed property's value is '\{t1}' which is not assignable to type '\{t2}'."
+    DeclarationEmitRequiresTypeResolution =>
+      "Declaration emit for this file requires type resolution."
+    CannotAssignAbstractConstructorToNonAbstract =>
+      "Cannot assign an abstract constructor type to a non-abstract constructor."
+    ConditionAlwaysReturns(val) =>
+      "This condition will always return '\{val}'."
+    TypeHasSeparatePrivatePropertyDeclarations(prop) =>
+      "Type has separate declarations of private property '\{prop}'."
+    TypeHasOrUsesPrivateName(name) =>
+      "Type has or is using private name '\{name}'."
+    DuplicateIdentifierCompilerReserves(id, reserved) =>
+      "Duplicate identifier '\{id}'. Compiler reserves name '\{reserved}' in top level scope."
+    CannotAugmentModuleWithValueExports(module) =>
+      "Cannot augment module '\{module}' with value exports."
+    EnumMemberCannotReferencePrecedingMembers =>
+      "A member initializer in a enum declaration cannot reference members."
+    DuplicateIdentifierAsyncHelper(id) =>
+      "Duplicate identifier '\{id}'. Compiler uses declaration for async helper."
+    ExpressionResolvesToCompilerDeclaration(decl) =>
+      "Expression resolves to variable declaration '\{decl}' that compiler uses."
+    CallSignaturesIncompatible => "Types of call signatures are incompatible."
+    ConstructSignaturesIncompatible =>
+      "Types of construct signatures are incompatible."
+    JSXExpressionsMustHaveOneParent =>
+      "JSX expressions must have one parent element."
+    SuperOnlyInObjectLiteral =>
+      "'super' is only allowed in members of an object literal."
+    SuperPropertyAccessOnlyInConstructor =>
+      "'super' property access is permitted only within a constructor."
+    DerivedConstructorMustReturnObjectOrUndefined =>
+      "Constructor of derived class must return object or undefined."
+    VoidTypeNotValidForMappedTypes =>
+      "'void' type is not valid as type argument for mapped types."
+    CannotInitializeOuterScopedVariable =>
+      "Cannot initialize outer scoped variable in nested function."
+    AssertionsRequireExplicitTypeAnnotation =>
+      "Assertions require every name to have an explicit type annotation."
+    TypeLiteralPropertyCannotHaveInitializer =>
+      "A type literal property cannot have an initializer."
+    DeclareInAmbientContext2 =>
+      "A 'declare' modifier cannot be used in an already ambient context."
+    ConstructorCannotHaveThisParameter =>
+      "A constructor cannot have a 'this' parameter."
+    ThisImplicitlyHasTypeAny =>
+      "'this' implicitly has type 'any' because it does not have a type annotation."
+    ThisContextNotAssignable(t) =>
+      "'this' context of type '\{t}' is not assignable."
+    ThisTypesOfSignaturesIncompatible =>
+      "The 'this' types of each signature are incompatible."
+    RefersToUMDGlobal(name) => "'\{name}' refers to a UMD global."
+    ClassNameCannotBeObject =>
+      "Class name cannot be 'Object' when targeting ES5."
+    CannotFindTypeDefinition(name) =>
+      "Cannot find type definition file for '\{name}'."
+    CannotExtendInterfaceWithImplements(iface) =>
+      "Cannot extend interface '\{iface}' which is used with 'implements'."
+    TypeOnlyRefersToType(name) =>
+      "'\{name}' only refers to a type, but is used as a value here."
+    ImportPathCannotEndWithTs =>
+      "An import path cannot end with '.ts' extension."
+    TypeCannotBeUsedAsTypeParameter(t) =>
+      "Type '\{t}' cannot be used as type parameter."
+    CannotFindNameNeedTypeAnnotation(name) =>
+      "Cannot find name '\{name}'. A type annotation is necessary."
+    NamespaceHasNoExportedMember(ns, member) =>
+      "Namespace '\{ns}' has no exported member '\{member}'."
+    ForInLeftCannotBeDestructuring =>
+      "The left-hand side of a 'for...in' statement cannot be a destructuring pattern."
+    RestTypesOnlyFromObjects =>
+      "Rest types may only be created from object types."
+    ObjectRestTargetMustBeVariable =>
+      "The target of an object rest assignment must be a variable."
+    ObjectRestCannotBeOptionalPropertyAccess =>
+      "The target of an object rest assignment may not be an optional property access."
+    ObjectRestCannotContainComputedProperty =>
+      "An object rest element cannot contain the computed property name of a named signature."
+    IteratorMustHaveNextMethod =>
+      "An iterator must have a 'next()' method."
+    RequiredTypeParamsMayNotFollowOptional =>
+      "Required type parameters may not follow optional type parameters."
+    GenericTypeRequiresTypeArguments(t, min, max) =>
+      "Generic type '\{t}' requires between \{min} and \{max} type arguments."
+    CannotUseNamespaceAsType(ns) =>
+      "Cannot use namespace '\{ns}' as a type."
+    CannotUseNamespaceAsValue(ns) =>
+      "Cannot use namespace '\{ns}' as a value."
+    ObjectLiteralPropertyDoesNotExist(prop) =>
+      "Object literal may only specify known properties, but '\{prop}' does not exist."
+    CannotInvokeExpressionWithoutCallSignature =>
+      "Cannot invoke an expression whose type lacks a call signature."
+    InstanceofRightMustBeCallable =>
+      "The right-hand side of an 'instanceof' expression must be of type 'any' or callable."
+    MappedObjectTypeImplicitlyAny =>
+      "Mapped object type implicitly has an 'any' type."
+    IndexSignatureParameterTypeMustBeStringOrNumber =>
+      "Index signature parameter type must be 'string', 'number', 'symbol' or template literal."
+    TypeCannotBeAssigned(t1, t2) =>
+      "Type '\{t1}' cannot be assigned to type '\{t2}'."
+    SuperCannotBeCalledBeforeSuperCall =>
+      "'super' cannot be called or accessed before the 'super()' call."
+    CannotInvokePossiblyUndefined =>
+      "Cannot invoke an object which is possibly 'undefined'."
+    CannotInvokePossiblyNullOrUndefined =>
+      "Cannot invoke an object which is possibly 'null' or 'undefined'."
+    PropertyUsedBeforeInitialization(prop) =>
+      "Property '\{prop}' is used before its initialization."
+    InferKeywordOnlyInExtendsConditional =>
+      "The 'infer' keyword can only be used within 'extends' conditional type."
+    ThisBasedTypeGuardNotCompatible =>
+      "A 'this' based type guard is not compatible with target type."
+    PropertyAlsoDeclaredHere(prop) =>
+      "Property '\{prop}' was also declared here."
+    MissingSemicolon => "Are you missing a semicolon?"
+    BigIntLiteralsNotAvailable =>
+      "BigInt literals are not available when targeting lower than ES2020."
+    TypeMissingProperties(t1, t2, props) =>
+      "Type '\{t1}' is missing the following properties from type '\{t2}': \{props}."
+    TypeMissingPropertiesAndMore(t1, t2, props, more) =>
+      "Type '\{t1}' is missing the following properties from type '\{t2}': \{props}, and \{more} more."
+    PropertyMissingInTypeButRequired(prop, t1, t2) =>
+      "Property '\{prop}' is missing in type '\{t1}' but required in type '\{t2}'."
+    InferredTypeCannotBeNamed(name) =>
+      "The inferred type of '\{name}' cannot be named without a reference."
+    TypeDoesNotSatisfyConstraint(t, constraint) =>
+      "Type '\{t}' does not satisfy constraint '\{constraint}'."
+    PropertyIncompatibleWithIndexSignature(prop) =>
+      "Property '\{prop}' is incompatible with index signature."
+    PropertyHasConflictingDeclarations(prop) =>
+      "Property '\{prop}' has conflicting declarations in the same merge target."
+    BaseClassIncludesPrivateProperty =>
+      "Base class includes private property."
+    CannotAccessBeforeInitialization(name) =>
+      "Cannot access '\{name}' before initialization."
+    RefersToValueUsedAsType(name) =>
+      "'\{name}' refers to a value, but is being used as a type here."
+    BaseClassCannotHaveStaticAbstractMembers =>
+      "Base class cannot have static abstract members."
+    CannotAssignAbstractClassConstructor =>
+      "Cannot assign an abstract class constructor type."
+    CannotUseAsValueExportType(name) =>
+      "'\{name}' cannot be used as a value because it was exported using 'export type'."
+    CannotUseAsValueImportType(name) =>
+      "'\{name}' cannot be used as a value because it was imported using 'import type'."
+    AsyncFunctionReturnTypeMustBePromise =>
+      "The return type of an async function must either be 'void' or 'Promise<T>'."
+    InferredTypeExceedsMaxLength =>
+      "The inferred type of this node exceeds the maximum length."
+    TypeNotAssignableDifferentNames(t1, t2) =>
+      "Type '\{t1}' is not assignable to type '\{t2}'. Two different types with same name."
+    PropertyTypesIncompatible2(prop) =>
+      "Types of property '\{prop}' are incompatible."
+    DuplicateIdentifier(id) => "Duplicate identifier '\{id}'."
+    SpreadTypesOnlyFromObjects =>
+      "Spread types may only be created from object types."
+    YieldExpressionImplicitlyAny =>
+      "'yield' expression implicitly results in an 'any' type."
+    ParameterNameNoTypeDidYouMean(name, suggestion) =>
+      "Parameter has a name but no type. Did you mean '\{name}: \{suggestion}'?"
+    CannotFindModule2(module) => "Cannot find module '\{module}'."
+    GetSetCannotDeclareThisParameter =>
+      "'get' and 'set' accessors cannot declare 'this' parameters."
+    YieldOperandMustBeAwaited =>
+      "Type of 'yield' operand in an async generator must be 'Awaited'."
+    TypeReferencesItselfInAnnotation =>
+      "Type is referenced directly or indirectly in its own type annotation."
+    CannotUseInOperator(name, t) =>
+      "Cannot use 'in' operator to search for '\{name}' in '\{t}'."
+    ConditionAlwaysTrueNoOverlap =>
+      "This condition will always return true since the types have no overlap."
+    UnionTypeTooComplex2 =>
+      "Expression produces a union type that is too complex to represent."
+    ThisCannotBeUsedAsType =>
+      "'this' cannot be used as type, only 'this' with typeof can."
+    CannotReadPrivateMemberOutsideClass(member) =>
+      "Cannot read private member '\{member}' outside of its defining class."
+    DeleteOperandMustBeOptional =>
+      "The operand of a 'delete' operator must be optional."
+    CannotFindModuleNeedResolveJsonModule(module) =>
+      "Cannot find module '\{module}'. Consider using '--resolveJsonModule'."
+    FileNotUnderRootDir(file, rootDir) =>
+      "File '\{file}' is not under 'rootDir' '\{rootDir}'. 'rootDir' is expected to contain all source files."
+    ExpectedArgumentsDidYouForgetVoid(expected, got) =>
+      "Expected \{expected} arguments, but got \{got}. Did you forget to include 'void'?"
+    NewExpressionWithTypeLackingConstructSignature =>
+      "'new' expression with type lacking construct signature."
+    NewExpressionCannotBeInvoked =>
+      "'new' expression cannot be invoked."
+    NewExpressionOnlyInValidContext =>
+      "'new' expression can only be invoked in a valid context."
+    NewExpressionImplicitlyYieldsAny =>
+      "'new' expression implicitly yields an 'any' type."
+    OperatorCannotBeApplied(op, t1, t2) =>
+      "Operator '\{op}' cannot be applied to types '\{t1}' and '\{t2}'."
+    TypeCanOnlyBeIteratedWithDownlevelIteration(t) =>
+      "Type '\{t}' can only be iterated through when using '--downlevelIteration'."
+    CannotAssignToPrivateMethod(method) =>
+      "Cannot assign to private method '\{method}'."
+    ExpectedTypeArgumentsOverloads(expected, got) =>
+      "Expected \{expected} type arguments, but got \{got}. Overloads have multiple forms."
+    VoidNotValidDestructuringTarget =>
+      "Type 'void' is not a valid type for a destructuring assignment target."
+    OptionalElementCannotFollowRest =>
+      "An optional element cannot follow a rest element."
+    RequiredElementCannotFollowOptional =>
+      "A required element cannot follow an optional element."
+    IndexSignatureMustHaveTypeAnnotation =>
+      "Index signature must have a type annotation."
+    CanOnlyWritePropertyOnThisValue(prop) =>
+      "Can only write property '\{prop}' when accessing 'this' value of class."
+    PrivateIdentifiersCannotBeParameters =>
+      "Private identifiers cannot be used as parameters."
+    SyntaxReservedInMtsCtc =>
+      "This syntax is reserved in files with '.mts' or '.cts' extension."
+    AwaitExpressionRequiresPromise =>
+      "'await' expression requires an argument that is a Promise."
+    TypeNotArrayOrHasIterator(t) =>
+      "Type '\{t}' is not an array type or does not have a '[Symbol.iterator]' method."
+    ForAwaitOfCannotIterateTypes =>
+      "'for await...of' loops cannot iterate types without '@@asyncIterator'."
+    CouldNotFindDeclarationFile(module) =>
+      "Could not find a declaration file for module '\{module}'."
+    IndexSignatureIncompatibleWithOptionalProperty(idx) =>
+      "Index signature '\{idx}' is incompatible with an optional property signature."
+    AssignmentLeftCannotBeOptionalPropertyAccess =>
+      "The left-hand side of an assignment expression may not be an optional property access."
+    CannotAssignToGetOnlyProperty(prop) =>
+      "Cannot assign to property '\{prop}' because it is a get-only property."
+    ExpressionNotCallable => "This expression is not callable."
+    UnionTypeNoMatchingNewSignature(t) =>
+      "Each member of the union type '\{t}' has signature 'new' but none match."
+    TypeNoNewSignatures(t) =>
+      "Type '\{t}' has no signatures for 'new' operation."
+    ImportNeverUsedAsValue =>
+      "This import is never used as a value."
+    DecoratorUsedOnUnknownField =>
+      "Decorator used on unknown class field."
+    CannotCallSuperFromNonDerivedConstructor =>
+      "Cannot call 'super' from non-derived class constructor."
+    UniqueSymbolPropertyMustBeReadonly =>
+      "A property of an interface or type literal whose type is 'unique symbol' must be 'readonly'."
+    CannotAssignToImport(name) =>
+      "Cannot assign to '\{name}' because it is an import."
+    OperatorCannotBeApplied2(op, t1, t2) =>
+      "Operator '\{op}' cannot be applied to '\{t1}' and '\{t2}'."
+    NoValueExistsForShorthandProperty(prop) =>
+      "No value exists in scope for shorthand property '\{prop}'."
+    ClassesMayNotHaveConstructorField =>
+      "Classes may not have a field named 'constructor'."
+    JSXElementNoClosingTag(tag) =>
+      "JSX element '\{tag}' has no corresponding closing tag."
+    SuperCallMustBeRootLevel =>
+      "A 'super' call must be a root-level statement."
   }
 }
 
@@ -682,6 +1683,53 @@ pub fn get_parser_error_int_with_arg(name : String, arg : String?) -> Int {
     "UsingDeclarationsRequireAwait" => UsingDeclarationsRequireAwait.to_int()
     "UsingDeclarationNotInParameter" => UsingDeclarationNotInParameter.to_int()
     "ESMImportExportNotValid" => ESMImportExportNotValid.to_int()
+    // Assignment & Compatibility error codes (TS2304-TS2859)
+    "CannotFindName" => CannotFindName(arg.unwrap_or("")).to_int()
+    "ModuleHasNoExportedMember" =>
+      ModuleHasNoExportedMember(arg.unwrap_or(""), "").to_int()
+    "FileIsNotModule" => FileIsNotModule(arg.unwrap_or("")).to_int()
+    "CannotFindModule" => CannotFindModule(arg.unwrap_or("")).to_int()
+    "TypeIsNotGeneric" => TypeIsNotGeneric(arg.unwrap_or("")).to_int()
+    "CannotFindGlobalType" => CannotFindGlobalType(arg.unwrap_or("")).to_int()
+    "PropertyDoesNotExistOnType" =>
+      PropertyDoesNotExistOnType(arg.unwrap_or(""), "").to_int()
+    "PropertyIsPrivate" => PropertyIsPrivate(arg.unwrap_or(""), "").to_int()
+    "ArgumentNotAssignableToParameter" =>
+      ArgumentNotAssignableToParameter(arg.unwrap_or(""), "").to_int()
+    "ThisCannotBeReferenced" => ThisCannotBeReferenced.to_int()
+    "SuperOnlyInDerivedClass" => SuperOnlyInDerivedClass.to_int()
+    "ObjectPossiblyNull" => ObjectPossiblyNull.to_int()
+    "ObjectPossiblyUndefined" => ObjectPossiblyUndefined.to_int()
+    "ObjectPossiblyNullOrUndefined" => ObjectPossiblyNullOrUndefined.to_int()
+    "CannotAssignToReadonly" => CannotAssignToReadonly(arg.unwrap_or("")).to_int()
+    "AwaitOnlyInAsyncFunction" => AwaitOnlyInAsyncFunction.to_int()
+    "YieldOnlyInGenerator" => YieldOnlyInGenerator.to_int()
+    "DuplicateIdentifier" => DuplicateIdentifier(arg.unwrap_or("")).to_int()
+    "BlockScopedVarUsedBeforeDeclaration" =>
+      BlockScopedVarUsedBeforeDeclaration(arg.unwrap_or("")).to_int()
+    "CannotRedeclareBlockScoped" =>
+      CannotRedeclareBlockScoped(arg.unwrap_or("")).to_int()
+    "VariableUsedBeforeAssigned" =>
+      VariableUsedBeforeAssigned(arg.unwrap_or("")).to_int()
+    "ObjectIsOfTypeUnknown" => ObjectIsOfTypeUnknown.to_int()
+    "TypeInstantiationTooDeep" => TypeInstantiationTooDeep.to_int()
+    "UnionTypeTooComplex" => UnionTypeTooComplex.to_int()
+    "TypeAliasCircularlyReferences" =>
+      TypeAliasCircularlyReferences(arg.unwrap_or("")).to_int()
+    "ExpressionNotCallable" => ExpressionNotCallable.to_int()
+    "ExpressionNotConstructable" => ExpressionNotConstructable.to_int()
+    "ThisImplicitlyHasTypeAny" => ThisImplicitlyHasTypeAny.to_int()
+    "PropertyHasNoInitializer" =>
+      PropertyHasNoInitializer(arg.unwrap_or("")).to_int()
+    "PropertyUsedBeforeAssigned" =>
+      PropertyUsedBeforeAssigned(arg.unwrap_or("")).to_int()
+    "AssignmentLeftMustBeVariable" => AssignmentLeftMustBeVariable.to_int()
+    "FunctionLacksEndingReturn" => FunctionLacksEndingReturn.to_int()
+    "DerivedClassMustHaveSuper" => DerivedClassMustHaveSuper.to_int()
+    "SuperCallMustBeFirst" => SuperCallMustBeFirst.to_int()
+    "AbstractMethodOnlyInAbstractClass" => AbstractMethodOnlyInAbstractClass.to_int()
+    "NonAbstractClassMissingAbstractMember" =>
+      NonAbstractClassMissingAbstractMember(arg.unwrap_or(""), "").to_int()
     _ => -1
   }
 }
@@ -786,6 +1834,55 @@ pub fn get_parser_error_message_with_arg(name : String, arg : String?) -> String
     "UsingDeclarationNotInParameter" =>
       UsingDeclarationNotInParameter.to_message()
     "ESMImportExportNotValid" => ESMImportExportNotValid.to_message()
+    // Assignment & Compatibility error codes (TS2304-TS2859)
+    "CannotFindName" => CannotFindName(arg.unwrap_or("")).to_message()
+    "ModuleHasNoExportedMember" =>
+      ModuleHasNoExportedMember(arg.unwrap_or(""), "").to_message()
+    "FileIsNotModule" => FileIsNotModule(arg.unwrap_or("")).to_message()
+    "CannotFindModule" => CannotFindModule(arg.unwrap_or("")).to_message()
+    "TypeIsNotGeneric" => TypeIsNotGeneric(arg.unwrap_or("")).to_message()
+    "CannotFindGlobalType" => CannotFindGlobalType(arg.unwrap_or("")).to_message()
+    "PropertyDoesNotExistOnType" =>
+      PropertyDoesNotExistOnType(arg.unwrap_or(""), "").to_message()
+    "PropertyIsPrivate" => PropertyIsPrivate(arg.unwrap_or(""), "").to_message()
+    "ArgumentNotAssignableToParameter" =>
+      ArgumentNotAssignableToParameter(arg.unwrap_or(""), "").to_message()
+    "ThisCannotBeReferenced" => ThisCannotBeReferenced.to_message()
+    "SuperOnlyInDerivedClass" => SuperOnlyInDerivedClass.to_message()
+    "ObjectPossiblyNull" => ObjectPossiblyNull.to_message()
+    "ObjectPossiblyUndefined" => ObjectPossiblyUndefined.to_message()
+    "ObjectPossiblyNullOrUndefined" => ObjectPossiblyNullOrUndefined.to_message()
+    "CannotAssignToReadonly" =>
+      CannotAssignToReadonly(arg.unwrap_or("")).to_message()
+    "AwaitOnlyInAsyncFunction" => AwaitOnlyInAsyncFunction.to_message()
+    "YieldOnlyInGenerator" => YieldOnlyInGenerator.to_message()
+    "DuplicateIdentifier" => DuplicateIdentifier(arg.unwrap_or("")).to_message()
+    "BlockScopedVarUsedBeforeDeclaration" =>
+      BlockScopedVarUsedBeforeDeclaration(arg.unwrap_or("")).to_message()
+    "CannotRedeclareBlockScoped" =>
+      CannotRedeclareBlockScoped(arg.unwrap_or("")).to_message()
+    "VariableUsedBeforeAssigned" =>
+      VariableUsedBeforeAssigned(arg.unwrap_or("")).to_message()
+    "ObjectIsOfTypeUnknown" => ObjectIsOfTypeUnknown.to_message()
+    "TypeInstantiationTooDeep" => TypeInstantiationTooDeep.to_message()
+    "UnionTypeTooComplex" => UnionTypeTooComplex.to_message()
+    "TypeAliasCircularlyReferences" =>
+      TypeAliasCircularlyReferences(arg.unwrap_or("")).to_message()
+    "ExpressionNotCallable" => ExpressionNotCallable.to_message()
+    "ExpressionNotConstructable" => ExpressionNotConstructable.to_message()
+    "ThisImplicitlyHasTypeAny" => ThisImplicitlyHasTypeAny.to_message()
+    "PropertyHasNoInitializer" =>
+      PropertyHasNoInitializer(arg.unwrap_or("")).to_message()
+    "PropertyUsedBeforeAssigned" =>
+      PropertyUsedBeforeAssigned(arg.unwrap_or("")).to_message()
+    "AssignmentLeftMustBeVariable" => AssignmentLeftMustBeVariable.to_message()
+    "FunctionLacksEndingReturn" => FunctionLacksEndingReturn.to_message()
+    "DerivedClassMustHaveSuper" => DerivedClassMustHaveSuper.to_message()
+    "SuperCallMustBeFirst" => SuperCallMustBeFirst.to_message()
+    "AbstractMethodOnlyInAbstractClass" =>
+      AbstractMethodOnlyInAbstractClass.to_message()
+    "NonAbstractClassMissingAbstractMember" =>
+      NonAbstractClassMissingAbstractMember(arg.unwrap_or(""), "").to_message()
     _ => "Unknown error"
   }
 }
