@@ -1201,7 +1201,8 @@ fn check_statement(checker : TypeChecker, node : Node) -> TypeChecker {
     InterfaceDeclaration(iface_decl) =>
       check_interface_declaration(checker, iface_decl)
     EnumDeclaration(enum_decl) => check_enum_declaration(checker, enum_decl)
-    TypeAliasDeclaration(_) => checker // Type aliases don't need runtime checking
+    TypeAliasDeclaration(type_alias) =>
+      check_type_alias_declaration(checker, type_alias)
     ImportDeclaration(_) => checker // Imports checked separately
     ExportDeclaration(_) => checker // Exports checked separately
     TryStatement(try_stmt) => check_try_statement(checker, try_stmt)
@@ -5238,6 +5239,47 @@ fn check_interface_heritage_conflicts(
     }
   }
   checker
+}
+
+///|
+/// Check type alias declaration for TS2700 (rest types may only be from object types)
+fn check_type_alias_declaration(
+  checker : TypeChecker,
+  type_alias : TypeAliasDeclaration,
+) -> TypeChecker {
+  check_type_node_for_rest_errors(checker, type_alias.type_node)
+}
+
+///|
+/// Recursively check type nodes for rest/spread type errors
+fn check_type_node_for_rest_errors(checker : TypeChecker, node : Node) -> TypeChecker {
+  match node {
+    TypeLiteral(tl) => {
+      let mut checker = checker
+      for type_member in tl.members {
+        match type_member {
+          SpreadExpression(spread_expr) => {
+            // Check if spread target is an object type
+            let (spread_type, c) = get_type_from_type_node(checker, spread_expr.expression)
+            checker = c
+            match spread_type {
+              Some(Object(_)) | Some(Any(_)) | Some(Unknown(_)) | None => ()
+              Some(_) =>
+                checker = add_diagnostic_with_code(
+                  checker,
+                  "Rest types may only be created from object types",
+                  spread_expr.location,
+                  TS2700,
+                )
+            }
+          }
+          _ => ()
+        }
+      }
+      checker
+    }
+    _ => checker
+  }
 }
 
 ///|
