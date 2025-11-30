@@ -1740,3 +1740,52 @@ test "parser error detection - valid assignment" {
   let errors = parse_and_get_errors(source)
   assert_true(not(has_error_code(errors, 2832)))
 }
+
+// ----------------------------------------------------------------------------
+// TS1092: Type Parameters Cannot Appear on Constructor Declaration
+// ----------------------------------------------------------------------------
+
+///|
+test "parser error detection - TS1092 type params on constructor" {
+  // Constructor with type parameters should trigger TS1092
+  let source =
+    #|class Foo {
+    #|  constructor<T>(x: T) { }
+    #|}
+  let errors = parse_and_get_errors(source)
+  assert_true(has_error_code(errors, 1092))
+  assert_true(has_error_message(errors, "Type parameters cannot appear on a constructor"))
+}
+
+///|
+test "parser error detection - TS1092 constructor multiple type params" {
+  // Constructor with multiple type parameters should trigger TS1092
+  let source =
+    #|class Foo {
+    #|  constructor<T, U>(x: T, y: U) { }
+    #|}
+  let errors = parse_and_get_errors(source)
+  assert_true(has_error_code(errors, 1092))
+}
+
+///|
+test "parser error detection - valid constructor without type params" {
+  // Constructor without type parameters should not produce TS1092
+  let source =
+    #|class Foo {
+    #|  constructor(x: number) { }
+    #|}
+  let errors = parse_and_get_errors(source)
+  assert_true(not(has_error_code(errors, 1092)))
+}
+
+///|
+test "parser error detection - valid generic class constructor" {
+  // Generic class constructor without constructor type params should be valid
+  let source =
+    #|class Foo<T> {
+    #|  constructor(x: T) { }
+    #|}
+  let errors = parse_and_get_errors(source)
+  assert_true(not(has_error_code(errors, 1092)))
+}

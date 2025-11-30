@@ -3136,7 +3136,7 @@ fn parse_function_declaration(
     _ => (None, parser)
   }
 
-  // Body
+  // Body (use parse_block_statement to set in_function context)
   let (body, parser) = match current_token(parser) {
     OpenBrace(_) =>
       match parse_block_statement(parser) {
@@ -3478,6 +3478,7 @@ fn parse_block_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
       )
   }
 }
+
 
 ///|
 /// Parse if statement
@@ -4111,12 +4112,28 @@ fn parse_class_member_with_decorators(
     // Constructor
     Identifier("constructor", loc) => {
       let parser = advance_parser(parser)
+      // TS1092: Type parameters cannot appear on a constructor declaration
+      let parser = match current_token(parser) {
+        LessThan(_) => {
+          let parser = add_error_with_code(
+            parser,
+            TypeParamsOnConstructor.to_message(),
+            loc,
+            TypeParamsOnConstructor,
+          )
+          // Parse and discard the type parameters for error recovery
+          match parse_type_parameters(parser) {
+            (_, p) => p
+          }
+        }
+        _ => parser
+      }
       match current_token(parser) {
         OpenParen(_) => {
           // Consume the OpenParen, then parse parameters
           let parser = advance_parser(parser)
           let (parameters, parser) = parse_parameter_list(parser)
-          // Parse body
+          // Parse body (use parse_block_statement for return statement validation)
           let (body, parser) = match current_token(parser) {
             OpenBrace(_) =>
               match parse_block_statement(parser) {
