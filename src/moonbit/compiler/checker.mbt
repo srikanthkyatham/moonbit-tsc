@@ -5473,12 +5473,33 @@ fn check_class_declaration(
   let prev_this_type = checker.current_this_type
   let mut checker = { ..checker, current_this_type: Some(class_type) }
 
+  // Collect uninitialized properties for definite assignment checking
+  let uninitialized_props : Map[String, SourceLocation] = Map::new()
+  for mem in class_decl.members {
+    match mem {
+      PropertyDeclaration(prop) =>
+        if prop.initializer.is_none() {
+          // Property without initializer - needs to be assigned in constructor
+          uninitialized_props.set(prop.name, prop.location)
+        }
+      _ => ()
+    }
+  }
+
   // Check class members (constructors, methods, properties)
   for i = 0; i < class_decl.members.length(); i = i + 1 {
     checker = match class_decl.members[i] {
       ConstructorDeclaration(ctor) =>
         match ctor.body {
-          Some(body) => check_statement(checker, body)
+          Some(body) => {
+            // Check for property use before assignment (TS2565)
+            let checker = check_property_use_before_assignment(
+              checker,
+              body,
+              uninitialized_props,
+            )
+            check_statement(checker, body)
+          }
           None => checker
         }
       MethodDeclaration(method_dec) =>
@@ -5500,6 +5521,217 @@ fn check_class_declaration(
 
   // Restore previous this type
   { ..checker, current_this_type: prev_this_type }
+}
+
+///|
+/// Check for property use before assignment in constructor (TS2565)
+fn check_property_use_before_assignment(
+  checker : TypeChecker,
+  body : Node,
+  uninitialized_props : Map[String, SourceLocation],
+) -> TypeChecker {
+  // Track which properties have been assigned
+  let assigned_props : Map[String, Bool] = Map::new()
+
+  // Scan the constructor body for this.prop accesses
+  check_this_property_accesses(checker, body, uninitialized_props, assigned_props)
+}
+
+///|
+/// Recursively check for this.prop accesses and track assignments
+fn check_this_property_accesses(
+  checker : TypeChecker,
+  node : Node,
+  uninitialized_props : Map[String, SourceLocation],
+  assigned_props : Map[String, Bool],
+) -> TypeChecker {
+  let mut checker = checker
+  match node {
+    // Assignment to this.prop
+    BinaryExpression(bin) =>
+      if bin.operator == BinaryOperator::Assign {
+        match bin.left {
+          PropertyAccessExpression(pa) =>
+            match pa.expression {
+              ThisExpression(_) => {
+                // This is an assignment: this.prop = value
+                // First check the right side (may read properties)
+                checker = check_this_property_accesses(
+                  checker,
+                  bin.right,
+                  uninitialized_props,
+                  assigned_props,
+                )
+                // Then mark the property as assigned
+                assigned_props.set(pa.name, true)
+                checker
+              }
+              _ => {
+                // Not a this.prop assignment, check both sides
+                checker = check_this_property_accesses(
+                  checker,
+                  bin.left,
+                  uninitialized_props,
+                  assigned_props,
+                )
+                check_this_property_accesses(
+                  checker,
+                  bin.right,
+                  uninitialized_props,
+                  assigned_props,
+                )
+              }
+            }
+          _ => {
+            checker = check_this_property_accesses(
+              checker,
+              bin.left,
+              uninitialized_props,
+              assigned_props,
+            )
+            check_this_property_accesses(
+              checker,
+              bin.right,
+              uninitialized_props,
+              assigned_props,
+            )
+          }
+        }
+      } else {
+        // Non-assignment binary expression
+        checker = check_this_property_accesses(
+          checker,
+          bin.left,
+          uninitialized_props,
+          assigned_props,
+        )
+        check_this_property_accesses(
+          checker,
+          bin.right,
+          uninitialized_props,
+          assigned_props,
+        )
+      }
+    // Read of this.prop
+    PropertyAccessExpression(pa) =>
+      match pa.expression {
+        ThisExpression(_) => {
+          // Reading this.prop - check if it's assigned
+          if uninitialized_props.contains(pa.name) &&
+            not(assigned_props.get(pa.name).unwrap_or(false)) {
+            // Property is used before being assigned
+            add_diagnostic_with_code(
+              checker,
+              "Property '" + pa.name + "' is used before being assigned.",
+              pa.location,
+              TS2565,
+            )
+          } else {
+            checker
+          }
+        }
+        _ =>
+          // Check the expression part
+          check_this_property_accesses(
+            checker,
+            pa.expression,
+            uninitialized_props,
+            assigned_props,
+          )
+      }
+    // Call expression - check all arguments and the callee
+    CallExpression(call) => {
+      checker = check_this_property_accesses(
+        checker,
+        call.expression,
+        uninitialized_props,
+        assigned_props,
+      )
+      for arg in call.arguments {
+        checker = check_this_property_accesses(
+          checker,
+          arg,
+          uninitialized_props,
+          assigned_props,
+        )
+      }
+      checker
+    }
+    // Expression statement
+    ExpressionStatement(es) =>
+      check_this_property_accesses(
+        checker,
+        es.expression,
+        uninitialized_props,
+        assigned_props,
+      )
+    // Block - process statements in order
+    BlockStatement(block) => {
+      for stmt in block.statements {
+        checker = check_this_property_accesses(
+          checker,
+          stmt,
+          uninitialized_props,
+          assigned_props,
+        )
+      }
+      checker
+    }
+    // Variable declaration
+    VariableStatement(vs) => {
+      for decl in vs.declarations {
+        match decl.initializer {
+          Some(init) =>
+            checker = check_this_property_accesses(
+              checker,
+              init,
+              uninitialized_props,
+              assigned_props,
+            )
+          None => ()
+        }
+      }
+      checker
+    }
+    // Return statement
+    ReturnStatement(ret) =>
+      match ret.expression {
+        Some(expr) =>
+          check_this_property_accesses(
+            checker,
+            expr,
+            uninitialized_props,
+            assigned_props,
+          )
+        None => checker
+      }
+    // If statement
+    IfStatement(if_stmt) => {
+      checker = check_this_property_accesses(
+        checker,
+        if_stmt.condition,
+        uninitialized_props,
+        assigned_props,
+      )
+      checker = check_this_property_accesses(
+        checker,
+        if_stmt.then_statement,
+        uninitialized_props,
+        assigned_props,
+      )
+      match if_stmt.else_statement {
+        Some(else_stmt) =>
+          check_this_property_accesses(
+            checker,
+            else_stmt,
+            uninitialized_props,
+            assigned_props,
+          )
+        None => checker
+      }
+    }
+    _ => checker
+  }
 }
 
 ///|
