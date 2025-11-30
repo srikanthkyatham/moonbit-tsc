@@ -127,6 +127,18 @@ pub enum MismatchReason {
   // BigInt errors (TS2365, TS2736)
   BigIntNumberMixing(String) // TS2365: Operator cannot be applied to bigint and number
   UnaryPlusBigInt // TS2736: Operator '+' cannot be applied to type 'bigint'
+
+  // Module/Import resolution errors
+  FileIsNotModule(String) // TS2306: File '{0}' is not a module
+  CannotFindModule(String) // TS2307: Cannot find module '{0}'
+  CannotFindGlobalType(String) // TS2318: Cannot find global type '{0}'
+  ImportPathCannotEndWithExtension(String, String) // TS2691: Import path '{0}' cannot end with '{1}' extension
+  CannotFindModuleOrTypeDeclarations(String) // TS2692: Cannot find module '{0}' or its corresponding type declarations
+  NamespaceHasNoExportedMember(String, String) // TS2694: Namespace '{0}' has no exported member '{1}'
+  CannotUseNamespaceAsType(String) // TS2709: Cannot use namespace '{0}' as a type
+  CannotUseNamespaceAsValue(String) // TS2710: Cannot use namespace '{0}' as a value
+  CannotFindModuleSetModuleResolution(String) // TS2766: Cannot find module '{0}'. Did you mean to set 'moduleResolution' to 'node'?
+  ModuleHasNoExportedMember(String, String) // TS2305: Module '{0}' has no exported member '{1}'
 } derive(Show, Eq)
 
 // ============================================================================
@@ -808,6 +820,24 @@ pub fn get_friendly_title(reason : MismatchReason) -> String {
     // BigInt errors
     BigIntNumberMixing(op) => "CANNOT MIX BIGINT AND NUMBER WITH '" + op + "'"
     UnaryPlusBigInt => "UNARY '+' CANNOT BE APPLIED TO BIGINT"
+    // Module/Import resolution errors
+    FileIsNotModule(file) => "FILE '" + file + "' IS NOT A MODULE"
+    CannotFindModule(module) => "CANNOT FIND MODULE '" + module + "'"
+    CannotFindGlobalType(name) => "CANNOT FIND GLOBAL TYPE '" + name + "'"
+    ImportPathCannotEndWithExtension(path, ext) =>
+      "IMPORT PATH '" + path + "' CANNOT END WITH '" + ext + "'"
+    CannotFindModuleOrTypeDeclarations(module) =>
+      "CANNOT FIND MODULE '" + module + "' OR TYPE DECLARATIONS"
+    NamespaceHasNoExportedMember(ns, member) =>
+      "NAMESPACE '" + ns + "' HAS NO EXPORTED MEMBER '" + member + "'"
+    CannotUseNamespaceAsType(ns) =>
+      "CANNOT USE NAMESPACE '" + ns + "' AS A TYPE"
+    CannotUseNamespaceAsValue(ns) =>
+      "CANNOT USE NAMESPACE '" + ns + "' AS A VALUE"
+    CannotFindModuleSetModuleResolution(module) =>
+      "CANNOT FIND MODULE '" + module + "' - CHECK MODULE RESOLUTION"
+    ModuleHasNoExportedMember(module, member) =>
+      "MODULE '" + module + "' HAS NO EXPORTED MEMBER '" + member + "'"
   }
 }
 
@@ -983,6 +1013,53 @@ pub fn get_why_explanation(reason : MismatchReason) -> String {
       "' operator requires both operands to be of the same numeric type."
     UnaryPlusBigInt =>
       "The unary '+' operator is not supported for bigint because it would be ambiguous - in JavaScript, '+x' typically converts to number, but bigint cannot be implicitly converted to number without potential precision loss."
+    // Module/Import resolution errors
+    FileIsNotModule(file) =>
+      "The file '" +
+      file +
+      "' does not contain any exports (export statements) and therefore cannot be imported as a module. In TypeScript, a file is only considered a module if it has at least one import or export statement."
+    CannotFindModule(module) =>
+      "TypeScript cannot locate the module '" +
+      module +
+      "'. This could be because the module path is incorrect, the module doesn't exist, or the module resolution settings don't include this path."
+    CannotFindGlobalType(name) =>
+      "The global type '" +
+      name +
+      "' is not available. Global types like 'Array', 'Promise', etc. are typically provided by the TypeScript lib files based on your target setting."
+    ImportPathCannotEndWithExtension(_, ext) =>
+      "Import paths in TypeScript should not include the file extension '" +
+      ext +
+      "'. TypeScript will automatically resolve the correct file based on your module resolution settings."
+    CannotFindModuleOrTypeDeclarations(module) =>
+      "TypeScript cannot find the module '" +
+      module +
+      "' or its corresponding type declarations (.d.ts file). For npm packages, you may need to install @types/" +
+      module +
+      " for type information."
+    NamespaceHasNoExportedMember(ns, member) =>
+      "The namespace '" +
+      ns +
+      "' exists but does not export a member named '" +
+      member +
+      "'. Check the namespace definition to see what members are available."
+    CannotUseNamespaceAsType(ns) =>
+      "'" +
+      ns +
+      "' refers to a namespace, not a type. Namespaces are containers for values and types but cannot be used directly as types."
+    CannotUseNamespaceAsValue(ns) =>
+      "'" +
+      ns +
+      "' refers to a namespace, but you're trying to use it as a value. You need to access a specific member of the namespace."
+    CannotFindModuleSetModuleResolution(module) =>
+      "TypeScript cannot find the module '" +
+      module +
+      "'. This might be because your moduleResolution setting doesn't match how modules are installed in your project."
+    ModuleHasNoExportedMember(module, member) =>
+      "The module '" +
+      module +
+      "' exists but does not export a member named '" +
+      member +
+      "'. Check the module's exports or look at its type definitions."
   }
 }
 
@@ -1443,6 +1520,76 @@ pub fn get_how_to_fix(
       fixes.push("If you need to convert to number:")
       fixes.push("    Number(bigintValue)")
     }
+    // Module/Import resolution errors
+    FileIsNotModule(file) => {
+      fixes.push("Add an export to make '" + file + "' a module:")
+      fixes.push("    export {};  // Makes file a module")
+      fixes.push("")
+      fixes.push("Or add actual exports:")
+      fixes.push("    export const myValue = ...;")
+      fixes.push("    export function myFunction() { ... }")
+    }
+    CannotFindModule(module) => {
+      fixes.push("Check if the module path is correct:")
+      fixes.push("    import { something } from './" + module + "';  // Relative path")
+      fixes.push("")
+      fixes.push("Or install the package if it's from npm:")
+      fixes.push("    npm install " + module)
+    }
+    CannotFindGlobalType(name) => {
+      fixes.push("Add the required lib to your tsconfig.json:")
+      fixes.push("    { \"compilerOptions\": { \"lib\": [\"ES2015\", \"DOM\"] } }")
+      fixes.push("")
+      fixes.push("Common libs for global types:")
+      fixes.push("    ES2015+ for Promise, Symbol, Map, Set, etc.")
+      fixes.push("    DOM for HTMLElement, Document, etc.")
+    }
+    ImportPathCannotEndWithExtension(_, ext) => {
+      fixes.push("Remove the '" + ext + "' extension from your import:")
+      fixes.push("    // Instead of: import { x } from './module" + ext + "'")
+      fixes.push("    // Use:        import { x } from './module'")
+    }
+    CannotFindModuleOrTypeDeclarations(module) => {
+      fixes.push("Install type definitions for '" + module + "':")
+      fixes.push("    npm install --save-dev @types/" + module)
+      fixes.push("")
+      fixes.push("Or create a type declaration file (.d.ts) if types don't exist.")
+    }
+    NamespaceHasNoExportedMember(ns, member) => {
+      fixes.push("Check available exports from namespace '" + ns + "'.")
+      fixes.push("Verify that '" + member + "' is spelled correctly.")
+      fixes.push("")
+      fixes.push("If you want to add this member, export it from the namespace:")
+      fixes.push("    namespace " + ns + " {")
+      fixes.push("        export const " + member + " = ...;")
+      fixes.push("    }")
+    }
+    CannotUseNamespaceAsType(ns) => {
+      fixes.push("Access a specific type from the namespace:")
+      fixes.push("    const x: " + ns + ".SomeType = ...;")
+      fixes.push("")
+      fixes.push("Or if you want a type alias for the namespace contents:")
+      fixes.push("    type MyType = typeof " + ns + ";")
+    }
+    CannotUseNamespaceAsValue(ns) => {
+      fixes.push("Access a specific value from the namespace:")
+      fixes.push("    const x = " + ns + ".someValue;")
+      fixes.push("    " + ns + ".someFunction();")
+    }
+    CannotFindModuleSetModuleResolution(module) => {
+      fixes.push("Try setting moduleResolution in tsconfig.json:")
+      fixes.push("    { \"compilerOptions\": { \"moduleResolution\": \"node\" } }")
+      fixes.push("")
+      fixes.push("Or for Node.js ESM:")
+      fixes.push("    { \"compilerOptions\": { \"moduleResolution\": \"node16\" } }")
+    }
+    ModuleHasNoExportedMember(module, member) => {
+      fixes.push("Check the module's exports for the correct name.")
+      fixes.push("The member '" + member + "' may not be exported or may be named differently.")
+      fixes.push("")
+      fixes.push("Try using default import if the module has a default export:")
+      fixes.push("    import module from '" + module + "';")
+    }
   }
   fixes
 }
@@ -1490,6 +1637,17 @@ pub fn get_error_code(reason : MismatchReason) -> Int {
     // BigInt errors
     BigIntNumberMixing(_) => 2365 // TS2365: Operator cannot be applied to types
     UnaryPlusBigInt => 2736 // TS2736: Operator '+' cannot be applied to type 'bigint'
+    // Module/Import resolution errors
+    FileIsNotModule(_) => 2306 // TS2306: File is not a module
+    CannotFindModule(_) => 2307 // TS2307: Cannot find module
+    CannotFindGlobalType(_) => 2318 // TS2318: Cannot find global type
+    ImportPathCannotEndWithExtension(_, _) => 2691 // TS2691: Import path cannot end with extension
+    CannotFindModuleOrTypeDeclarations(_) => 2692 // TS2692: Cannot find module or type declarations
+    NamespaceHasNoExportedMember(_, _) => 2694 // TS2694: Namespace has no exported member
+    CannotUseNamespaceAsType(_) => 2709 // TS2709: Cannot use namespace as type
+    CannotUseNamespaceAsValue(_) => 2710 // TS2710: Cannot use namespace as value
+    CannotFindModuleSetModuleResolution(_) => 2766 // TS2766: Cannot find module (moduleResolution)
+    ModuleHasNoExportedMember(_, _) => 2305 // TS2305: Module has no exported member
   }
 }
 
