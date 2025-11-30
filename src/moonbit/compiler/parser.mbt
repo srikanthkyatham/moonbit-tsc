@@ -164,6 +164,7 @@ pub enum ParserErrorCode {
   // Keywords
   ExpectedFunctionKeyword
   ExpectedClassKeyword
+  ExpectedEquals
 
   // JSX
   JSXClosingTagMismatch
@@ -589,6 +590,7 @@ pub fn ParserErrorCode::to_int(self : ParserErrorCode) -> Int {
     ExpectedCloseBracket => 1015 // Custom
     ExpectedFunctionKeyword => 1016 // Custom
     ExpectedClassKeyword => 1017 // Custom
+    ExpectedEquals => 1018 // Custom
 
     // JSX errors
     JSXClosingTagMismatch => 1100 // Custom
@@ -1014,6 +1016,7 @@ pub fn ParserErrorCode::to_message(self : ParserErrorCode) -> String {
     ExpectedCloseBracket => "']' expected"
     ExpectedFunctionKeyword => "'function' expected"
     ExpectedClassKeyword => "'class' expected"
+    ExpectedEquals => "'=' expected"
 
     // JSX errors
     JSXClosingTagMismatch => "JSX closing tag mismatch"
@@ -2350,7 +2353,14 @@ fn parse_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
               parse_class_declaration_with_decorators(parser, true, decorators)
             _ => {
               let loc = current_token(parser).location()
-              Err(add_error(parser, "Expected 'class' after 'abstract'", loc))
+              Err(
+                add_error_with_code(
+                  parser,
+                  ExpectedClassKeyword.to_message(),
+                  loc,
+                  ExpectedClassKeyword,
+                ),
+              )
             }
           }
         }
@@ -2363,8 +2373,11 @@ fn parse_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
             _ => {
               let loc = current_token(parser).location()
               Err(
-                add_error(
-                  parser, "Expected 'function' after decorators and 'async'", loc,
+                add_error_with_code(
+                  parser,
+                  ExpectedFunctionKeyword.to_message(),
+                  loc,
+                  ExpectedFunctionKeyword,
                 ),
               )
             }
@@ -2393,9 +2406,10 @@ fn parse_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
         _ => {
           let loc = current_token(parser).location()
           Err(
-            add_error(
-              parser, "Expected class or function declaration after decorators",
+            add_error_with_code(
+              parser, DecoratorsNotValidHere.to_message(),
               loc,
+              DecoratorsNotValidHere,
             ),
           )
         }
@@ -2414,7 +2428,14 @@ fn parse_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
           parse_class_declaration_with_decorators(parser, true, [])
         _ => {
           let loc = current_token(parser).location()
-          Err(add_error(parser, "Expected 'class' after 'abstract'", loc))
+          Err(
+            add_error_with_code(
+              parser,
+              ExpectedClassKeyword.to_message(),
+              loc,
+              ExpectedClassKeyword,
+            ),
+          )
         }
       }
     }
@@ -2751,8 +2772,9 @@ fn parse_variable_declaration(
         Ok((id, p)) => (Node::Identifier(id), p)
         Err(p) =>
           return Err(
-            add_error(
-              p, "Expected identifier in variable declaration", start_loc,
+            add_error_with_code(
+              p, ExpectedIdentifier.to_message(), start_loc,
+              ExpectedIdentifier,
             ),
           )
       }
@@ -2911,7 +2933,12 @@ fn parse_object_binding_pattern(
                 }
               _ =>
                 return Err(
-                  add_error(p2, "Expected identifier after colon", prop_loc),
+                  add_error_with_code(
+                    p2,
+                    ExpectedIdentifier.to_message(),
+                    prop_loc,
+                    ExpectedIdentifier,
+                  ),
                 )
             }
           }
@@ -3004,10 +3031,11 @@ fn parse_return_type(parser : Parser) -> Result[(Node, Parser), Parser] {
         }
         _ =>
           return Err(
-            add_error(
+            add_error_with_code(
               parser,
-              "Expected parameter name after 'asserts'",
+              ExpectedIdentifier.to_message(),
               current_token(parser).location(),
+              ExpectedIdentifier,
             ),
           )
       }
@@ -3086,7 +3114,14 @@ fn parse_function_declaration(
       parse_parameter_list(p)
     }
     Err(p) =>
-      return Err(add_error(p, "Expected '(' after function name", start_loc))
+      return Err(
+        add_error_with_code(
+          p,
+          ExpectedOpenParen.to_message(),
+          start_loc,
+          ExpectedOpenParen,
+        ),
+      )
   }
 
   // Return type (with type predicate support)
@@ -3421,10 +3456,26 @@ fn parse_block_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
             ),
           )
         }
-        Err(parser) => Err(add_error(parser, "Expected '}'", start_loc))
+        Err(parser) =>
+          Err(
+            add_error_with_code(
+              parser,
+              ExpectedCloseBrace.to_message(),
+              start_loc,
+              ExpectedCloseBrace,
+            ),
+          )
       }
     }
-    Err(parser) => Err(add_error(parser, "Expected '{'", start_loc))
+    Err(parser) =>
+      Err(
+        add_error_with_code(
+          parser,
+          ExpectedOpenBrace.to_message(),
+          start_loc,
+          ExpectedOpenBrace,
+        ),
+      )
   }
 }
 
@@ -3437,7 +3488,15 @@ fn parse_if_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
   // Expect '('
   let parser = match expect(parser, fn(t) { matches_open_paren(t) }) {
     Ok(p) => advance_parser(p)
-    Err(p) => return Err(add_error(p, "Expected '(' after 'if'", start_loc))
+    Err(p) =>
+      return Err(
+        add_error_with_code(
+          p,
+          ExpectedOpenParen.to_message(),
+          start_loc,
+          ExpectedOpenParen,
+        ),
+      )
   }
 
   // Parse condition
@@ -3450,7 +3509,14 @@ fn parse_if_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
   let parser = match expect(parser, fn(t) { matches_close_paren(t) }) {
     Ok(p) => advance_parser(p)
     Err(p) =>
-      return Err(add_error(p, "Expected ')' after condition", start_loc))
+      return Err(
+        add_error_with_code(
+          p,
+          ExpectedCloseParen.to_message(),
+          start_loc,
+          ExpectedCloseParen,
+        ),
+      )
   }
 
   // Parse then statement
@@ -3541,7 +3607,14 @@ fn parse_identifier(parser : Parser) -> Result[(Identifier, Parser), Parser] {
       Ok((Identifier::{ name, location: loc }, advance_parser(parser)))
     _ => {
       let loc = current_token(parser).location()
-      Err(add_error(parser, "Expected identifier", loc))
+      Err(
+        add_error_with_code(
+          parser,
+          ExpectedIdentifier.to_message(),
+          loc,
+          ExpectedIdentifier,
+        ),
+      )
     }
   }
 }
@@ -3685,20 +3758,22 @@ fn parse_class_declaration_with_decorators(
         }
         _ =>
           Err(
-            add_error(
+            add_error_with_code(
               parser,
-              "Expected '}' after class body",
+              ExpectedCloseBrace.to_message(),
               current_token(parser).location(),
+              ExpectedCloseBrace,
             ),
           )
       }
     }
     _ =>
       Err(
-        add_error(
+        add_error_with_code(
           parser,
-          "Expected '{' after class name",
+          ExpectedOpenBrace.to_message(),
           current_token(parser).location(),
+          ExpectedOpenBrace,
         ),
       )
   }
@@ -4757,10 +4832,11 @@ fn parse_interface_declaration(
     Identifier(n, _) => (n, advance_parser(parser))
     _ =>
       return Err(
-        add_error(
+        add_error_with_code(
           parser,
-          "Expected interface name",
+          ExpectedIdentifier.to_message(),
           current_token(parser).location(),
+          ExpectedIdentifier,
         ),
       )
   }
@@ -4816,10 +4892,11 @@ fn parse_interface_declaration(
               }
               _ =>
                 return Err(
-                  add_error(
+                  add_error_with_code(
                     parser,
-                    "Expected index parameter name",
+                    ExpectedIdentifier.to_message(),
                     current_token(parser).location(),
+                    ExpectedIdentifier,
                   ),
                 )
             }
@@ -4828,10 +4905,11 @@ fn parse_interface_declaration(
               Colon(_) => parser = advance_parser(parser)
               _ =>
                 return Err(
-                  add_error(
+                  add_error_with_code(
                     parser,
-                    "Expected ':' after index parameter",
+                    ExpectedColon.to_message(),
                     current_token(parser).location(),
+                    ExpectedColon,
                   ),
                 )
             }
@@ -4848,10 +4926,11 @@ fn parse_interface_declaration(
               CloseBracket(_) => parser = advance_parser(parser)
               _ =>
                 return Err(
-                  add_error(
+                  add_error_with_code(
                     parser,
-                    "Expected ']' after index signature",
+                    ExpectedCloseBracket.to_message(),
                     current_token(parser).location(),
+                    ExpectedCloseBracket,
                   ),
                 )
             }
@@ -4860,10 +4939,11 @@ fn parse_interface_declaration(
               Colon(_) => parser = advance_parser(parser)
               _ =>
                 return Err(
-                  add_error(
+                  add_error_with_code(
                     parser,
-                    "Expected ':' after index signature",
+                    ExpectedColon.to_message(),
                     current_token(parser).location(),
+                    ExpectedColon,
                   ),
                 )
             }
@@ -4907,10 +4987,11 @@ fn parse_interface_declaration(
                   }
                   _ =>
                     return Err(
-                      add_error(
+                      add_error_with_code(
                         parser,
-                        "Expected index parameter name",
+                        ExpectedIdentifier.to_message(),
                         current_token(parser).location(),
+                        ExpectedIdentifier,
                       ),
                     )
                 }
@@ -4919,10 +5000,11 @@ fn parse_interface_declaration(
                   Colon(_) => parser = advance_parser(parser)
                   _ =>
                     return Err(
-                      add_error(
+                      add_error_with_code(
                         parser,
-                        "Expected ':' after index parameter",
+                        ExpectedColon.to_message(),
                         current_token(parser).location(),
+                        ExpectedColon,
                       ),
                     )
                 }
@@ -4939,10 +5021,11 @@ fn parse_interface_declaration(
                   CloseBracket(_) => parser = advance_parser(parser)
                   _ =>
                     return Err(
-                      add_error(
+                      add_error_with_code(
                         parser,
-                        "Expected ']' after index signature",
+                        ExpectedCloseBracket.to_message(),
                         current_token(parser).location(),
+                        ExpectedCloseBracket,
                       ),
                     )
                 }
@@ -4951,10 +5034,11 @@ fn parse_interface_declaration(
                   Colon(_) => parser = advance_parser(parser)
                   _ =>
                     return Err(
-                      add_error(
+                      add_error_with_code(
                         parser,
-                        "Expected ':' after index signature",
+                        ExpectedColon.to_message(),
                         current_token(parser).location(),
+                        ExpectedColon,
                       ),
                     )
                 }
@@ -5024,20 +5108,22 @@ fn parse_interface_declaration(
                   }
                   _ =>
                     return Err(
-                      add_error(
+                      add_error_with_code(
                         parser,
-                        "Expected ':' after readonly property name",
+                        ExpectedColon.to_message(),
                         current_token(parser).location(),
+                        ExpectedColon,
                       ),
                     )
                 }
               }
               _ =>
                 return Err(
-                  add_error(
+                  add_error_with_code(
                     parser,
-                    "Expected property name or '[' after readonly",
+                    ExpectedIdentifier.to_message(),
                     current_token(parser).location(),
+                    ExpectedIdentifier,
                   ),
                 )
             }
@@ -5139,10 +5225,11 @@ fn parse_interface_declaration(
               }
               _ =>
                 return Err(
-                  add_error(
+                  add_error_with_code(
                     parser,
-                    "Expected '(' after 'new'",
+                    ExpectedOpenParen.to_message(),
                     current_token(parser).location(),
+                    ExpectedOpenParen,
                   ),
                 )
             }
@@ -5290,16 +5377,18 @@ fn parse_interface_declaration(
                   }
                   _ =>
                     return Err(
-                      add_error(
-                        parser, "Expected '(' after type parameters", current_token(parser).location(),
+                      add_error_with_code(
+                        parser, ExpectedOpenParen.to_message(), current_token(parser).location(),
+                        ExpectedOpenParen,
                       ),
                     )
                 }
               }
               _ =>
                 return Err(
-                  add_error(
-                    parser, "Expected ':' or '(' after property name", prop_loc,
+                  add_error_with_code(
+                    parser, ExpectedColon.to_message(), prop_loc,
+                    ExpectedColon,
                   ),
                 )
             }
@@ -5357,8 +5446,9 @@ fn parse_interface_declaration(
               }
               _ =>
                 return Err(
-                  add_error(
-                    parser, "Expected '(' after type parameters", current_token(parser).location(),
+                  add_error_with_code(
+                    parser, ExpectedOpenParen.to_message(), current_token(parser).location(),
+                    ExpectedOpenParen,
                   ),
                 )
             }
@@ -5367,19 +5457,21 @@ fn parse_interface_declaration(
         }
       }
       Err(
-        add_error(
+        add_error_with_code(
           parser,
-          "Expected '}' after interface body",
+          ExpectedCloseBrace.to_message(),
           current_token(parser).location(),
+          ExpectedCloseBrace,
         ),
       )
     }
     _ =>
       Err(
-        add_error(
+        add_error_with_code(
           parser,
-          "Expected '{' after interface name",
+          ExpectedOpenBrace.to_message(),
           current_token(parser).location(),
+          ExpectedOpenBrace,
         ),
       )
   }
@@ -5398,10 +5490,11 @@ fn parse_type_alias_declaration(
     Identifier(n, _) => (n, advance_parser(parser))
     _ =>
       return Err(
-        add_error(
+        add_error_with_code(
           parser,
-          "Expected type name",
+          ExpectedIdentifier.to_message(),
           current_token(parser).location(),
+          ExpectedIdentifier,
         ),
       )
   }
@@ -5417,10 +5510,11 @@ fn parse_type_alias_declaration(
     Equals(_) => advance_parser(parser)
     _ =>
       return Err(
-        add_error(
+        add_error_with_code(
           parser,
-          "Expected '=' in type alias",
+          ExpectedEquals.to_message(),
           current_token(parser).location(),
+          ExpectedEquals,
         ),
       )
   }
@@ -5469,10 +5563,11 @@ fn parse_enum_declaration(
     Identifier(n, _) => (n, advance_parser(parser))
     _ =>
       return Err(
-        add_error(
+        add_error_with_code(
           parser,
-          "Expected enum name",
+          ExpectedIdentifier.to_message(),
           current_token(parser).location(),
+          ExpectedIdentifier,
         ),
       )
   }
@@ -5509,20 +5604,22 @@ fn parse_enum_declaration(
         }
         _ =>
           Err(
-            add_error(
+            add_error_with_code(
               parser,
-              "Expected '}' after enum body",
+              ExpectedCloseBrace.to_message(),
               current_token(parser).location(),
+              ExpectedCloseBrace,
             ),
           )
       }
     }
     _ =>
       Err(
-        add_error(
+        add_error_with_code(
           parser,
-          "Expected '{' after enum name",
+          ExpectedOpenBrace.to_message(),
           current_token(parser).location(),
+          ExpectedOpenBrace,
         ),
       )
   }
@@ -5588,10 +5685,11 @@ fn parse_module_declaration_body(
     StringLiteral(s, _) => (s, true, advance_parser(parser)) // For ambient modules like declare module "fs"
     _ =>
       return Err(
-        add_error(
+        add_error_with_code(
           parser,
-          "Expected namespace/module name",
+          ExpectedIdentifier.to_message(),
           current_token(parser).location(),
+          ExpectedIdentifier,
         ),
       )
   }
@@ -5778,20 +5876,22 @@ fn parse_import_declaration(parser : Parser) -> Result[(Node, Parser), Parser] {
             }
             _ =>
               return Err(
-                add_error(
+                add_error_with_code(
                   parser,
-                  "Expected identifier after 'as'",
+                  ExpectedIdentifier.to_message(),
                   current_token(parser).location(),
+                  ExpectedIdentifier,
                 ),
               )
           }
         }
         _ =>
           return Err(
-            add_error(
+            add_error_with_code(
               parser,
-              "Expected 'as' after '*'",
+              UnexpectedToken.to_message(),
               current_token(parser).location(),
+              UnexpectedToken,
             ),
           )
       }
@@ -5807,10 +5907,11 @@ fn parse_import_declaration(parser : Parser) -> Result[(Node, Parser), Parser] {
         }
         _ =>
           return Err(
-            add_error(
+            add_error_with_code(
               parser,
-              "Expected '}' after import specifiers",
+              ExpectedCloseBrace.to_message(),
               current_token(parser).location(),
+              ExpectedCloseBrace,
             ),
           )
       }
@@ -5823,10 +5924,11 @@ fn parse_import_declaration(parser : Parser) -> Result[(Node, Parser), Parser] {
     KeywordFrom(_) => advance_parser(parser)
     _ =>
       return Err(
-        add_error(
+        add_error_with_code(
           parser,
-          "Expected 'from' after import clause",
+          UnexpectedToken.to_message(),
           current_token(parser).location(),
+          UnexpectedToken,
         ),
       )
   }
@@ -6851,10 +6953,11 @@ fn parse_switch_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
     OpenParen(_) => advance_parser(parser)
     _ =>
       return Err(
-        add_error(
+        add_error_with_code(
           parser,
-          "Expected '(' after 'switch'",
+          ExpectedOpenParen.to_message(),
           current_token(parser).location(),
+          ExpectedOpenParen,
         ),
       )
   }
@@ -6870,10 +6973,11 @@ fn parse_switch_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
     CloseParen(_) => advance_parser(parser)
     _ =>
       return Err(
-        add_error(
+        add_error_with_code(
           parser,
-          "Expected ')' after switch expression",
+          ExpectedCloseParen.to_message(),
           current_token(parser).location(),
+          ExpectedCloseParen,
         ),
       )
   }
@@ -6883,10 +6987,11 @@ fn parse_switch_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
     OpenBrace(_) => advance_parser(parser)
     _ =>
       return Err(
-        add_error(
+        add_error_with_code(
           parser,
-          "Expected '{' after switch header",
+          ExpectedOpenBrace.to_message(),
           current_token(parser).location(),
+          ExpectedOpenBrace,
         ),
       )
   }
@@ -6899,10 +7004,11 @@ fn parse_switch_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
     CloseBrace(loc) => loc
     _ =>
       return Err(
-        add_error(
+        add_error_with_code(
           parser,
-          "Expected '}' after switch body",
+          ExpectedCloseBrace.to_message(),
           current_token(parser).location(),
+          ExpectedCloseBrace,
         ),
       )
   }
