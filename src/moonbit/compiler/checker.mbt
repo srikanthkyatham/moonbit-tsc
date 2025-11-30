@@ -1653,6 +1653,13 @@ fn infer_function_declaration_type(
   func : FunctionDeclaration,
   symbol : Symbol,
 ) -> (Type, TypeChecker) {
+  // Check if this is an overloaded function (multiple declarations)
+  if symbol.declarations.length() > 1 {
+    // Create an Object type with multiple call signatures
+    return infer_overloaded_function_type(checker, symbol)
+  }
+
+  // Single declaration - create simple Function type
   // Build parameter list
   let parameters : Array[CheckerParameter] = []
   let mut checker = checker
@@ -1690,6 +1697,84 @@ fn infer_function_declaration_type(
   }
   let (info, checker) = create_type_info(checker)
   let func_type = Type::Function({ parameters, return_type, info })
+
+  // Cache the type
+  let new_symbol_types = checker.symbol_types
+  new_symbol_types.set(symbol.id, func_type)
+  (func_type, { ..checker, symbol_types: new_symbol_types })
+}
+
+///|
+/// Infer type for overloaded function (multiple declarations)
+fn infer_overloaded_function_type(
+  checker : TypeChecker,
+  symbol : Symbol,
+) -> (Type, TypeChecker) {
+  let mut checker = checker
+  let call_signatures : Array[CheckerSignature] = []
+
+  // Process each declaration to create a call signature
+  for decl in symbol.declarations {
+    match decl {
+      FunctionDeclaration(func) => {
+        // Build parameter list for this overload
+        let parameters : Array[CheckerParameter] = []
+        for param_node in func.parameters {
+          match param_node {
+            Parameter(p) => {
+              let (param_type, c) = match p.type_annotation {
+                Some(type_node) =>
+                  match get_type_from_type_node(checker, type_node) {
+                    (Some(t), c2) => (t, c2)
+                    (None, c2) => any_type(c2)
+                  }
+                None => any_type(checker)
+              }
+              checker = c
+              parameters.push({
+                name: get_parameter_name(p.name),
+                param_type,
+                is_optional: p.is_optional,
+                is_rest: p.is_rest,
+              })
+            }
+            _ => ()
+          }
+        }
+
+        // Get return type for this overload
+        let (return_type, c) = match func.return_type {
+          Some(type_node) =>
+            match get_type_from_type_node(checker, type_node) {
+              (Some(t), c2) => (t, c2)
+              (None, c2) => any_type(c2)
+            }
+          None => any_type(checker)
+        }
+        checker = c
+
+        // Only add overload signatures (those without body), not the implementation
+        if func.body.is_none() {
+          call_signatures.push({
+            parameters,
+            return_type,
+            type_parameters: [],
+          })
+        }
+      }
+      _ => ()
+    }
+  }
+
+  // Create Object type with call signatures
+  let (info, checker) = create_type_info(checker)
+  let func_type = Type::Object({
+    properties: Map::new(),
+    call_signatures,
+    construct_signatures: [],
+    index_signatures: [],
+    info,
+  })
 
   // Cache the type
   let new_symbol_types = checker.symbol_types

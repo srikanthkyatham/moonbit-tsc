@@ -594,6 +594,7 @@ fn bind_function_declaration(
     _ => return binder // Anonymous function
   }
   let symbol = Symbol::new(name, SymbolKind::Function, binder.next_symbol_id)
+  let symbol = symbol.add_declaration(Node::FunctionDeclaration(func))
   let binder = declare_symbol(binder, name, symbol)
 
   // Create new scope and container for function body
@@ -1860,7 +1861,7 @@ fn declare_symbol(binder : Binder, name : String, symbol : Symbol) -> Binder {
         is_namespace_merge ||
         is_interface_namespace_merge {
         // Overload, getter/setter pair, or mergeable declaration - allow it
-        // For interface/namespace merging, merge the symbols
+        // For interface/namespace merging or function overloads, merge the symbols
         if is_interface_merge ||
           is_namespace_merge ||
           is_interface_namespace_merge {
@@ -1872,6 +1873,32 @@ fn declare_symbol(binder : Binder, name : String, symbol : Symbol) -> Binder {
           let new_scopes = binder.scopes
           new_scopes[scope_index] = updated_scope
           { ..binder, scopes: new_scopes }
+        } else if is_function_overload || is_method_overload {
+          // Add the new declaration to the existing symbol's declarations array
+          match symbol.value_declaration {
+            Some(new_decl) => {
+              let updated_declarations = existing_symbol.declarations.copy()
+              updated_declarations.push(new_decl)
+              let updated_symbol = Symbol::{
+                name: existing_symbol.name,
+                kind: existing_symbol.kind,
+                flags: existing_symbol.flags,
+                declarations: updated_declarations,
+                value_declaration: existing_symbol.value_declaration,
+                members: existing_symbol.members,
+                exports: existing_symbol.exports,
+                id: existing_symbol.id,
+              }
+              let new_symbols = scope.symbols
+              new_symbols.set(name, updated_symbol)
+              let updated_scope = { ..scope, symbols: new_symbols }
+              let scope_index = binder.scopes.length() - 1
+              let new_scopes = binder.scopes
+              new_scopes[scope_index] = updated_scope
+              { ..binder, scopes: new_scopes }
+            }
+            None => binder
+          }
         } else {
           binder
         }
