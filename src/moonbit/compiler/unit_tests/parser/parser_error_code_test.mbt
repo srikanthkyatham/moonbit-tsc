@@ -636,3 +636,269 @@ test "ParserErrorCode::to_message - type errors" {
     "Expression produces a union type that is too complex to represent.",
   )
 }
+
+// ============================================================================
+// Tests for Build/Emit Error Codes (TS4000-4999)
+// ============================================================================
+
+///|
+test "ParserErrorCode::to_int - build/emit private name errors" {
+  // TS4000: Import declaration using private name
+  assert_eq(
+    @compiler.get_parser_error_int("ImportDeclarationUsingPrivateName"),
+    4000,
+  )
+  // TS4002: Type parameter has circular default
+  assert_eq(
+    @compiler.get_parser_error_int("TypeParameterHasCircularDefault"),
+    4002,
+  )
+  // TS4004: Parameter of exported function using private name
+  assert_eq(
+    @compiler.get_parser_error_int("ParameterOfExportedFunctionUsingPrivateName"),
+    4004,
+  )
+  // TS4020: Extends clause using private name
+  assert_eq(
+    @compiler.get_parser_error_int("ExtendsClauseUsingPrivateName"),
+    4020,
+  )
+  // TS4022: Implements clause using private name
+  assert_eq(
+    @compiler.get_parser_error_int("ImplementsClauseUsingPrivateName"),
+    4022,
+  )
+  // TS4023: Extends expression not class or interface
+  assert_eq(
+    @compiler.get_parser_error_int("ExtendsExpressionNotClassOrInterface"),
+    4023,
+  )
+}
+
+///|
+test "ParserErrorCode::to_int - build/emit export errors" {
+  // TS4025: Exported variable using external module name
+  assert_eq(
+    @compiler.get_parser_error_int("ExportedVariableUsingExternalModuleName"),
+    4025,
+  )
+  // TS4030: Public property using private name
+  assert_eq(
+    @compiler.get_parser_error_int("PublicPropertyUsingPrivateName"),
+    4030,
+  )
+  // TS4031: Public static property using private name
+  assert_eq(
+    @compiler.get_parser_error_int("PublicStaticPropertyUsingPrivateName"),
+    4031,
+  )
+  // TS4032: Type parameter of exported function using private name
+  assert_eq(
+    @compiler.get_parser_error_int("TypeParameterOfExportedFunctionUsingPrivateName"),
+    4032,
+  )
+  // TS4033: Type parameter of public static method using private name
+  assert_eq(
+    @compiler.get_parser_error_int("TypeParameterOfPublicStaticMethodUsingPrivateName"),
+    4033,
+  )
+}
+
+///|
+test "ParserErrorCode::to_int - build/emit accessor and signature errors" {
+  // TS4043: Return type of public getter using private name
+  assert_eq(
+    @compiler.get_parser_error_int("ReturnTypeOfPublicGetterUsingPrivateName"),
+    4043,
+  )
+  // TS4044: Parameter of public setter using private name
+  assert_eq(
+    @compiler.get_parser_error_int("ParameterOfPublicSetterUsingPrivateName"),
+    4044,
+  )
+  // TS4045: Return type of method from exported interface using private name
+  assert_eq(
+    @compiler.get_parser_error_int("ReturnTypeOfMethodFromExportedInterfaceUsingPrivateName"),
+    4045,
+  )
+  // TS4048: Parameter of method from exported interface using private name
+  assert_eq(
+    @compiler.get_parser_error_int("ParameterOfMethodFromExportedInterfaceUsingPrivateName"),
+    4048,
+  )
+  // TS4049: Return type of constructor signature using private name
+  assert_eq(
+    @compiler.get_parser_error_int("ReturnTypeOfConstructorSignatureUsingPrivateName"),
+    4049,
+  )
+}
+
+///|
+test "ParserErrorCode::to_int - build/emit call/index signature errors" {
+  // TS4055: Return type of call signature using private name
+  assert_eq(
+    @compiler.get_parser_error_int("ReturnTypeOfCallSignatureUsingPrivateName"),
+    4055,
+  )
+  // TS4058: Parameter of call signature using private name
+  assert_eq(
+    @compiler.get_parser_error_int("ParameterOfCallSignatureUsingPrivateName"),
+    4058,
+  )
+  // TS4060: Return type of index signature using private name
+  assert_eq(
+    @compiler.get_parser_error_int("ReturnTypeOfIndexSignatureUsingPrivateName"),
+    4060,
+  )
+  // TS4063: Parameter of index signature using private name
+  assert_eq(
+    @compiler.get_parser_error_int("ParameterOfIndexSignatureUsingPrivateName"),
+    4063,
+  )
+}
+
+///|
+test "ParserErrorCode::to_int - build/emit type alias and default export errors" {
+  // TS4064: Default export using private name
+  assert_eq(
+    @compiler.get_parser_error_int("DefaultExportUsingPrivateName"),
+    4064,
+  )
+  // TS4065: Type parameter of exported type alias using private name
+  assert_eq(
+    @compiler.get_parser_error_int("TypeParameterOfExportedTypeAliasUsingPrivateName"),
+    4065,
+  )
+  // TS4067: Property of exported mapped type using private name
+  assert_eq(
+    @compiler.get_parser_error_int("PropertyOfExportedMappedTypeUsingPrivateName"),
+    4067,
+  )
+  // TS4083: Exported type alias using private name
+  assert_eq(
+    @compiler.get_parser_error_int("ExportedTypeAliasUsingPrivateName"),
+    4083,
+  )
+  // TS4084: Type parameter of exported class expression using private name
+  assert_eq(
+    @compiler.get_parser_error_int("TypeParameterOfExportedClassExpressionUsingPrivateName"),
+    4084,
+  )
+}
+
+///|
+test "ParserErrorCode::to_int - build/emit parameter and accessor errors" {
+  // TS4090: Cannot find parameter
+  assert_eq(@compiler.get_parser_error_int("CannotFindParameter"), 4090)
+  // TS4091: Rest parameter must be array type
+  assert_eq(@compiler.get_parser_error_int("RestParameterMustBeArrayType"), 4091)
+  // TS4092: Set accessor cannot have rest parameter
+  assert_eq(
+    @compiler.get_parser_error_int("SetAccessorCannotHaveRestParameter"),
+    4092,
+  )
+  // TS4094: Get accessor must have at most one parameter
+  assert_eq(
+    @compiler.get_parser_error_int("GetAccessorMustHaveAtMostOneParameter"),
+    4094,
+  )
+  // TS4097: Set accessor must have one parameter
+  assert_eq(
+    @compiler.get_parser_error_int("SetAccessorMustHaveOneParameter"),
+    4097,
+  )
+}
+
+///|
+test "ParserErrorCode::to_message - build/emit private name errors" {
+  assert_eq(
+    @compiler.get_parser_error_message_with_arg(
+      "ImportDeclarationUsingPrivateName",
+      Some("MyImport"),
+    ),
+    "Import declaration 'MyImport' is using private name ''.",
+  )
+  assert_eq(
+    @compiler.get_parser_error_message_with_arg(
+      "TypeParameterHasCircularDefault",
+      Some("T"),
+    ),
+    "Type parameter 'T' has a circular default.",
+  )
+  assert_eq(
+    @compiler.get_parser_error_message_with_arg(
+      "ExtendsExpressionNotClassOrInterface",
+      Some("MyExpression"),
+    ),
+    "'MyExpression' expression is not a class or interface.",
+  )
+}
+
+///|
+test "ParserErrorCode::to_message - build/emit property errors" {
+  assert_eq(
+    @compiler.get_parser_error_message_with_arg(
+      "PublicPropertyUsingPrivateName",
+      Some("myProp"),
+    ),
+    "Public property 'myProp' is using private name ''.",
+  )
+  assert_eq(
+    @compiler.get_parser_error_message_with_arg(
+      "PublicStaticPropertyUsingPrivateName",
+      Some("MyPrivate"),
+    ),
+    "Public static property is using private name 'MyPrivate'.",
+  )
+}
+
+///|
+test "ParserErrorCode::to_message - build/emit signature errors" {
+  assert_eq(
+    @compiler.get_parser_error_message("ReturnTypeOfPublicGetterUsingPrivateName"),
+    "Return type of public getter is using private name.",
+  )
+  assert_eq(
+    @compiler.get_parser_error_message("ReturnTypeOfMethodFromExportedInterfaceUsingPrivateName"),
+    "Return type of method from exported interface is using private name.",
+  )
+  assert_eq(
+    @compiler.get_parser_error_message("ReturnTypeOfConstructorSignatureUsingPrivateName"),
+    "Return type of constructor signature is using private name.",
+  )
+  assert_eq(
+    @compiler.get_parser_error_message("ReturnTypeOfCallSignatureUsingPrivateName"),
+    "Return type of call signature is using private name.",
+  )
+  assert_eq(
+    @compiler.get_parser_error_message("ReturnTypeOfIndexSignatureUsingPrivateName"),
+    "Return type of index signature is using private name.",
+  )
+}
+
+///|
+test "ParserErrorCode::to_message - build/emit parameter errors" {
+  assert_eq(
+    @compiler.get_parser_error_message_with_arg(
+      "CannotFindParameter",
+      Some("myParam"),
+    ),
+    "Cannot find parameter 'myParam'.",
+  )
+  assert_eq(
+    @compiler.get_parser_error_message("RestParameterMustBeArrayType"),
+    "A rest parameter must be of an array type.",
+  )
+  assert_eq(
+    @compiler.get_parser_error_message("SetAccessorCannotHaveRestParameter"),
+    "A 'set' accessor cannot have a rest parameter.",
+  )
+  assert_eq(
+    @compiler.get_parser_error_message("GetAccessorMustHaveAtMostOneParameter"),
+    "A 'get' accessor must have at most one parameter.",
+  )
+  assert_eq(
+    @compiler.get_parser_error_message("SetAccessorMustHaveOneParameter"),
+    "A 'set' accessor must have exactly one parameter.",
+  )
+}

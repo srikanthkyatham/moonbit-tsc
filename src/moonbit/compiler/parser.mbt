@@ -529,6 +529,37 @@ pub enum ParserErrorCode {
   ClassesMayNotHaveConstructorField // TS2856
   JSXElementNoClosingTag(String) // TS2857
   SuperCallMustBeRootLevel // TS2859
+  // Build/Emit Errors (TS4000-4999)
+  ImportDeclarationUsingPrivateName(String, String) // TS4000
+  TypeParameterHasCircularDefault(String) // TS4002
+  ParameterOfExportedFunctionUsingPrivateName(String, String) // TS4004
+  ExtendsClauseUsingPrivateName(String, String) // TS4020
+  ImplementsClauseUsingPrivateName(String, String) // TS4022
+  ExtendsExpressionNotClassOrInterface(String) // TS4023
+  ExportedVariableUsingExternalModuleName(String, String) // TS4025
+  PublicPropertyUsingPrivateName(String, String) // TS4030
+  PublicStaticPropertyUsingPrivateName(String) // TS4031
+  TypeParameterOfExportedFunctionUsingPrivateName(String) // TS4032
+  TypeParameterOfPublicStaticMethodUsingPrivateName(String) // TS4033
+  ReturnTypeOfPublicGetterUsingPrivateName // TS4043
+  ParameterOfPublicSetterUsingPrivateName(String) // TS4044
+  ReturnTypeOfMethodFromExportedInterfaceUsingPrivateName // TS4045
+  ParameterOfMethodFromExportedInterfaceUsingPrivateName(String) // TS4048
+  ReturnTypeOfConstructorSignatureUsingPrivateName // TS4049
+  ReturnTypeOfCallSignatureUsingPrivateName // TS4055
+  ParameterOfCallSignatureUsingPrivateName(String) // TS4058
+  ReturnTypeOfIndexSignatureUsingPrivateName // TS4060
+  ParameterOfIndexSignatureUsingPrivateName(String) // TS4063
+  DefaultExportUsingPrivateName(String) // TS4064
+  TypeParameterOfExportedTypeAliasUsingPrivateName(String) // TS4065
+  PropertyOfExportedMappedTypeUsingPrivateName(String) // TS4067
+  ExportedTypeAliasUsingPrivateName(String, String) // TS4083
+  TypeParameterOfExportedClassExpressionUsingPrivateName(String, String) // TS4084
+  CannotFindParameter(String) // TS4090
+  RestParameterMustBeArrayType // TS4091
+  SetAccessorCannotHaveRestParameter // TS4092
+  GetAccessorMustHaveAtMostOneParameter // TS4094
+  SetAccessorMustHaveOneParameter // TS4097
 } derive(Show, Eq)
 
 ///|
@@ -922,6 +953,37 @@ pub fn ParserErrorCode::to_int(self : ParserErrorCode) -> Int {
     ClassesMayNotHaveConstructorField => 2856
     JSXElementNoClosingTag(_) => 2857
     SuperCallMustBeRootLevel => 2859
+    // Build/Emit Errors (TS4000-4999)
+    ImportDeclarationUsingPrivateName(_, _) => 4000
+    TypeParameterHasCircularDefault(_) => 4002
+    ParameterOfExportedFunctionUsingPrivateName(_, _) => 4004
+    ExtendsClauseUsingPrivateName(_, _) => 4020
+    ImplementsClauseUsingPrivateName(_, _) => 4022
+    ExtendsExpressionNotClassOrInterface(_) => 4023
+    ExportedVariableUsingExternalModuleName(_, _) => 4025
+    PublicPropertyUsingPrivateName(_, _) => 4030
+    PublicStaticPropertyUsingPrivateName(_) => 4031
+    TypeParameterOfExportedFunctionUsingPrivateName(_) => 4032
+    TypeParameterOfPublicStaticMethodUsingPrivateName(_) => 4033
+    ReturnTypeOfPublicGetterUsingPrivateName => 4043
+    ParameterOfPublicSetterUsingPrivateName(_) => 4044
+    ReturnTypeOfMethodFromExportedInterfaceUsingPrivateName => 4045
+    ParameterOfMethodFromExportedInterfaceUsingPrivateName(_) => 4048
+    ReturnTypeOfConstructorSignatureUsingPrivateName => 4049
+    ReturnTypeOfCallSignatureUsingPrivateName => 4055
+    ParameterOfCallSignatureUsingPrivateName(_) => 4058
+    ReturnTypeOfIndexSignatureUsingPrivateName => 4060
+    ParameterOfIndexSignatureUsingPrivateName(_) => 4063
+    DefaultExportUsingPrivateName(_) => 4064
+    TypeParameterOfExportedTypeAliasUsingPrivateName(_) => 4065
+    PropertyOfExportedMappedTypeUsingPrivateName(_) => 4067
+    ExportedTypeAliasUsingPrivateName(_, _) => 4083
+    TypeParameterOfExportedClassExpressionUsingPrivateName(_, _) => 4084
+    CannotFindParameter(_) => 4090
+    RestParameterMustBeArrayType => 4091
+    SetAccessorCannotHaveRestParameter => 4092
+    GetAccessorMustHaveAtMostOneParameter => 4094
+    SetAccessorMustHaveOneParameter => 4097
   }
 }
 
@@ -1580,6 +1642,66 @@ pub fn ParserErrorCode::to_message(self : ParserErrorCode) -> String {
       "JSX element '\{tag}' has no corresponding closing tag."
     SuperCallMustBeRootLevel =>
       "A 'super' call must be a root-level statement."
+    // Build/Emit Errors (TS4000-4999)
+    ImportDeclarationUsingPrivateName(decl, name) =>
+      "Import declaration '\{decl}' is using private name '\{name}'."
+    TypeParameterHasCircularDefault(param) =>
+      "Type parameter '\{param}' has a circular default."
+    ParameterOfExportedFunctionUsingPrivateName(func, name) =>
+      "Parameter of exported function '\{func}' is using private name '\{name}'."
+    ExtendsClauseUsingPrivateName(cls, name) =>
+      "Extends clause of '\{cls}' is using private name '\{name}'."
+    ImplementsClauseUsingPrivateName(cls, name) =>
+      "Implements clause of '\{cls}' is using private name '\{name}'."
+    ExtendsExpressionNotClassOrInterface(name) =>
+      "'\{name}' expression is not a class or interface."
+    ExportedVariableUsingExternalModuleName(var_name, mod_name) =>
+      "Exported variable '\{var_name}' is using name '\{mod_name}' from external module."
+    PublicPropertyUsingPrivateName(prop, name) =>
+      "Public property '\{prop}' is using private name '\{name}'."
+    PublicStaticPropertyUsingPrivateName(name) =>
+      "Public static property is using private name '\{name}'."
+    TypeParameterOfExportedFunctionUsingPrivateName(name) =>
+      "Type parameter of exported function is using private name '\{name}'."
+    TypeParameterOfPublicStaticMethodUsingPrivateName(name) =>
+      "Type parameter of public static method is using private name '\{name}'."
+    ReturnTypeOfPublicGetterUsingPrivateName =>
+      "Return type of public getter is using private name."
+    ParameterOfPublicSetterUsingPrivateName(name) =>
+      "Parameter of public setter is using private name '\{name}'."
+    ReturnTypeOfMethodFromExportedInterfaceUsingPrivateName =>
+      "Return type of method from exported interface is using private name."
+    ParameterOfMethodFromExportedInterfaceUsingPrivateName(name) =>
+      "Parameter '\{name}' of method from exported interface is using private name."
+    ReturnTypeOfConstructorSignatureUsingPrivateName =>
+      "Return type of constructor signature is using private name."
+    ReturnTypeOfCallSignatureUsingPrivateName =>
+      "Return type of call signature is using private name."
+    ParameterOfCallSignatureUsingPrivateName(name) =>
+      "Parameter '\{name}' of call signature is using private name."
+    ReturnTypeOfIndexSignatureUsingPrivateName =>
+      "Return type of index signature is using private name."
+    ParameterOfIndexSignatureUsingPrivateName(name) =>
+      "Parameter '\{name}' of index signature is using private name."
+    DefaultExportUsingPrivateName(name) =>
+      "Default export is using private name '\{name}'."
+    TypeParameterOfExportedTypeAliasUsingPrivateName(name) =>
+      "Type parameter of exported type alias is using private name '\{name}'."
+    PropertyOfExportedMappedTypeUsingPrivateName(name) =>
+      "Property of exported mapped type is using private name '\{name}'."
+    ExportedTypeAliasUsingPrivateName(alias, name) =>
+      "Exported type alias '\{alias}' is using private name '\{name}'."
+    TypeParameterOfExportedClassExpressionUsingPrivateName(cls, name) =>
+      "Type parameter of exported class expression '\{cls}' is using private name '\{name}'."
+    CannotFindParameter(name) => "Cannot find parameter '\{name}'."
+    RestParameterMustBeArrayType =>
+      "A rest parameter must be of an array type."
+    SetAccessorCannotHaveRestParameter =>
+      "A 'set' accessor cannot have a rest parameter."
+    GetAccessorMustHaveAtMostOneParameter =>
+      "A 'get' accessor must have at most one parameter."
+    SetAccessorMustHaveOneParameter =>
+      "A 'set' accessor must have exactly one parameter."
   }
 }
 
@@ -1730,6 +1852,64 @@ pub fn get_parser_error_int_with_arg(name : String, arg : String?) -> Int {
     "AbstractMethodOnlyInAbstractClass" => AbstractMethodOnlyInAbstractClass.to_int()
     "NonAbstractClassMissingAbstractMember" =>
       NonAbstractClassMissingAbstractMember(arg.unwrap_or(""), "").to_int()
+    // Build/Emit Errors (TS4000-4999)
+    "ImportDeclarationUsingPrivateName" =>
+      ImportDeclarationUsingPrivateName(arg.unwrap_or(""), "").to_int()
+    "TypeParameterHasCircularDefault" =>
+      TypeParameterHasCircularDefault(arg.unwrap_or("")).to_int()
+    "ParameterOfExportedFunctionUsingPrivateName" =>
+      ParameterOfExportedFunctionUsingPrivateName(arg.unwrap_or(""), "").to_int()
+    "ExtendsClauseUsingPrivateName" =>
+      ExtendsClauseUsingPrivateName(arg.unwrap_or(""), "").to_int()
+    "ImplementsClauseUsingPrivateName" =>
+      ImplementsClauseUsingPrivateName(arg.unwrap_or(""), "").to_int()
+    "ExtendsExpressionNotClassOrInterface" =>
+      ExtendsExpressionNotClassOrInterface(arg.unwrap_or("")).to_int()
+    "ExportedVariableUsingExternalModuleName" =>
+      ExportedVariableUsingExternalModuleName(arg.unwrap_or(""), "").to_int()
+    "PublicPropertyUsingPrivateName" =>
+      PublicPropertyUsingPrivateName(arg.unwrap_or(""), "").to_int()
+    "PublicStaticPropertyUsingPrivateName" =>
+      PublicStaticPropertyUsingPrivateName(arg.unwrap_or("")).to_int()
+    "TypeParameterOfExportedFunctionUsingPrivateName" =>
+      TypeParameterOfExportedFunctionUsingPrivateName(arg.unwrap_or("")).to_int()
+    "TypeParameterOfPublicStaticMethodUsingPrivateName" =>
+      TypeParameterOfPublicStaticMethodUsingPrivateName(arg.unwrap_or("")).to_int()
+    "ReturnTypeOfPublicGetterUsingPrivateName" =>
+      ReturnTypeOfPublicGetterUsingPrivateName.to_int()
+    "ParameterOfPublicSetterUsingPrivateName" =>
+      ParameterOfPublicSetterUsingPrivateName(arg.unwrap_or("")).to_int()
+    "ReturnTypeOfMethodFromExportedInterfaceUsingPrivateName" =>
+      ReturnTypeOfMethodFromExportedInterfaceUsingPrivateName.to_int()
+    "ParameterOfMethodFromExportedInterfaceUsingPrivateName" =>
+      ParameterOfMethodFromExportedInterfaceUsingPrivateName(arg.unwrap_or("")).to_int()
+    "ReturnTypeOfConstructorSignatureUsingPrivateName" =>
+      ReturnTypeOfConstructorSignatureUsingPrivateName.to_int()
+    "ReturnTypeOfCallSignatureUsingPrivateName" =>
+      ReturnTypeOfCallSignatureUsingPrivateName.to_int()
+    "ParameterOfCallSignatureUsingPrivateName" =>
+      ParameterOfCallSignatureUsingPrivateName(arg.unwrap_or("")).to_int()
+    "ReturnTypeOfIndexSignatureUsingPrivateName" =>
+      ReturnTypeOfIndexSignatureUsingPrivateName.to_int()
+    "ParameterOfIndexSignatureUsingPrivateName" =>
+      ParameterOfIndexSignatureUsingPrivateName(arg.unwrap_or("")).to_int()
+    "DefaultExportUsingPrivateName" =>
+      DefaultExportUsingPrivateName(arg.unwrap_or("")).to_int()
+    "TypeParameterOfExportedTypeAliasUsingPrivateName" =>
+      TypeParameterOfExportedTypeAliasUsingPrivateName(arg.unwrap_or("")).to_int()
+    "PropertyOfExportedMappedTypeUsingPrivateName" =>
+      PropertyOfExportedMappedTypeUsingPrivateName(arg.unwrap_or("")).to_int()
+    "ExportedTypeAliasUsingPrivateName" =>
+      ExportedTypeAliasUsingPrivateName(arg.unwrap_or(""), "").to_int()
+    "TypeParameterOfExportedClassExpressionUsingPrivateName" =>
+      TypeParameterOfExportedClassExpressionUsingPrivateName(arg.unwrap_or(""), "").to_int()
+    "CannotFindParameter" => CannotFindParameter(arg.unwrap_or("")).to_int()
+    "RestParameterMustBeArrayType" => RestParameterMustBeArrayType.to_int()
+    "SetAccessorCannotHaveRestParameter" =>
+      SetAccessorCannotHaveRestParameter.to_int()
+    "GetAccessorMustHaveAtMostOneParameter" =>
+      GetAccessorMustHaveAtMostOneParameter.to_int()
+    "SetAccessorMustHaveOneParameter" => SetAccessorMustHaveOneParameter.to_int()
     _ => -1
   }
 }
@@ -1883,6 +2063,65 @@ pub fn get_parser_error_message_with_arg(name : String, arg : String?) -> String
       AbstractMethodOnlyInAbstractClass.to_message()
     "NonAbstractClassMissingAbstractMember" =>
       NonAbstractClassMissingAbstractMember(arg.unwrap_or(""), "").to_message()
+    // Build/Emit Errors (TS4000-4999)
+    "ImportDeclarationUsingPrivateName" =>
+      ImportDeclarationUsingPrivateName(arg.unwrap_or(""), "").to_message()
+    "TypeParameterHasCircularDefault" =>
+      TypeParameterHasCircularDefault(arg.unwrap_or("")).to_message()
+    "ParameterOfExportedFunctionUsingPrivateName" =>
+      ParameterOfExportedFunctionUsingPrivateName(arg.unwrap_or(""), "").to_message()
+    "ExtendsClauseUsingPrivateName" =>
+      ExtendsClauseUsingPrivateName(arg.unwrap_or(""), "").to_message()
+    "ImplementsClauseUsingPrivateName" =>
+      ImplementsClauseUsingPrivateName(arg.unwrap_or(""), "").to_message()
+    "ExtendsExpressionNotClassOrInterface" =>
+      ExtendsExpressionNotClassOrInterface(arg.unwrap_or("")).to_message()
+    "ExportedVariableUsingExternalModuleName" =>
+      ExportedVariableUsingExternalModuleName(arg.unwrap_or(""), "").to_message()
+    "PublicPropertyUsingPrivateName" =>
+      PublicPropertyUsingPrivateName(arg.unwrap_or(""), "").to_message()
+    "PublicStaticPropertyUsingPrivateName" =>
+      PublicStaticPropertyUsingPrivateName(arg.unwrap_or("")).to_message()
+    "TypeParameterOfExportedFunctionUsingPrivateName" =>
+      TypeParameterOfExportedFunctionUsingPrivateName(arg.unwrap_or("")).to_message()
+    "TypeParameterOfPublicStaticMethodUsingPrivateName" =>
+      TypeParameterOfPublicStaticMethodUsingPrivateName(arg.unwrap_or("")).to_message()
+    "ReturnTypeOfPublicGetterUsingPrivateName" =>
+      ReturnTypeOfPublicGetterUsingPrivateName.to_message()
+    "ParameterOfPublicSetterUsingPrivateName" =>
+      ParameterOfPublicSetterUsingPrivateName(arg.unwrap_or("")).to_message()
+    "ReturnTypeOfMethodFromExportedInterfaceUsingPrivateName" =>
+      ReturnTypeOfMethodFromExportedInterfaceUsingPrivateName.to_message()
+    "ParameterOfMethodFromExportedInterfaceUsingPrivateName" =>
+      ParameterOfMethodFromExportedInterfaceUsingPrivateName(arg.unwrap_or("")).to_message()
+    "ReturnTypeOfConstructorSignatureUsingPrivateName" =>
+      ReturnTypeOfConstructorSignatureUsingPrivateName.to_message()
+    "ReturnTypeOfCallSignatureUsingPrivateName" =>
+      ReturnTypeOfCallSignatureUsingPrivateName.to_message()
+    "ParameterOfCallSignatureUsingPrivateName" =>
+      ParameterOfCallSignatureUsingPrivateName(arg.unwrap_or("")).to_message()
+    "ReturnTypeOfIndexSignatureUsingPrivateName" =>
+      ReturnTypeOfIndexSignatureUsingPrivateName.to_message()
+    "ParameterOfIndexSignatureUsingPrivateName" =>
+      ParameterOfIndexSignatureUsingPrivateName(arg.unwrap_or("")).to_message()
+    "DefaultExportUsingPrivateName" =>
+      DefaultExportUsingPrivateName(arg.unwrap_or("")).to_message()
+    "TypeParameterOfExportedTypeAliasUsingPrivateName" =>
+      TypeParameterOfExportedTypeAliasUsingPrivateName(arg.unwrap_or("")).to_message()
+    "PropertyOfExportedMappedTypeUsingPrivateName" =>
+      PropertyOfExportedMappedTypeUsingPrivateName(arg.unwrap_or("")).to_message()
+    "ExportedTypeAliasUsingPrivateName" =>
+      ExportedTypeAliasUsingPrivateName(arg.unwrap_or(""), "").to_message()
+    "TypeParameterOfExportedClassExpressionUsingPrivateName" =>
+      TypeParameterOfExportedClassExpressionUsingPrivateName(arg.unwrap_or(""), "").to_message()
+    "CannotFindParameter" => CannotFindParameter(arg.unwrap_or("")).to_message()
+    "RestParameterMustBeArrayType" => RestParameterMustBeArrayType.to_message()
+    "SetAccessorCannotHaveRestParameter" =>
+      SetAccessorCannotHaveRestParameter.to_message()
+    "GetAccessorMustHaveAtMostOneParameter" =>
+      GetAccessorMustHaveAtMostOneParameter.to_message()
+    "SetAccessorMustHaveOneParameter" =>
+      SetAccessorMustHaveOneParameter.to_message()
     _ => "Unknown error"
   }
 }
