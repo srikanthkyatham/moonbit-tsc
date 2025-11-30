@@ -1198,7 +1198,8 @@ fn check_statement(checker : TypeChecker, node : Node) -> TypeChecker {
     ForStatement(for_stmt) => check_for_statement(checker, for_stmt)
     BlockStatement(block) => check_block_statement(checker, block)
     ClassDeclaration(class_decl) => check_class_declaration(checker, class_decl)
-    InterfaceDeclaration(_) => checker // Interfaces don't need runtime checking
+    InterfaceDeclaration(iface_decl) =>
+      check_interface_declaration(checker, iface_decl)
     EnumDeclaration(enum_decl) => check_enum_declaration(checker, enum_decl)
     TypeAliasDeclaration(_) => checker // Type aliases don't need runtime checking
     ImportDeclaration(_) => checker // Imports checked separately
@@ -1771,6 +1772,30 @@ fn infer_binary_expression_type(
             }
           }
           (checker, target)
+        }
+        ElementAccessExpression(elem) => {
+          // Check for readonly index signature (TS2542)
+          let (object_type, c) = infer_type(checker, elem.expression)
+          let checker = match object_type {
+            Object(obj_type) => {
+              // Check if any index signature is readonly
+              let has_readonly_index = obj_type.index_signatures.iter().any(fn(
+                idx_sig
+              ) { idx_sig.is_readonly })
+              if has_readonly_index {
+                add_diagnostic_with_code(
+                  c,
+                  "Index signature in type '\{type_to_string(object_type)}' only permits reading",
+                  get_node_location(BinaryExpression(bin_expr)),
+                  TS2542,
+                )
+              } else {
+                c
+              }
+            }
+            _ => c
+          }
+          (checker, left_type)
         }
         _ => (checker, left_type)
       }
@@ -3181,7 +3206,23 @@ fn infer_property_access_type(
   )
   match prop_type_opt {
     Some(prop_type) => (prop_type, checker)
-    None => any_type(checker)
+    None => {
+      // TS2459: Type has no property and no string index signature
+      // Only emit if the object type is a concrete type (not any/unknown)
+      let checker = match object_type {
+        Any(_) | Unknown(_) => checker // Don't error for any/unknown
+        Object(_) => {
+          add_diagnostic_with_code(
+            checker,
+            "Property '\{prop.name}' does not exist on type '\{type_to_string(object_type)}'",
+            get_node_location(prop.expression),
+            TS2339, // TS2339 is the standard "property does not exist" error
+          )
+        }
+        _ => checker // Don't error for other types yet
+      }
+      any_type(checker)
+    }
   }
 }
 
@@ -4997,6 +5038,139 @@ fn check_class_declaration(
 }
 
 ///|
+/// Simple type compatibility check (without detailed error messages)
+fn is_simple_type_compatible(source : Type, target : Type) -> Bool {
+  match (source, target) {
+    // Any is compatible with anything
+    (Any(_), _) | (_, Any(_)) => true
+    // Never is compatible with everything
+    (Never(_), _) => true
+    // Unknown is compatible with unknown
+    (Unknown(_), Unknown(_)) => true
+    // Same primitive types
+    (Number(_), Number(_)) => true
+    (String(_), String(_)) => true
+    (Boolean(_), Boolean(_)) => true
+    (Void(_), Void(_)) => true
+    (Undefined(_), Undefined(_)) => true
+    (Null(_), Null(_)) => true
+    (Symbol(_), Symbol(_)) => true
+    // Literal types compatible with their base types
+    (NumberLiteral(_, _), Number(_)) => true
+    (StringLiteral(_, _), String(_)) => true
+    (BooleanLiteral(_, _), Boolean(_)) => true
+    // Same literal values
+    (NumberLiteral(v1, _), NumberLiteral(v2, _)) => v1 == v2
+    (StringLiteral(v1, _), StringLiteral(v2, _)) => v1 == v2
+    (BooleanLiteral(v1, _), BooleanLiteral(v2, _)) => v1 == v2
+    // Union target: source is compatible if it's compatible with any union member
+    (_, Union(union_type)) => {
+      for t in union_type.types {
+        if is_simple_type_compatible(source, t) {
+          return true
+        }
+      }
+      false
+    }
+    // Objects are loosely compatible (avoid false positives)
+    (Object(_), Object(_)) => true
+    // Different types
+    _ => false
+  }
+}
+
+///|
+/// Check interface declaration - validates index signature parameter types
+/// and property compatibility with index signatures
+fn check_interface_declaration(
+  checker : TypeChecker,
+  iface_decl : InterfaceDeclaration,
+) -> TypeChecker {
+  let mut checker = checker
+  // First pass: collect index signature return types and validate param types
+  let string_index_type : Ref[Type?] = { val: None }
+  for interface_member in iface_decl.members {
+    match interface_member {
+      IndexSignatureDeclaration(idx_sig) => {
+        // Get the parameter type (key type)
+        let (param_type, c) = match
+          get_type_from_type_node(checker, idx_sig.parameter_type) {
+          (Some(t), c2) => (t, c2)
+          (None, c2) => {
+            let (t, c3) = any_type(c2)
+            (t, c3)
+          }
+        }
+        checker = c
+        // TS2716: Validate that param_type is string, number, or symbol
+        checker = match param_type {
+          String(_) | Number(_) | Symbol(_) => checker
+          _ =>
+            add_diagnostic_with_code(
+              checker,
+              "An index signature parameter type must be 'string', 'number', 'symbol', or a template literal type",
+              idx_sig.location,
+              TS2716,
+            )
+        }
+        // Get the return type (value type) for property compatibility check
+        let (ret_type, c) = match
+          get_type_from_type_node(checker, idx_sig.return_type) {
+          (Some(t), c2) => (t, c2)
+          (None, c2) => {
+            let (t, c3) = any_type(c2)
+            (t, c3)
+          }
+        }
+        checker = c
+        // Store string index signature type for property checking
+        match param_type {
+          String(_) => string_index_type.val = Some(ret_type)
+          _ => ()
+        }
+      }
+      _ => ()
+    }
+  }
+  // Second pass: check property types against index signature
+  match string_index_type.val {
+    Some(idx_ret_type) => {
+      for interface_member in iface_decl.members {
+        match interface_member {
+          PropertyDeclaration(prop) => {
+            let (prop_type, c) = match prop.type_annotation {
+              Some(type_node) =>
+                match get_type_from_type_node(checker, type_node) {
+                  (Some(t), c2) => (t, c2)
+                  (None, c2) => {
+                    let (t, c3) = any_type(c2)
+                    (t, c3)
+                  }
+                }
+              None => any_type(checker)
+            }
+            checker = c
+            // TS2745: Check if property type is assignable to index signature type
+            let is_compatible = is_simple_type_compatible(prop_type, idx_ret_type)
+            if not(is_compatible) {
+              checker = add_diagnostic_with_code(
+                checker,
+                "Property '\{prop.name}' of type '\{type_to_string(prop_type)}' is not assignable to '\{type_to_string(idx_ret_type)}' index type '\{type_to_string(idx_ret_type)}'",
+                prop.location,
+                TS2745,
+              )
+            }
+          }
+          _ => ()
+        }
+      }
+    }
+    None => ()
+  }
+  checker
+}
+
+///|
 /// Build class type for 'this' context (without symbol caching)
 fn build_class_type_for_this(
   checker : TypeChecker,
@@ -5725,6 +5899,17 @@ fn resolve_interface_type(
               }
             }
             checker = c
+            // TS2716: Validate that param_type is string, number, or symbol
+            checker = match param_type {
+              String(_) | Number(_) | Symbol(_) => checker
+              _ =>
+                add_diagnostic_with_code(
+                  checker,
+                  "An index signature parameter type must be 'string', 'number', 'symbol', or a template literal type",
+                  idx_sig.location,
+                  TS2716,
+                )
+            }
             // Get the return type (value type)
             let (ret_type, c) = match
               get_type_from_type_node(checker, idx_sig.return_type) {
