@@ -200,6 +200,16 @@ pub enum MismatchReason {
   NewExprTargetLacksConstructSig(String) // TS2747: 'new' expression, whose target lacks a construct signature, implicitly has an 'any' type
   CannotAccessBeforeInit(String) // TS2748: '{0}' cannot be accessed before initialization
   PropertyCanOnlyBeAssignedWithThis(String) // TS2810: Property '{0}' can only be assigned using 'this' access
+
+  // Array & Iteration errors
+  TypeNotArrayOrString(String) // TS2548: Type '{0}' is not an array type or a string type
+  TypeNotArrayOrStringDownlevel(String) // TS2549: Type '{0}' is not an array type or a string type. Use compiler option '--downlevelIteration'
+  PropertyDoesNotExistDidYouMean(String, String, String) // TS2551: Property '{0}' does not exist on type '{1}'. Did you mean '{2}'?
+  CannotFindNameDidYouMean(String, String) // TS2552: Cannot find name '{0}'. Did you mean '{1}'?
+  ExpectedNArgsButGotMore(Int, Int) // TS2557: Expected at least {0} arguments, but got {1}
+  RestElementTypeMustBeArray(String) // TS2574: A rest element type must be an array type
+  NoOverloadExpectsNArgs(Int) // TS2575: No overload expects {0} arguments
+  TypeCanOnlyBeIteratedWithDownlevel(String) // TS2802: Type '{0}' can only be iterated through when using '--downlevelIteration'
 } derive(Show, Eq)
 
 // ============================================================================
@@ -1006,6 +1016,23 @@ pub fn get_friendly_title(reason : MismatchReason) -> String {
       "'" + name + "' CANNOT BE ACCESSED BEFORE INITIALIZATION"
     PropertyCanOnlyBeAssignedWithThis(prop) =>
       "PROPERTY '" + prop + "' CAN ONLY BE ASSIGNED USING 'THIS'"
+    // Array & Iteration errors
+    TypeNotArrayOrString(typ) =>
+      "TYPE '" + typ + "' IS NOT AN ARRAY OR STRING TYPE"
+    TypeNotArrayOrStringDownlevel(typ) =>
+      "TYPE '" + typ + "' IS NOT ARRAY OR STRING (USE --DOWNLEVELITERATION)"
+    PropertyDoesNotExistDidYouMean(prop, typ, suggestion) =>
+      "PROPERTY '" + prop + "' DOES NOT EXIST ON '" + typ + "' - DID YOU MEAN '" + suggestion + "'?"
+    CannotFindNameDidYouMean(name, suggestion) =>
+      "CANNOT FIND NAME '" + name + "' - DID YOU MEAN '" + suggestion + "'?"
+    ExpectedNArgsButGotMore(expected, actual) =>
+      "EXPECTED " + expected.to_string() + " ARGS BUT GOT " + actual.to_string()
+    RestElementTypeMustBeArray(typ) =>
+      "REST ELEMENT TYPE '" + typ + "' MUST BE AN ARRAY TYPE"
+    NoOverloadExpectsNArgs(n) =>
+      "NO OVERLOAD EXPECTS " + n.to_string() + " ARGUMENTS"
+    TypeCanOnlyBeIteratedWithDownlevel(typ) =>
+      "TYPE '" + typ + "' CAN ONLY BE ITERATED WITH --DOWNLEVELITERATION"
   }
 }
 
@@ -1503,6 +1530,47 @@ pub fn get_why_explanation(reason : MismatchReason) -> String {
       "Property '" +
       prop +
       "' can only be assigned using a 'this.' access. This restriction exists for readonly properties in a class constructor - they can only be assigned using 'this.propertyName = value', not through destructuring or other indirect means."
+    // Array & Iteration errors
+    TypeNotArrayOrString(typ) =>
+      "Type '" +
+      typ +
+      "' is not an array type or a string type. The spread operator (...) and certain iteration methods require the operand to be an array or string, which can be iterated over character by character or element by element."
+    TypeNotArrayOrStringDownlevel(typ) =>
+      "Type '" +
+      typ +
+      "' is not an array type or a string type. When targeting older JavaScript versions, you need to enable '--downlevelIteration' to iterate over types like Set, Map, or other iterables that aren't arrays or strings."
+    PropertyDoesNotExistDidYouMean(prop, typ, suggestion) =>
+      "Property '" +
+      prop +
+      "' does not exist on type '" +
+      typ +
+      "'. TypeScript found a similar property '" +
+      suggestion +
+      "' - this might be a typo. Property names are case-sensitive in TypeScript."
+    CannotFindNameDidYouMean(name, suggestion) =>
+      "Cannot find name '" +
+      name +
+      "'. TypeScript couldn't locate a variable, function, or type with this name. Did you mean '" +
+      suggestion +
+      "'? Check for typos or missing imports."
+    ExpectedNArgsButGotMore(expected, actual) =>
+      "Expected at least " +
+      expected.to_string() +
+      " arguments, but got " +
+      actual.to_string() +
+      ". When using spread syntax, the resulting number of arguments exceeds what the function can accept."
+    RestElementTypeMustBeArray(typ) =>
+      "A rest element type must be an array type, but got '" +
+      typ +
+      "'. Rest parameters (...args) and rest elements in destructuring patterns must be arrays so TypeScript can spread their elements."
+    NoOverloadExpectsNArgs(n) =>
+      "No overload expects " +
+      n.to_string() +
+      " arguments. The function has multiple overloaded signatures, but none of them accept this number of arguments. Check the function's type definitions to see valid argument counts."
+    TypeCanOnlyBeIteratedWithDownlevel(typ) =>
+      "Type '" +
+      typ +
+      "' can only be iterated through when using the '--downlevelIteration' compiler option. This type implements the iterable protocol but requires special handling when targeting older JavaScript versions."
   }
 }
 
@@ -2511,6 +2579,87 @@ pub fn get_how_to_fix(
       fixes.push("    // This won't work:")
       fixes.push("    // const { " + prop + " } = this; " + prop + " = value;")
     }
+    // Array & Iteration errors
+    TypeNotArrayOrString(typ) => {
+      fixes.push("Ensure the value is an array or string type.")
+      fixes.push("Current type: " + typ)
+      fixes.push("")
+      fixes.push("For spreading into an array:")
+      fixes.push("    const arr = [...someArray];  // works with arrays")
+      fixes.push("    const chars = [...someString];  // works with strings")
+      fixes.push("")
+      fixes.push("Convert to array if needed:")
+      fixes.push("    Array.from(iterable)")
+    }
+    TypeNotArrayOrStringDownlevel(typ) => {
+      fixes.push("Enable '--downlevelIteration' in tsconfig.json:")
+      fixes.push("    {")
+      fixes.push("        \"compilerOptions\": {")
+      fixes.push("            \"downlevelIteration\": true")
+      fixes.push("        }")
+      fixes.push("    }")
+      fixes.push("")
+      fixes.push("Or convert to array first:")
+      fixes.push("    Array.from(" + typ + ")  // converts iterable to array")
+    }
+    PropertyDoesNotExistDidYouMean(prop, _, suggestion) => {
+      fixes.push("Did you mean '" + suggestion + "' instead of '" + prop + "'?")
+      fixes.push("")
+      fixes.push("Check for typos - property names are case-sensitive:")
+      fixes.push("    obj." + suggestion + "  // correct")
+      fixes.push("    obj." + prop + "  // typo")
+      fixes.push("")
+      fixes.push("If the property should exist, add it to the type definition.")
+    }
+    CannotFindNameDidYouMean(name, suggestion) => {
+      fixes.push("Did you mean '" + suggestion + "' instead of '" + name + "'?")
+      fixes.push("")
+      fixes.push("Check for typos in variable/function names:")
+      fixes.push("    " + suggestion + "  // correct")
+      fixes.push("    " + name + "  // typo")
+      fixes.push("")
+      fixes.push("Or import the missing name if it's from another module.")
+    }
+    ExpectedNArgsButGotMore(expected, actual) => {
+      fixes.push("The function expects at most " + expected.to_string() + " arguments.")
+      fixes.push("You provided " + actual.to_string() + " arguments.")
+      fixes.push("")
+      fixes.push("Remove extra arguments or use a rest parameter:")
+      fixes.push("    function fn(a: number, b: number, ...rest: number[]) { }")
+    }
+    RestElementTypeMustBeArray(typ) => {
+      fixes.push("Rest elements must be array types.")
+      fixes.push("Current type: " + typ)
+      fixes.push("")
+      fixes.push("Change to an array type:")
+      fixes.push("    function fn(...args: string[]) { }  // correct")
+      fixes.push("    const [first, ...rest]: [number, ...number[]] = tuple;")
+      fixes.push("")
+      fixes.push("Or convert to array:")
+      fixes.push("    const arr = Array.from(iterable);")
+    }
+    NoOverloadExpectsNArgs(n) => {
+      fixes.push("No function overload accepts " + n.to_string() + " arguments.")
+      fixes.push("")
+      fixes.push("Check the function's type definitions for valid signatures:")
+      fixes.push("    function fn(a: string): void;")
+      fixes.push("    function fn(a: string, b: number): void;")
+      fixes.push("")
+      fixes.push("Match one of the available overloads.")
+    }
+    TypeCanOnlyBeIteratedWithDownlevel(typ) => {
+      fixes.push("Enable '--downlevelIteration' in tsconfig.json:")
+      fixes.push("    {")
+      fixes.push("        \"compilerOptions\": {")
+      fixes.push("            \"downlevelIteration\": true")
+      fixes.push("        }")
+      fixes.push("    }")
+      fixes.push("")
+      fixes.push("Or target ES2015+ which supports iteration natively:")
+      fixes.push("    \"target\": \"ES2015\"")
+      fixes.push("")
+      fixes.push("Or convert to array: Array.from(" + typ + ")")
+    }
   }
   fixes
 }
@@ -2625,6 +2774,15 @@ pub fn get_error_code(reason : MismatchReason) -> Int {
     NewExprTargetLacksConstructSig(_) => 2747 // TS2747: new expression target lacks construct signature
     CannotAccessBeforeInit(_) => 2748 // TS2748: Cannot access before initialization
     PropertyCanOnlyBeAssignedWithThis(_) => 2810 // TS2810: Property can only be assigned using 'this'
+    // Array & Iteration errors
+    TypeNotArrayOrString(_) => 2548 // TS2548: Type is not an array type or a string type
+    TypeNotArrayOrStringDownlevel(_) => 2549 // TS2549: Type is not an array type or a string type (downlevelIteration)
+    PropertyDoesNotExistDidYouMean(_, _, _) => 2551 // TS2551: Property does not exist, did you mean?
+    CannotFindNameDidYouMean(_, _) => 2552 // TS2552: Cannot find name, did you mean?
+    ExpectedNArgsButGotMore(_, _) => 2557 // TS2557: Expected N arguments but got more
+    RestElementTypeMustBeArray(_) => 2574 // TS2574: A rest element type must be an array type
+    NoOverloadExpectsNArgs(_) => 2575 // TS2575: No overload expects N arguments
+    TypeCanOnlyBeIteratedWithDownlevel(_) => 2802 // TS2802: Type can only be iterated with downlevelIteration
   }
 }
 

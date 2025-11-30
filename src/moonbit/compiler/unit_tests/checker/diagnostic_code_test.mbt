@@ -3915,3 +3915,239 @@ test "DiagnosticCode - valid readonly with parameter property" {
     }
   }
 }
+
+// =============================================================================
+// Array & Iteration Errors Tests
+// =============================================================================
+
+///|
+test "DiagnosticCode - TS2548: type is not array or string - spread object" {
+  let source =
+    #|const obj = { a: 1, b: 2 };
+    #|const arr = [...obj];
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(false) // Should detect non-array/string spread
+    Err(diagnostics) => {
+      assert_true(has_error(diagnostics, 2548) || has_error(diagnostics, 2488))
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - valid spread with array" {
+  let source =
+    #|const arr1: number[] = [1, 2, 3];
+    #|const arr2 = [...arr1, 4, 5];
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => {
+      assert_true(not(has_error(diagnostics, 2548)))
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - valid spread with string" {
+  let source =
+    #|const str = "hello";
+    #|const chars = [...str];
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => {
+      assert_true(not(has_error(diagnostics, 2548)))
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - TS2551: property does not exist did you mean" {
+  let source =
+    #|interface Person {
+    #|  name: string;
+    #|  age: number;
+    #|}
+    #|const p: Person = { name: "John", age: 30 };
+    #|const n = p.nme;
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(false) // Should detect typo
+    Err(diagnostics) => {
+      // May produce TS2339 for property not existing
+      assert_true(has_error(diagnostics, 2551) || has_error(diagnostics, 2339))
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - valid property access" {
+  let source =
+    #|interface Person {
+    #|  name: string;
+    #|  age: number;
+    #|}
+    #|const p: Person = { name: "John", age: 30 };
+    #|const n = p.name;
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => {
+      assert_true(not(has_error(diagnostics, 2551)))
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - TS2552: cannot find name did you mean" {
+  let source =
+    #|const value = 42;
+    #|console.log(valeu);
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(false) // Should detect typo
+    Err(diagnostics) => {
+      // May produce TS2304 for cannot find name
+      assert_true(has_error(diagnostics, 2552) || has_error(diagnostics, 2304))
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - valid name reference" {
+  let source =
+    #|const value = 42;
+    #|console.log(value);
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => {
+      assert_true(not(has_error(diagnostics, 2552)))
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - TS2574: rest element type must be array" {
+  let source =
+    #|function fn(...args: number): void {}
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(false) // Should detect non-array rest type
+    Err(diagnostics) => {
+      // May produce TS2370 for rest parameter must be array type
+      assert_true(has_error(diagnostics, 2574) || has_error(diagnostics, 2370))
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - valid rest parameter with array type" {
+  let source =
+    #|function fn(...args: number[]): void {
+    #|  console.log(args);
+    #|}
+    #|fn(1, 2, 3);
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => {
+      assert_true(not(has_error(diagnostics, 2574)))
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - TS2575: no overload expects N arguments" {
+  let source =
+    #|function fn(a: string): void;
+    #|function fn(a: string, b: number): void;
+    #|function fn(a: string, b?: number): void {}
+    #|fn("a", 1, 2, 3, 4);
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(false) // Should detect too many args
+    Err(diagnostics) => {
+      // May produce TS2554 for expected N args
+      assert_true(has_error(diagnostics, 2575) || has_error(diagnostics, 2554) || has_error(diagnostics, 2769))
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - valid overload call" {
+  let source =
+    #|function fn(a: string): void;
+    #|function fn(a: string, b: number): void;
+    #|function fn(a: string, b?: number): void {}
+    #|fn("test");
+    #|fn("test", 42);
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => {
+      assert_true(not(has_error(diagnostics, 2575)))
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - valid array iteration with for-of" {
+  let source =
+    #|const arr = [1, 2, 3];
+    #|for (const item of arr) {
+    #|  console.log(item);
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => {
+      assert_true(not(has_error(diagnostics, 2802)))
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - valid string iteration with for-of" {
+  let source =
+    #|const str = "hello";
+    #|for (const char of str) {
+    #|  console.log(char);
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => {
+      assert_true(not(has_error(diagnostics, 2802)))
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - valid tuple destructuring with rest" {
+  let source =
+    #|const tuple: [number, string, boolean] = [1, "a", true];
+    #|const [first, ...rest] = tuple;
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => {
+      assert_true(not(has_error(diagnostics, 2574)))
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - valid Array.from usage" {
+  let source =
+    #|const set = new Set([1, 2, 3]);
+    #|const arr = Array.from(set);
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => {
+      assert_true(not(has_error(diagnostics, 2548)))
+    }
+  }
+}
