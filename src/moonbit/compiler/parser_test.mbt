@@ -4420,3 +4420,4 @@ test "parse file without hashbang" {
     Err(_) => assert_true(false)
   }
 }
+

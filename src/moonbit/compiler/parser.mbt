@@ -138,6 +138,7 @@ fn add_error_checked(
 
 ///|
 /// Parser error codes
+/// Aligned with TypeScript's official diagnostic codes where applicable
 pub enum ParserErrorCode {
   // General
   UnexpectedToken
@@ -177,37 +178,368 @@ pub enum ParserErrorCode {
   // JSDoc
   JSDocInvalidTag
   JSDocInvalidType
+
+  // ============================================================================
+  // Critical Parser Errors (TS1000-1185)
+  // These are official TypeScript error codes for parser/syntax errors
+  // ============================================================================
+
+  // String/Literal errors
+  UnterminatedStringLiteral // TS1002
+  UnterminatedTemplateLiteral // TS1160
+  UnterminatedRegexLiteral // TS1161
+
+  // Trailing comma
+  TrailingCommaNotAllowed // TS1009
+
+  // Rest parameter errors
+  RestParameterMustBeLast // TS1014
+  RequiredParamAfterOptional // TS1016
+  RestParameterCannotBeOptional // TS1048
+  RestParameterCannotHaveInitializer // TS1049
+
+  // Ambient context errors
+  StatementsNotAllowedInAmbient // TS1036
+  DeclareInAmbientContext // TS1038
+  InitializerNotAllowedInAmbient // TS1039
+  AmbientEnumInitializerMustBeConstant // TS1066
+
+  // Modifier errors
+  AsyncModifierNotAllowed // TS1042
+  ModifierCannotAppearOnClassElement(String) // TS1044
+  ModifierCannotAppearOnConstructor(String) // TS1089
+  ModifiersNotAllowedHere // TS1184
+
+  // Constructor errors
+  TypeParamsOnConstructor // TS1092
+
+  // Accessor errors
+  SetAccessorCannotHaveReturnType // TS1093
+  GetAccessorCannotHaveParams // TS1094
+  SetAccessorMustHaveOneParam // TS1095
+
+  // Statement context errors
+  ReturnOutsideFunction // TS1108
+  TypeExpected // TS1110
+  DeclarationOrStatementExpected // TS1128
+  PropertyOrSignatureExpected // TS1131
+  StringLiteralExpected // TS1141
+  LineBreakNotPermitted // TS1142
+
+  // Declaration errors
+  ConstDeclarationMustBeInitialized // TS1155
+
+  // Merge conflict
+  MergeConflictMarker // TS1185
 } derive(Show, Eq)
 
 ///|
 /// Get numeric code for error
+/// Returns official TypeScript diagnostic codes where applicable
 pub fn ParserErrorCode::to_int(self : ParserErrorCode) -> Int {
   match self {
-    UnexpectedToken => 1001
-    UnexpectedEOF => 1002
-    ExpectedIdentifier => 1003
-    ExpectedTypeAnnotation => 1004
-    ExpectedExpression => 1005
-    ExpectedStatement => 1006
-    ExpectedSemicolon => 1007
-    ExpectedComma => 1008
-    ExpectedColon => 1009
-    ExpectedOpenParen => 1010
-    ExpectedCloseParen => 1011
-    ExpectedOpenBrace => 1012
-    ExpectedCloseBrace => 1013
-    ExpectedOpenBracket => 1014
-    ExpectedCloseBracket => 1015
-    ExpectedFunctionKeyword => 1016
-    ExpectedClassKeyword => 1017
-    JSXClosingTagMismatch => 1100
-    JSXExpectedClosingTag => 1101
-    JSXExpectedAttributeValue => 1102
-    JSONExpectedPropertyName => 1200
-    JSONExpectedValue => 1201
-    JSONTrailingComma => 1202
-    JSDocInvalidTag => 1300
-    JSDocInvalidType => 1301
+    // General errors (custom codes for internal use)
+    UnexpectedToken => 1012 // Aligns with TS1012: Unexpected token
+    UnexpectedEOF => 1002 // Aligns with TS1002: Unterminated string literal (general EOF)
+
+    // Declaration errors (custom codes)
+    ExpectedIdentifier => 1003 // TS1003: Identifier expected
+    ExpectedTypeAnnotation => 1004 // Custom
+    ExpectedExpression => 1109 // TS1109: Expression expected
+    ExpectedStatement => 1128 // TS1128: Declaration or statement expected
+
+    // Punctuation errors (custom codes)
+    ExpectedSemicolon => 1007 // Custom
+    ExpectedComma => 1008 // Custom
+    ExpectedColon => 1009 // Custom (close to TS1009)
+    ExpectedOpenParen => 1010 // Custom
+    ExpectedCloseParen => 1011 // Custom
+    ExpectedOpenBrace => 1012 // Custom (close to TS1012)
+    ExpectedCloseBrace => 1013 // Custom
+    ExpectedOpenBracket => 1014 // Custom
+    ExpectedCloseBracket => 1015 // Custom
+    ExpectedFunctionKeyword => 1016 // Custom
+    ExpectedClassKeyword => 1017 // Custom
+
+    // JSX errors
+    JSXClosingTagMismatch => 1100 // Custom
+    JSXExpectedClosingTag => 1101 // Custom
+    JSXExpectedAttributeValue => 1102 // Custom
+
+    // JSON errors
+    JSONExpectedPropertyName => 1200 // Custom
+    JSONExpectedValue => 1201 // Custom
+    JSONTrailingComma => 1202 // Custom
+
+    // JSDoc errors
+    JSDocInvalidTag => 1300 // Custom
+    JSDocInvalidType => 1301 // Custom
+
+    // ============================================================================
+    // Critical Parser Errors - Official TypeScript Error Codes
+    // ============================================================================
+
+    // String/Literal errors
+    UnterminatedStringLiteral => 1002 // TS1002: Unterminated string literal
+    UnterminatedTemplateLiteral => 1160 // TS1160: Unterminated template literal
+    UnterminatedRegexLiteral => 1161 // TS1161: Unterminated regular expression literal
+
+    // Trailing comma
+    TrailingCommaNotAllowed => 1009 // TS1009: Trailing comma not allowed
+
+    // Rest parameter errors
+    RestParameterMustBeLast => 1014 // TS1014: A rest parameter must be last in a parameter list
+    RequiredParamAfterOptional => 1016 // TS1016: A required parameter cannot follow an optional parameter
+    RestParameterCannotBeOptional => 1048 // TS1048: A rest parameter cannot be optional
+    RestParameterCannotHaveInitializer => 1049 // TS1049: A rest parameter cannot have an initializer
+
+    // Ambient context errors
+    StatementsNotAllowedInAmbient => 1036 // TS1036: Statements are not allowed in ambient contexts
+    DeclareInAmbientContext => 1038 // TS1038: A 'declare' modifier cannot be used in an already ambient context
+    InitializerNotAllowedInAmbient => 1039 // TS1039: Initializers are not allowed in ambient contexts
+    AmbientEnumInitializerMustBeConstant => 1066 // TS1066: In ambient enum declarations member initializer must be constant
+
+    // Modifier errors
+    AsyncModifierNotAllowed => 1042 // TS1042: 'async' modifier cannot be used here
+    ModifierCannotAppearOnClassElement(_) => 1044 // TS1044: '{0}' modifier cannot appear on a class element
+    ModifierCannotAppearOnConstructor(_) => 1089 // TS1089: '{0}' modifier cannot appear on a constructor declaration
+    ModifiersNotAllowedHere => 1184 // TS1184: Modifiers cannot appear here
+
+    // Constructor errors
+    TypeParamsOnConstructor => 1092 // TS1092: Type parameters cannot appear on a constructor declaration
+
+    // Accessor errors
+    SetAccessorCannotHaveReturnType => 1093 // TS1093: A 'set' accessor cannot have a return type annotation
+    GetAccessorCannotHaveParams => 1094 // TS1094: A 'get' accessor cannot have parameters
+    SetAccessorMustHaveOneParam => 1095 // TS1095: A 'set' accessor must have exactly one parameter
+
+    // Statement context errors
+    ReturnOutsideFunction => 1108 // TS1108: A 'return' statement can only be used within a function body
+    TypeExpected => 1110 // TS1110: Type expected
+    DeclarationOrStatementExpected => 1128 // TS1128: Declaration or statement expected
+    PropertyOrSignatureExpected => 1131 // TS1131: Property or signature expected
+    StringLiteralExpected => 1141 // TS1141: String literal expected
+    LineBreakNotPermitted => 1142 // TS1142: Line break not permitted here
+
+    // Declaration errors
+    ConstDeclarationMustBeInitialized => 1155 // TS1155: 'const' declarations must be initialized
+
+    // Merge conflict
+    MergeConflictMarker => 1185 // TS1185: Merge conflict marker encountered
+  }
+}
+
+///|
+/// Get the human-readable error message for this error code
+/// Messages are aligned with official TypeScript diagnostic messages
+pub fn ParserErrorCode::to_message(self : ParserErrorCode) -> String {
+  match self {
+    // General errors
+    UnexpectedToken => "Unexpected token"
+    UnexpectedEOF => "Unexpected end of file"
+
+    // Declaration errors
+    ExpectedIdentifier => "Identifier expected"
+    ExpectedTypeAnnotation => "Type annotation expected"
+    ExpectedExpression => "Expression expected"
+    ExpectedStatement => "Statement expected"
+
+    // Punctuation errors
+    ExpectedSemicolon => "';' expected"
+    ExpectedComma => "',' expected"
+    ExpectedColon => "':' expected"
+    ExpectedOpenParen => "'(' expected"
+    ExpectedCloseParen => "')' expected"
+    ExpectedOpenBrace => "'{' expected"
+    ExpectedCloseBrace => "'}' expected"
+    ExpectedOpenBracket => "'[' expected"
+    ExpectedCloseBracket => "']' expected"
+    ExpectedFunctionKeyword => "'function' expected"
+    ExpectedClassKeyword => "'class' expected"
+
+    // JSX errors
+    JSXClosingTagMismatch => "JSX closing tag mismatch"
+    JSXExpectedClosingTag => "JSX closing tag expected"
+    JSXExpectedAttributeValue => "JSX attribute value expected"
+
+    // JSON errors
+    JSONExpectedPropertyName => "Property name expected"
+    JSONExpectedValue => "Value expected"
+    JSONTrailingComma => "Trailing comma not allowed in JSON"
+
+    // JSDoc errors
+    JSDocInvalidTag => "Invalid JSDoc tag"
+    JSDocInvalidType => "Invalid JSDoc type"
+
+    // ============================================================================
+    // Critical Parser Errors - Official TypeScript Error Messages
+    // ============================================================================
+
+    // String/Literal errors
+    UnterminatedStringLiteral => "Unterminated string literal."
+    UnterminatedTemplateLiteral => "Unterminated template literal."
+    UnterminatedRegexLiteral => "Unterminated regular expression literal."
+
+    // Trailing comma
+    TrailingCommaNotAllowed => "Trailing comma not allowed."
+
+    // Rest parameter errors
+    RestParameterMustBeLast =>
+      "A rest parameter must be last in a parameter list."
+    RequiredParamAfterOptional =>
+      "A required parameter cannot follow an optional parameter."
+    RestParameterCannotBeOptional => "A rest parameter cannot be optional."
+    RestParameterCannotHaveInitializer =>
+      "A rest parameter cannot have an initializer."
+
+    // Ambient context errors
+    StatementsNotAllowedInAmbient =>
+      "Statements are not allowed in ambient contexts."
+    DeclareInAmbientContext =>
+      "A 'declare' modifier cannot be used in an already ambient context."
+    InitializerNotAllowedInAmbient =>
+      "Initializers are not allowed in ambient contexts."
+    AmbientEnumInitializerMustBeConstant =>
+      "In ambient enum declarations member initializer must be constant expression."
+
+    // Modifier errors
+    AsyncModifierNotAllowed => "'async' modifier cannot be used here."
+    ModifierCannotAppearOnClassElement(modifier) =>
+      "'" + modifier + "' modifier cannot appear on a class element."
+    ModifierCannotAppearOnConstructor(modifier) =>
+      "'" + modifier + "' modifier cannot appear on a constructor declaration."
+    ModifiersNotAllowedHere => "Modifiers cannot appear here."
+
+    // Constructor errors
+    TypeParamsOnConstructor =>
+      "Type parameters cannot appear on a constructor declaration."
+
+    // Accessor errors
+    SetAccessorCannotHaveReturnType =>
+      "A 'set' accessor cannot have a return type annotation."
+    GetAccessorCannotHaveParams => "An accessor cannot have parameters."
+    SetAccessorMustHaveOneParam =>
+      "A 'set' accessor must have exactly one parameter."
+
+    // Statement context errors
+    ReturnOutsideFunction =>
+      "A 'return' statement can only be used within a function body."
+    TypeExpected => "Type expected."
+    DeclarationOrStatementExpected => "Declaration or statement expected."
+    PropertyOrSignatureExpected => "Property or signature expected."
+    StringLiteralExpected => "String literal expected."
+    LineBreakNotPermitted => "Line break not permitted here."
+
+    // Declaration errors
+    ConstDeclarationMustBeInitialized =>
+      "'const' declarations must be initialized."
+
+    // Merge conflict
+    MergeConflictMarker => "Merge conflict marker encountered."
+  }
+}
+
+// ============================================================================
+// Public test helper functions for ParserErrorCode
+// These allow external tests to verify error codes without constructing enum variants
+// ============================================================================
+
+///|
+/// Get the integer error code for a parser error by name
+/// Used by external tests to verify error code mappings
+pub fn get_parser_error_int(name : String) -> Int {
+  get_parser_error_int_with_arg(name, None)
+}
+
+///|
+/// Get the integer error code for a parser error by name with optional argument
+pub fn get_parser_error_int_with_arg(name : String, arg : String?) -> Int {
+  match name {
+    "UnterminatedStringLiteral" => UnterminatedStringLiteral.to_int()
+    "UnterminatedTemplateLiteral" => UnterminatedTemplateLiteral.to_int()
+    "UnterminatedRegexLiteral" => UnterminatedRegexLiteral.to_int()
+    "TrailingCommaNotAllowed" => TrailingCommaNotAllowed.to_int()
+    "RestParameterMustBeLast" => RestParameterMustBeLast.to_int()
+    "RequiredParamAfterOptional" => RequiredParamAfterOptional.to_int()
+    "RestParameterCannotBeOptional" => RestParameterCannotBeOptional.to_int()
+    "RestParameterCannotHaveInitializer" =>
+      RestParameterCannotHaveInitializer.to_int()
+    "StatementsNotAllowedInAmbient" => StatementsNotAllowedInAmbient.to_int()
+    "DeclareInAmbientContext" => DeclareInAmbientContext.to_int()
+    "InitializerNotAllowedInAmbient" => InitializerNotAllowedInAmbient.to_int()
+    "AmbientEnumInitializerMustBeConstant" =>
+      AmbientEnumInitializerMustBeConstant.to_int()
+    "AsyncModifierNotAllowed" => AsyncModifierNotAllowed.to_int()
+    "ModifierCannotAppearOnClassElement" =>
+      ModifierCannotAppearOnClassElement(arg.unwrap_or("")).to_int()
+    "ModifierCannotAppearOnConstructor" =>
+      ModifierCannotAppearOnConstructor(arg.unwrap_or("")).to_int()
+    "ModifiersNotAllowedHere" => ModifiersNotAllowedHere.to_int()
+    "TypeParamsOnConstructor" => TypeParamsOnConstructor.to_int()
+    "SetAccessorCannotHaveReturnType" =>
+      SetAccessorCannotHaveReturnType.to_int()
+    "GetAccessorCannotHaveParams" => GetAccessorCannotHaveParams.to_int()
+    "SetAccessorMustHaveOneParam" => SetAccessorMustHaveOneParam.to_int()
+    "ReturnOutsideFunction" => ReturnOutsideFunction.to_int()
+    "TypeExpected" => TypeExpected.to_int()
+    "DeclarationOrStatementExpected" => DeclarationOrStatementExpected.to_int()
+    "PropertyOrSignatureExpected" => PropertyOrSignatureExpected.to_int()
+    "StringLiteralExpected" => StringLiteralExpected.to_int()
+    "LineBreakNotPermitted" => LineBreakNotPermitted.to_int()
+    "ConstDeclarationMustBeInitialized" =>
+      ConstDeclarationMustBeInitialized.to_int()
+    "MergeConflictMarker" => MergeConflictMarker.to_int()
+    _ => -1
+  }
+}
+
+///|
+/// Get the error message for a parser error by name
+pub fn get_parser_error_message(name : String) -> String {
+  get_parser_error_message_with_arg(name, None)
+}
+
+///|
+/// Get the error message for a parser error by name with optional argument
+pub fn get_parser_error_message_with_arg(name : String, arg : String?) -> String {
+  match name {
+    "UnterminatedStringLiteral" => UnterminatedStringLiteral.to_message()
+    "UnterminatedTemplateLiteral" => UnterminatedTemplateLiteral.to_message()
+    "UnterminatedRegexLiteral" => UnterminatedRegexLiteral.to_message()
+    "TrailingCommaNotAllowed" => TrailingCommaNotAllowed.to_message()
+    "RestParameterMustBeLast" => RestParameterMustBeLast.to_message()
+    "RequiredParamAfterOptional" => RequiredParamAfterOptional.to_message()
+    "RestParameterCannotBeOptional" => RestParameterCannotBeOptional.to_message()
+    "RestParameterCannotHaveInitializer" =>
+      RestParameterCannotHaveInitializer.to_message()
+    "StatementsNotAllowedInAmbient" => StatementsNotAllowedInAmbient.to_message()
+    "DeclareInAmbientContext" => DeclareInAmbientContext.to_message()
+    "InitializerNotAllowedInAmbient" =>
+      InitializerNotAllowedInAmbient.to_message()
+    "AmbientEnumInitializerMustBeConstant" =>
+      AmbientEnumInitializerMustBeConstant.to_message()
+    "AsyncModifierNotAllowed" => AsyncModifierNotAllowed.to_message()
+    "ModifierCannotAppearOnClassElement" =>
+      ModifierCannotAppearOnClassElement(arg.unwrap_or("")).to_message()
+    "ModifierCannotAppearOnConstructor" =>
+      ModifierCannotAppearOnConstructor(arg.unwrap_or("")).to_message()
+    "ModifiersNotAllowedHere" => ModifiersNotAllowedHere.to_message()
+    "TypeParamsOnConstructor" => TypeParamsOnConstructor.to_message()
+    "SetAccessorCannotHaveReturnType" =>
+      SetAccessorCannotHaveReturnType.to_message()
+    "GetAccessorCannotHaveParams" => GetAccessorCannotHaveParams.to_message()
+    "SetAccessorMustHaveOneParam" => SetAccessorMustHaveOneParam.to_message()
+    "ReturnOutsideFunction" => ReturnOutsideFunction.to_message()
+    "TypeExpected" => TypeExpected.to_message()
+    "DeclarationOrStatementExpected" =>
+      DeclarationOrStatementExpected.to_message()
+    "PropertyOrSignatureExpected" => PropertyOrSignatureExpected.to_message()
+    "StringLiteralExpected" => StringLiteralExpected.to_message()
+    "LineBreakNotPermitted" => LineBreakNotPermitted.to_message()
+    "ConstDeclarationMustBeInitialized" =>
+      ConstDeclarationMustBeInitialized.to_message()
+    "MergeConflictMarker" => MergeConflictMarker.to_message()
+    _ => "Unknown error"
   }
 }
 
@@ -651,8 +983,29 @@ fn parse_variable_declaration_list(
       Err(err_parser) => return Err(err_parser)
     }
   }
+
   let location = start_token.location()
   Ok((declarations, is_const, is_let, location, parser))
+}
+
+///|
+/// Validate that const declarations have initializers
+fn validate_const_initializers(
+  parser : Parser,
+  declarations : Array[VariableDeclaration],
+) -> Parser {
+  let mut parser = parser
+  for decl in declarations {
+    if decl.initializer.is_empty() {
+      parser = add_error_with_code(
+        parser,
+        ConstDeclarationMustBeInitialized.to_message(),
+        decl.location,
+        ConstDeclarationMustBeInitialized,
+      )
+    }
+  }
+  parser
 }
 
 ///|
@@ -660,6 +1013,9 @@ fn parse_variable_declaration_list(
 fn parse_variable_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
   match parse_variable_declaration_list(parser, true) {
     Ok((declarations, is_const, is_let, location, parser)) => {
+      // Note: TS1155 (const must be initialized) is checked in the checker
+      // because we need to know if 'declare' modifier is present
+      // (declare const doesn't require initializer)
       // Expect semicolon for standalone variable statements
       let parser = expect_semicolon(parser)
       Ok(
@@ -1178,26 +1534,93 @@ fn parse_parameter_list(parser : Parser) -> (Array[Node], Parser) {
   // Check for empty parameter list
   match current_token(parser) {
     CloseParen(_) => ([], advance_parser(parser))
-    _ => parse_parameter_list_aux(parser, [])
+    _ => parse_parameter_list_aux(parser, [], false, false)
   }
 }
 
 ///|
 /// Tail-recursive helper for parse_parameter_list with accumulator
+/// Tracks whether we've seen an optional parameter and a rest parameter for validation
 fn parse_parameter_list_aux(
   parser : Parser,
   acc : Array[Node],
+  seen_optional : Bool,
+  seen_rest : Bool,
 ) -> (Array[Node], Parser) {
   match parse_parameter(parser) {
     Ok((param, next_parser)) => {
+      // Validate parameter order
+      let next_parser = validate_parameter_order(
+        next_parser,
+        param,
+        seen_optional,
+        seen_rest,
+      )
+
+      // Check if this parameter is optional or rest
+      let (is_optional, is_rest) = match param {
+        Node::Parameter(p) =>
+          (p.is_optional || (p.initializer is Some(_)), p.is_rest)
+        _ => (false, false)
+      }
+
       acc.push(param)
       match current_token(next_parser) {
-        Comma(_) => parse_parameter_list_aux(advance_parser(next_parser), acc)
+        Comma(_) =>
+          parse_parameter_list_aux(
+            advance_parser(next_parser),
+            acc,
+            seen_optional || is_optional,
+            seen_rest || is_rest,
+          )
         CloseParen(_) => (acc, advance_parser(next_parser))
         _ => (acc, next_parser)
       }
     }
     Err(_) => (acc, parser)
+  }
+}
+
+///|
+/// Validate parameter order constraints
+fn validate_parameter_order(
+  parser : Parser,
+  param : Node,
+  seen_optional : Bool,
+  seen_rest : Bool,
+) -> Parser {
+  match param {
+    Node::Parameter(p) => {
+      let mut parser = parser
+
+      // TS1014: A rest parameter must be last in a parameter list
+      // If we've already seen a rest parameter and this is another parameter
+      if seen_rest {
+        parser = add_error_with_code(
+          parser,
+          RestParameterMustBeLast.to_message(),
+          p.location,
+          RestParameterMustBeLast,
+        )
+      }
+
+      // TS1016: A required parameter cannot follow an optional parameter
+      // A parameter is required if it's not optional and has no initializer
+      let is_required = not(p.is_optional) &&
+        p.initializer.is_empty() &&
+        not(p.is_rest)
+      if seen_optional && is_required {
+        parser = add_error_with_code(
+          parser,
+          RequiredParamAfterOptional.to_message(),
+          p.location,
+          RequiredParamAfterOptional,
+        )
+      }
+
+      parser
+    }
+    _ => parser
   }
 }
 
@@ -1317,6 +1740,35 @@ fn parse_parameter(parser : Parser) -> Result[(Node, Parser), Parser] {
     }
     _ => (None, parser)
   }
+
+  // Validate rest parameter constraints
+  let parser = if is_rest {
+    // TS1048: A rest parameter cannot be optional
+    let parser = if is_optional {
+      add_error_with_code(
+        parser,
+        RestParameterCannotBeOptional.to_message(),
+        start_loc,
+        RestParameterCannotBeOptional,
+      )
+    } else {
+      parser
+    }
+    // TS1049: A rest parameter cannot have an initializer
+    match initializer {
+      Some(_) =>
+        add_error_with_code(
+          parser,
+          RestParameterCannotHaveInitializer.to_message(),
+          start_loc,
+          RestParameterCannotHaveInitializer,
+        )
+      None => parser
+    }
+  } else {
+    parser
+  }
+
   Ok(
     (
       Node::Parameter(Parameter::{
@@ -2018,10 +2470,18 @@ fn parse_class_member_with_decorators(
           match current_token(parser) {
             OpenParen(_) => {
               let parser = advance_parser(parser)
-              // Getter has no parameters, just close paren
-              let parser = match current_token(parser) {
-                CloseParen(_) => advance_parser(parser)
-                _ => parser
+              // Parse any parameters (should be none for getter)
+              let (params, parser) = parse_parameter_list(parser)
+              // TS1094: A 'get' accessor cannot have parameters
+              let parser = if params.length() > 0 {
+                add_error_with_code(
+                  parser,
+                  GetAccessorCannotHaveParams.to_message(),
+                  start_loc,
+                  GetAccessorCannotHaveParams,
+                )
+              } else {
+                parser
               }
               // Optional return type
               let (return_type, parser) = match current_token(parser) {
@@ -2118,33 +2578,49 @@ fn parse_class_member_with_decorators(
           match current_token(parser) {
             OpenParen(_) => {
               let parser = advance_parser(parser)
-              // Parse single parameter
-              let (parameter, parser) = match parse_parameter(parser) {
-                Ok((param, p)) => (param, p)
-                Err(p) =>
-                  (
-                    Node::Identifier(Identifier::{
-                      name: "value",
-                      location: start_loc,
-                    }),
-                    p,
-                  )
+              // Parse parameters (should be exactly one for setter)
+              let (params, parser) = parse_parameter_list(parser)
+              // TS1095: A 'set' accessor must have exactly one parameter
+              let parser = if params.length() != 1 {
+                add_error_with_code(
+                  parser,
+                  SetAccessorMustHaveOneParam.to_message(),
+                  start_loc,
+                  SetAccessorMustHaveOneParam,
+                )
+              } else {
+                parser
               }
-              // Consume closing paren
-              let parser = match current_token(parser) {
-                CloseParen(_) => advance_parser(parser)
-                _ => parser
+              // Get the parameter (or create a dummy one)
+              let parameter = if params.length() > 0 {
+                params[0]
+              } else {
+                Node::Identifier(Identifier::{
+                  name: "value",
+                  location: start_loc,
+                })
               }
-              // Optional return type (usually void)
-              let (_, parser) = match current_token(parser) {
+              // Optional return type (usually void) - but should not be specified
+              let (has_return_type, parser) = match current_token(parser) {
                 Colon(_) => {
                   let parser = advance_parser(parser)
                   match parse_type(parser) {
-                    Ok((_, p)) => ((), p)
-                    Err(p) => ((), p)
+                    Ok((_, p)) => (true, p)
+                    Err(p) => (true, p)
                   }
                 }
-                _ => ((), parser)
+                _ => (false, parser)
+              }
+              // TS1093: A 'set' accessor cannot have a return type annotation
+              let parser = if has_return_type {
+                add_error_with_code(
+                  parser,
+                  SetAccessorCannotHaveReturnType.to_message(),
+                  start_loc,
+                  SetAccessorCannotHaveReturnType,
+                )
+              } else {
+                parser
               }
               // Body
               let (body, parser) = match current_token(parser) {
