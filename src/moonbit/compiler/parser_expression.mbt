@@ -399,6 +399,17 @@ fn parse_unary_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
           match parse_unary_expression(parser) {
             Ok((operand, parser)) => {
               let parser = decrement_depth(parser)
+              // TS1243: 'delete' cannot be called on an identifier in strict mode
+              let parser = match (op, operand) {
+                (Delete, Node::Identifier(ident)) =>
+                  add_error_with_code(
+                    parser,
+                    DeleteCannotBeCalledOnIdentifier.to_message(),
+                    ident.location,
+                    DeleteCannotBeCalledOnIdentifier,
+                  )
+                _ => parser
+              }
               Ok(
                 (
                   Node::UnaryExpression(UnaryExpression::{

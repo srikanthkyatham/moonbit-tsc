@@ -1034,6 +1034,9 @@ fn parse_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
             }
           }
         }
+        // @decorator export class ... - handle decorated exports
+        KeywordExport(_) =>
+          parse_export_declaration_with_decorators(parser, decorators)
         // Decorators not valid on these declarations - TS1206
         KeywordInterface(_)
         | KeywordType(_)
@@ -4654,6 +4657,83 @@ fn parse_import_specifiers_aux(
 }
 
 ///|
+/// Parse export declaration with decorators: @decorator export class ...
+fn parse_export_declaration_with_decorators(
+  parser : Parser,
+  decorators : Array[Node],
+) -> Result[(Node, Parser), Parser] {
+  let parser = advance_parser(parser) // consume 'export'
+
+  match current_token(parser) {
+    // @decorator export default class ...
+    KeywordDefault(_) => {
+      let parser = advance_parser(parser)
+      match current_token(parser) {
+        KeywordClass(_) =>
+          match parse_class_declaration_with_decorators(parser, false, decorators) {
+            Ok((decl, parser)) => {
+              let decl_with_modifiers = add_export_default_modifiers(decl)
+              Ok((decl_with_modifiers, parser))
+            }
+            Err(p) => Err(p)
+          }
+        KeywordAbstract(_) => {
+          let parser = advance_parser(parser)
+          match parse_class_declaration_with_decorators(parser, true, decorators) {
+            Ok((decl, parser)) => {
+              let decl_with_modifiers = add_export_default_modifiers(decl)
+              Ok((decl_with_modifiers, parser))
+            }
+            Err(p) => Err(p)
+          }
+        }
+        _ => {
+          let loc = current_token(parser).location()
+          Err(
+            add_error(
+              parser,
+              "Decorators are only valid on class declarations after 'export default'",
+              loc,
+            ),
+          )
+        }
+      }
+    }
+    // @decorator export class ...
+    KeywordClass(_) =>
+      match parse_class_declaration_with_decorators(parser, false, decorators) {
+        Ok((decl, parser)) => {
+          let decl_with_export = add_export_modifier(decl)
+          Ok((decl_with_export, parser))
+        }
+        Err(p) => Err(p)
+      }
+    // @decorator export abstract class ...
+    KeywordAbstract(_) => {
+      let parser = advance_parser(parser)
+      match parse_class_declaration_with_decorators(parser, true, decorators) {
+        Ok((decl, parser)) => {
+          let decl_with_export = add_export_modifier(decl)
+          Ok((decl_with_export, parser))
+        }
+        Err(p) => Err(p)
+      }
+    }
+    _ => {
+      let loc = get_location(decorators[0])
+      Err(
+        add_error_with_code(
+          parser,
+          DecoratorsNotValidHere.to_message(),
+          loc,
+          DecoratorsNotValidHere,
+        ),
+      )
+    }
+  }
+}
+
+///|
 fn parse_export_declaration(parser : Parser) -> Result[(Node, Parser), Parser] {
   // export { a, b }
   // export { a, b } from 'module'
@@ -4662,6 +4742,23 @@ fn parse_export_declaration(parser : Parser) -> Result[(Node, Parser), Parser] {
   // export const/let/var/function/class ...
   let start_loc = current_token(parser).location()
   let parser = advance_parser(parser) // consume 'export'
+
+  // TS1432: Check if decorator appears after 'export' - add error but continue
+  let (decorators_after_export, parser) = match current_token(parser) {
+    At(loc) => {
+      let parser = add_error_with_code(
+        parser,
+        DecoratorsNotAfterExport.to_message(),
+        loc,
+        DecoratorsNotAfterExport,
+      )
+      // Parse the decorators so we can continue
+      let (decorators, parser) = parse_decorators(parser)
+      (decorators, parser)
+    }
+    _ => ([], parser)
+  }
+
   match current_token(parser) {
     // export default expression/declaration
     KeywordDefault(_) => {
@@ -4967,14 +5064,51 @@ fn parse_export_declaration(parser : Parser) -> Result[(Node, Parser), Parser] {
 
     // export declaration (const, let, var, function, class, etc.)
     _ =>
-      // Parse the declaration and add Export modifier
-      match parse_statement(parser) {
-        Ok((stmt, parser)) => {
-          // Add Export modifier to the declaration
-          let stmt_with_export = add_export_modifier(stmt)
-          Ok((stmt_with_export, parser))
+      // If we parsed decorators after export (TS1432), use them
+      if decorators_after_export.length() > 0 {
+        match current_token(parser) {
+          KeywordClass(_) =>
+            match parse_class_declaration_with_decorators(
+              parser, false, decorators_after_export,
+            ) {
+              Ok((decl, parser)) => {
+                let decl_with_export = add_export_modifier(decl)
+                Ok((decl_with_export, parser))
+              }
+              Err(p) => Err(p)
+            }
+          KeywordAbstract(_) => {
+            let parser = advance_parser(parser)
+            match parse_class_declaration_with_decorators(
+              parser, true, decorators_after_export,
+            ) {
+              Ok((decl, parser)) => {
+                let decl_with_export = add_export_modifier(decl)
+                Ok((decl_with_export, parser))
+              }
+              Err(p) => Err(p)
+            }
+          }
+          _ =>
+            // Parse normally, decorators will be lost
+            match parse_statement(parser) {
+              Ok((stmt, parser)) => {
+                let stmt_with_export = add_export_modifier(stmt)
+                Ok((stmt_with_export, parser))
+              }
+              Err(p) => Err(p)
+            }
         }
-        Err(p) => Err(p)
+      } else {
+        // Normal case - no decorators after export
+        match parse_statement(parser) {
+          Ok((stmt, parser)) => {
+            // Add Export modifier to the declaration
+            let stmt_with_export = add_export_modifier(stmt)
+            Ok((stmt_with_export, parser))
+          }
+          Err(p) => Err(p)
+        }
       }
   }
 }

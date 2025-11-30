@@ -1013,7 +1013,7 @@ test "emit decorator factory with multiple args" {
 ///|
 /// Test: Emit export decorated class
 test "emit export decorated class" {
-  let js = compile_to_js("export @logged class ExportedClass { }")
+  let js = compile_to_js("@logged export class ExportedClass { }")
   println("Export decorated class:\n\{js}")
   // Should have export and decoration
   assert_true(js.contains("export"))

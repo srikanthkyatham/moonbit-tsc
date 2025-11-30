@@ -402,3 +402,53 @@ test "parser error detection - valid import string literal" {
   let errors = parse_and_get_errors(source)
   assert_true(not(has_error_code(errors, 1440)))
 }
+
+// ============================================================================
+// TS1432 Decorator After Export Error Detection Tests
+// ============================================================================
+
+///|
+test "parser error detection - TS1432 decorator after export" {
+  // Decorator after export keyword should trigger TS1432
+  let source = "export @decorator class Foo { }"
+  let errors = parse_and_get_errors(source)
+  assert_true(has_error_code(errors, 1432))
+  assert_true(has_error_message(errors, "Decorators must precede the name and all keywords"))
+}
+
+///|
+test "parser error detection - valid decorator before export" {
+  // Decorator before export is valid - should not produce TS1432
+  let source = "@decorator export class Foo { }"
+  let errors = parse_and_get_errors(source)
+  assert_true(not(has_error_code(errors, 1432)))
+}
+
+// ============================================================================
+// TS1243 Delete on Identifier Error Detection Tests
+// ============================================================================
+
+///|
+test "parser error detection - TS1243 delete on identifier" {
+  // delete on a plain identifier should trigger TS1243
+  let source = "delete x;"
+  let errors = parse_and_get_errors(source)
+  assert_true(has_error_code(errors, 1243))
+  assert_true(has_error_message(errors, "delete"))
+}
+
+///|
+test "parser error detection - valid delete on property access" {
+  // delete on property access is valid - should not produce TS1243
+  let source = "delete obj.prop;"
+  let errors = parse_and_get_errors(source)
+  assert_true(not(has_error_code(errors, 1243)))
+}
+
+///|
+test "parser error detection - valid delete on element access" {
+  // delete on element access is valid - should not produce TS1243
+  let source = "delete arr[0];"
+  let errors = parse_and_get_errors(source)
+  assert_true(not(has_error_code(errors, 1243)))
+}
