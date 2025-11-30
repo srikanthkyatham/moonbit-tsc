@@ -1517,3 +1517,113 @@ fn check_substring_at(haystack : String, needle : String, pos : Int) -> Bool {
   let sub = @utils.substr(haystack, start=pos, end=pos + needle_len)
   sub == needle
 }
+
+///|
+/// Test: Interface with call signature (generic)
+test "emit interface with call signature" {
+  let source = "interface Callable { <T>(x: T): T; }"
+  let tokens = scan_all_v2(source, "test.ts")
+  match parse_source_file(tokens, "test.ts") {
+    Ok(source_file) => {
+      let ctx = DeclarationEmitterContext::default()
+      let output = emit_declaration_file(source_file, ctx)
+
+      // Should contain interface with call signature
+      assert_true(output.contains("interface Callable"))
+      assert_true(output.contains("<T>"))
+      assert_true(output.contains("(x: T)"))
+      assert_true(output.contains(": T"))
+      // Should NOT have a method name before <T>
+      assert_true(not(output.contains("?<T>")))
+      println("\nInterface with call signature output:")
+      println(output)
+    }
+    Err(diagnostics) => {
+      println("Parse error:")
+      for d in diagnostics {
+        println("  " + d.message)
+      }
+      assert_true(false)
+    }
+  }
+}
+
+///|
+/// Test: Type alias with qualified type name
+test "emit type alias with qualified name" {
+  let source = "type Widget = Sample.Thing.IWidget;"
+  let tokens = scan_all_v2(source, "test.ts")
+  match parse_source_file(tokens, "test.ts") {
+    Ok(source_file) => {
+      let ctx = DeclarationEmitterContext::default()
+      let output = emit_declaration_file(source_file, ctx)
+
+      // Should contain type alias with qualified name preserved
+      assert_true(output.contains("type Widget"))
+      assert_true(output.contains("Sample.Thing.IWidget"))
+      println("\nType alias with qualified name output:")
+      println(output)
+    }
+    Err(diagnostics) => {
+      println("Parse error:")
+      for d in diagnostics {
+        println("  " + d.message)
+      }
+      assert_true(false)
+    }
+  }
+}
+
+///|
+/// Test: Function type with qualified parameter type
+test "emit function type with qualified parameter type" {
+  let source = "type Handler = (widget: Foo.Bar.Widget) => void;"
+  let tokens = scan_all_v2(source, "test.ts")
+  match parse_source_file(tokens, "test.ts") {
+    Ok(source_file) => {
+      let ctx = DeclarationEmitterContext::default()
+      let output = emit_declaration_file(source_file, ctx)
+
+      // Should contain function type with qualified parameter type
+      assert_true(output.contains("type Handler"))
+      assert_true(output.contains("Foo.Bar.Widget"))
+      assert_true(output.contains("=> void"))
+      println("\nFunction type with qualified parameter type output:")
+      println(output)
+    }
+    Err(diagnostics) => {
+      println("Parse error:")
+      for d in diagnostics {
+        println("  " + d.message)
+      }
+      assert_true(false)
+    }
+  }
+}
+
+///|
+/// Test: Interface with multiple call signatures
+test "emit interface with multiple call signatures" {
+  let source = "interface Overloaded { (x: number): number; (x: string): string; }"
+  let tokens = scan_all_v2(source, "test.ts")
+  match parse_source_file(tokens, "test.ts") {
+    Ok(source_file) => {
+      let ctx = DeclarationEmitterContext::default()
+      let output = emit_declaration_file(source_file, ctx)
+
+      // Should contain interface with both call signatures
+      assert_true(output.contains("interface Overloaded"))
+      assert_true(output.contains("(x: number): number"))
+      assert_true(output.contains("(x: string): string"))
+      println("\nInterface with multiple call signatures output:")
+      println(output)
+    }
+    Err(diagnostics) => {
+      println("Parse error:")
+      for d in diagnostics {
+        println("  " + d.message)
+      }
+      assert_true(false)
+    }
+  }
+}

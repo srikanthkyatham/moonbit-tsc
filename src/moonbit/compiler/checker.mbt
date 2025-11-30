@@ -5474,11 +5474,88 @@ fn type_to_string(t : Type) -> String {
 
 ///|
 /// Look up a symbol by name in the global scope
+/// Handles qualified names like Foo.Bar.Baz by resolving step by step
 fn lookup_symbol(checker : TypeChecker, name : String) -> Symbol? {
-  match checker.global_scope {
-    Some(scope) => scope.symbols.get(name)
+  // Check if this is a qualified name (contains dots)
+  if name.contains(".") {
+    // Split by dots and resolve step by step
+    lookup_qualified_symbol(checker, name)
+  } else {
+    // Simple name lookup
+    match checker.global_scope {
+      Some(scope) => scope.symbols.get(name)
+      None => None
+    }
+  }
+}
+
+///|
+/// Split a string by dots into parts
+pub fn split_by_dot(name : String) -> Array[String] {
+  let parts : Array[String] = []
+  let mut current = ""
+  for c in name {
+    if c == '.' {
+      if current.length() > 0 {
+        parts.push(current)
+        current = ""
+      }
+    } else {
+      current = current + c.to_string()
+    }
+  }
+  if current.length() > 0 {
+    parts.push(current)
+  }
+  parts
+}
+
+///|
+/// Look up a qualified symbol like Foo.Bar.Baz
+/// First looks up Foo, then Bar in Foo's exports/members, etc.
+fn lookup_qualified_symbol(checker : TypeChecker, qualified_name : String) -> Symbol? {
+  let parts = split_by_dot(qualified_name)
+  if parts.length() == 0 {
+    return None
+  }
+
+  // Look up the first part in global scope
+  let first_part = parts[0]
+  let mut current_symbol : Symbol? = match checker.global_scope {
+    Some(scope) => scope.symbols.get(first_part)
     None => None
   }
+
+  // Resolve remaining parts
+  for i = 1; i < parts.length(); i = i + 1 {
+    match current_symbol {
+      None => return None
+      Some(sym) => {
+        let part = parts[i]
+        // Try exports first (for namespaces/modules)
+        current_symbol = match sym.exports {
+          Some(exports) =>
+            match exports.get(part) {
+              Some(s) => Some(s)
+              None =>
+                // Try members (for classes/interfaces)
+                match sym.members {
+                  Some(members) => members.get(part)
+                  None => None
+                }
+            }
+          None =>
+            // Try members (for classes/interfaces)
+            match sym.members {
+              Some(members) => members.get(part)
+              None => None
+            }
+        }
+      }
+    }
+  }
+
+  current_symbol
 }
 
 ///|

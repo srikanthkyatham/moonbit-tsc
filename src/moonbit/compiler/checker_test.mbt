@@ -5045,3 +5045,55 @@ test "check super method call" {
     Err(_) => assert_true(false)
   }
 }
+
+// ============================================================================
+// Qualified Type Name Tests
+// ============================================================================
+
+///|
+test "split_by_dot simple name" {
+  let parts = split_by_dot("Foo")
+  assert_eq(parts.length(), 1)
+  assert_eq(parts[0], "Foo")
+}
+
+///|
+test "split_by_dot qualified name two parts" {
+  let parts = split_by_dot("Foo.Bar")
+  assert_eq(parts.length(), 2)
+  assert_eq(parts[0], "Foo")
+  assert_eq(parts[1], "Bar")
+}
+
+///|
+test "split_by_dot qualified name three parts" {
+  let parts = split_by_dot("Sample.Thing.IWidget")
+  assert_eq(parts.length(), 3)
+  assert_eq(parts[0], "Sample")
+  assert_eq(parts[1], "Thing")
+  assert_eq(parts[2], "IWidget")
+}
+
+///|
+test "check qualified type name in namespace" {
+  // Test that qualified names compile without error
+  let result = parse_bind_and_check(
+    "namespace Sample { export interface Widget { name: string; } } type W = Sample.Widget;",
+  )
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "check qualified type name in function parameter" {
+  // Test qualified names in function parameters
+  let result = parse_bind_and_check(
+    "namespace Foo { export interface Bar { x: number; } } function test(param: Foo.Bar): void {}",
+  )
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false)
+  }
+}

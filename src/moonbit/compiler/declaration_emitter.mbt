@@ -1250,14 +1250,26 @@ fn emit_decl_method_signature(
   ctx : DeclarationEmitterContext,
 ) -> String {
   let indent = ctx.get_indent()
-  let mut output = indent + meth.name
-  // Optional marker
-  if meth.is_optional {
-    output = output + "?"
+  let mut output = indent
+
+  // Check if this is a call signature (empty name)
+  let is_call_signature = meth.name == ""
+
+  // Add method name (skip for call signatures)
+  if not(is_call_signature) {
+    output = output + meth.name
+    // Optional marker (only for named methods)
+    if meth.is_optional {
+      output = output + "?"
+    }
   }
+
+  // Type parameters
   if meth.type_parameters.length() > 0 {
     output = output + emit_decl_type_parameters(meth.type_parameters, ctx)
   }
+
+  // Parameters
   output = output + "("
   for i = 0; i < meth.parameters.length(); i = i + 1 {
     if i > 0 {
@@ -1266,6 +1278,8 @@ fn emit_decl_method_signature(
     output = output + emit_decl_parameter(meth.parameters[i], ctx)
   }
   output = output + ")"
+
+  // Return type
   match meth.return_type {
     Some(return_type) =>
       output = output + ": " + emit_decl_type_node(return_type, ctx)
