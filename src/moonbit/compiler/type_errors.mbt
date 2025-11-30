@@ -139,6 +139,25 @@ pub enum MismatchReason {
   CannotUseNamespaceAsValue(String) // TS2710: Cannot use namespace '{0}' as a value
   CannotFindModuleSetModuleResolution(String) // TS2766: Cannot find module '{0}'. Did you mean to set 'moduleResolution' to 'node'?
   ModuleHasNoExportedMember(String, String) // TS2305: Module '{0}' has no exported member '{1}'
+
+  // Type Assignment & Compatibility errors
+  InterfaceCannotExtendTypes(String, Array[String]) // TS2320: Interface '{0}' cannot simultaneously extend types '{1}'
+  PropertyMissingInType(String, String) // TS2324: Property '{0}' is missing in type '{1}'
+  ParamTypesIncompatible(String, String, String) // TS2326: Types of parameters '{0}' and '{1}' are incompatible
+  PropertyTypesIncompatible(String, String, String) // TS2328: Types of property '{0}' are incompatible between '{1}' and '{2}'
+  IndexSignatureMissing(String, String) // TS2329: Index signature is missing in type '{0}' (expected from '{1}')
+  ThisInStaticProperty(String) // TS2334: 'this' cannot be referenced in a static property initializer
+  TypeDoesNotSatisfyConstraint(String, String) // TS2344: Type '{0}' does not satisfy the constraint '{1}'
+  ValueNoPropertiesInCommon(String, String) // TS2348: Value of type '{0}' has no properties in common with type '{1}'
+  OnlyVoidFunctionCanBeCalledWithNew(String) // TS2350: Only a void function can be called with the 'new' keyword
+  ConversionMayBeMistake(String, String) // TS2352: Conversion of type '{0}' to type '{1}' may be a mistake
+  TypeCannotBeAssignedToType(String, String) // TS2717: Type '{0}' is not assignable to type '{1}'
+  TypeMissingPropertiesFromType(String, String, Array[String]) // TS2739: Type '{0}' is missing the following properties from type '{1}': {2}
+  TypeMissingPropertiesAndMore(String, String, Array[String], Int) // TS2740: Type '{0}' is missing properties from type '{1}': {2} and {3} more
+  TypeDoesNotSatisfyConstraintAlt(String, String) // TS2744: Type '{0}' does not satisfy constraint '{1}'
+  TypeNotAssignableSameNameDifferentTypes(String, String, String) // TS2752: Type '{0}' is not assignable to type '{1}'. Two different types with this name exist, but they are unrelated.
+  TypeNotAssignableGeneric(String, String) // TS2757: Type '{0}' is not assignable to type '{1}'
+  PropertyTypesIncompatibleAlt(String, String, String) // TS2758: Types of property '{0}' are incompatible
 } derive(Show, Eq)
 
 // ============================================================================
@@ -838,6 +857,41 @@ pub fn get_friendly_title(reason : MismatchReason) -> String {
       "CANNOT FIND MODULE '" + module + "' - CHECK MODULE RESOLUTION"
     ModuleHasNoExportedMember(module, member) =>
       "MODULE '" + module + "' HAS NO EXPORTED MEMBER '" + member + "'"
+    // Type Assignment & Compatibility errors
+    InterfaceCannotExtendTypes(iface, _) =>
+      "INTERFACE '" + iface + "' CANNOT EXTEND INCOMPATIBLE TYPES"
+    PropertyMissingInType(prop, typ) =>
+      "PROPERTY '" + prop + "' IS MISSING IN TYPE '" + typ + "'"
+    ParamTypesIncompatible(param1, param2, _) =>
+      "PARAMETER TYPES '" + param1 + "' AND '" + param2 + "' ARE INCOMPATIBLE"
+    PropertyTypesIncompatible(prop, _, _) =>
+      "PROPERTY '" + prop + "' TYPES ARE INCOMPATIBLE"
+    IndexSignatureMissing(typ, _) =>
+      "INDEX SIGNATURE MISSING IN TYPE '" + typ + "'"
+    ThisInStaticProperty(prop) =>
+      "'THIS' CANNOT BE REFERENCED IN STATIC PROPERTY '" + prop + "'"
+    TypeDoesNotSatisfyConstraint(typ, constraint) =>
+      "TYPE '" + typ + "' DOES NOT SATISFY CONSTRAINT '" + constraint + "'"
+    ValueNoPropertiesInCommon(typ1, typ2) =>
+      "TYPE '" + typ1 + "' HAS NO PROPERTIES IN COMMON WITH '" + typ2 + "'"
+    OnlyVoidFunctionCanBeCalledWithNew(typ) =>
+      "ONLY VOID FUNCTION CAN BE CALLED WITH 'NEW' (GOT '" + typ + "')"
+    ConversionMayBeMistake(from, to) =>
+      "CONVERSION FROM '" + from + "' TO '" + to + "' MAY BE A MISTAKE"
+    TypeCannotBeAssignedToType(from, to) =>
+      "TYPE '" + from + "' CANNOT BE ASSIGNED TO TYPE '" + to + "'"
+    TypeMissingPropertiesFromType(typ, target, _) =>
+      "TYPE '" + typ + "' IS MISSING PROPERTIES FROM '" + target + "'"
+    TypeMissingPropertiesAndMore(typ, target, _, _) =>
+      "TYPE '" + typ + "' IS MISSING PROPERTIES FROM '" + target + "'"
+    TypeDoesNotSatisfyConstraintAlt(typ, constraint) =>
+      "TYPE '" + typ + "' DOES NOT SATISFY CONSTRAINT '" + constraint + "'"
+    TypeNotAssignableSameNameDifferentTypes(typ1, typ2, _) =>
+      "TYPE '" + typ1 + "' NOT ASSIGNABLE TO '" + typ2 + "' (DIFFERENT TYPES SAME NAME)"
+    TypeNotAssignableGeneric(from, to) =>
+      "TYPE '" + from + "' IS NOT ASSIGNABLE TO TYPE '" + to + "'"
+    PropertyTypesIncompatibleAlt(prop, _, _) =>
+      "PROPERTY '" + prop + "' TYPES ARE INCOMPATIBLE"
   }
 }
 
@@ -1060,6 +1114,119 @@ pub fn get_why_explanation(reason : MismatchReason) -> String {
       "' exists but does not export a member named '" +
       member +
       "'. Check the module's exports or look at its type definitions."
+    // Type Assignment & Compatibility errors
+    InterfaceCannotExtendTypes(iface, types) =>
+      "Interface '" +
+      iface +
+      "' is trying to extend multiple types that have conflicting members: " +
+      types.join(", ") +
+      ". When an interface extends multiple types, all their members must be compatible."
+    PropertyMissingInType(prop, typ) =>
+      "The property '" +
+      prop +
+      "' is required but not present in the type '" +
+      typ +
+      "'. TypeScript's structural typing requires all non-optional properties to exist."
+    ParamTypesIncompatible(param1, param2, context) =>
+      "The parameter types '" +
+      param1 +
+      "' and '" +
+      param2 +
+      "' are not compatible in " +
+      context +
+      ". Function parameters must match in both type and position for assignment."
+    PropertyTypesIncompatible(prop, type1, type2) =>
+      "The property '" +
+      prop +
+      "' has type '" +
+      type1 +
+      "' in one type and '" +
+      type2 +
+      "' in another. For types to be compatible, corresponding properties must have compatible types."
+    IndexSignatureMissing(typ, expected) =>
+      "Type '" +
+      typ +
+      "' is missing an index signature that exists in '" +
+      expected +
+      "'. Index signatures like [key: string]: T allow accessing properties by computed keys."
+    ThisInStaticProperty(prop) =>
+      "'this' refers to the instance of a class, but static property '" +
+      prop +
+      "' belongs to the class itself, not instances. Static members are initialized before any instance exists."
+    TypeDoesNotSatisfyConstraint(typ, constraint) =>
+      "The type '" +
+      typ +
+      "' doesn't meet the requirements specified by the constraint '" +
+      constraint +
+      "'. Generic constraints ensure type parameters have certain properties or extend certain types."
+    ValueNoPropertiesInCommon(typ1, typ2) =>
+      "Types '" +
+      typ1 +
+      "' and '" +
+      typ2 +
+      "' have no properties in common. This usually means you're comparing completely unrelated types or one is much more specific than the other."
+    OnlyVoidFunctionCanBeCalledWithNew(typ) =>
+      "The function returns '" +
+      typ +
+      "', but functions called with 'new' should either return void (letting the constructor create the instance) or return an object type."
+    ConversionMayBeMistake(from, to) =>
+      "Converting from '" +
+      from +
+      "' to '" +
+      to +
+      "' loses type information and may not be what you intended. TypeScript is warning that these types have very different structures."
+    TypeCannotBeAssignedToType(from, to) =>
+      "Type '" +
+      from +
+      "' cannot be assigned to type '" +
+      to +
+      "'. The source type is missing properties or has incompatible property types."
+    TypeMissingPropertiesFromType(typ, target, props) =>
+      "Type '" +
+      typ +
+      "' is missing the following required properties from type '" +
+      target +
+      "': " +
+      props.join(", ") +
+      "."
+    TypeMissingPropertiesAndMore(typ, target, props, more) =>
+      "Type '" +
+      typ +
+      "' is missing properties from type '" +
+      target +
+      "': " +
+      props.join(", ") +
+      " and " +
+      more.to_string() +
+      " more. This indicates significant structural differences between the types."
+    TypeDoesNotSatisfyConstraintAlt(typ, constraint) =>
+      "Type '" +
+      typ +
+      "' doesn't satisfy the constraint '" +
+      constraint +
+      "'. Ensure the type includes all required properties and methods defined by the constraint."
+    TypeNotAssignableSameNameDifferentTypes(typ1, typ2, source) =>
+      "Type '" +
+      typ1 +
+      "' is not assignable to type '" +
+      typ2 +
+      "'. Although they have the same name, they come from different declarations (" +
+      source +
+      ") and are treated as separate types."
+    TypeNotAssignableGeneric(from, to) =>
+      "Type '" +
+      from +
+      "' is not assignable to type '" +
+      to +
+      "'. Check that all properties and their types match the expected type structure."
+    PropertyTypesIncompatibleAlt(prop, type1, type2) =>
+      "Property '" +
+      prop +
+      "' has incompatible types: '" +
+      type1 +
+      "' vs '" +
+      type2 +
+      "'. Ensure the property types are compatible in both the source and target types."
   }
 }
 
@@ -1590,6 +1757,118 @@ pub fn get_how_to_fix(
       fixes.push("Try using default import if the module has a default export:")
       fixes.push("    import module from '" + module + "';")
     }
+    // Type Assignment & Compatibility errors
+    InterfaceCannotExtendTypes(iface, types) => {
+      fixes.push("Option 1: Remove conflicting extends from interface '" + iface + "':")
+      fixes.push("    interface " + iface + " extends " + (if types.length() > 0 { types[0] } else { "Type1" }) + " { }")
+      fixes.push("")
+      fixes.push("Option 2: Create a merged interface that resolves the conflicts:")
+      fixes.push("    interface Merged { /* resolve conflicting properties */ }")
+      fixes.push("    interface " + iface + " extends Merged { }")
+    }
+    PropertyMissingInType(prop, _) => {
+      fixes.push("Add the missing property to your type:")
+      fixes.push("    { " + prop + ": /* value */ }")
+      fixes.push("")
+      fixes.push("Or mark the property as optional in the expected type:")
+      fixes.push("    interface Target { " + prop + "?: SomeType; }")
+    }
+    ParamTypesIncompatible(param1, param2, _) => {
+      fixes.push("Ensure parameter types match:")
+      fixes.push("    function fn(param: CorrectType) { }")
+      fixes.push("")
+      fixes.push("Or use a union type to accept both:")
+      fixes.push("    function fn(param: " + param1 + " | " + param2 + ") { }")
+    }
+    PropertyTypesIncompatible(prop, type1, type2) => {
+      fixes.push("Change the property type to be compatible:")
+      fixes.push("    { " + prop + ": CompatibleType }")
+      fixes.push("")
+      fixes.push("Or use a union type if both should be valid:")
+      fixes.push("    { " + prop + ": " + type1 + " | " + type2 + " }")
+    }
+    IndexSignatureMissing(_, _) => {
+      fixes.push("Add an index signature to your type:")
+      fixes.push("    interface MyType {")
+      fixes.push("        [key: string]: ValueType;")
+      fixes.push("    }")
+    }
+    ThisInStaticProperty(_) => {
+      fixes.push("Option 1: Make the property non-static:")
+      fixes.push("    class MyClass { prop = this.value; }")
+      fixes.push("")
+      fixes.push("Option 2: Use the class name instead of 'this':")
+      fixes.push("    class MyClass { static prop = MyClass.staticValue; }")
+    }
+    TypeDoesNotSatisfyConstraint(typ, constraint) => {
+      fixes.push("Ensure type '" + typ + "' has all required properties from '" + constraint + "':")
+      fixes.push("    interface " + typ + " extends " + constraint + " { /* properties */ }")
+      fixes.push("")
+      fixes.push("Or adjust the generic constraint to be less restrictive.")
+    }
+    ValueNoPropertiesInCommon(_, _) => {
+      fixes.push("Check if you're comparing the correct types.")
+      fixes.push("Consider using a type assertion if intentional:")
+      fixes.push("    value as TargetType")
+      fixes.push("")
+      fixes.push("Or add common properties to make types compatible.")
+    }
+    OnlyVoidFunctionCanBeCalledWithNew(_) => {
+      fixes.push("Option 1: Make the function return void or an object:")
+      fixes.push("    function Ctor(): void { /* ... */ }")
+      fixes.push("")
+      fixes.push("Option 2: Use a class instead:")
+      fixes.push("    class MyClass { constructor() { } }")
+    }
+    ConversionMayBeMistake(from, to) => {
+      fixes.push("If this conversion is intentional, use 'unknown' as intermediate:")
+      fixes.push("    (value as unknown) as " + to)
+      fixes.push("")
+      fixes.push("Or reconsider if you're converting to the correct type.")
+      fixes.push("Current: " + from + " -> " + to)
+    }
+    TypeCannotBeAssignedToType(_, to) => {
+      fixes.push("Ensure the source type has all required properties of '" + to + "'.")
+      fixes.push("")
+      fixes.push("Or use a type assertion if you're certain:")
+      fixes.push("    value as " + to)
+    }
+    TypeMissingPropertiesFromType(_, _, props) => {
+      fixes.push("Add the missing properties to your object:")
+      for prop in props {
+        fixes.push("    " + prop + ": /* value */,")
+      }
+    }
+    TypeMissingPropertiesAndMore(_, _, props, more) => {
+      fixes.push("Add the missing properties. First few:")
+      for prop in props {
+        fixes.push("    " + prop + ": /* value */,")
+      }
+      fixes.push("    // ... and " + more.to_string() + " more properties")
+    }
+    TypeDoesNotSatisfyConstraintAlt(typ, constraint) => {
+      fixes.push("Ensure type '" + typ + "' implements all requirements of '" + constraint + "'.")
+      fixes.push("Check that all required properties and methods exist.")
+    }
+    TypeNotAssignableSameNameDifferentTypes(_, _, _) => {
+      fixes.push("These types have the same name but come from different sources.")
+      fixes.push("Options:")
+      fixes.push("  1. Import from the same source")
+      fixes.push("  2. Use type aliases to distinguish them")
+      fixes.push("  3. Consolidate type definitions to a single source")
+    }
+    TypeNotAssignableGeneric(_, to) => {
+      fixes.push("Ensure all properties match the expected type '" + to + "'.")
+      fixes.push("")
+      fixes.push("Or use a type assertion:")
+      fixes.push("    value as " + to)
+    }
+    PropertyTypesIncompatibleAlt(prop, type1, type2) => {
+      fixes.push("Property '" + prop + "' must have compatible types.")
+      fixes.push("Change from '" + type1 + "' to '" + type2 + "' or vice versa.")
+      fixes.push("")
+      fixes.push("Or use a union type: " + type1 + " | " + type2)
+    }
   }
   fixes
 }
@@ -1648,6 +1927,24 @@ pub fn get_error_code(reason : MismatchReason) -> Int {
     CannotUseNamespaceAsValue(_) => 2710 // TS2710: Cannot use namespace as value
     CannotFindModuleSetModuleResolution(_) => 2766 // TS2766: Cannot find module (moduleResolution)
     ModuleHasNoExportedMember(_, _) => 2305 // TS2305: Module has no exported member
+    // Type Assignment & Compatibility errors
+    InterfaceCannotExtendTypes(_, _) => 2320 // TS2320: Interface cannot simultaneously extend types
+    PropertyMissingInType(_, _) => 2324 // TS2324: Property is missing in type
+    ParamTypesIncompatible(_, _, _) => 2326 // TS2326: Types of parameters are incompatible
+    PropertyTypesIncompatible(_, _, _) => 2328 // TS2328: Types of property are incompatible
+    IndexSignatureMissing(_, _) => 2329 // TS2329: Index signature is missing in type
+    ThisInStaticProperty(_) => 2334 // TS2334: 'this' cannot be referenced in static property initializer
+    TypeDoesNotSatisfyConstraint(_, _) => 2344 // TS2344: Type does not satisfy the constraint
+    ValueNoPropertiesInCommon(_, _) => 2348 // TS2348: Value has no properties in common with type
+    OnlyVoidFunctionCanBeCalledWithNew(_) => 2350 // TS2350: Only a void function can be called with new
+    ConversionMayBeMistake(_, _) => 2352 // TS2352: Conversion may be a mistake
+    TypeCannotBeAssignedToType(_, _) => 2717 // TS2717: Type cannot be assigned to type
+    TypeMissingPropertiesFromType(_, _, _) => 2739 // TS2739: Type is missing properties from type
+    TypeMissingPropertiesAndMore(_, _, _, _) => 2740 // TS2740: Type is missing properties (and more)
+    TypeDoesNotSatisfyConstraintAlt(_, _) => 2744 // TS2744: Type does not satisfy constraint
+    TypeNotAssignableSameNameDifferentTypes(_, _, _) => 2752 // TS2752: Type not assignable (different types same name)
+    TypeNotAssignableGeneric(_, _) => 2757 // TS2757: Type not assignable
+    PropertyTypesIncompatibleAlt(_, _, _) => 2758 // TS2758: Types of property incompatible
   }
 }
 
