@@ -225,9 +225,9 @@ fn parse_jsx_tag_name(parser : Parser) -> Result[(JsxTagName, Parser), Parser] {
               Err(
                 add_error_with_code(
                   parser,
-                  ExpectedIdentifier.to_message(),
+                  IdentifierExpected.to_message(),
                   loc,
-                  ExpectedIdentifier,
+                  IdentifierExpected,
                 ),
               )
           }
@@ -256,9 +256,9 @@ fn parse_jsx_tag_name(parser : Parser) -> Result[(JsxTagName, Parser), Parser] {
                     return Err(
                       add_error_with_code(
                         parser,
-                        ExpectedIdentifier.to_message(),
+                        IdentifierExpected.to_message(),
                         loc,
-                        ExpectedIdentifier,
+                        IdentifierExpected,
                       ),
                     )
                 }
@@ -275,9 +275,9 @@ fn parse_jsx_tag_name(parser : Parser) -> Result[(JsxTagName, Parser), Parser] {
       Err(
         add_error_with_code(
           parser,
-          ExpectedIdentifier.to_message(),
+          IdentifierExpected.to_message(),
           start_loc,
-          ExpectedIdentifier,
+          IdentifierExpected,
         ),
       )
   }

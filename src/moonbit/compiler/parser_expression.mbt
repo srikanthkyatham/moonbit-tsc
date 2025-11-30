@@ -86,9 +86,9 @@ fn parse_identifier_or_keyword_name(
       Err(
         add_error_with_code(
           parser,
-          ExpectedIdentifier.to_message(),
+          IdentifierExpected.to_message(),
           loc,
-          ExpectedIdentifier,
+          IdentifierExpected,
         ),
       )
   }
@@ -1074,9 +1074,9 @@ fn parse_primary_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
           Err(
             add_error_with_code(
               parser,
-              ExpectedIdentifier.to_message(),
+              IdentifierExpected.to_message(),
               start_loc,
-              ExpectedIdentifier,
+              IdentifierExpected,
             ),
           )
       }
@@ -1472,8 +1472,8 @@ fn parse_object_property(
               let (parameters, parser) = parse_parameter_list(parser)
               let (return_type, parser) = parse_optional_return_type(parser)
 
-              // Parse method body
-              match parse_block_statement(parser) {
+              // Parse method body (with in_function context for return statements)
+              match parse_function_body(parser) {
                 Ok((body, parser)) => {
                   let func_expr = FunctionExpression::{
                     name: None,

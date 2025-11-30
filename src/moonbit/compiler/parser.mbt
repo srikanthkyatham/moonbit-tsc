@@ -144,39 +144,41 @@ fn add_error_checked(
 /// Aligned with TypeScript's official diagnostic codes where applicable
 pub enum ParserErrorCode {
   // ============================================================================
-  // Internal Parser Errors (no official TS codes)
-  // Used for basic syntax errors without official TypeScript equivalents
+  // Expected Token Errors (all use TS1005: "{0} expected")
+  // These map to TypeScript's TS1005 generic expected token error
   // ============================================================================
-  UnexpectedEOF // Internal: Unexpected end of file
-  ExpectedIdentifier // Internal: Identifier expected (TS1003)
-  ExpectedTypeAnnotation // Internal: Type annotation expected
-  ExpectedExpression // Internal: Expression expected (TS1109)
-  ExpectedStatement // Internal: Statement expected (TS1128)
-  ExpectedSemicolon // Internal: ';' expected
-  ExpectedComma // Internal: ',' expected
-  ExpectedColon // Internal: ':' expected
-  ExpectedOpenParen // Internal: '(' expected
-  ExpectedCloseParen // Internal: ')' expected
-  ExpectedOpenBrace // Internal: '{' expected
-  ExpectedCloseBrace // Internal: '}' expected
-  ExpectedOpenBracket // Internal: '[' expected
-  ExpectedCloseBracket // Internal: ']' expected
-  ExpectedFunctionKeyword // Internal: 'function' expected
-  ExpectedClassKeyword // Internal: 'class' expected
-  ExpectedEquals // Internal: '=' expected
-  JSXClosingTagMismatch // Internal: JSX closing tag mismatch
-  JSXExpectedClosingTag // Internal: JSX closing tag expected
-  JSXExpectedAttributeValue // Internal: JSX attribute value expected
-  JSONExpectedPropertyName // Internal: JSON property name expected
-  JSONExpectedValue // Internal: JSON value expected
-  JSONTrailingComma // Internal: JSON trailing comma
-  JSDocInvalidTag // Internal: Invalid JSDoc tag
-  JSDocInvalidType // Internal: Invalid JSDoc type
+  ExpectedSemicolon // TS1005: ';' expected
+  ExpectedColon // TS1005: ':' expected
+  ExpectedOpenParen // TS1005: '(' expected
+  ExpectedCloseParen // TS1005: ')' expected
+  ExpectedOpenBrace // TS1005: '{' expected
+  ExpectedCloseBrace // TS1005: '}' expected
+  ExpectedCloseBracket // TS1005: ']' expected
+  ExpectedFunctionKeyword // TS1005: 'function' expected
+  ExpectedClassKeyword // TS1005: 'class' expected
+  ExpectedEquals // TS1005: '=' expected
+
+  // ============================================================================
+  // JSX Errors (TS17xxx)
+  // ============================================================================
+  JSXClosingTagMismatch // TS17004: Expected corresponding JSX closing tag
+  JSXExpectedClosingTag // TS17008: JSX element has no corresponding closing tag
+  JSXExpectedAttributeValue // TS17001: JSX attribute expected
+
+  // ============================================================================
+  // JSON Errors
+  // ============================================================================
+  JSONExpectedPropertyName // TS1005: Property name expected
+  JSONExpectedValue // TS1005: Value expected
+  JSONTrailingComma // TS1009: Trailing comma not allowed
 
   // ============================================================================
   // Critical Parser Errors (TS1000-1185)
   // These are official TypeScript error codes for parser/syntax errors
   // ============================================================================
+
+  // Identifier errors
+  IdentifierExpected // TS1003
 
   // String/Literal errors
   UnterminatedStringLiteral // TS1002
@@ -214,7 +216,9 @@ pub enum ParserErrorCode {
 
   // Statement context errors
   ReturnOutsideFunction // TS1108
+  ExpressionExpected // TS1109
   TypeExpected // TS1110
+  UnexpectedEndOfText // TS1126
   DeclarationOrStatementExpected // TS1128
   PropertyOrSignatureExpected // TS1131
   StringLiteralExpected // TS1141
@@ -562,37 +566,35 @@ pub enum ParserErrorCode {
 pub fn ParserErrorCode::to_int(self : ParserErrorCode) -> Int {
   match self {
     // ============================================================================
-    // Internal Parser Errors (no official TS codes)
+    // Expected Token Errors (TS1005)
     // ============================================================================
-    UnexpectedEOF => 1002
-    ExpectedIdentifier => 1003
-    ExpectedTypeAnnotation => 1004
-    ExpectedExpression => 1109
-    ExpectedStatement => 1128
-    ExpectedSemicolon => 1007
-    ExpectedComma => 1008
-    ExpectedColon => 1009
-    ExpectedOpenParen => 1010
-    ExpectedCloseParen => 1011
-    ExpectedOpenBrace => 1012
-    ExpectedCloseBrace => 1013
-    ExpectedOpenBracket => 1014
-    ExpectedCloseBracket => 1015
-    ExpectedFunctionKeyword => 1016
-    ExpectedClassKeyword => 1017
-    ExpectedEquals => 1018
-    JSXClosingTagMismatch => 1100
-    JSXExpectedClosingTag => 1101
-    JSXExpectedAttributeValue => 1102
-    JSONExpectedPropertyName => 1200
-    JSONExpectedValue => 1201
-    JSONTrailingComma => 1202
-    JSDocInvalidTag => 1300
-    JSDocInvalidType => 1301
+    ExpectedSemicolon => 1005
+    ExpectedColon => 1005
+    ExpectedOpenParen => 1005
+    ExpectedCloseParen => 1005
+    ExpectedOpenBrace => 1005
+    ExpectedCloseBrace => 1005
+    ExpectedCloseBracket => 1005
+    ExpectedFunctionKeyword => 1005
+    ExpectedClassKeyword => 1005
+    ExpectedEquals => 1005
+
+    // JSX Errors (TS17xxx)
+    JSXClosingTagMismatch => 17004
+    JSXExpectedClosingTag => 17008
+    JSXExpectedAttributeValue => 17001
+
+    // JSON Errors
+    JSONExpectedPropertyName => 1005 // Property name expected
+    JSONExpectedValue => 1005 // Value expected
+    JSONTrailingComma => 1009 // Trailing comma not allowed
 
     // ============================================================================
     // Critical Parser Errors - Official TypeScript Error Codes
     // ============================================================================
+
+    // Identifier errors
+    IdentifierExpected => 1003 // TS1003: Identifier expected
 
     // String/Literal errors
     UnterminatedStringLiteral => 1002 // TS1002: Unterminated string literal
@@ -630,7 +632,9 @@ pub fn ParserErrorCode::to_int(self : ParserErrorCode) -> Int {
 
     // Statement context errors
     ReturnOutsideFunction => 1108 // TS1108: A 'return' statement can only be used within a function body
+    ExpressionExpected => 1109 // TS1109: Expression expected
     TypeExpected => 1110 // TS1110: Type expected
+    UnexpectedEndOfText => 1126 // TS1126: Unexpected end of text
     DeclarationOrStatementExpected => 1128 // TS1128: Declaration or statement expected
     PropertyOrSignatureExpected => 1131 // TS1131: Property or signature expected
     StringLiteralExpected => 1141 // TS1141: String literal expected
@@ -979,37 +983,35 @@ pub fn ParserErrorCode::to_int(self : ParserErrorCode) -> Int {
 pub fn ParserErrorCode::to_message(self : ParserErrorCode) -> String {
   match self {
     // ============================================================================
-    // Internal Parser Errors
+    // Expected Token Errors (TS1005)
     // ============================================================================
-    UnexpectedEOF => "Unexpected end of file"
-    ExpectedIdentifier => "Identifier expected"
-    ExpectedTypeAnnotation => "Type annotation expected"
-    ExpectedExpression => "Expression expected"
-    ExpectedStatement => "Statement expected"
-    ExpectedSemicolon => "';' expected"
-    ExpectedComma => "',' expected"
-    ExpectedColon => "':' expected"
-    ExpectedOpenParen => "'(' expected"
-    ExpectedCloseParen => "')' expected"
-    ExpectedOpenBrace => "'{' expected"
-    ExpectedCloseBrace => "'}' expected"
-    ExpectedOpenBracket => "'[' expected"
-    ExpectedCloseBracket => "']' expected"
-    ExpectedFunctionKeyword => "'function' expected"
-    ExpectedClassKeyword => "'class' expected"
-    ExpectedEquals => "'=' expected"
-    JSXClosingTagMismatch => "JSX closing tag mismatch"
-    JSXExpectedClosingTag => "JSX closing tag expected"
-    JSXExpectedAttributeValue => "JSX attribute value expected"
-    JSONExpectedPropertyName => "Property name expected"
-    JSONExpectedValue => "Value expected"
-    JSONTrailingComma => "Trailing comma not allowed in JSON"
-    JSDocInvalidTag => "Invalid JSDoc tag"
-    JSDocInvalidType => "Invalid JSDoc type"
+    ExpectedSemicolon => "';' expected."
+    ExpectedColon => "':' expected."
+    ExpectedOpenParen => "'(' expected."
+    ExpectedCloseParen => "')' expected."
+    ExpectedOpenBrace => "'{' expected."
+    ExpectedCloseBrace => "'}' expected."
+    ExpectedCloseBracket => "']' expected."
+    ExpectedFunctionKeyword => "'function' expected."
+    ExpectedClassKeyword => "'class' expected."
+    ExpectedEquals => "'=' expected."
+
+    // JSX Errors
+    JSXClosingTagMismatch => "Expected corresponding JSX closing tag."
+    JSXExpectedClosingTag => "JSX element has no corresponding closing tag."
+    JSXExpectedAttributeValue => "JSX attribute expected."
+
+    // JSON Errors
+    JSONExpectedPropertyName => "Property name expected."
+    JSONExpectedValue => "Value expected."
+    JSONTrailingComma => "Trailing comma not allowed."
 
     // ============================================================================
     // Critical Parser Errors - Official TypeScript Error Messages
     // ============================================================================
+
+    // Identifier errors
+    IdentifierExpected => "Identifier expected."
 
     // String/Literal errors
     UnterminatedStringLiteral => "Unterminated string literal."
@@ -1060,7 +1062,9 @@ pub fn ParserErrorCode::to_message(self : ParserErrorCode) -> String {
     // Statement context errors
     ReturnOutsideFunction =>
       "A 'return' statement can only be used within a function body."
+    ExpressionExpected => "Expression expected."
     TypeExpected => "Type expected."
+    UnexpectedEndOfText => "Unexpected end of text."
     DeclarationOrStatementExpected => "Declaration or statement expected."
     PropertyOrSignatureExpected => "Property or signature expected."
     StringLiteralExpected => "String literal expected."
@@ -3008,7 +3012,7 @@ fn parse_return_type(parser : Parser) -> Result[(Node, Parser), Parser] {
               parser,
               "Identifier expected",
               current_token(parser).location(),
-              ExpectedIdentifier,
+              IdentifierExpected,
             ),
           )
       }
@@ -3622,7 +3626,7 @@ fn parse_identifier(parser : Parser) -> Result[(Identifier, Parser), Parser] {
           parser,
           "Identifier expected",
           loc,
-          ExpectedIdentifier,
+          IdentifierExpected,
         ),
       )
     }
@@ -4862,7 +4866,7 @@ fn parse_interface_declaration(
           parser,
           "Identifier expected",
           current_token(parser).location(),
-          ExpectedIdentifier,
+          IdentifierExpected,
         ),
       )
   }
@@ -4922,7 +4926,7 @@ fn parse_interface_declaration(
                     parser,
                     "Identifier expected",
                     current_token(parser).location(),
-                    ExpectedIdentifier,
+                    IdentifierExpected,
                   ),
                 )
             }
@@ -5017,7 +5021,7 @@ fn parse_interface_declaration(
                         parser,
                         "Identifier expected",
                         current_token(parser).location(),
-                        ExpectedIdentifier,
+                        IdentifierExpected,
                       ),
                     )
                 }
@@ -5149,7 +5153,7 @@ fn parse_interface_declaration(
                     parser,
                     "Identifier expected",
                     current_token(parser).location(),
-                    ExpectedIdentifier,
+                    IdentifierExpected,
                   ),
                 )
             }
@@ -5520,7 +5524,7 @@ fn parse_type_alias_declaration(
           parser,
           "Identifier expected",
           current_token(parser).location(),
-          ExpectedIdentifier,
+          IdentifierExpected,
         ),
       )
   }
@@ -5593,7 +5597,7 @@ fn parse_enum_declaration(
           parser,
           "Identifier expected",
           current_token(parser).location(),
-          ExpectedIdentifier,
+          IdentifierExpected,
         ),
       )
   }
@@ -5715,7 +5719,7 @@ fn parse_module_declaration_body(
           parser,
           "Identifier expected",
           current_token(parser).location(),
-          ExpectedIdentifier,
+          IdentifierExpected,
         ),
       )
   }
@@ -5906,7 +5910,7 @@ fn parse_import_declaration(parser : Parser) -> Result[(Node, Parser), Parser] {
                   parser,
                   "Identifier expected",
                   current_token(parser).location(),
-                  ExpectedIdentifier,
+                  IdentifierExpected,
                 ),
               )
           }
@@ -6336,7 +6340,7 @@ fn parse_export_declaration(parser : Parser) -> Result[(Node, Parser), Parser] {
                   parser,
                   "Identifier expected",
                   current_token(parser).location(),
-                  ExpectedIdentifier,
+                  IdentifierExpected,
                 ),
               )
           }
@@ -7189,9 +7193,9 @@ fn parse_for_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
           return Err(
             add_error_with_code(
               p,
-              ExpectedExpression.to_message(),
+              ExpressionExpected.to_message(),
               current_token(p).location(),
-              ExpectedExpression,
+              ExpressionExpected,
             ),
           )
       }
@@ -7239,9 +7243,9 @@ fn parse_for_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
           return Err(
             add_error_with_code(
               p,
-              ExpectedExpression.to_message(),
+              ExpressionExpected.to_message(),
               current_token(p).location(),
-              ExpectedExpression,
+              ExpressionExpected,
             ),
           )
       }
@@ -7593,9 +7597,9 @@ fn parse_throw_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
       return Err(
         add_error_with_code(
           p,
-          ExpectedExpression.to_message(),
+          ExpressionExpected.to_message(),
           current_token(p).location(),
-          ExpectedExpression,
+          ExpressionExpected,
         ),
       )
   }

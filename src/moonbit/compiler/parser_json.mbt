@@ -152,9 +152,9 @@ fn parse_json_value(parser : Parser) -> Result[(Node, Parser), Parser] {
       Err(
         add_error_with_code(
           parser,
-          UnexpectedEOF.to_message(),
+          UnexpectedEndOfText.to_message(),
           loc,
-          UnexpectedEOF,
+          UnexpectedEndOfText,
         ),
       )
     _ =>
@@ -302,9 +302,9 @@ fn parse_json_object(parser : Parser) -> Result[(Node, Parser), Parser] {
   Err(
     add_error_with_code(
       parser,
-      UnexpectedEOF.to_message(),
+      UnexpectedEndOfText.to_message(),
       start_loc,
-      UnexpectedEOF,
+      UnexpectedEndOfText,
     ),
   )
 }
@@ -393,9 +393,9 @@ fn parse_json_array(parser : Parser) -> Result[(Node, Parser), Parser] {
   Err(
     add_error_with_code(
       parser,
-      UnexpectedEOF.to_message(),
+      UnexpectedEndOfText.to_message(),
       start_loc,
-      UnexpectedEOF,
+      UnexpectedEndOfText,
     ),
   )
 }
