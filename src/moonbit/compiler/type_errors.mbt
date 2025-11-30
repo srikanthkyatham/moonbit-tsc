@@ -123,6 +123,10 @@ pub enum MismatchReason {
   SuperPropertyOutsideClass // TS2335: 'super' can only be referenced in a derived class
   SuperCallInStaticMethod // Super call in static method
   SuperPropertyAccess(String) // TS2339: Property does not exist on type 'super'
+
+  // BigInt errors (TS2365, TS2736)
+  BigIntNumberMixing(String) // TS2365: Operator cannot be applied to bigint and number
+  UnaryPlusBigInt // TS2736: Operator '+' cannot be applied to type 'bigint'
 } derive(Show, Eq)
 
 // ============================================================================
@@ -363,6 +367,48 @@ pub fn aggregate_errors(
     IncompatibleTypes
   }
   { path, expected, actual, reason, children: errors, suggestions: [] }
+}
+
+// ============================================================================
+// BigInt Type Errors (TS2365, TS2736)
+// ============================================================================
+
+///|
+/// Create an error for BigInt/number mixing in arithmetic operations (TS2365)
+pub fn bigint_number_mixing_error(
+  operator : String,
+  left_type : TypeV2,
+  right_type : TypeV2,
+) -> TypeMismatchError {
+  {
+    path: PRoot,
+    expected: TBigInt, // or TNumber depending on context
+    actual: make_union([left_type, right_type]),
+    reason: BigIntNumberMixing(operator),
+    children: [],
+    suggestions: [
+      "Convert one operand to match the other type",
+      "Use BigInt(n) to convert number to bigint",
+      "Use Number(n) to convert bigint to number (may lose precision)",
+    ],
+  }
+}
+
+///|
+/// Create an error for unary + on bigint (TS2736)
+pub fn unary_plus_bigint_error() -> TypeMismatchError {
+  {
+    path: PRoot,
+    expected: TNumber,
+    actual: TBigInt,
+    reason: UnaryPlusBigInt,
+    children: [],
+    suggestions: [
+      "Unary '+' cannot be applied to bigint",
+      "Use Number(value) if you need to convert to number",
+      "Use 0n + value or just value for bigint",
+    ],
+  }
 }
 
 // ============================================================================
@@ -759,6 +805,9 @@ pub fn get_friendly_title(reason : MismatchReason) -> String {
     SuperPropertyOutsideClass => "'SUPER' OUTSIDE DERIVED CLASS"
     SuperCallInStaticMethod => "'SUPER' CALL IN STATIC METHOD"
     SuperPropertyAccess(name) => "PROPERTY '" + name + "' NOT ON 'SUPER'"
+    // BigInt errors
+    BigIntNumberMixing(op) => "CANNOT MIX BIGINT AND NUMBER WITH '" + op + "'"
+    UnaryPlusBigInt => "UNARY '+' CANNOT BE APPLIED TO BIGINT"
   }
 }
 
@@ -927,6 +976,13 @@ pub fn get_why_explanation(reason : MismatchReason) -> String {
       "The property '" +
       name +
       "' doesn't exist on the parent class. Check that the parent class defines this property or method."
+    // BigInt errors
+    BigIntNumberMixing(op) =>
+      "TypeScript doesn't allow mixing 'bigint' and 'number' in arithmetic operations because they are fundamentally different types. BigInt can represent arbitrarily large integers, while number is a 64-bit floating point. The '" +
+      op +
+      "' operator requires both operands to be of the same numeric type."
+    UnaryPlusBigInt =>
+      "The unary '+' operator is not supported for bigint because it would be ambiguous - in JavaScript, '+x' typically converts to number, but bigint cannot be implicitly converted to number without potential precision loss."
   }
 }
 
@@ -1368,6 +1424,25 @@ pub fn get_how_to_fix(
       fixes.push("2. Add the property/method to the base class")
       fixes.push("3. Use 'this." + name + "' if accessing a property defined in this class")
     }
+    // BigInt errors
+    BigIntNumberMixing(_) => {
+      fixes.push("Convert both operands to the same numeric type:")
+      fixes.push("")
+      fixes.push("Option 1: Convert to bigint:")
+      fixes.push("    const result = bigintValue + BigInt(numberValue);")
+      fixes.push("")
+      fixes.push("Option 2: Convert to number (may lose precision for large values):")
+      fixes.push("    const result = Number(bigintValue) + numberValue;")
+    }
+    UnaryPlusBigInt => {
+      fixes.push("Remove the unary '+' operator from the bigint value:")
+      fixes.push("")
+      fixes.push("Instead of: +bigintValue")
+      fixes.push("Use:        bigintValue")
+      fixes.push("")
+      fixes.push("If you need to convert to number:")
+      fixes.push("    Number(bigintValue)")
+    }
   }
   fixes
 }
@@ -1412,6 +1487,9 @@ pub fn get_error_code(reason : MismatchReason) -> Int {
     SuperPropertyOutsideClass => 2335 // TS2335: 'super' can only be referenced in a derived class
     SuperCallInStaticMethod => 2337 // Reuse TS2337
     SuperPropertyAccess(_) => 2339 // TS2339: Property does not exist on type
+    // BigInt errors
+    BigIntNumberMixing(_) => 2365 // TS2365: Operator cannot be applied to types
+    UnaryPlusBigInt => 2736 // TS2736: Operator '+' cannot be applied to type 'bigint'
   }
 }
 

@@ -338,6 +338,8 @@ pub enum DiagnosticCode {
   TS2349 // This expression is not callable
   TS2355 // A function whose declared type is neither 'void' nor 'any' must return a value
   TS2363 // The right-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type
+  TS2365 // Operator 'X' cannot be applied to types 'Y' and 'Z' (bigint/number mixing)
+  TS2736 // Operator 'X' cannot be applied to type 'bigint' (unary +)
 
   // Enum Errors (2400-2499)
   TS2474 // const enum member initializers can only contain literal values and other computed enum values
@@ -369,6 +371,8 @@ pub fn DiagnosticCode::to_int(self : DiagnosticCode) -> Int {
     TS2349 => 2349
     TS2355 => 2355
     TS2363 => 2363
+    TS2365 => 2365
+    TS2736 => 2736
     TS2474 => 2474
     TS2511 => 2511
     TS2554 => 2554
@@ -393,6 +397,8 @@ pub fn DiagnosticCode::from_int(code : Int) -> DiagnosticCode? {
     2349 => Some(TS2349)
     2355 => Some(TS2355)
     2363 => Some(TS2363)
+    2365 => Some(TS2365)
+    2736 => Some(TS2736)
     2474 => Some(TS2474)
     2511 => Some(TS2511)
     2554 => Some(TS2554)

@@ -885,22 +885,96 @@ fn infer_member_type_v2(
 }
 
 ///|
+/// Check if a type is a BigInt type (TBigInt or TLiteralBigInt)
+fn is_bigint_type(ty : TypeV2) -> Bool {
+  match ty {
+    TBigInt | TLiteralBigInt(_) => true
+    _ => false
+  }
+}
+
+///|
+/// Check if a type is a number type (TNumber or TLiteralNumber)
+fn is_number_type(ty : TypeV2) -> Bool {
+  match ty {
+    TNumber | TLiteralNumber(_) => true
+    _ => false
+  }
+}
+
+///|
+/// Get operator name for error messages
+fn get_operator_name(op : BinaryOperator) -> String {
+  match op {
+    Add => "+"
+    Subtract => "-"
+    Multiply => "*"
+    Divide => "/"
+    Remainder => "%"
+    Exponentiate => "**"
+    BitwiseAnd => "&"
+    BitwiseOr => "|"
+    BitwiseXor => "^"
+    LeftShift => "<<"
+    RightShift => ">>"
+    UnsignedRightShift => ">>>"
+    _ => "operator"
+  }
+}
+
+///|
 /// Infer binary expression type
 fn infer_binary_v2(env : TypeEnv, bin : BinaryExpression) -> CheckResultV2 {
   let left_result = infer_expr_v2(env, bin.left)
   let right_result = infer_expr_v2(env, bin.right)
+  let all_errors : Array[TypeMismatchError] = []
+  all_errors.append(left_result.errors)
+  all_errors.append(right_result.errors)
 
   // Extract narrowing information from comparison
   let narrowing = extract_narrowing_v2(bin)
+
   let result_ty = match bin.operator {
-    // Arithmetic operators
+    // Arithmetic operators - handle BigInt
     Add =>
       match (left_result.ty, right_result.ty) {
+        // String concatenation takes precedence
         (TString, _) | (_, TString) => TString
         (TLiteralString(_), _) | (_, TLiteralString(_)) => TString
+        // BigInt arithmetic
+        (TBigInt, TBigInt) | (TLiteralBigInt(_), TBigInt) |
+        (TBigInt, TLiteralBigInt(_)) | (TLiteralBigInt(_), TLiteralBigInt(_)) => TBigInt
+        // BigInt/number mixing error
+        (left, right) if is_bigint_type(left) && is_number_type(right) => {
+          all_errors.push(bigint_number_mixing_error("+", left, right))
+          TError
+        }
+        (left, right) if is_number_type(left) && is_bigint_type(right) => {
+          all_errors.push(bigint_number_mixing_error("+", left, right))
+          TError
+        }
+        // Default to number
         _ => TNumber
       }
-    Subtract | Multiply | Divide | Remainder | Exponentiate => TNumber
+    Subtract | Multiply | Divide | Remainder | Exponentiate => {
+      let op_name = get_operator_name(bin.operator)
+      match (left_result.ty, right_result.ty) {
+        // BigInt arithmetic
+        (TBigInt, TBigInt) | (TLiteralBigInt(_), TBigInt) |
+        (TBigInt, TLiteralBigInt(_)) | (TLiteralBigInt(_), TLiteralBigInt(_)) => TBigInt
+        // BigInt/number mixing error
+        (left, right) if is_bigint_type(left) && is_number_type(right) => {
+          all_errors.push(bigint_number_mixing_error(op_name, left, right))
+          TError
+        }
+        (left, right) if is_number_type(left) && is_bigint_type(right) => {
+          all_errors.push(bigint_number_mixing_error(op_name, left, right))
+          TError
+        }
+        // Default to number
+        _ => TNumber
+      }
+    }
 
     // Comparison operators -> boolean
     LessThan | LessThanEquals | GreaterThan | GreaterThanEquals => TBoolean
@@ -923,13 +997,35 @@ fn infer_binary_v2(env : TypeEnv, bin : BinaryExpression) -> CheckResultV2 {
     NullishCoalescing =>
       make_union([get_non_null_type(left_result.ty), right_result.ty])
 
-    // Bitwise operators
-    BitwiseAnd
-    | BitwiseOr
-    | BitwiseXor
-    | LeftShift
-    | RightShift
-    | UnsignedRightShift => TNumber
+    // Bitwise operators - also handle BigInt
+    BitwiseAnd | BitwiseOr | BitwiseXor | LeftShift | RightShift => {
+      let op_name = get_operator_name(bin.operator)
+      match (left_result.ty, right_result.ty) {
+        // BigInt bitwise operations
+        (TBigInt, TBigInt) | (TLiteralBigInt(_), TBigInt) |
+        (TBigInt, TLiteralBigInt(_)) | (TLiteralBigInt(_), TLiteralBigInt(_)) => TBigInt
+        // BigInt/number mixing error
+        (left, right) if is_bigint_type(left) && is_number_type(right) => {
+          all_errors.push(bigint_number_mixing_error(op_name, left, right))
+          TError
+        }
+        (left, right) if is_number_type(left) && is_bigint_type(right) => {
+          all_errors.push(bigint_number_mixing_error(op_name, left, right))
+          TError
+        }
+        // Default to number
+        _ => TNumber
+      }
+    }
+    // Unsigned right shift doesn't work with BigInt
+    UnsignedRightShift =>
+      match (left_result.ty, right_result.ty) {
+        (left, _) if is_bigint_type(left) => {
+          all_errors.push(bigint_number_mixing_error(">>>", left, right_result.ty))
+          TError
+        }
+        _ => TNumber
+      }
 
     // In operator
     In => TBoolean
@@ -938,9 +1034,6 @@ fn infer_binary_v2(env : TypeEnv, bin : BinaryExpression) -> CheckResultV2 {
     InstanceOf => TBoolean
     _ => TAny
   }
-  let all_errors : Array[TypeMismatchError] = []
-  all_errors.append(left_result.errors)
-  all_errors.append(right_result.errors)
   { ty: result_ty, narrowing, errors: all_errors }
 }
 
@@ -1010,15 +1103,43 @@ fn extract_narrowing_v2(bin : BinaryExpression) -> Narrowing {
 /// Infer unary expression type
 fn infer_unary_v2(env : TypeEnv, un : UnaryExpression) -> CheckResultV2 {
   let operand_result = infer_expr_v2(env, un.operand)
+  let all_errors : Array[TypeMismatchError] = []
+  all_errors.append(operand_result.errors)
+
   let result_ty = match un.operator {
     LogicalNot => TBoolean
-    BitwiseNot => TNumber
-    Minus => TNumber
-    Plus => TNumber
+    BitwiseNot =>
+      // Bitwise NOT works with bigint too
+      if is_bigint_type(operand_result.ty) {
+        TBigInt
+      } else {
+        TNumber
+      }
+    Minus =>
+      // Unary minus works with bigint
+      if is_bigint_type(operand_result.ty) {
+        TBigInt
+      } else {
+        TNumber
+      }
+    Plus =>
+      // Unary plus does NOT work with bigint (TS2736)
+      if is_bigint_type(operand_result.ty) {
+        all_errors.push(unary_plus_bigint_error())
+        TError
+      } else {
+        TNumber
+      }
     TypeOf => TString
     Void => TUndefined
     Delete => TBoolean
-    Increment | Decrement => TNumber
+    Increment | Decrement =>
+      // Increment/decrement work with bigint
+      if is_bigint_type(operand_result.ty) {
+        TBigInt
+      } else {
+        TNumber
+      }
   }
 
   // Extract narrowing for truthy checks (e.g., !x)
@@ -1030,7 +1151,7 @@ fn infer_unary_v2(env : TypeEnv, un : UnaryExpression) -> CheckResultV2 {
       }
     _ => NNone
   }
-  { ty: result_ty, narrowing, errors: operand_result.errors }
+  { ty: result_ty, narrowing, errors: all_errors }
 }
 
 ///|

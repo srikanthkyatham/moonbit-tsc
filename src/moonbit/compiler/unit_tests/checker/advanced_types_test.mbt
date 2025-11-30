@@ -1233,3 +1233,117 @@ test "unit/symbol/symbol-property-access - accessing Symbol.iterator" {
     Err(_) => assert_true(false)
   }
 }
+
+// ============================================================================
+// BigInt Type Tests
+// ============================================================================
+
+///|
+test "unit/bigint/literal - parses bigint literal" {
+  let result = parse_bind_check_advanced("const big = 100n;")
+  match result {
+    Ok(_) => assert_true(true)
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/bigint/type-annotation - bigint type annotation" {
+  let result = parse_bind_check_advanced("let x: bigint = 100n;")
+  match result {
+    Ok(_) => assert_true(true)
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/bigint/arithmetic - bigint addition" {
+  let result = parse_bind_check_advanced("const a = 10n; const b = 20n; const c = a + b;")
+  match result {
+    Ok(_) => assert_true(true)
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/bigint/arithmetic - bigint subtraction" {
+  let result = parse_bind_check_advanced("const a = 100n; const b = 20n; const c = a - b;")
+  match result {
+    Ok(_) => assert_true(true)
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/bigint/arithmetic - bigint multiplication" {
+  let result = parse_bind_check_advanced("const a = 10n; const b = 20n; const c = a * b;")
+  match result {
+    Ok(_) => assert_true(true)
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/bigint/arithmetic - bigint division" {
+  let result = parse_bind_check_advanced("const a = 100n; const b = 10n; const c = a / b;")
+  match result {
+    Ok(_) => assert_true(true)
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/bigint/bitwise - bigint bitwise operations" {
+  let result = parse_bind_check_advanced("const a = 10n; const b = 3n; const c = a & b; const d = a | b;")
+  match result {
+    Ok(_) => assert_true(true)
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/bigint/unary - bigint negation" {
+  let result = parse_bind_check_advanced("const a = 100n; const b = -a;")
+  match result {
+    Ok(_) => assert_true(true)
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/bigint/unary - bigint bitwise NOT" {
+  let result = parse_bind_check_advanced("const a = 100n; const b = ~a;")
+  match result {
+    Ok(_) => assert_true(true)
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/bigint/function - function with bigint parameter and return" {
+  let result = parse_bind_check_advanced(
+    "function double(n: bigint): bigint { return n * 2n; }",
+  )
+  match result {
+    Ok(_) => assert_true(true)
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/bigint/array - array of bigints" {
+  let result = parse_bind_check_advanced("const arr: bigint[] = [1n, 2n, 3n];")
+  match result {
+    Ok(_) => assert_true(true)
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/bigint/comparison - bigint comparison" {
+  let result = parse_bind_check_advanced("const a = 10n; const b = 20n; const c = a < b;")
+  match result {
+    Ok(_) => assert_true(true)
+    Err(_) => assert_true(false)
+  }
+}
