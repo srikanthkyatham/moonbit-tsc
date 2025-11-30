@@ -182,6 +182,11 @@ pub enum MismatchReason {
   IndividualDeclarationsMustMatch(String, String) // TS2395: Individual declarations in merged declaration '{0}' must be all exported or all local
   RequiredTypeParamAfterOptional(String) // TS2706: Required type parameters may not follow optional type parameters
   GenericTypeRequiresTypeArgs(String, Int, Int) // TS2707: Generic type '{0}' requires between {1} and {2} type arguments
+
+  // For-in/For-of errors
+  ForInLeftMustBeVariable(String) // TS2406: The left-hand side of a 'for...in' statement must be a variable or a property access
+  ForInRightMustBeObject(String) // TS2407: The right-hand side of a 'for...in' statement must be of type 'any', an object type or a type parameter
+  ForOfLeftMustBeVariable(String) // TS2487: The left-hand side of a 'for...of' statement must be a variable or a property access
 } derive(Show, Eq)
 
 // ============================================================================
@@ -958,6 +963,13 @@ pub fn get_friendly_title(reason : MismatchReason) -> String {
       "REQUIRED TYPE PARAMETER '" + param + "' AFTER OPTIONAL"
     GenericTypeRequiresTypeArgs(name, min, max) =>
       "GENERIC TYPE '" + name + "' REQUIRES " + min.to_string() + "-" + max.to_string() + " TYPE ARGS"
+    // For-in/For-of errors
+    ForInLeftMustBeVariable(expr) =>
+      "FOR...IN LEFT-HAND SIDE MUST BE VARIABLE (GOT '" + expr + "')"
+    ForInRightMustBeObject(typ) =>
+      "FOR...IN RIGHT-HAND SIDE MUST BE OBJECT (GOT '" + typ + "')"
+    ForOfLeftMustBeVariable(expr) =>
+      "FOR...OF LEFT-HAND SIDE MUST BE VARIABLE (GOT '" + expr + "')"
   }
 }
 
@@ -1391,6 +1403,19 @@ pub fn get_why_explanation(reason : MismatchReason) -> String {
       " and " +
       max.to_string() +
       " type arguments. You must provide the correct number of type arguments when using this generic type."
+    // For-in/For-of errors
+    ForInLeftMustBeVariable(expr) =>
+      "The left-hand side of a 'for...in' loop must be a variable declaration or a simple variable/property reference. You used '" +
+      expr +
+      "' which is not a valid assignment target. The 'for...in' loop iterates over the enumerable property names (keys) of an object."
+    ForInRightMustBeObject(typ) =>
+      "The right-hand side of a 'for...in' loop must be an object type (or 'any'). You provided a value of type '" +
+      typ +
+      "'. The 'for...in' loop iterates over object properties, so it needs an object to iterate over."
+    ForOfLeftMustBeVariable(expr) =>
+      "The left-hand side of a 'for...of' loop must be a variable declaration or a simple variable/property reference. You used '" +
+      expr +
+      "' which is not a valid assignment target. The 'for...of' loop iterates over the values of an iterable (like arrays, strings, etc.)."
   }
 }
 
@@ -2223,6 +2248,40 @@ pub fn get_how_to_fix(
         fixes.push("    " + name + "<Type1, Type2, ...>  // up to " + max.to_string())
       }
     }
+    // For-in/For-of errors
+    ForInLeftMustBeVariable(_) => {
+      fixes.push("Use a variable declaration or simple variable:")
+      fixes.push("")
+      fixes.push("With let/const:")
+      fixes.push("    for (let key in obj) { ... }")
+      fixes.push("    for (const key in obj) { ... }")
+      fixes.push("")
+      fixes.push("With existing variable:")
+      fixes.push("    let key: string;")
+      fixes.push("    for (key in obj) { ... }")
+    }
+    ForInRightMustBeObject(typ) => {
+      fixes.push("The right side of for...in must be an object.")
+      fixes.push("You have type: " + typ)
+      fixes.push("")
+      fixes.push("Valid examples:")
+      fixes.push("    for (const key in myObject) { ... }")
+      fixes.push("    for (const key in { a: 1, b: 2 }) { ... }")
+      fixes.push("")
+      fixes.push("For arrays, consider using for...of instead:")
+      fixes.push("    for (const item of myArray) { ... }")
+    }
+    ForOfLeftMustBeVariable(_) => {
+      fixes.push("Use a variable declaration or simple variable:")
+      fixes.push("")
+      fixes.push("With let/const:")
+      fixes.push("    for (let item of array) { ... }")
+      fixes.push("    for (const item of array) { ... }")
+      fixes.push("")
+      fixes.push("With destructuring:")
+      fixes.push("    for (const [key, value] of entries) { ... }")
+      fixes.push("    for (const { name, age } of people) { ... }")
+    }
   }
   fixes
 }
@@ -2321,6 +2380,10 @@ pub fn get_error_code(reason : MismatchReason) -> Int {
     IndividualDeclarationsMustMatch(_, _) => 2395 // TS2395: Individual declarations must be all exported/local
     RequiredTypeParamAfterOptional(_) => 2706 // TS2706: Required type parameters may not follow optional
     GenericTypeRequiresTypeArgs(_, _, _) => 2707 // TS2707: Generic type requires between N and M type arguments
+    // For-in/For-of errors
+    ForInLeftMustBeVariable(_) => 2406 // TS2406: Left-hand side of for...in must be variable
+    ForInRightMustBeObject(_) => 2407 // TS2407: Right-hand side of for...in must be object type
+    ForOfLeftMustBeVariable(_) => 2487 // TS2487: Left-hand side of for...of must be variable
   }
 }
 

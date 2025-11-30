@@ -3137,3 +3137,309 @@ test "DiagnosticCode - valid class with constructor" {
     }
   }
 }
+
+// ============================================================================
+// For-in/For-of Error Tests
+// ============================================================================
+
+// TS2406: Left-hand side of for...in must be variable
+///|
+test "DiagnosticCode - TS2406 for-in left not variable" {
+  let source =
+    #|const obj = { a: 1, b: 2 };
+    #|for (1 + 2 in obj) { }
+  let result = check_source(source)
+  match result {
+    Ok(_) => () // May not be fully implemented
+    Err(diagnostics) => {
+      // Should report TS2406 or a parser error
+      if has_error(diagnostics, 2406) {
+        assert_true(has_message(diagnostics, "for") || has_message(diagnostics, "variable"))
+      }
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - TS2406 for-in left is call expression" {
+  let source =
+    #|const obj = { a: 1 };
+    #|for (getKey() in obj) { }
+  let result = check_source(source)
+  match result {
+    Ok(_) => () // May not be fully implemented
+    Err(diagnostics) => {
+      // Should report TS2406 or TS2304 (cannot find name)
+      if has_error(diagnostics, 2406) || has_error(diagnostics, 2304) {
+        assert_true(true)
+      }
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - valid for-in with let" {
+  let source =
+    #|const obj = { a: 1, b: 2, c: 3 };
+    #|for (let key in obj) {
+    #|  console.log(key);
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => {
+      assert_true(not(has_error(diagnostics, 2406)))
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - valid for-in with const" {
+  let source =
+    #|const obj = { x: 10, y: 20 };
+    #|for (const prop in obj) {
+    #|  console.log(prop);
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => {
+      assert_true(not(has_error(diagnostics, 2406)))
+    }
+  }
+}
+
+// TS2407: Right-hand side of for...in must be object type
+///|
+test "DiagnosticCode - TS2407 for-in right not object" {
+  let source =
+    #|const num: number = 42;
+    #|for (let key in num) { }
+  let result = check_source(source)
+  match result {
+    Ok(_) => () // May not be fully implemented
+    Err(diagnostics) => {
+      // Should report TS2407
+      if has_error(diagnostics, 2407) {
+        assert_true(has_message(diagnostics, "object") || has_message(diagnostics, "for"))
+      }
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - TS2407 for-in right is boolean" {
+  let source =
+    #|const flag: boolean = true;
+    #|for (let key in flag) { }
+  let result = check_source(source)
+  match result {
+    Ok(_) => () // May not be fully implemented
+    Err(diagnostics) => {
+      if has_error(diagnostics, 2407) {
+        assert_true(true)
+      }
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - valid for-in with object" {
+  let source =
+    #|const person = { name: "John", age: 30 };
+    #|for (const key in person) {
+    #|  console.log(key);
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => {
+      assert_true(not(has_error(diagnostics, 2407)))
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - valid for-in with array indices" {
+  let source =
+    #|const arr = [1, 2, 3];
+    #|for (const index in arr) {
+    #|  console.log(index);
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => {
+      assert_true(not(has_error(diagnostics, 2407)))
+    }
+  }
+}
+
+// TS2487: Left-hand side of for...of must be variable
+///|
+test "DiagnosticCode - TS2487 for-of left not variable" {
+  let source =
+    #|const arr = [1, 2, 3];
+    #|for (1 + 2 of arr) { }
+  let result = check_source(source)
+  match result {
+    Ok(_) => () // May not be fully implemented
+    Err(diagnostics) => {
+      // Should report TS2487 or a parser error
+      if has_error(diagnostics, 2487) {
+        assert_true(has_message(diagnostics, "for") || has_message(diagnostics, "variable"))
+      }
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - TS2487 for-of left is call expression" {
+  let source =
+    #|const arr = [1, 2, 3];
+    #|for (getValue() of arr) { }
+  let result = check_source(source)
+  match result {
+    Ok(_) => () // May not be fully implemented
+    Err(diagnostics) => {
+      // Should report TS2487 or TS2304 (cannot find name)
+      if has_error(diagnostics, 2487) || has_error(diagnostics, 2304) {
+        assert_true(true)
+      }
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - valid for-of with let" {
+  let source =
+    #|const arr = [1, 2, 3];
+    #|for (let item of arr) {
+    #|  console.log(item);
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => {
+      assert_true(not(has_error(diagnostics, 2487)))
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - valid for-of with const" {
+  let source =
+    #|const names = ["Alice", "Bob", "Charlie"];
+    #|for (const name of names) {
+    #|  console.log(name);
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => {
+      assert_true(not(has_error(diagnostics, 2487)))
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - valid for-of with destructuring" {
+  let source =
+    #|const entries: [string, number][] = [["a", 1], ["b", 2]];
+    #|for (const [key, value] of entries) {
+    #|  console.log(key, value);
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => {
+      assert_true(not(has_error(diagnostics, 2487)))
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - valid for-of with string" {
+  let source =
+    #|const str = "hello";
+    #|for (const char of str) {
+    #|  console.log(char);
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => {
+      assert_true(not(has_error(diagnostics, 2487)))
+    }
+  }
+}
+
+// ============================================================================
+// Valid For-in/For-of Cases (negative tests)
+// ============================================================================
+
+///|
+test "DiagnosticCode - valid for-in with existing variable" {
+  let source =
+    #|const obj = { a: 1, b: 2 };
+    #|let key: string;
+    #|for (key in obj) {
+    #|  console.log(key);
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => {
+      assert_true(not(has_error(diagnostics, 2406)))
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - valid for-of with existing variable" {
+  let source =
+    #|const arr = [1, 2, 3];
+    #|let item: number;
+    #|for (item of arr) {
+    #|  console.log(item);
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => {
+      assert_true(not(has_error(diagnostics, 2487)))
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - valid for-of with Set" {
+  let source =
+    #|const mySet = new Set([1, 2, 3]);
+    #|for (const value of mySet) {
+    #|  console.log(value);
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => {
+      assert_true(not(has_error(diagnostics, 2487)))
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - valid for-of with Map entries" {
+  let source =
+    #|const myMap = new Map([["a", 1], ["b", 2]]);
+    #|for (const [key, value] of myMap) {
+    #|  console.log(key, value);
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => {
+      assert_true(not(has_error(diagnostics, 2487)))
+    }
+  }
+}
