@@ -2130,3 +2130,98 @@ pub fn resolve_builtin_utility_type(
     _ => None
   }
 }
+
+// ============================================================================
+// Declaration Merging Support
+// ============================================================================
+
+///|
+/// Merge two ObjectTypeV2 types (for interface/namespace declaration merging)
+/// This implements TypeScript's declaration merging semantics:
+/// - Fields from both objects are combined
+/// - Symbol fields from both objects are combined
+/// - Call signatures are concatenated
+/// - Construct signatures are concatenated
+/// - Index signatures are merged (later declaration wins)
+pub fn merge_object_types(a : ObjectTypeV2, b : ObjectTypeV2) -> ObjectTypeV2 {
+  // Merge fields - b's fields override a's fields with same name
+  let merged_fields : Map[String, FieldInfoV2] = Map::new()
+  a.fields.each(fn(name, field) { merged_fields.set(name, field) })
+  b.fields.each(fn(name, field) { merged_fields.set(name, field) })
+
+  // Merge symbol fields
+  let merged_symbol_fields : Array[SymbolPropertyV2] = []
+  for sf in a.symbol_fields {
+    merged_symbol_fields.push(sf)
+  }
+  for sf in b.symbol_fields {
+    merged_symbol_fields.push(sf)
+  }
+
+  // Merge call signatures - concatenate
+  let merged_call_signatures : Array[FunctionTypeV2] = []
+  for sig in a.call_signatures {
+    merged_call_signatures.push(sig)
+  }
+  for sig in b.call_signatures {
+    merged_call_signatures.push(sig)
+  }
+
+  // Merge construct signatures - concatenate
+  let merged_construct_signatures : Array[FunctionTypeV2] = []
+  for sig in a.construct_signatures {
+    merged_construct_signatures.push(sig)
+  }
+  for sig in b.construct_signatures {
+    merged_construct_signatures.push(sig)
+  }
+
+  // Merge index signatures - prefer b's
+  let merged_index_signature = match (a.index_signature, b.index_signature) {
+    (_, Some(sig)) => Some(sig)
+    (Some(sig), None) => Some(sig)
+    (None, None) => None
+  }
+
+  ObjectTypeV2::{
+    fields: merged_fields,
+    symbol_fields: merged_symbol_fields,
+    call_signatures: merged_call_signatures,
+    construct_signatures: merged_construct_signatures,
+    index_signature: merged_index_signature,
+    is_class: a.is_class || b.is_class,
+    class_name: match (a.class_name, b.class_name) {
+      (Some(n), _) => Some(n)
+      (None, Some(n)) => Some(n)
+      (None, None) => None
+    },
+  }
+}
+
+///|
+/// Merge multiple object types into one (for multiple interface declarations)
+pub fn merge_multiple_object_types(types : Array[ObjectTypeV2]) -> ObjectTypeV2 {
+  if types.length() == 0 {
+    return ObjectTypeV2::empty()
+  }
+  if types.length() == 1 {
+    return types[0]
+  }
+  let mut result = types[0]
+  for i = 1; i < types.length(); i = i + 1 {
+    result = merge_object_types(result, types[i])
+  }
+  result
+}
+
+///|
+/// Merge two TypeV2 types (for declaration merging)
+/// This handles merging at the type level, particularly for interfaces
+pub fn merge_types(a : TypeV2, b : TypeV2) -> TypeV2 {
+  match (a, b) {
+    // Merge two object types (interfaces)
+    (TObject(obj_a), TObject(obj_b)) => TObject(merge_object_types(obj_a, obj_b))
+    // For other types, prefer the second (later declaration)
+    (_, other) => other
+  }
+}

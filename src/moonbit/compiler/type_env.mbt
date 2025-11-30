@@ -230,14 +230,20 @@ pub fn TypeEnv::with_type_alias(
 }
 
 ///|
-/// Add an interface
+/// Add an interface (supports declaration merging)
+/// If an interface with the same name already exists, merge them
 pub fn TypeEnv::with_interface(
   self : TypeEnv,
   name : String,
   obj : ObjectTypeV2,
 ) -> TypeEnv {
   let new_interfaces = self.interfaces
-  new_interfaces.set(name, obj)
+  // Check if interface already exists for merging
+  let merged_obj = match new_interfaces.get(name) {
+    Some(existing) => merge_object_types(existing, obj)
+    None => obj
+  }
+  new_interfaces.set(name, merged_obj)
   {
     variables: self.variables,
     type_aliases: self.type_aliases,
@@ -812,4 +818,204 @@ pub fn TypeEnv::with_builtins() -> TypeEnv {
     class_name: None,
   })
   env.with_variable("console", console_type)
+}
+
+// ============================================================================
+// Global Augmentation Support
+// ============================================================================
+
+///|
+/// Apply a global augmentation to the type environment
+/// This processes interface declarations from `declare global { }` blocks
+pub fn TypeEnv::apply_global_augmentation(
+  self : TypeEnv,
+  augmentation : GlobalAugmentation,
+) -> TypeEnv {
+  let mut env = self
+  // Process each declaration in the augmentation
+  augmentation.declarations.each(fn(name, symbol) {
+    match symbol.kind {
+      SymbolKind::Interface => {
+        // Get the interface type from the symbol's declarations
+        match symbol.value_declaration {
+          Some(InterfaceDeclaration(iface_decl)) => {
+            // Convert interface to ObjectTypeV2
+            let obj_type = interface_declaration_to_object_type(env, iface_decl)
+            env = env.with_interface(name, obj_type)
+          }
+          _ => ()
+        }
+      }
+      SymbolKind::Variable => {
+        // Add variable to scope - use the symbol's members or type
+        env = env.with_variable(name, TAny)
+      }
+      SymbolKind::Function => {
+        // Add function to scope
+        match symbol.value_declaration {
+          Some(FunctionDeclaration(func_decl)) => {
+            let func_type = function_declaration_to_type(env, func_decl)
+            env = env.with_variable(name, func_type)
+          }
+          _ => ()
+        }
+      }
+      SymbolKind::Type => {
+        // Add type alias
+        match symbol.value_declaration {
+          Some(TypeAliasDeclaration(alias_decl)) => {
+            let ty = ast_type_to_v2(env, alias_decl.type_node)
+            let alias_info = TypeAliasInfoV2::{ type_params: [], body: ty }
+            let new_aliases = env.type_aliases
+            new_aliases.set(name, alias_info)
+            env = { ..env, type_aliases: new_aliases }
+          }
+          _ => ()
+        }
+      }
+      _ => ()
+    }
+  })
+  env
+}
+
+///|
+/// Apply multiple global augmentations
+pub fn TypeEnv::apply_global_augmentations(
+  self : TypeEnv,
+  augmentations : Array[GlobalAugmentation],
+) -> TypeEnv {
+  let mut env = self
+  for aug in augmentations {
+    env = env.apply_global_augmentation(aug)
+  }
+  env
+}
+
+///|
+/// Convert an interface declaration to ObjectTypeV2
+fn interface_declaration_to_object_type(
+  env : TypeEnv,
+  iface : InterfaceDeclaration,
+) -> ObjectTypeV2 {
+  let fields : Map[String, FieldInfoV2] = Map::new()
+  let call_signatures : Array[FunctionTypeV2] = []
+  let construct_signatures : Array[FunctionTypeV2] = []
+  let mut index_signature : IndexSignatureV2? = None
+
+  for m in iface.members {
+    match m {
+      PropertyDeclaration(prop) => {
+        let ty = match prop.type_annotation {
+          Some(type_node) => ast_type_to_v2(env, type_node)
+          None => TAny
+        }
+        fields.set(prop.name, FieldInfoV2::{
+          ty,
+          optional: prop.is_optional,
+          is_readonly: false,
+        })
+      }
+      MethodDeclaration(meth) => {
+        // Convert method to function type and add as field
+        let params = meth.parameters.map(fn(p) {
+          match p {
+            Parameter(param) => {
+              let ty = match param.type_annotation {
+                Some(type_node) => ast_type_to_v2(env, type_node)
+                None => TAny
+              }
+              ParamInfoV2::{
+                name: match param.name {
+                  Identifier(id) => id.name
+                  _ => "arg"
+                },
+                ty,
+                optional: param.is_optional,
+                is_rest: param.is_rest,
+              }
+            }
+            _ => ParamInfoV2::required("arg", TAny)
+          }
+        })
+        let return_ty = match meth.return_type {
+          Some(type_node) => ast_type_to_v2(env, type_node)
+          None => TAny
+        }
+        let func_ty = TFunction(FunctionTypeV2::{
+          type_params: [],
+          params,
+          rest_param: None,
+          return_type: return_ty,
+          type_predicate: None,
+          this_type: None,
+        })
+        fields.set(meth.name, FieldInfoV2::{
+          ty: func_ty,
+          optional: meth.is_optional,
+          is_readonly: false,
+        })
+      }
+      IndexSignatureDeclaration(idx) => {
+        let key_ty = ast_type_to_v2(env, idx.parameter_type)
+        let value_ty = ast_type_to_v2(env, idx.return_type)
+        index_signature = Some(IndexSignatureV2::{
+          key_type: key_ty,
+          value_type: value_ty,
+          is_readonly: idx.is_readonly,
+        })
+      }
+      _ => ()
+    }
+  }
+
+  ObjectTypeV2::{
+    fields,
+    symbol_fields: [],
+    call_signatures,
+    construct_signatures,
+    index_signature,
+    is_class: false,
+    class_name: None,
+  }
+}
+
+///|
+/// Convert a function declaration to function type
+fn function_declaration_to_type(
+  env : TypeEnv,
+  func : FunctionDeclaration,
+) -> TypeV2 {
+  let params = func.parameters.map(fn(p) {
+    match p {
+      Parameter(param) => {
+        let ty = match param.type_annotation {
+          Some(type_node) => ast_type_to_v2(env, type_node)
+          None => TAny
+        }
+        ParamInfoV2::{
+          name: match param.name {
+            Identifier(id) => id.name
+            _ => "arg"
+          },
+          ty,
+          optional: param.is_optional,
+          is_rest: param.is_rest,
+        }
+      }
+      _ => ParamInfoV2::required("arg", TAny)
+    }
+  })
+  let return_ty = match func.return_type {
+    Some(type_node) => ast_type_to_v2(env, type_node)
+    None => TAny
+  }
+  TFunction(FunctionTypeV2::{
+    type_params: [],
+    params,
+    rest_param: None,
+    return_type: return_ty,
+    type_predicate: None,
+    this_type: None,
+  })
 }

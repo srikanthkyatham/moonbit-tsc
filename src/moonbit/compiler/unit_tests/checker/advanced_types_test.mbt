@@ -1347,3 +1347,106 @@ test "unit/bigint/comparison - bigint comparison" {
     Err(_) => assert_true(false)
   }
 }
+
+// ============================================================================
+// Module Augmentation Tests
+// ============================================================================
+
+///|
+test "unit/augmentation/interface-merge - interface declaration merging" {
+  let result = parse_bind_check_advanced(
+    "interface Person { name: string; } interface Person { age: number; } const p: Person = { name: 'Alice', age: 30 };",
+  )
+  match result {
+    Ok(_) => assert_true(true)
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/augmentation/interface-merge-methods - interface method merging" {
+  let result = parse_bind_check_advanced(
+    "interface Calculator { add(a: number, b: number): number; } interface Calculator { subtract(a: number, b: number): number; }",
+  )
+  match result {
+    Ok(_) => assert_true(true)
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/augmentation/namespace-merge - namespace declaration merging" {
+  let result = parse_bind_check_advanced(
+    "namespace Utils { export function log(msg: string): void {} } namespace Utils { export function warn(msg: string): void {} }",
+  )
+  match result {
+    Ok(_) => assert_true(true)
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/augmentation/global-augmentation - declare global basic" {
+  let result = parse_bind_check_advanced(
+    "export const x = 1; declare global { interface Window { myApp: string; } }",
+  )
+  match result {
+    Ok(_) => assert_true(true)
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/augmentation/global-augmentation-var - declare global with var" {
+  let result = parse_bind_check_advanced(
+    "export type T = string; declare global { var globalVar: number; }",
+  )
+  match result {
+    Ok(_) => assert_true(true)
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/augmentation/interface-extends-merge - interface extends with merge" {
+  let result = parse_bind_check_advanced(
+    "interface Animal { name: string; } interface Dog extends Animal { breed: string; } interface Dog { age: number; }",
+  )
+  match result {
+    Ok(_) => assert_true(true)
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/augmentation/multiple-interface-merge - three interfaces merging" {
+  let result = parse_bind_check_advanced(
+    "interface Config { host: string; } interface Config { port: number; } interface Config { secure: boolean; }",
+  )
+  match result {
+    Ok(_) => assert_true(true)
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/augmentation/interface-index-sig - interface merge with index signature" {
+  let result = parse_bind_check_advanced(
+    "interface Dict { name: string; } interface Dict { [key: string]: any; }",
+  )
+  match result {
+    Ok(_) => assert_true(true)
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/augmentation/global-multiple - multiple global augmentations" {
+  let result = parse_bind_check_advanced(
+    "export type T = string; declare global { interface Window { app1: string; } } declare global { interface Window { app2: number; } }",
+  )
+  match result {
+    Ok(_) => assert_true(true)
+    Err(_) => assert_true(false)
+  }
+}
