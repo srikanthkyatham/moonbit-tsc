@@ -169,6 +169,19 @@ pub enum MismatchReason {
   ConditionAlwaysTrue(String) // TS2774: This condition will always return true since this '{0}' is always defined
   OperatorCannotBeApplied(String, String, String) // TS2800: Operator '{0}' cannot be applied to types '{1}' and '{2}'
   BigIntLiteralsNotAvailable // TS2737: BigInt literals are not available when targeting lower than ES2020
+
+  // Function & Parameter errors
+  TypeParamNameCannotBe(String) // TS2368: Type parameter name cannot be '{0}'
+  ParamPropertyOnlyInConstructor(String) // TS2369: A parameter property is only allowed in a constructor implementation
+  ParamInitializerOnlyInFunctionOrConstructor(String) // TS2371: A parameter initializer is only allowed in a function or constructor implementation
+  ParamCannotReferenceSelf(String) // TS2372: Parameter '{0}' cannot reference itself
+  OverloadSignaturesAmbientMismatch(String) // TS2383: Overload signatures must all be ambient or non-ambient
+  FunctionOverloadMustNotBeStatic(String) // TS2388: Function overload must not be static
+  FunctionImplSignatureNotAssignable(String) // TS2389: The signature of the function implementation is not assignable to the overload signature
+  ConstructorImplMissing(String) // TS2390: Constructor implementation is missing
+  IndividualDeclarationsMustMatch(String, String) // TS2395: Individual declarations in merged declaration '{0}' must be all exported or all local
+  RequiredTypeParamAfterOptional(String) // TS2706: Required type parameters may not follow optional type parameters
+  GenericTypeRequiresTypeArgs(String, Int, Int) // TS2707: Generic type '{0}' requires between {1} and {2} type arguments
 } derive(Show, Eq)
 
 // ============================================================================
@@ -922,6 +935,29 @@ pub fn get_friendly_title(reason : MismatchReason) -> String {
       "OPERATOR '" + op + "' CANNOT BE APPLIED TO '" + left + "' AND '" + right + "'"
     BigIntLiteralsNotAvailable =>
       "BIGINT LITERALS NOT AVAILABLE"
+    // Function & Parameter errors
+    TypeParamNameCannotBe(name) =>
+      "TYPE PARAMETER NAME CANNOT BE '" + name + "'"
+    ParamPropertyOnlyInConstructor(param) =>
+      "PARAMETER PROPERTY '" + param + "' ONLY ALLOWED IN CONSTRUCTOR"
+    ParamInitializerOnlyInFunctionOrConstructor(param) =>
+      "PARAMETER INITIALIZER FOR '" + param + "' ONLY IN FUNCTION/CONSTRUCTOR"
+    ParamCannotReferenceSelf(param) =>
+      "PARAMETER '" + param + "' CANNOT REFERENCE ITSELF"
+    OverloadSignaturesAmbientMismatch(name) =>
+      "OVERLOAD SIGNATURES FOR '" + name + "' MUST ALL BE AMBIENT OR NON-AMBIENT"
+    FunctionOverloadMustNotBeStatic(name) =>
+      "FUNCTION OVERLOAD '" + name + "' MUST NOT BE STATIC"
+    FunctionImplSignatureNotAssignable(name) =>
+      "FUNCTION '" + name + "' IMPLEMENTATION SIGNATURE NOT ASSIGNABLE"
+    ConstructorImplMissing(class_name) =>
+      "CONSTRUCTOR IMPLEMENTATION MISSING FOR '" + class_name + "'"
+    IndividualDeclarationsMustMatch(name, _) =>
+      "DECLARATIONS IN '" + name + "' MUST ALL BE EXPORTED OR LOCAL"
+    RequiredTypeParamAfterOptional(param) =>
+      "REQUIRED TYPE PARAMETER '" + param + "' AFTER OPTIONAL"
+    GenericTypeRequiresTypeArgs(name, min, max) =>
+      "GENERIC TYPE '" + name + "' REQUIRES " + min.to_string() + "-" + max.to_string() + " TYPE ARGS"
   }
 }
 
@@ -1302,6 +1338,59 @@ pub fn get_why_explanation(reason : MismatchReason) -> String {
       "'. TypeScript requires compatible types for this operation."
     BigIntLiteralsNotAvailable =>
       "BigInt literals (like 123n) are only available when targeting ES2020 or later. Your current target doesn't support BigInt syntax."
+    // Function & Parameter errors
+    TypeParamNameCannotBe(name) =>
+      "The name '" +
+      name +
+      "' is reserved and cannot be used as a type parameter name. TypeScript reserves certain names like primitive types (string, number, boolean, etc.) to avoid confusion."
+    ParamPropertyOnlyInConstructor(param) =>
+      "Parameter properties (like 'public " +
+      param +
+      "' or 'private " +
+      param +
+      "') can only be used in class constructors. They provide a shorthand for declaring and initializing class members directly from constructor parameters."
+    ParamInitializerOnlyInFunctionOrConstructor(param) =>
+      "Default parameter values (like '" +
+      param +
+      " = value') can only appear in function or constructor implementations, not in type declarations or overload signatures."
+    ParamCannotReferenceSelf(param) =>
+      "Parameter '" +
+      param +
+      "' cannot use itself in its own default value or type annotation. This would create a circular reference that TypeScript cannot resolve."
+    OverloadSignaturesAmbientMismatch(name) =>
+      "The overload signatures for '" +
+      name +
+      "' mix ambient (declare) and non-ambient declarations. All overloads must consistently be either declared in a .d.ts file / declare context, or be regular function overloads."
+    FunctionOverloadMustNotBeStatic(name) =>
+      "The function overload '" +
+      name +
+      "' is marked as static, but function overloads in this context should not use the static modifier. Static is for class members, not standalone functions."
+    FunctionImplSignatureNotAssignable(name) =>
+      "The implementation signature of function '" +
+      name +
+      "' is not compatible with all its overload signatures. The implementation must be able to handle all cases defined by the overloads."
+    ConstructorImplMissing(class_name) =>
+      "Class '" +
+      class_name +
+      "' has constructor overload signatures but no implementation. After declaring constructor overloads, you must provide a single implementation that handles all cases."
+    IndividualDeclarationsMustMatch(name, context) =>
+      "The declarations being merged into '" +
+      name +
+      "' have inconsistent export modifiers in " +
+      context +
+      ". When merging declarations, they must all be exported or all be local (not exported)."
+    RequiredTypeParamAfterOptional(param) =>
+      "Required type parameter '" +
+      param +
+      "' cannot follow an optional type parameter. Like function parameters, required type parameters must come before optional ones (those with defaults)."
+    GenericTypeRequiresTypeArgs(name, min, max) =>
+      "Generic type '" +
+      name +
+      "' requires between " +
+      min.to_string() +
+      " and " +
+      max.to_string() +
+      " type arguments. You must provide the correct number of type arguments when using this generic type."
   }
 }
 
@@ -2022,6 +2111,118 @@ pub fn get_how_to_fix(
       fixes.push("Or use BigInt constructor:")
       fixes.push("    const big = BigInt(123);")
     }
+    // Function & Parameter errors
+    TypeParamNameCannotBe(name) => {
+      fixes.push("Choose a different name for your type parameter.")
+      fixes.push("'" + name + "' is reserved.")
+      fixes.push("")
+      fixes.push("Common conventions:")
+      fixes.push("    T, U, V for general types")
+      fixes.push("    K for keys, V for values")
+      fixes.push("    P for props, S for state")
+    }
+    ParamPropertyOnlyInConstructor(_) => {
+      fixes.push("Move the parameter property to the constructor:")
+      fixes.push("    class MyClass {")
+      fixes.push("        constructor(public prop: Type) { }")
+      fixes.push("    }")
+      fixes.push("")
+      fixes.push("Or declare the property separately:")
+      fixes.push("    class MyClass {")
+      fixes.push("        prop: Type;")
+      fixes.push("        method(prop: Type) { this.prop = prop; }")
+      fixes.push("    }")
+    }
+    ParamInitializerOnlyInFunctionOrConstructor(_) => {
+      fixes.push("Remove the default value from the type declaration.")
+      fixes.push("Default values can only appear in implementations.")
+      fixes.push("")
+      fixes.push("In a type declaration:")
+      fixes.push("    function fn(param?: Type): void;")
+      fixes.push("")
+      fixes.push("In the implementation:")
+      fixes.push("    function fn(param: Type = defaultValue) { }")
+    }
+    ParamCannotReferenceSelf(param) => {
+      fixes.push("Parameter '" + param + "' references itself.")
+      fixes.push("")
+      fixes.push("Options:")
+      fixes.push("  1. Use a different variable for the default value")
+      fixes.push("  2. Calculate the value inside the function body")
+      fixes.push("  3. Use a separate initialization statement")
+    }
+    OverloadSignaturesAmbientMismatch(name) => {
+      fixes.push("Make all overloads for '" + name + "' consistent:")
+      fixes.push("")
+      fixes.push("Either all ambient (in .d.ts or declare):")
+      fixes.push("    declare function " + name + "(x: string): void;")
+      fixes.push("    declare function " + name + "(x: number): void;")
+      fixes.push("")
+      fixes.push("Or all non-ambient with implementation:")
+      fixes.push("    function " + name + "(x: string): void;")
+      fixes.push("    function " + name + "(x: number): void;")
+      fixes.push("    function " + name + "(x: string | number) { }")
+    }
+    FunctionOverloadMustNotBeStatic(name) => {
+      fixes.push("Remove 'static' from the function overload '" + name + "'.")
+      fixes.push("")
+      fixes.push("For class static methods, use:")
+      fixes.push("    class MyClass {")
+      fixes.push("        static " + name + "(x: string): void;")
+      fixes.push("        static " + name + "(x: number): void;")
+      fixes.push("        static " + name + "(x: string | number) { }")
+      fixes.push("    }")
+    }
+    FunctionImplSignatureNotAssignable(name) => {
+      fixes.push("Update the implementation of '" + name + "' to handle all overloads.")
+      fixes.push("")
+      fixes.push("The implementation must accept all parameter combinations:")
+      fixes.push("    function " + name + "(x: string): string;")
+      fixes.push("    function " + name + "(x: number): number;")
+      fixes.push("    function " + name + "(x: string | number): string | number {")
+      fixes.push("        return x;")
+      fixes.push("    }")
+    }
+    ConstructorImplMissing(class_name) => {
+      fixes.push("Add a constructor implementation for '" + class_name + "':")
+      fixes.push("")
+      fixes.push("    class " + class_name + " {")
+      fixes.push("        constructor(x: string);")
+      fixes.push("        constructor(x: number);")
+      fixes.push("        constructor(x: string | number) {")
+      fixes.push("            // Implementation here")
+      fixes.push("        }")
+      fixes.push("    }")
+    }
+    IndividualDeclarationsMustMatch(name, _) => {
+      fixes.push("Make all declarations of '" + name + "' consistent:")
+      fixes.push("")
+      fixes.push("Either all exported:")
+      fixes.push("    export interface " + name + " { ... }")
+      fixes.push("    export interface " + name + " { ... }")
+      fixes.push("")
+      fixes.push("Or all local (not exported):")
+      fixes.push("    interface " + name + " { ... }")
+      fixes.push("    interface " + name + " { ... }")
+    }
+    RequiredTypeParamAfterOptional(param) => {
+      fixes.push("Reorder type parameters so required ones come first:")
+      fixes.push("")
+      fixes.push("Before: <T = Default, " + param + ">")
+      fixes.push("After:  <" + param + ", T = Default>")
+      fixes.push("")
+      fixes.push("Required parameters must precede optional ones.")
+    }
+    GenericTypeRequiresTypeArgs(name, min, max) => {
+      fixes.push("Provide the correct number of type arguments:")
+      fixes.push("")
+      if min == max {
+        fixes.push("    " + name + "<Type1" + (if max > 1 { ", Type2" } else { "" }) + ">")
+      } else {
+        fixes.push("    " + name + "<Type1>  // minimum " + min.to_string())
+        fixes.push("    " + name + "<Type1, Type2, ...>  // up to " + max.to_string())
+      }
+    }
   }
   fixes
 }
@@ -2108,6 +2309,18 @@ pub fn get_error_code(reason : MismatchReason) -> Int {
     ConditionAlwaysTrue(_) => 2774 // TS2774: Condition will always return true
     OperatorCannotBeApplied(_, _, _) => 2800 // TS2800: Operator cannot be applied to types
     BigIntLiteralsNotAvailable => 2737 // TS2737: BigInt literals not available
+    // Function & Parameter errors
+    TypeParamNameCannotBe(_) => 2368 // TS2368: Type parameter name cannot be X
+    ParamPropertyOnlyInConstructor(_) => 2369 // TS2369: Parameter property only in constructor
+    ParamInitializerOnlyInFunctionOrConstructor(_) => 2371 // TS2371: Parameter initializer only in function/constructor
+    ParamCannotReferenceSelf(_) => 2372 // TS2372: Parameter cannot reference itself
+    OverloadSignaturesAmbientMismatch(_) => 2383 // TS2383: Overload signatures must all be ambient or non-ambient
+    FunctionOverloadMustNotBeStatic(_) => 2388 // TS2388: Function overload must not be static
+    FunctionImplSignatureNotAssignable(_) => 2389 // TS2389: Function implementation signature must be assignable
+    ConstructorImplMissing(_) => 2390 // TS2390: Constructor implementation is missing
+    IndividualDeclarationsMustMatch(_, _) => 2395 // TS2395: Individual declarations must be all exported/local
+    RequiredTypeParamAfterOptional(_) => 2706 // TS2706: Required type parameters may not follow optional
+    GenericTypeRequiresTypeArgs(_, _, _) => 2707 // TS2707: Generic type requires between N and M type arguments
   }
 }
 
