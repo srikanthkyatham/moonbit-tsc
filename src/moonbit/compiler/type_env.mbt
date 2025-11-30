@@ -656,6 +656,7 @@ fn subst_in_function_v2(
     },
     return_type: subst_in_type_v2(f.return_type, subst),
     type_predicate: f.type_predicate,
+    this_type: f.this_type.map(fn(t) { subst_in_type_v2(t, subst) }),
   }
 }
 
@@ -761,6 +762,7 @@ pub fn TypeEnv::with_builtins() -> TypeEnv {
         rest_param: Some(ParamInfoV2::rest("args", TAny)),
         return_type: TVoid,
         type_predicate: None,
+        this_type: None,
       }),
     ),
   )
@@ -773,6 +775,7 @@ pub fn TypeEnv::with_builtins() -> TypeEnv {
         rest_param: Some(ParamInfoV2::rest("args", TAny)),
         return_type: TVoid,
         type_predicate: None,
+        this_type: None,
       }),
     ),
   )
@@ -785,6 +788,7 @@ pub fn TypeEnv::with_builtins() -> TypeEnv {
         rest_param: Some(ParamInfoV2::rest("args", TAny)),
         return_type: TVoid,
         type_predicate: None,
+        this_type: None,
       }),
     ),
   )

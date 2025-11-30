@@ -232,12 +232,13 @@ pub struct FunctionTypeV2 {
   rest_param : ParamInfoV2?
   return_type : TypeV2
   type_predicate : TypePredicateV2? // For type guards (x is Type, asserts x is Type)
+  this_type : TypeV2? // For explicit `this` parameter type (this: Type)
 } derive(Show, Eq)
 
 ///|
 /// Default function type (any => any)
 pub fn FunctionTypeV2::any() -> FunctionTypeV2 {
-  { type_params: [], params: [], rest_param: None, return_type: TAny, type_predicate: None }
+  { type_params: [], params: [], rest_param: None, return_type: TAny, type_predicate: None, this_type: None }
 }
 
 ///|
@@ -254,6 +255,7 @@ pub fn FunctionTypeV2::simple(
     rest_param: None,
     return_type,
     type_predicate: None,
+    this_type: None,
   }
 }
 

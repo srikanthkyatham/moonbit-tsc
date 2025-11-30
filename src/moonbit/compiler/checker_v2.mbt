@@ -520,6 +520,7 @@ fn infer_function_v2(env : TypeEnv, func : FunctionExpression) -> CheckResultV2 
     rest_param: None,
     return_type: return_ty,
     type_predicate: None,
+    this_type: None,
   }
   CheckResultV2::ok(TFunction(func_ty))
 }
@@ -590,6 +591,7 @@ fn infer_arrow_v2(env : TypeEnv, arrow : ArrowFunction) -> CheckResultV2 {
     rest_param: None,
     return_type: return_ty,
     type_predicate: None,
+    this_type: None,
   }
   CheckResultV2::ok(TFunction(func_ty))
 }

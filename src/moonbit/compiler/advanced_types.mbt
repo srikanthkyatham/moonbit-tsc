@@ -449,6 +449,7 @@ fn substitute_inferred(
         },
         return_type: substitute_inferred(env, f.return_type, inferred),
         type_predicate: f.type_predicate,
+        this_type: f.this_type.map(fn(t) { substitute_inferred(env, t, inferred) }),
       })
 
     TConditional(c) =>
@@ -728,6 +729,7 @@ fn apply_substitution(ty : TypeV2, subst : Map[String, TypeV2]) -> TypeV2 {
         },
         return_type: apply_substitution(f.return_type, subst),
         type_predicate: f.type_predicate,
+        this_type: f.this_type.map(fn(t) { apply_substitution(t, subst) }),
       })
 
     TGenericInstance(name, args) =>
@@ -1924,5 +1926,206 @@ fn is_interpolation_type_assignable(source : TypeV2, target : TypeV2) -> Bool {
     (_, TUnion(tgt_types)) =>
       tgt_types.iter().any(fn(t) { is_interpolation_type_assignable(source, t) })
     _ => source == target
+  }
+}
+
+// ============================================================================
+// Advanced Utility Types
+// ============================================================================
+
+///|
+/// Implement ConstructorParameters<T> - get parameter types of a constructor as tuple
+/// Similar to Parameters<T> but for construct signatures
+pub fn get_constructor_parameters_type(ty : TypeV2) -> TypeV2 {
+  match ty {
+    TObject(obj) =>
+      // Check construct signatures
+      if not(obj.construct_signatures.is_empty()) {
+        let sig = obj.construct_signatures[0]
+        let elems = sig.params.map(fn(p) {
+          TupleElementV2::{
+            ty: p.ty,
+            optional: p.optional,
+            is_rest: p.is_rest,
+            label: Some(p.name),
+          }
+        })
+        TTuple(elems)
+      } else {
+        TTuple([])
+      }
+    TFunction(f) => {
+      // Treat function as constructor
+      let elems = f.params.map(fn(p) {
+        TupleElementV2::{
+          ty: p.ty,
+          optional: p.optional,
+          is_rest: p.is_rest,
+          label: Some(p.name),
+        }
+      })
+      TTuple(elems)
+    }
+    _ => TTuple([])
+  }
+}
+
+///|
+/// Implement ThisParameterType<T> - extract the `this` parameter type from a function
+/// Returns `unknown` if the function has no explicit `this` parameter
+pub fn get_this_parameter_type(ty : TypeV2) -> TypeV2 {
+  match ty {
+    TFunction(f) =>
+      match f.this_type {
+        Some(this_ty) => this_ty
+        None => TUnknown
+      }
+    _ => TUnknown
+  }
+}
+
+///|
+/// Implement OmitThisParameter<T> - remove the `this` parameter from a function type
+/// Returns the function type with this_type set to None
+pub fn omit_this_parameter(ty : TypeV2) -> TypeV2 {
+  match ty {
+    TFunction(f) =>
+      TFunction({
+        type_params: f.type_params,
+        params: f.params,
+        rest_param: f.rest_param,
+        return_type: f.return_type,
+        type_predicate: f.type_predicate,
+        this_type: None,
+      })
+    _ => ty
+  }
+}
+
+///|
+/// Resolve a built-in utility type by name with type arguments
+/// Returns None if not a recognized utility type
+pub fn resolve_builtin_utility_type(
+  name : String,
+  type_args : Array[TypeV2],
+) -> TypeV2? {
+  match name {
+    "Partial" =>
+      if type_args.length() >= 1 {
+        Some(make_partial(type_args[0]))
+      } else {
+        None
+      }
+    "Required" =>
+      if type_args.length() >= 1 {
+        Some(make_required(type_args[0]))
+      } else {
+        None
+      }
+    "Readonly" =>
+      if type_args.length() >= 1 {
+        Some(make_readonly_type(type_args[0]))
+      } else {
+        None
+      }
+    "Pick" =>
+      if type_args.length() >= 2 {
+        let keys = extract_literal_strings(type_args[1])
+        Some(make_pick(type_args[0], keys))
+      } else {
+        None
+      }
+    "Omit" =>
+      if type_args.length() >= 2 {
+        let keys = extract_literal_strings(type_args[1])
+        Some(make_omit(type_args[0], keys))
+      } else {
+        None
+      }
+    "Extract" =>
+      if type_args.length() >= 2 {
+        Some(make_extract(type_args[0], type_args[1]))
+      } else {
+        None
+      }
+    "Exclude" =>
+      if type_args.length() >= 2 {
+        Some(make_exclude(type_args[0], type_args[1]))
+      } else {
+        None
+      }
+    "NonNullable" =>
+      if type_args.length() >= 1 {
+        Some(make_non_nullable(type_args[0]))
+      } else {
+        None
+      }
+    "ReturnType" =>
+      if type_args.length() >= 1 {
+        Some(get_return_type(type_args[0]))
+      } else {
+        None
+      }
+    "Parameters" =>
+      if type_args.length() >= 1 {
+        Some(get_parameters_type(type_args[0]))
+      } else {
+        None
+      }
+    "ConstructorParameters" =>
+      if type_args.length() >= 1 {
+        Some(get_constructor_parameters_type(type_args[0]))
+      } else {
+        None
+      }
+    "InstanceType" =>
+      if type_args.length() >= 1 {
+        Some(get_instance_type(type_args[0]))
+      } else {
+        None
+      }
+    "ThisParameterType" =>
+      if type_args.length() >= 1 {
+        Some(get_this_parameter_type(type_args[0]))
+      } else {
+        None
+      }
+    "OmitThisParameter" =>
+      if type_args.length() >= 1 {
+        Some(omit_this_parameter(type_args[0]))
+      } else {
+        None
+      }
+    "Awaited" =>
+      if type_args.length() >= 1 {
+        Some(get_awaited_type(type_args[0]))
+      } else {
+        None
+      }
+    "Uppercase" =>
+      if type_args.length() >= 1 {
+        Some(evaluate_uppercase_type(type_args[0]))
+      } else {
+        None
+      }
+    "Lowercase" =>
+      if type_args.length() >= 1 {
+        Some(evaluate_lowercase_type(type_args[0]))
+      } else {
+        None
+      }
+    "Capitalize" =>
+      if type_args.length() >= 1 {
+        Some(evaluate_capitalize_type(type_args[0]))
+      } else {
+        None
+      }
+    "Uncapitalize" =>
+      if type_args.length() >= 1 {
+        Some(evaluate_uncapitalize_type(type_args[0]))
+      } else {
+        None
+      }
+    _ => None
   }
 }

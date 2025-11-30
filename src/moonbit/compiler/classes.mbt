@@ -807,7 +807,7 @@ fn build_method_type(env : TypeEnv, md : MethodDeclaration) -> FunctionTypeV2 {
     None => TAny
   }
 
-  { type_params, params, rest_param, return_type, type_predicate: None }
+  { type_params, params, rest_param, return_type, type_predicate: None, this_type: None }
 }
 
 ///|
@@ -848,7 +848,7 @@ fn build_constructor_type(
     }
   }
 
-  { type_params: [], params, rest_param, return_type: TVoid, type_predicate: None }
+  { type_params: [], params, rest_param, return_type: TVoid, type_predicate: None, this_type: None }
 }
 
 ///|

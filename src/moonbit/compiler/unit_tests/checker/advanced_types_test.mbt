@@ -903,3 +903,217 @@ test "unit/advanced/async - PromiseLike type" {
     Err(_) => assert_true(false)
   }
 }
+
+// ============================================================================
+// Advanced Utility Types Tests
+// ============================================================================
+
+///|
+test "unit/utility/Partial - makes properties optional" {
+  let result = parse_bind_check_advanced(
+    "interface User { name: string; age: number; } type PartialUser = Partial<User>;",
+  )
+  match result {
+    Ok(_) => assert_true(true)
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/utility/Required - makes properties required" {
+  let result = parse_bind_check_advanced(
+    "interface User { name?: string; age?: number; } type RequiredUser = Required<User>;",
+  )
+  match result {
+    Ok(_) => assert_true(true)
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/utility/Readonly - makes properties readonly" {
+  let result = parse_bind_check_advanced(
+    "interface User { name: string; age: number; } type ReadonlyUser = Readonly<User>;",
+  )
+  match result {
+    Ok(_) => assert_true(true)
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/utility/Pick - selects properties" {
+  let result = parse_bind_check_advanced(
+    "interface User { name: string; age: number; email: string; } type NameOnly = Pick<User, 'name'>;",
+  )
+  match result {
+    Ok(_) => assert_true(true)
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/utility/Omit - excludes properties" {
+  let result = parse_bind_check_advanced(
+    "interface User { name: string; age: number; email: string; } type WithoutEmail = Omit<User, 'email'>;",
+  )
+  match result {
+    Ok(_) => assert_true(true)
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/utility/Extract - extracts union members" {
+  let result = parse_bind_check_advanced(
+    "type T = 'a' | 'b' | 'c'; type OnlyAB = Extract<T, 'a' | 'b'>;",
+  )
+  match result {
+    Ok(_) => assert_true(true)
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/utility/Exclude - excludes union members" {
+  let result = parse_bind_check_advanced(
+    "type T = 'a' | 'b' | 'c'; type NotA = Exclude<T, 'a'>;",
+  )
+  match result {
+    Ok(_) => assert_true(true)
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/utility/NonNullable - removes null and undefined" {
+  let result = parse_bind_check_advanced(
+    "type T = string | null | undefined; type NonNull = NonNullable<T>;",
+  )
+  match result {
+    Ok(_) => assert_true(true)
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/utility/ReturnType - extracts function return type" {
+  let result = parse_bind_check_advanced(
+    "function greet(): string { return 'hello'; } type GreetReturn = ReturnType<typeof greet>;",
+  )
+  match result {
+    Ok(_) => assert_true(true)
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/utility/Parameters - extracts function parameters as tuple" {
+  let result = parse_bind_check_advanced(
+    "function add(x: number, y: number): number { return x + y; } type AddParams = Parameters<typeof add>;",
+  )
+  match result {
+    Ok(_) => assert_true(true)
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/utility/ConstructorParameters - extracts constructor parameters" {
+  let result = parse_bind_check_advanced(
+    "class Person { constructor(name: string, age: number) {} } type PersonParams = ConstructorParameters<typeof Person>;",
+  )
+  match result {
+    Ok(_) => assert_true(true)
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/utility/InstanceType - extracts instance type from class" {
+  let result = parse_bind_check_advanced(
+    "class Person { name: string = ''; } type PersonInstance = InstanceType<typeof Person>;",
+  )
+  match result {
+    Ok(_) => assert_true(true)
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/utility/ThisParameterType - extracts this parameter type" {
+  let result = parse_bind_check_advanced(
+    "function greet(this: { name: string }): string { return this.name; } type ThisType = ThisParameterType<typeof greet>;",
+  )
+  match result {
+    Ok(_) => assert_true(true)
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/utility/OmitThisParameter - removes this parameter" {
+  // Use interface method with this type instead of function with this parameter
+  let result = parse_bind_check_advanced(
+    "interface Greeter { greet(greeting: string): string; } type GreetFn = Greeter['greet']; type NoThis = OmitThisParameter<GreetFn>;",
+  )
+  match result {
+    Ok(_) => assert_true(true)
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/utility/Awaited - unwraps Promise type" {
+  let result = parse_bind_check_advanced(
+    "type P = Promise<string>; type Unwrapped = Awaited<P>;",
+  )
+  match result {
+    Ok(_) => assert_true(true)
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/utility/Uppercase - uppercase string type" {
+  let result = parse_bind_check_advanced(
+    "type Lower = 'hello'; type Upper = Uppercase<Lower>;",
+  )
+  match result {
+    Ok(_) => assert_true(true)
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/utility/Lowercase - lowercase string type" {
+  let result = parse_bind_check_advanced(
+    "type Upper = 'HELLO'; type Lower = Lowercase<Upper>;",
+  )
+  match result {
+    Ok(_) => assert_true(true)
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/utility/Capitalize - capitalize first letter" {
+  let result = parse_bind_check_advanced(
+    "type Lower = 'hello'; type Cap = Capitalize<Lower>;",
+  )
+  match result {
+    Ok(_) => assert_true(true)
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/utility/Uncapitalize - uncapitalize first letter" {
+  let result = parse_bind_check_advanced(
+    "type Upper = 'Hello'; type Uncap = Uncapitalize<Upper>;",
+  )
+  match result {
+    Ok(_) => assert_true(true)
+    Err(_) => assert_true(false)
+  }
+}

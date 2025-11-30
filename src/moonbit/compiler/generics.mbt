@@ -172,7 +172,7 @@ pub fn ast_type_to_v2(env : TypeEnv, node : Node) -> TypeV2 {
         other => (ast_type_to_v2(child_env, other), None)
       }
 
-      TFunction(FunctionTypeV2::{ type_params, params, rest_param: None, return_type, type_predicate })
+      TFunction(FunctionTypeV2::{ type_params, params, rest_param: None, return_type, type_predicate, this_type: None })
     }
 
     // Literal type
@@ -950,6 +950,7 @@ pub fn instantiate_function(
     },
     return_type: subst_in_type_v2(func.return_type, subst),
     type_predicate: func.type_predicate,
+    this_type: func.this_type.map(fn(t) { subst_in_type_v2(t, subst) }),
   }
 }
 

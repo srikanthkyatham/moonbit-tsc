@@ -169,6 +169,7 @@ fn function_type_to_v2(func : CheckerFunctionType) -> FunctionTypeV2 {
     rest_param,
     return_type: type_to_v2(func.return_type),
     type_predicate: None,
+    this_type: None,
   }
 }
 
@@ -200,6 +201,7 @@ fn signature_to_function_v2(sig : CheckerSignature) -> FunctionTypeV2 {
     rest_param,
     return_type: type_to_v2(sig.return_type),
     type_predicate: None,
+    this_type: None,
   }
 }
 

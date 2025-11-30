@@ -497,6 +497,7 @@ fn resolve_type_impl(
         type_params: func.type_params,
         rest_param: func.rest_param,
         type_predicate: func.type_predicate,
+        this_type: func.this_type,
       }
       (TFunction(resolved_func), final_ctx)
     }
