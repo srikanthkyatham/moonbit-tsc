@@ -452,3 +452,33 @@ test "parser error detection - valid delete on element access" {
   let errors = parse_and_get_errors(source)
   assert_true(not(has_error_code(errors, 1243)))
 }
+
+// ============================================================================
+// TS1227 Type Assertion in Exponentiation Error Detection Tests
+// ============================================================================
+
+///|
+test "parser error detection - TS1227 type assertion in exponentiation" {
+  // Type assertion on left side of ** should trigger TS1227
+  let source = "<number>x ** 2;"
+  let errors = parse_and_get_errors(source)
+  assert_true(has_error_code(errors, 1227))
+  assert_true(has_error_message(errors, "type assertion"))
+}
+
+///|
+test "parser error detection - TS1227 as expression in exponentiation" {
+  // as expression on left side of ** should trigger TS1227
+  let source = "(x as number) ** 2;"
+  let errors = parse_and_get_errors(source)
+  // Note: (x as number) is parenthesized, so it should not trigger TS1227
+  assert_true(not(has_error_code(errors, 1227)))
+}
+
+///|
+test "parser error detection - valid exponentiation without type assertion" {
+  // Regular exponentiation should not produce TS1227
+  let source = "x ** 2;"
+  let errors = parse_and_get_errors(source)
+  assert_true(not(has_error_code(errors, 1227)))
+}

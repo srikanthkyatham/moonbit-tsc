@@ -224,6 +224,25 @@ fn parse_binary_expression(
           Ok((expr, p)) => (expr, decrement_depth(p))
           Err(p) => return Err(decrement_depth(p))
         }
+        // TS1227: A type assertion expression is not allowed in the
+        // left-hand side of an exponentiation expression
+        let next_parser = match (op, left) {
+          (Exponentiate, Node::TypeAssertionExpression(t)) =>
+            add_error_with_code(
+              next_parser,
+              TypeAssertionNotAllowedInExponentiation.to_message(),
+              t.location,
+              TypeAssertionNotAllowedInExponentiation,
+            )
+          (Exponentiate, Node::AsExpression(a)) =>
+            add_error_with_code(
+              next_parser,
+              TypeAssertionNotAllowedInExponentiation.to_message(),
+              a.location,
+              TypeAssertionNotAllowedInExponentiation,
+            )
+          _ => next_parser
+        }
         left = Node::BinaryExpression(BinaryExpression::{
           left,
           operator: op,
