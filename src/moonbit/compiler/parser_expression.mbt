@@ -389,24 +389,24 @@ fn parse_unary_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
         _ => {
           // Regular new expression
           let parser = increment_depth(parser)
-          // Parse the constructor expression (which might have property/element access)
-          match parse_postfix_expression(parser) {
+          // Parse the constructor expression (property/element access, but NOT calls)
+          match parse_member_expression_for_new(parser) {
             Ok((expr, parser)) => {
               let parser = decrement_depth(parser)
               // Check if there are explicit call arguments
-              match current_token(parser) {
+              let (new_expr, parser) = match current_token(parser) {
                 OpenParen(_) => {
                   // Has explicit arguments
                   let parser = advance_parser(parser)
                   let (arguments, parser) = parse_argument_list(parser)
-                  Ok(
-                    (make_new_expression(expr, Some(arguments), start_loc), parser),
-                  )
+                  (make_new_expression(expr, Some(arguments), start_loc), parser)
                 }
                 _ =>
                   // No arguments (e.g., new Date)
-                  Ok((make_new_expression(expr, None, start_loc), parser))
+                  (make_new_expression(expr, None, start_loc), parser)
               }
+              // Continue parsing postfix operations (e.g., new Builder().append())
+              continue_postfix_expression(parser, new_expr)
             }
             Err(parser) => {
               let parser = decrement_depth(parser)
@@ -458,6 +458,230 @@ fn parse_unary_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
         None => parse_postfix_expression(parser)
       }
   }
+}
+
+///|
+/// Continue parsing postfix operations on an already-parsed expression
+/// This handles method calls, property access, etc. starting from a given expression
+fn continue_postfix_expression(
+  parser : Parser,
+  initial_expr : Node,
+) -> Result[(Node, Parser), Parser] {
+  let mut left = initial_expr
+  let mut parser = parser
+  let mut should_continue = true
+  while should_continue {
+    let token = current_token(parser)
+    match token {
+      // Type arguments for generic calls (e.g., func<T>(...))
+      LessThan(_) => {
+        // Try to parse type arguments - if successful and followed by OpenParen, it's a generic call
+        let saved_parser = parser
+        match parse_type_argument_list(parser) {
+          Ok((type_args, next_parser)) =>
+            match current_token(next_parser) {
+              OpenParen(_) => {
+                // It's a generic function call
+                let start_loc = get_location(left)
+                parser = advance_parser(next_parser)
+                let (arguments, next_parser) = parse_argument_list(parser)
+                parser = next_parser
+                left = make_call_expression(left, type_args, arguments, start_loc)
+              }
+              _ => {
+                // Not a generic call, backtrack
+                parser = saved_parser
+                should_continue = false
+              }
+            }
+          Err(_) => {
+            parser = saved_parser
+            should_continue = false
+          }
+        }
+      }
+      // Function call
+      OpenParen(_) => {
+        let start_loc = get_location(left)
+        parser = advance_parser(parser)
+        let (arguments, next_parser) = parse_argument_list(parser)
+        parser = next_parser
+        left = make_call_expression(left, [], arguments, start_loc)
+      }
+      // Property access
+      Dot(_) => {
+        let start_loc = get_location(left)
+        parser = advance_parser(parser)
+        match parse_identifier_or_keyword_name(parser) {
+          Ok((name, next_parser)) => {
+            left = make_property_access(left, name, start_loc)
+            parser = next_parser
+          }
+          Err(p) => return Err(p)
+        }
+      }
+      // Element access
+      OpenBracket(_) => {
+        let start_loc = get_location(left)
+        match parse_bracketed_expression(parser) {
+          Ok((index, next_parser)) => {
+            parser = next_parser
+            left = make_element_access(left, index, start_loc)
+          }
+          Err(p) => return Err(p)
+        }
+      }
+      // Optional chaining
+      QuestionDot(_) => {
+        let start_loc = get_location(left)
+        parser = advance_parser(parser)
+        match current_token(parser) {
+          OpenBracket(_) =>
+            match parse_bracketed_expression(parser) {
+              Ok((index, next_parser)) => {
+                parser = next_parser
+                left = Node::OptionalChain(OptionalChain::{
+                  expression: left,
+                  chain: OptionalChainKind::Element(index),
+                  location: start_loc,
+                })
+              }
+              Err(p) => return Err(p)
+            }
+          OpenParen(_) => {
+            parser = advance_parser(parser)
+            let (arguments, next_parser) = parse_argument_list(parser)
+            parser = next_parser
+            left = Node::OptionalChain(OptionalChain::{
+              expression: left,
+              chain: OptionalChainKind::Call(arguments),
+              location: start_loc,
+            })
+          }
+          _ =>
+            match parse_identifier_or_keyword_name(parser) {
+              Ok((name, next_parser)) => {
+                left = Node::OptionalChain(OptionalChain::{
+                  expression: left,
+                  chain: OptionalChainKind::Property(name),
+                  location: start_loc,
+                })
+                parser = next_parser
+              }
+              Err(p) => return Err(p)
+            }
+        }
+      }
+      // Non-null assertion (!)
+      Exclamation(_) => {
+        let start_loc = get_location(left)
+        parser = advance_parser(parser)
+        left = Node::NonNullExpression(NonNullExpression::{
+          expression: left,
+          location: start_loc,
+        })
+      }
+      // Type assertion with 'as' keyword
+      KeywordAs(_) => {
+        let start_loc = get_location(left)
+        parser = advance_parser(parser)
+        match current_token(parser) {
+          KeywordConst(loc) => {
+            parser = advance_parser(parser)
+            let type_node = Node::KeywordType(KeywordType::{
+              kind: TypeKeyword::Const,
+              location: loc,
+            })
+            left = Node::AsExpression(AsExpression::{
+              expression: left,
+              type_node,
+              location: start_loc,
+            })
+          }
+          _ =>
+            match parse_type(parser) {
+              Ok((type_node, next_parser)) => {
+                left = Node::AsExpression(AsExpression::{
+                  expression: left,
+                  type_node,
+                  location: start_loc,
+                })
+                parser = next_parser
+              }
+              Err(p) => return Err(p)
+            }
+        }
+      }
+      _ => should_continue = false
+    }
+  }
+  Ok((left, parser))
+}
+
+///|
+/// Parse member expression for new expression target (property access, element access, but NOT calls)
+/// This is used for parsing the target of `new` expressions
+fn parse_member_expression_for_new(parser : Parser) -> Result[(Node, Parser), Parser] {
+  let (left_val, parser_val) = match parse_primary_expression(parser) {
+    Ok((expr, p)) => (expr, p)
+    Err(p) => return Err(p)
+  }
+  let mut left = left_val
+  let mut parser = parser_val
+  let mut should_continue = true
+  while should_continue {
+    let token = current_token(parser)
+    match token {
+      // Property access
+      Dot(_) => {
+        let start_loc = get_location(left)
+        parser = advance_parser(parser)
+        match parse_identifier_or_keyword_name(parser) {
+          Ok((name, next_parser)) => {
+            left = make_property_access(left, name, start_loc)
+            parser = next_parser
+          }
+          Err(p) => return Err(p)
+        }
+      }
+
+      // Non-null assertion property access (obj!.property)
+      ExclamationDot(_) => {
+        let start_loc = get_location(left)
+        parser = advance_parser(parser)
+        // First wrap left in NonNullExpression
+        let non_null_expr = Node::NonNullExpression(NonNullExpression::{
+          expression: left,
+          location: start_loc,
+        })
+        // Then parse the property access
+        match parse_identifier_or_keyword_name(parser) {
+          Ok((name, next_parser)) => {
+            left = make_property_access(non_null_expr, name, start_loc)
+            parser = next_parser
+          }
+          Err(p) => return Err(p)
+        }
+      }
+
+      // Element access
+      OpenBracket(_) => {
+        let start_loc = get_location(left)
+        match parse_bracketed_expression(parser) {
+          Ok((index, next_parser)) => {
+            parser = next_parser
+            left = make_element_access(left, index, start_loc)
+          }
+          Err(p) => return Err(p)
+        }
+      }
+
+      // Stop at OpenParen (call arguments will be handled by new expression parser)
+      // Stop at anything else
+      _ => should_continue = false
+    }
+  }
+  Ok((left, parser))
 }
 
 ///|

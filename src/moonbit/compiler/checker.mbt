@@ -3738,29 +3738,45 @@ fn infer_new_expression_type(
   }
 
   // Check if the target has a construct signature (TS2747)
-  let checker = match expr_type {
-    Object(obj_type) =>
-      if obj_type.construct_signatures.length() == 0 &&
-        obj_type.call_signatures.length() > 0 {
-        // Has call signatures but no construct signatures
+  // Skip check for class types (lookup symbol to determine)
+  let is_class_type = match new_expr.expression {
+    Identifier(id) =>
+      match lookup_symbol(checker, id.name) {
+        Some(symbol) =>
+          match symbol.kind {
+            Class => true
+            _ => false
+          }
+        None => false
+      }
+    _ => false
+  }
+  let checker = if not(is_class_type) {
+    match expr_type {
+      Object(obj_type) =>
+        if obj_type.construct_signatures.length() == 0 {
+          // No construct signatures - emit TS2747
+          add_diagnostic_with_code(
+            checker,
+            "'new' expression, whose target lacks a construct signature, implicitly has an 'any' type",
+            get_node_location(new_expr.expression),
+            TS2747,
+          )
+        } else {
+          checker
+        }
+      Function(_) =>
+        // Plain function type without construct signature
         add_diagnostic_with_code(
           checker,
           "'new' expression, whose target lacks a construct signature, implicitly has an 'any' type",
           get_node_location(new_expr.expression),
           TS2747,
         )
-      } else {
-        checker
-      }
-    Function(_) =>
-      // Plain function type without construct signature
-      add_diagnostic_with_code(
-        checker,
-        "'new' expression, whose target lacks a construct signature, implicitly has an 'any' type",
-        get_node_location(new_expr.expression),
-        TS2747,
-      )
-    _ => checker
+      _ => checker
+    }
+  } else {
+    checker
   }
 
   // Return the constructed instance type
@@ -6089,6 +6105,47 @@ fn get_type_from_type_node(
         ),
         checker,
       )
+    }
+    FunctionType(func_type) => {
+      // Handle function type annotations: (x: number) => string
+      let mut checker = checker
+      let parameters : Array[CheckerParameter] = []
+
+      // Convert each parameter
+      for param in func_type.parameters {
+        match param {
+          Parameter(p) => {
+            let (param_type, c) = match p.type_annotation {
+              Some(type_node) =>
+                match get_type_from_type_node(checker, type_node) {
+                  (Some(t), c2) => (t, c2)
+                  (None, c2) => any_type(c2)
+                }
+              None => any_type(checker)
+            }
+            checker = c
+            parameters.push({
+              name: get_parameter_name(p.name),
+              param_type,
+              is_optional: p.is_optional,
+              is_rest: p.is_rest,
+            })
+          }
+          _ => ()
+        }
+      }
+
+      // Get return type
+      let (return_type, checker) = match get_type_from_type_node(
+        checker,
+        func_type.return_type,
+      ) {
+        (Some(t), c) => (t, c)
+        (None, c) => any_type(c)
+      }
+
+      let (info, checker) = create_type_info(checker)
+      (Some(Type::Function({ parameters, return_type, info })), checker)
     }
     _ => (None, checker)
   }
