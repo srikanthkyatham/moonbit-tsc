@@ -6037,6 +6037,24 @@ fn get_type_from_type_node(
 
       for member in type_literal.members {
         match member {
+          TypeLiteralProperty(tl_prop) => {
+            // Get property type
+            let (prop_type, c) = match tl_prop.type_node {
+              Some(type_node) =>
+                match get_type_from_type_node(checker, type_node) {
+                  (Some(t), c2) => (t, c2)
+                  (None, c2) => any_type(c2)
+                }
+              None => any_type(checker)
+            }
+            checker = c
+            properties.set(tl_prop.name, {
+              name: tl_prop.name,
+              prop_type,
+              is_optional: tl_prop.is_optional,
+              is_readonly: tl_prop.is_readonly,
+            })
+          }
           PropertyDeclaration(prop_decl) => {
             // Get property type
             let (prop_type, c) = match prop_decl.type_annotation {
