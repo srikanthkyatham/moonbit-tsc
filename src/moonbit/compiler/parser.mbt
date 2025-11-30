@@ -231,6 +231,14 @@ pub enum ParserErrorCode {
 
   // Merge conflict
   MergeConflictMarker // TS1185
+
+  // Decorator errors
+  DecoratorsNotValidHere // TS1206
+  ExperimentalDecoratorsWarning // TS1219
+  UnableToResolveClassDecorator // TS1239
+  UnableToResolveParameterDecorator // TS1240
+  UnableToResolvePropertyDecorator // TS1241
+  DecoratorReturnTypeMustBeAssignable // TS1270
 } derive(Show, Eq)
 
 ///|
@@ -326,6 +334,14 @@ pub fn ParserErrorCode::to_int(self : ParserErrorCode) -> Int {
 
     // Merge conflict
     MergeConflictMarker => 1185 // TS1185: Merge conflict marker encountered
+
+    // Decorator errors
+    DecoratorsNotValidHere => 1206 // TS1206: Decorators are not valid here
+    ExperimentalDecoratorsWarning => 1219 // TS1219: Experimental support for decorators
+    UnableToResolveClassDecorator => 1239 // TS1239: Unable to resolve signature of class decorator
+    UnableToResolveParameterDecorator => 1240 // TS1240: Unable to resolve signature of parameter decorator
+    UnableToResolvePropertyDecorator => 1241 // TS1241: Unable to resolve signature of property decorator
+    DecoratorReturnTypeMustBeAssignable => 1270 // TS1270: Decorator function return type must be assignable
   }
 }
 
@@ -436,6 +452,19 @@ pub fn ParserErrorCode::to_message(self : ParserErrorCode) -> String {
 
     // Merge conflict
     MergeConflictMarker => "Merge conflict marker encountered."
+
+    // Decorator errors
+    DecoratorsNotValidHere => "Decorators are not valid here."
+    ExperimentalDecoratorsWarning =>
+      "Experimental support for decorators is a feature that is subject to change in a future release."
+    UnableToResolveClassDecorator =>
+      "Unable to resolve signature of class decorator when called as an expression."
+    UnableToResolveParameterDecorator =>
+      "Unable to resolve signature of parameter decorator when called as an expression."
+    UnableToResolvePropertyDecorator =>
+      "Unable to resolve signature of property decorator when called as an expression."
+    DecoratorReturnTypeMustBeAssignable =>
+      "Decorator function return type is not assignable to type of the decorated target."
   }
 }
 
@@ -489,6 +518,16 @@ pub fn get_parser_error_int_with_arg(name : String, arg : String?) -> Int {
     "ConstDeclarationMustBeInitialized" =>
       ConstDeclarationMustBeInitialized.to_int()
     "MergeConflictMarker" => MergeConflictMarker.to_int()
+    // Decorator errors
+    "DecoratorsNotValidHere" => DecoratorsNotValidHere.to_int()
+    "ExperimentalDecoratorsWarning" => ExperimentalDecoratorsWarning.to_int()
+    "UnableToResolveClassDecorator" => UnableToResolveClassDecorator.to_int()
+    "UnableToResolveParameterDecorator" =>
+      UnableToResolveParameterDecorator.to_int()
+    "UnableToResolvePropertyDecorator" =>
+      UnableToResolvePropertyDecorator.to_int()
+    "DecoratorReturnTypeMustBeAssignable" =>
+      DecoratorReturnTypeMustBeAssignable.to_int()
     _ => -1
   }
 }
@@ -539,6 +578,16 @@ pub fn get_parser_error_message_with_arg(name : String, arg : String?) -> String
     "ConstDeclarationMustBeInitialized" =>
       ConstDeclarationMustBeInitialized.to_message()
     "MergeConflictMarker" => MergeConflictMarker.to_message()
+    // Decorator errors
+    "DecoratorsNotValidHere" => DecoratorsNotValidHere.to_message()
+    "ExperimentalDecoratorsWarning" => ExperimentalDecoratorsWarning.to_message()
+    "UnableToResolveClassDecorator" => UnableToResolveClassDecorator.to_message()
+    "UnableToResolveParameterDecorator" =>
+      UnableToResolveParameterDecorator.to_message()
+    "UnableToResolvePropertyDecorator" =>
+      UnableToResolvePropertyDecorator.to_message()
+    "DecoratorReturnTypeMustBeAssignable" =>
+      DecoratorReturnTypeMustBeAssignable.to_message()
     _ => "Unknown error"
   }
 }
@@ -786,6 +835,23 @@ fn parse_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
               )
             }
           }
+        }
+        // Decorators not valid on these declarations - TS1206
+        KeywordInterface(_)
+        | KeywordType(_)
+        | KeywordEnum(_)
+        | KeywordConst(_)
+        | KeywordLet(_)
+        | KeywordVar(_) => {
+          let loc = get_location(decorators[0])
+          Err(
+            add_error_with_code(
+              parser,
+              DecoratorsNotValidHere.to_message(),
+              loc,
+              DecoratorsNotValidHere,
+            ),
+          )
         }
         _ => {
           let loc = current_token(parser).location()

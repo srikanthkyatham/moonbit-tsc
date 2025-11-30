@@ -317,6 +317,63 @@ test "ParserErrorCode::to_message - modifier with dynamic name" {
   )
 }
 
+// ============================================================================
+// Tests for Decorator Error Codes
+// ============================================================================
+
+///|
+test "ParserErrorCode::to_int - decorator errors" {
+  // TS1206: Decorators not valid here
+  assert_eq(@compiler.get_parser_error_int("DecoratorsNotValidHere"), 1206)
+  // TS1219: Experimental decorators warning
+  assert_eq(@compiler.get_parser_error_int("ExperimentalDecoratorsWarning"), 1219)
+  // TS1239: Unable to resolve class decorator
+  assert_eq(@compiler.get_parser_error_int("UnableToResolveClassDecorator"), 1239)
+  // TS1240: Unable to resolve parameter decorator
+  assert_eq(
+    @compiler.get_parser_error_int("UnableToResolveParameterDecorator"),
+    1240,
+  )
+  // TS1241: Unable to resolve property decorator
+  assert_eq(
+    @compiler.get_parser_error_int("UnableToResolvePropertyDecorator"),
+    1241,
+  )
+  // TS1270: Decorator return type must be assignable
+  assert_eq(
+    @compiler.get_parser_error_int("DecoratorReturnTypeMustBeAssignable"),
+    1270,
+  )
+}
+
+///|
+test "ParserErrorCode::to_message - decorator errors" {
+  assert_eq(
+    @compiler.get_parser_error_message("DecoratorsNotValidHere"),
+    "Decorators are not valid here.",
+  )
+  assert_eq(
+    @compiler.get_parser_error_message("ExperimentalDecoratorsWarning"),
+    "Experimental support for decorators is a feature that is subject to change in a future release.",
+  )
+  assert_eq(
+    @compiler.get_parser_error_message("UnableToResolveClassDecorator"),
+    "Unable to resolve signature of class decorator when called as an expression.",
+  )
+  assert_eq(
+    @compiler.get_parser_error_message("UnableToResolveParameterDecorator"),
+    "Unable to resolve signature of parameter decorator when called as an expression.",
+  )
+  assert_eq(
+    @compiler.get_parser_error_message("UnableToResolvePropertyDecorator"),
+    "Unable to resolve signature of property decorator when called as an expression.",
+  )
+  assert_eq(
+    @compiler.get_parser_error_message("DecoratorReturnTypeMustBeAssignable"),
+    "Decorator function return type is not assignable to type of the decorated target.",
+  )
+}
+
 ///|
 test "ParserErrorCode::to_int - unknown error returns -1" {
   assert_eq(@compiler.get_parser_error_int("NonExistentError"), -1)

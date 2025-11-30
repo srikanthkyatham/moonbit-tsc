@@ -251,3 +251,108 @@ test "parser error detection - multiple parameter errors" {
   // Should have TS1048 (rest cannot be optional)
   assert_true(has_error_code(errors, 1048))
 }
+
+// ============================================================================
+// Decorator Error Detection Tests
+// ============================================================================
+
+///|
+test "parser error detection - TS1206 decorator on interface" {
+  // Decorators are not valid on interfaces
+  let source =
+    #|@decorator
+    #|interface Foo { }
+  let errors = parse_and_get_errors(source)
+  assert_true(has_error_code(errors, 1206))
+  assert_true(has_error_message(errors, "Decorators are not valid here"))
+}
+
+///|
+test "parser error detection - TS1206 decorator on type alias" {
+  // Decorators are not valid on type aliases
+  let source =
+    #|@decorator
+    #|type Foo = string;
+  let errors = parse_and_get_errors(source)
+  assert_true(has_error_code(errors, 1206))
+  assert_true(has_error_message(errors, "Decorators are not valid here"))
+}
+
+///|
+test "parser error detection - TS1206 decorator on enum" {
+  // Decorators are not valid on enums
+  let source =
+    #|@decorator
+    #|enum Color { Red, Green, Blue }
+  let errors = parse_and_get_errors(source)
+  assert_true(has_error_code(errors, 1206))
+  assert_true(has_error_message(errors, "Decorators are not valid here"))
+}
+
+///|
+test "parser error detection - TS1206 decorator on variable" {
+  // Decorators are not valid on variable declarations
+  let source =
+    #|@decorator
+    #|const x = 1;
+  let errors = parse_and_get_errors(source)
+  assert_true(has_error_code(errors, 1206))
+  assert_true(has_error_message(errors, "Decorators are not valid here"))
+}
+
+///|
+test "parser error detection - TS1206 decorator on let" {
+  // Decorators are not valid on let declarations
+  let source =
+    #|@decorator
+    #|let y = 2;
+  let errors = parse_and_get_errors(source)
+  assert_true(has_error_code(errors, 1206))
+  assert_true(has_error_message(errors, "Decorators are not valid here"))
+}
+
+///|
+test "parser error detection - valid decorator on class" {
+  // Decorators ARE valid on classes - should not produce TS1206
+  let source =
+    #|@decorator
+    #|class Foo { }
+  let errors = parse_and_get_errors(source)
+  assert_true(not(has_error_code(errors, 1206)))
+}
+
+///|
+test "parser error detection - valid decorator on class method" {
+  // Decorators ARE valid on class methods - should not produce TS1206
+  let source =
+    #|class Foo {
+    #|  @decorator
+    #|  bar() { }
+    #|}
+  let errors = parse_and_get_errors(source)
+  assert_true(not(has_error_code(errors, 1206)))
+}
+
+///|
+test "parser error detection - valid decorator on class property" {
+  // Decorators ARE valid on class properties - should not produce TS1206
+  let source =
+    #|class Foo {
+    #|  @decorator
+    #|  value: number;
+    #|}
+  let errors = parse_and_get_errors(source)
+  assert_true(not(has_error_code(errors, 1206)))
+}
+
+///|
+test "parser error detection - valid decorator on class accessor" {
+  // Decorators ARE valid on accessors - should not produce TS1206
+  let source =
+    #|class Foo {
+    #|  @decorator
+    #|  get value() { return 1; }
+    #|}
+  let errors = parse_and_get_errors(source)
+  assert_true(not(has_error_code(errors, 1206)))
+}
