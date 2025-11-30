@@ -21,8 +21,11 @@ pub fn parse_json(
       // Check for trailing content
       if not(is_at_end(parser)) {
         let loc = current_token(parser).location()
-        let parser = add_error(
-          parser, "Unexpected content after JSON value", loc,
+        let parser = add_error_with_code(
+          parser,
+          UnexpectedToken.to_message(),
+          loc,
+          UnexpectedToken,
         )
         Err(parser.diagnostics)
       } else if parser.diagnostics.length() > 0 {
@@ -87,7 +90,15 @@ fn parse_json_value(parser : Parser) -> Result[(Node, Parser), Parser] {
             ),
           )
         }
-        _ => Err(add_error(parser, "Expected number after '-' in JSON", loc))
+        _ =>
+          Err(
+            add_error_with_code(
+              parser,
+              JSONExpectedValue.to_message(),
+              loc,
+              JSONExpectedValue,
+            ),
+          )
       }
     }
 
@@ -129,11 +140,33 @@ fn parse_json_value(parser : Parser) -> Result[(Node, Parser), Parser] {
           Ok((Node::NullLiteral(NullLiteral::{ location: loc }), parser))
         }
         _ =>
-          Err(add_error(parser, "Unexpected identifier in JSON: " + name, loc))
+          Err(
+            add_error_with_code(
+              parser,
+              JSONExpectedValue.to_message(),
+              loc,
+              JSONExpectedValue,
+            ),
+          )
       }
     EOF(_) =>
-      Err(add_error(parser, "Unexpected end of file, expected JSON value", loc))
-    _ => Err(add_error(parser, "Expected JSON value", loc))
+      Err(
+        add_error_with_code(
+          parser,
+          UnexpectedEOF.to_message(),
+          loc,
+          UnexpectedEOF,
+        ),
+      )
+    _ =>
+      Err(
+        add_error_with_code(
+          parser,
+          JSONExpectedValue.to_message(),
+          loc,
+          JSONExpectedValue,
+        ),
+      )
   }
 }
 
@@ -170,8 +203,11 @@ fn parse_json_object(parser : Parser) -> Result[(Node, Parser), Parser] {
           _ => {
             let loc = current_token(parser).location()
             return Err(
-              add_error(
-                parser, "Expected ':' after property name in JSON object", loc,
+              add_error_with_code(
+                parser,
+                ExpectedColon.to_message(),
+                loc,
+                ExpectedColon,
               ),
             )
           }
@@ -195,8 +231,11 @@ fn parse_json_object(parser : Parser) -> Result[(Node, Parser), Parser] {
             // Check for trailing comma (not allowed in strict JSON)
             if matches_close_brace(current_token(parser)) {
               let loc = current_token(parser).location()
-              let parser = add_error(
-                parser, "Trailing comma not allowed in JSON", loc,
+              let parser = add_error_with_code(
+                parser,
+                JSONTrailingComma.to_message(),
+                loc,
+                JSONTrailingComma,
               )
               // Continue anyway to be lenient
               let parser = advance_parser(parser)
@@ -226,7 +265,12 @@ fn parse_json_object(parser : Parser) -> Result[(Node, Parser), Parser] {
           _ => {
             let loc = current_token(parser).location()
             return Err(
-              add_error(parser, "Expected ',' or '}' in JSON object", loc),
+              add_error_with_code(
+                parser,
+                UnexpectedToken.to_message(),
+                loc,
+                UnexpectedToken,
+              ),
             )
           }
         }
@@ -247,12 +291,24 @@ fn parse_json_object(parser : Parser) -> Result[(Node, Parser), Parser] {
       _ => {
         let loc = current_token(parser).location()
         return Err(
-          add_error(parser, "Expected string property name in JSON object", loc),
+          add_error_with_code(
+            parser,
+            JSONExpectedPropertyName.to_message(),
+            loc,
+            JSONExpectedPropertyName,
+          ),
         )
       }
     }
   }
-  Err(add_error(parser, "Unexpected end of file in JSON object", start_loc))
+  Err(
+    add_error_with_code(
+      parser,
+      UnexpectedEOF.to_message(),
+      start_loc,
+      UnexpectedEOF,
+    ),
+  )
 }
 
 ///|
@@ -293,8 +349,11 @@ fn parse_json_array(parser : Parser) -> Result[(Node, Parser), Parser] {
         // Check for trailing comma (not allowed in strict JSON)
         if matches_close_bracket(current_token(parser)) {
           let loc = current_token(parser).location()
-          let parser = add_error(
-            parser, "Trailing comma not allowed in JSON", loc,
+          let parser = add_error_with_code(
+            parser,
+            JSONTrailingComma.to_message(),
+            loc,
+            JSONTrailingComma,
           )
           // Continue anyway to be lenient
           let parser = advance_parser(parser)
@@ -323,9 +382,23 @@ fn parse_json_array(parser : Parser) -> Result[(Node, Parser), Parser] {
       }
       _ => {
         let loc = current_token(parser).location()
-        return Err(add_error(parser, "Expected ',' or ']' in JSON array", loc))
+        return Err(
+          add_error_with_code(
+            parser,
+            UnexpectedToken.to_message(),
+            loc,
+            UnexpectedToken,
+          ),
+        )
       }
     }
   }
-  Err(add_error(parser, "Unexpected end of file in JSON array", start_loc))
+  Err(
+    add_error_with_code(
+      parser,
+      UnexpectedEOF.to_message(),
+      start_loc,
+      UnexpectedEOF,
+    ),
+  )
 }

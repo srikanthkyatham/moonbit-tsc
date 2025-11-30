@@ -119,7 +119,15 @@ fn parse_jsx_element_or_fragment(
     Identifier(_, _) =>
       // Element: <tag>...</tag> or <tag />
       parse_jsx_element(parser, start_loc)
-    _ => Err(add_error(parser, "Expected JSX element name or '>'", start_loc))
+    _ =>
+      Err(
+        add_error_with_code(
+          parser,
+          UnexpectedToken.to_message(),
+          start_loc,
+          UnexpectedToken,
+        ),
+      )
   }
 }
 
@@ -187,7 +195,14 @@ fn parse_jsx_element(
       }
     }
     _ =>
-      Err(add_error(parser, "Expected '>' or '/>' in JSX element", start_loc))
+      Err(
+        add_error_with_code(
+          parser,
+          UnexpectedToken.to_message(),
+          start_loc,
+          UnexpectedToken,
+        ),
+      )
   }
 }
 
@@ -210,8 +225,11 @@ fn parse_jsx_tag_name(parser : Parser) -> Result[(JsxTagName, Parser), Parser] {
             }
             _ =>
               Err(
-                add_error(
-                  parser, "Expected identifier after ':' in JSX tag", loc,
+                add_error_with_code(
+                  parser,
+                  ExpectedIdentifier.to_message(),
+                  loc,
+                  ExpectedIdentifier,
                 ),
               )
           }
@@ -238,8 +256,11 @@ fn parse_jsx_tag_name(parser : Parser) -> Result[(JsxTagName, Parser), Parser] {
                   }
                   _ =>
                     return Err(
-                      add_error(
-                        parser, "Expected identifier after '.' in JSX tag", loc,
+                      add_error_with_code(
+                        parser,
+                        ExpectedIdentifier.to_message(),
+                        loc,
+                        ExpectedIdentifier,
                       ),
                     )
                 }
@@ -252,7 +273,15 @@ fn parse_jsx_tag_name(parser : Parser) -> Result[(JsxTagName, Parser), Parser] {
         _ => Ok((JsxTagName::Identifier(name, loc), parser))
       }
     }
-    _ => Err(add_error(parser, "Expected JSX element name", start_loc))
+    _ =>
+      Err(
+        add_error_with_code(
+          parser,
+          ExpectedIdentifier.to_message(),
+          start_loc,
+          ExpectedIdentifier,
+        ),
+      )
   }
 }
 
@@ -371,8 +400,11 @@ fn parse_jsx_attribute_value(
             }
             _ =>
               Err(
-                add_error(
-                  parser, "Expected '}' after JSX attribute expression", loc,
+                add_error_with_code(
+                  parser,
+                  ExpectedCloseBrace.to_message(),
+                  loc,
+                  ExpectedCloseBrace,
                 ),
               )
           }
@@ -386,7 +418,15 @@ fn parse_jsx_attribute_value(
           Ok((JsxAttributeValue::Element(element, loc), parser))
         Err(p) => Err(p)
       }
-    _ => Err(add_error(parser, "Expected JSX attribute value", loc))
+    _ =>
+      Err(
+        add_error_with_code(
+          parser,
+          JSXExpectedAttributeValue.to_message(),
+          loc,
+          JSXExpectedAttributeValue,
+        ),
+      )
   }
 }
 
@@ -519,10 +559,26 @@ fn parse_jsx_closing_element(
       let parser = advance_parser(parser)
       match current_token(parser) {
         Slash(_) => advance_parser(parser)
-        _ => return Err(add_error(parser, "Expected closing tag", start_loc))
+        _ =>
+          return Err(
+            add_error_with_code(
+              parser,
+              JSXExpectedClosingTag.to_message(),
+              start_loc,
+              JSXExpectedClosingTag,
+            ),
+          )
       }
     }
-    _ => return Err(add_error(parser, "Expected '</'", start_loc))
+    _ =>
+      return Err(
+        add_error_with_code(
+          parser,
+          JSXExpectedClosingTag.to_message(),
+          start_loc,
+          JSXExpectedClosingTag,
+        ),
+      )
   }
 
   // Parse tag name
@@ -533,8 +589,11 @@ fn parse_jsx_closing_element(
 
   // Verify tag name matches
   if !jsx_tag_names_match(expected_tag, tag_name) {
-    let parser = add_error(
-      parser, "JSX closing tag does not match opening tag", start_loc,
+    let parser = add_error_with_code(
+      parser,
+      JSXClosingTagMismatch.to_message(),
+      start_loc,
+      JSXClosingTagMismatch,
     )
     // Continue anyway to try to recover
     let _ = parser
@@ -545,7 +604,14 @@ fn parse_jsx_closing_element(
   let parser = match current_token(parser) {
     GreaterThan(_) => advance_parser(parser)
     _ =>
-      return Err(add_error(parser, "Expected '>' after closing tag", start_loc))
+      return Err(
+        add_error_with_code(
+          parser,
+          UnexpectedToken.to_message(),
+          start_loc,
+          UnexpectedToken,
+        ),
+      )
   }
   let end_loc = current_token(parser).location()
   Ok(
@@ -582,7 +648,15 @@ fn parse_jsx_fragment(
   // Already consumed <, expect >
   let parser = match current_token(parser) {
     GreaterThan(_) => advance_parser(parser)
-    _ => return Err(add_error(parser, "Expected '>' for fragment", start_loc))
+    _ =>
+      return Err(
+        add_error_with_code(
+          parser,
+          UnexpectedToken.to_message(),
+          start_loc,
+          UnexpectedToken,
+        ),
+      )
   }
   let opening_loc = start_loc
 
@@ -594,13 +668,25 @@ fn parse_jsx_fragment(
     LessThanSlash(_) => advance_parser(parser)
     _ =>
       return Err(
-        add_error(parser, "Expected '</>' to close fragment", start_loc),
+        add_error_with_code(
+          parser,
+          JSXExpectedClosingTag.to_message(),
+          start_loc,
+          JSXExpectedClosingTag,
+        ),
       )
   }
   let parser = match current_token(parser) {
     GreaterThan(_) => advance_parser(parser)
     _ =>
-      return Err(add_error(parser, "Expected '>' to close fragment", start_loc))
+      return Err(
+        add_error_with_code(
+          parser,
+          UnexpectedToken.to_message(),
+          start_loc,
+          UnexpectedToken,
+        ),
+      )
   }
   let closing_loc = current_token(parser).location()
   Ok(

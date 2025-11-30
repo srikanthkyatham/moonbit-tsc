@@ -82,7 +82,15 @@ fn parse_identifier_or_keyword_name(
     KeywordTypeOf(_) => Ok(("typeof", advance_parser(parser)))
     KeywordDelete(_) => Ok(("delete", advance_parser(parser)))
     KeywordDebugger(_) => Ok(("debugger", advance_parser(parser)))
-    _ => Err(add_error(parser, "Expected identifier or keyword", loc))
+    _ =>
+      Err(
+        add_error_with_code(
+          parser,
+          ExpectedIdentifier.to_message(),
+          loc,
+          ExpectedIdentifier,
+        ),
+      )
   }
 }
 
@@ -370,10 +378,11 @@ fn parse_unary_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
             }
             _ =>
               Err(
-                add_error(
+                add_error_with_code(
                   parser,
-                  "Expected 'target' after 'new.'",
+                  UnexpectedToken.to_message(),
                   current_token(parser).location(),
+                  UnexpectedToken,
                 ),
               )
           }
@@ -724,20 +733,22 @@ fn parse_postfix_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
                     }
                     _ =>
                       return Err(
-                        add_error(
+                        add_error_with_code(
                           current_parser,
-                          "Expected template continuation after }",
+                          UnexpectedToken.to_message(),
                           current_token(current_parser).location(),
+                          UnexpectedToken,
                         ),
                       )
                   }
                 }
                 _ =>
                   return Err(
-                    add_error(
+                    add_error_with_code(
                       current_parser,
-                      "Expected '}' after expression in template literal",
+                      ExpectedCloseBrace.to_message(),
                       current_token(current_parser).location(),
+                      ExpectedCloseBrace,
                     ),
                   )
               }
@@ -916,20 +927,22 @@ fn parse_primary_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
                   }
                   _ =>
                     return Err(
-                      add_error(
+                      add_error_with_code(
                         parser,
-                        "Expected template continuation after }",
+                        UnexpectedToken.to_message(),
                         current_token(parser).location(),
+                        UnexpectedToken,
                       ),
                     )
                 }
               }
               _ =>
                 return Err(
-                  add_error(
+                  add_error_with_code(
                     parser,
-                    "Expected '}' after expression in template literal",
+                    ExpectedCloseBrace.to_message(),
                     current_token(parser).location(),
+                    ExpectedCloseBrace,
                   ),
                 )
             }
@@ -1022,10 +1035,11 @@ fn parse_primary_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
             }
             _ =>
               Err(
-                add_error(
+                add_error_with_code(
                   parser,
-                  "Expected 'target' after 'new.'",
+                  UnexpectedToken.to_message(),
                   current_token(parser).location(),
+                  UnexpectedToken,
                 ),
               )
           }
@@ -1061,7 +1075,14 @@ fn parse_primary_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
           }
         }
         _ =>
-          Err(add_error(parser, "Expected identifier or '.' after 'new'", start_loc))
+          Err(
+            add_error_with_code(
+              parser,
+              ExpectedIdentifier.to_message(),
+              start_loc,
+              ExpectedIdentifier,
+            ),
+          )
       }
     }
 
@@ -1164,10 +1185,11 @@ fn parse_primary_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
         }
         _ =>
           Err(
-            add_error(
+            add_error_with_code(
               parser,
-              "Expected function or arrow function after 'async'",
+              UnexpectedToken.to_message(),
               current_token(parser).location(),
+              UnexpectedToken,
             ),
           )
       }
@@ -1201,10 +1223,11 @@ fn parse_primary_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
             }
             _ =>
               Err(
-                add_error(
+                add_error_with_code(
                   parser,
-                  "Expected 'meta' after 'import.'",
+                  UnexpectedToken.to_message(),
                   current_token(parser).location(),
+                  UnexpectedToken,
                 ),
               )
           }
@@ -1230,10 +1253,11 @@ fn parse_primary_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
                   )
                 _ =>
                   Err(
-                    add_error(
+                    add_error_with_code(
                       parser,
-                      "Expected ')' after import expression",
+                      ExpectedCloseParen.to_message(),
                       current_token(parser).location(),
+                      ExpectedCloseParen,
                     ),
                   )
               }
@@ -1242,17 +1266,25 @@ fn parse_primary_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
         }
         _ =>
           Err(
-            add_error(
+            add_error_with_code(
               parser,
-              "Expected '(' or '.' after 'import'",
+              UnexpectedToken.to_message(),
               current_token(parser).location(),
+              UnexpectedToken,
             ),
           )
       }
     }
 
     _ =>
-      Err(add_error(parser, "Unexpected token in expression", token.location()))
+      Err(
+        add_error_with_code(
+          parser,
+          UnexpectedToken.to_message(),
+          token.location(),
+          UnexpectedToken,
+        ),
+      )
   }
 }
 
@@ -1398,20 +1430,22 @@ fn parse_object_property(
                 }
                 _ =>
                   Err(
-                    add_error(
+                    add_error_with_code(
                       parser,
-                      "Expected ':' after computed property name",
+                      ExpectedColon.to_message(),
                       current_token(parser).location(),
+                      ExpectedColon,
                     ),
                   )
               }
             }
             _ =>
               Err(
-                add_error(
+                add_error_with_code(
                   parser,
-                  "Expected ']' after computed property name",
+                  ExpectedCloseBracket.to_message(),
                   current_token(parser).location(),
+                  ExpectedCloseBracket,
                 ),
               )
           }
@@ -1597,20 +1631,22 @@ fn parse_class_expression(
         }
         _ =>
           Err(
-            add_error(
+            add_error_with_code(
               parser,
-              "Expected '}' after class body",
+              ExpectedCloseBrace.to_message(),
               current_token(parser).location(),
+              ExpectedCloseBrace,
             ),
           )
       }
     }
     _ =>
       Err(
-        add_error(
+        add_error_with_code(
           parser,
-          "Expected '{' after class name",
+          ExpectedOpenBrace.to_message(),
           current_token(parser).location(),
+          ExpectedOpenBrace,
         ),
       )
   }
