@@ -1551,7 +1551,13 @@ fn infer_identifier_type(
                   infer_symbol_type(c, symbol)
               }
             None => {
-              // Variable not found in any scope
+              // Variable not found in any scope - emit TS2304
+              let checker = add_diagnostic_with_code(
+                checker,
+                "Cannot find name '" + id.name + "'",
+                id.location,
+                TS2304,
+              )
               any_type(checker)
             }
           }
@@ -2135,12 +2141,25 @@ fn check_function_call_args(
 ) -> (Type, TypeChecker) {
   let mut checker = checker
 
+  // Check if function has rest parameter
+  let has_rest = func.parameters.length() > 0 &&
+    func.parameters[func.parameters.length() - 1].is_rest
+
   // Check argument count
   let min_params = count_required_params(func.parameters)
+  let max_params = if has_rest { -1 } else { func.parameters.length() }
   if arg_types.length() < min_params {
     checker = add_diagnostic_with_code(
       checker,
       "Expected \{min_params} arguments, but got \{arg_types.length()}",
+      location,
+      TS2554,
+    )
+  } else if max_params >= 0 && arg_types.length() > max_params {
+    // Too many arguments (TS2554)
+    checker = add_diagnostic_with_code(
+      checker,
+      "Expected \{max_params} arguments, but got \{arg_types.length()}",
       location,
       TS2554,
     )
@@ -3989,9 +4008,43 @@ fn infer_array_literal_type(
   for i = 0; i < arr.elements.length(); i = i + 1 {
     match arr.elements[i] {
       Some(elem) => {
-        let (elem_type, c) = infer_type(checker, elem)
-        element_types.push(elem_type)
-        checker = c
+        // Check for spread expressions - they must spread iterable types (TS2548)
+        match elem {
+          SpreadExpression(spread) => {
+            let (spread_type, c) = infer_type(checker, spread.expression)
+            checker = c
+            // Check if type is iterable (array, string, or has Symbol.iterator)
+            let is_iterable = match spread_type {
+              Array(_) => true
+              String(_) => true
+              TypeReference(ref_type) => ref_type.name == "Array" || ref_type.name == "String"
+              _ => false
+            }
+            if not(is_iterable) {
+              checker = add_diagnostic_with_code(
+                checker,
+                "Type is not an array type or a string type. Use a spread only on iterable types",
+                get_node_location(spread.expression),
+                TS2548,
+              )
+            }
+            // For arrays, extract element type
+            match spread_type {
+              Array(arr_type) => element_types.push(arr_type.element_type)
+              String(_) => {
+                let (info, c) = create_type_info(checker)
+                checker = c
+                element_types.push(String(info))
+              }
+              _ => element_types.push(spread_type)
+            }
+          }
+          _ => {
+            let (elem_type, c) = infer_type(checker, elem)
+            element_types.push(elem_type)
+            checker = c
+          }
+        }
       }
       None => ()
     }
