@@ -356,3 +356,49 @@ test "parser error detection - valid decorator on class accessor" {
   let errors = parse_and_get_errors(source)
   assert_true(not(has_error_code(errors, 1206)))
 }
+
+// ============================================================================
+// Module/Import Error Detection Tests
+// ============================================================================
+
+///|
+test "parser error detection - TS1248 class member const" {
+  // A class member cannot have the 'const' keyword
+  let source =
+    #|class Foo {
+    #|  const x = 1;
+    #|}
+  let errors = parse_and_get_errors(source)
+  assert_true(has_error_code(errors, 1248))
+  assert_true(has_error_message(errors, "const"))
+}
+
+///|
+test "parser error detection - TS1440 import path not string literal" {
+  // Import path must be a string literal
+  let source =
+    #|const path = "./module";
+    #|import x from path;
+  let errors = parse_and_get_errors(source)
+  assert_true(has_error_code(errors, 1440))
+  assert_true(has_error_message(errors, "import"))
+}
+
+///|
+test "parser error detection - valid class method" {
+  // Regular class methods should not trigger const error
+  let source =
+    #|class Foo {
+    #|  bar() { return 1; }
+    #|}
+  let errors = parse_and_get_errors(source)
+  assert_true(not(has_error_code(errors, 1248)))
+}
+
+///|
+test "parser error detection - valid import string literal" {
+  // Import with string literal path is valid
+  let source = "import x from './module';"
+  let errors = parse_and_get_errors(source)
+  assert_true(not(has_error_code(errors, 1440)))
+}

@@ -239,6 +239,35 @@ pub enum ParserErrorCode {
   UnableToResolveParameterDecorator // TS1240
   UnableToResolvePropertyDecorator // TS1241
   DecoratorReturnTypeMustBeAssignable // TS1270
+
+  // Module/Import errors
+  ModuleHasNoDefaultExport(String) // TS1192
+  ImportAssignmentNotAllowedInESModules // TS1202
+  IsolatedModulesScriptFile(String) // TS1208
+  IsolatedModulesConstEnum(String) // TS1209
+  AmbientConstEnumsNotAllowedWithIsolatedModules // TS1211
+  ExportAssignmentNotAllowedWithModuleExports // TS1218
+  TypeAssertionNotAllowedInExponentiation // TS1227
+  ImportAliasCannotReferenceTypeExport // TS1232
+  DeleteCannotBeCalledOnIdentifier // TS1243
+  ClassMemberCannotHaveConst // TS1248
+  ConstInitializerMustBeLiteral // TS1254
+  AwaitOnlyAllowedAtTopLevel // TS1278
+  EqualsOnlyInDestructuring // TS1312
+  AwaitNotAllowedInParameterInitializer // TS1313
+  DynamicImportSecondArgOnlyEsnext // TS1323
+  TopLevelAwaitRequiresEsnext // TS1378
+  TopLevelForAwaitNotSupported // TS1431
+  DecoratorsNotAfterExport // TS1432
+  DecoratorReturnTypeNotAssignable(String) // TS1433
+  AwaitUsingOnlyInAsyncFunctions // TS1437
+  ImportPathNotStringLiteral // TS1440
+  ModifierOnlyInTypeScriptFiles(String) // TS1450
+  TypeAnnotationsOnlyInTypeScriptFiles // TS1451
+  VariableDeclarationExpected // TS1462
+  UsingDeclarationsRequireAwait // TS1463
+  UsingDeclarationNotInParameter // TS1484
+  ESMImportExportNotValid // TS1486
 } derive(Show, Eq)
 
 ///|
@@ -342,6 +371,35 @@ pub fn ParserErrorCode::to_int(self : ParserErrorCode) -> Int {
     UnableToResolveParameterDecorator => 1240 // TS1240: Unable to resolve signature of parameter decorator
     UnableToResolvePropertyDecorator => 1241 // TS1241: Unable to resolve signature of property decorator
     DecoratorReturnTypeMustBeAssignable => 1270 // TS1270: Decorator function return type must be assignable
+
+    // Module/Import errors
+    ModuleHasNoDefaultExport(_) => 1192
+    ImportAssignmentNotAllowedInESModules => 1202
+    IsolatedModulesScriptFile(_) => 1208
+    IsolatedModulesConstEnum(_) => 1209
+    AmbientConstEnumsNotAllowedWithIsolatedModules => 1211
+    ExportAssignmentNotAllowedWithModuleExports => 1218
+    TypeAssertionNotAllowedInExponentiation => 1227
+    ImportAliasCannotReferenceTypeExport => 1232
+    DeleteCannotBeCalledOnIdentifier => 1243
+    ClassMemberCannotHaveConst => 1248
+    ConstInitializerMustBeLiteral => 1254
+    AwaitOnlyAllowedAtTopLevel => 1278
+    EqualsOnlyInDestructuring => 1312
+    AwaitNotAllowedInParameterInitializer => 1313
+    DynamicImportSecondArgOnlyEsnext => 1323
+    TopLevelAwaitRequiresEsnext => 1378
+    TopLevelForAwaitNotSupported => 1431
+    DecoratorsNotAfterExport => 1432
+    DecoratorReturnTypeNotAssignable(_) => 1433
+    AwaitUsingOnlyInAsyncFunctions => 1437
+    ImportPathNotStringLiteral => 1440
+    ModifierOnlyInTypeScriptFiles(_) => 1450
+    TypeAnnotationsOnlyInTypeScriptFiles => 1451
+    VariableDeclarationExpected => 1462
+    UsingDeclarationsRequireAwait => 1463
+    UsingDeclarationNotInParameter => 1484
+    ESMImportExportNotValid => 1486
   }
 }
 
@@ -465,6 +523,62 @@ pub fn ParserErrorCode::to_message(self : ParserErrorCode) -> String {
       "Unable to resolve signature of property decorator when called as an expression."
     DecoratorReturnTypeMustBeAssignable =>
       "Decorator function return type is not assignable to type of the decorated target."
+
+    // Module/Import errors
+    ModuleHasNoDefaultExport(module_name) =>
+      "Module '\{module_name}' has no default export."
+    ImportAssignmentNotAllowedInESModules =>
+      "Import assignment cannot be used when targeting ECMAScript modules. Consider using 'import * as ns from \"mod\"', 'import {a} from \"mod\"', 'import d from \"mod\"', or another module format instead."
+    IsolatedModulesScriptFile(name) =>
+      "'\{name}' cannot be compiled under '--isolatedModules' because it is considered a global script file. Add an import, export, or an empty 'export {}' statement to make it a module."
+    IsolatedModulesConstEnum(name) =>
+      "'\{name}' cannot be compiled under '--isolatedModules' because it is considered a global script file. Add an import, export, or an empty 'export {}' statement to make it a module."
+    AmbientConstEnumsNotAllowedWithIsolatedModules =>
+      "Ambient const enums are not allowed when the '--isolatedModules' flag is provided."
+    ExportAssignmentNotAllowedWithModuleExports =>
+      "An export assignment cannot be used in a module with other exported elements."
+    TypeAssertionNotAllowedInExponentiation =>
+      "A type assertion expression is not allowed in the left-hand side of an exponentiation expression. Consider enclosing the expression in parentheses."
+    ImportAliasCannotReferenceTypeExport =>
+      "An import alias cannot reference a declaration that was exported using 'export type'."
+    DeleteCannotBeCalledOnIdentifier =>
+      "'delete' cannot be called on an identifier in strict mode."
+    ClassMemberCannotHaveConst =>
+      "A class member cannot have the 'const' keyword."
+    ConstInitializerMustBeLiteral =>
+      "A 'const' initializer in an ambient context must be a string or numeric literal or literal enum reference."
+    AwaitOnlyAllowedAtTopLevel =>
+      "'await' expressions are only allowed at the top level of a file when that file is a module, but this file has no imports or exports. Consider adding an empty 'export {}' to make this file a module."
+    EqualsOnlyInDestructuring =>
+      "'=' can only be used in an object literal property inside a destructuring assignment."
+    AwaitNotAllowedInParameterInitializer =>
+      "'await' expressions cannot be used in a parameter initializer."
+    DynamicImportSecondArgOnlyEsnext =>
+      "Dynamic imports only support a second argument when the '--module' option is set to 'esnext', 'node16', or 'nodenext'."
+    TopLevelAwaitRequiresEsnext =>
+      "Top-level 'await' expressions are only allowed when the 'module' option is set to 'es2022', 'esnext', 'system', 'node16', or 'nodenext', and the 'target' option is set to 'es2017' or higher."
+    TopLevelForAwaitNotSupported =>
+      "Top-level 'for await' statements are only allowed when the 'module' option is set to 'es2022', 'esnext', 'system', 'node16', or 'nodenext', and the 'target' option is set to 'es2017' or higher."
+    DecoratorsNotAfterExport =>
+      "Decorators must precede the name and all keywords of property declarations."
+    DecoratorReturnTypeNotAssignable(type_name) =>
+      "Decorator function return type '\{type_name}' is not assignable to type of decorated declaration."
+    AwaitUsingOnlyInAsyncFunctions =>
+      "'await using' statements are only allowed within async functions and at the top levels of modules."
+    ImportPathNotStringLiteral =>
+      "The 'import' path must be a string literal."
+    ModifierOnlyInTypeScriptFiles(modifier) =>
+      "The '\{modifier}' modifier can only be used in TypeScript files."
+    TypeAnnotationsOnlyInTypeScriptFiles =>
+      "Type annotations can only be used in TypeScript files."
+    VariableDeclarationExpected =>
+      "Variable declaration expected."
+    UsingDeclarationsRequireAwait =>
+      "'using' declarations may not have a binding pattern, and must have an initializer."
+    UsingDeclarationNotInParameter =>
+      "A 'using' declaration may not be declared in a parameter."
+    ESMImportExportNotValid =>
+      "This file has an import or export that cannot be used outside of ECMAScript modules."
   }
 }
 
@@ -528,6 +642,46 @@ pub fn get_parser_error_int_with_arg(name : String, arg : String?) -> Int {
       UnableToResolvePropertyDecorator.to_int()
     "DecoratorReturnTypeMustBeAssignable" =>
       DecoratorReturnTypeMustBeAssignable.to_int()
+    // Module/Import errors
+    "ModuleHasNoDefaultExport" =>
+      ModuleHasNoDefaultExport(arg.unwrap_or("")).to_int()
+    "ImportAssignmentNotAllowedInESModules" =>
+      ImportAssignmentNotAllowedInESModules.to_int()
+    "IsolatedModulesScriptFile" =>
+      IsolatedModulesScriptFile(arg.unwrap_or("")).to_int()
+    "IsolatedModulesConstEnum" =>
+      IsolatedModulesConstEnum(arg.unwrap_or("")).to_int()
+    "AmbientConstEnumsNotAllowedWithIsolatedModules" =>
+      AmbientConstEnumsNotAllowedWithIsolatedModules.to_int()
+    "ExportAssignmentNotAllowedWithModuleExports" =>
+      ExportAssignmentNotAllowedWithModuleExports.to_int()
+    "TypeAssertionNotAllowedInExponentiation" =>
+      TypeAssertionNotAllowedInExponentiation.to_int()
+    "ImportAliasCannotReferenceTypeExport" =>
+      ImportAliasCannotReferenceTypeExport.to_int()
+    "DeleteCannotBeCalledOnIdentifier" => DeleteCannotBeCalledOnIdentifier.to_int()
+    "ClassMemberCannotHaveConst" => ClassMemberCannotHaveConst.to_int()
+    "ConstInitializerMustBeLiteral" => ConstInitializerMustBeLiteral.to_int()
+    "AwaitOnlyAllowedAtTopLevel" => AwaitOnlyAllowedAtTopLevel.to_int()
+    "EqualsOnlyInDestructuring" => EqualsOnlyInDestructuring.to_int()
+    "AwaitNotAllowedInParameterInitializer" =>
+      AwaitNotAllowedInParameterInitializer.to_int()
+    "DynamicImportSecondArgOnlyEsnext" => DynamicImportSecondArgOnlyEsnext.to_int()
+    "TopLevelAwaitRequiresEsnext" => TopLevelAwaitRequiresEsnext.to_int()
+    "TopLevelForAwaitNotSupported" => TopLevelForAwaitNotSupported.to_int()
+    "DecoratorsNotAfterExport" => DecoratorsNotAfterExport.to_int()
+    "DecoratorReturnTypeNotAssignable" =>
+      DecoratorReturnTypeNotAssignable(arg.unwrap_or("")).to_int()
+    "AwaitUsingOnlyInAsyncFunctions" => AwaitUsingOnlyInAsyncFunctions.to_int()
+    "ImportPathNotStringLiteral" => ImportPathNotStringLiteral.to_int()
+    "ModifierOnlyInTypeScriptFiles" =>
+      ModifierOnlyInTypeScriptFiles(arg.unwrap_or("")).to_int()
+    "TypeAnnotationsOnlyInTypeScriptFiles" =>
+      TypeAnnotationsOnlyInTypeScriptFiles.to_int()
+    "VariableDeclarationExpected" => VariableDeclarationExpected.to_int()
+    "UsingDeclarationsRequireAwait" => UsingDeclarationsRequireAwait.to_int()
+    "UsingDeclarationNotInParameter" => UsingDeclarationNotInParameter.to_int()
+    "ESMImportExportNotValid" => ESMImportExportNotValid.to_int()
     _ => -1
   }
 }
@@ -588,6 +742,50 @@ pub fn get_parser_error_message_with_arg(name : String, arg : String?) -> String
       UnableToResolvePropertyDecorator.to_message()
     "DecoratorReturnTypeMustBeAssignable" =>
       DecoratorReturnTypeMustBeAssignable.to_message()
+    // Module/Import errors
+    "ModuleHasNoDefaultExport" =>
+      ModuleHasNoDefaultExport(arg.unwrap_or("")).to_message()
+    "ImportAssignmentNotAllowedInESModules" =>
+      ImportAssignmentNotAllowedInESModules.to_message()
+    "IsolatedModulesScriptFile" =>
+      IsolatedModulesScriptFile(arg.unwrap_or("")).to_message()
+    "IsolatedModulesConstEnum" =>
+      IsolatedModulesConstEnum(arg.unwrap_or("")).to_message()
+    "AmbientConstEnumsNotAllowedWithIsolatedModules" =>
+      AmbientConstEnumsNotAllowedWithIsolatedModules.to_message()
+    "ExportAssignmentNotAllowedWithModuleExports" =>
+      ExportAssignmentNotAllowedWithModuleExports.to_message()
+    "TypeAssertionNotAllowedInExponentiation" =>
+      TypeAssertionNotAllowedInExponentiation.to_message()
+    "ImportAliasCannotReferenceTypeExport" =>
+      ImportAliasCannotReferenceTypeExport.to_message()
+    "DeleteCannotBeCalledOnIdentifier" =>
+      DeleteCannotBeCalledOnIdentifier.to_message()
+    "ClassMemberCannotHaveConst" => ClassMemberCannotHaveConst.to_message()
+    "ConstInitializerMustBeLiteral" => ConstInitializerMustBeLiteral.to_message()
+    "AwaitOnlyAllowedAtTopLevel" => AwaitOnlyAllowedAtTopLevel.to_message()
+    "EqualsOnlyInDestructuring" => EqualsOnlyInDestructuring.to_message()
+    "AwaitNotAllowedInParameterInitializer" =>
+      AwaitNotAllowedInParameterInitializer.to_message()
+    "DynamicImportSecondArgOnlyEsnext" =>
+      DynamicImportSecondArgOnlyEsnext.to_message()
+    "TopLevelAwaitRequiresEsnext" => TopLevelAwaitRequiresEsnext.to_message()
+    "TopLevelForAwaitNotSupported" => TopLevelForAwaitNotSupported.to_message()
+    "DecoratorsNotAfterExport" => DecoratorsNotAfterExport.to_message()
+    "DecoratorReturnTypeNotAssignable" =>
+      DecoratorReturnTypeNotAssignable(arg.unwrap_or("")).to_message()
+    "AwaitUsingOnlyInAsyncFunctions" =>
+      AwaitUsingOnlyInAsyncFunctions.to_message()
+    "ImportPathNotStringLiteral" => ImportPathNotStringLiteral.to_message()
+    "ModifierOnlyInTypeScriptFiles" =>
+      ModifierOnlyInTypeScriptFiles(arg.unwrap_or("")).to_message()
+    "TypeAnnotationsOnlyInTypeScriptFiles" =>
+      TypeAnnotationsOnlyInTypeScriptFiles.to_message()
+    "VariableDeclarationExpected" => VariableDeclarationExpected.to_message()
+    "UsingDeclarationsRequireAwait" => UsingDeclarationsRequireAwait.to_message()
+    "UsingDeclarationNotInParameter" =>
+      UsingDeclarationNotInParameter.to_message()
+    "ESMImportExportNotValid" => ESMImportExportNotValid.to_message()
     _ => "Unknown error"
   }
 }
@@ -2806,6 +3004,19 @@ fn parse_class_member_with_decorators(
       parse_class_member_with_modifiers(parser, acc, decorators, [Modifier::Async])
     }
 
+    // TS1248: A class member cannot have the 'const' keyword
+    KeywordConst(loc) => {
+      let parser = add_error_with_code(
+        parser,
+        ClassMemberCannotHaveConst.to_message(),
+        loc,
+        ClassMemberCannotHaveConst,
+      )
+      let parser = advance_parser(parser)
+      // Skip to next member
+      parse_class_members_aux(parser, acc)
+    }
+
     // Property or method
     Identifier(name, loc) => {
       let parser = advance_parser(parser)
@@ -4282,14 +4493,16 @@ fn parse_import_declaration(parser : Parser) -> Result[(Node, Parser), Parser] {
   }
 
   // Parse module specifier (string literal)
+  // TS1440: The 'import' path must be a string literal
   let (module_specifier, parser) = match current_token(parser) {
     StringLiteral(spec, _) => (spec, advance_parser(parser))
     _ =>
       return Err(
-        add_error(
+        add_error_with_code(
           parser,
-          "Expected module specifier string",
+          ImportPathNotStringLiteral.to_message(),
           current_token(parser).location(),
+          ImportPathNotStringLiteral,
         ),
       )
   }
