@@ -1011,9 +1011,7 @@ test "parse generic interface" {
 ///|
 test "parse interface with generic call signature" {
   // Based on recursiveTypeIdentity.ts
-  let tokens = tokens_from_source(
-    "interface A { <T extends A>(x: T): void; }",
-  )
+  let tokens = tokens_from_source("interface A { <T extends A>(x: T): void; }")
   let result = parse_source_file(tokens, "test.ts")
   match result {
     Ok(source_file) => {
@@ -1024,11 +1022,11 @@ test "parse interface with generic call signature" {
           assert_eq(iface.members.length(), 1)
           // The generic call signature is represented as a MethodDeclaration with empty name
           match iface.members[0] {
-            MethodDeclaration(method) => {
-              assert_eq(method.name, "")
-              assert_eq(method.type_parameters.length(), 1)
-              assert_eq(method.type_parameters[0].name, "T")
-              assert_eq(method.parameters.length(), 1)
+            MethodDeclaration(imethod) => {
+              assert_eq(imethod.name, "")
+              assert_eq(imethod.type_parameters.length(), 1)
+              assert_eq(imethod.type_parameters[0].name, "T")
+              assert_eq(imethod.parameters.length(), 1)
             }
             _ => assert_true(false)
           }
@@ -1055,11 +1053,11 @@ test "parse interface with generic method signature" {
           assert_eq(iface.type_parameters.length(), 1)
           assert_eq(iface.members.length(), 1)
           match iface.members[0] {
-            MethodDeclaration(method) => {
-              assert_eq(method.name, "map")
-              assert_eq(method.type_parameters.length(), 1)
-              assert_eq(method.type_parameters[0].name, "U")
-              assert_eq(method.parameters.length(), 1)
+            MethodDeclaration(m_method) => {
+              assert_eq(m_method.name, "map")
+              assert_eq(m_method.type_parameters.length(), 1)
+              assert_eq(m_method.type_parameters[0].name, "U")
+              assert_eq(m_method.parameters.length(), 1)
             }
             _ => assert_true(false)
           }
@@ -1074,9 +1072,7 @@ test "parse interface with generic method signature" {
 ///|
 test "parse interface with multiple generic call signatures" {
   // Based on recursiveTypeIdentity.ts - interface C with multiple call signatures
-  let tokens = tokens_from_source(
-    "interface C { (x: A): void; (x: B): void; }",
-  )
+  let tokens = tokens_from_source("interface C { (x: A): void; (x: B): void; }")
   let result = parse_source_file(tokens, "test.ts")
   match result {
     Ok(source_file) => {
@@ -1087,11 +1083,11 @@ test "parse interface with multiple generic call signatures" {
           assert_eq(iface.members.length(), 2)
           // Both are call signatures (MethodDeclaration with empty name)
           match iface.members[0] {
-            MethodDeclaration(method) => assert_eq(method.name, "")
+            MethodDeclaration(imethod) => assert_eq(imethod.name, "")
             _ => assert_true(false)
           }
           match iface.members[1] {
-            MethodDeclaration(method) => assert_eq(method.name, "")
+            MethodDeclaration(imethod) => assert_eq(imethod.name, "")
             _ => assert_true(false)
           }
         }
@@ -1105,9 +1101,7 @@ test "parse interface with multiple generic call signatures" {
 ///|
 test "parse qualified type name in function type" {
   // Test qualified names like Sample.Thing.IWidget in function types
-  let tokens = tokens_from_source(
-    "type F = (widget: Foo.Bar.Baz) => void;",
-  )
+  let tokens = tokens_from_source("type F = (widget: Foo.Bar.Baz) => void;")
   let result = parse_source_file(tokens, "test.ts")
   match result {
     Ok(source_file) => {
@@ -1142,9 +1136,7 @@ test "parse qualified type name in function type" {
 ///|
 test "parse qualified type name with type arguments" {
   // Test qualified names with generic type arguments
-  let tokens = tokens_from_source(
-    "type F = Sample.Thing.Container<string>;",
-  )
+  let tokens = tokens_from_source("type F = Sample.Thing.Container<string>;")
   let result = parse_source_file(tokens, "test.ts")
   match result {
     Ok(source_file) => {
@@ -3185,7 +3177,8 @@ test "parse simple namespace" {
         ModuleDeclaration(md) => {
           assert_eq(md.name, "Foo")
           match md.body {
-            Some(BlockStatement(block)) => assert_eq(block.statements.length(), 1)
+            Some(BlockStatement(block)) =>
+              assert_eq(block.statements.length(), 1)
             _ => assert_true(false)
           }
         }
@@ -3302,18 +3295,22 @@ test "parse export default function" {
           // Should have Export and Default modifiers (2 modifiers)
           assert_eq(fd.modifiers.length(), 2)
           // Check modifiers by pattern matching
-          let has_export = fd.modifiers.iter().any(fn(m) {
-            match m {
-              Export => true
-              _ => false
-            }
-          })
-          let has_default = fd.modifiers.iter().any(fn(m) {
-            match m {
-              Default => true
-              _ => false
-            }
-          })
+          let has_export = fd.modifiers
+            .iter()
+            .any(fn(m) {
+              match m {
+                Export => true
+                _ => false
+              }
+            })
+          let has_default = fd.modifiers
+            .iter()
+            .any(fn(m) {
+              match m {
+                Default => true
+                _ => false
+              }
+            })
           assert_true(has_export)
           assert_true(has_default)
         }
@@ -3335,18 +3332,22 @@ test "parse export default class" {
         ClassDeclaration(cd) => {
           // Should have Export and Default modifiers (2 modifiers)
           assert_eq(cd.modifiers.length(), 2)
-          let has_export = cd.modifiers.iter().any(fn(m) {
-            match m {
-              Export => true
-              _ => false
-            }
-          })
-          let has_default = cd.modifiers.iter().any(fn(m) {
-            match m {
-              Default => true
-              _ => false
-            }
-          })
+          let has_export = cd.modifiers
+            .iter()
+            .any(fn(m) {
+              match m {
+                Export => true
+                _ => false
+              }
+            })
+          let has_default = cd.modifiers
+            .iter()
+            .any(fn(m) {
+              match m {
+                Default => true
+                _ => false
+              }
+            })
           assert_true(has_export)
           assert_true(has_default)
         }
@@ -3381,12 +3382,14 @@ test "parse constructor with parameter properties" {
               // First parameter should have public modifier
               match ctor.parameters[0] {
                 Parameter(p1) => {
-                  let has_public = p1.modifiers.iter().any(fn(m) {
-                    match m {
-                      Public => true
-                      _ => false
-                    }
-                  })
+                  let has_public = p1.modifiers
+                    .iter()
+                    .any(fn(m) {
+                      match m {
+                        Public => true
+                        _ => false
+                      }
+                    })
                   assert_true(has_public)
                   match p1.name {
                     Identifier(id) => assert_eq(id.name, "name")
@@ -3398,12 +3401,14 @@ test "parse constructor with parameter properties" {
               // Second parameter should have private modifier
               match ctor.parameters[1] {
                 Parameter(p2) => {
-                  let has_private = p2.modifiers.iter().any(fn(m) {
-                    match m {
-                      Private => true
-                      _ => false
-                    }
-                  })
+                  let has_private = p2.modifiers
+                    .iter()
+                    .any(fn(m) {
+                      match m {
+                        Private => true
+                        _ => false
+                      }
+                    })
                   assert_true(has_private)
                   match p2.name {
                     Identifier(id) => assert_eq(id.name, "age")
@@ -3435,25 +3440,25 @@ test "parse constructor with readonly parameter property" {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
       match source_file.statements[0] {
-        ClassDeclaration(cd) => {
+        ClassDeclaration(cd) =>
           match cd.members[0] {
-            ConstructorDeclaration(ctor) => {
+            ConstructorDeclaration(ctor) =>
               match ctor.parameters[0] {
                 Parameter(p) => {
-                  let has_readonly = p.modifiers.iter().any(fn(m) {
-                    match m {
-                      Readonly => true
-                      _ => false
-                    }
-                  })
+                  let has_readonly = p.modifiers
+                    .iter()
+                    .any(fn(m) {
+                      match m {
+                        Readonly => true
+                        _ => false
+                      }
+                    })
                   assert_true(has_readonly)
                 }
                 _ => assert_true(false)
               }
-            }
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
     }
@@ -3502,7 +3507,7 @@ test "parse private method with hash syntax" {
   let tokens = tokens_from_source(source)
   let result = parse_source_file(tokens, "test.ts")
   match result {
-    Ok(source_file) => {
+    Ok(source_file) =>
       match source_file.statements[0] {
         ClassDeclaration(cd) => {
           assert_eq(cd.members.length(), 1)
@@ -3513,7 +3518,6 @@ test "parse private method with hash syntax" {
         }
         _ => assert_true(false)
       }
-    }
     Err(_) => assert_true(false)
   }
 }
@@ -3537,17 +3541,15 @@ test "parse static block in class" {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
       match source_file.statements[0] {
-        ClassDeclaration(cd) => {
+        ClassDeclaration(cd) =>
           // Should have 2 members: static property and static block
           assert_true(cd.members.length() >= 1)
-        }
         _ => assert_true(false)
       }
     }
-    Err(_) => {
+    Err(_) =>
       // Static blocks may not be implemented yet - that's OK for now
       assert_true(true)
-    }
   }
 }
 
@@ -3567,12 +3569,11 @@ test "parse dynamic import with string literal" {
         VariableStatement(vs) => {
           assert_eq(vs.declarations.length(), 1)
           match vs.declarations[0].initializer {
-            Some(ImportExpression(ie)) => {
+            Some(ImportExpression(ie)) =>
               match ie.source {
                 StringLiteral(sl) => assert_eq(sl.value, "./module.js")
                 _ => assert_true(false)
               }
-            }
             _ => assert_true(false)
           }
         }
@@ -3592,22 +3593,19 @@ test "parse dynamic import with await" {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
       match source_file.statements[0] {
-        VariableStatement(vs) => {
+        VariableStatement(vs) =>
           match vs.declarations[0].initializer {
-            Some(AwaitExpression(ae)) => {
+            Some(AwaitExpression(ae)) =>
               match ae.expression {
-                ImportExpression(ie) => {
+                ImportExpression(ie) =>
                   match ie.source {
                     StringLiteral(sl) => assert_eq(sl.value, "./dynamic.js")
                     _ => assert_true(false)
                   }
-                }
                 _ => assert_true(false)
               }
-            }
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
     }
@@ -3624,17 +3622,15 @@ test "parse dynamic import with expression" {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
       match source_file.statements[0] {
-        ExpressionStatement(es) => {
+        ExpressionStatement(es) =>
           match es.expression {
-            ImportExpression(ie) => {
+            ImportExpression(ie) =>
               match ie.source {
                 Identifier(id) => assert_eq(id.name, "modulePath")
                 _ => assert_true(false)
               }
-            }
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
     }
@@ -3651,17 +3647,15 @@ test "parse dynamic import with template literal" {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
       match source_file.statements[0] {
-        ExpressionStatement(es) => {
+        ExpressionStatement(es) =>
           match es.expression {
-            ImportExpression(ie) => {
+            ImportExpression(ie) =>
               match ie.source {
                 TemplateExpression(_) => assert_true(true)
                 _ => assert_true(false)
               }
-            }
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
     }
@@ -3682,7 +3676,7 @@ test "parse simple tagged template literal" {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
       match source_file.statements[0] {
-        ExpressionStatement(es) => {
+        ExpressionStatement(es) =>
           match es.expression {
             TaggedTemplateExpression(tte) => {
               match tte.tag {
@@ -3699,7 +3693,6 @@ test "parse simple tagged template literal" {
             }
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
     }
@@ -3716,7 +3709,7 @@ test "parse tagged template with interpolation" {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
       match source_file.statements[0] {
-        ExpressionStatement(es) => {
+        ExpressionStatement(es) =>
           match es.expression {
             TaggedTemplateExpression(tte) => {
               match tte.tag {
@@ -3733,7 +3726,6 @@ test "parse tagged template with interpolation" {
             }
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
     }
@@ -3750,17 +3742,15 @@ test "parse tagged template with property access tag" {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
       match source_file.statements[0] {
-        ExpressionStatement(es) => {
+        ExpressionStatement(es) =>
           match es.expression {
-            TaggedTemplateExpression(tte) => {
+            TaggedTemplateExpression(tte) =>
               match tte.tag {
                 PropertyAccessExpression(_) => assert_true(true)
                 _ => assert_true(false)
               }
-            }
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
     }
@@ -3777,17 +3767,15 @@ test "parse css tagged template" {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
       match source_file.statements[0] {
-        VariableStatement(vs) => {
+        VariableStatement(vs) =>
           match vs.declarations[0].initializer {
-            Some(TaggedTemplateExpression(tte)) => {
+            Some(TaggedTemplateExpression(tte)) =>
               match tte.tag {
                 Identifier(id) => assert_eq(id.name, "css")
                 _ => assert_true(false)
               }
-            }
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
     }
@@ -3799,6 +3787,7 @@ test "parse css tagged template" {
 // Class Expression Tests
 // ============================================================================
 
+///|
 test "parse anonymous class expression" {
   let source = "const MyClass = class {}"
   let tokens = tokens_from_source(source)
@@ -3807,7 +3796,7 @@ test "parse anonymous class expression" {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
       match source_file.statements[0] {
-        VariableStatement(vs) => {
+        VariableStatement(vs) =>
           match vs.declarations[0].initializer {
             Some(ClassExpression(ce)) => {
               match ce.name {
@@ -3818,7 +3807,6 @@ test "parse anonymous class expression" {
             }
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
     }
@@ -3826,6 +3814,7 @@ test "parse anonymous class expression" {
   }
 }
 
+///|
 test "parse named class expression" {
   let source = "const MyClass = class Foo {}"
   let tokens = tokens_from_source(source)
@@ -3834,17 +3823,15 @@ test "parse named class expression" {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
       match source_file.statements[0] {
-        VariableStatement(vs) => {
+        VariableStatement(vs) =>
           match vs.declarations[0].initializer {
-            Some(ClassExpression(ce)) => {
+            Some(ClassExpression(ce)) =>
               match ce.name {
                 Some(Identifier(id)) => assert_eq(id.name, "Foo")
                 _ => assert_true(false)
               }
-            }
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
     }
@@ -3852,6 +3839,7 @@ test "parse named class expression" {
   }
 }
 
+///|
 test "parse class expression with extends" {
   let source = "const MyClass = class extends Base {}"
   let tokens = tokens_from_source(source)
@@ -3860,7 +3848,7 @@ test "parse class expression with extends" {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
       match source_file.statements[0] {
-        VariableStatement(vs) => {
+        VariableStatement(vs) =>
           match vs.declarations[0].initializer {
             Some(ClassExpression(ce)) => {
               assert_eq(ce.heritage_clauses.length(), 1)
@@ -3871,7 +3859,6 @@ test "parse class expression with extends" {
             }
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
     }
@@ -3879,6 +3866,7 @@ test "parse class expression with extends" {
   }
 }
 
+///|
 test "parse class expression with method" {
   let source = "const MyClass = class { foo() { return 1; } }"
   let tokens = tokens_from_source(source)
@@ -3887,7 +3875,7 @@ test "parse class expression with method" {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
       match source_file.statements[0] {
-        VariableStatement(vs) => {
+        VariableStatement(vs) =>
           match vs.declarations[0].initializer {
             Some(ClassExpression(ce)) => {
               assert_eq(ce.members.length(), 1)
@@ -3898,7 +3886,6 @@ test "parse class expression with method" {
             }
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
     }
@@ -3910,6 +3897,7 @@ test "parse class expression with method" {
 // Meta Property Tests (import.meta, new.target)
 // ============================================================================
 
+///|
 test "parse import.meta" {
   let source = "const url = import.meta.url"
   let tokens = tokens_from_source(source)
@@ -3918,22 +3906,19 @@ test "parse import.meta" {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
       match source_file.statements[0] {
-        VariableStatement(vs) => {
+        VariableStatement(vs) =>
           match vs.declarations[0].initializer {
-            Some(PropertyAccessExpression(pae)) => {
+            Some(PropertyAccessExpression(pae)) =>
               match pae.expression {
-                MetaProperty(mp) => {
+                MetaProperty(mp) =>
                   match mp.keyword_kind {
                     ImportMeta => assert_eq(mp.name, "meta")
                     _ => assert_true(false)
                   }
-                }
                 _ => assert_true(false)
               }
-            }
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
     }
@@ -3941,6 +3926,7 @@ test "parse import.meta" {
   }
 }
 
+///|
 test "parse import.meta standalone" {
   let source = "console.log(import.meta)"
   let tokens = tokens_from_source(source)
@@ -3949,23 +3935,21 @@ test "parse import.meta standalone" {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
       match source_file.statements[0] {
-        ExpressionStatement(es) => {
+        ExpressionStatement(es) =>
           match es.expression {
             CallExpression(ce) => {
               assert_eq(ce.arguments.length(), 1)
               match ce.arguments[0] {
-                MetaProperty(mp) => {
+                MetaProperty(mp) =>
                   match mp.keyword_kind {
                     ImportMeta => assert_eq(mp.name, "meta")
                     _ => assert_true(false)
                   }
-                }
                 _ => assert_true(false)
               }
             }
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
     }
@@ -3973,6 +3957,7 @@ test "parse import.meta standalone" {
   }
 }
 
+///|
 test "parse new.target standalone" {
   let source = "console.log(new.target)"
   let tokens = tokens_from_source(source)
@@ -3981,23 +3966,21 @@ test "parse new.target standalone" {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
       match source_file.statements[0] {
-        ExpressionStatement(es) => {
+        ExpressionStatement(es) =>
           match es.expression {
             CallExpression(ce) => {
               assert_eq(ce.arguments.length(), 1)
               match ce.arguments[0] {
-                MetaProperty(mp) => {
+                MetaProperty(mp) =>
                   match mp.keyword_kind {
                     NewTarget => assert_eq(mp.name, "target")
                     _ => assert_true(false)
                   }
-                }
                 _ => assert_true(false)
               }
             }
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
     }
@@ -4005,6 +3988,7 @@ test "parse new.target standalone" {
   }
 }
 
+///|
 test "parse new.target as variable initializer" {
   let source = "const target = new.target"
   let tokens = tokens_from_source(source)
@@ -4013,17 +3997,15 @@ test "parse new.target as variable initializer" {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
       match source_file.statements[0] {
-        VariableStatement(vs) => {
+        VariableStatement(vs) =>
           match vs.declarations[0].initializer {
-            Some(MetaProperty(mp)) => {
+            Some(MetaProperty(mp)) =>
               match mp.keyword_kind {
                 NewTarget => assert_eq(mp.name, "target")
                 _ => assert_true(false)
               }
-            }
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
     }
@@ -4198,7 +4180,7 @@ test "parse tuple with leading types and spread" {
     Ok(sf) => {
       assert_true(sf.statements.length() == 1)
       match sf.statements[0] {
-        TypeAliasDeclaration(tad) => {
+        TypeAliasDeclaration(tad) =>
           match tad.type_node {
             TupleType(tt) => {
               assert_true(tt.element_types.length() == 2)
@@ -4215,7 +4197,6 @@ test "parse tuple with leading types and spread" {
             }
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
     }
@@ -4347,9 +4328,7 @@ test "parse await using statement" {
 
 ///|
 test "parse using statement with type annotation" {
-  let tokens = tokens_from_source(
-    "using resource: Disposable = getResource();",
-  )
+  let tokens = tokens_from_source("using resource: Disposable = getResource();")
   let result = parse_source_file(tokens, "test.ts")
   match result {
     Ok(source_file) => {
@@ -4420,4 +4399,3 @@ test "parse file without hashbang" {
     Err(_) => assert_true(false)
   }
 }
-

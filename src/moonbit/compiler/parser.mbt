@@ -6128,10 +6128,11 @@ fn parse_export_declaration_with_decorators(
         _ => {
           let loc = current_token(parser).location()
           Err(
-            add_error(
+            add_error_with_code(
               parser,
-              "Decorators are only valid on class declarations after 'export default'",
+              DecoratorsNotValidHere.to_message(),
               loc,
+              DecoratorsNotValidHere,
             ),
           )
         }
@@ -6287,30 +6288,33 @@ fn parse_export_declaration(parser : Parser) -> Result[(Node, Parser), Parser] {
                     }
                     _ =>
                       Err(
-                        add_error(
+                        add_error_with_code(
                           parser,
-                          "Expected module specifier after 'from'",
+                          UnexpectedToken.to_message(),
                           current_token(parser).location(),
+                          UnexpectedToken,
                         ),
                       )
                   }
                 }
                 _ =>
                   Err(
-                    add_error(
+                    add_error_with_code(
                       parser,
-                      "Expected 'from' after namespace export",
+                      UnexpectedToken.to_message(),
                       current_token(parser).location(),
+                      UnexpectedToken,
                     ),
                   )
               }
             }
             _ =>
               Err(
-                add_error(
+                add_error_with_code(
                   parser,
-                  "Expected namespace name after 'as'",
+                  ExpectedIdentifier.to_message(),
                   current_token(parser).location(),
+                  ExpectedIdentifier,
                 ),
               )
           }
@@ -6345,20 +6349,22 @@ fn parse_export_declaration(parser : Parser) -> Result[(Node, Parser), Parser] {
             }
             _ =>
               Err(
-                add_error(
+                add_error_with_code(
                   parser,
-                  "Expected module specifier after 'from'",
+                  UnexpectedToken.to_message(),
                   current_token(parser).location(),
+                  UnexpectedToken,
                 ),
               )
           }
         }
         _ =>
           Err(
-            add_error(
+            add_error_with_code(
               parser,
-              "Expected 'from' or 'as' after 'export *'",
+              UnexpectedToken.to_message(),
               current_token(parser).location(),
+              UnexpectedToken,
             ),
           )
       }
@@ -6385,10 +6391,11 @@ fn parse_export_declaration(parser : Parser) -> Result[(Node, Parser), Parser] {
                       (Some(spec), advance_parser(parser))
                     _ =>
                       return Err(
-                        add_error(
+                        add_error_with_code(
                           parser,
-                          "Expected module specifier after 'from'",
+                          UnexpectedToken.to_message(),
                           current_token(parser).location(),
+                          UnexpectedToken,
                         ),
                       )
                   }
@@ -6421,10 +6428,11 @@ fn parse_export_declaration(parser : Parser) -> Result[(Node, Parser), Parser] {
             }
             _ =>
               Err(
-                add_error(
+                add_error_with_code(
                   parser,
-                  "Expected '}' after export specifiers",
+                  ExpectedCloseBrace.to_message(),
                   current_token(parser).location(),
+                  ExpectedCloseBrace,
                 ),
               )
           }
@@ -6457,10 +6465,11 @@ fn parse_export_declaration(parser : Parser) -> Result[(Node, Parser), Parser] {
                 StringLiteral(spec, _) => (Some(spec), advance_parser(parser))
                 _ =>
                   return Err(
-                    add_error(
+                    add_error_with_code(
                       parser,
-                      "Expected module specifier after 'from'",
+                      UnexpectedToken.to_message(),
                       current_token(parser).location(),
+                      UnexpectedToken,
                     ),
                   )
               }
@@ -6491,10 +6500,11 @@ fn parse_export_declaration(parser : Parser) -> Result[(Node, Parser), Parser] {
         }
         _ =>
           Err(
-            add_error(
+            add_error_with_code(
               parser,
-              "Expected '}' after export specifiers",
+              ExpectedCloseBrace.to_message(),
               current_token(parser).location(),
+              ExpectedCloseBrace,
             ),
           )
       }
@@ -7115,10 +7125,11 @@ fn parse_for_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
     OpenParen(_) => advance_parser(parser)
     _ =>
       return Err(
-        add_error(
+        add_error_with_code(
           parser,
-          "Expected '(' after 'for'",
+          ExpectedOpenParen.to_message(),
           current_token(parser).location(),
+          ExpectedOpenParen,
         ),
       )
   }
@@ -7158,10 +7169,11 @@ fn parse_for_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
         Ok((expr, p)) => (expr, p)
         Err(p) =>
           return Err(
-            add_error(
+            add_error_with_code(
               p,
-              "Expected expression in for-in",
+              ExpectedExpression.to_message(),
               current_token(p).location(),
+              ExpectedExpression,
             ),
           )
       }
@@ -7169,10 +7181,11 @@ fn parse_for_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
         CloseParen(_) => advance_parser(parser)
         _ =>
           return Err(
-            add_error(
+            add_error_with_code(
               parser,
-              "Expected ')' in for-in",
+              ExpectedCloseParen.to_message(),
               current_token(parser).location(),
+              ExpectedCloseParen,
             ),
           )
       }
@@ -7206,10 +7219,11 @@ fn parse_for_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
         Ok((expr, p)) => (expr, p)
         Err(p) =>
           return Err(
-            add_error(
+            add_error_with_code(
               p,
-              "Expected expression in for-of",
+              ExpectedExpression.to_message(),
               current_token(p).location(),
+              ExpectedExpression,
             ),
           )
       }
@@ -7217,10 +7231,11 @@ fn parse_for_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
         CloseParen(_) => advance_parser(parser)
         _ =>
           return Err(
-            add_error(
+            add_error_with_code(
               parser,
-              "Expected ')' in for-of",
+              ExpectedCloseParen.to_message(),
               current_token(parser).location(),
+              ExpectedCloseParen,
             ),
           )
       }
@@ -7257,10 +7272,11 @@ fn parse_for_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
     Semicolon(_) => advance_parser(parser)
     _ =>
       return Err(
-        add_error(
+        add_error_with_code(
           parser,
-          "Expected ';' after for loop initializer",
+          ExpectedSemicolon.to_message(),
           current_token(parser).location(),
+          ExpectedSemicolon,
         ),
       )
   }
@@ -7280,10 +7296,11 @@ fn parse_for_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
     Semicolon(_) => advance_parser(parser)
     _ =>
       return Err(
-        add_error(
+        add_error_with_code(
           parser,
-          "Expected ';' after for loop condition",
+          ExpectedSemicolon.to_message(),
           current_token(parser).location(),
+          ExpectedSemicolon,
         ),
       )
   }
@@ -7303,10 +7320,11 @@ fn parse_for_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
     CloseParen(_) => advance_parser(parser)
     _ =>
       return Err(
-        add_error(
+        add_error_with_code(
           parser,
-          "Expected ')' after for loop header",
+          ExpectedCloseParen.to_message(),
           current_token(parser).location(),
+          ExpectedCloseParen,
         ),
       )
   }
@@ -7346,10 +7364,11 @@ fn parse_while_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
     OpenParen(_) => advance_parser(parser)
     _ =>
       return Err(
-        add_error(
+        add_error_with_code(
           parser,
-          "Expected '(' after 'while'",
+          ExpectedOpenParen.to_message(),
           current_token(parser).location(),
+          ExpectedOpenParen,
         ),
       )
   }
@@ -7365,10 +7384,11 @@ fn parse_while_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
     CloseParen(_) => advance_parser(parser)
     _ =>
       return Err(
-        add_error(
+        add_error_with_code(
           parser,
-          "Expected ')' after while condition",
+          ExpectedCloseParen.to_message(),
           current_token(parser).location(),
+          ExpectedCloseParen,
         ),
       )
   }
@@ -7412,10 +7432,11 @@ fn parse_do_while_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
     KeywordWhile(_) => advance_parser(parser)
     _ =>
       return Err(
-        add_error(
+        add_error_with_code(
           parser,
-          "Expected 'while' after do statement",
+          UnexpectedToken.to_message(),
           current_token(parser).location(),
+          UnexpectedToken,
         ),
       )
   }
@@ -7425,10 +7446,11 @@ fn parse_do_while_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
     OpenParen(_) => advance_parser(parser)
     _ =>
       return Err(
-        add_error(
+        add_error_with_code(
           parser,
-          "Expected '(' after 'while'",
+          ExpectedOpenParen.to_message(),
           current_token(parser).location(),
+          ExpectedOpenParen,
         ),
       )
   }
@@ -7444,10 +7466,11 @@ fn parse_do_while_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
     CloseParen(_) => advance_parser(parser)
     _ =>
       return Err(
-        add_error(
+        add_error_with_code(
           parser,
-          "Expected ')' after while condition",
+          ExpectedCloseParen.to_message(),
           current_token(parser).location(),
+          ExpectedCloseParen,
         ),
       )
   }
@@ -7551,10 +7574,11 @@ fn parse_throw_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
     Ok((expr, p)) => (expr, p)
     Err(p) =>
       return Err(
-        add_error(
+        add_error_with_code(
           p,
-          "Expected expression after 'throw'",
+          ExpectedExpression.to_message(),
           current_token(p).location(),
+          ExpectedExpression,
         ),
       )
   }
@@ -7591,7 +7615,12 @@ fn parse_try_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
     Ok((block, p)) => (block, p)
     Err(p) =>
       return Err(
-        add_error(p, "Expected block after 'try'", current_token(p).location()),
+        add_error_with_code(
+          p,
+          ExpectedOpenBrace.to_message(),
+          current_token(p).location(),
+          ExpectedOpenBrace,
+        ),
       )
   }
 
@@ -7647,10 +7676,11 @@ fn parse_try_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
             CloseParen(_) => advance_parser(parser)
             _ =>
               return Err(
-                add_error(
+                add_error_with_code(
                   parser,
-                  "Expected ')' after catch parameter",
+                  ExpectedCloseParen.to_message(),
                   current_token(parser).location(),
+                  ExpectedCloseParen,
                 ),
               )
           }
@@ -7664,10 +7694,11 @@ fn parse_try_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
         Ok((block, p)) => (block, p)
         Err(p) =>
           return Err(
-            add_error(
+            add_error_with_code(
               p,
-              "Expected block in catch clause",
+              ExpectedOpenBrace.to_message(),
               current_token(p).location(),
+              ExpectedOpenBrace,
             ),
           )
       }
@@ -7694,10 +7725,11 @@ fn parse_try_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
         Ok((block, p)) => (Some(block), p)
         Err(p) =>
           return Err(
-            add_error(
+            add_error_with_code(
               p,
-              "Expected block after 'finally'",
+              ExpectedOpenBrace.to_message(),
               current_token(p).location(),
+              ExpectedOpenBrace,
             ),
           )
       }
@@ -7708,10 +7740,11 @@ fn parse_try_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
   // Must have either catch or finally
   if catch_clause is None && finally_block is None {
     return Err(
-      add_error(
+      add_error_with_code(
         parser,
-        "Missing catch or finally clause",
+        UnexpectedToken.to_message(),
         current_token(parser).location(),
+        UnexpectedToken,
       ),
     )
   }
@@ -8035,8 +8068,11 @@ fn check_depth(parser : Parser) -> Result[Parser, Parser] {
   if parser.depth > max_expression_depth {
     let loc = current_token(parser).location()
     Err(
-      add_error(
-        parser, "Expression too deeply nested (stack overflow prevention)", loc,
+      add_error_with_code(
+        parser,
+        "Expression too deeply nested (stack overflow prevention)",
+        loc,
+        UnexpectedToken,
       ),
     )
   } else {
