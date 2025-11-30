@@ -135,22 +135,33 @@ pub fn ast_type_to_v2(env : TypeEnv, node : Node) -> TypeV2 {
       // Create child env with type params in scope
       let child_env = env.with_type_params(type_params)
 
-      // Convert parameters
-      let params = ft.parameters.map(fn(p) {
+      // Convert parameters, extracting `this` parameter separately
+      let params : Array[ParamInfoV2] = []
+      let mut this_type : TypeV2? = None
+      for p in ft.parameters {
         match p {
-          Parameter(param) =>
-            ParamInfoV2::{
-              name: get_param_name(param.name),
-              ty: match param.type_annotation {
-                Some(t) => ast_type_to_v2(child_env, t)
-                None => TAny
-              },
-              optional: param.is_optional,
-              is_rest: param.is_rest,
+          Parameter(param) => {
+            // Check for `this` parameter: function foo(this: SomeType, ...)
+            if param.is_this_parameter {
+              this_type = match param.type_annotation {
+                Some(t) => Some(ast_type_to_v2(child_env, t))
+                None => Some(TAny)
+              }
+            } else {
+              params.push(ParamInfoV2::{
+                name: get_param_name(param.name),
+                ty: match param.type_annotation {
+                  Some(t) => ast_type_to_v2(child_env, t)
+                  None => TAny
+                },
+                optional: param.is_optional,
+                is_rest: param.is_rest,
+              })
             }
-          _ => ParamInfoV2::required("unknown", TAny)
+          }
+          _ => params.push(ParamInfoV2::required("unknown", TAny))
         }
-      })
+      }
 
       // Check if return type is a type predicate
       let (return_type, type_predicate) : (TypeV2, TypePredicateV2?) = match ft.return_type {
@@ -172,7 +183,7 @@ pub fn ast_type_to_v2(env : TypeEnv, node : Node) -> TypeV2 {
         other => (ast_type_to_v2(child_env, other), None)
       }
 
-      TFunction(FunctionTypeV2::{ type_params, params, rest_param: None, return_type, type_predicate, this_type: None })
+      TFunction(FunctionTypeV2::{ type_params, params, rest_param: None, return_type, type_predicate, this_type })
     }
 
     // Literal type

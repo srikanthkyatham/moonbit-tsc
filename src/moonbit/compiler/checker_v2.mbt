@@ -493,13 +493,21 @@ fn check_object_literal_v2(
 /// Infer function type
 fn infer_function_v2(env : TypeEnv, func : FunctionExpression) -> CheckResultV2 {
   let params : Array[ParamInfoV2] = []
+  let mut this_type : TypeV2? = None
   // Use closure_child to inherit narrowings from outer scope
   let mut child_env = env.closure_child()
 
   // Add parameters to environment
   for param in func.parameters {
+    // Check for `this` parameter: function foo(this: SomeType, ...)
+    if is_this_parameter(param) {
+      // Extract the this type from the parameter's type annotation
+      this_type = Some(get_param_type_annotation(env, param))
+      // Don't add `this` as a regular parameter
+      continue
+    }
     let param_name = get_param_name_v2(param)
-    let param_ty = TAny // Would need type annotation parsing
+    let param_ty = get_param_type_annotation(env, param)
     params.push(ParamInfoV2::required(param_name, param_ty))
     child_env = child_env.with_variable(param_name, param_ty)
   }
@@ -520,7 +528,7 @@ fn infer_function_v2(env : TypeEnv, func : FunctionExpression) -> CheckResultV2 
     rest_param: None,
     return_type: return_ty,
     type_predicate: None,
-    this_type: None,
+    this_type,
   }
   CheckResultV2::ok(TFunction(func_ty))
 }
@@ -561,11 +569,17 @@ fn check_function_v2(
 /// Infer arrow function type
 fn infer_arrow_v2(env : TypeEnv, arrow : ArrowFunction) -> CheckResultV2 {
   let params : Array[ParamInfoV2] = []
+  let mut this_type : TypeV2? = None
   // Use closure_child to inherit narrowings from outer scope
   let mut child_env = env.closure_child()
   for param in arrow.parameters {
+    // Check for `this` parameter
+    if is_this_parameter(param) {
+      this_type = Some(get_param_type_annotation(env, param))
+      continue
+    }
     let param_name = get_param_name_v2(param)
-    let param_ty = TAny
+    let param_ty = get_param_type_annotation(env, param)
     params.push(ParamInfoV2::required(param_name, param_ty))
     child_env = child_env.with_variable(param_name, param_ty)
   }
@@ -591,7 +605,7 @@ fn infer_arrow_v2(env : TypeEnv, arrow : ArrowFunction) -> CheckResultV2 {
     rest_param: None,
     return_type: return_ty,
     type_predicate: None,
-    this_type: None,
+    this_type,
   }
   CheckResultV2::ok(TFunction(func_ty))
 }
@@ -1269,6 +1283,28 @@ fn get_param_name_v2(node : Node) -> String {
       }
     Identifier(id) => id.name
     _ => "arg"
+  }
+}
+
+///|
+/// Check if a parameter is a `this` parameter
+fn is_this_parameter(node : Node) -> Bool {
+  match node {
+    Parameter(param) => param.is_this_parameter
+    _ => false
+  }
+}
+
+///|
+/// Get the type annotation from a parameter node
+fn get_param_type_annotation(env : TypeEnv, node : Node) -> TypeV2 {
+  match node {
+    Parameter(param) =>
+      match param.type_annotation {
+        Some(type_node) => ast_type_to_v2(env, type_node)
+        None => TAny
+      }
+    _ => TAny
   }
 }
 

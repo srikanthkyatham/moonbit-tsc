@@ -1052,10 +1052,34 @@ test "unit/utility/ThisParameterType - extracts this parameter type" {
 }
 
 ///|
-test "unit/utility/OmitThisParameter - removes this parameter" {
-  // Use interface method with this type instead of function with this parameter
+test "unit/utility/OmitThisParameter - removes this parameter from function type" {
+  // Use function type with explicit `this` parameter
   let result = parse_bind_check_advanced(
-    "interface Greeter { greet(greeting: string): string; } type GreetFn = Greeter['greet']; type NoThis = OmitThisParameter<GreetFn>;",
+    "type GreetFn = (this: { name: string }, greeting: string) => string; type NoThis = OmitThisParameter<GreetFn>;",
+  )
+  match result {
+    Ok(_) => assert_true(true)
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/utility/ThisParameterType - extracts this parameter type" {
+  // Use function type with explicit `this` parameter
+  let result = parse_bind_check_advanced(
+    "type GreetFn = (this: { name: string }, greeting: string) => string; type ThisType = ThisParameterType<GreetFn>;",
+  )
+  match result {
+    Ok(_) => assert_true(true)
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/parser/this-parameter - parses function declaration with this parameter" {
+  // Test that function declarations with `this` parameter parse correctly
+  let result = parse_bind_check_advanced(
+    "function greet(this: { name: string }, greeting: string): void { }",
   )
   match result {
     Ok(_) => assert_true(true)
