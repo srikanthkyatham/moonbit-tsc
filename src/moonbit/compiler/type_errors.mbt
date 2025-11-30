@@ -158,6 +158,17 @@ pub enum MismatchReason {
   TypeNotAssignableSameNameDifferentTypes(String, String, String) // TS2752: Type '{0}' is not assignable to type '{1}'. Two different types with this name exist, but they are unrelated.
   TypeNotAssignableGeneric(String, String) // TS2757: Type '{0}' is not assignable to type '{1}'
   PropertyTypesIncompatibleAlt(String, String, String) // TS2758: Types of property '{0}' are incompatible
+
+  // Operator & Expression errors
+  InstanceofLeftNotObject(String) // TS2358: The left-hand side of an 'instanceof' expression must be of type 'any', an object type or a type parameter
+  InstanceofRightNotFunction(String) // TS2359: The right-hand side of an 'instanceof' expression must be of type 'any' or of a type assignable to the 'Function' interface type
+  ConditionAlwaysSameValue(String, String) // TS2367: This condition will always return '{0}' since the types '{1}' have no overlap
+  LeftSideCommaUnused(String) // TS2695: Left side of comma operator is unused and has no side effects
+  CannotUseInOperator(String, String) // TS2772: The right-hand side of an 'in' expression must be an object type, not '{0}'
+  ConditionAlwaysTrueFunction(String) // TS2773: This condition will always return true since this function is always defined. Did you mean to call it instead?
+  ConditionAlwaysTrue(String) // TS2774: This condition will always return true since this '{0}' is always defined
+  OperatorCannotBeApplied(String, String, String) // TS2800: Operator '{0}' cannot be applied to types '{1}' and '{2}'
+  BigIntLiteralsNotAvailable // TS2737: BigInt literals are not available when targeting lower than ES2020
 } derive(Show, Eq)
 
 // ============================================================================
@@ -892,6 +903,25 @@ pub fn get_friendly_title(reason : MismatchReason) -> String {
       "TYPE '" + from + "' IS NOT ASSIGNABLE TO TYPE '" + to + "'"
     PropertyTypesIncompatibleAlt(prop, _, _) =>
       "PROPERTY '" + prop + "' TYPES ARE INCOMPATIBLE"
+    // Operator & Expression errors
+    InstanceofLeftNotObject(typ) =>
+      "INVALID 'INSTANCEOF' LEFT-HAND SIDE (TYPE '" + typ + "')"
+    InstanceofRightNotFunction(typ) =>
+      "INVALID 'INSTANCEOF' RIGHT-HAND SIDE (TYPE '" + typ + "')"
+    ConditionAlwaysSameValue(result, _) =>
+      "CONDITION ALWAYS RETURNS '" + result + "'"
+    LeftSideCommaUnused(_) =>
+      "LEFT SIDE OF COMMA OPERATOR UNUSED"
+    CannotUseInOperator(_, typ) =>
+      "CANNOT USE 'IN' OPERATOR WITH TYPE '" + typ + "'"
+    ConditionAlwaysTrueFunction(name) =>
+      "CONDITION ALWAYS TRUE (FUNCTION '" + name + "' NOT CALLED)"
+    ConditionAlwaysTrue(typ) =>
+      "CONDITION ALWAYS TRUE ('" + typ + "' IS ALWAYS DEFINED)"
+    OperatorCannotBeApplied(op, left, right) =>
+      "OPERATOR '" + op + "' CANNOT BE APPLIED TO '" + left + "' AND '" + right + "'"
+    BigIntLiteralsNotAvailable =>
+      "BIGINT LITERALS NOT AVAILABLE"
   }
 }
 
@@ -1227,6 +1257,51 @@ pub fn get_why_explanation(reason : MismatchReason) -> String {
       "' vs '" +
       type2 +
       "'. Ensure the property types are compatible in both the source and target types."
+    // Operator & Expression errors
+    InstanceofLeftNotObject(typ) =>
+      "The 'instanceof' operator checks if an object is an instance of a constructor. The left-hand side must be an object type, but you provided '" +
+      typ +
+      "' which is a primitive or non-object type."
+    InstanceofRightNotFunction(typ) =>
+      "The right-hand side of 'instanceof' must be a constructor function or class. You provided '" +
+      typ +
+      "' which is not callable as a constructor."
+    ConditionAlwaysSameValue(result, types) =>
+      "This comparison will always return '" +
+      result +
+      "' because the types '" +
+      types +
+      "' have no overlap. This usually indicates a logic error or incorrect type narrowing."
+    LeftSideCommaUnused(expr) =>
+      "The left side of a comma operator '" +
+      expr +
+      "' is evaluated but its result is discarded. This is often a bug unless the left side has side effects."
+    CannotUseInOperator(key, typ) =>
+      "The 'in' operator checks if a property exists in an object. The right-hand side must be an object type, but '" +
+      typ +
+      "' is not an object. You're checking for key '" +
+      key +
+      "'."
+    ConditionAlwaysTrueFunction(name) =>
+      "You're using function '" +
+      name +
+      "' directly in a condition without calling it. Functions are always truthy in JavaScript. Did you mean to call the function with '" +
+      name +
+      "()'?"
+    ConditionAlwaysTrue(typ) =>
+      "The value of type '" +
+      typ +
+      "' is always defined (never null or undefined), so this condition will always be true. This may indicate unnecessary null checking."
+    OperatorCannotBeApplied(op, left, right) =>
+      "The operator '" +
+      op +
+      "' cannot be used with types '" +
+      left +
+      "' and '" +
+      right +
+      "'. TypeScript requires compatible types for this operation."
+    BigIntLiteralsNotAvailable =>
+      "BigInt literals (like 123n) are only available when targeting ES2020 or later. Your current target doesn't support BigInt syntax."
   }
 }
 
@@ -1869,6 +1944,84 @@ pub fn get_how_to_fix(
       fixes.push("")
       fixes.push("Or use a union type: " + type1 + " | " + type2)
     }
+    // Operator & Expression errors
+    InstanceofLeftNotObject(typ) => {
+      fixes.push("The left side of 'instanceof' must be an object type.")
+      fixes.push("Current type: " + typ)
+      fixes.push("")
+      fixes.push("Option 1: Check your type narrowing logic")
+      fixes.push("Option 2: Use typeof for primitives:")
+      fixes.push("    if (typeof x === 'string') { ... }")
+    }
+    InstanceofRightNotFunction(typ) => {
+      fixes.push("The right side of 'instanceof' must be a constructor.")
+      fixes.push("Current type: " + typ)
+      fixes.push("")
+      fixes.push("Use a class or constructor function:")
+      fixes.push("    x instanceof MyClass")
+      fixes.push("    x instanceof Array")
+    }
+    ConditionAlwaysSameValue(_, _) => {
+      fixes.push("This comparison can never succeed/fail due to type incompatibility.")
+      fixes.push("")
+      fixes.push("Options:")
+      fixes.push("  1. Check if your types are correct")
+      fixes.push("  2. Widen one of the types if needed")
+      fixes.push("  3. Remove the unnecessary check")
+    }
+    LeftSideCommaUnused(expr) => {
+      fixes.push("The expression '" + expr + "' has no effect.")
+      fixes.push("")
+      fixes.push("Options:")
+      fixes.push("  1. Remove the left side if it's not needed")
+      fixes.push("  2. If it has side effects, use a separate statement")
+      fixes.push("  3. Check for missing operators (did you mean &&?)")
+    }
+    CannotUseInOperator(key, typ) => {
+      fixes.push("The 'in' operator requires an object on the right side.")
+      fixes.push("You have: '" + key + "' in " + typ)
+      fixes.push("")
+      fixes.push("Options:")
+      fixes.push("  1. Check if the value is an object first")
+      fixes.push("  2. Use optional chaining: obj?." + key)
+      fixes.push("  3. Use typeof for type checking primitives")
+    }
+    ConditionAlwaysTrueFunction(name) => {
+      fixes.push("You're checking if a function exists, not its return value.")
+      fixes.push("")
+      fixes.push("Did you mean to call the function?")
+      fixes.push("    if (" + name + "()) { ... }")
+      fixes.push("")
+      fixes.push("Or check the return value:")
+      fixes.push("    const result = " + name + "();")
+      fixes.push("    if (result) { ... }")
+    }
+    ConditionAlwaysTrue(_) => {
+      fixes.push("This value is always defined, so the check is redundant.")
+      fixes.push("")
+      fixes.push("Options:")
+      fixes.push("  1. Remove the unnecessary null check")
+      fixes.push("  2. Check if strictNullChecks is enabled")
+      fixes.push("  3. If the type should be nullable, update the type annotation")
+    }
+    OperatorCannotBeApplied(op, left, right) => {
+      fixes.push("Operator '" + op + "' is not valid for these types.")
+      fixes.push("Left: " + left + ", Right: " + right)
+      fixes.push("")
+      fixes.push("Options:")
+      fixes.push("  1. Convert operands to compatible types")
+      fixes.push("  2. Use a different operator")
+      fixes.push("  3. Check if you're using the intended types")
+    }
+    BigIntLiteralsNotAvailable => {
+      fixes.push("BigInt literals require ES2020 or later target.")
+      fixes.push("")
+      fixes.push("Update your tsconfig.json:")
+      fixes.push("    { \"compilerOptions\": { \"target\": \"ES2020\" } }")
+      fixes.push("")
+      fixes.push("Or use BigInt constructor:")
+      fixes.push("    const big = BigInt(123);")
+    }
   }
   fixes
 }
@@ -1945,6 +2098,16 @@ pub fn get_error_code(reason : MismatchReason) -> Int {
     TypeNotAssignableSameNameDifferentTypes(_, _, _) => 2752 // TS2752: Type not assignable (different types same name)
     TypeNotAssignableGeneric(_, _) => 2757 // TS2757: Type not assignable
     PropertyTypesIncompatibleAlt(_, _, _) => 2758 // TS2758: Types of property incompatible
+    // Operator & Expression errors
+    InstanceofLeftNotObject(_) => 2358 // TS2358: Left-hand side of instanceof must be object type
+    InstanceofRightNotFunction(_) => 2359 // TS2359: Right-hand side of instanceof must be Function type
+    ConditionAlwaysSameValue(_, _) => 2367 // TS2367: Condition will always return same value
+    LeftSideCommaUnused(_) => 2695 // TS2695: Left side of comma operator unused
+    CannotUseInOperator(_, _) => 2772 // TS2772: Cannot use 'in' operator
+    ConditionAlwaysTrueFunction(_) => 2773 // TS2773: Condition will always return true (function)
+    ConditionAlwaysTrue(_) => 2774 // TS2774: Condition will always return true
+    OperatorCannotBeApplied(_, _, _) => 2800 // TS2800: Operator cannot be applied to types
+    BigIntLiteralsNotAvailable => 2737 // TS2737: BigInt literals not available
   }
 }
 
