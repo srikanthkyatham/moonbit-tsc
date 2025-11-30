@@ -220,6 +220,7 @@ pub fn ast_type_to_v2(env : TypeEnv, node : Node) -> TypeV2 {
       }
       TObject(ObjectTypeV2::{
         fields,
+        symbol_fields: [],
         call_signatures: [],
         construct_signatures: [],
         index_signature: None,
@@ -262,7 +263,11 @@ pub fn ast_type_to_v2(env : TypeEnv, node : Node) -> TypeV2 {
           }
         }
         TypeOf => TAny // Would need runtime value resolution
-        Unique => TSymbol
+        Unique => {
+          // unique symbol creates a distinct unique symbol type
+          // For type annotations, we use a generated anonymous name
+          TUniqueSymbol(UniqueSymbolV2::new("$unique", generate_unique_symbol_id()))
+        }
         Readonly => ast_type_to_v2(env, to.type_node) // TODO: mark as readonly
       }
 

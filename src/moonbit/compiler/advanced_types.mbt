@@ -635,6 +635,7 @@ pub fn evaluate_mapped_type_v2(env : TypeEnv, mapped : MappedTypeV2) -> TypeV2 {
 
   TObject(ObjectTypeV2::{
     fields,
+    symbol_fields: [],
     call_signatures: [],
     construct_signatures: [],
     index_signature: None,

@@ -868,6 +868,7 @@ fn build_class_object_type(class_info : ClassTypeInfo) -> ObjectTypeV2 {
 
   {
     fields,
+    symbol_fields: [],
     call_signatures: [],
     construct_signatures: class_info.construct_signatures,
     index_signature: None,

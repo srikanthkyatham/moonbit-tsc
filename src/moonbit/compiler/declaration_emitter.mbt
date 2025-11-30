@@ -154,6 +154,7 @@ pub fn type_v2_to_ts_string(ty : TypeV2) -> String {
     TAny => "any"
     TUnknown => "unknown"
     TSymbol => "symbol"
+    TUniqueSymbol(_) => "unique symbol"
     TBigInt => "bigint"
     // Literals - widen to base types in declarations
     TLiteralString(s) => "\"" + s + "\""

@@ -133,6 +133,7 @@ fn object_type_to_v2(obj : ObjectType) -> ObjectTypeV2 {
   }
   ObjectTypeV2::{
     fields,
+    symbol_fields: [],
     call_signatures: call_sigs,
     construct_signatures: construct_sigs,
     index_signature: index_sig,
@@ -251,6 +252,7 @@ pub fn v2_to_type(checker : TypeChecker, ty : TypeV2) -> (Type, TypeChecker) {
     TUndefined => (Undefined(info), checker)
     TNull => (Null(info), checker)
     TSymbol => (Symbol(info), checker)
+    TUniqueSymbol(_) => (Symbol(info), checker) // Unique symbol maps to symbol in old type system
     TAny => (Any(info), checker)
     TUnknown => (Unknown(info), checker)
     TNever => (Never(info), checker)

@@ -38,6 +38,7 @@ pub fn type_identity_key(ty : TypeV2) -> String {
     TUndefined => "undefined"
     TNull => "null"
     TSymbol => "symbol"
+    TUniqueSymbol(us) => "unique_sym:" + us.name + ":" + us.id.to_string()
     TBigInt => "bigint"
     TAny => "any"
     TUnknown => "unknown"
@@ -468,6 +469,7 @@ fn resolve_type_impl(
       }
       let resolved_obj = ObjectTypeV2::{
         fields: resolved_fields,
+        symbol_fields: obj.symbol_fields,
         index_signature: obj.index_signature,
         call_signatures: obj.call_signatures,
         construct_signatures: obj.construct_signatures,

@@ -505,6 +505,7 @@ pub fn infer_class_expression_type(
   })
   let static_type = TObject(ObjectTypeV2::{
     fields: static_fields,
+    symbol_fields: [],
     call_signatures: [],
     construct_signatures: class_info.construct_signatures,
     index_signature: None,

@@ -62,6 +62,7 @@ fn narrow_to_const_type(ty : TypeV2) -> TypeV2 {
       })
       TObject(ObjectTypeV2::{
         fields: new_fields,
+        symbol_fields: obj.symbol_fields,
         call_signatures: obj.call_signatures,
         construct_signatures: obj.construct_signatures,
         index_signature: obj.index_signature,

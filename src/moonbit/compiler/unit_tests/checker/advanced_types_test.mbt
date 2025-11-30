@@ -1141,3 +1141,95 @@ test "unit/utility/Uncapitalize - uncapitalize first letter" {
     Err(_) => assert_true(false)
   }
 }
+
+// ============================================================================
+// Symbol Type Tests
+// ============================================================================
+
+///|
+test "unit/symbol/unique-symbol - parses unique symbol type annotation" {
+  let result = parse_bind_check_advanced(
+    "const sym: unique symbol = Symbol('unique');",
+  )
+  match result {
+    Ok(_) => assert_true(true)
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/symbol/unique-symbol-interface - interface with unique symbol property" {
+  let result = parse_bind_check_advanced(
+    "interface HasId { readonly id: unique symbol; }",
+  )
+  match result {
+    Ok(_) => assert_true(true)
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/symbol/symbol-index-signature - object with symbol index signature" {
+  let result = parse_bind_check_advanced(
+    "interface SymbolMap { [key: symbol]: string; }",
+  )
+  match result {
+    Ok(_) => assert_true(true)
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/symbol/symbol-type-annotation - function with symbol parameter" {
+  let result = parse_bind_check_advanced(
+    "function getSymbol(key: symbol): symbol { return key; }",
+  )
+  match result {
+    Ok(_) => assert_true(true)
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/symbol/symbol-variable - variable with symbol type" {
+  let result = parse_bind_check_advanced(
+    "let sym: symbol = Symbol('test');",
+  )
+  match result {
+    Ok(_) => assert_true(true)
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/symbol/symbol-union-type - symbol in union type" {
+  let result = parse_bind_check_advanced(
+    "type Key = string | symbol;",
+  )
+  match result {
+    Ok(_) => assert_true(true)
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/symbol/multiple-unique-symbols - multiple const unique symbols" {
+  let result = parse_bind_check_advanced(
+    "const sym1: unique symbol = Symbol('one'); const sym2: unique symbol = Symbol('two');",
+  )
+  match result {
+    Ok(_) => assert_true(true)
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/symbol/symbol-property-access - accessing Symbol.iterator" {
+  let result = parse_bind_check_advanced(
+    "const iter = Symbol.iterator;",
+  )
+  match result {
+    Ok(_) => assert_true(true)
+    Err(_) => assert_true(false)
+  }
+}

@@ -15,7 +15,8 @@ pub enum TypeV2 {
   TNever
   TAny
   TUnknown
-  TSymbol
+  TSymbol // Generic symbol type
+  TUniqueSymbol(UniqueSymbolV2) // Unique symbol type (const s: unique symbol)
   TBigInt
 
   // Compound types
@@ -47,10 +48,134 @@ pub enum TypeV2 {
   TError
 } derive(Show, Eq)
 
+// ============================================================================
+// Unique Symbol Types
+// ============================================================================
+
+///|
+/// Unique symbol information
+/// Each unique symbol has a unique identifier (declaration name) and optional description
+pub struct UniqueSymbolV2 {
+  /// The name of the variable/constant that declares this unique symbol
+  name : String
+  /// Optional description (from Symbol("description"))
+  description : String?
+  /// Unique ID to distinguish symbols with same name in different scopes
+  id : Int
+} derive(Show, Eq)
+
+///|
+/// Create a new unique symbol
+pub fn UniqueSymbolV2::new(name : String, id : Int) -> UniqueSymbolV2 {
+  { name, description: None, id }
+}
+
+///|
+/// Create a unique symbol with description
+pub fn UniqueSymbolV2::with_description(
+  name : String,
+  description : String,
+  id : Int
+) -> UniqueSymbolV2 {
+  { name, description: Some(description), id }
+}
+
+///|
+/// Global counter for generating unique symbol IDs
+let unique_symbol_counter : Ref[Int] = { val: 0 }
+
+///|
+/// Generate a new unique symbol ID
+pub fn generate_unique_symbol_id() -> Int {
+  let id = unique_symbol_counter.val
+  unique_symbol_counter.val = id + 1
+  id
+}
+
+///|
+/// Well-known symbol identifiers
+pub enum WellKnownSymbol {
+  Iterator // Symbol.iterator
+  AsyncIterator // Symbol.asyncIterator
+  HasInstance // Symbol.hasInstance
+  IsConcatSpreadable // Symbol.isConcatSpreadable
+  Match // Symbol.match
+  MatchAll // Symbol.matchAll
+  Replace // Symbol.replace
+  Search // Symbol.search
+  Species // Symbol.species
+  Split // Symbol.split
+  ToPrimitive // Symbol.toPrimitive
+  ToStringTag // Symbol.toStringTag
+  Unscopables // Symbol.unscopables
+} derive(Show, Eq)
+
+///|
+/// Get the property name for a well-known symbol
+pub fn WellKnownSymbol::property_name(self : WellKnownSymbol) -> String {
+  match self {
+    Iterator => "iterator"
+    AsyncIterator => "asyncIterator"
+    HasInstance => "hasInstance"
+    IsConcatSpreadable => "isConcatSpreadable"
+    Match => "match"
+    MatchAll => "matchAll"
+    Replace => "replace"
+    Search => "search"
+    Species => "species"
+    Split => "split"
+    ToPrimitive => "toPrimitive"
+    ToStringTag => "toStringTag"
+    Unscopables => "unscopables"
+  }
+}
+
+///|
+/// Parse a well-known symbol from its property name
+pub fn parse_well_known_symbol(name : String) -> WellKnownSymbol? {
+  match name {
+    "iterator" => Some(Iterator)
+    "asyncIterator" => Some(AsyncIterator)
+    "hasInstance" => Some(HasInstance)
+    "isConcatSpreadable" => Some(IsConcatSpreadable)
+    "match" => Some(Match)
+    "matchAll" => Some(MatchAll)
+    "replace" => Some(Replace)
+    "search" => Some(Search)
+    "species" => Some(Species)
+    "split" => Some(Split)
+    "toPrimitive" => Some(ToPrimitive)
+    "toStringTag" => Some(ToStringTag)
+    "unscopables" => Some(Unscopables)
+    _ => None
+  }
+}
+
+///|
+/// Symbol-keyed property information
+pub struct SymbolPropertyV2 {
+  /// The symbol key (either a unique symbol or well-known symbol reference)
+  symbol : SymbolKeyV2
+  /// The property type information
+  field : FieldInfoV2
+} derive(Show, Eq)
+
+///|
+/// Symbol key types for object properties
+pub enum SymbolKeyV2 {
+  /// A well-known symbol like Symbol.iterator
+  WellKnown(WellKnownSymbol)
+  /// A unique symbol reference (by name and id)
+  Unique(String, Int)
+  /// A computed symbol expression (unresolved)
+  Computed(String)
+} derive(Show, Eq)
+
 ///|
 /// Object type (interfaces, classes, object literals)
 pub struct ObjectTypeV2 {
   fields : Map[String, FieldInfoV2]
+  symbol_fields : Array[SymbolPropertyV2] // Symbol-keyed properties
   call_signatures : Array[FunctionTypeV2]
   construct_signatures : Array[FunctionTypeV2]
   index_signature : IndexSignatureV2?
@@ -63,6 +188,7 @@ pub struct ObjectTypeV2 {
 pub fn ObjectTypeV2::empty() -> ObjectTypeV2 {
   {
     fields: Map::new(),
+    symbol_fields: [],
     call_signatures: [],
     construct_signatures: [],
     index_signature: None,
@@ -642,6 +768,7 @@ pub fn format_type_v2(ty : TypeV2) -> String {
     TAny => "any"
     TUnknown => "unknown"
     TSymbol => "symbol"
+    TUniqueSymbol(us) => "unique symbol /* " + us.name + " */"
     TBigInt => "bigint"
     TLiteralString(s) => "\"" + s + "\""
     TLiteralNumber(n) => n.to_string()

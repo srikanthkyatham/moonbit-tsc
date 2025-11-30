@@ -608,6 +608,16 @@ fn subst_in_object_v2(
   }
   {
     fields: new_fields,
+    symbol_fields: obj.symbol_fields.map(fn(sp) {
+      SymbolPropertyV2::{
+        symbol: sp.symbol,
+        field: FieldInfoV2::{
+          ty: subst_in_type_v2(sp.field.ty, subst),
+          optional: sp.field.optional,
+          is_readonly: sp.field.is_readonly,
+        },
+      }
+    }),
     call_signatures: obj.call_signatures.map(fn(f) {
       subst_in_function_v2(f, subst)
     }),
@@ -794,6 +804,7 @@ pub fn TypeEnv::with_builtins() -> TypeEnv {
   )
   let console_type = TObject({
     fields: console_fields,
+    symbol_fields: [],
     call_signatures: [],
     construct_signatures: [],
     index_signature: None,

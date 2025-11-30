@@ -346,6 +346,7 @@ fn infer_object_literal_v2(
   }
   let obj_ty = ObjectTypeV2::{
     fields,
+    symbol_fields: [],
     call_signatures: [],
     construct_signatures: [],
     index_signature: None,
@@ -480,6 +481,7 @@ fn check_object_literal_v2(
   }
   let obj_ty = ObjectTypeV2::{
     fields,
+    symbol_fields: [],
     call_signatures: [],
     construct_signatures: [],
     index_signature: None,
