@@ -145,7 +145,7 @@ test "emit do-while loop" {
 /// Test: Emit switch statement
 test "emit switch statement" {
   let js = compile_to_js(
-    "switch (x) { case 1: return \"one\"; default: return \"other\"; }",
+    "function test() { switch (x) { case 1: return \"one\"; default: return \"other\"; } }",
   )
   assert_true(js.contains("switch (x)"))
   assert_true(js.contains("case 1:"))

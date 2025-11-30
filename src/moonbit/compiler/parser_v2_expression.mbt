@@ -240,7 +240,7 @@ fn parse_optional_return_type(parser : Parser) -> (Node?, Parser) {
 /// Parse arrow function body (block or expression)
 fn parse_arrow_body(parser : Parser) -> Result[(Node, Parser), Parser] {
   match current_token(parser) {
-    OpenBrace(_) => parse_block_statement(parser)
+    OpenBrace(_) => parse_function_body(parser)
     _ => parse_assignment_expression(parser)
   }
 }
@@ -403,7 +403,7 @@ fn parse_function_expression_body(
       let parser = advance_parser(parser)
       let (params, parser) = parse_parameter_list(parser)
       let (return_type, parser) = parse_optional_return_type(parser)
-      match parse_block_statement(parser) {
+      match parse_function_body(parser) {
         Ok((body, parser)) =>
           Ok(
             (

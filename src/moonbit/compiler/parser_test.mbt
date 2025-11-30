@@ -1325,14 +1325,14 @@ test "parse switch with default" {
 ///|
 test "parse switch with multiple cases" {
   let tokens = tokens_from_source(
-    "switch (x) { case 1: return a; case 2: return b; default: return c; }",
+    "function test() { switch (x) { case 1: return a; case 2: return b; default: return c; } }",
   )
   let result = parse_source_file(tokens, "test.ts")
   match result {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
       match source_file.statements[0] {
-        SwitchStatement(_) => ()
+        FunctionDeclaration(_) => ()
         _ => assert_true(false)
       }
     }

@@ -34,6 +34,8 @@ pub struct ParserContext {
   disallow_comma : Bool
   /// In conditional expression (for : vs ? disambiguation)
   in_conditional : Bool
+  /// Currently inside a function body (for return statement validation)
+  in_function : Bool
 } derive(Show)
 
 ///|
@@ -50,6 +52,7 @@ pub fn ParserContext::default() -> ParserContext {
     in_decorator: false,
     disallow_comma: false,
     in_conditional: false,
+    in_function: false,
   }
 }
 
@@ -3136,10 +3139,10 @@ fn parse_function_declaration(
     _ => (None, parser)
   }
 
-  // Body (use parse_block_statement to set in_function context)
+  // Body (use parse_function_body to set in_function context)
   let (body, parser) = match current_token(parser) {
     OpenBrace(_) =>
-      match parse_block_statement(parser) {
+      match parse_function_body(parser) {
         Ok((block, p)) => (Some(block), p)
         Err(p) => (None, p)
       }
@@ -3479,6 +3482,29 @@ fn parse_block_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
   }
 }
 
+///|
+/// Parse function body (block statement with in_function context)
+/// Sets in_function: true to allow return statements
+fn parse_function_body(parser : Parser) -> Result[(Node, Parser), Parser] {
+  // Set in_function context
+  let old_context = parser.context
+  let new_context = { ..old_context, in_function: true }
+  let parser = { ..parser, context: new_context }
+
+  // Parse the block
+  match parse_block_statement(parser) {
+    Ok((block, parser)) => {
+      // Restore old context
+      let parser = { ..parser, context: old_context }
+      Ok((block, parser))
+    }
+    Err(parser) => {
+      // Restore old context even on error
+      let parser = { ..parser, context: old_context }
+      Err(parser)
+    }
+  }
+}
 
 ///|
 /// Parse if statement
@@ -3554,6 +3580,19 @@ fn parse_if_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
 /// Parse return statement
 fn parse_return_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
   let start_loc = current_token(parser).location()
+
+  // TS1108: A 'return' statement can only be used within a function body
+  let parser = if not(parser.context.in_function) {
+    add_error_with_code(
+      parser,
+      ReturnOutsideFunction.to_message(),
+      start_loc,
+      ReturnOutsideFunction,
+    )
+  } else {
+    parser
+  }
+
   let parser = advance_parser(parser) // Skip 'return'
 
   // Check if there's an expression
@@ -3994,7 +4033,7 @@ fn parse_class_member_with_decorators(
               }
               let (body, parser) = match current_token(parser) {
                 OpenBrace(_) =>
-                  match parse_block_statement(parser) {
+                  match parse_function_body(parser) {
                     Ok((b, p)) => (Some(b), p)
                     Err(p) => (None, p)
                   }
@@ -4133,10 +4172,10 @@ fn parse_class_member_with_decorators(
           // Consume the OpenParen, then parse parameters
           let parser = advance_parser(parser)
           let (parameters, parser) = parse_parameter_list(parser)
-          // Parse body (use parse_block_statement for return statement validation)
+          // Parse body (use parse_function_body for return statement validation)
           let (body, parser) = match current_token(parser) {
             OpenBrace(_) =>
-              match parse_block_statement(parser) {
+              match parse_function_body(parser) {
                 Ok((b, p)) => (Some(b), p)
                 Err(p) => (None, p)
               }
@@ -4192,7 +4231,7 @@ fn parse_class_member_with_decorators(
               // Body
               let (body, parser) = match current_token(parser) {
                 OpenBrace(_) =>
-                  match parse_block_statement(parser) {
+                  match parse_function_body(parser) {
                     Ok((b, p)) => (Some(b), p)
                     Err(p) => (None, p)
                   }
@@ -4231,7 +4270,7 @@ fn parse_class_member_with_decorators(
                   }
                   let (body, parser) = match current_token(parser) {
                     OpenBrace(_) =>
-                      match parse_block_statement(parser) {
+                      match parse_function_body(parser) {
                         Ok((b, p)) => (Some(b), p)
                         Err(p) => (None, p)
                       }
@@ -4320,7 +4359,7 @@ fn parse_class_member_with_decorators(
               // Body
               let (body, parser) = match current_token(parser) {
                 OpenBrace(_) =>
-                  match parse_block_statement(parser) {
+                  match parse_function_body(parser) {
                     Ok((b, p)) => (Some(b), p)
                     Err(p) => (None, p)
                   }
@@ -4470,7 +4509,7 @@ fn parse_class_member_with_decorators(
           }
           let (body, parser) = match current_token(parser) {
             OpenBrace(_) =>
-              match parse_block_statement(parser) {
+              match parse_function_body(parser) {
                 Ok((b, p)) => (Some(b), p)
                 Err(p) => (None, p)
               }
@@ -4563,7 +4602,7 @@ fn parse_class_member_with_decorators(
           }
           let (body, parser) = match current_token(parser) {
             OpenBrace(_) =>
-              match parse_block_statement(parser) {
+              match parse_function_body(parser) {
                 Ok((b, p)) => (Some(b), p)
                 Err(p) => (None, p)
               }
@@ -4750,7 +4789,7 @@ fn parse_class_member_with_modifiers(
           }
           let (body, parser) = match current_token(parser) {
             OpenBrace(_) =>
-              match parse_block_statement(parser) {
+              match parse_function_body(parser) {
                 Ok((b, p)) => (Some(b), p)
                 Err(p) => (None, p)
               }

@@ -1789,3 +1789,97 @@ test "parser error detection - valid generic class constructor" {
   let errors = parse_and_get_errors(source)
   assert_true(not(has_error_code(errors, 1092)))
 }
+
+// ============================================================================
+// Return Outside Function Error Detection Tests (TS1108)
+// ============================================================================
+
+///|
+test "parser error detection - TS1108 return outside function" {
+  // Return statement at top level should trigger TS1108
+  let source = "return 42;"
+  let errors = parse_and_get_errors(source)
+  assert_true(has_error_code(errors, 1108))
+  assert_true(has_error_message(errors, "return"))
+}
+
+///|
+test "parser error detection - TS1108 return outside function with expression" {
+  // Return with expression at top level
+  let source = "const x = 1; return x + 1;"
+  let errors = parse_and_get_errors(source)
+  assert_true(has_error_code(errors, 1108))
+}
+
+///|
+test "parser error detection - TS1108 return in if at top level" {
+  // Return inside if block at top level
+  let source = "if (true) { return 1; }"
+  let errors = parse_and_get_errors(source)
+  assert_true(has_error_code(errors, 1108))
+}
+
+///|
+test "parser error detection - valid return inside function" {
+  // Return inside function should be valid
+  let source = "function foo() { return 42; }"
+  let errors = parse_and_get_errors(source)
+  assert_true(not(has_error_code(errors, 1108)))
+}
+
+///|
+test "parser error detection - valid return inside arrow function" {
+  // Return inside arrow function should be valid
+  let source = "const fn = () => { return 1; };"
+  let errors = parse_and_get_errors(source)
+  assert_true(not(has_error_code(errors, 1108)))
+}
+
+///|
+test "parser error detection - valid return inside method" {
+  // Return inside class method should be valid
+  let source =
+    #|class Foo {
+    #|  bar() { return 42; }
+    #|}
+  let errors = parse_and_get_errors(source)
+  assert_true(not(has_error_code(errors, 1108)))
+}
+
+///|
+test "parser error detection - valid return inside getter" {
+  // Return inside getter should be valid
+  let source =
+    #|class Foo {
+    #|  get value() { return 42; }
+    #|}
+  let errors = parse_and_get_errors(source)
+  assert_true(not(has_error_code(errors, 1108)))
+}
+
+///|
+test "parser error detection - valid return inside function expression" {
+  // Return inside function expression should be valid
+  let source = "const fn = function() { return 1; };"
+  let errors = parse_and_get_errors(source)
+  assert_true(not(has_error_code(errors, 1108)))
+}
+
+///|
+test "parser error detection - valid return inside async function" {
+  // Return inside async function should be valid
+  let source = "async function foo() { return await Promise.resolve(1); }"
+  let errors = parse_and_get_errors(source)
+  assert_true(not(has_error_code(errors, 1108)))
+}
+
+///|
+test "parser error detection - valid return inside constructor" {
+  // Return inside constructor should be valid (even though it's unusual)
+  let source =
+    #|class Foo {
+    #|  constructor() { return; }
+    #|}
+  let errors = parse_and_get_errors(source)
+  assert_true(not(has_error_code(errors, 1108)))
+}
