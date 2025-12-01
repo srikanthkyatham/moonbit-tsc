@@ -352,11 +352,28 @@ test "DiagnosticCode - TS2391 function implementation missing" {
     #|function overloaded(x: string): string;
   let result = check_source(source)
   match result {
-    Ok(_) => () // May not be implemented yet
+    Ok(_) => fail!("Expected TS2391 error")
     Err(diagnostics) => {
-      if has_error(diagnostics, 2391) {
-        assert_true(has_message(diagnostics, "implementation"))
-      }
+      assert_true(has_error(diagnostics, 2391))
+      assert_true(has_message(diagnostics, "implementation"))
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - TS2391 valid overload with implementation" {
+  let source =
+    #|function overloaded(x: number): number;
+    #|function overloaded(x: string): string;
+    #|function overloaded(x: number | string): number | string {
+    #|  return x;
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => {
+      // Should NOT have TS2391 error
+      assert_true(not(has_error(diagnostics, 2391)))
     }
   }
 }
@@ -1583,17 +1600,16 @@ test "DiagnosticCode - TS2364 assignment left-hand side" {
 // TS2394: Overload signature not compatible
 ///|
 test "DiagnosticCode - TS2394 overload signature not compatible" {
+  // Implementation requires more parameters than overload provides
   let source =
     #|function test(x: number): number;
-    #|function test(x: string): string;
-    #|function test(x: boolean): boolean { return x; }
+    #|function test(x: number, y: number, z: number): number { return x + y + z; }
   let result = check_source(source)
   match result {
-    Ok(_) => () // May not be implemented yet
+    Ok(_) => fail!("Expected TS2394 error")
     Err(diagnostics) => {
-      if has_error(diagnostics, 2394) {
-        assert_true(has_message(diagnostics, "overload"))
-      }
+      assert_true(has_error(diagnostics, 2394))
+      assert_true(has_message(diagnostics, "Overload") || has_message(diagnostics, "overload"))
     }
   }
 }
@@ -3214,12 +3230,10 @@ test "DiagnosticCode - TS2383 mixed ambient overloads" {
     #|function fn(x: string | number) { }
   let result = check_source(source)
   match result {
-    Ok(_) => () // May not be fully implemented
+    Ok(_) => fail!("Expected TS2383 error")
     Err(diagnostics) => {
-      // Should report TS2383
-      if has_error(diagnostics, 2383) {
-        assert_true(has_message(diagnostics, "ambient"))
-      }
+      assert_true(has_error(diagnostics, 2383))
+      assert_true(has_message(diagnostics, "ambient"))
     }
   }
 }
@@ -3302,12 +3316,10 @@ test "DiagnosticCode - TS2390 constructor impl missing" {
     #|}
   let result = check_source(source)
   match result {
-    Ok(_) => () // May not be fully implemented
+    Ok(_) => fail!("Expected TS2390 error")
     Err(diagnostics) => {
-      // Should report TS2390
-      if has_error(diagnostics, 2390) || has_error(diagnostics, 2391) {
-        assert_true(true)
-      }
+      assert_true(has_error(diagnostics, 2390))
+      assert_true(has_message(diagnostics, "Constructor") || has_message(diagnostics, "implementation"))
     }
   }
 }

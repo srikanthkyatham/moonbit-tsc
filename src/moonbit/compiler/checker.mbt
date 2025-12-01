@@ -1414,6 +1414,10 @@ fn check_statements(
   statements : Array[Node],
 ) -> TypeChecker {
   let mut checker = checker
+
+  // Check function overloads (TS2391, TS2383, TS2394)
+  checker = check_statement_overloads(statements, checker)
+
   for i = 0; i < statements.length(); i = i + 1 {
     checker = check_statement(checker, statements[i])
   }
@@ -7989,6 +7993,10 @@ fn check_class_declaration(
 
   // Check for abstract members in non-abstract class (TS2516)
   let checker = check_abstract_members_in_non_abstract_class(checker, class_decl)
+
+  // Check for constructor overloads (TS2390)
+  let class_name = get_class_decl_name(class_decl)
+  let checker = check_class_constructor_overloads(class_name, class_decl.members, checker)
 
   // Restore previous context flags
   {

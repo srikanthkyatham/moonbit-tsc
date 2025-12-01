@@ -576,3 +576,127 @@ pub fn check_statement_overloads(
 
   checker
 }
+
+// ============================================================================
+// Constructor Overload Checking (TS2390)
+// ============================================================================
+
+///|
+/// Collected constructor overloads for a class
+pub struct ConstructorOverloads {
+  class_name : String
+  signatures : Array[OverloadSignature]
+  implementation : ConstructorDeclaration?
+  implementation_location : SourceLocation?
+} derive(Show)
+
+///|
+/// Create empty constructor overloads
+pub fn ConstructorOverloads::empty(class_name : String) -> ConstructorOverloads {
+  { class_name, signatures: [], implementation: None, implementation_location: None }
+}
+
+///|
+/// Collect constructor overloads from class members
+pub fn collect_constructor_overloads(
+  class_name : String,
+  members : Array[Node],
+) -> ConstructorOverloads {
+  let mut overloads = ConstructorOverloads::empty(class_name)
+
+  for member in members {
+    match member {
+      ConstructorDeclaration(ctor) =>
+        match ctor.body {
+          None => {
+            // This is an overload signature
+            let sig = extract_constructor_signature(ctor)
+            overloads.signatures.push(sig)
+          }
+          Some(_) => {
+            // This is the implementation
+            overloads = {
+              ..overloads,
+              implementation: Some(ctor),
+              implementation_location: Some(ctor.location),
+            }
+          }
+        }
+      _ => ()
+    }
+  }
+
+  overloads
+}
+
+///|
+/// Extract overload signature from constructor declaration
+fn extract_constructor_signature(ctor : ConstructorDeclaration) -> OverloadSignature {
+  let parameters : Array[OverloadParameter] = []
+
+  for param_node in ctor.parameters {
+    match param_node {
+      Parameter(p) => {
+        parameters.push({
+          name: overload_get_param_name(p.name),
+          type_annotation: p.type_annotation,
+          is_optional: p.is_optional,
+          is_rest: p.is_rest,
+        })
+      }
+      _ => ()
+    }
+  }
+
+  {
+    parameters,
+    return_type: None, // Constructors don't have explicit return type
+    type_parameters: [],
+    location: ctor.location,
+    is_ambient: false,
+  }
+}
+
+///|
+/// Validate constructor overloads (TS2390)
+pub fn validate_constructor_overloads(
+  overloads : ConstructorOverloads,
+) -> OverloadValidationResult {
+  let errors : Array[OverloadError] = []
+
+  // If there are no signatures, nothing to validate
+  if overloads.signatures.is_empty() {
+    return { errors, is_valid: true }
+  }
+
+  // Check TS2390: Missing implementation
+  if overloads.implementation is None {
+    errors.push({
+      kind: MissingImplementation,
+      message: "Constructor implementation is missing.",
+      location: overloads.signatures[0].location,
+      code: 2390,
+    })
+  }
+
+  { errors, is_valid: errors.is_empty() }
+}
+
+///|
+/// Check constructor overloads in a class
+pub fn check_class_constructor_overloads(
+  class_name : String,
+  members : Array[Node],
+  checker : TypeChecker,
+) -> TypeChecker {
+  let overloads = collect_constructor_overloads(class_name, members)
+  let result = validate_constructor_overloads(overloads)
+
+  // Add diagnostics for any errors
+  for err in result.errors {
+    let diag = Diagnostic::error(err.message, err.location, err.code)
+    checker.diagnostics.push(diag)
+  }
+
+  checker
+}
