@@ -1551,18 +1551,279 @@ fn infer_identifier_type(
                   infer_symbol_type(c, symbol)
               }
             None => {
-              // Variable not found in any scope - emit TS2304
-              let checker = add_diagnostic_with_code(
-                checker,
-                "Cannot find name '" + id.name + "'",
-                id.location,
-                TS2304,
-              )
-              any_type(checker)
+              // Check for built-in globals before emitting error
+              match get_builtin_global_type(checker, id.name) {
+                Some((builtin_type, c)) => (builtin_type, c)
+                None => {
+                  // Variable not found in any scope - emit TS2304
+                  let checker = add_diagnostic_with_code(
+                    checker,
+                    "Cannot find name '" + id.name + "'",
+                    id.location,
+                    TS2304,
+                  )
+                  any_type(checker)
+                }
+              }
             }
           }
       }
   }
+}
+
+///|
+/// Get type for built-in globals like console, JSON, Math, etc.
+fn get_builtin_global_type(
+  checker : TypeChecker,
+  name : String,
+) -> ((Type, TypeChecker))? {
+  if name == "console" {
+    Some(get_console_type(checker))
+  } else if name == "JSON" {
+    Some(get_json_type(checker))
+  } else if name == "Math" {
+    Some(get_math_type(checker))
+  } else {
+    None
+  }
+}
+
+///|
+/// Get the type for the console global object
+fn get_console_type(checker : TypeChecker) -> (Type, TypeChecker) {
+  let (id, checker) = next_type_id(checker)
+  let console_methods : Map[String, PropertySignature] = Map::new()
+  let default_flags = TypeFlags::default()
+  let void_info = TypeInfo::{ id: 0, flags: default_flags }
+
+  // Console methods accept any number of any type arguments via rest parameter
+  let rest_param = CheckerParameter::{
+    name: "data",
+    param_type: Type::Any(void_info),
+    is_optional: false,
+    is_rest: true,
+  }
+
+  // Add common console methods (all accept any args and return void)
+  let log_method = PropertySignature::{
+    name: "log",
+    prop_type: Type::Function(CheckerFunctionType::{
+      parameters: [rest_param],
+      return_type: Type::Void(void_info),
+      info: void_info,
+    }),
+    is_optional: false,
+    is_readonly: false,
+  }
+  console_methods.set("log", log_method)
+
+  let warn_method = PropertySignature::{
+    name: "warn",
+    prop_type: Type::Function(CheckerFunctionType::{
+      parameters: [rest_param],
+      return_type: Type::Void(void_info),
+      info: void_info,
+    }),
+    is_optional: false,
+    is_readonly: false,
+  }
+  console_methods.set("warn", warn_method)
+
+  let error_method = PropertySignature::{
+    name: "error",
+    prop_type: Type::Function(CheckerFunctionType::{
+      parameters: [rest_param],
+      return_type: Type::Void(void_info),
+      info: void_info,
+    }),
+    is_optional: false,
+    is_readonly: false,
+  }
+  console_methods.set("error", error_method)
+
+  let info_method = PropertySignature::{
+    name: "info",
+    prop_type: Type::Function(CheckerFunctionType::{
+      parameters: [rest_param],
+      return_type: Type::Void(void_info),
+      info: void_info,
+    }),
+    is_optional: false,
+    is_readonly: false,
+  }
+  console_methods.set("info", info_method)
+
+  let debug_method = PropertySignature::{
+    name: "debug",
+    prop_type: Type::Function(CheckerFunctionType::{
+      parameters: [rest_param],
+      return_type: Type::Void(void_info),
+      info: void_info,
+    }),
+    is_optional: false,
+    is_readonly: false,
+  }
+  console_methods.set("debug", debug_method)
+
+  let console_type = Type::Object(ObjectType::{
+    properties: console_methods,
+    call_signatures: [],
+    construct_signatures: [],
+    index_signatures: [],
+    info: TypeInfo::{ id, flags: default_flags },
+  })
+
+  (console_type, checker)
+}
+
+///|
+/// Get the type for the JSON global object
+fn get_json_type(checker : TypeChecker) -> (Type, TypeChecker) {
+  let (id, checker) = next_type_id(checker)
+  let json_methods : Map[String, PropertySignature] = Map::new()
+  let default_flags = TypeFlags::default()
+  let info = TypeInfo::{ id: 0, flags: default_flags }
+
+  // JSON.parse
+  let parse_method = PropertySignature::{
+    name: "parse",
+    prop_type: Type::Function(CheckerFunctionType::{
+      parameters: [CheckerParameter::{
+        name: "text",
+        param_type: Type::String(info),
+        is_optional: false,
+        is_rest: false,
+      }],
+      return_type: Type::Any(info),
+      info,
+    }),
+    is_optional: false,
+    is_readonly: false,
+  }
+  json_methods.set("parse", parse_method)
+
+  // JSON.stringify
+  let stringify_method = PropertySignature::{
+    name: "stringify",
+    prop_type: Type::Function(CheckerFunctionType::{
+      parameters: [CheckerParameter::{
+        name: "value",
+        param_type: Type::Any(info),
+        is_optional: false,
+        is_rest: false,
+      }],
+      return_type: Type::String(info),
+      info,
+    }),
+    is_optional: false,
+    is_readonly: false,
+  }
+  json_methods.set("stringify", stringify_method)
+
+  let json_type = Type::Object(ObjectType::{
+    properties: json_methods,
+    call_signatures: [],
+    construct_signatures: [],
+    index_signatures: [],
+    info: TypeInfo::{ id, flags: default_flags },
+  })
+
+  (json_type, checker)
+}
+
+///|
+/// Get the type for the Math global object
+fn get_math_type(checker : TypeChecker) -> (Type, TypeChecker) {
+  let (id, checker) = next_type_id(checker)
+  let math_methods : Map[String, PropertySignature] = Map::new()
+  let default_flags = TypeFlags::default()
+  let info = TypeInfo::{ id: 0, flags: default_flags }
+
+  // Math.abs
+  let abs_method = PropertySignature::{
+    name: "abs",
+    prop_type: Type::Function(CheckerFunctionType::{
+      parameters: [CheckerParameter::{
+        name: "x",
+        param_type: Type::Number(info),
+        is_optional: false,
+        is_rest: false,
+      }],
+      return_type: Type::Number(info),
+      info,
+    }),
+    is_optional: false,
+    is_readonly: false,
+  }
+  math_methods.set("abs", abs_method)
+
+  // Math.floor
+  let floor_method = PropertySignature::{
+    name: "floor",
+    prop_type: Type::Function(CheckerFunctionType::{
+      parameters: [CheckerParameter::{
+        name: "x",
+        param_type: Type::Number(info),
+        is_optional: false,
+        is_rest: false,
+      }],
+      return_type: Type::Number(info),
+      info,
+    }),
+    is_optional: false,
+    is_readonly: false,
+  }
+  math_methods.set("floor", floor_method)
+
+  // Math.ceil
+  let ceil_method = PropertySignature::{
+    name: "ceil",
+    prop_type: Type::Function(CheckerFunctionType::{
+      parameters: [CheckerParameter::{
+        name: "x",
+        param_type: Type::Number(info),
+        is_optional: false,
+        is_rest: false,
+      }],
+      return_type: Type::Number(info),
+      info,
+    }),
+    is_optional: false,
+    is_readonly: false,
+  }
+  math_methods.set("ceil", ceil_method)
+
+  // Math.random
+  let random_method = PropertySignature::{
+    name: "random",
+    prop_type: Type::Function(CheckerFunctionType::{
+      parameters: [],
+      return_type: Type::Number(info),
+      info,
+    }),
+    is_optional: false,
+    is_readonly: false,
+  }
+  math_methods.set("random", random_method)
+
+  // Math.PI
+  let pi_prop = PropertySignature::{
+    name: "PI",
+    prop_type: Type::Number(info),
+    is_optional: false,
+    is_readonly: true,
+  }
+  math_methods.set("PI", pi_prop)
+
+  let math_type = Type::Object(ObjectType::{
+    properties: math_methods,
+    call_signatures: [],
+    construct_signatures: [],
+    index_signatures: [],
+    info: TypeInfo::{ id, flags: default_flags },
+  })
+
+  (math_type, checker)
 }
 
 ///|
