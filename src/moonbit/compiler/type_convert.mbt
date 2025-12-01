@@ -464,6 +464,7 @@ fn object_v2_to_type(
       construct_signatures: construct_sigs,
       index_signatures: index_sigs,
       info,
+      class_name: None,
     },
     final_checker,
   )

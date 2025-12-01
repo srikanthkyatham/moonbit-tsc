@@ -89,6 +89,7 @@ pub struct ObjectType {
   construct_signatures : Array[CheckerSignature]
   index_signatures : Array[IndexSignature]
   info : TypeInfo
+  class_name : String? // For class instances, the name of the class they came from
 } derive(Show)
 
 ///|
@@ -762,6 +763,7 @@ pub fn merge_intersection(
       construct_signatures: merged_construct_sigs,
       index_signatures: merged_index_sigs,
       info,
+      class_name: None,
     }),
     checker,
   )
@@ -929,6 +931,7 @@ pub fn evaluate_mapped_type(
           construct_signatures: [],
           index_signatures: [],
           info,
+          class_name: None,
         }),
         checker,
       )
@@ -1691,6 +1694,7 @@ fn get_console_type(checker : TypeChecker) -> (Type, TypeChecker) {
     construct_signatures: [],
     index_signatures: [],
     info: TypeInfo::{ id, flags: default_flags },
+    class_name: None,
   })
 
   (console_type, checker)
@@ -1746,6 +1750,7 @@ fn get_json_type(checker : TypeChecker) -> (Type, TypeChecker) {
     construct_signatures: [],
     index_signatures: [],
     info: TypeInfo::{ id, flags: default_flags },
+    class_name: None,
   })
 
   (json_type, checker)
@@ -1859,6 +1864,7 @@ fn get_math_type(checker : TypeChecker) -> (Type, TypeChecker) {
     construct_signatures: [],
     index_signatures: [],
     info: TypeInfo::{ id, flags: default_flags },
+    class_name: None,
   })
 
   (math_type, checker)
@@ -1932,6 +1938,7 @@ fn get_promise_type(checker : TypeChecker) -> (Type, TypeChecker) {
     construct_signatures: [],
     index_signatures: [],
     info: TypeInfo::{ id, flags: default_flags },
+    class_name: None,
   })
 
   (promise_type, checker)
@@ -1998,6 +2005,7 @@ fn get_date_type(checker : TypeChecker) -> (Type, TypeChecker) {
     construct_signatures: [],
     index_signatures: [],
     info: TypeInfo::{ id: instance_id, flags: default_flags },
+    class_name: Some("Date"),
   })
 
   // Construct signature: new Date() => Date
@@ -2025,6 +2033,7 @@ fn get_date_type(checker : TypeChecker) -> (Type, TypeChecker) {
     construct_signatures: [construct_sig, construct_sig_value],
     index_signatures: [],
     info: TypeInfo::{ id, flags: default_flags },
+    class_name: None,
   })
 
   (date_type, checker)
@@ -2062,6 +2071,7 @@ fn get_string_constructor_type(checker : TypeChecker) -> (Type, TypeChecker) {
     construct_signatures: [],
     index_signatures: [],
     info: TypeInfo::{ id, flags: default_flags },
+    class_name: None,
   })
 
   (string_type, checker)
@@ -2108,6 +2118,7 @@ fn get_symbol_constructor_type(checker : TypeChecker) -> (Type, TypeChecker) {
     construct_signatures: [],
     index_signatures: [],
     info: TypeInfo::{ id, flags: default_flags },
+    class_name: None,
   })
 
   (symbol_type, checker)
@@ -2157,6 +2168,7 @@ fn get_error_constructor_type(checker : TypeChecker) -> (Type, TypeChecker) {
     construct_signatures: [],
     index_signatures: [],
     info: TypeInfo::{ id: instance_id, flags: default_flags },
+    class_name: Some("Error"),
   })
 
   // Construct signature: new Error(message?: string) => Error
@@ -2180,6 +2192,7 @@ fn get_error_constructor_type(checker : TypeChecker) -> (Type, TypeChecker) {
     construct_signatures: [construct_sig],
     index_signatures: [],
     info: TypeInfo::{ id, flags: default_flags },
+    class_name: None,
   })
 
   (error_type, checker)
@@ -2235,6 +2248,7 @@ fn get_array_constructor_type(checker : TypeChecker) -> (Type, TypeChecker) {
     construct_signatures: [],
     index_signatures: [],
     info: TypeInfo::{ id, flags: default_flags },
+    class_name: None,
   })
 
   (array_type, checker)
@@ -2331,6 +2345,7 @@ fn get_object_constructor_type(checker : TypeChecker) -> (Type, TypeChecker) {
     construct_signatures: [],
     index_signatures: [],
     info: TypeInfo::{ id, flags: default_flags },
+    class_name: None,
   })
 
   (object_type, checker)
@@ -2404,6 +2419,7 @@ fn get_number_constructor_type(checker : TypeChecker) -> (Type, TypeChecker) {
     construct_signatures: [],
     index_signatures: [],
     info: TypeInfo::{ id, flags: default_flags },
+    class_name: None,
   })
 
   (number_type, checker)
@@ -2421,6 +2437,7 @@ fn get_boolean_constructor_type(checker : TypeChecker) -> (Type, TypeChecker) {
     construct_signatures: [],
     index_signatures: [],
     info: TypeInfo::{ id, flags: default_flags },
+    class_name: None,
   })
 
   (boolean_type, checker)
@@ -2659,6 +2676,7 @@ fn infer_overloaded_function_type(
     construct_signatures: [],
     index_signatures: [],
     info,
+    class_name: None,
   })
 
   // Cache the type
@@ -2788,6 +2806,9 @@ fn infer_class_declaration_type(
   resolving.remove(symbol.id)
   checker = { ..checker, resolving_symbols: resolving }
 
+  // Get class name from symbol for tracking instance types
+  let class_name_str = symbol.name
+
   // Create instance type (used when instantiating with 'new')
   let (instance_info, checker) = create_type_info(checker)
   let instance_type = Type::Object(ObjectType::{
@@ -2796,6 +2817,7 @@ fn infer_class_declaration_type(
     construct_signatures: [],
     index_signatures: [],
     info: instance_info,
+    class_name: Some(class_name_str), // Track which class this instance came from
   })
 
   // Create construct signature for 'new Class()'
@@ -2814,6 +2836,7 @@ fn infer_class_declaration_type(
     construct_signatures: [construct_sig],
     index_signatures: [],
     info: class_info,
+    class_name: None, // Constructor type doesn't need class_name tracking
   })
 
   // Cache the type
@@ -3583,6 +3606,7 @@ fn substitute_in_type(
           construct_signatures: obj.construct_signatures,
           index_signatures: obj.index_signatures,
           info,
+          class_name: obj.class_name,
         }),
         checker,
       )
@@ -3961,6 +3985,7 @@ fn typeof_string_to_type(checker : TypeChecker, s : String) -> Type? {
           construct_signatures: [],
           index_signatures: [],
           info,
+          class_name: None,
         }),
       )
     "function" =>
@@ -4551,36 +4576,33 @@ fn class_has_static_member(
 ///|
 /// Check if a property is a static member of a class
 /// Returns (is_static, class_name) if the property is a static member
-/// Checks both TypeReference types and traces back from expressions to find class
+/// Checks both TypeReference types and Object types with class_name tracking
 fn check_is_static_member_of_class(
   checker : TypeChecker,
   object_type : Type,
   prop_name : String,
   expr : Node,
 ) -> (Bool, String) {
-  // First check if the object type is a TypeReference that points to a class
+  // First check if the object type has class tracking info
   let class_name = match object_type {
     TypeReference(type_ref) => type_ref.name
-    Object(_) => {
-      // For Object types, try to trace back from the expression to find the class
-      // Use helper function to unwrap parenthesized expressions
-      let unwrapped = unwrap_parenthesized_expression(expr)
-      match unwrapped {
-        Identifier(id) =>
-          // Look up the symbol and check if it was initialized with a new expression
-          match lookup_symbol(checker, id.name) {
-            Some(sym) =>
-              // Try to get class name from declarations
-              get_class_name_from_symbol_declarations(sym)
-            None => return (false, "")
-          }
-        NewExpression(new_expr) =>
-          // Direct new expression like (new MyClass()).staticProp
-          match new_expr.expression {
-            Identifier(class_id) => class_id.name
+    Object(obj_type) => {
+      // Check if Object has class_name tracking (instance of a class)
+      match obj_type.class_name {
+        Some(name) => name
+        None => {
+          // Fall back to expression tracing for parenthesized new expressions
+          let unwrapped = unwrap_parenthesized_expression(expr)
+          match unwrapped {
+            NewExpression(new_expr) =>
+              // Direct new expression like (new MyClass()).staticProp
+              match new_expr.expression {
+                Identifier(class_id) => class_id.name
+                _ => return (false, "")
+              }
             _ => return (false, "")
           }
-        _ => return (false, "")
+        }
       }
     }
     _ => return (false, "")
@@ -5503,6 +5525,7 @@ fn infer_object_literal_type(
       construct_signatures: [],
       index_signatures: [],
       info,
+      class_name: None,
     }),
     checker,
   )
@@ -7253,6 +7276,7 @@ fn build_class_type_for_this(
     construct_signatures: [],
     index_signatures: [],
     info,
+    class_name: None,
   })
   (class_type, checker)
 }
@@ -7522,6 +7546,7 @@ fn get_type_from_type_node(
                 construct_signatures: [],
                 index_signatures: [],
                 info,
+                class_name: None,
               }),
             ),
             c,
@@ -7764,6 +7789,7 @@ fn get_type_from_type_node(
             construct_signatures,
             index_signatures,
             info,
+            class_name: None,
           }),
         ),
         checker,
@@ -8084,6 +8110,7 @@ fn resolve_interface_type(
           construct_signatures: [],
           index_signatures: [],
           info,
+          class_name: None,
         }),
       ),
       checker,
@@ -8230,6 +8257,7 @@ fn resolve_interface_type(
           construct_signatures,
           index_signatures,
           info,
+          class_name: None,
         }),
       )
     }

@@ -5003,9 +5003,9 @@ test "DiagnosticCode - TS2576 static member access on direct new expression" {
 }
 
 ///|
-test "DiagnosticCode - TS2576 static member via variable (not yet detected)" {
-  // This case is harder to detect because we'd need to trace back through variable assignment
-  // TypeScript detects this, but our implementation doesn't yet
+test "DiagnosticCode - TS2576 static member via variable" {
+  // Now detects static member access on instance stored in a variable
+  // because instance types track their class_name
   let source =
     #|class MyClass {
     #|  static staticProp: number = 42;
@@ -5014,11 +5014,11 @@ test "DiagnosticCode - TS2576 static member via variable (not yet detected)" {
     #|const x = instance.staticProp; // accessing static on instance
   let result = check_source(source)
   match result {
-    Ok(_) => () // Detection not implemented for variable case yet
+    Ok(_) => assert_true(false, msg="Expected error TS2576 but got no errors")
     Err(diagnostics) => {
-      if has_error(diagnostics, 2576) {
-        assert_true(has_message(diagnostics, "static"))
-      }
+      assert_true(has_error(diagnostics, 2576), msg="Expected error TS2576")
+      assert_true(has_message(diagnostics, "static"), msg="Expected 'static' in message")
+      assert_true(has_message(diagnostics, "MyClass"), msg="Expected 'MyClass' in message")
     }
   }
 }

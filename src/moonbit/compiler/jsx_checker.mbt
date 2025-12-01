@@ -575,6 +575,7 @@ fn create_jsx_element_type(checker : TypeChecker) -> (Type, TypeChecker) {
     call_signatures: [],
     construct_signatures: [],
     info: { id, flags },
+    class_name: None,
   })
   (jsx_element, { ..checker, next_type_id: id + 1 })
 }
