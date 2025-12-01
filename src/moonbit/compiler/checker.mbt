@@ -272,6 +272,7 @@ pub struct TypeChecker {
   resolving_symbols : Map[Int, Bool] // Symbol IDs currently being resolved (for cycle detection)
   arrow_function_depth : Int // Tracks nesting depth in arrow functions (> 0 means inside arrow)
   async_function_depth : Int // Tracks nesting depth in async functions (> 0 means inside async)
+  block_scoped_decls : Map[String, Int] // Variable name -> declaration line (for TS2448 TDZ check)
 } derive(Show)
 
 ///|
@@ -324,6 +325,7 @@ pub fn TypeChecker::new_with_options(
     resolving_symbols: Map::new(),
     arrow_function_depth: 0,
     async_function_depth: 0,
+    block_scoped_decls: Map::new(),
   }
 }
 
@@ -1586,6 +1588,21 @@ fn infer_identifier_type(
       TS2496,
     )
     return any_type(checker)
+  }
+
+  // TS2448: Check for block-scoped variable used before declaration (TDZ)
+  match checker.block_scoped_decls.get(id.name) {
+    Some(decl_line) =>
+      if id.location.start.line < decl_line {
+        let checker = add_diagnostic_with_code(
+          checker,
+          "Block-scoped variable '\{id.name}' used before its declaration.",
+          id.location,
+          TS2448,
+        )
+        return any_type(checker)
+      }
+    None => ()
   }
 
   // First check for narrowed type (from type guards in if statements)
@@ -7444,6 +7461,29 @@ fn get_for_of_element_type(
 }
 
 ///|
+/// Scan statements for block-scoped (let/const) declarations
+/// Returns a map of variable name -> declaration line number
+fn scan_block_scoped_declarations(statements : Array[Node]) -> Map[String, Int] {
+  let decls : Map[String, Int] = Map::new()
+  for stmt in statements {
+    match stmt {
+      VariableStatement(vs) =>
+        // Check if this is let or const (block-scoped)
+        if vs.is_let || vs.is_const {
+          for vd in vs.declarations {
+            match vd.name {
+              Identifier(id) => decls.set(id.name, vd.location.start.line)
+              _ => () // Skip destructuring for now
+            }
+          }
+        }
+      _ => ()
+    }
+  }
+  decls
+}
+
+///|
 /// Check block statement
 fn check_block_statement(
   checker : TypeChecker,
@@ -7451,8 +7491,19 @@ fn check_block_statement(
 ) -> TypeChecker {
   // Check for unreachable code first
   let checker = check_unreachable_code(checker, block.statements)
+
+  // Scan for block-scoped declarations (TS2448 TDZ check)
+  let block_decls = scan_block_scoped_declarations(block.statements)
+
+  // Save old block_scoped_decls and set new ones for this block
+  let old_decls = checker.block_scoped_decls
+  let checker = { ..checker, block_scoped_decls: block_decls }
+
   // Then check all statements
-  check_statements(checker, block.statements)
+  let checker = check_statements(checker, block.statements)
+
+  // Restore old block_scoped_decls
+  { ..checker, block_scoped_decls: old_decls }
 }
 
 ///|

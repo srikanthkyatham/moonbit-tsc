@@ -5501,3 +5501,75 @@ test "DiagnosticCode - TS2377 non-derived class without super" {
     }
   }
 }
+
+// ============================================================================
+// TS2448: Block-scoped variable used before declaration (strict tests)
+// ============================================================================
+
+///|
+test "DiagnosticCode - TS2448 let variable used before declaration strict" {
+  let source =
+    #|function test() {
+    #|  console.log(x);
+    #|  let x = 10;
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => fail!("Should have detected TDZ violation")
+    Err(diagnostics) => {
+      assert_true(has_error(diagnostics, 2448))
+      assert_true(has_message(diagnostics, "before"))
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - TS2448 const variable used before declaration strict" {
+  let source =
+    #|function test() {
+    #|  const y = x + 1;
+    #|  const x = 10;
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => fail!("Should have detected TDZ violation")
+    Err(diagnostics) => {
+      assert_true(has_error(diagnostics, 2448))
+      assert_true(has_message(diagnostics, "before"))
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - TS2448 var should not trigger TDZ" {
+  let source =
+    #|function test() {
+    #|  console.log(x);
+    #|  var x = 10;
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => {
+      // Should NOT have TS2448 for var (var is hoisted)
+      assert_true(not(has_error(diagnostics, 2448)))
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - TS2448 let after usage is fine" {
+  let source =
+    #|function test() {
+    #|  let x = 10;
+    #|  console.log(x);
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => {
+      // Should NOT have TS2448 when used after declaration
+      assert_true(not(has_error(diagnostics, 2448)))
+    }
+  }
+}

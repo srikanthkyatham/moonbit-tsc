@@ -640,6 +640,7 @@ fn TypeChecker::create_type_info(self : TypeChecker) -> (TypeInfo, TypeChecker) 
     resolving_symbols: self.resolving_symbols,
     arrow_function_depth: self.arrow_function_depth,
     async_function_depth: self.async_function_depth,
+    block_scoped_decls: self.block_scoped_decls,
   }
   (info, new_checker)
 }
