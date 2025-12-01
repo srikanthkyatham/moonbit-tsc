@@ -99,6 +99,16 @@ defmodule TSC.Worker.PoolSupervisor do
     end
   end
 
+  @doc """
+  List imports from a TypeScript file using the CLI.
+  This uses the MoonBit CLI's --list-imports command for accurate AST-based extraction.
+  """
+  @spec list_imports(String.t(), timeout()) :: {:ok, map()} | {:error, term()}
+  def list_imports(file, timeout \\ 60_000) do
+    worker_id = get_worker()
+    CLIWorker.list_imports(worker_id, file, timeout)
+  end
+
   # ============================================================================
   # Supervisor Callbacks
   # ============================================================================

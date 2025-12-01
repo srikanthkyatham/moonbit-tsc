@@ -280,6 +280,64 @@ defmodule TSC.Worker.CLIWorker do
     }
   end
 
+  defp run_list_imports(binary_path, file) do
+    if File.exists?(binary_path) do
+      args = ["--json", "--list-imports", file]
+
+      case System.cmd(binary_path, args, stderr_to_stdout: true) do
+        {output, 0} ->
+          parse_list_imports_output(output)
+
+        {output, _exit_code} ->
+          Logger.warning("list-imports failed: #{output}")
+          {:error, output}
+      end
+    else
+      Logger.warning("MoonBit binary not found at #{binary_path}")
+      {:ok, mock_list_imports_result(file)}
+    end
+  end
+
+  defp parse_list_imports_output(output) do
+    case Jason.decode(output) do
+      {:ok, json} ->
+        {:ok, normalize_list_imports(json)}
+
+      {:error, reason} ->
+        Logger.warning("Failed to parse list-imports JSON output: #{inspect(reason)}")
+        {:error, {:json_parse_error, reason}}
+    end
+  end
+
+  defp normalize_list_imports(json) do
+    # CLI returns: {"file": "...", "imports": [{"moduleSpecifier": "...", "isTypeOnly": false, ...}]}
+    imports = Map.get(json, "imports", [])
+    |> Enum.map(fn imp ->
+      %{
+        specifier: imp["moduleSpecifier"],
+        kind: if(imp["isTypeOnly"], do: :type_only, else: :es6),
+        default: imp["defaultImport"],
+        named: imp["namedImports"] || [],
+        namespace: imp["namespaceImport"]
+      }
+    end)
+
+    %{
+      file: Map.get(json, "file"),
+      imports: imports,
+      count: length(imports)
+    }
+  end
+
+  defp mock_list_imports_result(file) do
+    %{
+      file: file,
+      imports: [],
+      count: 0,
+      mock: true
+    }
+  end
+
   defp mock_result(_file) do
     %{
       diagnostics: [],

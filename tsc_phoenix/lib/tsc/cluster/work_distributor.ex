@@ -133,7 +133,7 @@ defmodule TSC.Cluster.WorkDistributor do
   end
 
   @impl true
-  def handle_call({:distribute, files, opts}, from, state) do
+  def handle_call({:distribute, files, opts}, _from, state) do
     strategy = Keyword.get(opts, :strategy, state.strategy)
     batch_id = generate_batch_id()
 
