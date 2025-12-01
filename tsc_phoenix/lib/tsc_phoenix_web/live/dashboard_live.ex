@@ -5,6 +5,8 @@ defmodule TscPhoenixWeb.DashboardLive do
 
   use TscPhoenixWeb, :live_view
 
+  import TscPhoenixWeb.Live.Components.BuildProgress
+
   alias TSC.Telemetry.Reporter
   alias TSC.Cache.{TypeCache, FileCache}
   alias TSC.Worker.PoolSupervisor
@@ -21,10 +23,13 @@ defmodule TscPhoenixWeb.DashboardLive do
       :timer.send_interval(1000, self(), :refresh)
     end
 
+    metrics = Reporter.get_metrics()
+
     socket =
       socket
       |> assign(:page_title, "TSC Dashboard")
-      |> assign(:metrics, Reporter.get_metrics())
+      |> assign(:metrics, metrics)
+      |> assign(:phases, Map.get(metrics, :phases, %{}))
       |> assign(:active_checks, Reporter.get_active_checks())
       |> assign(:type_cache_stats, TypeCache.stats())
       |> assign(:file_cache_stats, FileCache.stats())
@@ -39,9 +44,12 @@ defmodule TscPhoenixWeb.DashboardLive do
 
   @impl true
   def handle_info(:refresh, socket) do
+    metrics = Reporter.get_metrics()
+
     socket =
       socket
-      |> assign(:metrics, Reporter.get_metrics())
+      |> assign(:metrics, metrics)
+      |> assign(:phases, Map.get(metrics, :phases, %{}))
       |> assign(:active_checks, Reporter.get_active_checks())
       |> assign(:type_cache_stats, TypeCache.stats())
       |> assign(:file_cache_stats, FileCache.stats())
@@ -224,40 +232,13 @@ defmodule TscPhoenixWeb.DashboardLive do
 
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <!-- Build Progress -->
-          <div class="card bg-base-100 shadow-xl">
-            <div class="card-body">
-              <h2 class="card-title">Current Build</h2>
-              <%= if @current_build do %>
-                <div class="mb-4">
-                  <%= case @current_build.status do %>
-                    <% :in_progress -> %>
-                      <progress class="progress progress-primary w-full"></progress>
-                      <p class="text-sm mt-2">Checking <%= @current_build[:files_count] || "..." %> files...</p>
-                    <% :complete -> %>
-                      <div class="alert alert-success">
-                        <span>Complete in <%= @current_build[:duration] || @current_build[:stats][:elapsed_ms] %>ms</span>
-                      </div>
-                    <% _ -> %>
-                      <p>Unknown status</p>
-                  <% end %>
-                </div>
-              <% else %>
-                <p class="text-base-content/60">No active build</p>
-              <% end %>
-
-              <%= if length(@active_checks) > 0 do %>
-                <h3 class="font-semibold mt-4">Currently Checking:</h3>
-                <ul class="list-disc list-inside text-sm">
-                  <%= for file <- Enum.take(@active_checks, 5) do %>
-                    <li class="truncate"><%= Path.basename(file) %></li>
-                  <% end %>
-                  <%= if length(@active_checks) > 5 do %>
-                    <li class="text-base-content/60">... and <%= length(@active_checks) - 5 %> more</li>
-                  <% end %>
-                </ul>
-              <% end %>
-            </div>
-          </div>
+          <.build_progress
+            current_build={@current_build}
+            active_checks={@active_checks}
+            phases={@phases}
+            errors_count={@metrics.errors_count}
+            warnings_count={Map.get(@metrics, :warnings_count, 0)}
+          />
 
           <!-- Worker Status -->
           <div class="card bg-base-100 shadow-xl">
