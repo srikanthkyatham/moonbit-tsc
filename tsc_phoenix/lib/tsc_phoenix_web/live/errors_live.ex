@@ -302,10 +302,10 @@ defmodule TscPhoenixWeb.ErrorsLive do
             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
             </svg>
-            <%= Enum.count(@errors, &(&1[:category] == :error)) %> Errors
+            <%= Enum.count(@errors, &(to_string(&1[:category]) == "error")) %> Errors
           </div>
           <div class="badge badge-warning gap-2 badge-lg">
-            <%= Enum.count(@errors, &(&1[:category] == :warning)) %> Warnings
+            <%= Enum.count(@errors, &(to_string(&1[:category]) == "warning")) %> Warnings
           </div>
           <div class="badge badge-info gap-2 badge-lg">
             <%= length(@files) %> Files
@@ -437,13 +437,16 @@ defmodule TscPhoenixWeb.ErrorsLive do
   attr :category, :atom, required: true
 
   defp category_icon(assigns) do
+    category_str = to_string(assigns.category)
+    assigns = assign(assigns, :category_str, category_str)
+
     ~H"""
-    <%= case @category do %>
-      <% :error -> %>
+    <%= case @category_str do %>
+      <% "error" -> %>
         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-error flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
         </svg>
-      <% :warning -> %>
+      <% "warning" -> %>
         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-warning flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
         </svg>
@@ -525,9 +528,13 @@ defmodule TscPhoenixWeb.ErrorsLive do
 
   defp format_error_type(_), do: "Unknown"
 
-  defp error_row_class(:error), do: "border-l-4 border-error"
-  defp error_row_class(:warning), do: "border-l-4 border-warning"
-  defp error_row_class(_), do: "border-l-4 border-info"
+  defp error_row_class(category) do
+    case to_string(category) do
+      "error" -> "border-l-4 border-error"
+      "warning" -> "border-l-4 border-warning"
+      _ -> "border-l-4 border-info"
+    end
+  end
 
   defp sort_indicator(current, dir, target) when current == target do
     if dir == :asc, do: "↑", else: "↓"

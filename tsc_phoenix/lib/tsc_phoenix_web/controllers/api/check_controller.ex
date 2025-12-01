@@ -14,6 +14,7 @@ defmodule TscPhoenixWeb.API.CheckController do
   alias TSC.Coordinator
   alias TSC.Telemetry.Reporter
   alias TSC.Options
+  alias TSC.Project.TsConfig
 
   @doc """
   POST /api/check
@@ -159,20 +160,14 @@ defmodule TscPhoenixWeb.API.CheckController do
   defp discover_project_files(_), do: discover_project_files("./")
 
   defp discover_files_from_tsconfig(tsconfig_path) when is_binary(tsconfig_path) do
-    case File.read(tsconfig_path) do
-      {:ok, content} ->
-        case Jason.decode(content) do
-          {:ok, config} ->
-            project_dir = Path.dirname(tsconfig_path)
-            discover_files_from_config(config, project_dir)
-          {:error, _} ->
-            # If parsing fails, fall back to project directory
-            discover_project_files(Path.dirname(tsconfig_path))
-        end
-      {:error, _} ->
-        # If file doesn't exist, check if it's a directory with tsconfig.json
+    case TsConfig.load(tsconfig_path) do
+      {:ok, config} ->
+        TsConfig.get_files(config)
+
+      {:error, _reason} ->
+        # Fall back to directory scanning
         if File.dir?(tsconfig_path) do
-          discover_files_from_tsconfig(Path.join(tsconfig_path, "tsconfig.json"))
+          discover_project_files(tsconfig_path)
         else
           discover_project_files(Path.dirname(tsconfig_path))
         end
@@ -180,33 +175,6 @@ defmodule TscPhoenixWeb.API.CheckController do
   end
 
   defp discover_files_from_tsconfig(_), do: discover_project_files("./")
-
-  defp discover_files_from_config(config, project_dir) do
-    # Check for explicit files list
-    case config["files"] do
-      files when is_list(files) and length(files) > 0 ->
-        Enum.map(files, &Path.join(project_dir, &1))
-
-      _ ->
-        # Use include/exclude patterns
-        include_patterns = Map.get(config, "include", ["**/*.ts", "**/*.tsx"])
-        exclude_patterns = Map.get(config, "exclude", ["node_modules", "dist"])
-
-        # Get all matching files
-        include_patterns
-        |> Enum.flat_map(fn pattern ->
-          Path.wildcard(Path.join(project_dir, pattern))
-        end)
-        |> Enum.reject(fn file ->
-          rel_path = Path.relative_to(file, project_dir)
-          Enum.any?(exclude_patterns, fn pattern ->
-            String.starts_with?(rel_path, pattern) or
-            String.contains?(rel_path, "/#{pattern}/")
-          end)
-        end)
-        |> Enum.uniq()
-    end
-  end
 
 
   defp format_diagnostics(diagnostics) do
