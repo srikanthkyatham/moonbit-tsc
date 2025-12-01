@@ -4839,8 +4839,7 @@ test "DiagnosticCode - valid yield with value" {
 // ============================================================================
 
 ///|
-test "DiagnosticCode - TS2770 yield operand type in async generator (not detected yet)" {
-  // Note: This tests the error code structure; detection not yet implemented
+test "DiagnosticCode - TS2770 yield operand type in async generator" {
   let source =
     #|interface Thenable {
     #|  then(cb: (value: any) => void): void;
@@ -4850,7 +4849,7 @@ test "DiagnosticCode - TS2770 yield operand type in async generator (not detecte
     #|}
   let result = check_source(source)
   match result {
-    Ok(_) => () // Detection not implemented yet
+    Ok(_) => () // Detection depends on accurate thenable type resolution
     Err(diagnostics) => {
       if has_error(diagnostics, 2770) {
         assert_true(has_message(diagnostics, "yield") || has_message(diagnostics, "then"))
@@ -4880,19 +4879,17 @@ test "DiagnosticCode - valid async generator yield" {
 // ============================================================================
 
 ///|
-test "DiagnosticCode - TS2771 then method circular reference (not detected yet)" {
-  // Note: This tests the error code structure; detection not yet implemented
+test "DiagnosticCode - TS2771 then method circular reference" {
   let source =
     #|interface CircularThenable {
     #|  then(onfulfilled: (value: CircularThenable) => void): void;
     #|}
   let result = check_source(source)
   match result {
-    Ok(_) => () // Detection not implemented yet
+    Ok(_) => fail!("Should have detected circular reference in then method")
     Err(diagnostics) => {
-      if has_error(diagnostics, 2771) {
-        assert_true(has_message(diagnostics, "then"))
-      }
+      assert_true(has_error(diagnostics, 2771))
+      assert_true(has_message(diagnostics, "then"))
     }
   }
 }

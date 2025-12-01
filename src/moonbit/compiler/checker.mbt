@@ -6002,6 +6002,49 @@ fn infer_yield_expression_type(
 }
 
 ///|
+/// Check if we're in an async generator (both async and generator)
+fn is_in_async_generator(checker : TypeChecker) -> Bool {
+  is_in_async_function(checker) && is_in_generator_function(checker)
+}
+
+///|
+/// Check if a type has a callable 'then' member (thenable)
+fn has_callable_then_member(checker : TypeChecker, t : Type) -> Bool {
+  match t {
+    Object(obj_type) =>
+      match obj_type.properties.get("then") {
+        Some(prop) =>
+          // Check if 'then' is a function type
+          match prop.prop_type {
+            Function(_) => true
+            _ => false
+          }
+        None => false
+      }
+    TypeReference(type_ref) =>
+      // Check if it's a Promise type (which is allowed)
+      if type_ref.name == "Promise" {
+        false // Promise is allowed, don't report error
+      } else {
+        // Resolve the type and check
+        match resolve_type_reference(checker, type_ref) {
+          (Object(obj_type), _) =>
+            match obj_type.properties.get("then") {
+              Some(prop) =>
+                match prop.prop_type {
+                  Function(_) => true
+                  _ => false
+                }
+              None => false
+            }
+          _ => false
+        }
+      }
+    _ => false
+  }
+}
+
+///|
 /// Check if the yield operand type has a problematic 'then' member (TS2770)
 /// Type of 'yield' operand in an async generator must either be a valid promise
 /// or must not contain a callable 'then' member
@@ -6010,28 +6053,97 @@ fn check_yield_operand_then_member(
   operand_type : Type,
   location : SourceLocation,
 ) -> TypeChecker {
-  // Check if the type has a 'then' property that is callable but not a proper promise
-  // In an async generator, the yield operand must either be a valid promise
-  // or must not contain a callable 'then' member (TS2770)
-  // Full implementation would check enclosing async generator context
-  // For now, this is a placeholder for the check
-  ignore(operand_type)
-  ignore(location)
-  checker
+  // Only check in async generators
+  if not(is_in_async_generator(checker)) {
+    return checker
+  }
+
+  // Check if the type has a 'then' property that is callable but not a proper Promise
+  if has_callable_then_member(checker, operand_type) {
+    add_diagnostic_with_code(
+      checker,
+      "Type of 'yield' operand in an async generator must either be a valid promise or must not contain a callable 'then' member.",
+      location,
+      TS2770,
+    )
+  } else {
+    checker
+  }
 }
 
 ///|
 /// Check for circular type reference in promise 'then' method (TS2771)
-/// Type '{0}' referenced when attempting to get type of 'then' method in a promise
+/// Type '{0}' is referenced directly or indirectly in the fulfillment callback of its own 'then' method
 fn check_promise_then_circular_reference(
   checker : TypeChecker,
-  type_name : String,
+  interface_name : String,
+  members : Array[Node],
   location : SourceLocation,
 ) -> TypeChecker {
-  // This check is for detecting circular references when resolving promise types
-  // It's typically triggered when a type refers to itself through the 'then' callback
-  // Full implementation requires cycle detection during promise type resolution
+  // Look for a 'then' method in the interface
+  for member in members {
+    match member {
+      MethodDeclaration(method) =>
+        if method.name == "then" {
+          // Check if any parameter's callback type references the interface itself
+          for param in method.parameters {
+            match param {
+              Parameter(p) =>
+                match p.type_annotation {
+                  Some(type_node) =>
+                    if type_references_name_in_callback(type_node, interface_name) {
+                      return add_diagnostic_with_code(
+                        checker,
+                        "Type '\{interface_name}' is referenced directly or indirectly in the fulfillment callback of its own 'then' method.",
+                        location,
+                        TS2771,
+                      )
+                    }
+                  None => ()
+                }
+              _ => ()
+            }
+          }
+        }
+      _ => ()
+    }
+  }
   checker
+}
+
+///|
+/// Check if a type node references a given name in a callback parameter
+fn type_references_name_in_callback(type_node : Node, name : String) -> Bool {
+  match type_node {
+    FunctionType(ft) => {
+      // Check the parameter types of the function
+      for param in ft.parameters {
+        match param {
+          Parameter(p) =>
+            match p.type_annotation {
+              Some(param_type) =>
+                if type_node_references_name(param_type, name) {
+                  return true
+                }
+              None => ()
+            }
+          _ => ()
+        }
+      }
+      false
+    }
+    _ => false
+  }
+}
+
+///|
+/// Check if a type node directly references a given name
+fn type_node_references_name(type_node : Node, name : String) -> Bool {
+  match type_node {
+    TypeReference(type_ref) => type_ref.type_name == name
+    Identifier(id) => id.name == name
+    _ => false
+  }
 }
 
 ///|
@@ -8882,6 +8994,13 @@ fn check_interface_declaration(
     }
     None => ()
   }
+  // TS2771: Check for circular reference in Promise-like interface's then method
+  checker = check_promise_then_circular_reference(
+    checker,
+    iface_decl.name,
+    iface_decl.members,
+    iface_decl.location,
+  )
   // TS2746: Check for conflicting property declarations in extended interfaces
   checker = check_interface_heritage_conflicts(checker, iface_decl)
   checker
