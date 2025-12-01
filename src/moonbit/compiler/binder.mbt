@@ -822,6 +822,12 @@ fn bind_enum_declaration(
     SymbolKind::Enum,
     binder.next_symbol_id,
   )
+  // Set is_const flag for const enums
+  let symbol = if enum_decl.is_const {
+    { ..symbol, flags: { ..symbol.flags, is_const: true } }
+  } else {
+    symbol
+  }
   let symbol = symbol.add_declaration(Node::EnumDeclaration(enum_decl))
   let binder = declare_symbol(binder, enum_decl.name, symbol)
 

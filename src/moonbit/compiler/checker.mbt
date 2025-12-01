@@ -1526,6 +1526,22 @@ fn check_variable_declaration(
     None => (None, checker)
   }
 
+  // Check for TS2475: const enum used as value (not in property/index access)
+  let checker = match decl.initializer {
+    Some(init) =>
+      match get_const_enum_name(checker, init) {
+        Some(enum_name) =>
+          add_diagnostic_with_code(
+            checker,
+            "'const' enums can only be used in property or index access expressions or the right hand side of an import declaration or export assignment or type query.",
+            get_node_location(init),
+            TS2475,
+          )
+        None => checker
+      }
+    None => checker
+  }
+
   // Check compatibility if both are present using check_assignment_compatibility
   let checker = match (declared_type, init_type) {
     (Some(decl_t), Some(init_t)) =>
@@ -5374,6 +5390,24 @@ fn infer_property_access_type(
 }
 
 ///|
+/// Check if an expression refers to a const enum and return the enum name
+fn get_const_enum_name(checker : TypeChecker, expr : Node) -> String? {
+  match expr {
+    Identifier(id) =>
+      match lookup_symbol(checker, id.name) {
+        Some(symbol) =>
+          if symbol.kind == SymbolKind::Enum && symbol.flags.is_const {
+            Some(id.name)
+          } else {
+            None
+          }
+        None => None
+      }
+    _ => None
+  }
+}
+
+///|
 /// Infer element access type (bracket notation)
 /// When noUncheckedIndexedAccess is enabled, adds undefined to the result type
 /// for array access and index signature access (but not for known property access)
@@ -5383,6 +5417,25 @@ fn infer_element_access_type(
 ) -> (Type, TypeChecker) {
   let (object_type, checker) = infer_type(checker, elem.expression)
   let (index_type, checker) = infer_type(checker, elem.argument_expression)
+
+  // Check for const enum access restrictions (TS2476)
+  let checker = match get_const_enum_name(checker, elem.expression) {
+    Some(enum_name) =>
+      // For const enums, only string literal access is allowed
+      match elem.argument_expression {
+        StringLiteral(_) => checker // Valid: Colors["Red"]
+        _ =>
+          // TS2476: A const enum member can only be accessed using a string literal
+          add_diagnostic_with_code(
+            checker,
+            "A const enum member can only be accessed using a string literal.",
+            get_node_location(elem.argument_expression),
+            TS2476,
+          )
+      }
+    None => checker
+  }
+
   let no_unchecked = checker.no_unchecked_indexed_access
   match object_type {
     Array(arr_type) => {

@@ -4976,19 +4976,16 @@ test "DiagnosticCode - valid catch clause with any" {
 // ============================================================================
 
 ///|
-test "DiagnosticCode - TS2475 const enum usage restriction (not detected yet)" {
-  // Note: This tests the error code structure; detection not yet implemented
+test "DiagnosticCode - TS2475 const enum usage restriction" {
+  // TS2475: const enum can only be used in property/index access
   let source =
     #|const enum Colors { Red, Green, Blue }
-    #|const key = "Red";
-    #|const value = Colors[key]; // dynamic access not allowed
+    #|const enumRef = Colors; // using const enum as a value
   let result = check_source(source)
   match result {
-    Ok(_) => () // Detection not implemented yet
+    Ok(_) => assert_true(false) // Should detect const enum usage error
     Err(diagnostics) => {
-      if has_error(diagnostics, 2475) {
-        assert_true(has_message(diagnostics, "const enum") || has_message(diagnostics, "string literal"))
-      }
+      assert_true(has_error(diagnostics, 2475))
     }
   }
 }
@@ -5012,8 +5009,7 @@ test "DiagnosticCode - valid const enum literal access" {
 // ============================================================================
 
 ///|
-test "DiagnosticCode - TS2476 const enum member access (not detected yet)" {
-  // Note: This tests the error code structure; detection not yet implemented
+test "DiagnosticCode - TS2476 const enum member access" {
   let source =
     #|const enum Status { Active = 1, Inactive = 0 }
     #|function getStatus(s: number) {
@@ -5021,11 +5017,9 @@ test "DiagnosticCode - TS2476 const enum member access (not detected yet)" {
     #|}
   let result = check_source(source)
   match result {
-    Ok(_) => () // Detection not implemented yet
+    Ok(_) => assert_true(false) // Should detect const enum access error
     Err(diagnostics) => {
-      if has_error(diagnostics, 2476) {
-        assert_true(has_message(diagnostics, "const enum") || has_message(diagnostics, "string literal"))
-      }
+      assert_true(has_error(diagnostics, 2476))
     }
   }
 }
