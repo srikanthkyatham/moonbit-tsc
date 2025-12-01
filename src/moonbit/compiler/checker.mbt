@@ -6984,7 +6984,28 @@ fn check_try_statement(
 ) -> TypeChecker {
   let checker = check_statement(checker, try_stmt.try_block)
   let checker = match try_stmt.catch_clause {
-    Some(catch_clause) => check_statement(checker, catch_clause.block)
+    Some(catch_clause) => {
+      // Push a local scope for the catch block
+      let checker = push_local_scope(checker)
+      // Add the catch clause variable to scope if present
+      let checker = match catch_clause.variable_declaration {
+        Some(var_decl) => {
+          // The variable_declaration is typically an Identifier or BindingPattern
+          match var_decl {
+            Identifier(id) => {
+              // Catch variable has type 'unknown' in strict mode, 'any' otherwise
+              let (catch_type, checker) = any_type(checker)
+              add_local_variable(checker, id.name, catch_type)
+            }
+            _ => checker
+          }
+        }
+        None => checker
+      }
+      let checker = check_statement(checker, catch_clause.block)
+      // Pop the local scope
+      pop_local_scope(checker)
+    }
     None => checker
   }
   match try_stmt.finally_block {
