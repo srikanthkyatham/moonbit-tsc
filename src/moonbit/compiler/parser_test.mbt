@@ -1811,6 +1811,71 @@ test "parse non-abstract class declaration" {
 // Await Expression Tests
 
 ///|
+test "verify await token is KeywordAwait" {
+  // First verify the scanner produces KeywordAwait for "await"
+  let tokens = tokens_from_source("await Promise.resolve()")
+  // Should produce: KeywordAwait, Identifier(Promise), Dot, Identifier(resolve), OpenParen, CloseParen, EOF
+  match tokens[0] {
+    KeywordAwait(_) => ()
+    Identifier(name, _) => {
+      println("ERROR: await was scanned as Identifier('\{name}') instead of KeywordAwait")
+      assert_true(false)
+    }
+    _ => {
+      println("ERROR: await was scanned as unexpected token type")
+      assert_true(false)
+    }
+  }
+}
+
+///|
+test "parse await in non-async function" {
+  // Test that await is still parsed as AwaitExpression even in non-async function
+  // (The error should be caught by type checker, not parser)
+  let tokens = tokens_from_source(
+    "function syncFunction() { await Promise.resolve(); }",
+  )
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        FunctionDeclaration(func) => {
+          assert_true(not(func.is_async))
+          match func.body {
+            Some(BlockStatement(block)) => {
+              assert_eq(block.statements.length(), 1)
+              match block.statements[0] {
+                ExpressionStatement(stmt) =>
+                  match stmt.expression {
+                    AwaitExpression(_) => ()
+                    CallExpression(_) => {
+                      // This is incorrect - await should be AwaitExpression, not CallExpression
+                      // If we reach here, the parser is treating "await" as a function call
+                      println(
+                        "ERROR: await was parsed as CallExpression instead of AwaitExpression",
+                      )
+                      assert_true(false)
+                    }
+                    _ => {
+                      println("ERROR: unexpected expression type")
+                      assert_true(false)
+                    }
+                  }
+                _ => assert_true(false)
+              }
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
 test "parse await expression" {
   let tokens = tokens_from_source(
     "async function fetch() { const data = await getData(); }",

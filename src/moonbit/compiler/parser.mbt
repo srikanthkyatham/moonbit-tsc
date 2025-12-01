@@ -1136,11 +1136,17 @@ fn parse_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
     KeywordUsing(start_loc) => parse_using_statement(parser, start_loc, false)
 
     // Await using statement (TS 5.2+): await using x = expr;
+    // Or await expression used as statement (await Promise.resolve();)
     KeywordAwait(_) => {
-      let parser = advance_parser(parser)
-      match current_token(parser) {
-        KeywordUsing(loc) => parse_using_statement(parser, loc, true)
-        _ => parse_expression_statement(parser)
+      // Check if this is "await using" (save parser state to potentially backtrack)
+      let saved_parser = parser
+      let parser_after_await = advance_parser(parser)
+      match current_token(parser_after_await) {
+        KeywordUsing(loc) => parse_using_statement(parser_after_await, loc, true)
+        // Not "await using", so this is an await expression statement
+        // Use the original parser (with await token) so parse_expression_statement
+        // can properly parse the await expression
+        _ => parse_expression_statement(saved_parser)
       }
     }
 
