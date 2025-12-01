@@ -5,6 +5,8 @@ defmodule TscPhoenixWeb.MetricsLive do
 
   use TscPhoenixWeb, :live_view
 
+  import TscPhoenixWeb.Live.Components.Navigation
+
   alias TSC.Telemetry.Reporter
 
   @impl true
@@ -49,9 +51,9 @@ defmodule TscPhoenixWeb.MetricsLive do
     ~H"""
     <div class="min-h-screen bg-base-200">
       <header class="navbar bg-base-100 shadow-lg">
-        <div class="flex-1">
-          <a href="/" class="btn btn-ghost text-xl">TSC Dashboard</a>
-          <span class="text-xl font-bold px-4">/ Metrics</span>
+        <div class="flex-1 gap-4">
+          <span class="text-xl font-bold px-4">TSC Dashboard</span>
+          <.nav_tabs current_path="/metrics" />
         </div>
       </header>
 

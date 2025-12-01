@@ -6,6 +6,7 @@ defmodule TscPhoenixWeb.DashboardLive do
   use TscPhoenixWeb, :live_view
 
   import TscPhoenixWeb.Live.Components.BuildProgress
+  import TscPhoenixWeb.Live.Components.Navigation
 
   alias TSC.Telemetry.Reporter
   alias TSC.Cache.{TypeCache, FileCache}
@@ -181,8 +182,9 @@ defmodule TscPhoenixWeb.DashboardLive do
     ~H"""
     <div class="min-h-screen bg-base-200">
       <header class="navbar bg-base-100 shadow-lg">
-        <div class="flex-1">
+        <div class="flex-1 gap-4">
           <span class="text-xl font-bold px-4">TSC Dashboard</span>
+          <.nav_tabs current_path="/" />
         </div>
         <div class="flex-none gap-2">
           <input

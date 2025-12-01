@@ -5,6 +5,8 @@ defmodule TscPhoenixWeb.GraphLive do
 
   use TscPhoenixWeb, :live_view
 
+  import TscPhoenixWeb.Live.Components.Navigation
+
   alias TSC.Graph.DependencyGraph
   alias TSC.Parser.ImportExtractor
   alias TSC.Project.TsConfig
@@ -151,8 +153,9 @@ defmodule TscPhoenixWeb.GraphLive do
     ~H"""
     <div class="min-h-screen bg-base-200">
       <header class="navbar bg-base-100 shadow-lg">
-        <div class="flex-1">
-          <span class="text-xl font-bold px-4">Dependency Graph</span>
+        <div class="flex-1 gap-4">
+          <span class="text-xl font-bold px-4">TSC Dashboard</span>
+          <.nav_tabs current_path="/graph" />
         </div>
         <div class="flex-none gap-2">
           <form phx-submit="load_project" class="flex gap-2">

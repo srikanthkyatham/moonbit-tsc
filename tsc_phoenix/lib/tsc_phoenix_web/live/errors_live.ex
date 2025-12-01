@@ -8,6 +8,7 @@ defmodule TscPhoenixWeb.ErrorsLive do
 
   import TscPhoenixWeb.Live.Components.FileTree
   import TscPhoenixWeb.Live.Components.CodePreview
+  import TscPhoenixWeb.Live.Components.Navigation
 
   alias TSC.Cache.ErrorStore
 
@@ -233,9 +234,9 @@ defmodule TscPhoenixWeb.ErrorsLive do
     <div class="min-h-screen bg-base-200">
       <!-- Header -->
       <header class="navbar bg-base-100 shadow-lg sticky top-0 z-50">
-        <div class="flex-1">
-          <a href="/" class="btn btn-ghost text-xl">TSC Dashboard</a>
-          <span class="text-xl font-bold px-4">/ Errors</span>
+        <div class="flex-1 gap-4">
+          <span class="text-xl font-bold px-4">TSC Dashboard</span>
+          <.nav_tabs current_path="/errors" />
         </div>
         <div class="flex-none gap-2">
           <!-- Project Selector -->

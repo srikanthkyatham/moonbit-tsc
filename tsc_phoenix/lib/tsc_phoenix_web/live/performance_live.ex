@@ -5,6 +5,8 @@ defmodule TscPhoenixWeb.PerformanceLive do
 
   use TscPhoenixWeb, :live_view
 
+  import TscPhoenixWeb.Live.Components.Navigation
+
   alias TSC.Telemetry.{Profiler, MemoryAnalyzer}
 
   @impl true
@@ -102,8 +104,9 @@ defmodule TscPhoenixWeb.PerformanceLive do
     ~H"""
     <div class="min-h-screen bg-base-200">
       <header class="navbar bg-base-100 shadow-lg">
-        <div class="flex-1">
-          <span class="text-xl font-bold px-4">Performance Profiler</span>
+        <div class="flex-1 gap-4">
+          <span class="text-xl font-bold px-4">TSC Dashboard</span>
+          <.nav_tabs current_path="/performance" />
         </div>
         <div class="flex-none gap-2">
           <form phx-submit="start_session" class="flex gap-2">

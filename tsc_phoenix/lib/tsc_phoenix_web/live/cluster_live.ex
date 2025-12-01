@@ -5,6 +5,8 @@ defmodule TscPhoenixWeb.ClusterLive do
 
   use TscPhoenixWeb, :live_view
 
+  import TscPhoenixWeb.Live.Components.Navigation
+
   alias TSC.Cluster.{NodeRegistry, WorkDistributor, DistributedCache}
 
   @impl true
@@ -162,8 +164,9 @@ defmodule TscPhoenixWeb.ClusterLive do
     ~H"""
     <div class="min-h-screen bg-base-200">
       <header class="navbar bg-base-100 shadow-lg">
-        <div class="flex-1">
-          <span class="text-xl font-bold px-4">Cluster Management</span>
+        <div class="flex-1 gap-4">
+          <span class="text-xl font-bold px-4">TSC Dashboard</span>
+          <.nav_tabs current_path="/cluster" />
         </div>
         <div class="flex-none gap-2">
           <%= if local_registered?(@nodes) do %>
