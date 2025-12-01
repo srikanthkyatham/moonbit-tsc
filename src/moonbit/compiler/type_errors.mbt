@@ -231,6 +231,17 @@ pub enum MismatchReason {
   ConstEnumMemberAccessRestriction(String) // TS2476: A const enum member can only be accessed using a string literal
   UsingPrivateName(String, String) // TS2494: Using private name '{0}' as the type of '{1}'
   MemberInitializerForwardReference(String, String) // TS2651: A member initializer in a enum declaration cannot reference members declared after it, including members defined in other enums
+
+  // Module & Export errors
+  ExportDeclarationConflicts(String, String) // TS2484: Export declaration conflicts with exported declaration of '{0}'
+  ArgumentsObjectCannotBeReferenced(String) // TS2496: The 'arguments' object cannot be referenced in an arrow function
+  ModuleCanOnlyBeReferencedWithESImport(String) // TS2497: Module '{0}' can only be referenced with a default import when using esModuleInterop
+  ReferencedInOwnBaseExpression(String) // TS2502: '{0}' is referenced directly or indirectly in its own base expression
+  InferredTypeReferencesInaccessible(String, String) // TS2527: The inferred type of '{0}' references an inaccessible '{1}' type
+  CannotAugmentModule(String) // TS2649: Cannot augment module '{0}' with value exports because it resolves to a non-module entity
+  RefersToUMDGlobal(String) // TS2686: '{0}' refers to a UMD global, but the current file is a module
+  DeclarationsMustHaveIdenticalModifiers(String) // TS2687: All declarations of '{0}' must have identical modifiers
+  CannotFindTypeDefinitionFile(String) // TS2688: Cannot find type definition file for '{0}'
 } derive(Show, Eq)
 
 // ============================================================================
@@ -1085,6 +1096,25 @@ pub fn get_friendly_title(reason : MismatchReason) -> String {
       "USING PRIVATE NAME '" + private_name + "' IN '" + context + "'"
     MemberInitializerForwardReference(member, referenced) =>
       "MEMBER '" + member + "' CANNOT REFERENCE '" + referenced + "'"
+    // Module & Export errors
+    ExportDeclarationConflicts(name, _) =>
+      "EXPORT DECLARATION CONFLICTS WITH '" + name + "'"
+    ArgumentsObjectCannotBeReferenced(context) =>
+      "'ARGUMENTS' CANNOT BE REFERENCED IN " + context
+    ModuleCanOnlyBeReferencedWithESImport(module_name) =>
+      "MODULE '" + module_name + "' REQUIRES ES IMPORT"
+    ReferencedInOwnBaseExpression(name) =>
+      "'" + name + "' REFERENCED IN ITS OWN BASE EXPRESSION"
+    InferredTypeReferencesInaccessible(name, inaccessible) =>
+      "INFERRED TYPE OF '" + name + "' REFERENCES INACCESSIBLE '" + inaccessible + "'"
+    CannotAugmentModule(module_name) =>
+      "CANNOT AUGMENT MODULE '" + module_name + "'"
+    RefersToUMDGlobal(name) =>
+      "'" + name + "' REFERS TO UMD GLOBAL"
+    DeclarationsMustHaveIdenticalModifiers(name) =>
+      "DECLARATIONS OF '" + name + "' MUST HAVE IDENTICAL MODIFIERS"
+    CannotFindTypeDefinitionFile(name) =>
+      "CANNOT FIND TYPE DEFINITION FILE FOR '" + name + "'"
   }
 }
 
@@ -1684,6 +1714,47 @@ pub fn get_why_explanation(reason : MismatchReason) -> String {
       "' references '" +
       referenced +
       "' which is declared after it. Enum members are evaluated in order, so earlier members cannot reference later ones. This prevents circular dependencies and ensures deterministic initialization order."
+    // Module & Export errors
+    ExportDeclarationConflicts(name, _) =>
+      "There are multiple export declarations for '" +
+      name +
+      "' that conflict with each other. Each name can only be exported once from a module. This often happens when you have both a named export and a re-export with the same name."
+    ArgumentsObjectCannotBeReferenced(context) =>
+      "The 'arguments' object cannot be referenced in " +
+      context +
+      ". Arrow functions don't have their own 'arguments' binding - they inherit it from the enclosing scope. Use rest parameters (...args) instead to capture all arguments."
+    ModuleCanOnlyBeReferencedWithESImport(module_name) =>
+      "Module '" +
+      module_name +
+      "' can only be referenced with a default import when using 'esModuleInterop'. This happens when importing a CommonJS module that doesn't have ES module exports. The esModuleInterop flag helps bridge the gap between CommonJS and ES modules."
+    ReferencedInOwnBaseExpression(name) =>
+      "'" +
+      name +
+      "' is referenced directly or indirectly in its own base expression. This creates a circular dependency where a class or type is trying to extend or reference itself in its own definition, which is not allowed."
+    InferredTypeReferencesInaccessible(name, inaccessible) =>
+      "The inferred type of '" +
+      name +
+      "' references an inaccessible '" +
+      inaccessible +
+      "' type. This happens when TypeScript infers a type that includes a private or internal type that cannot be used in the public API. You need to explicitly annotate the type with an accessible type."
+    CannotAugmentModule(module_name) =>
+      "Cannot augment module '" +
+      module_name +
+      "' with value exports because it resolves to a non-module entity. Module augmentation only works with actual ES modules or namespaces that can be extended. If the target is a non-module (like a script), it cannot be augmented."
+    RefersToUMDGlobal(name) =>
+      "'" +
+      name +
+      "' refers to a UMD global, but the current file is a module. When a file has import or export statements, it becomes a module and can no longer access UMD globals directly. You need to import the module explicitly instead."
+    DeclarationsMustHaveIdenticalModifiers(name) =>
+      "All declarations of '" +
+      name +
+      "' must have identical modifiers. When a name is declared multiple times (like in declaration merging), the access modifiers (public, private, export, etc.) must be consistent across all declarations."
+    CannotFindTypeDefinitionFile(name) =>
+      "Cannot find type definition file for '" +
+      name +
+      "'. TypeScript looks for type definitions in @types packages or .d.ts files. This usually means you need to install the corresponding @types package (npm install @types/" +
+      name +
+      ") or create a custom type declaration."
   }
 }
 
@@ -2959,6 +3030,121 @@ pub fn get_how_to_fix(
       fixes.push("        " + referenced + " = 1,")
       fixes.push("    }")
     }
+    // Module & Export errors
+    ExportDeclarationConflicts(name, _) => {
+      fixes.push("Export declaration for '" + name + "' conflicts with another export.")
+      fixes.push("")
+      fixes.push("Option 1: Remove the duplicate export:")
+      fixes.push("    export { " + name + " };  // Keep only one export")
+      fixes.push("")
+      fixes.push("Option 2: Rename one of the exports:")
+      fixes.push("    export { " + name + " as " + name + "Alt };")
+      fixes.push("")
+      fixes.push("Option 3: Consolidate exports into a single statement")
+    }
+    ArgumentsObjectCannotBeReferenced(context) => {
+      fixes.push("The 'arguments' object cannot be used in " + context + ".")
+      fixes.push("")
+      fixes.push("Arrow functions don't have their own 'arguments' binding.")
+      fixes.push("")
+      fixes.push("Option 1: Use rest parameters instead:")
+      fixes.push("    const fn = (...args) => {")
+      fixes.push("        console.log(args);  // Array of all arguments")
+      fixes.push("    };")
+      fixes.push("")
+      fixes.push("Option 2: Convert to a regular function:")
+      fixes.push("    function fn() {")
+      fixes.push("        console.log(arguments);")
+      fixes.push("    }")
+    }
+    ModuleCanOnlyBeReferencedWithESImport(module_name) => {
+      fixes.push("Module '" + module_name + "' requires ES module import syntax.")
+      fixes.push("")
+      fixes.push("Option 1: Use default import with esModuleInterop:")
+      fixes.push("    import " + module_name + " from '" + module_name + "';")
+      fixes.push("")
+      fixes.push("Option 2: Use namespace import:")
+      fixes.push("    import * as " + module_name + " from '" + module_name + "';")
+      fixes.push("")
+      fixes.push("Option 3: Enable esModuleInterop in tsconfig.json:")
+      fixes.push("    { \"compilerOptions\": { \"esModuleInterop\": true } }")
+    }
+    ReferencedInOwnBaseExpression(name) => {
+      fixes.push("'" + name + "' cannot reference itself in its base expression.")
+      fixes.push("")
+      fixes.push("A class or type cannot extend itself directly or indirectly.")
+      fixes.push("")
+      fixes.push("Option 1: Remove the self-reference:")
+      fixes.push("    class " + name + " { /* don't extend " + name + " */ }")
+      fixes.push("")
+      fixes.push("Option 2: Create a separate base class:")
+      fixes.push("    class Base { ... }")
+      fixes.push("    class " + name + " extends Base { ... }")
+    }
+    InferredTypeReferencesInaccessible(name, inaccessible) => {
+      fixes.push("The inferred type of '" + name + "' references inaccessible type '" + inaccessible + "'.")
+      fixes.push("")
+      fixes.push("Option 1: Add an explicit type annotation with a public type:")
+      fixes.push("    export const " + name + ": PublicType = ...;")
+      fixes.push("")
+      fixes.push("Option 2: Make the referenced type public/exported:")
+      fixes.push("    export type " + inaccessible + " = ...;")
+      fixes.push("")
+      fixes.push("Option 3: Use a type that doesn't depend on internal types")
+    }
+    CannotAugmentModule(module_name) => {
+      fixes.push("Cannot augment module '" + module_name + "' with value exports.")
+      fixes.push("")
+      fixes.push("Module augmentation only works with ES modules or namespaces.")
+      fixes.push("")
+      fixes.push("Option 1: Ensure the target is a proper module:")
+      fixes.push("    // The module should have import/export statements")
+      fixes.push("")
+      fixes.push("Option 2: Use a different augmentation approach:")
+      fixes.push("    declare module '" + module_name + "' {")
+      fixes.push("        // Only add type declarations, not values")
+      fixes.push("    }")
+    }
+    RefersToUMDGlobal(name) => {
+      fixes.push("'" + name + "' refers to a UMD global but this file is a module.")
+      fixes.push("")
+      fixes.push("In modules, UMD globals must be imported explicitly.")
+      fixes.push("")
+      fixes.push("Option 1: Import the module:")
+      fixes.push("    import " + name + " from '" + name + "';")
+      fixes.push("")
+      fixes.push("Option 2: Import as namespace:")
+      fixes.push("    import * as " + name + " from '" + name + "';")
+      fixes.push("")
+      fixes.push("Option 3: If you need the global, remove import/export to make this a script")
+    }
+    DeclarationsMustHaveIdenticalModifiers(name) => {
+      fixes.push("All declarations of '" + name + "' must have identical modifiers.")
+      fixes.push("")
+      fixes.push("When merging declarations, modifiers must be consistent.")
+      fixes.push("")
+      fixes.push("Option 1: Make all declarations have the same export modifier:")
+      fixes.push("    export interface " + name + " { ... }")
+      fixes.push("    export interface " + name + " { ... }  // Both exported")
+      fixes.push("")
+      fixes.push("Option 2: Or make all declarations local:")
+      fixes.push("    interface " + name + " { ... }")
+      fixes.push("    interface " + name + " { ... }  // Both local")
+    }
+    CannotFindTypeDefinitionFile(name) => {
+      fixes.push("Cannot find type definition file for '" + name + "'.")
+      fixes.push("")
+      fixes.push("Option 1: Install the @types package:")
+      fixes.push("    npm install --save-dev @types/" + name)
+      fixes.push("")
+      fixes.push("Option 2: Create a custom type declaration file:")
+      fixes.push("    // " + name + ".d.ts")
+      fixes.push("    declare module '" + name + "' {")
+      fixes.push("        // Add type declarations here")
+      fixes.push("    }")
+      fixes.push("")
+      fixes.push("Option 3: Add the types to tsconfig.json typeRoots")
+    }
   }
   fixes
 }
@@ -3100,6 +3286,16 @@ pub fn get_error_code(reason : MismatchReason) -> Int {
     ConstEnumMemberAccessRestriction(_) => 2476 // TS2476: A const enum member can only be accessed using a string literal
     UsingPrivateName(_, _) => 2494 // TS2494: Using private name as type
     MemberInitializerForwardReference(_, _) => 2651 // TS2651: A member initializer cannot reference members declared after it
+    // Module & Export errors
+    ExportDeclarationConflicts(_, _) => 2484 // TS2484: Export declaration conflicts
+    ArgumentsObjectCannotBeReferenced(_) => 2496 // TS2496: The 'arguments' object cannot be referenced
+    ModuleCanOnlyBeReferencedWithESImport(_) => 2497 // TS2497: Module can only be referenced with ES import
+    ReferencedInOwnBaseExpression(_) => 2502 // TS2502: Referenced in its own base expression
+    InferredTypeReferencesInaccessible(_, _) => 2527 // TS2527: Inferred type references inaccessible type
+    CannotAugmentModule(_) => 2649 // TS2649: Cannot augment module
+    RefersToUMDGlobal(_) => 2686 // TS2686: Refers to UMD global
+    DeclarationsMustHaveIdenticalModifiers(_) => 2687 // TS2687: All declarations must have identical modifiers
+    CannotFindTypeDefinitionFile(_) => 2688 // TS2688: Cannot find type definition file
   }
 }
 

@@ -4685,3 +4685,296 @@ test "DiagnosticCode - valid enum without references" {
     }
   }
 }
+
+// ============================================================================
+// TS2484: Export declaration conflicts
+// ============================================================================
+
+///|
+test "DiagnosticCode - TS2484 export declaration conflicts (not detected yet)" {
+  // Note: This tests the error code structure; detection not yet implemented
+  let source =
+    #|const foo = 1;
+    #|export { foo };
+    #|export { foo as foo }; // duplicate export
+  let result = check_source(source)
+  match result {
+    Ok(_) => () // Detection not implemented yet
+    Err(diagnostics) => {
+      if has_error(diagnostics, 2484) {
+        assert_true(has_message(diagnostics, "export") || has_message(diagnostics, "conflicts"))
+      }
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - valid distinct exports" {
+  let source =
+    #|const foo = 1;
+    #|const bar = 2;
+    #|export { foo, bar };
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => {
+      assert_true(not(has_error(diagnostics, 2484)))
+    }
+  }
+}
+
+// ============================================================================
+// TS2496: arguments object cannot be referenced
+// ============================================================================
+
+///|
+test "DiagnosticCode - TS2496 arguments in arrow function (not detected yet)" {
+  // Note: This tests the error code structure; detection not yet implemented
+  let source =
+    #|const fn = () => {
+    #|  console.log(arguments); // arguments not available in arrow
+    #|};
+  let result = check_source(source)
+  match result {
+    Ok(_) => () // Detection not implemented yet
+    Err(diagnostics) => {
+      if has_error(diagnostics, 2496) {
+        assert_true(has_message(diagnostics, "arguments"))
+      }
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - valid arguments in regular function" {
+  let source =
+    #|function fn() {
+    #|  console.log(arguments);
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => {
+      assert_true(not(has_error(diagnostics, 2496)))
+    }
+  }
+}
+
+// ============================================================================
+// TS2497: Module can only be referenced with ES imports
+// ============================================================================
+
+///|
+test "DiagnosticCode - TS2497 module ES import (not detected yet)" {
+  // Note: This tests the error code structure; detection not yet implemented
+  let source =
+    #|import myModule = require('./module'); // CommonJS style
+  let result = check_source(source)
+  match result {
+    Ok(_) => () // Detection not implemented yet
+    Err(diagnostics) => {
+      if has_error(diagnostics, 2497) {
+        assert_true(has_message(diagnostics, "import") || has_message(diagnostics, "module"))
+      }
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - valid ES module import" {
+  let source =
+    #|import { something } from './module';
+  let result = check_source(source)
+  match result {
+    Ok(_) => () // Module resolution may not work in test
+    Err(diagnostics) => {
+      assert_true(not(has_error(diagnostics, 2497)))
+    }
+  }
+}
+
+// ============================================================================
+// TS2502: Referenced in its own base expression
+// ============================================================================
+
+///|
+test "DiagnosticCode - TS2502 self base expression (not detected yet)" {
+  // Note: This tests the error code structure; detection not yet implemented
+  let source =
+    #|class A extends A {} // self reference
+  let result = check_source(source)
+  match result {
+    Ok(_) => () // Detection not implemented yet
+    Err(diagnostics) => {
+      if has_error(diagnostics, 2502) {
+        assert_true(has_message(diagnostics, "base") || has_message(diagnostics, "referenced"))
+      }
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - valid class extension" {
+  let source =
+    #|class Base { value: number = 0; }
+    #|class Derived extends Base { extra: string = ""; }
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => {
+      assert_true(not(has_error(diagnostics, 2502)))
+    }
+  }
+}
+
+// ============================================================================
+// TS2527: Inferred type references inaccessible type
+// ============================================================================
+
+///|
+test "DiagnosticCode - TS2527 inaccessible type (not detected yet)" {
+  // Note: This tests the error code structure; detection not yet implemented
+  let source =
+    #|class MyClass {
+    #|  private data = { secret: 123 };
+    #|  getData() { return this.data; } // infers private type
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => () // Detection not implemented yet
+    Err(diagnostics) => {
+      if has_error(diagnostics, 2527) {
+        assert_true(has_message(diagnostics, "inaccessible") || has_message(diagnostics, "inferred"))
+      }
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - valid explicit return type" {
+  let source =
+    #|class MyClass {
+    #|  private data = { secret: 123 };
+    #|  getData(): { secret: number } { return this.data; }
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => {
+      assert_true(not(has_error(diagnostics, 2527)))
+    }
+  }
+}
+
+// ============================================================================
+// TS2649: Cannot augment module
+// ============================================================================
+
+///|
+test "DiagnosticCode - TS2649 cannot augment module (not detected yet)" {
+  // Note: This tests the error code structure; detection not yet implemented
+  let source =
+    #|declare module 'nonexistent' {
+    #|  export const value: number;
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => () // Detection not implemented yet
+    Err(diagnostics) => {
+      if has_error(diagnostics, 2649) {
+        assert_true(has_message(diagnostics, "augment") || has_message(diagnostics, "module"))
+      }
+    }
+  }
+}
+
+// ============================================================================
+// TS2686: Refers to UMD global
+// ============================================================================
+
+///|
+test "DiagnosticCode - TS2686 UMD global (not detected yet)" {
+  // Note: This tests the error code structure; detection not yet implemented
+  let source =
+    #|import { something } from './module';
+    #|const x = React; // UMD global in module context
+  let result = check_source(source)
+  match result {
+    Ok(_) => () // Detection not implemented yet
+    Err(diagnostics) => {
+      if has_error(diagnostics, 2686) {
+        assert_true(has_message(diagnostics, "UMD") || has_message(diagnostics, "global"))
+      }
+    }
+  }
+}
+
+// ============================================================================
+// TS2687: All declarations must have identical modifiers
+// ============================================================================
+
+///|
+test "DiagnosticCode - TS2687 identical modifiers (not detected yet)" {
+  // Note: This tests the error code structure; detection not yet implemented
+  let source =
+    #|interface Foo { a: number; }
+    #|export interface Foo { b: string; } // mixed export/non-export
+  let result = check_source(source)
+  match result {
+    Ok(_) => () // Detection not implemented yet
+    Err(diagnostics) => {
+      if has_error(diagnostics, 2687) {
+        assert_true(has_message(diagnostics, "modifiers") || has_message(diagnostics, "identical"))
+      }
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - valid interface merging" {
+  let source =
+    #|interface Foo { a: number; }
+    #|interface Foo { b: string; }
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => {
+      assert_true(not(has_error(diagnostics, 2687)))
+    }
+  }
+}
+
+// ============================================================================
+// TS2688: Cannot find type definition file
+// ============================================================================
+
+///|
+test "DiagnosticCode - TS2688 type definition file (not detected yet)" {
+  // Note: This tests the error code structure; detection not yet implemented
+  let source =
+    #|/// <reference types="nonexistent-package" />
+    #|const x = 1;
+  let result = check_source(source)
+  match result {
+    Ok(_) => () // Detection not implemented yet
+    Err(diagnostics) => {
+      if has_error(diagnostics, 2688) {
+        assert_true(has_message(diagnostics, "type definition") || has_message(diagnostics, "find"))
+      }
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - valid type reference" {
+  let source =
+    #|type MyType = string;
+    #|const x: MyType = "hello";
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => {
+      assert_true(not(has_error(diagnostics, 2688)))
+    }
+  }
+}
