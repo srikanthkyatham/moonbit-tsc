@@ -202,16 +202,26 @@ defmodule TscPhoenixWeb.API.CheckController do
 
   defp format_diagnostics(diagnostics) do
     Enum.map(diagnostics, fn d ->
-      %{
-        file: d[:file],
-        line: d[:line],
-        column: d[:column],
-        end_line: d[:end_line],
-        end_column: d[:end_column],
-        code: d[:code],
-        category: to_string(d[:category]),
-        message: d[:message]
-      }
+      case d do
+        %TSC.Diagnostic{} ->
+          TSC.Diagnostic.to_map(d)
+
+        %{} ->
+          # Legacy map format fallback
+          %{
+            file: d[:file] || d.file,
+            line: d[:line] || d.line,
+            column: d[:column] || d.column,
+            end_line: d[:end_line],
+            end_column: d[:end_column],
+            code: d[:code] || d.code,
+            code_number: d[:code_number],
+            category: to_string(d[:category] || d.category),
+            message: d[:message] || d.message,
+            error_type: to_string(d[:error_type] || :other),
+            error_type_label: d[:error_type_label] || "Other"
+          }
+      end
     end)
   end
 end

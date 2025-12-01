@@ -14,6 +14,7 @@ defmodule TSC.Worker.CLIWorker do
 
   alias TSC.Telemetry.Metrics
   alias TSC.Options
+  alias TSC.Diagnostic
 
   require Logger
 
@@ -147,59 +148,28 @@ defmodule TSC.Worker.CLIWorker do
   end
 
   defp parse_success_output(_file, output) do
-    # Parse CLI output for diagnostics
-    diagnostics = parse_diagnostics_from_output(output)
+    # Parse CLI output for diagnostics using the Diagnostic module
+    diagnostics = Diagnostic.parse(output)
 
     %{
       diagnostics: diagnostics,
+      diagnostics_maps: Enum.map(diagnostics, &Diagnostic.to_map/1),
+      summary: Diagnostic.summary(diagnostics),
       exports: %{},  # CLI doesn't output exports yet
-      success: Enum.empty?(Enum.filter(diagnostics, &(&1.category == :error)))
+      success: Enum.empty?(Diagnostic.filter_by_category(diagnostics, :error))
     }
   end
 
   defp parse_error_output(_file, output, _exit_code) do
-    diagnostics = parse_diagnostics_from_output(output)
+    diagnostics = Diagnostic.parse(output)
 
     %{
       diagnostics: diagnostics,
+      diagnostics_maps: Enum.map(diagnostics, &Diagnostic.to_map/1),
+      summary: Diagnostic.summary(diagnostics),
       exports: %{},
       success: false
     }
-  end
-
-  defp parse_diagnostics_from_output(output) do
-    # Parse lines like: src/foo.ts:10:5 - error TS2322: Type 'string' is not assignable to type 'number'
-    output
-    |> String.split("\n")
-    |> Enum.filter(fn line ->
-      String.contains?(line, " - error TS") or
-      String.contains?(line, " - warning TS") or
-      String.contains?(line, " - suggestion TS") or
-      String.contains?(line, " - message TS")
-    end)
-    |> Enum.map(&parse_diagnostic_line/1)
-    |> Enum.reject(&is_nil/1)
-  end
-
-  defp parse_diagnostic_line(line) do
-    # MoonBit CLI format: file_path:line:column - category TScode: message
-    # Example: src/foo.ts:10:5 - error TS2322: Type 'string' is not assignable to type 'number'
-    regex = ~r/^(.+?):(\d+):(\d+) - (error|warning|suggestion|message) (TS\d+): (.+)$/
-
-    case Regex.run(regex, line) do
-      [_, file, line_num, col, category, code, message] ->
-        %{
-          file: file,
-          line: String.to_integer(line_num),
-          column: String.to_integer(col),
-          category: String.to_atom(category),
-          code: code,
-          message: message
-        }
-
-      _ ->
-        nil
-    end
   end
 
   defp mock_result(_file) do
