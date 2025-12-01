@@ -1610,6 +1610,49 @@ fn parse_object_binding_pattern(
           _ => ()
         }
       }
+      // Handle rest element: { ...rest } or { ...{ a, b } } (error case)
+      DotDotDot(rest_loc) => {
+        parser = advance_parser(parser) // consume '...'
+        match current_token(parser) {
+          Identifier(rest_name, id_loc) => {
+            // Valid rest element: { ...rest }
+            parser = advance_parser(parser)
+            properties.push(BindingElement::{
+              property_name: "...",
+              name: Node::Identifier(Identifier::{
+                name: rest_name,
+                location: id_loc,
+              }),
+              location: rest_loc,
+            })
+            // Rest must be last element, but we allow parsing to continue
+          }
+          OpenBrace(_) | OpenBracket(_) => {
+            // TS2566: A rest element cannot contain a binding pattern
+            return Err(
+              add_error_checked(
+                parser,
+                "A rest element cannot contain a binding pattern.",
+                rest_loc,
+                2566,
+              ),
+            )
+          }
+          _ =>
+            return Err(
+              add_error(
+                parser,
+                "Identifier expected after rest element",
+                rest_loc,
+              ),
+            )
+        }
+        // Optional comma (though rest should be last)
+        match current_token(parser) {
+          Comma(_) => parser = advance_parser(parser)
+          _ => ()
+        }
+      }
       _ => break
     }
   }
