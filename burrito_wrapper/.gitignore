@@ -1,0 +1,17 @@
+# Build artifacts
+/_build/
+/deps/
+*.ez
+
+# Generated on crash by the VM
+erl_crash.dump
+
+# Compiled binaries (will be built during release)
+/priv/bin/moonbit-cli
+
+# Test output
+/test/output/
+
+# IDE
+.elixir_ls/
+*.beam
