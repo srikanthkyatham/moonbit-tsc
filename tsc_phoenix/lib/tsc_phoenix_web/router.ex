@@ -22,6 +22,7 @@ defmodule TscPhoenixWeb.Router do
     live "/errors", ErrorsLive, :index
     live "/performance", PerformanceLive, :index
     live "/cluster", ClusterLive, :index
+    live "/graph", GraphLive, :index
   end
 
   # REST API for CI/CD integration
@@ -47,6 +48,14 @@ defmodule TscPhoenixWeb.Router do
     post "/performance/sessions/:id/stop", PerformanceController, :stop_session
     get "/performance/sessions", PerformanceController, :list_sessions
     get "/performance/sessions/:id", PerformanceController, :get_session
+
+    # Dependency graph endpoints
+    post "/graph/build", GraphController, :build
+    get "/graph", GraphController, :index
+    get "/graph/stats", GraphController, :stats
+    get "/graph/levels", GraphController, :levels
+    get "/graph/affected", GraphController, :affected
+    get "/graph/file/*path", GraphController, :file
   end
 
   # Enable LiveDashboard in development
