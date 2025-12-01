@@ -6242,3 +6242,154 @@ test "DiagnosticCode - TS2737 BigInt literal with ESNext target is fine" {
     }
   }
 }
+
+// ============================================================================
+// TS2691: Import path cannot end with extension
+// ============================================================================
+
+///|
+test "DiagnosticCode - TS2691 import with .ts extension" {
+  let source =
+    #|import { foo } from './module.ts';
+  let result = check_source(source)
+  match result {
+    Ok(_) => fail!("Should have detected .ts extension in import path")
+    Err(diagnostics) => {
+      assert_true(has_error(diagnostics, 2691))
+      assert_true(has_message(diagnostics, "cannot end with a '.ts' extension"))
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - TS2691 import with .tsx extension" {
+  let source =
+    #|import { Component } from './component.tsx';
+  let result = check_source(source)
+  match result {
+    Ok(_) => fail!("Should have detected .tsx extension in import path")
+    Err(diagnostics) => {
+      assert_true(has_error(diagnostics, 2691))
+      assert_true(has_message(diagnostics, "cannot end with a '.tsx' extension"))
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - TS2691 import with .d.ts extension" {
+  let source =
+    #|import { Type } from './types.d.ts';
+  let result = check_source(source)
+  match result {
+    Ok(_) => fail!("Should have detected .d.ts extension in import path")
+    Err(diagnostics) => {
+      assert_true(has_error(diagnostics, 2691))
+      assert_true(has_message(diagnostics, "cannot end with a '.d.ts' extension"))
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - TS2691 import with .js extension" {
+  let source =
+    #|import { utils } from './utils.js';
+  let result = check_source(source)
+  match result {
+    Ok(_) => fail!("Should have detected .js extension in import path")
+    Err(diagnostics) => {
+      assert_true(has_error(diagnostics, 2691))
+      assert_true(has_message(diagnostics, "cannot end with a '.js' extension"))
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - TS2691 import with .jsx extension" {
+  let source =
+    #|import { JsxComponent } from './jsx-component.jsx';
+  let result = check_source(source)
+  match result {
+    Ok(_) => fail!("Should have detected .jsx extension in import path")
+    Err(diagnostics) => {
+      assert_true(has_error(diagnostics, 2691))
+      assert_true(has_message(diagnostics, "cannot end with a '.jsx' extension"))
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - TS2691 import without extension is fine" {
+  let source =
+    #|import { foo } from './module';
+    #|const x: number = foo;
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => {
+      // Should NOT have TS2691 for imports without extension
+      assert_true(not(has_error(diagnostics, 2691)))
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - TS2691 import from package (node_modules) is fine" {
+  let source =
+    #|import { useState } from 'react';
+    #|const x = useState;
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => {
+      // Should NOT have TS2691 for package imports
+      assert_true(not(has_error(diagnostics, 2691)))
+    }
+  }
+}
+
+// ============================================================================
+// TS2709: Cannot use namespace as a type
+// ============================================================================
+
+///|
+test "DiagnosticCode - TS2709 namespace import used as type" {
+  let source =
+    #|import * as ns from './module';
+    #|const x: ns = 42;
+  let result = check_source(source)
+  match result {
+    Ok(_) => fail!("Should have detected namespace used as type")
+    Err(diagnostics) => {
+      assert_true(has_error(diagnostics, 2709))
+      assert_true(has_message(diagnostics, "Cannot use namespace 'ns' as a type"))
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - TS2709 namespace import used as type in function param" {
+  let source =
+    #|import * as utils from './utils';
+    #|function process(data: utils): void {}
+  let result = check_source(source)
+  match result {
+    Ok(_) => fail!("Should have detected namespace used as type")
+    Err(diagnostics) => {
+      assert_true(has_error(diagnostics, 2709))
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - TS2709 namespace import used as type in return type" {
+  let source =
+    #|import * as fs from 'fs';
+    #|function getFs(): fs { return null as any; }
+  let result = check_source(source)
+  match result {
+    Ok(_) => fail!("Should have detected namespace used as type")
+    Err(diagnostics) => {
+      assert_true(has_error(diagnostics, 2709))
+    }
+  }
+}

@@ -1484,7 +1484,8 @@ fn check_statement(checker : TypeChecker, node : Node) -> TypeChecker {
     EnumDeclaration(enum_decl) => check_enum_declaration(checker, enum_decl)
     TypeAliasDeclaration(type_alias) =>
       check_type_alias_declaration(checker, type_alias)
-    ImportDeclaration(_) => checker // Imports checked separately
+    ImportDeclaration(import_decl) =>
+      check_import_declaration(checker, import_decl)
     ExportDeclaration(_) => checker // Exports checked separately
     TryStatement(try_stmt) => check_try_statement(checker, try_stmt)
     ThrowStatement(throw_stmt) => check_throw_statement(checker, throw_stmt)
@@ -9352,6 +9353,64 @@ fn is_const_enum_initializer(expr : Node) -> Bool {
 }
 
 ///|
+/// Check import declaration for TS2691 (import path cannot end with extension)
+fn check_import_declaration(
+  checker : TypeChecker,
+  import_decl : ImportDeclaration,
+) -> TypeChecker {
+  let module_spec = import_decl.module_specifier
+
+  // TS2691: An import path cannot end with a '.ts', '.tsx', '.d.ts', '.js', or '.jsx' extension
+  // Check for prohibited extensions
+  let has_prohibited_extension = module_spec.has_suffix(".ts") ||
+    module_spec.has_suffix(".tsx") ||
+    module_spec.has_suffix(".d.ts") ||
+    module_spec.has_suffix(".js") ||
+    module_spec.has_suffix(".jsx")
+
+  if has_prohibited_extension {
+    // Determine which extension was used
+    let ext = if module_spec.has_suffix(".d.ts") {
+      ".d.ts"
+    } else if module_spec.has_suffix(".tsx") {
+      ".tsx"
+    } else if module_spec.has_suffix(".ts") {
+      ".ts"
+    } else if module_spec.has_suffix(".jsx") {
+      ".jsx"
+    } else {
+      ".js"
+    }
+    add_diagnostic_with_code(
+      checker,
+      "An import path cannot end with a '\{ext}' extension. Consider importing '\{remove_extension(module_spec)}' instead.",
+      import_decl.location,
+      TS2691,
+    )
+  } else {
+    checker
+  }
+}
+
+///|
+/// Remove file extension from a module path for TS2691 suggestion
+fn remove_extension(path : String) -> String {
+  if path.has_suffix(".d.ts") {
+    @utils.substr(path, end=path.length() - 5)
+  } else if path.has_suffix(".tsx") {
+    @utils.substr(path, end=path.length() - 4)
+  } else if path.has_suffix(".jsx") {
+    @utils.substr(path, end=path.length() - 4)
+  } else if path.has_suffix(".ts") {
+    @utils.substr(path, end=path.length() - 3)
+  } else if path.has_suffix(".js") {
+    @utils.substr(path, end=path.length() - 3)
+  } else {
+    path
+  }
+}
+
+///|
 /// Check try statement
 fn check_try_statement(
   checker : TypeChecker,
@@ -10028,6 +10087,16 @@ fn get_type_from_type_node(
                     (Some(t), c) => (Some(t), c)
                     (None, c) => (None, c)
                   }
+                Module => {
+                  // TS2709: Cannot use namespace as a type
+                  let checker = add_diagnostic_with_code(
+                    checker,
+                    "Cannot use namespace '\{type_ref.type_name}' as a type.",
+                    type_ref.location,
+                    TS2709,
+                  )
+                  (None, checker)
+                }
                 _ => (None, checker) // Other symbol kinds not yet supported
               }
             }
