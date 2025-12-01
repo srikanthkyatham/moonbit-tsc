@@ -3174,11 +3174,19 @@ fn infer_binary_expression_type(
     LessThan
     | GreaterThan
     | LessThanEquals
-    | GreaterThanEquals
-    | Equals
-    | NotEquals
-    | StrictEquals
-    | StrictNotEquals => boolean_type(checker)
+    | GreaterThanEquals => boolean_type(checker)
+    // Loose equality operators - no type overlap check (type coercion allowed)
+    Equals | NotEquals => boolean_type(checker)
+    // Strict equality operators - check for no overlap between types (TS2367)
+    StrictEquals | StrictNotEquals => {
+      let checker = check_equality_type_overlap(
+        checker,
+        left_type,
+        right_type,
+        bin_expr,
+      )
+      boolean_type(checker)
+    }
     // instanceof operator: obj instanceof Constructor -> boolean
     InstanceOf => {
       let checker = check_instanceof_operands(
@@ -7278,6 +7286,120 @@ fn check_instanceof_operands(
 }
 
 ///|
+/// Check if two types have overlap for equality comparisons (TS2367)
+/// Types have no overlap if there's no value that could be both types
+fn check_equality_type_overlap(
+  checker : TypeChecker,
+  left_type : Type,
+  right_type : Type,
+  bin_expr : BinaryExpression,
+) -> TypeChecker {
+  // Check if types have overlap
+  if types_have_overlap(left_type, right_type) {
+    return checker
+  }
+
+  // No overlap - report TS2367
+  // Determine result based on operator (== vs !=)
+  let result = match bin_expr.operator {
+    Equals | StrictEquals => "false"
+    NotEquals | StrictNotEquals => "true"
+    _ => "false"
+  }
+
+  add_diagnostic_with_code(
+    checker,
+    "This condition will always return '\{result}' since the types '\{type_to_string(left_type)}' and '\{type_to_string(right_type)}' have no overlap.",
+    bin_expr.location,
+    TS2367,
+  )
+}
+
+///|
+/// Check if two types have any possible overlap (could share a value)
+fn types_have_overlap(left : Type, right : Type) -> Bool {
+  // Any/Unknown/Error overlap with everything
+  match (left, right) {
+    (Any(_), _) | (_, Any(_)) => return true
+    (Unknown(_), _) | (_, Unknown(_)) => return true
+    (Error(_), _) | (_, Error(_)) => return true
+    _ => ()
+  }
+
+  // Handle union types - check if ANY member overlaps
+  match left {
+    Union(u) => {
+      for member in u.types {
+        if types_have_overlap(member, right) {
+          return true
+        }
+      }
+      return false
+    }
+    _ => ()
+  }
+  match right {
+    Union(u) => {
+      for member in u.types {
+        if types_have_overlap(left, member) {
+          return true
+        }
+      }
+      return false
+    }
+    _ => ()
+  }
+
+  // Get base type categories
+  let left_cat = get_type_category(left)
+  let right_cat = get_type_category(right)
+
+  // Same category types can overlap
+  if left_cat == right_cat && left_cat != "never" {
+    // Check for literal type mismatches within same category
+    match (left, right) {
+      // Different number literals have no overlap
+      (NumberLiteral(n1, _), NumberLiteral(n2, _)) => n1 == n2
+      // Different string literals have no overlap
+      (StringLiteral(s1, _), StringLiteral(s2, _)) => s1 == s2
+      // Different boolean literals have no overlap
+      (BooleanLiteral(b1, _), BooleanLiteral(b2, _)) => b1 == b2
+      // Base type vs literal always overlap (e.g., number vs 42)
+      _ => true
+    }
+  } else {
+    // Different categories - no overlap
+    false
+  }
+}
+
+///|
+/// Get type category for overlap checking
+fn get_type_category(t : Type) -> String {
+  match t {
+    Number(_) | NumberLiteral(_, _) => "number"
+    String(_) | StringLiteral(_, _) => "string"
+    Boolean(_) | BooleanLiteral(_, _) => "boolean"
+    BigInt(_) => "bigint"
+    Symbol(_) => "symbol"
+    Null(_) => "null"
+    Undefined(_) => "undefined"
+    Void(_) => "void"
+    Never(_) => "never"
+    Any(_) => "any"
+    Unknown(_) => "unknown"
+    Object(_) => "object"
+    Function(_) => "function"
+    Array(_) => "array"
+    Tuple(_) => "tuple"
+    Union(_) => "union" // Union needs special handling
+    Intersection(_) => "intersection"
+    TypeReference(_) => "reference"
+    _ => "other"
+  }
+}
+
+///|
 /// Check if type is numeric
 fn is_numeric_type(t : Type) -> Bool {
   match t {
@@ -7411,7 +7533,10 @@ fn check_if_statement(
   if_stmt : IfStatement,
 ) -> TypeChecker {
   // Infer the condition type
-  let (_, checker) = infer_type(checker, if_stmt.condition)
+  let (cond_type, checker) = infer_type(checker, if_stmt.condition)
+
+  // Check for always-true conditions (TS2773, TS2774)
+  let checker = check_condition_always_true(checker, if_stmt.condition, cond_type)
 
   // Save current narrowed types before entering branches
   let saved_narrowed_types = checker.narrowed_types
@@ -7440,6 +7565,64 @@ fn check_if_statement(
 
   // Restore narrowed types after exiting branches (simplified: just restore saved state)
   { ..final_checker, narrowed_types: saved_narrowed_types }
+}
+
+///|
+/// Check for conditions that always evaluate to true (TS2773, TS2774)
+fn check_condition_always_true(
+  checker : TypeChecker,
+  condition : Node,
+  cond_type : Type,
+) -> TypeChecker {
+  // TS2773: Function used as condition without being called
+  match condition {
+    Identifier(ident) =>
+      match cond_type {
+        Function(_) => {
+          return add_diagnostic_with_code(
+            checker,
+            "This condition will always return true since this function is always defined. Did you mean to call it instead?",
+            ident.location,
+            TS2773,
+          )
+        }
+        Object(obj) =>
+          // Check if it's a callable object type
+          if obj.call_signatures.length() > 0 {
+            return add_diagnostic_with_code(
+              checker,
+              "This condition will always return true since this function is always defined. Did you mean to call it instead?",
+              ident.location,
+              TS2773,
+            )
+          }
+        _ => ()
+      }
+    _ => ()
+  }
+
+  // TS2774: Object/non-nullable value always truthy
+  // Only check for simple identifiers that are objects
+  match condition {
+    Identifier(ident) =>
+      match cond_type {
+        Object(obj) =>
+          // Object types are always truthy (when not null/undefined)
+          // Only report if strictNullChecks is implied and no call signatures
+          if obj.call_signatures.is_empty() && obj.class_name.is_some() {
+            return add_diagnostic_with_code(
+              checker,
+              "This condition will always return true since this '\{type_to_string(cond_type)}' is always defined.",
+              ident.location,
+              TS2774,
+            )
+          }
+        _ => ()
+      }
+    _ => ()
+  }
+
+  checker
 }
 
 ///|
