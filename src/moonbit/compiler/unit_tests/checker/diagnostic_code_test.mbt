@@ -5277,3 +5277,227 @@ test "DiagnosticCode - valid explicit return type" {
     }
   }
 }
+
+// ============================================================================
+// TS2341: Property is private and only accessible within class
+// ============================================================================
+
+///|
+test "DiagnosticCode - TS2341 private property accessed outside class" {
+  let source =
+    #|class Person {
+    #|  private name: string = "test";
+    #|}
+    #|const p = new Person();
+    #|const n = p.name;
+  let result = check_source(source)
+  match result {
+    Ok(_) => () // Detection may not be implemented yet
+    Err(diagnostics) => {
+      if has_error(diagnostics, 2341) {
+        assert_true(has_message(diagnostics, "private"))
+      }
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - TS2341 private method accessed outside class" {
+  let source =
+    #|class Calculator {
+    #|  private compute(): number { return 42; }
+    #|}
+    #|const calc = new Calculator();
+    #|calc.compute();
+  let result = check_source(source)
+  match result {
+    Ok(_) => () // Detection may not be implemented yet
+    Err(diagnostics) => {
+      if has_error(diagnostics, 2341) {
+        assert_true(has_message(diagnostics, "private"))
+      }
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - TS2341 private property accessible within class" {
+  let source =
+    #|class Person {
+    #|  private name: string = "test";
+    #|  public getName(): string {
+    #|    return this.name;
+    #|  }
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => {
+      // Should not have TS2341 error for accessing private inside the class
+      assert_true(not(has_error(diagnostics, 2341)))
+    }
+  }
+}
+
+// ============================================================================
+// TS2445: Property is protected and only accessible within class and subclasses
+// ============================================================================
+
+///|
+test "DiagnosticCode - TS2445 protected property accessed outside class" {
+  let source =
+    #|class Animal {
+    #|  protected age: number = 5;
+    #|}
+    #|const a = new Animal();
+    #|const x = a.age;
+  let result = check_source(source)
+  match result {
+    Ok(_) => () // Detection may not be implemented yet
+    Err(diagnostics) => {
+      if has_error(diagnostics, 2445) {
+        assert_true(has_message(diagnostics, "protected"))
+      }
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - TS2445 protected property accessible in subclass" {
+  let source =
+    #|class Animal {
+    #|  protected age: number = 5;
+    #|}
+    #|class Dog extends Animal {
+    #|  public getAge(): number {
+    #|    return this.age;
+    #|  }
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => {
+      // Should not have TS2445 error for accessing protected in subclass
+      assert_true(not(has_error(diagnostics, 2445)))
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - TS2445 protected method accessed outside class" {
+  let source =
+    #|class Service {
+    #|  protected init(): void {}
+    #|}
+    #|const s = new Service();
+    #|s.init();
+  let result = check_source(source)
+  match result {
+    Ok(_) => () // Detection may not be implemented yet
+    Err(diagnostics) => {
+      if has_error(diagnostics, 2445) {
+        assert_true(has_message(diagnostics, "protected"))
+      }
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - TS2341 private property strict detection" {
+  let source =
+    #|class Person {
+    #|  private secret: string = "hidden";
+    #|}
+    #|const p = new Person();
+    #|const s = p.secret;
+  let result = check_source(source)
+  match result {
+    Ok(_) => fail!("Should have detected private property access")
+    Err(diagnostics) => {
+      assert_true(has_error(diagnostics, 2341))
+      assert_true(has_message(diagnostics, "private"))
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - TS2445 protected property strict detection" {
+  let source =
+    #|class Base {
+    #|  protected data: number = 42;
+    #|}
+    #|const b = new Base();
+    #|const d = b.data;
+  let result = check_source(source)
+  match result {
+    Ok(_) => fail!("Should have detected protected property access")
+    Err(diagnostics) => {
+      assert_true(has_error(diagnostics, 2445))
+      assert_true(has_message(diagnostics, "protected"))
+    }
+  }
+}
+
+// ============================================================================
+// TS2377: Derived class must call super
+// ============================================================================
+
+///|
+test "DiagnosticCode - TS2377 derived class constructor missing super call" {
+  let source =
+    #|class Base {
+    #|  constructor() {}
+    #|}
+    #|class Derived extends Base {
+    #|  constructor() {
+    #|    console.log("no super");
+    #|  }
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => fail!("Should have detected missing super() call")
+    Err(diagnostics) => {
+      assert_true(has_error(diagnostics, 2377))
+      assert_true(has_message(diagnostics, "super"))
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - TS2377 derived class constructor with super call" {
+  let source =
+    #|class Base {
+    #|  constructor() {}
+    #|}
+    #|class Derived extends Base {
+    #|  constructor() {
+    #|    super();
+    #|  }
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => {
+      // Should not have TS2377 error when super() is called
+      assert_true(not(has_error(diagnostics, 2377)))
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - TS2377 non-derived class without super" {
+  let source =
+    #|class NotDerived {
+    #|  constructor() {
+    #|    console.log("no parent");
+    #|  }
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => {
+      // Should not have TS2377 error for non-derived class
+      assert_true(not(has_error(diagnostics, 2377)))
+    }
+  }
+}

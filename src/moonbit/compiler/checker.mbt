@@ -4676,6 +4676,211 @@ fn get_class_property_type(
 }
 
 ///|
+/// Visibility enum for class members
+enum MemberVisibility {
+  Public
+  Private
+  Protected
+}
+
+///|
+/// Get the visibility of a class member (property or method)
+fn get_class_member_visibility(
+  checker : TypeChecker,
+  class_name : String,
+  member_name : String,
+) -> MemberVisibility {
+  match lookup_symbol(checker, class_name) {
+    Some(symbol) =>
+      match symbol.value_declaration {
+        Some(ClassDeclaration(class_decl)) => {
+          for member in class_decl.members {
+            match member {
+              PropertyDeclaration(prop) =>
+                if prop.name == member_name {
+                  return get_visibility_from_modifiers(prop.modifiers)
+                }
+              MethodDeclaration(method) =>
+                if method.name == member_name {
+                  return get_visibility_from_modifiers(method.modifiers)
+                }
+              GetAccessor(getter) =>
+                if getter.name == member_name {
+                  return get_visibility_from_modifiers(getter.modifiers)
+                }
+              SetAccessor(setter) =>
+                if setter.name == member_name {
+                  return get_visibility_from_modifiers(setter.modifiers)
+                }
+              _ => continue
+            }
+          }
+          MemberVisibility::Public // Not found, assume public
+        }
+        _ => MemberVisibility::Public
+      }
+    None => MemberVisibility::Public
+  }
+}
+
+///|
+/// Get visibility from modifiers array
+fn get_visibility_from_modifiers(modifiers : Array[Modifier]) -> MemberVisibility {
+  for modifier in modifiers {
+    match modifier {
+      Modifier::Private => return MemberVisibility::Private
+      Modifier::Protected => return MemberVisibility::Protected
+      _ => continue
+    }
+  }
+  MemberVisibility::Public
+}
+
+///|
+/// Get the current class name from checker's this type
+fn get_current_class_name(checker : TypeChecker) -> String? {
+  match checker.current_this_type {
+    Some(Object(obj_type)) => obj_type.class_name
+    Some(TypeReference(type_ref)) => Some(type_ref.name)
+    _ => None
+  }
+}
+
+///|
+/// Check if we're inside a class that inherits from the given class
+fn is_inside_class_or_subclass(
+  checker : TypeChecker,
+  target_class_name : String,
+) -> Bool {
+  match get_current_class_name(checker) {
+    Some(current_name) =>
+      if current_name == target_class_name {
+        true
+      } else {
+        // Check if current class extends target class (for protected access)
+        is_subclass_of(checker, current_name, target_class_name)
+      }
+    None => false
+  }
+}
+
+///|
+/// Check if class_name is a subclass of parent_name
+fn is_subclass_of(
+  checker : TypeChecker,
+  class_name : String,
+  parent_name : String,
+) -> Bool {
+  match lookup_symbol(checker, class_name) {
+    Some(symbol) =>
+      match symbol.value_declaration {
+        Some(ClassDeclaration(class_decl)) => {
+          // Find the extends clause in heritage clauses
+          for heritage in class_decl.heritage_clauses {
+            if heritage.kind == HeritageKind::Extends {
+              for type_node in heritage.types {
+                // Extract the class name from the heritage type
+                let base_name = get_name_from_heritage_node(type_node)
+                match base_name {
+                  Some(name) =>
+                    if name == parent_name {
+                      return true
+                    } else {
+                      if is_subclass_of(checker, name, parent_name) {
+                        return true
+                      }
+                    }
+                  None => ()
+                }
+              }
+            }
+          }
+          false
+        }
+        _ => false
+      }
+    None => false
+  }
+}
+
+///|
+/// Extract a name from a Node (used for heritage clauses)
+fn get_name_from_heritage_node(node : Node) -> String? {
+  match node {
+    Identifier(id) => Some(id.name)
+    TypeReference(type_ref) => Some(type_ref.type_name)
+    CallExpression(call) =>
+      // For extends SomeClass<T>()
+      get_name_from_heritage_node(call.expression)
+    _ => None
+  }
+}
+
+///|
+/// Check member visibility and emit TS2341 (private) or TS2445 (protected) errors
+fn check_member_visibility(
+  checker : TypeChecker,
+  object_type : Type,
+  member_name : String,
+  location : SourceLocation,
+) -> TypeChecker {
+  // Get the class name from the object type
+  let class_name_opt = match object_type {
+    Object(obj_type) => obj_type.class_name
+    TypeReference(type_ref) => Some(type_ref.name)
+    _ => None
+  }
+  match class_name_opt {
+    Some(class_name) => {
+      let visibility = get_class_member_visibility(checker, class_name, member_name)
+      match visibility {
+        MemberVisibility::Private => {
+          // Check if we're inside the same class
+          match get_current_class_name(checker) {
+            Some(current_class) =>
+              if current_class == class_name {
+                checker // Access allowed - inside same class
+              } else {
+                // TS2341: Property 'x' is private and only accessible within class 'ClassName'.
+                add_diagnostic_with_code(
+                  checker,
+                  "Property '\{member_name}' is private and only accessible within class '\{class_name}'.",
+                  location,
+                  TS2341,
+                )
+              }
+            None =>
+              // Not inside any class - private access not allowed
+              add_diagnostic_with_code(
+                checker,
+                "Property '\{member_name}' is private and only accessible within class '\{class_name}'.",
+                location,
+                TS2341,
+              )
+          }
+        }
+        MemberVisibility::Protected => {
+          // Check if we're inside the same class or a subclass
+          if is_inside_class_or_subclass(checker, class_name) {
+            checker // Access allowed
+          } else {
+            // TS2445: Property 'x' is protected and only accessible within class 'ClassName' and its subclasses.
+            add_diagnostic_with_code(
+              checker,
+              "Property '\{member_name}' is protected and only accessible within class '\{class_name}' and its subclasses.",
+              location,
+              TS2445,
+            )
+          }
+        }
+        MemberVisibility::Public => checker // Public access is always allowed
+      }
+    }
+    None => checker // No class name, can't check visibility
+  }
+}
+
+///|
 /// Unwrap parenthesized expressions to get the inner expression
 fn unwrap_parenthesized_expression(expr : Node) -> Node {
   match expr {
@@ -4900,7 +5105,16 @@ fn infer_property_access_type(
     prop.name,
   )
   match prop_type_opt {
-    Some(prop_type) => (prop_type, checker)
+    Some(prop_type) => {
+      // Check visibility (TS2341: private, TS2445: protected)
+      let checker = check_member_visibility(
+        checker,
+        object_type,
+        prop.name,
+        prop.location,
+      )
+      (prop_type, checker)
+    }
     None => {
       // TS2459: Type has no property and no string index signature
       // Only emit if the object type is a concrete type (not any/unknown)
@@ -7242,6 +7456,91 @@ fn check_block_statement(
 }
 
 ///|
+/// Check if a class is a derived class (has extends clause)
+fn is_derived_class(class_decl : ClassDeclaration) -> Bool {
+  for clause in class_decl.heritage_clauses {
+    if clause.kind == Extends {
+      return true
+    }
+  }
+  false
+}
+
+///|
+/// Check if a constructor body contains a super() call
+fn contains_super_call(node : Node) -> Bool {
+  match node {
+    CallExpression(ce) =>
+      match ce.expression {
+        SuperExpression(_) => true
+        _ => {
+          // Check arguments and expression
+          if contains_super_call(ce.expression) {
+            return true
+          }
+          for arg in ce.arguments {
+            if contains_super_call(arg) {
+              return true
+            }
+          }
+          false
+        }
+      }
+    BlockStatement(bs) => {
+      for stmt in bs.statements {
+        if contains_super_call(stmt) {
+          return true
+        }
+      }
+      false
+    }
+    ExpressionStatement(es) => contains_super_call(es.expression)
+    IfStatement(if_stmt) => {
+      if contains_super_call(if_stmt.then_statement) {
+        return true
+      }
+      match if_stmt.else_statement {
+        Some(else_stmt) => contains_super_call(else_stmt)
+        None => false
+      }
+    }
+    ReturnStatement(rs) =>
+      match rs.expression {
+        Some(expr) => contains_super_call(expr)
+        None => false
+      }
+    _ => false
+  }
+}
+
+///|
+/// Check for super() call requirement in derived class constructor (TS2377)
+fn check_super_call_in_constructor(
+  checker : TypeChecker,
+  class_decl : ClassDeclaration,
+  body : Node,
+  location : SourceLocation,
+) -> TypeChecker {
+  // Only check if this is a derived class (has extends clause)
+  if not(is_derived_class(class_decl)) {
+    return checker
+  }
+
+  // Check if constructor body contains super() call
+  if contains_super_call(body) {
+    return checker
+  }
+
+  // Emit TS2377 error
+  add_diagnostic_with_code(
+    checker,
+    "Constructors for derived classes must contain a 'super' call.",
+    location,
+    TS2377,
+  )
+}
+
+///|
 /// Check class declaration
 fn check_class_declaration(
   checker : TypeChecker,
@@ -7287,6 +7586,13 @@ fn check_class_declaration(
               uninitialized_props,
             )
             let checker = check_statement(checker, body)
+            // Check for super() call in derived class constructor (TS2377)
+            let checker = check_super_call_in_constructor(
+              checker,
+              class_decl,
+              body,
+              ctor.location,
+            )
             // Pop local scope
             pop_local_scope(checker)
           }
@@ -7838,13 +8144,18 @@ fn build_class_type_for_this(
     }
   }
   let (info, checker) = create_type_info(checker)
+  // Extract the class name from the name node
+  let class_name_str = match class_decl.name {
+    Some(Identifier(id)) => Some(id.name)
+    _ => None
+  }
   let class_type = Type::Object({
     properties,
     call_signatures: [],
     construct_signatures: [],
     index_signatures: [],
     info,
-    class_name: None,
+    class_name: class_name_str,
   })
   (class_type, checker)
 }
