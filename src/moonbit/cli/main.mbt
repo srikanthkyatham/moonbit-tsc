@@ -421,6 +421,7 @@ fn print_help() -> Unit {
   println("  --version, -v           Show version")
   println("  --project, -p <path>    Compile project from tsconfig.json")
   println("  --build, -b <path>      Build project with all references")
+  println("  --list-imports <file>   List all imports from a TypeScript file")
   println("  --target <target>       ECMAScript target (es5, es2015, esnext, etc.)")
   println("  --outDir <dir>          Output directory")
   println("  --sourceMap             Generate external source map files")
@@ -463,23 +464,28 @@ fn print_init_message() -> Unit {
 /// List imports from a TypeScript file
 async fn run_list_imports(file_path : String) -> Unit raise Error {
   // Read the file
-  let source = @fs.read_to_string(file_path)
+  let data = @fs.read_file(file_path)
+  let source = data.text()
 
-  // Parse the file
-  let source_file = @compiler.parse_source(source, file_path)
+  // Scan and parse the file
+  let tokens = @compiler.scan_all_v2(source, file_path)
+  match @compiler.parse_source_file(tokens, file_path) {
+    Ok(source_file) => {
+      // Get imports using the new API
+      let imports = @compiler.get_imports(source_file)
 
-  // Get imports using the new API
-  let imports = @compiler.get_imports(source_file)
-
-  // Print each import
-  if imports.length() == 0 {
-    println("No imports found in " + file_path)
-  } else {
-    println("Imports in " + file_path + ":")
-    for import_decl in imports {
-      let type_prefix = if import_decl.is_type_only { "(type) " } else { "" }
-      println("  " + type_prefix + import_decl.module_specifier)
+      // Print each import
+      if imports.length() == 0 {
+        println("No imports found in " + file_path)
+      } else {
+        println("Imports in " + file_path + ":")
+        for import_decl in imports {
+          let type_prefix = if import_decl.is_type_only { "(type) " } else { "" }
+          println("  " + type_prefix + import_decl.module_specifier)
+        }
+      }
     }
+    Err(_) => println("Error: Failed to parse " + file_path)
   }
 }
 
