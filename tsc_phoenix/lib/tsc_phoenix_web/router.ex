@@ -21,6 +21,7 @@ defmodule TscPhoenixWeb.Router do
     live "/metrics", MetricsLive, :index
     live "/errors", ErrorsLive, :index
     live "/performance", PerformanceLive, :index
+    live "/cluster", ClusterLive, :index
   end
 
   # REST API for CI/CD integration

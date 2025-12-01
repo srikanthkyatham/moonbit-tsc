@@ -23,6 +23,11 @@ defmodule TscPhoenix.Application do
       {TSC.Worker.PoolSupervisor, pool_size: pool_size()},
       TSC.Watcher.FileWatcher,
 
+      # Cluster services
+      TSC.Cluster.NodeRegistry,
+      TSC.Cluster.WorkDistributor,
+      TSC.Cluster.DistributedCache,
+
       # Start to serve requests, typically the last entry
       TscPhoenixWeb.Endpoint
     ]

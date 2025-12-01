@@ -89,6 +89,38 @@ defmodule TSC.Cache.TypeCache do
   end
 
   @doc """
+  Get cached keys with pagination.
+  """
+  @spec keys(non_neg_integer(), non_neg_integer()) :: [String.t()]
+  def keys(offset, limit) do
+    keys()
+    |> Enum.drop(offset)
+    |> Enum.take(limit)
+  end
+
+  @doc """
+  Invalidate a specific cache entry.
+  """
+  @spec invalidate(String.t()) :: :ok
+  def invalidate(key) do
+    :ets.delete(@table, key)
+    :ok
+  end
+
+  @doc """
+  Invalidate entries matching a pattern.
+  """
+  @spec invalidate_pattern(String.t()) :: non_neg_integer()
+  def invalidate_pattern(pattern) do
+    regex = Regex.compile!(pattern)
+
+    keys()
+    |> Enum.filter(&Regex.match?(regex, &1))
+    |> Enum.each(&:ets.delete(@table, &1))
+    |> length()
+  end
+
+  @doc """
   Check if module is cached.
   """
   @spec has?(String.t()) :: boolean()
