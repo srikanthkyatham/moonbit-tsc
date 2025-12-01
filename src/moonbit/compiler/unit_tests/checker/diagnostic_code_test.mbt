@@ -4369,6 +4369,46 @@ test "DiagnosticCode - valid readonly with parameter property" {
 }
 
 // =============================================================================
+// TS2810: Private field assignment via non-'this' access
+// =============================================================================
+
+///|
+test "DiagnosticCode - TS2810: private field assigned via other instance" {
+  let source =
+    #|class Example {
+    #|  #value: number = 0;
+    #|  setValue(other: Example, val: number) {
+    #|    other.#value = val;
+    #|  }
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(false) // Should detect TS2810 error
+    Err(diagnostics) => {
+      assert_true(has_error(diagnostics, 2810))
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - valid private field assignment via this" {
+  let source =
+    #|class Example {
+    #|  #value: number = 0;
+    #|  setValue(val: number) {
+    #|    this.#value = val;
+    #|  }
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(true) // Should not have TS2810 error
+    Err(diagnostics) => {
+      assert_true(not(has_error(diagnostics, 2810)))
+    }
+  }
+}
+
+// =============================================================================
 // Array & Iteration Errors Tests
 // =============================================================================
 

@@ -3388,6 +3388,12 @@ fn infer_binary_expression_type(
             prop.name,
             get_node_location(BinaryExpression(bin_expr)),
           )
+          // TS2810: Private field can only be assigned using 'this' access
+          let checker = check_private_field_this_access(
+            checker,
+            prop,
+            get_node_location(BinaryExpression(bin_expr)),
+          )
           (checker, left_type)
         }
         _ => (checker, left_type)
@@ -4691,6 +4697,37 @@ fn check_readonly_property_assignment(
       }
     }
     _ => checker
+  }
+}
+
+///|
+/// Check if a private field (starting with #) is being assigned via non-'this' access (TS2810)
+/// Private fields can only be assigned using 'this' access within the class body
+fn check_private_field_this_access(
+  checker : TypeChecker,
+  prop : PropertyAccessExpression,
+  location : SourceLocation,
+) -> TypeChecker {
+  // Check if this is a private field (name starts with #)
+  if prop.name.has_prefix("#") {
+    // Check if the base expression is 'this'
+    let is_this_access = match prop.expression {
+      ThisExpression(_) => true
+      _ => false
+    }
+    if not(is_this_access) {
+      // TS2810: Property '#field' can only be assigned using 'this' access
+      add_diagnostic_with_code(
+        checker,
+        "Property '\{prop.name}' can only be assigned to by using 'this' access within the class body.",
+        location,
+        TS2810,
+      )
+    } else {
+      checker
+    }
+  } else {
+    checker
   }
 }
 

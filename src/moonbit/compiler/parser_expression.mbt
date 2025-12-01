@@ -82,6 +82,8 @@ fn parse_identifier_or_keyword_name(
     KeywordTypeOf(_) => Ok(("typeof", advance_parser(parser)))
     KeywordDelete(_) => Ok(("delete", advance_parser(parser)))
     KeywordDebugger(_) => Ok(("debugger", advance_parser(parser)))
+    // Private identifiers (ES2022 private class fields: #fieldName)
+    PrivateIdentifier(name, _) => Ok((name, advance_parser(parser)))
     _ =>
       Err(
         add_error_with_code(
