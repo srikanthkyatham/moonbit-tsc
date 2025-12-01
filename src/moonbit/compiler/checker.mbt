@@ -273,6 +273,7 @@ pub struct TypeChecker {
   arrow_function_depth : Int // Tracks nesting depth in arrow functions (> 0 means inside arrow)
   async_function_depth : Int // Tracks nesting depth in async functions (> 0 means inside async)
   block_scoped_decls : Map[String, Int] // Variable name -> declaration line (for TS2448 TDZ check)
+  uninitialized_vars : Map[String, Int] // Variable name -> declaration line (for TS2454 definite assignment)
 } derive(Show)
 
 ///|
@@ -326,6 +327,7 @@ pub fn TypeChecker::new_with_options(
     arrow_function_depth: 0,
     async_function_depth: 0,
     block_scoped_decls: Map::new(),
+    uninitialized_vars: Map::new(),
   }
 }
 
@@ -1429,14 +1431,42 @@ fn check_statement(checker : TypeChecker, node : Node) -> TypeChecker {
 // ============================================================================
 
 ///|
+/// Check if modifiers include Declare (ambient declaration)
+fn is_ambient_declaration(modifiers : Array[Modifier]) -> Bool {
+  for m in modifiers {
+    if m == Declare {
+      return true
+    }
+  }
+  false
+}
+
+///|
 /// Check variable statement
 fn check_variable_statement(
   checker : TypeChecker,
   var_stmt : VariableStatement,
 ) -> TypeChecker {
   let mut checker = checker
+
+  // Check if this is an ambient declaration (declare const/let/var)
+  let is_ambient = is_ambient_declaration(var_stmt.modifiers)
+
   for i = 0; i < var_stmt.declarations.length(); i = i + 1 {
-    checker = check_variable_declaration(checker, var_stmt.declarations[i])
+    let decl = var_stmt.declarations[i]
+    checker = check_variable_declaration(checker, decl)
+
+    // Track uninitialized variables for TS2454 (definite assignment)
+    // Only track if NOT ambient declaration and has type annotation but no initializer
+    if not(is_ambient) {
+      match (decl.name, decl.type_annotation, decl.initializer) {
+        (Identifier(id), Some(_), None) => {
+          // Variable declared with type but no initializer - track it
+          checker.uninitialized_vars.set(id.name, decl.location.start.line)
+        }
+        _ => ()
+      }
+    }
   }
   checker
 }
@@ -1510,6 +1540,7 @@ fn check_variable_declaration(
       add_object_binding_elements_to_scope(checker, obj_pat, var_type)
     _ => checker
   }
+
   checker
 }
 
@@ -1602,6 +1633,20 @@ fn infer_identifier_type(
         )
         return any_type(checker)
       }
+    None => ()
+  }
+
+  // TS2454: Check for variable used before being assigned
+  match checker.uninitialized_vars.get(id.name) {
+    Some(_) => {
+      let checker = add_diagnostic_with_code(
+        checker,
+        "Variable '\{id.name}' is used before being assigned.",
+        id.location,
+        TS2454,
+      )
+      return any_type(checker)
+    }
     None => ()
   }
 
@@ -3148,6 +3193,11 @@ fn infer_binary_expression_type(
           }
           // Assignment invalidates type narrowing for this variable
           let checker = remove_narrowed_type(checker, id.name)
+          // Mark variable as initialized (remove from uninitialized_vars for TS2454)
+          let checker = {
+            let _ = checker.uninitialized_vars.remove(id.name)
+            checker
+          }
           // Use declared type if available, otherwise use any (to skip check)
           let target = match declared_type_opt {
             Some(t) => t

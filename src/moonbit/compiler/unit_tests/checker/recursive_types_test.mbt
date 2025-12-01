@@ -532,7 +532,7 @@ test "unit/recursive/interface - infinitely expanding base types" {
     #|interface B<T> {
     #|  x: B<()=>T>;
     #|}
-    #|var a: A<string>;
+    #|declare var a: A<string>;
     #|var b: B<string> = a;
   let result = parse_bind_check_recursive(source)
   match result {
