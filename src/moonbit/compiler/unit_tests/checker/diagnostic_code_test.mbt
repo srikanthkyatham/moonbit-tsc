@@ -4984,8 +4984,28 @@ test "DiagnosticCode - valid type reference" {
 // ============================================================================
 
 ///|
-test "DiagnosticCode - TS2576 static member access (not detected yet)" {
-  // Note: This tests the error code structure; detection not yet implemented
+test "DiagnosticCode - TS2576 static member access on direct new expression" {
+  // Test direct new expression: (new MyClass()).staticProp
+  let source =
+    #|class MyClass {
+    #|  static staticProp: number = 42;
+    #|}
+    #|const x = (new MyClass()).staticProp; // accessing static on instance
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(false, msg="Expected error TS2576 but got no errors")
+    Err(diagnostics) => {
+      assert_true(has_error(diagnostics, 2576), msg="Expected error TS2576")
+      assert_true(has_message(diagnostics, "static"), msg="Expected 'static' in message")
+      assert_true(has_message(diagnostics, "MyClass"), msg="Expected 'MyClass' in message")
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - TS2576 static member via variable (not yet detected)" {
+  // This case is harder to detect because we'd need to trace back through variable assignment
+  // TypeScript detects this, but our implementation doesn't yet
   let source =
     #|class MyClass {
     #|  static staticProp: number = 42;
@@ -4994,7 +5014,7 @@ test "DiagnosticCode - TS2576 static member access (not detected yet)" {
     #|const x = instance.staticProp; // accessing static on instance
   let result = check_source(source)
   match result {
-    Ok(_) => () // Detection not implemented yet
+    Ok(_) => () // Detection not implemented for variable case yet
     Err(diagnostics) => {
       if has_error(diagnostics, 2576) {
         assert_true(has_message(diagnostics, "static"))

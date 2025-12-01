@@ -4491,6 +4491,135 @@ fn get_class_property_type(
 }
 
 ///|
+/// Unwrap parenthesized expressions to get the inner expression
+fn unwrap_parenthesized_expression(expr : Node) -> Node {
+  match expr {
+    ParenthesizedExpression(paren) => unwrap_parenthesized_expression(paren.expression)
+    _ => expr
+  }
+}
+
+///|
+/// Check if a class has a static member with the given name
+fn class_has_static_member(
+  checker : TypeChecker,
+  class_name : String,
+  prop_name : String,
+) -> Bool {
+  // Look up the class symbol
+  let symbol = match lookup_symbol(checker, class_name) {
+    Some(s) => s
+    None => return false
+  }
+
+  // Check if it's a class
+  match symbol.kind {
+    Class => ()
+    _ => return false
+  }
+
+  // Get the class declaration and check for static members
+  match symbol.value_declaration {
+    Some(ClassDeclaration(class_decl)) => {
+      for i = 0; i < class_decl.members.length(); i = i + 1 {
+        match class_decl.members[i] {
+          PropertyDeclaration(prop) =>
+            if prop.name == prop_name && is_static_modifier(prop.modifiers) {
+              return true
+            }
+          MethodDeclaration(method) =>
+            if method.name == prop_name && is_static_modifier(method.modifiers) {
+              return true
+            }
+          GetAccessor(ga) =>
+            if ga.name == prop_name && is_static_modifier(ga.modifiers) {
+              return true
+            }
+          SetAccessor(sa) =>
+            if sa.name == prop_name && is_static_modifier(sa.modifiers) {
+              return true
+            }
+          _ => continue
+        }
+      }
+      false
+    }
+    _ => false
+  }
+}
+
+///|
+/// Check if a property is a static member of a class
+/// Returns (is_static, class_name) if the property is a static member
+/// Checks both TypeReference types and traces back from expressions to find class
+fn check_is_static_member_of_class(
+  checker : TypeChecker,
+  object_type : Type,
+  prop_name : String,
+  expr : Node,
+) -> (Bool, String) {
+  // First check if the object type is a TypeReference that points to a class
+  let class_name = match object_type {
+    TypeReference(type_ref) => type_ref.name
+    Object(_) => {
+      // For Object types, try to trace back from the expression to find the class
+      // Use helper function to unwrap parenthesized expressions
+      let unwrapped = unwrap_parenthesized_expression(expr)
+      match unwrapped {
+        Identifier(id) =>
+          // Look up the symbol and check if it was initialized with a new expression
+          match lookup_symbol(checker, id.name) {
+            Some(sym) =>
+              // Try to get class name from declarations
+              get_class_name_from_symbol_declarations(sym)
+            None => return (false, "")
+          }
+        NewExpression(new_expr) =>
+          // Direct new expression like (new MyClass()).staticProp
+          match new_expr.expression {
+            Identifier(class_id) => class_id.name
+            _ => return (false, "")
+          }
+        _ => return (false, "")
+      }
+    }
+    _ => return (false, "")
+  }
+
+  // Check if this class has a static member with the property name
+  if class_has_static_member(checker, class_name, prop_name) {
+    (true, class_name)
+  } else {
+    (false, "")
+  }
+}
+
+///|
+/// Helper to get class name from a symbol's declarations
+/// Looks for NewExpression initializers in variable statements
+fn get_class_name_from_symbol_declarations(sym : Symbol) -> String {
+  for i = 0; i < sym.declarations.length(); i = i + 1 {
+    match sym.declarations[i] {
+      VariableStatement(var_stmt) => {
+        for j = 0; j < var_stmt.declarations.length(); j = j + 1 {
+          let decl = var_stmt.declarations[j]
+          match decl.initializer {
+            Some(NewExpression(new_expr)) =>
+              match new_expr.expression {
+                Identifier(class_id) => return class_id.name
+                _ => continue
+              }
+            _ => continue
+          }
+        }
+      }
+      _ => continue
+    }
+  }
+  ""
+}
+
+///|
 /// Infer property access type
 fn infer_property_access_type(
   checker : TypeChecker,
@@ -4512,11 +4641,28 @@ fn infer_property_access_type(
         ThisExpression(_) => true
         _ => false
       }
+
+      // Check if this is a static member being accessed on an instance (TS2576)
+      let (is_static_member, class_name) = check_is_static_member_of_class(
+        checker,
+        object_type,
+        prop.name,
+        prop.expression,
+      )
+
       let checker = match object_type {
         Any(_) | Unknown(_) => checker // Don't error for any/unknown
-        Object(_) =>
+        Object(_) | TypeReference(_) =>
           if is_this_expr {
             checker // Don't error for property access on 'this' - allows implicit property assignment
+          } else if is_static_member {
+            // TS2576: Property 'X' is a static member of type 'Y'
+            add_diagnostic_with_code(
+              checker,
+              "Property '\{prop.name}' is a static member of type '\{class_name}'",
+              get_node_location(prop.expression),
+              TS2576,
+            )
           } else {
             add_diagnostic_with_code(
               checker,
