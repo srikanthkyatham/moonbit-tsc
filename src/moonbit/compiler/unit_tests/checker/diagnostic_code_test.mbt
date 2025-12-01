@@ -5809,16 +5809,27 @@ test "DiagnosticCode - valid module import" {
 // ============================================================================
 
 ///|
-test "DiagnosticCode - TS2742 inferred type naming (not detected yet)" {
-  // Note: This tests the error code structure; detection not yet implemented
+test "DiagnosticCode - TS2742 inferred type naming" {
+  // Exported function returns a non-exported interface type
   let source =
-    #|// This would require a module that exports a function returning an unexported type
-    #|export function getData() {
-    #|  return { internal: true };
+    #|interface InternalData { value: number; }
+    #|export function getData(): InternalData {
+    #|  return { value: 42 };
     #|}
   let result = check_source(source)
   match result {
-    Ok(_) => () // Detection not implemented yet
+    Ok(tf) => {
+      // Check if TS2742 was detected
+      let found = tf.diagnostics.iter().any(fn(d) { d.code == 2742 })
+      if found {
+        // Error was detected - verify message
+        assert_true(
+          tf.diagnostics.iter().any(fn(d) {
+            d.message.contains("inferred") || d.message.contains("named")
+          }),
+        )
+      }
+    }
     Err(diagnostics) => {
       if has_error(diagnostics, 2742) {
         assert_true(has_message(diagnostics, "inferred") || has_message(diagnostics, "named"))
@@ -5828,7 +5839,51 @@ test "DiagnosticCode - TS2742 inferred type naming (not detected yet)" {
 }
 
 ///|
-test "DiagnosticCode - valid explicit return type" {
+test "DiagnosticCode - TS2742 exported function returning unexported type" {
+  // Explicit case: function with NO return type annotation returning unexported class instance
+  let source =
+    #|class Internal { data: string = "test"; }
+    #|export function getData() {
+    #|  return new Internal();
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(tf) => {
+      // TS2742 should be detected because getData() has no return type
+      // and returns an Internal type which is not exported
+      let found = tf.diagnostics.iter().any(fn(d) { d.code == 2742 })
+      assert_true(found)
+    }
+    Err(diagnostics) => {
+      assert_true(has_error(diagnostics, 2742))
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - TS2742 no error with exported interface" {
+  // Exported function returns an exported interface - no error
+  let source =
+    #|export interface PublicData { value: number; }
+    #|export function getData() {
+    #|  let d: PublicData = { value: 42 };
+    #|  return d;
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(tf) => {
+      // Should not have TS2742 because PublicData is exported
+      let found = tf.diagnostics.iter().any(fn(d) { d.code == 2742 })
+      assert_true(not(found))
+    }
+    Err(diagnostics) => {
+      assert_true(not(has_error(diagnostics, 2742)))
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - TS2742 valid explicit return type" {
   let source =
     #|interface Result { value: number; }
     #|export function getData(): Result {
@@ -5836,7 +5891,11 @@ test "DiagnosticCode - valid explicit return type" {
     #|}
   let result = check_source(source)
   match result {
-    Ok(_) => assert_true(true)
+    Ok(tf) => {
+      // With explicit return type, TS2742 should not be reported
+      let found = tf.diagnostics.iter().any(fn(d) { d.code == 2742 })
+      assert_true(not(found))
+    }
     Err(diagnostics) => {
       assert_true(not(has_error(diagnostics, 2742)))
     }

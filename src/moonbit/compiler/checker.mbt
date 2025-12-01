@@ -1576,6 +1576,224 @@ fn is_ambient_declaration(modifiers : Array[Modifier]) -> Bool {
 }
 
 ///|
+/// Collect all type reference names from a type (for TS2742 check)
+fn collect_type_reference_names(t : Type) -> Array[String] {
+  let names : Array[String] = []
+  collect_type_reference_names_inner(t, names)
+  names
+}
+
+///|
+/// Helper to recursively collect type reference names
+fn collect_type_reference_names_inner(t : Type, names : Array[String]) -> Unit {
+  match t {
+    TypeReference(ref_type) => {
+      names.push(ref_type.name)
+      // Also collect from type arguments
+      for arg in ref_type.type_arguments {
+        collect_type_reference_names_inner(arg, names)
+      }
+    }
+    Object(obj) => {
+      // Collect from class_name if present
+      match obj.class_name {
+        Some(name) => names.push(name)
+        None => ()
+      }
+      // Collect from property types
+      obj.properties.each(fn(_key, prop) {
+        collect_type_reference_names_inner(prop.prop_type, names)
+      })
+      // Collect from call signatures
+      for sig in obj.call_signatures {
+        collect_type_reference_names_inner(sig.return_type, names)
+        for param in sig.parameters {
+          collect_type_reference_names_inner(param.param_type, names)
+        }
+      }
+      // Collect from construct signatures
+      for sig in obj.construct_signatures {
+        collect_type_reference_names_inner(sig.return_type, names)
+        for param in sig.parameters {
+          collect_type_reference_names_inner(param.param_type, names)
+        }
+      }
+      // Collect from index signatures
+      for idx_sig in obj.index_signatures {
+        collect_type_reference_names_inner(idx_sig.parameter_type, names)
+        collect_type_reference_names_inner(idx_sig.return_type, names)
+      }
+    }
+    Function(func_type) => {
+      collect_type_reference_names_inner(func_type.return_type, names)
+      for param in func_type.parameters {
+        collect_type_reference_names_inner(param.param_type, names)
+      }
+    }
+    Union(union_type) => {
+      for constituent in union_type.types {
+        collect_type_reference_names_inner(constituent, names)
+      }
+    }
+    Intersection(intersection_type) => {
+      for constituent in intersection_type.types {
+        collect_type_reference_names_inner(constituent, names)
+      }
+    }
+    Array(arr_type) => {
+      collect_type_reference_names_inner(arr_type.element_type, names)
+    }
+    Tuple(tuple_type) => {
+      for elem in tuple_type.element_types {
+        collect_type_reference_names_inner(elem.element_type, names)
+      }
+    }
+    Conditional(cond_type) => {
+      collect_type_reference_names_inner(cond_type.check_type, names)
+      collect_type_reference_names_inner(cond_type.extends_type, names)
+      collect_type_reference_names_inner(cond_type.true_type, names)
+      collect_type_reference_names_inner(cond_type.false_type, names)
+    }
+    Mapped(mapped_type) => {
+      collect_type_reference_names_inner(mapped_type.template_type, names)
+      // Check type parameter constraint
+      match mapped_type.type_parameter.constraint {
+        Some(ct) => collect_type_reference_names_inner(ct, names)
+        None => ()
+      }
+      // Check name_type if present
+      match mapped_type.name_type {
+        Some(nt) => collect_type_reference_names_inner(nt, names)
+        None => ()
+      }
+    }
+    IndexAccess(idx_access) => {
+      collect_type_reference_names_inner(idx_access.object_type, names)
+      collect_type_reference_names_inner(idx_access.index_type, names)
+    }
+    // Primitives, literals, infer, error don't contain type references
+    _ => ()
+  }
+}
+
+///|
+/// Check if a symbol is exported (for TS2742 check)
+fn is_symbol_exported(checker : TypeChecker, name : String) -> Bool {
+  // First check if it's a built-in type (always accessible)
+  let builtins = [
+    "Array", "Object", "String", "Number", "Boolean", "Function", "Symbol",
+    "BigInt", "Promise", "Map", "Set", "WeakMap", "WeakSet", "Date", "RegExp",
+    "Error", "TypeError", "RangeError", "SyntaxError", "ReferenceError",
+    "Partial", "Required", "Readonly", "Pick", "Omit", "Record", "Exclude",
+    "Extract", "NonNullable", "ReturnType", "Parameters", "InstanceType",
+    "ConstructorParameters", "ThisParameterType", "OmitThisParameter",
+    "ThisType", "Awaited", "Generator", "AsyncGenerator", "IterableIterator",
+    "AsyncIterableIterator", "ReadonlyArray", "ReadonlyMap", "ReadonlySet",
+  ]
+  if builtins.contains(name) {
+    return true
+  }
+
+  // Check if symbol exists and is exported
+  match lookup_symbol(checker, name) {
+    Some(symbol) => symbol.flags.is_export
+    None => {
+      // If we can't find the symbol, it might be from another file
+      // In single-file mode, assume it's accessible (conservative)
+      true
+    }
+  }
+}
+
+///|
+/// Infer return type from function body (for TS2742 check)
+fn infer_function_body_return_type(
+  checker : TypeChecker,
+  func : FunctionDeclaration,
+) -> (Type?, TypeChecker) {
+  match func.body {
+    Some(BlockStatement(block)) => {
+      // Collect return types from all return statements
+      let return_types : Array[Type] = []
+      let mut checker = checker
+      for stmt in block.statements {
+        match stmt {
+          ReturnStatement(ret) =>
+            match ret.expression {
+              Some(expr) => {
+                let (return_type, c) = infer_type(checker, expr)
+                checker = c
+                return_types.push(return_type)
+              }
+              None => {
+                let (vt, c) = void_type(checker)
+                checker = c
+                return_types.push(vt)
+              }
+            }
+          _ => ()
+        }
+      }
+      if return_types.is_empty() {
+        let (vt, checker) = void_type(checker)
+        (Some(vt), checker)
+      } else if return_types.length() == 1 {
+        (Some(return_types[0]), checker)
+      } else {
+        // Multiple return types - create union
+        let (ut, checker) = union_type(checker, return_types)
+        (Some(ut), checker)
+      }
+    }
+    _ => (None, checker)
+  }
+}
+
+///|
+/// Check TS2742: Inferred type of exported function cannot be named without reference
+fn check_inferred_type_accessibility(
+  checker : TypeChecker,
+  func : FunctionDeclaration,
+) -> TypeChecker {
+  // Only check exported functions without explicit return type
+  if not(has_export_modifier(func.modifiers)) {
+    return checker
+  }
+  if func.return_type.is_some() {
+    return checker // Has explicit return type, no issue
+  }
+
+  // Get function name
+  let func_name = match func.name {
+    Some(Identifier(id)) => id.name
+    _ => return checker // Anonymous function, skip
+  }
+
+  // Infer the return type from body
+  let (return_type_opt, checker) = infer_function_body_return_type(checker, func)
+  match return_type_opt {
+    Some(return_type) => {
+      // Collect all type references in the return type
+      let type_names = collect_type_reference_names(return_type)
+
+      // Check if any referenced type is not exported
+      for name in type_names {
+        if not(is_symbol_exported(checker, name)) {
+          return add_diagnostic_with_code(
+            checker,
+            "The inferred type of '\{func_name}' cannot be named without a reference to '\{name}'. This is likely not portable. A type annotation is necessary.",
+            func.location,
+            TS2742,
+          )
+        }
+      }
+      checker
+    }
+    None => checker
+  }
+}
+
+///|
 /// Check variable statement
 fn check_variable_statement(
   checker : TypeChecker,
@@ -8005,6 +8223,10 @@ fn check_function_declaration(
       }
     None => checker
   }
+
+  // Check TS2742: Inferred type cannot be named without reference
+  // This applies when exported function has no explicit return type
+  let checker = check_inferred_type_accessibility(checker, func)
 
   // Pop the local scope
   let checker = pop_local_scope(checker)
