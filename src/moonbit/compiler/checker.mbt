@@ -283,6 +283,7 @@ pub struct TypeChecker {
   in_class_body : Bool // Tracks if we're in a class body (for TS2335 super outside class)
   in_derived_class : Bool // Tracks if we're in a class that extends another (for TS2335)
   super_called : Bool // Tracks if super() has been called in constructor (for TS17009)
+  current_location : SourceLocation // Current location being checked (for TS2590 and similar)
 } derive(Show)
 
 ///|
@@ -346,6 +347,11 @@ pub fn TypeChecker::new_with_options(
     in_class_body: false,
     in_derived_class: false,
     super_called: false,
+    current_location: SourceLocation::new(
+      file_path,
+      Position::{ line: 0, column: 0, offset: 0 },
+      Position::{ line: 0, column: 0, offset: 0 },
+    ),
   }
 }
 
@@ -1299,6 +1305,9 @@ fn infer_type_parameters_recursive(
 // Union Type Helper
 // ============================================================================
 
+// Maximum number of constituents allowed in a union type before reporting TS2590
+let max_union_constituents : Int = 100000
+
 ///|
 /// Create a union type from an array of types
 pub fn union_type(
@@ -1325,6 +1334,17 @@ pub fn union_type(
   // Empty union is never
   if flattened.length() == 0 {
     return never_type(checker)
+  }
+  // TS2590: Check if union is too complex
+  if flattened.length() > max_union_constituents {
+    let checker = add_diagnostic_with_code(
+      checker,
+      "Expression produces a union type that is too complex to represent.",
+      checker.current_location,
+      TS2590,
+    )
+    // Return 'any' type as fallback when union is too complex
+    return any_type(checker)
   }
   let (info, checker) = create_type_info(checker)
   (Union({ types: flattened, info }), checker)

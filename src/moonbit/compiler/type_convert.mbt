@@ -651,6 +651,7 @@ fn TypeChecker::create_type_info(self : TypeChecker) -> (TypeInfo, TypeChecker) 
     in_class_body: self.in_class_body,
     in_derived_class: self.in_derived_class,
     super_called: self.super_called,
+    current_location: self.current_location,
   }
   (info, new_checker)
 }
