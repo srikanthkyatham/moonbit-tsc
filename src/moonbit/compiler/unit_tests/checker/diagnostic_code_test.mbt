@@ -19,6 +19,23 @@ fn check_source(source : String) -> @compiler.CheckResult {
 }
 
 ///|
+/// Helper function to parse, bind, and check source code with a specific ES target
+fn check_source_with_target(
+  source : String,
+  target : @compiler.Target,
+) -> @compiler.CheckResult {
+  let tokens = @compiler.scan_all_v2(source, "test.ts")
+  match @compiler.parse_source_file(tokens, "test.ts") {
+    Ok(source_file) =>
+      match @compiler.bind_source_file(source_file) {
+        Ok(bound) => @compiler.check_source_file_with_options(bound, false, target)
+        Err(diagnostics) => Err(diagnostics)
+      }
+    Err(diagnostics) => Err(diagnostics)
+  }
+}
+
+///|
 /// Helper to check if any diagnostic has a specific error code
 fn has_error(diagnostics : Array[@compiler.Diagnostic], code : Int) -> Bool {
   for diag in diagnostics {
@@ -6163,6 +6180,65 @@ test "DiagnosticCode - TS2376 this before super" {
     Err(diagnostics) => {
       // Should have either TS2376 or TS17009 (super must be called before this)
       assert_true(has_error(diagnostics, 2376) || has_error(diagnostics, 17009))
+    }
+  }
+}
+
+// ============================================================================
+// TS2737: BigInt literals are not available when targeting lower than ES2020
+// ============================================================================
+
+///|
+test "DiagnosticCode - TS2737 BigInt literal with ES2019 target" {
+  let source =
+    #|const x = 123n;
+  let result = check_source_with_target(source, @compiler.Target::ES2019)
+  match result {
+    Ok(_) => fail!("Should have detected BigInt not available for ES2019")
+    Err(diagnostics) => {
+      assert_true(has_error(diagnostics, 2737))
+      assert_true(has_message(diagnostics, "BigInt literals are not available"))
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - TS2737 BigInt literal with ES5 target" {
+  let source =
+    #|const x = 100n;
+  let result = check_source_with_target(source, @compiler.Target::ES5)
+  match result {
+    Ok(_) => fail!("Should have detected BigInt not available for ES5")
+    Err(diagnostics) => {
+      assert_true(has_error(diagnostics, 2737))
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - TS2737 BigInt literal with ES2020 target is fine" {
+  let source =
+    #|const x = 123n;
+  let result = check_source_with_target(source, @compiler.Target::ES2020)
+  match result {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => {
+      // Should NOT have TS2737 for ES2020+
+      assert_true(not(has_error(diagnostics, 2737)))
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - TS2737 BigInt literal with ESNext target is fine" {
+  let source =
+    #|const x = 999n;
+  let result = check_source_with_target(source, @compiler.Target::ESNext)
+  match result {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => {
+      // Should NOT have TS2737 for ESNext
+      assert_true(not(has_error(diagnostics, 2737)))
     }
   }
 }

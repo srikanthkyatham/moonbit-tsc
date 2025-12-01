@@ -74,7 +74,6 @@ fn gen_temp_name(ctx : TransformerContext, prefix : String) -> String {
 
 ///|
 /// Target ECMAScript version
-#valtype
 pub(all) enum Target {
   ES5
   ES2015
@@ -111,6 +110,12 @@ pub fn Target::supports(self : Target, min_version : Target) -> Bool {
 /// Check if target is older than a specific version (requires downleveling)
 pub fn Target::older_than(self : Target, version : Target) -> Bool {
   self.ordinal() < version.ordinal()
+}
+
+///|
+/// Check if the target supports BigInt literals (ES2020+)
+pub fn Target::supports_bigint(self : Target) -> Bool {
+  self.supports(ES2020)
 }
 
 ///|

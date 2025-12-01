@@ -270,6 +270,7 @@ pub struct TypeChecker {
   local_scopes : Array[LocalScope] // Stack of local scopes (innermost last)
   current_this_type : Type? // Type of 'this' in current scope (for class methods/constructors)
   no_unchecked_indexed_access : Bool // Adds undefined to indexed access types
+  target : Target // ECMAScript target version (affects feature availability)
   resolving_symbols : Map[Int, Bool] // Symbol IDs currently being resolved (for cycle detection)
   arrow_function_depth : Int // Tracks nesting depth in arrow functions (> 0 means inside arrow)
   async_function_depth : Int // Tracks nesting depth in async functions (> 0 means inside async)
@@ -309,7 +310,7 @@ pub fn TypeChecker::new(
   file_path : String,
   global_scope : Scope?,
 ) -> TypeChecker {
-  TypeChecker::new_with_options(file_path, global_scope, false)
+  TypeChecker::new_with_options(file_path, global_scope, false, Target::ESNext)
 }
 
 ///|
@@ -318,6 +319,7 @@ pub fn TypeChecker::new_with_options(
   file_path : String,
   global_scope : Scope?,
   no_unchecked_indexed_access : Bool,
+  target : Target,
 ) -> TypeChecker {
   {
     next_type_id: 0,
@@ -331,6 +333,7 @@ pub fn TypeChecker::new_with_options(
     local_scopes: [],
     current_this_type: None,
     no_unchecked_indexed_access,
+    target,
     resolving_symbols: Map::new(),
     arrow_function_depth: 0,
     async_function_depth: 0,
@@ -1406,7 +1409,7 @@ fn types_equal(a : Type, b : Type) -> Bool {
 ///|
 /// Check a bound source file
 pub fn check_source_file(bound : BoundSourceFile) -> CheckResult {
-  check_source_file_with_options(bound, false)
+  check_source_file_with_options(bound, false, Target::ESNext)
 }
 
 ///|
@@ -1414,11 +1417,13 @@ pub fn check_source_file(bound : BoundSourceFile) -> CheckResult {
 pub fn check_source_file_with_options(
   bound : BoundSourceFile,
   no_unchecked_indexed_access : Bool,
+  target : Target,
 ) -> CheckResult {
   let checker = TypeChecker::new_with_options(
     bound.file_path,
     Some(bound.global_scope),
     no_unchecked_indexed_access,
+    target,
   )
   // Push a top-level scope for the source file so local variables are tracked
   let checker = push_local_scope(checker)
@@ -1649,9 +1654,20 @@ fn infer_type(checker : TypeChecker, expr : Node) -> (Type, TypeChecker) {
     StringLiteral(_) => string_type(checker)
     BooleanLiteral(_) => boolean_type(checker)
     NullLiteral(_) => null_type(checker)
-    BigIntLiteral(_) => bigint_type(checker)
-    // Note: TS2737 (BigInt literals not available) should be reported when targeting ES2019 or below
-    // This requires compiler target configuration which is not yet implemented
+    BigIntLiteral(lit) => {
+      // TS2737: BigInt literals are not available when targeting lower than ES2020
+      let checker = if not(checker.target.supports_bigint()) {
+        add_diagnostic_with_code(
+          checker,
+          "BigInt literals are not available when targeting lower than ES2020.",
+          lit.location,
+          TS2737,
+        )
+      } else {
+        checker
+      }
+      bigint_type(checker)
+    }
     Identifier(id) =>
       // Check for undefined identifier
       if id.name == "undefined" {

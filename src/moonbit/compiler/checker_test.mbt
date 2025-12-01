@@ -4713,7 +4713,7 @@ fn parse_bind_and_check_with_no_unchecked_indexed_access(
   match parse_source_file(tokens, "test.ts") {
     Ok(source_file) =>
       match bind_source_file(source_file) {
-        Ok(bound) => check_source_file_with_options(bound, true)
+        Ok(bound) => check_source_file_with_options(bound, true, Target::ESNext)
         Err(diagnostics) => Err(diagnostics)
       }
     Err(diagnostics) => Err(diagnostics)

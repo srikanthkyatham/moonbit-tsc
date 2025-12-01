@@ -638,6 +638,7 @@ fn TypeChecker::create_type_info(self : TypeChecker) -> (TypeInfo, TypeChecker) 
     local_scopes: self.local_scopes,
     current_this_type: self.current_this_type,
     no_unchecked_indexed_access: self.no_unchecked_indexed_access,
+    target: self.target,
     resolving_symbols: self.resolving_symbols,
     arrow_function_depth: self.arrow_function_depth,
     async_function_depth: self.async_function_depth,
