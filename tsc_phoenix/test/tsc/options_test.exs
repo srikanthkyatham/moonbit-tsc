@@ -204,6 +204,51 @@ defmodule TSC.OptionsTest do
     end
   end
 
+  describe "validate_cache/1" do
+    test "accepts valid options with defaults" do
+      assert {:ok, opts} = Options.validate_cache([])
+
+      assert Keyword.fetch!(opts, :persist_to_disk) == true
+      assert Keyword.fetch!(opts, :cache_dir) == nil
+      assert Keyword.fetch!(opts, :warm_on_startup) == true
+      assert Keyword.fetch!(opts, :max_entries) == 10_000
+      assert Keyword.fetch!(opts, :ttl_hours) == 24
+    end
+
+    test "accepts custom cache options" do
+      opts = [
+        persist_to_disk: false,
+        cache_dir: "/tmp/tsc_cache",
+        warm_on_startup: false,
+        max_entries: 5_000,
+        ttl_hours: 48
+      ]
+
+      assert {:ok, validated} = Options.validate_cache(opts)
+
+      assert Keyword.fetch!(validated, :persist_to_disk) == false
+      assert Keyword.fetch!(validated, :cache_dir) == "/tmp/tsc_cache"
+      assert Keyword.fetch!(validated, :warm_on_startup) == false
+      assert Keyword.fetch!(validated, :max_entries) == 5_000
+      assert Keyword.fetch!(validated, :ttl_hours) == 48
+    end
+
+    test "rejects invalid max_entries (zero)" do
+      assert {:error, %NimbleOptions.ValidationError{}} =
+               Options.validate_cache(max_entries: 0)
+    end
+
+    test "rejects invalid ttl_hours (zero)" do
+      assert {:error, %NimbleOptions.ValidationError{}} =
+               Options.validate_cache(ttl_hours: 0)
+    end
+
+    test "rejects invalid persist_to_disk type" do
+      assert {:error, %NimbleOptions.ValidationError{}} =
+               Options.validate_cache(persist_to_disk: "true")
+    end
+  end
+
   describe "validate_api_check/1" do
     test "accepts valid options with defaults" do
       assert {:ok, opts} = Options.validate_api_check([])
@@ -328,6 +373,11 @@ defmodule TSC.OptionsTest do
 
     test "file_watcher_schema returns NimbleOptions schema" do
       schema = Options.file_watcher_schema()
+      assert %NimbleOptions{} = schema
+    end
+
+    test "cache_schema returns NimbleOptions schema" do
+      schema = Options.cache_schema()
       assert %NimbleOptions{} = schema
     end
 

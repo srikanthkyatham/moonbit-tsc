@@ -243,6 +243,55 @@ defmodule TSC.Options do
   end
 
   # ============================================================================
+  # Cache Options
+  # ============================================================================
+
+  @cache_schema NimbleOptions.new!([
+    persist_to_disk: [
+      type: :boolean,
+      default: true,
+      doc: "Persist cache to disk for faster startup"
+    ],
+    cache_dir: [
+      type: {:or, [:string, nil]},
+      default: nil,
+      doc: "Directory for cache files (defaults to .tsc_cache in project root)"
+    ],
+    warm_on_startup: [
+      type: :boolean,
+      default: true,
+      doc: "Load cache from disk on startup"
+    ],
+    max_entries: [
+      type: :pos_integer,
+      default: 10_000,
+      doc: "Maximum number of entries to keep in cache"
+    ],
+    ttl_hours: [
+      type: :pos_integer,
+      default: 24,
+      doc: "Time-to-live for cache entries in hours"
+    ]
+  ])
+
+  @doc """
+  Returns the NimbleOptions schema for cache configuration.
+
+  ## Options
+
+  #{NimbleOptions.docs(@cache_schema)}
+  """
+  def cache_schema, do: @cache_schema
+
+  @doc """
+  Validates cache options.
+  """
+  @spec validate_cache(keyword()) :: {:ok, keyword()} | {:error, NimbleOptions.ValidationError.t()}
+  def validate_cache(opts) do
+    NimbleOptions.validate(opts, @cache_schema)
+  end
+
+  # ============================================================================
   # API Request Options
   # ============================================================================
 
@@ -328,6 +377,10 @@ defmodule TSC.Options do
 
   defp get_allowed_keys(:file_watcher) do
     ~w(dirs debounce_ms extensions)
+  end
+
+  defp get_allowed_keys(:cache) do
+    ~w(persist_to_disk cache_dir warm_on_startup max_entries ttl_hours)
   end
 
   defp get_allowed_keys(:api_check) do
