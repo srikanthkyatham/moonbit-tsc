@@ -885,8 +885,9 @@ pub fn parse_source_file(
   tokens : Array[Token],
   file_path : String,
 ) -> ParseResult[SourceFile] {
-  // Extract triple-slash directive tokens, hashbang, and filter out comment tokens
+  // Extract triple-slash directive tokens, hashbang, ts-expect-error directives, and filter out comment tokens
   let directive_tokens : Array[(String, SourceLocation)] = []
+  let ts_expect_error_directives : Array[SourceLocation] = []
   let filtered_tokens : Array[Token] = []
   let mut hashbang : String? = None
   for i = 0; i < tokens.length(); i = i + 1 {
@@ -896,7 +897,11 @@ pub fn parse_source_file(
         directive_tokens.push((content, loc))
         // Don't add to filtered_tokens - skip directive tokens during parsing
       }
-      CommentDirective(_, _, _) => ()  // Skip other comment directives
+      CommentDirective(TsExpectError, _, loc) => {
+        // Track @ts-expect-error directives for TS2578 checking
+        ts_expect_error_directives.push(loc)
+      }
+      CommentDirective(_, _, _) => ()  // Skip other comment directives (@ts-ignore, @ts-nocheck, etc.)
       JSDocComment(_, _) => ()  // Skip JSDoc comments - handled separately
       token => filtered_tokens.push(token)
     }
@@ -921,6 +926,7 @@ pub fn parse_source_file(
       has_no_default_lib: false,
       directive_tokens,
       hashbang,
+      ts_expect_error_directives,
     })
   }
 }

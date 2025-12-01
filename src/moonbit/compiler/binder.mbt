@@ -134,6 +134,7 @@ pub fn bind_source_file(source_file : SourceFile) -> BindResult {
       module_augmentations: binder.module_augmentations,
       global_augmentations: binder.global_augmentations,
       triple_slash_directives: binder.triple_slash_directives,
+      ts_expect_error_directives: source_file.ts_expect_error_directives,
     })
   }
 }

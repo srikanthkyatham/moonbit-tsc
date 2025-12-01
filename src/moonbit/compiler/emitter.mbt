@@ -320,6 +320,7 @@ pub fn compile_source_file(
     has_no_default_lib: sf.has_no_default_lib,
     directive_tokens: sf.directive_tokens,
     hashbang: sf.hashbang,
+    ts_expect_error_directives: sf.ts_expect_error_directives,
   })
   // Transform and emit
   let transformed = transform(sf_node, ctx)

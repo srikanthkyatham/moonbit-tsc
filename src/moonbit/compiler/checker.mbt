@@ -1431,6 +1431,12 @@ pub fn check_source_file_with_options(
   // Pop the top-level scope
   let checker = pop_local_scope(checker)
 
+  // Check for unused @ts-expect-error directives (TS2578)
+  let checker = check_unused_ts_expect_error_directives(
+    checker,
+    bound.ts_expect_error_directives,
+  )
+
   // Return result
   let typed_file : TypedFile = {
     file_path: bound.file_path,
@@ -1443,6 +1449,44 @@ pub fn check_source_file_with_options(
   } else {
     Err(checker.diagnostics)
   }
+}
+
+///|
+/// Check for unused @ts-expect-error directives (TS2578)
+/// A @ts-expect-error directive should suppress an error on the following line.
+/// If no error occurs on that line, the directive is "unused" and TS2578 is reported.
+fn check_unused_ts_expect_error_directives(
+  checker : TypeChecker,
+  directives : Array[SourceLocation],
+) -> TypeChecker {
+  if directives.is_empty() {
+    return checker
+  }
+
+  // Build a set of line numbers that have errors
+  let error_lines : Map[Int, Bool] = Map::new()
+  for diag in checker.diagnostics {
+    error_lines.set(diag.location.start.line, true)
+  }
+
+  // Check each @ts-expect-error directive
+  let mut result_checker = checker
+  for directive_loc in directives {
+    // The directive is on line N, it should suppress errors on line N+1
+    let expected_error_line = directive_loc.start.line + 1
+
+    // Check if there's an error on the expected line
+    if not(error_lines.contains(expected_error_line)) {
+      // No error on the following line - report TS2578
+      result_checker = add_diagnostic_with_code(
+        result_checker,
+        "Unused '@ts-expect-error' directive.",
+        directive_loc,
+        TS2578,
+      )
+    }
+  }
+  result_checker
 }
 
 ///|

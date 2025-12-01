@@ -41,6 +41,7 @@ pub fn parse_incremental(
             has_no_default_lib: false,
             directive_tokens: [],
             hashbang: None,
+            ts_expect_error_directives: [],
           }
           IncrementalParseResult::{
             source_file: Node::SourceFile(empty_sf),
@@ -91,6 +92,7 @@ fn try_incremental_parse(
           has_no_default_lib: false,
           directive_tokens: [],
           hashbang: None,
+          ts_expect_error_directives: [],
         }
         IncrementalParseResult::{
           source_file: Node::SourceFile(empty_sf),
@@ -122,6 +124,7 @@ fn try_incremental_parse(
         has_no_default_lib: false,
         directive_tokens: [],
         hashbang: None,
+        ts_expect_error_directives: [],
       }
       IncrementalParseResult::{
         source_file: Node::SourceFile(empty_sf),

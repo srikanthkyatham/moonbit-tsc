@@ -255,6 +255,7 @@ pub fn transform(node : Node, ctx : TransformerContext) -> Node {
         has_no_default_lib: sf.has_no_default_lib,
         directive_tokens: sf.directive_tokens,
         hashbang: sf.hashbang,
+        ts_expect_error_directives: sf.ts_expect_error_directives,
       })
     }
 

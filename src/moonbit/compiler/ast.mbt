@@ -142,6 +142,8 @@ pub struct SourceFile {
   directive_tokens : Array[(String, SourceLocation)]
   /// Hashbang (shebang) line if present (e.g., "#!/usr/bin/env node")
   hashbang : String?
+  /// @ts-expect-error directives with their locations (line number where directive appears)
+  ts_expect_error_directives : Array[SourceLocation]
 } derive(Show)
 
 ///|

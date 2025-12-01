@@ -1464,6 +1464,7 @@ pub struct BoundSourceFile {
   module_augmentations : Array[ModuleAugmentation] // Module augmentations (declare module in module files)
   global_augmentations : Array[GlobalAugmentation] // Global augmentations (declare global { })
   triple_slash_directives : Array[TripleSlashDirective] // Triple-slash directives (/// <reference ...>)
+  ts_expect_error_directives : Array[SourceLocation] // @ts-expect-error directive locations for TS2578 checking
 } derive(Show)
 
 ///|

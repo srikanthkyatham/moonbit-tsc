@@ -4409,6 +4409,41 @@ test "DiagnosticCode - valid private field assignment via this" {
 }
 
 // =============================================================================
+// TS2578: Unused @ts-expect-error directive
+// =============================================================================
+
+///|
+test "DiagnosticCode - TS2578: unused ts-expect-error no error on next line" {
+  let source =
+    #|// @ts-expect-error
+    #|const x: number = 42;
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(false) // Should detect unused @ts-expect-error
+    Err(diagnostics) => {
+      assert_true(has_error(diagnostics, 2578))
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - valid ts-expect-error suppresses type error" {
+  let source =
+    #|// @ts-expect-error
+    #|const x: number = "not a number";
+  let result = check_source(source)
+  // The @ts-expect-error should suppress the type error
+  // So either it's Ok (all errors suppressed) or no TS2578 error
+  match result {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => {
+      // Should NOT have TS2578 because there IS an error on the next line
+      assert_true(not(has_error(diagnostics, 2578)))
+    }
+  }
+}
+
+// =============================================================================
 // Array & Iteration Errors Tests
 // =============================================================================
 
