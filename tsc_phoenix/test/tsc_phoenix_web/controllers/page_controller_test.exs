@@ -1,8 +1,9 @@
 defmodule TscPhoenixWeb.PageControllerTest do
   use TscPhoenixWeb.ConnCase
 
-  test "GET /", %{conn: conn} do
+  test "GET / renders dashboard", %{conn: conn} do
     conn = get(conn, ~p"/")
-    assert html_response(conn, 200) =~ "Peace of mind from prototype to production"
+    # The dashboard LiveView is rendered at the root
+    assert html_response(conn, 200) =~ "TSC Dashboard"
   end
 end

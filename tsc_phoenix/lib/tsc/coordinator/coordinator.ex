@@ -7,16 +7,19 @@ defmodule TSC.Coordinator do
   2. Extract imports and build dependency graph
   3. Type check files in topological order
   4. Collect and report diagnostics
+
+  ## Options
+
+  #{NimbleOptions.docs(TSC.Options.check_project_schema())}
   """
 
   alias TSC.Cache.{TypeCache, FileCache}
   alias TSC.Graph.DependencyGraph
   alias TSC.Worker.PoolSupervisor
   alias TSC.Telemetry.Metrics
+  alias TSC.Options
 
   require Logger
-
-  @default_concurrency 4
 
   # ============================================================================
   # Public API
@@ -25,14 +28,13 @@ defmodule TSC.Coordinator do
   @doc """
   Check a TypeScript project.
 
-  Options:
-  - :incremental - Only check changed files (default: true)
-  - :concurrency - Max concurrent checks per level (default: 4)
+  See module documentation for available options.
   """
   @spec check_project(list(String.t()), keyword()) :: map()
   def check_project(files, opts \\ []) do
-    incremental = Keyword.get(opts, :incremental, true)
-    concurrency = Keyword.get(opts, :concurrency, @default_concurrency)
+    opts = Options.validate_check_project!(opts)
+    incremental = Keyword.fetch!(opts, :incremental)
+    concurrency = Keyword.fetch!(opts, :concurrency)
 
     start_time = System.monotonic_time(:millisecond)
 
@@ -90,18 +92,26 @@ defmodule TSC.Coordinator do
 
   @doc """
   Check a single file.
+
+  ## Options
+
+  #{NimbleOptions.docs(TSC.Options.check_file_schema())}
   """
   @spec check_file(String.t(), keyword()) :: {:ok, map()} | {:error, term()}
   def check_file(file, opts \\ []) do
+    opts = Options.validate_check_file!(opts)
     start_time = System.monotonic_time(:millisecond)
 
     Metrics.emit_file_check_start(file)
 
-    # Get imported types from cache
-    imported_types = get_imported_types_for_file(file)
+    # Get imported types from cache (merge with any provided)
+    imported_types = Map.merge(
+      get_imported_types_for_file(file),
+      Keyword.fetch!(opts, :imported_types)
+    )
 
     # Read file content
-    content = case Keyword.get(opts, :content) do
+    content = case Keyword.fetch!(opts, :content) do
       nil -> File.read!(file)
       c -> c
     end

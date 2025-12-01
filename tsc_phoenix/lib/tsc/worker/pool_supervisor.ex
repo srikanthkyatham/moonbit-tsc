@@ -3,13 +3,16 @@ defmodule TSC.Worker.PoolSupervisor do
   Supervisor for MoonBit worker pool.
 
   Manages multiple worker processes with automatic restart on crash.
+
+  ## Options
+
+  #{NimbleOptions.docs(TSC.Options.pool_supervisor_schema())}
   """
 
   use Supervisor
 
   alias TSC.Worker.CLIWorker
-
-  @default_pool_size 4
+  alias TSC.Options
 
   # ============================================================================
   # Public API
@@ -48,7 +51,7 @@ defmodule TSC.Worker.PoolSupervisor do
   """
   @spec pool_size() :: pos_integer()
   def pool_size do
-    Application.get_env(:tsc_phoenix, :worker_pool_size, @default_pool_size)
+    Application.get_env(:tsc_phoenix, :worker_pool_size, 4)
   end
 
   @doc """
@@ -84,8 +87,9 @@ defmodule TSC.Worker.PoolSupervisor do
 
   @impl true
   def init(opts) do
-    pool_size = Keyword.get(opts, :pool_size, @default_pool_size)
-    binary_path = Keyword.get(opts, :binary_path)
+    {:ok, validated} = Options.validate_pool_supervisor(opts)
+    pool_size = Keyword.fetch!(validated, :pool_size)
+    binary_path = Keyword.get(validated, :binary_path)
 
     # Initialize the round-robin counter
     ref = :atomics.new(1, [])

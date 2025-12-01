@@ -1,0 +1,295 @@
+defmodule TSC.Options do
+  @moduledoc """
+  Option schemas for the TypeScript Compiler using NimbleOptions.
+
+  Provides validated, documented options for:
+  - Project checking (`check_project_schema/0`)
+  - File checking (`check_file_schema/0`)
+  - CLI worker (`cli_worker_schema/0`)
+  - API requests (`api_check_schema/0`)
+  """
+
+  # ============================================================================
+  # Check Project Options
+  # ============================================================================
+
+  @check_project_schema NimbleOptions.new!([
+    incremental: [
+      type: :boolean,
+      default: true,
+      doc: "Only check changed files based on file modification times"
+    ],
+    concurrency: [
+      type: :pos_integer,
+      default: 4,
+      doc: "Maximum number of concurrent file checks per dependency level"
+    ],
+    verbose: [
+      type: :boolean,
+      default: false,
+      doc: "Enable verbose output during compilation"
+    ],
+    report_diagnostics: [
+      type: :boolean,
+      default: true,
+      doc: "Always report diagnostics even when compilation succeeds"
+    ],
+    target: [
+      type: {:in, ~w(es5 es2015 es2016 es2017 es2018 es2019 es2020 esnext)},
+      default: "es2015",
+      doc: "ECMAScript target version"
+    ],
+    out_dir: [
+      type: {:or, [:string, nil]},
+      default: nil,
+      doc: "Output directory for compiled files"
+    ],
+    source_map: [
+      type: :boolean,
+      default: false,
+      doc: "Generate source map files"
+    ],
+    declaration: [
+      type: :boolean,
+      default: false,
+      doc: "Generate .d.ts declaration files"
+    ]
+  ])
+
+  @doc """
+  Returns the NimbleOptions schema for `check_project/2`.
+
+  ## Options
+
+  #{NimbleOptions.docs(@check_project_schema)}
+  """
+  def check_project_schema, do: @check_project_schema
+
+  @doc """
+  Validates options for `check_project/2`.
+
+  Returns `{:ok, validated_options}` or `{:error, %NimbleOptions.ValidationError{}}`.
+  """
+  @spec validate_check_project(keyword()) :: {:ok, keyword()} | {:error, NimbleOptions.ValidationError.t()}
+  def validate_check_project(opts) do
+    NimbleOptions.validate(opts, @check_project_schema)
+  end
+
+  @doc """
+  Validates options for `check_project/2`, raising on error.
+  """
+  @spec validate_check_project!(keyword()) :: keyword()
+  def validate_check_project!(opts) do
+    NimbleOptions.validate!(opts, @check_project_schema)
+  end
+
+  # ============================================================================
+  # Check File Options
+  # ============================================================================
+
+  @check_file_schema NimbleOptions.new!([
+    content: [
+      type: {:or, [:string, nil]},
+      default: nil,
+      doc: "File content (if nil, reads from disk)"
+    ],
+    imported_types: [
+      type: :map,
+      default: %{},
+      doc: "Map of imported type definitions from dependencies"
+    ],
+    verbose: [
+      type: :boolean,
+      default: false,
+      doc: "Enable verbose output"
+    ]
+  ])
+
+  @doc """
+  Returns the NimbleOptions schema for `check_file/2`.
+
+  ## Options
+
+  #{NimbleOptions.docs(@check_file_schema)}
+  """
+  def check_file_schema, do: @check_file_schema
+
+  @doc """
+  Validates options for `check_file/2`.
+  """
+  @spec validate_check_file(keyword()) :: {:ok, keyword()} | {:error, NimbleOptions.ValidationError.t()}
+  def validate_check_file(opts) do
+    NimbleOptions.validate(opts, @check_file_schema)
+  end
+
+  @doc """
+  Validates options for `check_file/2`, raising on error.
+  """
+  @spec validate_check_file!(keyword()) :: keyword()
+  def validate_check_file!(opts) do
+    NimbleOptions.validate!(opts, @check_file_schema)
+  end
+
+  # ============================================================================
+  # CLI Worker Options
+  # ============================================================================
+
+  @cli_worker_schema NimbleOptions.new!([
+    worker_id: [
+      type: :pos_integer,
+      default: 1,
+      doc: "Worker process identifier"
+    ],
+    binary_path: [
+      type: {:or, [:string, nil]},
+      default: nil,
+      doc: "Path to MoonBit CLI binary (uses config default if nil)"
+    ],
+    timeout: [
+      type: :pos_integer,
+      default: 60_000,
+      doc: "Request timeout in milliseconds"
+    ]
+  ])
+
+  @doc """
+  Returns the NimbleOptions schema for CLI worker configuration.
+
+  ## Options
+
+  #{NimbleOptions.docs(@cli_worker_schema)}
+  """
+  def cli_worker_schema, do: @cli_worker_schema
+
+  @doc """
+  Validates CLI worker options.
+  """
+  @spec validate_cli_worker(keyword()) :: {:ok, keyword()} | {:error, NimbleOptions.ValidationError.t()}
+  def validate_cli_worker(opts) do
+    NimbleOptions.validate(opts, @cli_worker_schema)
+  end
+
+  # ============================================================================
+  # Worker Pool Supervisor Options
+  # ============================================================================
+
+  @pool_supervisor_schema NimbleOptions.new!([
+    pool_size: [
+      type: :pos_integer,
+      default: 4,
+      doc: "Number of worker processes in the pool"
+    ],
+    binary_path: [
+      type: {:or, [:string, nil]},
+      default: nil,
+      doc: "Path to MoonBit CLI binary (uses config default if nil)"
+    ]
+  ])
+
+  @doc """
+  Returns the NimbleOptions schema for pool supervisor configuration.
+
+  ## Options
+
+  #{NimbleOptions.docs(@pool_supervisor_schema)}
+  """
+  def pool_supervisor_schema, do: @pool_supervisor_schema
+
+  @doc """
+  Validates pool supervisor options.
+  """
+  @spec validate_pool_supervisor(keyword()) :: {:ok, keyword()} | {:error, NimbleOptions.ValidationError.t()}
+  def validate_pool_supervisor(opts) do
+    NimbleOptions.validate(opts, @pool_supervisor_schema)
+  end
+
+  # ============================================================================
+  # API Request Options
+  # ============================================================================
+
+  @api_check_schema NimbleOptions.new!([
+    files: [
+      type: {:list, :string},
+      default: [],
+      doc: "List of TypeScript file paths to check"
+    ],
+    project: [
+      type: {:or, [:string, nil]},
+      default: nil,
+      doc: "Project directory path for file discovery"
+    ],
+    tsconfig: [
+      type: {:or, [:string, nil]},
+      default: nil,
+      doc: "Path to tsconfig.json for configuration and file discovery"
+    ],
+    incremental: [
+      type: :boolean,
+      default: true,
+      doc: "Only check changed files"
+    ],
+    concurrency: [
+      type: :pos_integer,
+      default: 4,
+      doc: "Maximum concurrent file checks"
+    ]
+  ])
+
+  @doc """
+  Returns the NimbleOptions schema for API check requests.
+
+  ## Options
+
+  #{NimbleOptions.docs(@api_check_schema)}
+  """
+  def api_check_schema, do: @api_check_schema
+
+  @doc """
+  Validates API check request options.
+  """
+  @spec validate_api_check(keyword()) :: {:ok, keyword()} | {:error, NimbleOptions.ValidationError.t()}
+  def validate_api_check(opts) do
+    NimbleOptions.validate(opts, @api_check_schema)
+  end
+
+  # ============================================================================
+  # Helper Functions
+  # ============================================================================
+
+  @doc """
+  Converts a map (e.g., from JSON) to keyword list for validation.
+
+  Keys are atomized, and nested maps are recursively converted.
+  Only converts keys that are known option names to prevent atom exhaustion.
+  """
+  @spec from_map(map(), atom()) :: keyword()
+  def from_map(map, schema_type) when is_map(map) do
+    allowed_keys = get_allowed_keys(schema_type)
+
+    map
+    |> Enum.filter(fn {k, _v} -> to_string(k) in allowed_keys end)
+    |> Enum.map(fn {k, v} -> {String.to_existing_atom(to_string(k)), v} end)
+  end
+
+  defp get_allowed_keys(:check_project) do
+    ~w(incremental concurrency verbose report_diagnostics target out_dir source_map declaration)
+  end
+
+  defp get_allowed_keys(:check_file) do
+    ~w(content imported_types verbose)
+  end
+
+  defp get_allowed_keys(:cli_worker) do
+    ~w(worker_id binary_path timeout)
+  end
+
+  defp get_allowed_keys(:pool_supervisor) do
+    ~w(pool_size binary_path)
+  end
+
+  defp get_allowed_keys(:api_check) do
+    ~w(files project tsconfig incremental concurrency)
+  end
+
+  defp get_allowed_keys(_), do: []
+end

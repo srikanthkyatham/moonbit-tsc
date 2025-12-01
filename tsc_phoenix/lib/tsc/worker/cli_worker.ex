@@ -4,15 +4,18 @@ defmodule TSC.Worker.CLIWorker do
 
   This is a simpler approach than Port-based communication,
   executing the CLI binary for each check request.
+
+  ## Options
+
+  #{NimbleOptions.docs(TSC.Options.cli_worker_schema())}
   """
 
   use GenServer
 
   alias TSC.Telemetry.Metrics
+  alias TSC.Options
 
   require Logger
-
-  @default_timeout 60_000
 
   defstruct [:binary_path, :worker_id, :status, :processed_count, :started_at, :current_task]
 
@@ -21,15 +24,16 @@ defmodule TSC.Worker.CLIWorker do
   # ============================================================================
 
   def start_link(opts) do
-    worker_id = Keyword.get(opts, :worker_id, 1)
-    GenServer.start_link(__MODULE__, opts, name: via_tuple(worker_id))
+    {:ok, validated} = Options.validate_cli_worker(opts)
+    worker_id = Keyword.fetch!(validated, :worker_id)
+    GenServer.start_link(__MODULE__, validated, name: via_tuple(worker_id))
   end
 
   @doc """
   Check a TypeScript file using the CLI.
   """
   @spec check(pos_integer(), map(), timeout()) :: {:ok, map()} | {:error, term()}
-  def check(worker_id, request, timeout \\ @default_timeout) do
+  def check(worker_id, request, timeout \\ 60_000) do
     GenServer.call(via_tuple(worker_id), {:check, request}, timeout)
   end
 
@@ -47,8 +51,8 @@ defmodule TSC.Worker.CLIWorker do
 
   @impl true
   def init(opts) do
-    worker_id = Keyword.get(opts, :worker_id, 1)
-    binary_path = Keyword.get(opts, :binary_path, default_binary_path())
+    worker_id = Keyword.fetch!(opts, :worker_id)
+    binary_path = Keyword.get(opts, :binary_path) || default_binary_path()
 
     state = %__MODULE__{
       binary_path: binary_path,
@@ -133,7 +137,8 @@ defmodule TSC.Worker.CLIWorker do
   end
 
   defp build_args(file, options) do
-    args = [file]
+    # Always use --reportDiagnostics to get type errors/warnings in output
+    args = ["--reportDiagnostics", file]
 
     args = if options[:verbose], do: args ++ ["--verbose"], else: args
     args = if options[:out_dir], do: args ++ ["--outDir", options[:out_dir]], else: args
@@ -163,17 +168,23 @@ defmodule TSC.Worker.CLIWorker do
   end
 
   defp parse_diagnostics_from_output(output) do
-    # Parse lines like: src/foo.ts(10,5): error TS2322: Type 'string' is not assignable to type 'number'
+    # Parse lines like: src/foo.ts:10:5 - error TS2322: Type 'string' is not assignable to type 'number'
     output
     |> String.split("\n")
-    |> Enum.filter(&String.contains?(&1, ": error ") or String.contains?(&1, ": warning "))
+    |> Enum.filter(fn line ->
+      String.contains?(line, " - error TS") or
+      String.contains?(line, " - warning TS") or
+      String.contains?(line, " - suggestion TS") or
+      String.contains?(line, " - message TS")
+    end)
     |> Enum.map(&parse_diagnostic_line/1)
     |> Enum.reject(&is_nil/1)
   end
 
   defp parse_diagnostic_line(line) do
-    # Pattern: file(line,col): category TScode: message
-    regex = ~r/^(.+?)\((\d+),(\d+)\): (error|warning) (TS\d+): (.+)$/
+    # MoonBit CLI format: file_path:line:column - category TScode: message
+    # Example: src/foo.ts:10:5 - error TS2322: Type 'string' is not assignable to type 'number'
+    regex = ~r/^(.+?):(\d+):(\d+) - (error|warning|suggestion|message) (TS\d+): (.+)$/
 
     case Regex.run(regex, line) do
       [_, file, line_num, col, category, code, message] ->
