@@ -81,7 +81,8 @@ defmodule TscPhoenixWeb.API.CheckController do
       project: Map.get(params, "project"),
       tsconfig: Map.get(params, "tsconfig"),
       incremental: get_in(params, ["options", "incremental"]) |> to_boolean(true),
-      concurrency: get_in(params, ["options", "concurrency"]) || 4
+      concurrency: get_in(params, ["options", "concurrency"]) || 4,
+      use_dependency_order: get_in(params, ["options", "use_dependency_order"]) |> to_boolean(false)
     ]
   end
 
@@ -110,7 +111,8 @@ defmodule TscPhoenixWeb.API.CheckController do
   defp extract_coordinator_opts(validated) do
     [
       incremental: Keyword.fetch!(validated, :incremental),
-      concurrency: Keyword.fetch!(validated, :concurrency)
+      concurrency: Keyword.fetch!(validated, :concurrency),
+      use_dependency_order: Keyword.fetch!(validated, :use_dependency_order)
     ]
   end
 

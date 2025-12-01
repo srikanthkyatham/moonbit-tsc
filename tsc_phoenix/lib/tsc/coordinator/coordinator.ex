@@ -15,6 +15,7 @@ defmodule TSC.Coordinator do
 
   alias TSC.Cache.{TypeCache, FileCache, ErrorStore}
   alias TSC.Graph.DependencyGraph
+  alias TSC.Parser.ImportExtractor
   alias TSC.Worker.PoolSupervisor
   alias TSC.Telemetry.Metrics
   alias TSC.Options
@@ -170,15 +171,34 @@ defmodule TSC.Coordinator do
   This is the most efficient way to check multiple files.
 
   Returns the full result from the CLI including all file diagnostics and stats.
+
+  ## Options
+
+  - `:use_dependency_order` - Build dependency graph and check in topological order (default: false)
+  - `:concurrency` - Number of parallel workers (default: 4)
   """
   @spec check_files_batch(list(String.t()), keyword()) :: {:ok, map()} | {:error, term()}
   def check_files_batch(files, opts \\ []) do
-    _opts = Options.validate_check_project!(opts)
+    opts = Options.validate_check_project!(opts)
+    use_dependency_order = Keyword.get(opts, :use_dependency_order, false)
+    concurrency = Keyword.fetch!(opts, :concurrency)
     start_time = System.monotonic_time(:millisecond)
 
     Metrics.emit_project_check_start(length(files))
 
-    result = PoolSupervisor.check_files(files)
+    # Optionally build dependency graph and order files
+    {ordered_files, graph_stats} = if use_dependency_order do
+      build_dependency_graph_fast(files, concurrency)
+      levels = DependencyGraph.topological_levels(files)
+      ordered = List.flatten(levels)
+      stats = DependencyGraph.stats()
+      Logger.info("Dependency graph: #{stats.files} files, #{stats.edges} edges, #{length(levels)} levels")
+      {ordered, Map.put(stats, :levels, length(levels))}
+    else
+      {files, nil}
+    end
+
+    result = PoolSupervisor.check_files(ordered_files)
 
     duration = System.monotonic_time(:millisecond) - start_time
 
@@ -196,7 +216,8 @@ defmodule TSC.Coordinator do
             files_checked: stats["total_files"] || length(files),
             elapsed_ms: duration,
             errors: summary[:errors] || stats["total_errors"] || 0,
-            warnings: summary[:warnings] || stats["total_warnings"] || 0
+            warnings: summary[:warnings] || stats["total_warnings"] || 0,
+            graph: graph_stats
           }
         }
 
@@ -412,6 +433,40 @@ defmodule TSC.Coordinator do
           Metrics.emit_cache_miss(:type_cache, dep)
           acc
       end
+    end)
+  end
+
+  # Fast dependency graph building using the Elixir-based ImportExtractor
+  # This is much faster than calling the CLI worker for each file
+  defp build_dependency_graph_fast(files, concurrency) do
+    DependencyGraph.clear()
+
+    files
+    |> Task.async_stream(
+      fn file ->
+        case ImportExtractor.extract(file) do
+          {:ok, imports} ->
+            # Resolve imports to absolute paths
+            dependencies =
+              imports
+              |> Enum.map(fn imp -> ImportExtractor.resolve(file, imp.specifier) end)
+              |> Enum.reject(&is_nil/1)
+
+            {file, dependencies}
+
+          {:error, _reason} ->
+            {file, []}
+        end
+      end,
+      max_concurrency: concurrency,
+      timeout: 30_000
+    )
+    |> Enum.each(fn
+      {:ok, {file, deps}} ->
+        DependencyGraph.add(file, deps)
+
+      {:exit, reason} ->
+        Logger.warning("Failed to extract imports: #{inspect(reason)}")
     end)
   end
 end

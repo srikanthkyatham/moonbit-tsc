@@ -24,6 +24,11 @@ defmodule TSC.Options do
       default: 4,
       doc: "Maximum number of concurrent file checks per dependency level"
     ],
+    use_dependency_order: [
+      type: :boolean,
+      default: false,
+      doc: "Build dependency graph and check files in topological order"
+    ],
     verbose: [
       type: :boolean,
       default: false,
@@ -320,6 +325,11 @@ defmodule TSC.Options do
       type: :pos_integer,
       default: 4,
       doc: "Maximum concurrent file checks"
+    ],
+    use_dependency_order: [
+      type: :boolean,
+      default: false,
+      doc: "Build dependency graph and check files in topological order"
     ]
   ])
 
@@ -360,7 +370,7 @@ defmodule TSC.Options do
   end
 
   defp get_allowed_keys(:check_project) do
-    ~w(incremental concurrency verbose report_diagnostics target out_dir source_map declaration)
+    ~w(incremental concurrency use_dependency_order verbose report_diagnostics target out_dir source_map declaration)
   end
 
   defp get_allowed_keys(:check_file) do
@@ -384,7 +394,7 @@ defmodule TSC.Options do
   end
 
   defp get_allowed_keys(:api_check) do
-    ~w(files project tsconfig incremental concurrency)
+    ~w(files project tsconfig incremental concurrency use_dependency_order)
   end
 
   defp get_allowed_keys(_), do: []

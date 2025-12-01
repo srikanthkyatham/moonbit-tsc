@@ -10,11 +10,13 @@ defmodule TSC.Parser.ImportExtractor do
   - Dynamic imports: `import('module')`
   - Require calls: `require('module')`
   - Re-exports: `export { x } from 'module'`
+  - Triple-slash references: `/// <reference path="..." />`
+  - Triple-slash types: `/// <reference types="..." />`
   """
 
   @type import_info :: %{
     specifier: String.t(),
-    kind: :es6 | :require | :dynamic | :reexport | :side_effect,
+    kind: :es6 | :require | :dynamic | :reexport | :side_effect | :reference | :reference_types,
     line: pos_integer(),
     named: list(String.t()),
     default: String.t() | nil,
@@ -80,7 +82,11 @@ defmodule TSC.Parser.ImportExtractor do
     trimmed = String.trim(line)
 
     cond do
-      # Skip comments
+      # Triple-slash reference directive (must be checked before general comment skip)
+      String.starts_with?(trimmed, "/// <reference") ->
+        parse_triple_slash_reference(trimmed, line_num)
+
+      # Skip other comments
       String.starts_with?(trimmed, "//") ->
         []
 
@@ -106,6 +112,44 @@ defmodule TSC.Parser.ImportExtractor do
       # Require
       String.contains?(trimmed, "require(") ->
         parse_require(trimmed, line_num)
+
+      true ->
+        []
+    end
+  end
+
+  # Triple-slash reference directive: /// <reference path="..." /> or /// <reference types="..." />
+  defp parse_triple_slash_reference(line, line_num) do
+    # Pattern for path reference: /// <reference path="./foo" />
+    path_pattern = ~r/<reference\s+path\s*=\s*["']([^"']+)["']\s*\/>/
+
+    # Pattern for types reference: /// <reference types="node" />
+    types_pattern = ~r/<reference\s+types\s*=\s*["']([^"']+)["']\s*\/>/
+
+    # Pattern for lib reference: /// <reference lib="es2015" />
+    lib_pattern = ~r/<reference\s+lib\s*=\s*["']([^"']+)["']\s*\/>/
+
+    cond do
+      Regex.match?(path_pattern, line) ->
+        case Regex.run(path_pattern, line) do
+          [_, specifier] ->
+            [%{specifier: specifier, kind: :reference, line: line_num, named: [], default: nil, namespace: nil}]
+          _ ->
+            []
+        end
+
+      Regex.match?(types_pattern, line) ->
+        case Regex.run(types_pattern, line) do
+          [_, specifier] ->
+            # Types references are like @types/package - external dependencies
+            [%{specifier: specifier, kind: :reference_types, line: line_num, named: [], default: nil, namespace: nil}]
+          _ ->
+            []
+        end
+
+      Regex.match?(lib_pattern, line) ->
+        # Lib references point to built-in TypeScript libs, skip them
+        []
 
       true ->
         []

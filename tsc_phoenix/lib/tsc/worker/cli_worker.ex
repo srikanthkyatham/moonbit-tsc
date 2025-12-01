@@ -55,6 +55,15 @@ defmodule TSC.Worker.CLIWorker do
     GenServer.call(via_tuple(worker_id), :status)
   end
 
+  @doc """
+  List imports from a TypeScript file using the CLI.
+  Returns JSON with imports including moduleSpecifier, namedImports, defaultImport, etc.
+  """
+  @spec list_imports(pos_integer(), String.t(), timeout()) :: {:ok, map()} | {:error, term()}
+  def list_imports(worker_id, file, timeout \\ 60_000) do
+    GenServer.call(via_tuple(worker_id), {:list_imports, file}, timeout)
+  end
+
   # ============================================================================
   # GenServer Callbacks
   # ============================================================================
@@ -136,6 +145,21 @@ defmodule TSC.Worker.CLIWorker do
     }
 
     {:reply, status, state}
+  end
+
+  @impl true
+  def handle_call({:list_imports, file}, _from, state) do
+    new_state = %{state | status: :busy, current_task: "list_imports: #{file}"}
+
+    result = run_list_imports(state.binary_path, file)
+
+    final_state = %{new_state |
+      status: :ready,
+      processed_count: state.processed_count + 1,
+      current_task: nil
+    }
+
+    {:reply, result, final_state}
   end
 
   # ============================================================================
