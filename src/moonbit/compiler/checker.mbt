@@ -271,6 +271,7 @@ pub struct TypeChecker {
   no_unchecked_indexed_access : Bool // Adds undefined to indexed access types
   resolving_symbols : Map[Int, Bool] // Symbol IDs currently being resolved (for cycle detection)
   arrow_function_depth : Int // Tracks nesting depth in arrow functions (> 0 means inside arrow)
+  async_function_depth : Int // Tracks nesting depth in async functions (> 0 means inside async)
 } derive(Show)
 
 ///|
@@ -322,6 +323,7 @@ pub fn TypeChecker::new_with_options(
     no_unchecked_indexed_access,
     resolving_symbols: Map::new(),
     arrow_function_depth: 0,
+    async_function_depth: 0,
   }
 }
 
@@ -366,6 +368,24 @@ fn exit_arrow_function(checker : TypeChecker) -> TypeChecker {
 /// Check if currently inside an arrow function
 fn is_in_arrow_function(checker : TypeChecker) -> Bool {
   checker.arrow_function_depth > 0
+}
+
+///|
+/// Enter async function context (increment depth)
+fn enter_async_function(checker : TypeChecker) -> TypeChecker {
+  { ..checker, async_function_depth: checker.async_function_depth + 1 }
+}
+
+///|
+/// Exit async function context (decrement depth)
+fn exit_async_function(checker : TypeChecker) -> TypeChecker {
+  { ..checker, async_function_depth: checker.async_function_depth - 1 }
+}
+
+///|
+/// Check if currently inside an async function
+fn is_in_async_function(checker : TypeChecker) -> Bool {
+  checker.async_function_depth > 0
 }
 
 ///|
@@ -2896,7 +2916,17 @@ fn infer_method_type(
   checker : TypeChecker,
   method_decl : MethodDeclaration,
 ) -> (Type, TypeChecker) {
-  // Build parameter list
+  // Push a local scope for method body checking
+  let checker = push_local_scope(checker)
+
+  // Track async function context for TS2465
+  let checker = if method_decl.is_async {
+    enter_async_function(checker)
+  } else {
+    checker
+  }
+
+  // Build parameter list and add parameters to local scope
   let parameters : Array[CheckerParameter] = []
   let mut checker = checker
   for param_node in method_decl.parameters {
@@ -2911,12 +2941,15 @@ fn infer_method_type(
           None => any_type(checker)
         }
         checker = c
+        let param_name = get_parameter_name(p.name)
         parameters.push({
-          name: get_parameter_name(p.name),
+          name: param_name,
           param_type,
           is_optional: p.is_optional,
           is_rest: p.is_rest,
         })
+        // Add parameter to local scope for body checking
+        checker = add_local_variable(checker, param_name, param_type)
       }
       _ => ()
     }
@@ -2931,6 +2964,27 @@ fn infer_method_type(
       }
     None => any_type(checker)
   }
+
+  // Check method body for errors (including await expressions)
+  let checker = match method_decl.body {
+    Some(body) =>
+      match body {
+        BlockStatement(block) => check_block_statement(checker, block)
+        _ => checker
+      }
+    None => checker
+  }
+
+  // Exit async function context if needed
+  let checker = if method_decl.is_async {
+    exit_async_function(checker)
+  } else {
+    checker
+  }
+
+  // Pop the local scope
+  let checker = pop_local_scope(checker)
+
   let (info, checker) = create_type_info(checker)
   (Type::Function({ parameters, return_type, info }), checker)
 }
@@ -5353,6 +5407,17 @@ fn infer_await_expression_type(
   checker : TypeChecker,
   ae : AwaitExpression,
 ) -> (Type, TypeChecker) {
+  // TS2465: 'await' expressions are only allowed within async functions
+  let checker = if not(is_in_async_function(checker)) {
+    add_diagnostic_with_code(
+      checker,
+      "'await' expressions are only allowed within async functions and at the top levels of modules.",
+      ae.location,
+      TS2465,
+    )
+  } else {
+    checker
+  }
   // Get the type of the awaited expression
   let (promise_type, checker) = infer_type(checker, ae.expression)
   // For now, unwrap Promise<T> to T (simplified)
@@ -5481,7 +5546,17 @@ fn infer_function_expression_type(
   checker : TypeChecker,
   fe : FunctionExpression,
 ) -> (Type, TypeChecker) {
-  // Build a function type from the function expression
+  // Push a local scope for function body checking
+  let checker = push_local_scope(checker)
+
+  // Track async function context for TS2465
+  let checker = if fe.is_async {
+    enter_async_function(checker)
+  } else {
+    checker
+  }
+
+  // Build a function type from the function expression and add parameters to local scope
   let params : Array[CheckerParameter] = []
   let mut checker = checker
   for param_node in fe.parameters {
@@ -5498,15 +5573,18 @@ fn infer_function_expression_type(
           None => any_type(checker)
         }
         checker = c
+        let param_name = match p.name {
+          Identifier(id) => id.name
+          _ => ""
+        }
         params.push({
-          name: match p.name {
-            Identifier(id) => id.name
-            _ => ""
-          },
+          name: param_name,
           param_type,
           is_optional: p.is_optional,
           is_rest: p.is_rest,
         })
+        // Add parameter to local scope for body checking
+        checker = add_local_variable(checker, param_name, param_type)
       }
       _ => ()
     }
@@ -5521,6 +5599,23 @@ fn infer_function_expression_type(
     }
     None => any_type(checker)
   }
+
+  // Check function body for errors (including await expressions)
+  let checker = match fe.body {
+    BlockStatement(block) => check_block_statement(checker, block)
+    _ => checker
+  }
+
+  // Exit async function context if needed
+  let checker = if fe.is_async {
+    exit_async_function(checker)
+  } else {
+    checker
+  }
+
+  // Pop the local scope
+  let checker = pop_local_scope(checker)
+
   let (info, checker) = create_type_info(checker)
   (Function({ parameters: params, return_type, info }), checker)
 }
@@ -5764,6 +5859,13 @@ fn infer_arrow_function_type(
   // Enter arrow function context (for arguments check)
   let checker = enter_arrow_function(checker)
 
+  // Track async function context for TS2465
+  let checker = if arrow.is_async {
+    enter_async_function(checker)
+  } else {
+    checker
+  }
+
   // Build parameter list and add parameters to local scope
   let parameters = []
   let mut checker = checker
@@ -5819,6 +5921,13 @@ fn infer_arrow_function_type(
         }
         _ => infer_type(checker, arrow.body)
       }
+  }
+
+  // Exit async function context if needed
+  let checker = if arrow.is_async {
+    exit_async_function(checker)
+  } else {
+    checker
   }
 
   // Exit arrow function context
@@ -6834,10 +6943,24 @@ fn check_function_declaration(
     }
   }
 
+  // Track async function context for TS2465
+  let checker = if func.is_async {
+    enter_async_function(checker)
+  } else {
+    checker
+  }
+
   // Check function body first (so variables are declared in scope)
   let checker = match func.body {
     Some(body) => check_statement(checker, body)
     None => checker
+  }
+
+  // Exit async function context
+  let checker = if func.is_async {
+    exit_async_function(checker)
+  } else {
+    checker
   }
 
   // Check return type consistency if a return type is declared
@@ -7174,12 +7297,24 @@ fn check_class_declaration(
           Some(body) => {
             // Push local scope for method
             let checker = push_local_scope(checker)
+            // Track async function context for TS2465
+            let checker = if method_dec.is_async {
+              enter_async_function(checker)
+            } else {
+              checker
+            }
             // Add method parameters to scope
             let mut checker = checker
             for param in method_dec.parameters {
               checker = add_parameter_to_scope(checker, param)
             }
             let checker = check_statement(checker, body)
+            // Exit async function context if needed
+            let checker = if method_dec.is_async {
+              exit_async_function(checker)
+            } else {
+              checker
+            }
             // Pop local scope
             pop_local_scope(checker)
           }

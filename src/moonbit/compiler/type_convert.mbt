@@ -639,6 +639,7 @@ fn TypeChecker::create_type_info(self : TypeChecker) -> (TypeInfo, TypeChecker) 
     no_unchecked_indexed_access: self.no_unchecked_indexed_access,
     resolving_symbols: self.resolving_symbols,
     arrow_function_depth: self.arrow_function_depth,
+    async_function_depth: self.async_function_depth,
   }
   (info, new_checker)
 }

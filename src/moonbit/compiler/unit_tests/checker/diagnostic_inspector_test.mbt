@@ -324,7 +324,9 @@ test "inspect/complex - class implementing interface with wrong method signature
     #|}
   let result = inspect_diagnostics(source)
   println(result)
-  inspect(result, content="OK: No errors")
+  inspect(result, content=(
+    "OK: No errors"
+  ))
 }
 
 ///|
