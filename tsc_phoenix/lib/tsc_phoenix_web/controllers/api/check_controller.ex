@@ -28,7 +28,16 @@ defmodule TscPhoenixWeb.API.CheckController do
   def create(conn, params) do
     case parse_and_validate_params(params) do
       {:ok, files, coordinator_opts} ->
-        result = Coordinator.check_project(files, coordinator_opts)
+        # Use batch check for direct file lists (more efficient)
+        # Use check_project for tsconfig-based checking (handles dependency ordering)
+        result = if Keyword.get(coordinator_opts, :use_batch, true) do
+          case Coordinator.check_files_batch(files, coordinator_opts) do
+            {:ok, r} -> r
+            {:error, reason} -> %{success: false, diagnostics: [], stats: %{error: inspect(reason)}}
+          end
+        else
+          Coordinator.check_project(files, coordinator_opts)
+        end
 
         conn
         |> put_status(if result.success, do: 200, else: 400)

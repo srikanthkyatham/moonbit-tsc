@@ -39,6 +39,15 @@ defmodule TSC.Worker.CLIWorker do
   end
 
   @doc """
+  Check multiple TypeScript files using the CLI in a single invocation.
+  This is more efficient than calling check/3 multiple times.
+  """
+  @spec check_files(pos_integer(), list(String.t()), map(), timeout()) :: {:ok, map()} | {:error, term()}
+  def check_files(worker_id, files, options \\ %{}, timeout \\ 60_000) do
+    GenServer.call(via_tuple(worker_id), {:check_files, files, options}, timeout)
+  end
+
+  @doc """
   Get worker status.
   """
   @spec status(pos_integer()) :: map()
@@ -92,6 +101,29 @@ defmodule TSC.Worker.CLIWorker do
   end
 
   @impl true
+  def handle_call({:check_files, files, options}, _from, state) do
+    start_time = System.monotonic_time(:millisecond)
+
+    Enum.each(files, &Metrics.emit_file_check_start/1)
+
+    new_state = %{state | status: :busy, current_task: "batch: #{length(files)} files"}
+
+    result = run_check_files(state.binary_path, files, options)
+
+    duration = System.monotonic_time(:millisecond) - start_time
+
+    Enum.each(files, fn file -> Metrics.emit_file_check_stop(file, duration, result) end)
+
+    final_state = %{new_state |
+      status: :ready,
+      processed_count: state.processed_count + length(files),
+      current_task: nil
+    }
+
+    {:reply, result, final_state}
+  end
+
+  @impl true
   def handle_call(:status, _from, state) do
     uptime = System.system_time(:second) - state.started_at
 
@@ -122,7 +154,7 @@ defmodule TSC.Worker.CLIWorker do
 
   defp run_check(binary_path, file, options) do
     if File.exists?(binary_path) do
-      args = build_args(file, options)
+      args = build_args([file], options)
 
       case System.cmd(binary_path, args, stderr_to_stdout: true) do
         {output, _exit_code} ->
@@ -134,9 +166,23 @@ defmodule TSC.Worker.CLIWorker do
     end
   end
 
-  defp build_args(file, options) do
-    # Use --json for structured JSON output
-    args = ["--json", file]
+  defp run_check_files(binary_path, files, options) do
+    if File.exists?(binary_path) do
+      args = build_args(files, options)
+
+      case System.cmd(binary_path, args, stderr_to_stdout: true) do
+        {output, _exit_code} ->
+          parse_json_output(output)
+      end
+    else
+      Logger.warning("MoonBit binary not found at #{binary_path}")
+      {:ok, mock_result_files(files)}
+    end
+  end
+
+  defp build_args(files, options) when is_list(files) do
+    # Use --json for structured JSON output, followed by all file paths
+    args = ["--json"] ++ files
 
     args = if options[:verbose], do: args ++ ["--verbose"], else: args
     args = if options[:out_dir], do: args ++ ["--outDir", options[:out_dir]], else: args
@@ -215,6 +261,29 @@ defmodule TSC.Worker.CLIWorker do
       diagnostics: [],
       exports: %{},
       success: true,
+      mock: true
+    }
+  end
+
+  defp mock_result_files(files) do
+    %{
+      diagnostics: [],
+      diagnostics_maps: [],
+      summary: %{
+        total: 0,
+        errors: 0,
+        warnings: 0,
+        suggestions: 0,
+        by_type: %{},
+        files_with_errors: 0
+      },
+      exports: %{},
+      success: true,
+      stats: %{
+        "total_files" => length(files),
+        "successful" => length(files),
+        "failed" => 0
+      },
       mock: true
     }
   end

@@ -166,6 +166,55 @@ defmodule TSC.Coordinator do
   end
 
   @doc """
+  Check multiple files in a single CLI invocation.
+  This is the most efficient way to check multiple files.
+
+  Returns the full result from the CLI including all file diagnostics and stats.
+  """
+  @spec check_files_batch(list(String.t()), keyword()) :: {:ok, map()} | {:error, term()}
+  def check_files_batch(files, opts \\ []) do
+    _opts = Options.validate_check_project!(opts)
+    start_time = System.monotonic_time(:millisecond)
+
+    Metrics.emit_project_check_start(length(files))
+
+    result = PoolSupervisor.check_files(files)
+
+    duration = System.monotonic_time(:millisecond) - start_time
+
+    case result do
+      {:ok, data} ->
+        # Get stats from either :stats or "stats" key (JSON keys are strings)
+        stats = data[:stats] || data["stats"] || %{}
+        summary = data[:summary] || %{}
+
+        # Enhance the result with timing info
+        enhanced_result = %{
+          success: data.success,
+          diagnostics: data.diagnostics,
+          stats: %{
+            files_checked: stats["total_files"] || length(files),
+            elapsed_ms: duration,
+            errors: summary[:errors] || stats["total_errors"] || 0,
+            warnings: summary[:warnings] || stats["total_warnings"] || 0
+          }
+        }
+
+        Metrics.emit_project_check_stop(
+          length(files),
+          duration,
+          if(enhanced_result.success, do: :success, else: :errors)
+        )
+
+        {:ok, enhanced_result}
+
+      error ->
+        Metrics.emit_project_check_stop(length(files), duration, :error)
+        error
+    end
+  end
+
+  @doc """
   Check a single file.
 
   ## Options

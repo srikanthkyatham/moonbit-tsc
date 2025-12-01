@@ -64,6 +64,16 @@ defmodule TSC.Worker.PoolSupervisor do
   end
 
   @doc """
+  Check multiple files using an available worker in a single CLI invocation.
+  This is more efficient than calling check/2 multiple times.
+  """
+  @spec check_files(list(String.t()), map(), timeout()) :: {:ok, map()} | {:error, term()}
+  def check_files(files, options \\ %{}, timeout \\ 60_000) do
+    worker_id = get_worker()
+    CLIWorker.check_files(worker_id, files, options, timeout)
+  end
+
+  @doc """
   Parse a file using an available worker (delegates to check for now).
   """
   @spec parse(map(), timeout()) :: {:ok, map()} | {:error, term()}
