@@ -242,6 +242,16 @@ pub enum MismatchReason {
   RefersToUMDGlobal(String) // TS2686: '{0}' refers to a UMD global, but the current file is a module
   DeclarationsMustHaveIdenticalModifiers(String) // TS2687: All declarations of '{0}' must have identical modifiers
   CannotFindTypeDefinitionFile(String) // TS2688: Cannot find type definition file for '{0}'
+
+  // Type Complexity & Inference errors
+  PropertyIsStaticMemberOfType(String, String) // TS2576: Property '{0}' is a static member of type '{1}'
+  UnusedTsExpectErrorDirective // TS2578: Unused '@ts-expect-error' directive
+  CannotFindNameTestRunner(String) // TS2579: Cannot find name '{0}'. Do you need to install type definitions for a test runner?
+  CannotFindNameTargetLibrary(String, String) // TS2580: Cannot find name '{0}'. Do you need to change your target library?
+  CannotFindNameTargetLibraryAlt(String, String) // TS2584: Cannot find name '{0}'. Do you need to change your target library?
+  ExpressionProducesUnionTooComplex // TS2590: Expression produces a union type that is too complex to represent
+  CannotImportTypeDeclarationFiles(String) // TS2591: Cannot import type declaration files. Consider importing '{0}' instead
+  InferredTypeCannotBeNamed(String, String) // TS2742: The inferred type of '{0}' cannot be named without a reference to '{1}'
 } derive(Show, Eq)
 
 // ============================================================================
@@ -1115,6 +1125,23 @@ pub fn get_friendly_title(reason : MismatchReason) -> String {
       "DECLARATIONS OF '" + name + "' MUST HAVE IDENTICAL MODIFIERS"
     CannotFindTypeDefinitionFile(name) =>
       "CANNOT FIND TYPE DEFINITION FILE FOR '" + name + "'"
+    // Type Complexity & Inference errors
+    PropertyIsStaticMemberOfType(prop, type_name) =>
+      "PROPERTY '" + prop + "' IS A STATIC MEMBER OF TYPE '" + type_name + "'"
+    UnusedTsExpectErrorDirective =>
+      "UNUSED '@ts-expect-error' DIRECTIVE"
+    CannotFindNameTestRunner(name) =>
+      "CANNOT FIND NAME '" + name + "' (TEST RUNNER TYPES)"
+    CannotFindNameTargetLibrary(name, _) =>
+      "CANNOT FIND NAME '" + name + "' (TARGET LIBRARY)"
+    CannotFindNameTargetLibraryAlt(name, _) =>
+      "CANNOT FIND NAME '" + name + "' (TARGET LIBRARY)"
+    ExpressionProducesUnionTooComplex =>
+      "EXPRESSION PRODUCES UNION TOO COMPLEX"
+    CannotImportTypeDeclarationFiles(file) =>
+      "CANNOT IMPORT TYPE DECLARATION FILE '" + file + "'"
+    InferredTypeCannotBeNamed(name, reference) =>
+      "INFERRED TYPE OF '" + name + "' CANNOT BE NAMED WITHOUT '" + reference + "'"
   }
 }
 
@@ -1755,6 +1782,43 @@ pub fn get_why_explanation(reason : MismatchReason) -> String {
       "'. TypeScript looks for type definitions in @types packages or .d.ts files. This usually means you need to install the corresponding @types package (npm install @types/" +
       name +
       ") or create a custom type declaration."
+    // Type Complexity & Inference errors
+    PropertyIsStaticMemberOfType(prop, type_name) =>
+      "Property '" +
+      prop +
+      "' is a static member of type '" +
+      type_name +
+      "'. Static members belong to the class/type itself, not to instances of that type. You're trying to access it on an instance when you should access it on the class directly."
+    UnusedTsExpectErrorDirective =>
+      "The '@ts-expect-error' directive was added to suppress an error, but no error was actually produced on the following line. This often happens when the code was fixed but the directive was left behind, or the error occurs on a different line."
+    CannotFindNameTestRunner(name) =>
+      "Cannot find name '" +
+      name +
+      "'. This name is typically provided by test runner frameworks like Jest, Mocha, or Jasmine. You may need to install type definitions for your test runner (e.g., @types/jest, @types/mocha)."
+    CannotFindNameTargetLibrary(name, target) =>
+      "Cannot find name '" +
+      name +
+      "'. This is a built-in feature that requires a specific target library. Your current compilation target '" +
+      target +
+      "' doesn't include this feature. Consider changing your target to a newer ECMAScript version."
+    CannotFindNameTargetLibraryAlt(name, target) =>
+      "Cannot find name '" +
+      name +
+      "'. This feature is not available in your current target library '" +
+      target +
+      "'. You may need to include additional lib entries in your tsconfig.json or change your compilation target."
+    ExpressionProducesUnionTooComplex =>
+      "The expression produces a union type that is too complex to represent. TypeScript has limits on how complex types can be to prevent performance issues. This often happens with recursive types or when combining many conditional types."
+    CannotImportTypeDeclarationFiles(file) =>
+      "You cannot directly import type declaration files (.d.ts). Declaration files are automatically loaded by TypeScript and should not be imported directly. If you need types from '" +
+      file +
+      "', import from the corresponding JavaScript module instead."
+    InferredTypeCannotBeNamed(name, reference) =>
+      "The inferred type of '" +
+      name +
+      "' cannot be named without a reference to '" +
+      reference +
+      "'. This usually happens when an exported function returns a type from a module that isn't directly exported. You need to either add an explicit type annotation or ensure the referenced module is accessible."
   }
 }
 
@@ -3145,6 +3209,99 @@ pub fn get_how_to_fix(
       fixes.push("")
       fixes.push("Option 3: Add the types to tsconfig.json typeRoots")
     }
+    // Type Complexity & Inference errors
+    PropertyIsStaticMemberOfType(prop, type_name) => {
+      fixes.push("Property '" + prop + "' is a static member of '" + type_name + "'.")
+      fixes.push("")
+      fixes.push("Static members are accessed on the class itself, not on instances.")
+      fixes.push("")
+      fixes.push("Option 1: Access it on the class directly:")
+      fixes.push("    " + type_name + "." + prop + "  // ✓ correct")
+      fixes.push("")
+      fixes.push("Option 2: If you have an instance, use the constructor:")
+      fixes.push("    instance.constructor." + prop)
+      fixes.push("")
+      fixes.push("Option 3: If this should be an instance member, remove 'static' from the declaration")
+    }
+    UnusedTsExpectErrorDirective => {
+      fixes.push("The '@ts-expect-error' directive is unused - no error on the following line.")
+      fixes.push("")
+      fixes.push("Option 1: Remove the directive if the error was fixed:")
+      fixes.push("    // @ts-expect-error  <-- remove this line")
+      fixes.push("")
+      fixes.push("Option 2: Check if the error is on a different line")
+      fixes.push("")
+      fixes.push("Option 3: If you're suppressing a potential future error, use @ts-ignore instead")
+    }
+    CannotFindNameTestRunner(name) => {
+      fixes.push("Cannot find name '" + name + "'. This is typically a test runner global.")
+      fixes.push("")
+      fixes.push("Option 1: Install type definitions for your test framework:")
+      fixes.push("    npm install --save-dev @types/jest      // for Jest")
+      fixes.push("    npm install --save-dev @types/mocha     // for Mocha")
+      fixes.push("    npm install --save-dev @types/jasmine   // for Jasmine")
+      fixes.push("")
+      fixes.push("Option 2: Add types to tsconfig.json:")
+      fixes.push("    { \"compilerOptions\": { \"types\": [\"jest\"] } }")
+    }
+    CannotFindNameTargetLibrary(name, target) => {
+      fixes.push("Cannot find name '" + name + "'. Current target: " + target)
+      fixes.push("")
+      fixes.push("Option 1: Change target in tsconfig.json:")
+      fixes.push("    { \"compilerOptions\": { \"target\": \"ES2020\" } }")
+      fixes.push("")
+      fixes.push("Option 2: Add lib entries to include the feature:")
+      fixes.push("    { \"compilerOptions\": { \"lib\": [\"ES2020\", \"DOM\"] } }")
+      fixes.push("")
+      fixes.push("Option 3: Use a polyfill for older targets")
+    }
+    CannotFindNameTargetLibraryAlt(name, target) => {
+      fixes.push("Cannot find name '" + name + "'. Not available in target: " + target)
+      fixes.push("")
+      fixes.push("Option 1: Update your compilation target:")
+      fixes.push("    { \"compilerOptions\": { \"target\": \"ESNext\" } }")
+      fixes.push("")
+      fixes.push("Option 2: Include additional lib entries:")
+      fixes.push("    { \"compilerOptions\": { \"lib\": [\"ESNext\"] } }")
+      fixes.push("")
+      fixes.push("Option 3: Check if a polyfill is available for this feature")
+    }
+    ExpressionProducesUnionTooComplex => {
+      fixes.push("The union type is too complex for TypeScript to represent.")
+      fixes.push("")
+      fixes.push("Option 1: Simplify the type by breaking it into smaller parts:")
+      fixes.push("    type Part1 = A | B | C;")
+      fixes.push("    type Part2 = D | E | F;")
+      fixes.push("    type Combined = Part1 | Part2;")
+      fixes.push("")
+      fixes.push("Option 2: Use a more general type:")
+      fixes.push("    type Result = string | number;  // instead of literal unions")
+      fixes.push("")
+      fixes.push("Option 3: Review recursive types that might expand infinitely")
+    }
+    CannotImportTypeDeclarationFiles(file) => {
+      fixes.push("Cannot import type declaration file '" + file + "' directly.")
+      fixes.push("")
+      fixes.push("Option 1: Import from the JavaScript module instead:")
+      fixes.push("    import { Type } from 'module';  // not 'module.d.ts'")
+      fixes.push("")
+      fixes.push("Option 2: Use type-only import if you only need types:")
+      fixes.push("    import type { Type } from 'module';")
+      fixes.push("")
+      fixes.push("Option 3: Use triple-slash reference for ambient declarations:")
+      fixes.push("    /// <reference types=\"module\" />")
+    }
+    InferredTypeCannotBeNamed(name, reference) => {
+      fixes.push("The inferred type of '" + name + "' cannot be named without '" + reference + "'.")
+      fixes.push("")
+      fixes.push("Option 1: Add an explicit type annotation:")
+      fixes.push("    export function " + name + "(): ExplicitType { ... }")
+      fixes.push("")
+      fixes.push("Option 2: Export the referenced type:")
+      fixes.push("    export { " + reference + " } from './module';")
+      fixes.push("")
+      fixes.push("Option 3: Re-export the module that contains the type")
+    }
   }
   fixes
 }
@@ -3296,6 +3453,15 @@ pub fn get_error_code(reason : MismatchReason) -> Int {
     RefersToUMDGlobal(_) => 2686 // TS2686: Refers to UMD global
     DeclarationsMustHaveIdenticalModifiers(_) => 2687 // TS2687: All declarations must have identical modifiers
     CannotFindTypeDefinitionFile(_) => 2688 // TS2688: Cannot find type definition file
+    // Type Complexity & Inference errors
+    PropertyIsStaticMemberOfType(_, _) => 2576 // TS2576: Property is a static member of type
+    UnusedTsExpectErrorDirective => 2578 // TS2578: Unused '@ts-expect-error' directive
+    CannotFindNameTestRunner(_) => 2579 // TS2579: Cannot find name (test runner types)
+    CannotFindNameTargetLibrary(_, _) => 2580 // TS2580: Cannot find name (target library)
+    CannotFindNameTargetLibraryAlt(_, _) => 2584 // TS2584: Cannot find name (target library)
+    ExpressionProducesUnionTooComplex => 2590 // TS2590: Expression produces union too complex
+    CannotImportTypeDeclarationFiles(_) => 2591 // TS2591: Cannot import type declaration files
+    InferredTypeCannotBeNamed(_, _) => 2742 // TS2742: Inferred type cannot be named without reference
   }
 }
 

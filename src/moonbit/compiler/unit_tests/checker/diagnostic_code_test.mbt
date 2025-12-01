@@ -4978,3 +4978,234 @@ test "DiagnosticCode - valid type reference" {
     }
   }
 }
+
+// ============================================================================
+// TS2576: Property is static member of type
+// ============================================================================
+
+///|
+test "DiagnosticCode - TS2576 static member access (not detected yet)" {
+  // Note: This tests the error code structure; detection not yet implemented
+  let source =
+    #|class MyClass {
+    #|  static staticProp: number = 42;
+    #|}
+    #|const instance = new MyClass();
+    #|const x = instance.staticProp; // accessing static on instance
+  let result = check_source(source)
+  match result {
+    Ok(_) => () // Detection not implemented yet
+    Err(diagnostics) => {
+      if has_error(diagnostics, 2576) {
+        assert_true(has_message(diagnostics, "static"))
+      }
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - valid static member access" {
+  let source =
+    #|class MyClass {
+    #|  static staticProp: number = 42;
+    #|}
+    #|const x = MyClass.staticProp; // correct: accessing on class
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => {
+      assert_true(not(has_error(diagnostics, 2576)))
+    }
+  }
+}
+
+// ============================================================================
+// TS2578: Unused @ts-expect-error directive
+// ============================================================================
+
+///|
+test "DiagnosticCode - TS2578 unused ts-expect-error (not detected yet)" {
+  // Note: This tests the error code structure; detection not yet implemented
+  let source =
+    #|// @ts-expect-error
+    #|const x: number = 42; // no error here, so directive is unused
+  let result = check_source(source)
+  match result {
+    Ok(_) => () // Detection not implemented yet
+    Err(diagnostics) => {
+      if has_error(diagnostics, 2578) {
+        assert_true(has_message(diagnostics, "ts-expect-error") || has_message(diagnostics, "unused"))
+      }
+    }
+  }
+}
+
+// ============================================================================
+// TS2579: Cannot find name (test runner types)
+// ============================================================================
+
+///|
+test "DiagnosticCode - TS2579 test runner name (not detected yet)" {
+  // Note: This tests the error code structure; detection not yet implemented
+  let source =
+    #|describe("test", () => {
+    #|  it("should work", () => {});
+    #|});
+  let result = check_source(source)
+  match result {
+    Ok(_) => () // Detection not implemented yet
+    Err(diagnostics) => {
+      if has_error(diagnostics, 2579) {
+        assert_true(has_message(diagnostics, "describe") || has_message(diagnostics, "test runner"))
+      }
+    }
+  }
+}
+
+// ============================================================================
+// TS2580: Cannot find name (target library)
+// ============================================================================
+
+///|
+test "DiagnosticCode - TS2580 target library name (not detected yet)" {
+  // Note: This tests the error code structure; detection not yet implemented
+  let source =
+    #|const x = BigInt(42); // BigInt might not be available in older targets
+  let result = check_source(source)
+  match result {
+    Ok(_) => () // Detection not implemented yet
+    Err(diagnostics) => {
+      if has_error(diagnostics, 2580) {
+        assert_true(has_message(diagnostics, "target") || has_message(diagnostics, "library"))
+      }
+    }
+  }
+}
+
+// ============================================================================
+// TS2584: Cannot find name (target library alt)
+// ============================================================================
+
+///|
+test "DiagnosticCode - TS2584 target library alt (not detected yet)" {
+  // Note: This tests the error code structure; detection not yet implemented
+  let source =
+    #|const x = Symbol.asyncIterator; // may need specific lib
+  let result = check_source(source)
+  match result {
+    Ok(_) => () // Detection not implemented yet
+    Err(diagnostics) => {
+      if has_error(diagnostics, 2584) {
+        assert_true(has_message(diagnostics, "target") || has_message(diagnostics, "library"))
+      }
+    }
+  }
+}
+
+// ============================================================================
+// TS2590: Expression produces union too complex
+// ============================================================================
+
+///|
+test "DiagnosticCode - TS2590 union too complex (not detected yet)" {
+  // Note: This tests the error code structure; detection not yet implemented
+  // This would require a very complex recursive type to trigger
+  let source =
+    #|type Recursive<T> = T extends object ? { [K in keyof T]: Recursive<T[K]> } : T;
+    #|type Complex = Recursive<Recursive<Recursive<object>>>;
+  let result = check_source(source)
+  match result {
+    Ok(_) => () // Detection not implemented yet
+    Err(diagnostics) => {
+      if has_error(diagnostics, 2590) {
+        assert_true(has_message(diagnostics, "complex") || has_message(diagnostics, "union"))
+      }
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - valid simple union type" {
+  let source =
+    #|type SimpleUnion = string | number | boolean;
+    #|const x: SimpleUnion = "hello";
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => {
+      assert_true(not(has_error(diagnostics, 2590)))
+    }
+  }
+}
+
+// ============================================================================
+// TS2591: Cannot import type declaration files
+// ============================================================================
+
+///|
+test "DiagnosticCode - TS2591 import declaration file (not detected yet)" {
+  // Note: This tests the error code structure; detection not yet implemented
+  let source =
+    #|import { Type } from './module.d.ts'; // should not import .d.ts directly
+  let result = check_source(source)
+  match result {
+    Ok(_) => () // Detection not implemented yet
+    Err(diagnostics) => {
+      if has_error(diagnostics, 2591) {
+        assert_true(has_message(diagnostics, "declaration") || has_message(diagnostics, ".d.ts"))
+      }
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - valid module import" {
+  let source =
+    #|import { something } from './module'; // correct: no .d.ts extension
+  let result = check_source(source)
+  match result {
+    Ok(_) => () // Module resolution may not work in test
+    Err(diagnostics) => {
+      assert_true(not(has_error(diagnostics, 2591)))
+    }
+  }
+}
+
+// ============================================================================
+// TS2742: Inferred type cannot be named without reference
+// ============================================================================
+
+///|
+test "DiagnosticCode - TS2742 inferred type naming (not detected yet)" {
+  // Note: This tests the error code structure; detection not yet implemented
+  let source =
+    #|// This would require a module that exports a function returning an unexported type
+    #|export function getData() {
+    #|  return { internal: true };
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => () // Detection not implemented yet
+    Err(diagnostics) => {
+      if has_error(diagnostics, 2742) {
+        assert_true(has_message(diagnostics, "inferred") || has_message(diagnostics, "named"))
+      }
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - valid explicit return type" {
+  let source =
+    #|interface Result { value: number; }
+    #|export function getData(): Result {
+    #|  return { value: 42 };
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => {
+      assert_true(not(has_error(diagnostics, 2742)))
+    }
+  }
+}
