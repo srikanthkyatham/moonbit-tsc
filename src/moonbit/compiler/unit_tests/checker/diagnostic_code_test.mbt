@@ -3169,11 +3169,10 @@ test "DiagnosticCode - TS2369 param property in method" {
     #|}
   let result = check_source(source)
   match result {
-    Ok(_) => () // May not be fully implemented
+    Ok(_) => fail!("Expected TS2369 error")
     Err(diagnostics) => {
-      // Should report TS2369 or parser error
-      if has_error(diagnostics, 2369) {
-        assert_true(has_message(diagnostics, "constructor") || has_message(diagnostics, "parameter property"))
+      if not(has_error(diagnostics, 2369)) {
+        fail!("Expected TS2369 error")
       }
     }
   }
@@ -3201,11 +3200,10 @@ test "DiagnosticCode - TS2371 param initializer in declaration" {
     #|declare function fn(x: number = 5): void;
   let result = check_source(source)
   match result {
-    Ok(_) => () // May not be fully implemented
+    Ok(_) => fail!("Expected TS2371 error")
     Err(diagnostics) => {
-      // Should report TS2371
-      if has_error(diagnostics, 2371) {
-        assert_true(has_message(diagnostics, "initializer") || has_message(diagnostics, "implementation"))
+      if not(has_error(diagnostics, 2371)) {
+        fail!("Expected TS2371 error")
       }
     }
   }
@@ -3232,11 +3230,10 @@ test "DiagnosticCode - TS2372 param references itself" {
     #|function fn(x: number = x) { return x; }
   let result = check_source(source)
   match result {
-    Ok(_) => () // May not be fully implemented
+    Ok(_) => fail!("Expected TS2372 error")
     Err(diagnostics) => {
-      // Should report TS2372
-      if has_error(diagnostics, 2372) {
-        assert_true(has_message(diagnostics, "itself") || has_message(diagnostics, "reference"))
+      if not(has_error(diagnostics, 2372)) {
+        fail!("Expected TS2372 error")
       }
     }
   }

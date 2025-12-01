@@ -7434,6 +7434,17 @@ fn check_function_declaration(
   checker : TypeChecker,
   func : FunctionDeclaration,
 ) -> TypeChecker {
+  // Check for TS2371: parameter initializer in ambient declaration
+  let is_ambient = is_ambient_declaration(func.modifiers) || func.body.is_none()
+  let checker = if is_ambient {
+    check_ambient_parameter_initializers(checker, func.parameters)
+  } else {
+    checker
+  }
+
+  // Check for TS2372: parameter cannot reference itself
+  let checker = check_parameter_self_reference(checker, func.parameters)
+
   // Clear any narrowed types from outer scope before entering function body
   let saved_narrowed_types = checker.narrowed_types
   let checker = clear_narrowed_types(checker)
@@ -8145,6 +8156,11 @@ fn check_class_declaration(
           Some(body) => {
             // Push local scope for method
             let checker = push_local_scope(checker)
+            // Check for TS2369: parameter property only in constructor
+            let checker = check_method_parameter_properties(
+              checker,
+              method_dec.parameters,
+            )
             // Track async function context for TS2465
             let checker = if method_dec.is_async {
               enter_async_function(checker)
@@ -8166,7 +8182,9 @@ fn check_class_declaration(
             // Pop local scope
             pop_local_scope(checker)
           }
-          None => checker
+          None =>
+            // Also check method signatures without body for TS2369
+            check_method_parameter_properties(checker, method_dec.parameters)
         }
       PropertyDeclaration(prop) =>
         match prop.initializer {
@@ -9115,6 +9133,137 @@ fn check_switch_statement(
 // ============================================================================
 // Helper Functions
 // ============================================================================
+
+///|
+/// Check if a parameter has a parameter property modifier (public, private, protected, readonly)
+/// These are only valid in constructors (TS2369)
+fn has_parameter_property_modifier(modifiers : Array[Modifier]) -> Bool {
+  for m in modifiers {
+    match m {
+      Public | Private | Protected | Readonly => return true
+      _ => continue
+    }
+  }
+  false
+}
+
+///|
+/// Check method parameters for TS2369 (parameter property only in constructor)
+fn check_method_parameter_properties(
+  checker : TypeChecker,
+  parameters : Array[Node],
+) -> TypeChecker {
+  let mut checker = checker
+  for param_node in parameters {
+    match param_node {
+      Parameter(p) =>
+        if has_parameter_property_modifier(p.modifiers) {
+          checker = add_diagnostic_with_code(
+            checker,
+            "A parameter property is only allowed in a constructor implementation.",
+            p.location,
+            DiagnosticCode::TS2369,
+          )
+        }
+      _ => ()
+    }
+  }
+  checker
+}
+
+///|
+/// Check parameters in ambient context for TS2371 (parameter initializer not allowed)
+fn check_ambient_parameter_initializers(
+  checker : TypeChecker,
+  parameters : Array[Node],
+) -> TypeChecker {
+  let mut checker = checker
+  for param_node in parameters {
+    match param_node {
+      Parameter(p) =>
+        if p.initializer.is_some() {
+          checker = add_diagnostic_with_code(
+            checker,
+            "A parameter initializer is only allowed in a function or constructor implementation.",
+            p.location,
+            DiagnosticCode::TS2371,
+          )
+        }
+      _ => ()
+    }
+  }
+  checker
+}
+
+///|
+/// Check if an expression contains a reference to a given identifier name
+fn expression_contains_identifier(expr : Node, name : String) -> Bool {
+  match expr {
+    Identifier(id) => id.name == name
+    BinaryExpression(bin) =>
+      expression_contains_identifier(bin.left, name) ||
+      expression_contains_identifier(bin.right, name)
+    ParenthesizedExpression(paren) =>
+      expression_contains_identifier(paren.expression, name)
+    UnaryExpression(unary) =>
+      expression_contains_identifier(unary.operand, name)
+    ConditionalExpression(cond) =>
+      expression_contains_identifier(cond.condition, name) ||
+      expression_contains_identifier(cond.when_true, name) ||
+      expression_contains_identifier(cond.when_false, name)
+    CallExpression(call) => {
+      if expression_contains_identifier(call.expression, name) {
+        return true
+      }
+      for arg in call.arguments {
+        if expression_contains_identifier(arg, name) {
+          return true
+        }
+      }
+      false
+    }
+    PropertyAccessExpression(prop) =>
+      expression_contains_identifier(prop.expression, name)
+    ElementAccessExpression(elem) =>
+      expression_contains_identifier(elem.expression, name) ||
+      expression_contains_identifier(elem.argument_expression, name)
+    _ => false
+  }
+}
+
+///|
+/// Check parameter for TS2372 (parameter cannot reference itself in initializer)
+fn check_parameter_self_reference(
+  checker : TypeChecker,
+  parameters : Array[Node],
+) -> TypeChecker {
+  let mut checker = checker
+  for param_node in parameters {
+    match param_node {
+      Parameter(p) =>
+        match p.initializer {
+          Some(init) => {
+            // Get parameter name
+            let param_name = match p.name {
+              Identifier(id) => id.name
+              _ => ""
+            }
+            if param_name != "" && expression_contains_identifier(init, param_name) {
+              checker = add_diagnostic_with_code(
+                checker,
+                "Parameter '\{param_name}' cannot reference itself.",
+                p.location,
+                DiagnosticCode::TS2372,
+              )
+            }
+          }
+          None => ()
+        }
+      _ => ()
+    }
+  }
+  checker
+}
 
 ///|
 /// Get type parameters from a symbol's declarations (interfaces, classes, type aliases)
