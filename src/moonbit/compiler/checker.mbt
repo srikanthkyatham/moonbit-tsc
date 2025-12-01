@@ -274,6 +274,11 @@ pub struct TypeChecker {
   async_function_depth : Int // Tracks nesting depth in async functions (> 0 means inside async)
   block_scoped_decls : Map[String, Int] // Variable name -> declaration line (for TS2448 TDZ check)
   uninitialized_vars : Map[String, Int] // Variable name -> declaration line (for TS2454 definite assignment)
+  in_static_context : Bool // Tracks if we're in a static property initializer (for TS2334)
+  in_constructor : Bool // Tracks if we're in a constructor (for TS2337 super outside constructor)
+  in_class_body : Bool // Tracks if we're in a class body (for TS2335 super outside class)
+  in_derived_class : Bool // Tracks if we're in a class that extends another (for TS2335)
+  super_called : Bool // Tracks if super() has been called in constructor (for TS17009)
 } derive(Show)
 
 ///|
@@ -328,6 +333,11 @@ pub fn TypeChecker::new_with_options(
     async_function_depth: 0,
     block_scoped_decls: Map::new(),
     uninitialized_vars: Map::new(),
+    in_static_context: false,
+    in_constructor: false,
+    in_class_body: false,
+    in_derived_class: false,
+    super_called: false,
   }
 }
 
@@ -1586,7 +1596,7 @@ fn infer_type(checker : TypeChecker, expr : Node) -> (Type, TypeChecker) {
     NewExpression(new_expr) => infer_new_expression_type(checker, new_expr)
     TemplateExpression(template) =>
       infer_template_expression_type(checker, template)
-    ThisExpression(_) => infer_this_type(checker)
+    ThisExpression(this_expr) => infer_this_type(checker, this_expr.location)
     SpreadExpression(spread) => infer_type(checker, spread.expression)
     OptionalChain(oc) => infer_optional_chain_type(checker, oc)
     AwaitExpression(ae) => infer_await_expression_type(checker, ae)
@@ -3328,6 +3338,31 @@ fn infer_call_expression_type(
   checker : TypeChecker,
   call : CallExpression,
 ) -> (Type, TypeChecker) {
+  // TS2335/TS2337: Check for super() call outside class/constructor
+  let checker = match call.expression {
+    SuperExpression(super_expr) =>
+      // TS2335: 'super' can only be referenced in a derived class
+      if not(checker.in_class_body) || not(checker.in_derived_class) {
+        add_diagnostic_with_code(
+          checker,
+          "'super' can only be referenced in a derived class.",
+          super_expr.location,
+          TS2335,
+        )
+      } else if not(checker.in_constructor) {
+        // TS2337: Super calls are not permitted outside constructors
+        add_diagnostic_with_code(
+          checker,
+          "Super calls are not permitted outside constructors or in nested functions inside constructors.",
+          super_expr.location,
+          TS2337,
+        )
+      } else {
+        // Mark super as called for TS17009 tracking
+        { ..checker, super_called: true }
+      }
+    _ => checker
+  }
   let (func_type, checker) = infer_type(checker, call.expression)
 
   // Infer argument types
@@ -5642,7 +5677,33 @@ fn infer_template_expression_type(
 
 ///|
 /// Infer this keyword type
-fn infer_this_type(checker : TypeChecker) -> (Type, TypeChecker) {
+fn infer_this_type(
+  checker : TypeChecker,
+  location : SourceLocation,
+) -> (Type, TypeChecker) {
+  // TS2334: 'this' cannot be referenced in a static property initializer
+  let checker = if checker.in_static_context {
+    add_diagnostic_with_code(
+      checker,
+      "'this' cannot be referenced in a static property initializer.",
+      location,
+      TS2334,
+    )
+  } else {
+    checker
+  }
+  // TS17009: 'super' must be called before accessing 'this' in derived class constructor
+  let checker = if checker.in_constructor && checker.in_derived_class &&
+    not(checker.super_called) {
+    add_diagnostic_with_code(
+      checker,
+      "'super' must be called before accessing 'this' in the constructor of a derived class.",
+      location,
+      TS17009,
+    )
+  } else {
+    checker
+  }
   match checker.current_this_type {
     Some(this_type) => (this_type, checker)
     None => any_type(checker)
@@ -7650,9 +7711,20 @@ fn check_class_declaration(
   // Build the class type so we can set current_this_type
   let (class_type, checker) = build_class_type_for_this(checker, class_decl)
 
-  // Save previous this type and set current_this_type to class type
+  // Save previous this type and context flags, set current_this_type to class type
   let prev_this_type = checker.current_this_type
-  let mut checker = { ..checker, current_this_type: Some(class_type) }
+  let prev_in_class_body = checker.in_class_body
+  let prev_in_static_context = checker.in_static_context
+  let prev_in_constructor = checker.in_constructor
+  let prev_in_derived_class = checker.in_derived_class
+  // Check if this is a derived class (has extends clause)
+  let is_derived = is_derived_class(class_decl)
+  let mut checker = {
+    ..checker,
+    current_this_type: Some(class_type),
+    in_class_body: true,
+    in_derived_class: is_derived,
+  }
 
   // Collect uninitialized properties for definite assignment checking
   let uninitialized_props : Map[String, SourceLocation] = Map::new()
@@ -7675,6 +7747,8 @@ fn check_class_declaration(
           Some(body) => {
             // Push local scope for constructor
             let checker = push_local_scope(checker)
+            // Set in_constructor flag and track super call status for TS2337/TS17009
+            let checker = { ..checker, in_constructor: true, super_called: false }
             // Add constructor parameters to scope
             let mut checker = checker
             for param in ctor.parameters {
@@ -7694,6 +7768,8 @@ fn check_class_declaration(
               body,
               ctor.location,
             )
+            // Restore in_constructor flag
+            let checker = { ..checker, in_constructor: false }
             // Pop local scope
             pop_local_scope(checker)
           }
@@ -7730,8 +7806,16 @@ fn check_class_declaration(
       PropertyDeclaration(prop) =>
         match prop.initializer {
           Some(init) => {
+            // Check if this is a static property for TS2334
+            let is_static = has_modifier(prop.modifiers, Modifier::Static)
+            let checker = if is_static {
+              { ..checker, in_static_context: true }
+            } else {
+              checker
+            }
             let (_, c) = infer_type(checker, init)
-            c
+            // Restore in_static_context flag
+            if is_static { { ..c, in_static_context: false } } else { c }
           }
           None => checker
         }
@@ -7739,8 +7823,15 @@ fn check_class_declaration(
     }
   }
 
-  // Restore previous this type
-  { ..checker, current_this_type: prev_this_type }
+  // Restore previous context flags
+  {
+    ..checker,
+    current_this_type: prev_this_type,
+    in_class_body: prev_in_class_body,
+    in_static_context: prev_in_static_context,
+    in_constructor: prev_in_constructor,
+    in_derived_class: prev_in_derived_class,
+  }
 }
 
 ///|

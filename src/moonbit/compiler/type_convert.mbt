@@ -642,6 +642,11 @@ fn TypeChecker::create_type_info(self : TypeChecker) -> (TypeInfo, TypeChecker) 
     async_function_depth: self.async_function_depth,
     block_scoped_decls: self.block_scoped_decls,
     uninitialized_vars: self.uninitialized_vars,
+    in_static_context: self.in_static_context,
+    in_constructor: self.in_constructor,
+    in_class_body: self.in_class_body,
+    in_derived_class: self.in_derived_class,
+    super_called: self.super_called,
   }
   (info, new_checker)
 }

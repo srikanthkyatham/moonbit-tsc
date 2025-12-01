@@ -1251,6 +1251,61 @@ test "DiagnosticCode - TS2332 this cannot be referenced" {
   }
 }
 
+// TS2334: 'this' cannot be referenced in a static property initializer
+///|
+test "DiagnosticCode - TS2334 this in static property initializer" {
+  let source =
+    #|class MyClass {
+    #|  static prop = this.someMethod();
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => fail!("Expected error TS2334 for 'this' in static property initializer")
+    Err(diagnostics) => {
+      assert_true(has_error(diagnostics, 2334), msg="Should report TS2334")
+      assert_true(has_message(diagnostics, "this"), msg="Should mention 'this'")
+      assert_true(has_message(diagnostics, "static"), msg="Should mention 'static'")
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - TS2334 this in static property arrow function is ok" {
+  // Arrow functions capture 'this' lexically, so this might be allowed
+  // TypeScript actually reports TS2334 for this too - let's verify
+  let source =
+    #|class MyClass {
+    #|  static prop = () => this.toString();
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => () // This might be allowed in some contexts
+    Err(diagnostics) => {
+      // TypeScript reports TS2334 for this too
+      if has_error(diagnostics, 2334) {
+        assert_true(has_message(diagnostics, "this"))
+      }
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - TS2334 valid instance property with this" {
+  let source =
+    #|class MyClass {
+    #|  name = "test";
+    #|  prop = this.name;
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => () // Instance properties can use 'this'
+    Err(diagnostics) => {
+      // Should NOT have TS2334 for instance properties
+      assert_true(not(has_error(diagnostics, 2334)), msg="Instance property should be allowed to use 'this'")
+    }
+  }
+}
+
 // TS2337: Super calls not permitted outside constructors
 ///|
 test "DiagnosticCode - TS2337 super call outside constructor" {
@@ -1263,11 +1318,125 @@ test "DiagnosticCode - TS2337 super call outside constructor" {
     #|}
   let result = check_source(source)
   match result {
-    Ok(_) => () // May not be implemented yet
+    Ok(_) => fail!("Expected error TS2337 for super() call outside constructor")
     Err(diagnostics) => {
-      if has_error(diagnostics, 2337) {
-        assert_true(has_message(diagnostics, "super"))
-      }
+      assert_true(has_error(diagnostics, 2337), msg="Should report TS2337")
+      assert_true(has_message(diagnostics, "Super") || has_message(diagnostics, "super"), msg="Should mention super")
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - TS2337 super call in constructor is valid" {
+  let source =
+    #|class Base { }
+    #|class Derived extends Base {
+    #|  constructor() {
+    #|    super();
+    #|  }
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => () // Valid - no error
+    Err(diagnostics) => {
+      // Should NOT have TS2337 for super() in constructor
+      assert_true(not(has_error(diagnostics, 2337)), msg="super() in constructor should be valid")
+    }
+  }
+}
+
+// TS2335: 'super' can only be referenced in a derived class
+///|
+test "DiagnosticCode - TS2335 super in non-derived class" {
+  let source =
+    #|class MyClass {
+    #|  constructor() {
+    #|    super();
+    #|  }
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => fail!("Expected error TS2335 for super() in non-derived class")
+    Err(diagnostics) => {
+      assert_true(has_error(diagnostics, 2335), msg="Should report TS2335")
+      assert_true(has_message(diagnostics, "super") || has_message(diagnostics, "derived"), msg="Should mention super or derived class")
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - TS2335 super outside class" {
+  let source =
+    #|function foo() {
+    #|  super();
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => fail!("Expected error TS2335 for super() outside class")
+    Err(diagnostics) => {
+      assert_true(has_error(diagnostics, 2335), msg="Should report TS2335")
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - TS2335 super in derived class is valid" {
+  let source =
+    #|class Base { }
+    #|class Derived extends Base {
+    #|  constructor() {
+    #|    super();
+    #|  }
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => () // Valid - no error
+    Err(diagnostics) => {
+      // Should NOT have TS2335 for super() in derived class
+      assert_true(not(has_error(diagnostics, 2335)), msg="super() in derived class should be valid")
+    }
+  }
+}
+
+// TS17009: 'super' must be called before accessing 'this' in derived class constructor
+///|
+test "DiagnosticCode - TS17009 this before super" {
+  let source =
+    #|class Base { }
+    #|class Derived extends Base {
+    #|  x: number;
+    #|  constructor() {
+    #|    this.x = 1;  // Error: 'this' before 'super()'
+    #|    super();
+    #|  }
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => fail!("Expected error TS17009 for 'this' before super()")
+    Err(diagnostics) => {
+      assert_true(has_error(diagnostics, 17009), msg="Should report TS17009")
+      assert_true(has_message(diagnostics, "super") || has_message(diagnostics, "this"), msg="Should mention super or this")
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - TS17009 valid super then this" {
+  let source =
+    #|class Base { }
+    #|class Derived extends Base {
+    #|  x: number;
+    #|  constructor() {
+    #|    super();
+    #|    this.x = 1;  // Valid: 'this' after 'super()'
+    #|  }
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => () // Valid - no error
+    Err(diagnostics) => {
+      // Should NOT have TS17009 after super() is called
+      assert_true(not(has_error(diagnostics, 17009)), msg="'this' after super() should be valid")
     }
   }
 }
