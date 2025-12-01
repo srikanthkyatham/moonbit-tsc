@@ -4194,6 +4194,83 @@ fn parse_interface_declaration(
                 )
             }
           }
+          // Spread type: ...Type or ...name?: Type (TS2702 error)
+          DotDotDot(spread_loc) => {
+            parser = advance_parser(parser)
+            // Check if next token is an identifier followed by ? or :
+            // If so, it's a named rest element which is TS2702 error
+            match current_token(parser) {
+              Identifier(name, id_loc) => {
+                // Check if followed by ?: or :
+                let lookahead = peek_token(parser)
+                match lookahead {
+                  Question(_) | Colon(_) => {
+                    // TS2702: A rest element cannot have a property name
+                    return Err(
+                      add_error_checked(
+                        parser,
+                        "A rest element cannot have a property name.",
+                        spread_loc,
+                        2702,
+                      ),
+                    )
+                  }
+                  _ => {
+                    // It's a spread type with type reference: ...SomeType
+                    // Create a property with spread marker
+                    members.push(
+                      Node::PropertyDeclaration(PropertyDeclaration::{
+                        name: "...",
+                        type_annotation: Some(
+                          Node::TypeReference(TypeReference::{
+                            type_name: name,
+                            type_arguments: [],
+                            location: id_loc,
+                          }),
+                        ),
+                        initializer: None,
+                        is_optional: false,
+                        decorators: [],
+                        modifiers: [],
+                        location: spread_loc,
+                      }),
+                    )
+                    parser = advance_parser(parser)
+                    // Optional semicolon or comma
+                    match current_token(parser) {
+                      Semicolon(_) | Comma(_) => parser = advance_parser(parser)
+                      _ => ()
+                    }
+                  }
+                }
+              }
+              _ => {
+                // It's just a spread type without identifier, parse the type
+                match parse_type(parser) {
+                  Ok((spread_type, p)) => {
+                    parser = p
+                    members.push(
+                      Node::PropertyDeclaration(PropertyDeclaration::{
+                        name: "...",
+                        type_annotation: Some(spread_type),
+                        initializer: None,
+                        is_optional: false,
+                        decorators: [],
+                        modifiers: [],
+                        location: spread_loc,
+                      }),
+                    )
+                    // Optional semicolon or comma
+                    match current_token(parser) {
+                      Semicolon(_) | Comma(_) => parser = advance_parser(parser)
+                      _ => ()
+                    }
+                  }
+                  Err(p) => return Err(p)
+                }
+              }
+            }
+          }
           _ => break
         }
       }

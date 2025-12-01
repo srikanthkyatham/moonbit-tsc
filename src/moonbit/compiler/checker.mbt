@@ -2089,6 +2089,31 @@ fn infer_binary_expression_type(
           }
           (checker, left_type)
         }
+        ObjectLiteralExpression(obj) => {
+          // Check for TS2701: rest element in destructuring assignment must be simple variable
+          let mut checker = checker
+          for prop in obj.properties {
+            match prop {
+              SpreadAssignment(spread_expr, loc) =>
+                // Rest element must be an identifier (simple variable)
+                match spread_expr {
+                  Identifier(_) => () // Valid - simple variable
+                  _ => {
+                    // TS2701: The target of an object rest assignment must be a variable or a property access.
+                    // In destructuring contexts, only simple identifiers are allowed
+                    checker = add_diagnostic_with_code(
+                      checker,
+                      "The target of an object rest assignment must be a variable or a property access.",
+                      loc,
+                      TS2701,
+                    )
+                  }
+                }
+              _ => ()
+            }
+          }
+          (checker, left_type)
+        }
         _ => (checker, left_type)
       }
       // Check type compatibility for assignments (using declared type for identifiers, inferred type for others)

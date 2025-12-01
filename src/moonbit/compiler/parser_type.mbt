@@ -1135,6 +1135,61 @@ fn parse_primary_type_with_readonly(
               _ => break
             }
           }
+          // Handle spread type: { ...T }
+          DotDotDot(spread_loc) => {
+            parser = advance_parser(parser) // consume '...'
+            match parse_type(parser) {
+              Ok((spread_type, p)) => {
+                parser = p
+                // Check if the spread type is a primitive (TS2700)
+                let is_primitive = match spread_type {
+                  KeywordType(kt) =>
+                    match kt.kind {
+                      TypeKeyword::Number
+                      | TypeKeyword::String
+                      | TypeKeyword::Boolean
+                      | TypeKeyword::Symbol
+                      | TypeKeyword::Void
+                      | TypeKeyword::Undefined
+                      | TypeKeyword::Null
+                      | TypeKeyword::Never
+                      | TypeKeyword::Any
+                      | TypeKeyword::Unknown => true
+                      _ => false
+                    }
+                  _ => false
+                }
+                if is_primitive {
+                  // TS2700: Rest types may only be created from object types
+                  return Err(
+                    add_error_checked(
+                      parser,
+                      "Rest types may only be created from object types.",
+                      spread_loc,
+                      2700,
+                    ),
+                  )
+                }
+                // Valid spread type - add as a spread member
+                // For now, we'll create a TypeLiteralProperty with a special name
+                members.push(
+                  Node::TypeLiteralProperty(TypeLiteralProperty::{
+                    name: "...",
+                    type_node: Some(spread_type),
+                    is_optional: false,
+                    is_readonly: false,
+                    location: spread_loc,
+                  }),
+                )
+                // Optional comma or semicolon
+                match current_token(parser) {
+                  Comma(_) | Semicolon(_) => parser = advance_parser(parser)
+                  _ => ()
+                }
+              }
+              Err(p) => return Err(p)
+            }
+          }
           _ =>
             // Try to parse as identifier or keyword property name
             match try_get_property_name(current_token(parser)) {
