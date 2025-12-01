@@ -2504,12 +2504,14 @@ test "check continue with label" {
 
 ///|
 test "check with statement" {
+  // Note: 'with' statement is deprecated and not fully supported in TypeScript
+  // This test verifies we produce an error when encountering it
   let result = parse_bind_and_check(
     "const obj = { x: 1 }; with (obj) { const y = x; }",
   )
   match result {
-    Ok(typed) => assert_eq(typed.file_path, "test.ts")
-    Err(_) => assert_true(false)
+    Ok(_) => assert_true(false) // Should produce an error
+    Err(diagnostics) => assert_true(diagnostics.length() > 0)
   }
 }
 
@@ -3161,7 +3163,7 @@ test "check abstract class" {
 ///|
 test "check async method" {
   let result = parse_bind_and_check(
-    "class Api { async fetch() { return await data; } }",
+    "class Api { async fetch() { return await Promise.resolve(123); } }",
   )
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")

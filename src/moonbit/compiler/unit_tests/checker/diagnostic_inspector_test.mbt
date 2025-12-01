@@ -131,10 +131,12 @@ test "inspect/complex - function signature with multiple param mismatches" {
     #|);
   let result = inspect_diagnostics(source)
   println(result)
-  inspect(result, content=(
-    
-    "OK: No errors"
-  ))
+  // Now correctly detects type errors in function arguments
+  inspect(result, content=
+    #|Found 1 diagnostic(s):
+    #|[1] TS2769: No overload matches this call. Arguments: (number, string, object, function) (line 14)
+    #|
+  )
 }
 
 ///|
@@ -277,7 +279,12 @@ test "inspect/complex - rest parameter type mismatch" {
     #|sum(1, 2, "three", 4, true);
   let result = inspect_diagnostics(source)
   println(result)
-  inspect(result, content="OK: No errors")
+  // Now correctly detects type errors in rest parameters
+  inspect(result, content=
+    #|Found 1 diagnostic(s):
+    #|[1] TS2769: No overload matches this call. Arguments: (number, number, string, number, boolean) (line 4)
+    #|
+  )
 }
 
 ///|
@@ -291,7 +298,13 @@ test "inspect/complex - overloaded function with no matching signature" {
     #|process(true);
   let result = inspect_diagnostics(source)
   println(result)
-  inspect(result, content="OK: No errors")
+  // Now correctly detects no matching overload
+  inspect(result, content=
+    #|Found 2 diagnostic(s):
+    #|[1] TS2322: Type is not assignable to the declared return type. (line 4)
+    #|[2] TS2769: No overload matches this call. Arguments: (boolean) (line 6)
+    #|
+  )
 }
 
 ///|

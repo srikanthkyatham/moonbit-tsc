@@ -1976,10 +1976,53 @@ fn get_date_type(checker : TypeChecker) -> (Type, TypeChecker) {
   }
   date_methods.set("parse", parse_method)
 
+  // Create Date instance type with methods like getTime, getFullYear, etc.
+  let (instance_id, checker) = next_type_id(checker)
+  let instance_methods : Map[String, PropertySignature] = Map::new()
+  instance_methods.set(
+    "getTime",
+    PropertySignature::{
+      name: "getTime",
+      prop_type: Type::Function(CheckerFunctionType::{
+        parameters: [],
+        return_type: Type::Number(info),
+        info,
+      }),
+      is_optional: false,
+      is_readonly: false,
+    },
+  )
+  let date_instance_type = Type::Object(ObjectType::{
+    properties: instance_methods,
+    call_signatures: [],
+    construct_signatures: [],
+    index_signatures: [],
+    info: TypeInfo::{ id: instance_id, flags: default_flags },
+  })
+
+  // Construct signature: new Date() => Date
+  let construct_sig = CheckerSignature::{
+    parameters: [],
+    return_type: date_instance_type,
+    type_parameters: [],
+  }
+
+  // Construct signature with value: new Date(value) => Date
+  let construct_sig_value = CheckerSignature::{
+    parameters: [CheckerParameter::{
+      name: "value",
+      param_type: Type::Any(info),
+      is_optional: true,
+      is_rest: false,
+    }],
+    return_type: date_instance_type,
+    type_parameters: [],
+  }
+
   let date_type = Type::Object(ObjectType::{
     properties: date_methods,
     call_signatures: [],
-    construct_signatures: [],
+    construct_signatures: [construct_sig, construct_sig_value],
     index_signatures: [],
     info: TypeInfo::{ id, flags: default_flags },
   })
@@ -2639,17 +2682,9 @@ fn infer_class_declaration_type(
 
   // Check for circular reference (class referring to itself in initializer)
   if checker.resolving_symbols.get(symbol.id).is_some() {
-    // Circular reference detected - return a placeholder object type
-    // This allows `static origin = new Point(0, 0)` to work
-    let (info, checker) = create_type_info(checker)
-    let placeholder_type = Type::Object({
-      properties: Map::new(),
-      call_signatures: [],
-      construct_signatures: [],
-      index_signatures: [],
-      info,
-    })
-    return (placeholder_type, checker)
+    // Circular reference detected - return 'any' type to allow property access
+    // This allows `static origin = new Point(0, 0)` and `static ref = X.data` to work
+    return any_type(checker)
   }
 
   // Mark symbol as being resolved
@@ -2657,8 +2692,46 @@ fn infer_class_declaration_type(
   resolving.set(symbol.id, true)
   let mut checker = { ..checker, resolving_symbols: resolving }
 
-  // Build object type for the class instance
-  let properties : Map[String, PropertySignature] = Map::new()
+  // Build object type for the class - separating static and instance properties
+  // Static properties go on the class constructor type (for X.staticProp)
+  // Instance properties go on the instance type (for new X().instanceProp)
+  let static_properties : Map[String, PropertySignature] = Map::new()
+  let instance_properties : Map[String, PropertySignature] = Map::new()
+
+  // Inherit static properties from parent class (if extends clause exists)
+  for heritage_clause in class_decl.heritage_clauses {
+    if heritage_clause.kind == Extends {
+      for type_node in heritage_clause.types {
+        // Get the type of the parent class by looking up the class name
+        let (parent_type, c) = match type_node {
+          TypeReference(type_ref) => {
+            // Look up the class by name
+            match lookup_symbol(checker, type_ref.type_name) {
+              Some(parent_symbol) => {
+                match get_symbol_type(checker, parent_symbol) {
+                  (Some(t), c) => (t, c)
+                  (None, c) => infer_symbol_type(c, parent_symbol)
+                }
+              }
+              None => any_type(checker)
+            }
+          }
+          _ => infer_type(checker, type_node)
+        }
+        checker = c
+        // If parent is an object type, copy its static properties
+        match parent_type {
+          Object(parent_obj) => {
+            for entry in parent_obj.properties.iter() {
+              static_properties.set(entry.0, entry.1)
+            }
+          }
+          _ => ()
+        }
+      }
+    }
+  }
+
   for class_member in class_decl.members {
     match class_member {
       PropertyDeclaration(prop) => {
@@ -2677,22 +2750,34 @@ fn infer_class_declaration_type(
         checker = c
         // Check if property has readonly modifier
         let has_readonly = has_modifier(prop.modifiers, Modifier::Readonly)
-        properties.set(prop.name, {
+        let is_static = has_modifier(prop.modifiers, Modifier::Static)
+        let prop_sig = PropertySignature::{
           name: prop.name,
           prop_type,
           is_optional: false,
           is_readonly: has_readonly,
-        })
+        }
+        if is_static {
+          static_properties.set(prop.name, prop_sig)
+        } else {
+          instance_properties.set(prop.name, prop_sig)
+        }
       }
       MethodDeclaration(method_decl) => {
         let (method_type, c) = infer_method_type(checker, method_decl)
         checker = c
-        properties.set(method_decl.name, {
+        let is_static = has_modifier(method_decl.modifiers, Modifier::Static)
+        let prop_sig = PropertySignature::{
           name: method_decl.name,
           prop_type: method_type,
           is_optional: false,
           is_readonly: false,
-        })
+        }
+        if is_static {
+          static_properties.set(method_decl.name, prop_sig)
+        } else {
+          instance_properties.set(method_decl.name, prop_sig)
+        }
       }
       _ => ()
     }
@@ -2703,13 +2788,32 @@ fn infer_class_declaration_type(
   resolving.remove(symbol.id)
   checker = { ..checker, resolving_symbols: resolving }
 
-  let (info, checker) = create_type_info(checker)
-  let class_type = Type::Object({
-    properties,
+  // Create instance type (used when instantiating with 'new')
+  let (instance_info, checker) = create_type_info(checker)
+  let instance_type = Type::Object(ObjectType::{
+    properties: instance_properties,
     call_signatures: [],
     construct_signatures: [],
     index_signatures: [],
-    info,
+    info: instance_info,
+  })
+
+  // Create construct signature for 'new Class()'
+  let construct_sig = CheckerSignature::{
+    parameters: [], // TODO: extract constructor parameters
+    return_type: instance_type,
+    type_parameters: [],
+  }
+
+  // Create class constructor type (the type of the class name as a value)
+  // This includes static properties and a construct signature
+  let (class_info, checker) = create_type_info(checker)
+  let class_type = Type::Object(ObjectType::{
+    properties: static_properties,
+    call_signatures: [],
+    construct_signatures: [construct_sig],
+    index_signatures: [],
+    info: class_info,
   })
 
   // Cache the type
@@ -4780,9 +4884,19 @@ fn infer_new_expression_type(
     checker
   }
 
-  // Return the constructed instance type
-  // For a class constructor, the expression type should be the class/object type
-  (expr_type, checker)
+  // Return the constructed instance type from the construct signature
+  // For a class constructor, we need to get the return type of the construct signature
+  let result_type = match expr_type {
+    Object(obj_type) =>
+      if obj_type.construct_signatures.length() > 0 {
+        // Return the instance type from the first construct signature
+        obj_type.construct_signatures[0].return_type
+      } else {
+        expr_type
+      }
+    _ => expr_type
+  }
+  (result_type, checker)
 }
 
 ///|
