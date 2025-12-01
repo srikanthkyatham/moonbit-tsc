@@ -3911,8 +3911,8 @@ test "DiagnosticCode - TS2460: type is not an array type - destructuring" {
   match result {
     Ok(_) => assert_true(false) // Should detect non-array destructuring
     Err(diagnostics) => {
-      // Should produce TS2460 or TS2461
-      assert_true(has_error(diagnostics, 2460) || has_error(diagnostics, 2461))
+      // Should produce TS2460 for non-array destructuring
+      assert_true(has_error(diagnostics, 2460))
     }
   }
 }

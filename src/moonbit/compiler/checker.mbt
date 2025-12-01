@@ -1533,15 +1533,15 @@ fn check_variable_declaration(
     _ => checker
   }
 
-  // Check for array destructuring on non-array type (TS2461)
+  // Check for array destructuring on non-array type (TS2460)
   let checker = match (decl.name, init_type) {
     (ArrayBindingPattern(_), Some(init_t)) =>
       if not(is_array_like_type(init_t)) {
         add_diagnostic_with_code(
           checker,
-          "Type is not an array type",
+          "Type '\{type_to_string(init_t)}' is not an array type.",
           decl.location,
-          TS2461,
+          TS2460,
         )
       } else {
         checker
