@@ -9779,19 +9779,27 @@ fn check_import_declaration(
 ) -> TypeChecker {
   let module_spec = import_decl.module_specifier
 
-  // TS2691: An import path cannot end with a '.ts', '.tsx', '.d.ts', '.js', or '.jsx' extension
+  // Check for .d.ts files first - TS2591: Cannot import type declaration files
+  if module_spec.has_suffix(".d.ts") {
+    let suggested_path = remove_extension(module_spec)
+    return add_diagnostic_with_code(
+      checker,
+      "Cannot import type declaration files. Consider importing '\{suggested_path}' instead.",
+      import_decl.location,
+      TS2591,
+    )
+  }
+
+  // TS2691: An import path cannot end with a '.ts', '.tsx', '.js', or '.jsx' extension
   // Check for prohibited extensions
   let has_prohibited_extension = module_spec.has_suffix(".ts") ||
     module_spec.has_suffix(".tsx") ||
-    module_spec.has_suffix(".d.ts") ||
     module_spec.has_suffix(".js") ||
     module_spec.has_suffix(".jsx")
 
   if has_prohibited_extension {
     // Determine which extension was used
-    let ext = if module_spec.has_suffix(".d.ts") {
-      ".d.ts"
-    } else if module_spec.has_suffix(".tsx") {
+    let ext = if module_spec.has_suffix(".tsx") {
       ".tsx"
     } else if module_spec.has_suffix(".ts") {
       ".ts"

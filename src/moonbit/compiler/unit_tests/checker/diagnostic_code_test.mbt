@@ -5765,17 +5765,28 @@ test "DiagnosticCode - valid simple union type" {
 // ============================================================================
 
 ///|
-test "DiagnosticCode - TS2591 import declaration file (not detected yet)" {
-  // Note: This tests the error code structure; detection not yet implemented
+test "DiagnosticCode - TS2591 import declaration file" {
   let source =
     #|import { Type } from './module.d.ts'; // should not import .d.ts directly
   let result = check_source(source)
   match result {
-    Ok(_) => () // Detection not implemented yet
+    Ok(_) => fail!("Expected TS2591 error")
     Err(diagnostics) => {
-      if has_error(diagnostics, 2591) {
-        assert_true(has_message(diagnostics, "declaration") || has_message(diagnostics, ".d.ts"))
-      }
+      assert_true(has_error(diagnostics, 2591))
+      assert_true(has_message(diagnostics, "declaration") || has_message(diagnostics, "module"))
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - TS2591 import types declaration file" {
+  let source =
+    #|import type { Foo } from './types.d.ts';
+  let result = check_source(source)
+  match result {
+    Ok(_) => fail!("Expected TS2591 error")
+    Err(diagnostics) => {
+      assert_true(has_error(diagnostics, 2591))
     }
   }
 }
@@ -6416,15 +6427,17 @@ test "DiagnosticCode - TS2691 import with .tsx extension" {
 }
 
 ///|
-test "DiagnosticCode - TS2691 import with .d.ts extension" {
+test "DiagnosticCode - TS2591 import with .d.ts extension" {
+  // Note: .d.ts imports now emit TS2591 (Cannot import type declaration files)
+  // instead of TS2691 (import path cannot end with extension)
   let source =
     #|import { Type } from './types.d.ts';
   let result = check_source(source)
   match result {
     Ok(_) => fail!("Should have detected .d.ts extension in import path")
     Err(diagnostics) => {
-      assert_true(has_error(diagnostics, 2691))
-      assert_true(has_message(diagnostics, "cannot end with a '.d.ts' extension"))
+      assert_true(has_error(diagnostics, 2591))
+      assert_true(has_message(diagnostics, "declaration"))
     }
   }
 }
