@@ -3169,12 +3169,34 @@ fn try_signature(
     } else {
       effective_params.length() - 1
     }
-    let param_type = effective_params[param_idx].param_type
-    if not(is_assignable(arg_types[i], param_type)) {
+    let param = effective_params[param_idx]
+    // For rest parameters, check against the element type of the array
+    let expected_type = if param.is_rest {
+      get_array_element_type(param.param_type)
+    } else {
+      param.param_type
+    }
+    if not(is_assignable(arg_types[i], expected_type)) {
       return None
     }
   }
   Some((return_type, checker))
+}
+
+///|
+/// Get the element type of an array type (for rest parameters)
+fn get_array_element_type(array_type : Type) -> Type {
+  match array_type {
+    Array(arr) => arr.element_type
+    TypeReference(ref_type) =>
+      // Handle Array<T> type reference
+      if ref_type.name == "Array" && ref_type.type_arguments.length() > 0 {
+        ref_type.type_arguments[0]
+      } else {
+        array_type
+      }
+    _ => array_type // Fall back to the original type
+  }
 }
 
 ///|
