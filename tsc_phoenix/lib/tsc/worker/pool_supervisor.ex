@@ -83,12 +83,20 @@ defmodule TSC.Worker.PoolSupervisor do
   end
 
   @doc """
-  Extract imports using an available worker (placeholder - returns empty for now).
+  Extract imports from a TypeScript file.
+  Uses the Elixir-based import extractor for fast parsing.
   """
   @spec extract_imports(map(), timeout()) :: {:ok, map()} | {:error, term()}
-  def extract_imports(_request, _timeout \\ 60_000) do
-    # TODO: Implement import extraction via CLI or parse output
-    {:ok, %{imports: []}}
+  def extract_imports(request, _timeout \\ 60_000) do
+    file = request[:file] || request.file
+
+    case TSC.Parser.ImportExtractor.extract(file) do
+      {:ok, imports} ->
+        {:ok, %{imports: imports}}
+
+      {:error, reason} ->
+        {:error, reason}
+    end
   end
 
   # ============================================================================

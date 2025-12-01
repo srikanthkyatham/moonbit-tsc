@@ -30,6 +30,7 @@ defmodule TscPhoenixWeb.Router do
 
     post "/check", CheckController, :create
     get "/check/status", CheckController, :status
+    post "/imports", CheckController, :imports
 
     # Metrics endpoints
     get "/metrics", MetricsController, :summary

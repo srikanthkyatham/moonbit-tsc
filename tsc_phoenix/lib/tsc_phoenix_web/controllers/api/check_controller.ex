@@ -148,6 +148,38 @@ defmodule TscPhoenixWeb.API.CheckController do
     })
   end
 
+  @doc """
+  POST /api/imports
+  Body: { "file": "src/foo.ts" }
+
+  Response: {
+    "imports": [
+      { "specifier": "./bar", "kind": "es6", "line": 1, "named": ["x"], "default": null }
+    ]
+  }
+  """
+  def imports(conn, %{"file" => file}) do
+    case TSC.Parser.ImportExtractor.extract(file) do
+      {:ok, imports} ->
+        # Resolve imports to absolute paths
+        resolved_imports = Enum.map(imports, fn imp ->
+          resolved = TSC.Parser.ImportExtractor.resolve(file, imp.specifier)
+          Map.put(imp, :resolved_path, resolved)
+        end)
+
+        json(conn, %{
+          file: file,
+          imports: resolved_imports,
+          count: length(imports)
+        })
+
+      {:error, reason} ->
+        conn
+        |> put_status(400)
+        |> json(%{error: inspect(reason)})
+    end
+  end
+
   # ============================================================================
   # Private Helpers
   # ============================================================================
