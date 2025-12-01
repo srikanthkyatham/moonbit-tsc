@@ -270,6 +270,7 @@ pub struct TypeChecker {
   current_this_type : Type? // Type of 'this' in current scope (for class methods/constructors)
   no_unchecked_indexed_access : Bool // Adds undefined to indexed access types
   resolving_symbols : Map[Int, Bool] // Symbol IDs currently being resolved (for cycle detection)
+  arrow_function_depth : Int // Tracks nesting depth in arrow functions (> 0 means inside arrow)
 } derive(Show)
 
 ///|
@@ -320,6 +321,7 @@ pub fn TypeChecker::new_with_options(
     current_this_type: None,
     no_unchecked_indexed_access,
     resolving_symbols: Map::new(),
+    arrow_function_depth: 0,
   }
 }
 
@@ -346,6 +348,24 @@ fn pop_local_scope(checker : TypeChecker) -> TypeChecker {
     let _ = scopes.pop()
   }
   { ..checker, local_scopes: scopes }
+}
+
+///|
+/// Enter arrow function context (increment depth)
+fn enter_arrow_function(checker : TypeChecker) -> TypeChecker {
+  { ..checker, arrow_function_depth: checker.arrow_function_depth + 1 }
+}
+
+///|
+/// Exit arrow function context (decrement depth)
+fn exit_arrow_function(checker : TypeChecker) -> TypeChecker {
+  { ..checker, arrow_function_depth: checker.arrow_function_depth - 1 }
+}
+
+///|
+/// Check if currently inside an arrow function
+fn is_in_arrow_function(checker : TypeChecker) -> Bool {
+  checker.arrow_function_depth > 0
 }
 
 ///|
@@ -1362,6 +1382,8 @@ fn check_statement(checker : TypeChecker, node : Node) -> TypeChecker {
     WhileStatement(while_stmt) => check_while_statement(checker, while_stmt)
     DoWhileStatement(do_while) => check_do_while_statement(checker, do_while)
     ForStatement(for_stmt) => check_for_statement(checker, for_stmt)
+    ForInStatement(for_in_stmt) => check_for_in_statement(checker, for_in_stmt)
+    ForOfStatement(for_of_stmt) => check_for_of_statement(checker, for_of_stmt)
     BlockStatement(block) => check_block_statement(checker, block)
     ClassDeclaration(class_decl) => check_class_declaration(checker, class_decl)
     InterfaceDeclaration(iface_decl) =>
@@ -1535,6 +1557,17 @@ fn infer_identifier_type(
   checker : TypeChecker,
   id : Identifier,
 ) -> (Type, TypeChecker) {
+  // TS2496: Check for 'arguments' in arrow function
+  if id.name == "arguments" && is_in_arrow_function(checker) {
+    let checker = add_diagnostic_with_code(
+      checker,
+      "The 'arguments' object cannot be referenced in an arrow function in ES3 and ES5. Consider using a standard function expression.",
+      id.location,
+      TS2496,
+    )
+    return any_type(checker)
+  }
+
   // First check for narrowed type (from type guards in if statements)
   match get_narrowed_type(checker, id.name) {
     Some(narrowed) => (narrowed, checker)
@@ -1558,13 +1591,25 @@ fn infer_identifier_type(
               match get_builtin_global_type(checker, id.name) {
                 Some((builtin_type, c)) => (builtin_type, c)
                 None => {
-                  // Variable not found in any scope - emit TS2304
-                  let checker = add_diagnostic_with_code(
-                    checker,
-                    "Cannot find name '" + id.name + "'",
-                    id.location,
-                    TS2304,
-                  )
+                  // Variable not found - try to find a similar name for suggestion
+                  let suggestion = find_similar_name_in_scope(checker, id.name)
+                  let checker = match suggestion {
+                    Some(similar_name) =>
+                      add_diagnostic_with_code(
+                        checker,
+                        "Cannot find name '\{id.name}'. Did you mean '\{similar_name}'?",
+                        id.location,
+                        TS2552,
+                      )
+                    None =>
+                      // No similar name found - emit TS2304
+                      add_diagnostic_with_code(
+                        checker,
+                        "Cannot find name '" + id.name + "'",
+                        id.location,
+                        TS2304,
+                      )
+                  }
                   any_type(checker)
                 }
               }
@@ -2975,8 +3020,16 @@ fn infer_binary_expression_type(
     | NotEquals
     | StrictEquals
     | StrictNotEquals => boolean_type(checker)
-    // instanceof operator: any instanceof any -> boolean
-    InstanceOf => boolean_type(checker)
+    // instanceof operator: obj instanceof Constructor -> boolean
+    InstanceOf => {
+      let checker = check_instanceof_operands(
+        checker,
+        left_type,
+        right_type,
+        bin_expr,
+      )
+      boolean_type(checker)
+    }
     // in operator: any in any -> boolean
     In => boolean_type(checker)
     // Logical operators: boolean op boolean -> boolean
@@ -4661,6 +4714,58 @@ fn find_similar_property(object_type : Type, prop_name : String) -> String? {
 }
 
 ///|
+/// Find a similar name in scope for "Did you mean" suggestions
+fn find_similar_name_in_scope(checker : TypeChecker, name : String) -> String? {
+  let mut best_match : String? = None
+  let mut best_distance = 3 // Maximum distance threshold for suggestions
+
+  // Search local scopes first (innermost to outermost)
+  let scopes = checker.local_scopes
+  for i = scopes.length() - 1; i >= 0; i = i - 1 {
+    for entry in scopes[i].variables.iter() {
+      let candidate = entry.0
+      // Skip if the candidate is too different in length
+      let len_diff = if candidate.length() > name.length() {
+        candidate.length() - name.length()
+      } else {
+        name.length() - candidate.length()
+      }
+      if len_diff <= 2 {
+        let distance = levenshtein_distance(name, candidate)
+        if distance < best_distance && distance > 0 {
+          best_distance = distance
+          best_match = Some(candidate)
+        }
+      }
+    }
+  }
+
+  // Search global scope
+  match checker.global_scope {
+    Some(global) => {
+      for entry in global.symbols.iter() {
+        let candidate = entry.0
+        let len_diff = if candidate.length() > name.length() {
+          candidate.length() - name.length()
+        } else {
+          name.length() - candidate.length()
+        }
+        if len_diff <= 2 {
+          let distance = levenshtein_distance(name, candidate)
+          if distance < best_distance && distance > 0 {
+            best_distance = distance
+            best_match = Some(candidate)
+          }
+        }
+      }
+    }
+    None => ()
+  }
+
+  best_match
+}
+
+///|
 /// Check if a property is a static member of a class
 /// Returns (is_static, class_name) if the property is a static member
 /// Checks both TypeReference types and Object types with class_name tracking
@@ -5656,6 +5761,9 @@ fn infer_arrow_function_type(
   // Push a new local scope for the arrow function
   let checker = push_local_scope(checker)
 
+  // Enter arrow function context (for arguments check)
+  let checker = enter_arrow_function(checker)
+
   // Build parameter list and add parameters to local scope
   let parameters = []
   let mut checker = checker
@@ -5685,19 +5793,36 @@ fn infer_arrow_function_type(
     }
   }
 
-  // Get return type
+  // Get return type and check body
   let (return_type, checker) = match arrow.return_type {
-    Some(type_node) =>
+    Some(type_node) => {
+      // With explicit return type, still check the body for errors
+      let checker = match arrow.body {
+        BlockStatement(block) => check_block_statement(checker, block)
+        _ => {
+          let (_, c) = infer_type(checker, arrow.body)
+          c
+        }
+      }
       match get_type_from_type_node(checker, type_node) {
         (Some(t), c) => (t, c)
         (None, c) => any_type(c)
       }
-    None => {
-      // Infer from body
-      let (t, c) = infer_type(checker, arrow.body)
-      (t, c)
     }
+    None =>
+      // Infer from body
+      match arrow.body {
+        BlockStatement(block) => {
+          // Check block body statements for errors
+          let checker = check_block_statement(checker, block)
+          void_type(checker) // Block returns void unless explicitly returning
+        }
+        _ => infer_type(checker, arrow.body)
+      }
   }
+
+  // Exit arrow function context
+  let checker = exit_arrow_function(checker)
 
   // Pop the local scope
   let checker = pop_local_scope(checker)
@@ -6602,6 +6727,48 @@ fn check_boolean_operands(
 }
 
 ///|
+/// Check instanceof operands (TS2358, TS2359)
+fn check_instanceof_operands(
+  checker : TypeChecker,
+  left_type : Type,
+  right_type : Type,
+  bin_expr : BinaryExpression,
+) -> TypeChecker {
+  // TS2358: Left-hand side must be of type 'any', an object type or a type parameter
+  let checker = match left_type {
+    Any(_) | Unknown(_) | Object(_) | TypeReference(_) | Array(_) | Null(_) =>
+      checker
+    Number(_) | Boolean(_) | String(_) | Void(_) | Undefined(_) | NumberLiteral(
+      _,
+      _,
+    ) | StringLiteral(_, _) | BooleanLiteral(_, _) =>
+      add_diagnostic_with_code(
+        checker,
+        "The left-hand side of an 'instanceof' expression must be of type 'any', an object type or a type parameter, but here has type '\{type_to_string(left_type)}'",
+        get_node_location(bin_expr.left),
+        TS2358,
+      )
+    _ => checker // Allow other types that might be object-like
+  }
+
+  // TS2359: Right-hand side must be of type 'any' or Function type
+  match right_type {
+    Any(_) | Function(_) | TypeReference(_) => checker
+    Number(_) | Boolean(_) | String(_) | Void(_) | Undefined(_) | Null(_) | NumberLiteral(
+      _,
+      _,
+    ) | StringLiteral(_, _) | BooleanLiteral(_, _) =>
+      add_diagnostic_with_code(
+        checker,
+        "The right-hand side of an 'instanceof' expression must be of type 'any' or of a type assignable to the 'Function' interface type, but here has type '\{type_to_string(right_type)}'",
+        get_node_location(bin_expr.right),
+        TS2359,
+      )
+    _ => checker // Allow other types that might be constructors
+  }
+}
+
+///|
 /// Check if type is numeric
 fn is_numeric_type(t : Type) -> Bool {
   match t {
@@ -6807,6 +6974,136 @@ fn check_for_statement(
 
   // Check body
   check_statement(checker, for_stmt.statement)
+}
+
+///|
+/// Check for-in statement
+/// Validates TS2406: Left-hand side must be a variable
+/// Validates TS2407: Right-hand side must be an object type
+fn check_for_in_statement(
+  checker : TypeChecker,
+  for_in_stmt : ForInStatement,
+) -> TypeChecker {
+  // Check the right-hand side expression type (TS2407)
+  let (expr_type, checker) = infer_type(checker, for_in_stmt.expression)
+  let checker = match expr_type {
+    Any(_) | Unknown(_) | Object(_) | TypeReference(_) | Array(_) => checker // Valid types for for...in
+    _ =>
+      add_diagnostic_with_code(
+        checker,
+        "The right-hand side of a 'for...in' statement must be of type 'any', an object type or a type parameter, but here has type '\{type_to_string(expr_type)}'",
+        get_node_location(for_in_stmt.expression),
+        TS2407,
+      )
+  }
+
+  // Push scope for loop variable
+  let checker = push_local_scope(checker)
+
+  // Add the loop variable to scope - for-in keys are always strings
+  let checker = add_for_in_variable_to_scope(checker, for_in_stmt.initializer)
+
+  // Check the body statement
+  let checker = check_statement(checker, for_in_stmt.statement)
+
+  // Pop the loop scope
+  pop_local_scope(checker)
+}
+
+///|
+/// Add the for-in loop variable to scope with string type
+fn add_for_in_variable_to_scope(
+  checker : TypeChecker,
+  initializer : Node,
+) -> TypeChecker {
+  let (str_type, checker) = string_type(checker)
+  match initializer {
+    VariableStatement(var_stmt) => {
+      // Handle: for (const key in obj)
+      if var_stmt.declarations.length() > 0 {
+        let decl = var_stmt.declarations[0]
+        match decl.name {
+          Identifier(id) => add_local_variable(checker, id.name, str_type)
+          _ => checker
+        }
+      } else {
+        checker
+      }
+    }
+    Identifier(_) =>
+      // Handle: for (key in obj) where key was previously declared
+      checker
+    _ => checker
+  }
+}
+
+///|
+/// Check for-of statement
+/// Validates that right-hand side is iterable (array, string, or has [Symbol.iterator])
+fn check_for_of_statement(
+  checker : TypeChecker,
+  for_of_stmt : ForOfStatement,
+) -> TypeChecker {
+  // Infer the type of the iterable expression
+  let (iterable_type, checker) = infer_type(checker, for_of_stmt.expression)
+
+  // Push scope for loop variable
+  let checker = push_local_scope(checker)
+
+  // Add the loop variable to scope with the element type
+  let checker = add_for_of_variable_to_scope(
+    checker,
+    for_of_stmt.initializer,
+    iterable_type,
+  )
+
+  // Check the body statement
+  let checker = check_statement(checker, for_of_stmt.statement)
+
+  // Pop the loop scope
+  pop_local_scope(checker)
+}
+
+///|
+/// Add the for-of loop variable to scope with the element type
+fn add_for_of_variable_to_scope(
+  checker : TypeChecker,
+  initializer : Node,
+  iterable_type : Type,
+) -> TypeChecker {
+  // Get the element type from the iterable
+  let (elem_type, checker) = get_for_of_element_type(checker, iterable_type)
+  match initializer {
+    VariableStatement(var_stmt) => {
+      // Handle: for (const item of arr)
+      if var_stmt.declarations.length() > 0 {
+        let decl = var_stmt.declarations[0]
+        match decl.name {
+          Identifier(id) => add_local_variable(checker, id.name, elem_type)
+          _ => checker
+        }
+      } else {
+        checker
+      }
+    }
+    Identifier(_) =>
+      // Handle: for (item of arr) where item was previously declared
+      checker
+    _ => checker
+  }
+}
+
+///|
+/// Get the element type of an iterable for for-of loops
+fn get_for_of_element_type(
+  checker : TypeChecker,
+  iterable_type : Type,
+) -> (Type, TypeChecker) {
+  match iterable_type {
+    Array(arr) => (arr.element_type, checker)
+    String(_) => string_type(checker) // Iterating string produces strings
+    _ => any_type(checker) // Fallback to any
+  }
 }
 
 ///|

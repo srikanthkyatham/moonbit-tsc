@@ -2344,11 +2344,10 @@ test "DiagnosticCode - TS2358 instanceof left not object" {
     #|const result = x instanceof String;
   let result = check_source(source)
   match result {
-    Ok(_) => () // May allow this as string can be boxed
+    Ok(_) => assert_true(false) // Should detect primitive type on left side
     Err(diagnostics) => {
-      if has_error(diagnostics, 2358) {
-        assert_true(has_message(diagnostics, "instanceof") || has_message(diagnostics, "object"))
-      }
+      // Should report TS2358 for string primitive on left side
+      assert_true(has_error(diagnostics, 2358))
     }
   }
 }
@@ -2360,11 +2359,10 @@ test "DiagnosticCode - TS2358 instanceof with primitive number" {
     #|const result = num instanceof Number;
   let result = check_source(source)
   match result {
-    Ok(_) => () // May allow this
+    Ok(_) => assert_true(false) // Should detect primitive type on left side
     Err(diagnostics) => {
-      if has_error(diagnostics, 2358) {
-        assert_true(true)
-      }
+      // Should report TS2358 for number primitive on left side
+      assert_true(has_error(diagnostics, 2358))
     }
   }
 }
@@ -4011,8 +4009,8 @@ test "DiagnosticCode - TS2552: cannot find name did you mean" {
   match result {
     Ok(_) => assert_true(false) // Should detect typo
     Err(diagnostics) => {
-      // May produce TS2304 for cannot find name
-      assert_true(has_error(diagnostics, 2552) || has_error(diagnostics, 2304))
+      // Should produce TS2552 with "Did you mean" suggestion since "valeu" is similar to "value"
+      assert_true(has_error(diagnostics, 2552))
     }
   }
 }
@@ -4032,15 +4030,15 @@ test "DiagnosticCode - valid name reference" {
 }
 
 ///|
-test "DiagnosticCode - TS2574: rest element type must be array" {
+test "DiagnosticCode - TS2370: rest parameter must be array type" {
   let source =
     #|function fn(...args: number): void {}
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(false) // Should detect non-array rest type
     Err(diagnostics) => {
-      // May produce TS2370 for rest parameter must be array type
-      assert_true(has_error(diagnostics, 2574) || has_error(diagnostics, 2370))
+      // Should produce TS2370 for rest parameter must be array type
+      assert_true(has_error(diagnostics, 2370))
     }
   }
 }
@@ -4729,19 +4727,17 @@ test "DiagnosticCode - valid distinct exports" {
 // ============================================================================
 
 ///|
-test "DiagnosticCode - TS2496 arguments in arrow function (not detected yet)" {
-  // Note: This tests the error code structure; detection not yet implemented
+test "DiagnosticCode - TS2496 arguments in arrow function" {
   let source =
     #|const fn = () => {
     #|  console.log(arguments); // arguments not available in arrow
     #|};
   let result = check_source(source)
   match result {
-    Ok(_) => () // Detection not implemented yet
+    Ok(_) => assert_true(false) // Should detect arguments in arrow function
     Err(diagnostics) => {
-      if has_error(diagnostics, 2496) {
-        assert_true(has_message(diagnostics, "arguments"))
-      }
+      // Should report TS2496 for arguments in arrow function
+      assert_true(has_error(diagnostics, 2496))
     }
   }
 }

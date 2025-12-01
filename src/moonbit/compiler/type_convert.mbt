@@ -638,6 +638,7 @@ fn TypeChecker::create_type_info(self : TypeChecker) -> (TypeInfo, TypeChecker) 
     current_this_type: self.current_this_type,
     no_unchecked_indexed_access: self.no_unchecked_indexed_access,
     resolving_symbols: self.resolving_symbols,
+    arrow_function_depth: self.arrow_function_depth,
   }
   (info, new_checker)
 }
