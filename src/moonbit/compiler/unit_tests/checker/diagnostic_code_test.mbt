@@ -3432,12 +3432,11 @@ test "DiagnosticCode - TS2706 required after optional type param" {
     #|type MyType<T = string, U> = { t: T; u: U };
   let result = check_source(source)
   match result {
-    Ok(_) => () // May not be fully implemented
+    Ok(_) => fail!("Expected TS2706 error for required type param after optional")
     Err(diagnostics) => {
       // Should report TS2706
-      if has_error(diagnostics, 2706) {
-        assert_true(has_message(diagnostics, "required") || has_message(diagnostics, "optional"))
-      }
+      assert_true(has_error(diagnostics, 2706))
+      assert_true(has_message(diagnostics, "required") || has_message(diagnostics, "optional"))
     }
   }
 }
@@ -3457,35 +3456,38 @@ test "DiagnosticCode - valid type param order" {
 }
 
 // TS2707: Generic type requires between N and M type arguments
+// This error is used when there's a range of valid type args (optional type params)
 ///|
-test "DiagnosticCode - TS2707 wrong number of type args" {
+test "DiagnosticCode - TS2707 too few args with optional params" {
+  // Box has min=1, max=2 type args - providing 0 should give TS2707
   let source =
-    #|interface Box<T, U> { value: T; key: U; }
-    #|const x: Box<string> = { value: "hello", key: 1 };
+    #|interface Box<T, U = number> { value: T; key: U; }
+    #|type Empty = Box;
   let result = check_source(source)
   match result {
-    Ok(_) => () // May not be fully implemented
+    Ok(_) => fail!("Expected TS2707 error")
     Err(diagnostics) => {
-      // Should report TS2707 or TS2314/TS2315
-      if has_error(diagnostics, 2707) || has_error(diagnostics, 2314) || has_error(diagnostics, 2315) {
-        assert_true(true)
+      // Should report TS2707 since there's a range of valid type args
+      if not(has_error(diagnostics, 2707)) {
+        fail!("Expected TS2707 error")
       }
     }
   }
 }
 
 ///|
-test "DiagnosticCode - TS2707 too many type args" {
+test "DiagnosticCode - TS2707 too many args with optional params" {
+  // Box has min=1, max=2 type args - providing 3 should give TS2707
   let source =
-    #|interface Box<T> { value: T; }
-    #|const x: Box<string, number> = { value: "hello" };
+    #|interface Box<T, U = number> { value: T; key: U; }
+    #|type TooMany = Box<string, number, boolean>;
   let result = check_source(source)
   match result {
-    Ok(_) => () // May not be fully implemented
+    Ok(_) => fail!("Expected TS2707 error")
     Err(diagnostics) => {
-      // Should report TS2707 or TS2315
-      if has_error(diagnostics, 2707) || has_error(diagnostics, 2315) {
-        assert_true(true)
+      // Should report TS2707 since there's a range of valid type args
+      if not(has_error(diagnostics, 2707)) {
+        fail!("Expected TS2707 error")
       }
     }
   }

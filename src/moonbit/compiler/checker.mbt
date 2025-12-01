@@ -3932,21 +3932,35 @@ fn check_type_arguments(
 
   // Check arity
   let min_required = count_required_type_params(type_params)
-  if type_args.length() < min_required {
-    checker = add_diagnostic_with_code(
-      checker,
-      "Generic type requires more type arguments",
-      location,
-      DiagnosticCode::TS2314,
-    )
-  }
-  if type_args.length() > type_params.length() {
-    checker = add_diagnostic_with_code(
-      checker,
-      "Too many type arguments provided",
-      location,
-      DiagnosticCode::TS2558,
-    )
+  let max_allowed = type_params.length()
+  let actual = type_args.length()
+
+  if actual < min_required || actual > max_allowed {
+    // Use TS2707 when there's a range (optional type params exist)
+    if min_required != max_allowed {
+      checker = add_diagnostic_with_code(
+        checker,
+        "Generic type requires between \{min_required} and \{max_allowed} type arguments, but got \{actual}.",
+        location,
+        DiagnosticCode::TS2707,
+      )
+    } else if actual < min_required {
+      // Exact count required, too few provided
+      checker = add_diagnostic_with_code(
+        checker,
+        "Generic type requires \{min_required} type argument(s), but got \{actual}.",
+        location,
+        DiagnosticCode::TS2314,
+      )
+    } else {
+      // Exact count required, too many provided
+      checker = add_diagnostic_with_code(
+        checker,
+        "Generic type requires \{max_allowed} type argument(s), but got \{actual}.",
+        location,
+        DiagnosticCode::TS2558,
+      )
+    }
   }
 
   // Check constraints
@@ -8766,6 +8780,8 @@ fn check_type_alias_declaration(
 ) -> TypeChecker {
   // Check type parameter names for reserved keywords (TS2368)
   let checker = check_type_parameter_names(checker, type_alias.type_parameters)
+  // Validate the type node (checks type argument counts, etc.)
+  let (_, checker) = get_type_from_type_node(checker, type_alias.type_node)
   check_type_node_for_rest_errors(checker, type_alias.type_node)
 }
 
@@ -9101,6 +9117,75 @@ fn check_switch_statement(
 // ============================================================================
 
 ///|
+/// Get type parameters from a symbol's declarations (interfaces, classes, type aliases)
+fn get_type_parameters_from_symbol(symbol : Symbol) -> Array[TypeParameter] {
+  for decl in symbol.declarations {
+    match decl {
+      InterfaceDeclaration(iface) => return iface.type_parameters
+      ClassDeclaration(class_decl) => return class_decl.type_parameters
+      TypeAliasDeclaration(type_alias) => return type_alias.type_parameters
+      _ => continue
+    }
+  }
+  []
+}
+
+///|
+/// Count required type parameters (those without defaults)
+fn count_required_type_params_from_ast(type_params : Array[TypeParameter]) -> Int {
+  let mut count = 0
+  for param in type_params {
+    if param.default.is_none() {
+      count = count + 1
+    }
+  }
+  count
+}
+
+///|
+/// Validate type arguments against type parameters, returning (isValid, checker)
+/// If invalid, adds diagnostic and returns false
+fn validate_type_argument_count(
+  checker : TypeChecker,
+  type_name : String,
+  type_args_count : Int,
+  type_params : Array[TypeParameter],
+  location : SourceLocation,
+) -> TypeChecker {
+  let min_required = count_required_type_params_from_ast(type_params)
+  let max_allowed = type_params.length()
+
+  if type_args_count < min_required || type_args_count > max_allowed {
+    if min_required != max_allowed {
+      // TS2707: Generic type requires between N and M type arguments
+      return add_diagnostic_with_code(
+        checker,
+        "Generic type '\{type_name}' requires between \{min_required} and \{max_allowed} type argument(s), but got \{type_args_count}.",
+        location,
+        DiagnosticCode::TS2707,
+      )
+    } else if type_args_count < min_required {
+      // TS2314: Generic type requires N type argument(s)
+      return add_diagnostic_with_code(
+        checker,
+        "Generic type '\{type_name}' requires \{min_required} type argument(s).",
+        location,
+        DiagnosticCode::TS2314,
+      )
+    } else {
+      // Too many type arguments (exact count expected)
+      return add_diagnostic_with_code(
+        checker,
+        "Generic type '\{type_name}' requires \{max_allowed} type argument(s), but got \{type_args_count}.",
+        location,
+        DiagnosticCode::TS2558,
+      )
+    }
+  }
+  checker
+}
+
+///|
 /// Get type from type node
 fn get_type_from_type_node(
   checker : TypeChecker,
@@ -9231,7 +9316,17 @@ fn get_type_from_type_node(
         _ =>
           // Try to look up the type name in the symbol table (for interfaces, classes, etc.)
           match lookup_symbol(checker, type_ref.type_name) {
-            Some(symbol) =>
+            Some(symbol) => {
+              // Validate type argument count against type parameters
+              let type_params = get_type_parameters_from_symbol(symbol)
+              let type_args_count = type_ref.type_arguments.length()
+              let checker = validate_type_argument_count(
+                checker,
+                type_ref.type_name,
+                type_args_count,
+                type_params,
+                type_ref.location,
+              )
               match symbol.kind {
                 Interface =>
                   // Resolve interface to an Object type with its properties
@@ -9241,6 +9336,7 @@ fn get_type_from_type_node(
                   }
                 _ => (None, checker) // Other symbol kinds not yet supported
               }
+            }
             None => (None, checker)
           }
       }
@@ -10297,18 +10393,40 @@ fn is_reserved_type_name(name : String) -> Bool {
 
 ///|
 /// Check type parameter names for reserved keywords (TS2368)
+/// and required type parameters after optional (TS2706)
 fn check_type_parameter_names(
   checker : TypeChecker,
   type_params : Array[TypeParameter],
 ) -> TypeChecker {
   let mut checker = checker
+  let mut seen_optional = false
+  let mut first_optional_name = ""
+
   for param in type_params {
+    // TS2368: Check reserved type names
     if is_reserved_type_name(param.name) {
       checker = add_diagnostic_with_code(
         checker,
         "Type parameter name cannot be '\{param.name}'",
         param.location,
         TS2368,
+      )
+    }
+
+    // TS2706: Check required type params don't follow optional
+    let has_default = param.default.is_some()
+    if has_default {
+      if not(seen_optional) {
+        seen_optional = true
+        first_optional_name = param.name
+      }
+    } else if seen_optional {
+      // Required param after optional - error!
+      checker = add_diagnostic_with_code(
+        checker,
+        "Required type parameters may not follow optional type parameters. '\{param.name}' is required but follows '\{first_optional_name}' which has a default.",
+        param.location,
+        TS2706,
       )
     }
   }
