@@ -18,6 +18,7 @@ defmodule TSC.Coordinator do
   alias TSC.Worker.PoolSupervisor
   alias TSC.Telemetry.Metrics
   alias TSC.Options
+  alias TSC.Project.References
 
   require Logger
 
@@ -88,6 +89,80 @@ defmodule TSC.Coordinator do
     )
 
     result
+  end
+
+  @doc """
+  Build a project with references (composite build).
+
+  Builds all referenced projects in dependency order, then the root project.
+
+  ## Options
+
+  Same as `check_project/2`.
+  """
+  @spec build_with_references(String.t(), keyword()) :: map()
+  def build_with_references(tsconfig_path, opts \\ []) do
+    opts = Options.validate_check_project!(opts)
+    start_time = System.monotonic_time(:millisecond)
+
+    case References.build_order_with_info(tsconfig_path) do
+      {:ok, projects} ->
+        Logger.info("Building #{length(projects)} projects in dependency order")
+
+        # Build each project in order
+        results =
+          projects
+          |> Enum.with_index(1)
+          |> Enum.map(fn {project, index} ->
+            Logger.info("[#{index}/#{length(projects)}] Building #{project.path}")
+
+            files = References.get_project_files(project)
+            project_result = check_project(files, opts)
+
+            %{
+              project: project.path,
+              result: project_result
+            }
+          end)
+
+        duration = System.monotonic_time(:millisecond) - start_time
+
+        # Aggregate results
+        all_diagnostics = Enum.flat_map(results, fn r -> r.result.diagnostics end)
+        total_files = Enum.sum(Enum.map(results, fn r -> r.result.stats.files_checked end))
+        success = Enum.all?(results, fn r -> r.result.success end)
+
+        %{
+          success: success,
+          diagnostics: all_diagnostics,
+          projects: results,
+          stats: %{
+            projects_built: length(projects),
+            total_files_checked: total_files,
+            elapsed_ms: duration,
+            errors: Enum.count(all_diagnostics, &(&1.category == :error)),
+            warnings: Enum.count(all_diagnostics, &(&1.category == :warning))
+          }
+        }
+
+      {:error, :circular_dependency} ->
+        Logger.error("Circular dependency detected in project references")
+        %{
+          success: false,
+          error: :circular_dependency,
+          diagnostics: [],
+          stats: %{elapsed_ms: System.monotonic_time(:millisecond) - start_time}
+        }
+
+      {:error, reason} ->
+        Logger.error("Failed to build project graph: #{inspect(reason)}")
+        %{
+          success: false,
+          error: reason,
+          diagnostics: [],
+          stats: %{elapsed_ms: System.monotonic_time(:millisecond) - start_time}
+        }
+    end
   end
 
   @doc """
