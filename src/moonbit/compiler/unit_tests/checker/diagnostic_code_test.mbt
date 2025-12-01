@@ -5629,19 +5629,31 @@ test "DiagnosticCode - TS2578 unused ts-expect-error (not detected yet)" {
 // ============================================================================
 
 ///|
-test "DiagnosticCode - TS2579 test runner name (not detected yet)" {
-  // Note: This tests the error code structure; detection not yet implemented
+test "DiagnosticCode - TS2579 test runner name" {
   let source =
     #|describe("test", () => {
     #|  it("should work", () => {});
     #|});
   let result = check_source(source)
   match result {
-    Ok(_) => () // Detection not implemented yet
+    Ok(_) => fail!("Expected TS2579 error")
     Err(diagnostics) => {
-      if has_error(diagnostics, 2579) {
-        assert_true(has_message(diagnostics, "describe") || has_message(diagnostics, "test runner"))
-      }
+      assert_true(has_error(diagnostics, 2579))
+      assert_true(has_message(diagnostics, "describe") || has_message(diagnostics, "test runner"))
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - TS2579 jest expect" {
+  let source =
+    #|expect(1).toBe(1);
+  let result = check_source(source)
+  match result {
+    Ok(_) => fail!("Expected TS2579 error")
+    Err(diagnostics) => {
+      assert_true(has_error(diagnostics, 2579))
+      assert_true(has_message(diagnostics, "expect"))
     }
   }
 }
@@ -5651,17 +5663,29 @@ test "DiagnosticCode - TS2579 test runner name (not detected yet)" {
 // ============================================================================
 
 ///|
-test "DiagnosticCode - TS2580 target library name (not detected yet)" {
-  // Note: This tests the error code structure; detection not yet implemented
+test "DiagnosticCode - TS2580 DOM document" {
   let source =
-    #|const x = BigInt(42); // BigInt might not be available in older targets
+    #|const el = document.getElementById("test");
   let result = check_source(source)
   match result {
-    Ok(_) => () // Detection not implemented yet
+    Ok(_) => fail!("Expected TS2580 error")
     Err(diagnostics) => {
-      if has_error(diagnostics, 2580) {
-        assert_true(has_message(diagnostics, "target") || has_message(diagnostics, "library"))
-      }
+      assert_true(has_error(diagnostics, 2580))
+      assert_true(has_message(diagnostics, "document"))
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - TS2580 DOM window" {
+  let source =
+    #|const w = window.innerWidth;
+  let result = check_source(source)
+  match result {
+    Ok(_) => fail!("Expected TS2580 error")
+    Err(diagnostics) => {
+      assert_true(has_error(diagnostics, 2580))
+      assert_true(has_message(diagnostics, "window"))
     }
   }
 }
@@ -5671,17 +5695,29 @@ test "DiagnosticCode - TS2580 target library name (not detected yet)" {
 // ============================================================================
 
 ///|
-test "DiagnosticCode - TS2584 target library alt (not detected yet)" {
-  // Note: This tests the error code structure; detection not yet implemented
+test "DiagnosticCode - TS2584 BigInt" {
   let source =
-    #|const x = Symbol.asyncIterator; // may need specific lib
+    #|const x = BigInt(42);
   let result = check_source(source)
   match result {
-    Ok(_) => () // Detection not implemented yet
+    Ok(_) => fail!("Expected TS2584 error")
     Err(diagnostics) => {
-      if has_error(diagnostics, 2584) {
-        assert_true(has_message(diagnostics, "target") || has_message(diagnostics, "library"))
-      }
+      assert_true(has_error(diagnostics, 2584))
+      assert_true(has_message(diagnostics, "BigInt"))
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - TS2584 globalThis" {
+  let source =
+    #|const g = globalThis;
+  let result = check_source(source)
+  match result {
+    Ok(_) => fail!("Expected TS2584 error")
+    Err(diagnostics) => {
+      assert_true(has_error(diagnostics, 2584))
+      assert_true(has_message(diagnostics, "globalThis"))
     }
   }
 }
