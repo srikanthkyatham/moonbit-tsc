@@ -641,6 +641,8 @@ fn TypeChecker::create_type_info(self : TypeChecker) -> (TypeInfo, TypeChecker) 
     resolving_symbols: self.resolving_symbols,
     arrow_function_depth: self.arrow_function_depth,
     async_function_depth: self.async_function_depth,
+    generator_function_depth: self.generator_function_depth,
+    generator_has_return_type: self.generator_has_return_type,
     block_scoped_decls: self.block_scoped_decls,
     uninitialized_vars: self.uninitialized_vars,
     in_static_context: self.in_static_context,

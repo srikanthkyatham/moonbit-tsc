@@ -4805,19 +4805,16 @@ test "DiagnosticCode - valid function rest parameter" {
 // ============================================================================
 
 ///|
-test "DiagnosticCode - TS2764 yield expression implicitly any (not detected yet)" {
-  // Note: This tests the error code structure; detection not yet implemented
+test "DiagnosticCode - TS2764 yield expression implicitly any" {
   let source =
     #|function* gen() {
-    #|  yield; // yield without value
+    #|  yield; // yield without value in generator without return type
     #|}
   let result = check_source(source)
   match result {
-    Ok(_) => () // Detection not implemented yet
+    Ok(_) => assert_true(false) // Should detect yield implicitly any
     Err(diagnostics) => {
-      if has_error(diagnostics, 2764) {
-        assert_true(has_message(diagnostics, "yield"))
-      }
+      assert_true(has_error(diagnostics, 2764))
     }
   }
 }

@@ -273,6 +273,8 @@ pub struct TypeChecker {
   resolving_symbols : Map[Int, Bool] // Symbol IDs currently being resolved (for cycle detection)
   arrow_function_depth : Int // Tracks nesting depth in arrow functions (> 0 means inside arrow)
   async_function_depth : Int // Tracks nesting depth in async functions (> 0 means inside async)
+  generator_function_depth : Int // Tracks nesting depth in generator functions (> 0 means inside generator)
+  generator_has_return_type : Bool // Tracks if current generator has a return type annotation
   block_scoped_decls : Map[String, Int] // Variable name -> declaration line (for TS2448 TDZ check)
   uninitialized_vars : Map[String, Int] // Variable name -> declaration line (for TS2454 definite assignment)
   in_static_context : Bool // Tracks if we're in a static property initializer (for TS2334)
@@ -332,6 +334,8 @@ pub fn TypeChecker::new_with_options(
     resolving_symbols: Map::new(),
     arrow_function_depth: 0,
     async_function_depth: 0,
+    generator_function_depth: 0,
+    generator_has_return_type: false,
     block_scoped_decls: Map::new(),
     uninitialized_vars: Map::new(),
     in_static_context: false,
@@ -401,6 +405,35 @@ fn exit_async_function(checker : TypeChecker) -> TypeChecker {
 /// Check if currently inside an async function
 fn is_in_async_function(checker : TypeChecker) -> Bool {
   checker.async_function_depth > 0
+}
+
+///|
+/// Enter generator function context (increment depth)
+fn enter_generator_function(
+  checker : TypeChecker,
+  has_return_type : Bool,
+) -> TypeChecker {
+  {
+    ..checker,
+    generator_function_depth: checker.generator_function_depth + 1,
+    generator_has_return_type: has_return_type,
+  }
+}
+
+///|
+/// Exit generator function context (decrement depth)
+fn exit_generator_function(checker : TypeChecker) -> TypeChecker {
+  {
+    ..checker,
+    generator_function_depth: checker.generator_function_depth - 1,
+    generator_has_return_type: false,
+  }
+}
+
+///|
+/// Check if currently inside a generator function
+fn is_in_generator_function(checker : TypeChecker) -> Bool {
+  checker.generator_function_depth > 0
 }
 
 ///|
@@ -5951,8 +5984,19 @@ fn infer_yield_expression_type(
     None => {
       // TS2764: 'yield' expression implicitly results in an 'any' type
       // because its containing generator lacks a return-type annotation
-      // Note: Full implementation requires tracking enclosing function context
-      undefined_type(checker)
+      let checker = if is_in_generator_function(checker) &&
+        not(checker.generator_has_return_type) {
+        add_diagnostic_with_code(
+          checker,
+          "'yield' expression implicitly results in an 'any' type because its containing generator lacks a return-type annotation.",
+          ye.location,
+          TS2764,
+        )
+      } else {
+        checker
+      }
+      let (t, checker) = undefined_type(checker)
+      (t, checker)
     }
   }
 }
@@ -7574,10 +7618,25 @@ fn check_function_declaration(
     checker
   }
 
+  // Track generator function context for TS2764
+  let checker = if func.is_generator {
+    let has_return_type = func.return_type.is_some()
+    enter_generator_function(checker, has_return_type)
+  } else {
+    checker
+  }
+
   // Check function body first (so variables are declared in scope)
   let checker = match func.body {
     Some(body) => check_statement(checker, body)
     None => checker
+  }
+
+  // Exit generator function context
+  let checker = if func.is_generator {
+    exit_generator_function(checker)
+  } else {
+    checker
   }
 
   // Exit async function context
