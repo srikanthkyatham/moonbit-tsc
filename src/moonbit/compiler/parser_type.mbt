@@ -360,6 +360,16 @@ fn parse_primary_type_with_readonly(
           advance_parser(parser),
         ),
       )
+    KeywordBigInt(_) =>
+      Ok(
+        (
+          Node::KeywordType(KeywordType::{
+            kind: TypeKeyword::BigInt,
+            location: loc,
+          }),
+          advance_parser(parser),
+        ),
+      )
     KeywordObject(_) =>
       Ok(
         (

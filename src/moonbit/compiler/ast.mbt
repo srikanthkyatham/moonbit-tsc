@@ -914,6 +914,7 @@ pub enum TypeKeyword {
   Number
   String
   Symbol
+  BigInt
   Object
   Const // For "as const" assertions
 } derive(Show, Eq)

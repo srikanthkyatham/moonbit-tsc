@@ -12,6 +12,7 @@ pub enum Type {
   Undefined(TypeInfo)
   Null(TypeInfo)
   Symbol(TypeInfo)
+  BigInt(TypeInfo)
   Any(TypeInfo)
   Unknown(TypeInfo)
   Never(TypeInfo)
@@ -614,6 +615,22 @@ pub fn unknown_type(checker : TypeChecker) -> (Type, TypeChecker) {
 pub fn symbol_type(checker : TypeChecker) -> (Type, TypeChecker) {
   let (info, checker) = create_type_info(checker)
   (Symbol(info), checker)
+}
+
+///|
+/// Get the bigint type
+pub fn bigint_type(checker : TypeChecker) -> (Type, TypeChecker) {
+  let (info, checker) = create_type_info(checker)
+  (BigInt(info), checker)
+}
+
+///|
+/// Check if a Type is bigint (for use in checker.mbt)
+fn type_is_bigint(t : Type) -> Bool {
+  match t {
+    BigInt(_) => true
+    _ => false
+  }
 }
 
 ///|
@@ -1576,6 +1593,7 @@ fn infer_type(checker : TypeChecker, expr : Node) -> (Type, TypeChecker) {
     StringLiteral(_) => string_type(checker)
     BooleanLiteral(_) => boolean_type(checker)
     NullLiteral(_) => null_type(checker)
+    BigIntLiteral(_) => bigint_type(checker)
     Identifier(id) =>
       // Check for undefined identifier
       if id.name == "undefined" {
@@ -3094,11 +3112,14 @@ fn infer_binary_expression_type(
 
   // Determine result type based on operator
   match bin_expr.operator {
-    // Addition: can be number + number -> number OR string + string -> string
+    // Addition: can be number + number -> number OR string + string -> string OR bigint + bigint -> bigint
     Add =>
       // Check if either operand is a string
       match (left_type, right_type) {
         (String(_), _) | (_, String(_)) => string_type(checker)
+        (BigInt(_), BigInt(_)) =>
+          // bigint + bigint -> bigint
+          bigint_type(checker)
         _ => {
           let checker = check_numeric_operands(
             checker,
@@ -3110,33 +3131,41 @@ fn infer_binary_expression_type(
           number_type(checker)
         }
       }
-    // Arithmetic operators: number op number -> number
-    Subtract | Multiply | Divide | Remainder | Exponentiate => {
-      let checker = check_numeric_operands(
-        checker,
-        left_type,
-        right_type,
-        bin_expr.operator,
-        get_node_location(BinaryExpression(bin_expr)),
-      )
-      number_type(checker)
-    }
-    // Bitwise operators: number op number -> number
+    // Arithmetic operators: number op number -> number OR bigint op bigint -> bigint
+    Subtract | Multiply | Divide | Remainder | Exponentiate =>
+      // Check if both are bigint
+      if type_is_bigint(left_type) && type_is_bigint(right_type) {
+        bigint_type(checker)
+      } else {
+        let checker = check_numeric_operands(
+          checker,
+          left_type,
+          right_type,
+          bin_expr.operator,
+          get_node_location(BinaryExpression(bin_expr)),
+        )
+        number_type(checker)
+      }
+    // Bitwise operators: number op number -> number OR bigint op bigint -> bigint
     BitwiseAnd
     | BitwiseOr
     | BitwiseXor
     | LeftShift
     | RightShift
-    | UnsignedRightShift => {
-      let checker = check_numeric_operands(
-        checker,
-        left_type,
-        right_type,
-        bin_expr.operator,
-        get_node_location(BinaryExpression(bin_expr)),
-      )
-      number_type(checker)
-    }
+    | UnsignedRightShift =>
+      // Check if both are bigint
+      if type_is_bigint(left_type) && type_is_bigint(right_type) {
+        bigint_type(checker)
+      } else {
+        let checker = check_numeric_operands(
+          checker,
+          left_type,
+          right_type,
+          bin_expr.operator,
+          get_node_location(BinaryExpression(bin_expr)),
+        )
+        number_type(checker)
+      }
     // Comparison operators: any op any -> boolean
     LessThan
     | GreaterThan
@@ -3306,15 +3335,39 @@ fn infer_unary_expression_type(
 ) -> (Type, TypeChecker) {
   let (operand_type, checker) = infer_type(checker, un_expr.operand)
   match un_expr.operator {
-    Plus | Minus | BitwiseNot => {
-      let checker = check_numeric_operand(
-        checker,
-        operand_type,
-        un_expr.operator,
-        get_node_location(UnaryExpression(un_expr)),
-      )
+    Plus => {
+      // TS2736: Operator '+' cannot be applied to type 'bigint'
+      let checker = if type_is_bigint(operand_type) {
+        add_diagnostic_with_code(
+          checker,
+          "Operator '+' cannot be applied to type 'bigint'.",
+          get_node_location(UnaryExpression(un_expr)),
+          TS2736,
+        )
+      } else {
+        check_numeric_operand(
+          checker,
+          operand_type,
+          un_expr.operator,
+          get_node_location(UnaryExpression(un_expr)),
+        )
+      }
       number_type(checker)
     }
+    Minus | BitwiseNot =>
+      // Minus and BitwiseNot work on both number and bigint
+      if type_is_bigint(operand_type) {
+        // bigint - no error, return bigint
+        bigint_type(checker)
+      } else {
+        let checker = check_numeric_operand(
+          checker,
+          operand_type,
+          un_expr.operator,
+          get_node_location(UnaryExpression(un_expr)),
+        )
+        number_type(checker)
+      }
     LogicalNot => boolean_type(checker)
     Increment | Decrement => {
       let checker = check_numeric_operand(
@@ -6325,6 +6378,7 @@ fn is_assignable(source : Type, target : Type) -> Bool {
     (Undefined(_), Undefined(_)) => true
     (Null(_), Null(_)) => true
     (Symbol(_), Symbol(_)) => true
+    (BigInt(_), BigInt(_)) => true
     // Undefined and null are assignable to most types (like TypeScript without strictNullChecks)
     (Undefined(_), Void(_)) => true
     (Undefined(_), Number(_)) => true
@@ -7442,6 +7496,29 @@ fn check_for_statement(
 }
 
 ///|
+/// Check if the left-hand side of a for-in statement is valid (TS2406)
+fn check_for_in_left_side(checker : TypeChecker, initializer : Node) -> TypeChecker {
+  match initializer {
+    // Valid: for (const key in obj), for (let key in obj), for (var key in obj)
+    VariableStatement(_) => checker
+    // Valid: for (key in obj) where key is an identifier (previously declared)
+    Identifier(_) => checker
+    // Valid: for (obj.prop in otherObj) - property access assignment
+    PropertyAccessExpression(_) => checker
+    // Valid: for (obj["prop"] in otherObj) - element access assignment
+    ElementAccessExpression(_) => checker
+    // Invalid: expressions like (1 + 2), function calls, etc.
+    _ =>
+      add_diagnostic_with_code(
+        checker,
+        "The left-hand side of a 'for...in' statement must be a variable or a property access.",
+        get_node_location(initializer),
+        TS2406,
+      )
+  }
+}
+
+///|
 /// Check for-in statement
 /// Validates TS2406: Left-hand side must be a variable
 /// Validates TS2407: Right-hand side must be an object type
@@ -7449,6 +7526,10 @@ fn check_for_in_statement(
   checker : TypeChecker,
   for_in_stmt : ForInStatement,
 ) -> TypeChecker {
+  // Check the left-hand side (TS2406)
+  // Must be a variable declaration, identifier, or property access
+  let checker = check_for_in_left_side(checker, for_in_stmt.initializer)
+
   // Check the right-hand side expression type (TS2407)
   let (expr_type, checker) = infer_type(checker, for_in_stmt.expression)
   let checker = match expr_type {
@@ -7503,12 +7584,39 @@ fn add_for_in_variable_to_scope(
 }
 
 ///|
+/// Check if the left-hand side of a for-of statement is valid (TS2487)
+fn check_for_of_left_side(checker : TypeChecker, initializer : Node) -> TypeChecker {
+  match initializer {
+    // Valid: for (const item of arr), for (let item of arr), for (var item of arr)
+    VariableStatement(_) => checker
+    // Valid: for (item of arr) where item is an identifier (previously declared)
+    Identifier(_) => checker
+    // Valid: for (obj.prop of arr) - property access assignment
+    PropertyAccessExpression(_) => checker
+    // Valid: for (obj["prop"] of arr) - element access assignment
+    ElementAccessExpression(_) => checker
+    // Invalid: expressions like (1 + 2), function calls, etc.
+    _ =>
+      add_diagnostic_with_code(
+        checker,
+        "The left-hand side of a 'for...of' statement must be a variable or a property access.",
+        get_node_location(initializer),
+        TS2487,
+      )
+  }
+}
+
+///|
 /// Check for-of statement
+/// Validates TS2487: Left-hand side must be a variable
 /// Validates that right-hand side is iterable (array, string, or has [Symbol.iterator])
 fn check_for_of_statement(
   checker : TypeChecker,
   for_of_stmt : ForOfStatement,
 ) -> TypeChecker {
+  // Check the left-hand side (TS2487)
+  let checker = check_for_of_left_side(checker, for_of_stmt.initializer)
+
   // Infer the type of the iterable expression
   let (iterable_type, checker) = infer_type(checker, for_of_stmt.expression)
 
@@ -8638,6 +8746,10 @@ fn get_type_from_type_node(
           let (t, c) = symbol_type(checker)
           (Some(t), c)
         }
+        BigInt => {
+          let (t, c) = bigint_type(checker)
+          (Some(t), c)
+        }
         Object => {
           // For the object keyword type, create an empty object type
           let (info, c) = create_type_info(checker)
@@ -9050,6 +9162,7 @@ fn type_to_string(t : Type) -> String {
     Undefined(_) => "undefined"
     Null(_) => "null"
     Symbol(_) => "symbol"
+    BigInt(_) => "bigint"
     Any(_) => "any"
     Unknown(_) => "unknown"
     Never(_) => "never"

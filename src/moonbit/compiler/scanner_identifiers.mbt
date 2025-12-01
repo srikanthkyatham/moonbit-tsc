@@ -84,6 +84,7 @@ fn keyword_token(text : String, loc : SourceLocation) -> Token {
     "number" => KeywordNumber(loc)
     "string" => KeywordString(loc)
     "symbol" => KeywordSymbol(loc)
+    "bigint" => KeywordBigInt(loc)
     "object" => KeywordObject(loc)
     "void" => KeywordVoid(loc)
     "unknown" => KeywordUnknown(loc)

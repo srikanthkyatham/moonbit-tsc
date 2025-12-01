@@ -3363,18 +3363,18 @@ test "DiagnosticCode - valid class with constructor" {
 
 // TS2406: Left-hand side of for...in must be variable
 ///|
-test "DiagnosticCode - TS2406 for-in left not variable" {
+test "DiagnosticCode - TS2406 for-in left not variable - numeric literal" {
+  // Use a simple numeric literal as the left side
+  // Note: This syntax may be rejected at parse time rather than check time
   let source =
     #|const obj = { a: 1, b: 2 };
-    #|for (1 + 2 in obj) { }
+    #|for (123 in obj) { }
   let result = check_source(source)
   match result {
-    Ok(_) => () // May not be fully implemented
+    Ok(_) => assert_true(false) // Should have error
     Err(diagnostics) => {
-      // Should report TS2406 or a parser error
-      if has_error(diagnostics, 2406) {
-        assert_true(has_message(diagnostics, "for") || has_message(diagnostics, "variable"))
-      }
+      // Some kind of error should be reported (either parser or checker)
+      assert_true(diagnostics.length() > 0)
     }
   }
 }
@@ -5820,6 +5820,56 @@ test "DiagnosticCode - TS2454 initialized variable is fine" {
     Err(diagnostics) => {
       // Should NOT have TS2454 when initialized
       assert_true(not(has_error(diagnostics, 2454)))
+    }
+  }
+}
+
+// ============================================================================
+// TS2736: Operator '+' cannot be applied to type 'bigint'
+// ============================================================================
+
+///|
+test "DiagnosticCode - TS2736 unary plus on bigint" {
+  let source =
+    #|const x = 10n;
+    #|const y = +x;
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(false) // Should have error
+    Err(diagnostics) => {
+      assert_true(has_error(diagnostics, 2736))
+      assert_true(has_message(diagnostics, "Operator '+' cannot be applied to type 'bigint'"))
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - TS2736 unary plus on number is fine" {
+  let source =
+    #|const x = 10;
+    #|const y = +x;
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => {
+      // Should NOT have TS2736 for number
+      assert_true(not(has_error(diagnostics, 2736)))
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - TS2736 unary minus on bigint is fine" {
+  // Unary minus SHOULD work on bigint
+  let source =
+    #|const x = 10n;
+    #|const y = -x;
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => {
+      // Should NOT have TS2736 for unary minus
+      assert_true(not(has_error(diagnostics, 2736)))
     }
   }
 }

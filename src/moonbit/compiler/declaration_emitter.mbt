@@ -133,6 +133,7 @@ fn type_keyword_to_string(keyword : TypeKeyword) -> String {
     Number => "number"
     String => "string"
     Symbol => "symbol"
+    BigInt => "bigint"
     Object => "object"
     Const => "const" // For "as const" assertions
   }

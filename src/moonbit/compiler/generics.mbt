@@ -25,6 +25,7 @@ pub fn ast_type_to_v2(env : TypeEnv, node : Node) -> TypeV2 {
         Number => TNumber
         String => TString
         Symbol => TSymbol
+        BigInt => TBigInt
         Object => TObject(ObjectTypeV2::empty())
         Const => TAny // as const is handled elsewhere
       }

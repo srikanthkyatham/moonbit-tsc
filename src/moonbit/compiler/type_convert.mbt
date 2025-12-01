@@ -13,6 +13,7 @@ pub fn type_to_v2(ty : Type) -> TypeV2 {
     Undefined(_) => TUndefined
     Null(_) => TNull
     Symbol(_) => TSymbol
+    BigInt(_) => TBigInt
     Any(_) => TAny
     Unknown(_) => TUnknown
     Never(_) => TNever
