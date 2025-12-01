@@ -311,6 +311,12 @@ fn print_summary(
   summary : @coordinator.CompilationSummary,
   options : CLIOptions,
 ) -> Unit {
+  // If JSON output mode, use JSON format
+  if options.json_output {
+    print_json_summary(summary)
+    return
+  }
+
   // Track total diagnostics for summary
   let mut total_errors = 0
   let mut total_warnings = 0
@@ -424,6 +430,7 @@ fn print_help() -> Unit {
   println("  --watchInterval <ms>    Watch polling interval in ms (default: 500)")
   println("  --verbose               Verbose output")
   println("  --reportDiagnostics     Report all diagnostics (errors/warnings)")
+  println("  --json                  Output results as JSON for tooling integration")
   println("  --init                  Generate tsconfig.json (future)")
   println("")
   println("Examples:")
@@ -434,6 +441,7 @@ fn print_help() -> Unit {
   println("  moonbit-tsc --project tsconfig.json")
   println("  moonbit-tsc -p ./tsconfig.build.json --verbose")
   println("  moonbit-tsc --build tsconfig.json        # Build with references")
+  println("  moonbit-tsc --json src/index.ts          # JSON output for tooling")
 }
 
 ///|

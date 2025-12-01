@@ -32,6 +32,7 @@ pub(all) struct CLIOptions {
   watch : Bool
   watch_interval : Int // Polling interval in milliseconds
   report_diagnostics : Bool // Always report diagnostics, even when successful
+  json_output : Bool // Output results as JSON for tooling integration
 } derive(Show)
 
 ///|
@@ -47,6 +48,7 @@ pub fn CLIOptions::default() -> CLIOptions {
     watch: false,
     watch_interval: 500, // Default 500ms polling interval
     report_diagnostics: false,
+    json_output: false,
   }
 }
 
@@ -68,6 +70,7 @@ pub fn parse_args(args : Array[String]) -> Result[Command, String] {
   let mut watch_interval = 500
   let mut project : String? = None
   let mut report_diagnostics = false
+  let mut json_output = false
 
   let mut i = 1 // Skip program name
 
@@ -99,6 +102,7 @@ pub fn parse_args(args : Array[String]) -> Result[Command, String] {
         watch: false,
         watch_interval: 500,
         report_diagnostics: false,
+        json_output: false,
       }
       return Ok(Command::BuildReferences(build_path, options))
     } else if arg == "--project" || arg == "-p" {
@@ -129,6 +133,8 @@ pub fn parse_args(args : Array[String]) -> Result[Command, String] {
       verbose = true
     } else if arg == "--reportDiagnostics" {
       report_diagnostics = true
+    } else if arg == "--json" {
+      json_output = true
     } else if arg == "--watch" || arg == "-w" {
       watch = true
     } else if arg == "--watchInterval" {
@@ -170,6 +176,7 @@ pub fn parse_args(args : Array[String]) -> Result[Command, String] {
     watch,
     watch_interval,
     report_diagnostics,
+    json_output,
   }
 
   // If --project was specified, use project mode

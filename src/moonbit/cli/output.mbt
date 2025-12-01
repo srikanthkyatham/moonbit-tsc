@@ -173,3 +173,210 @@ pub async fn write_all_outputs(
     write_output(result, options)
   }
 }
+
+///|
+/// Parsed diagnostic structure for JSON output
+pub(all) struct DiagnosticInfo {
+  file : String
+  line : Int
+  column : Int
+  category : String // "error", "warning", "suggestion", "message"
+  code : String // "TS2322"
+  code_number : Int // 2322
+  message : String
+} derive(Show, ToJson)
+
+///|
+/// Parse a diagnostic string into structured info
+/// Format: `file:line:column - category TScode: message`
+fn parse_diagnostic_string(diag : String) -> DiagnosticInfo? {
+  // Find the pattern: file:line:col - category TSnnn: message
+  // First find the " - " separator
+  let dash_sep = " - "
+  let mut dash_idx = -1
+  for i = 0; i < diag.length() - dash_sep.length(); i = i + 1 {
+    if @utils.substr(diag, start=i, end=i + 3) == dash_sep {
+      dash_idx = i
+      break
+    }
+  }
+
+  if dash_idx == -1 {
+    return None
+  }
+
+  let file_part = @utils.substr(diag, end=dash_idx)
+  let rest = @utils.substr(diag, start=dash_idx + 3)
+
+  // Parse file:line:column
+  // Find last two colons for line and column
+  let mut last_colon = -1
+  let mut second_last_colon = -1
+  for i = file_part.length() - 1; i >= 0; i = i - 1 {
+    if file_part[i] == ':' {
+      if last_colon == -1 {
+        last_colon = i
+      } else {
+        second_last_colon = i
+        break
+      }
+    }
+  }
+
+  if second_last_colon == -1 || last_colon == -1 {
+    return None
+  }
+
+  let file = @utils.substr(file_part, end=second_last_colon)
+  let line_str = @utils.substr(file_part, start=second_last_colon + 1, end=last_colon)
+  let col_str = @utils.substr(file_part, start=last_colon + 1)
+
+  let line = try {
+    @strconv.parse_int(line_str)
+  } catch {
+    _ => return None
+  }
+
+  let column = try {
+    @strconv.parse_int(col_str)
+  } catch {
+    _ => return None
+  }
+
+  // Parse category TScode: message
+  // Find space after category
+  let mut space_idx = -1
+  for i = 0; i < rest.length(); i = i + 1 {
+    if rest[i] == ' ' {
+      space_idx = i
+      break
+    }
+  }
+
+  if space_idx == -1 {
+    return None
+  }
+
+  let category = @utils.substr(rest, end=space_idx)
+  let code_and_msg = @utils.substr(rest, start=space_idx + 1)
+
+  // Find colon after TS code
+  let mut colon_idx = -1
+  for i = 0; i < code_and_msg.length(); i = i + 1 {
+    if code_and_msg[i] == ':' {
+      colon_idx = i
+      break
+    }
+  }
+
+  if colon_idx == -1 {
+    return None
+  }
+
+  let code = @utils.substr(code_and_msg, end=colon_idx)
+  let message = @utils.substr(code_and_msg, start=colon_idx + 2) // Skip ": "
+
+  // Parse code number from TSnnnn
+  let code_number = if code.length() > 2 && code.has_prefix("TS") {
+    try {
+      @strconv.parse_int(@utils.substr(code, start=2))
+    } catch {
+      _ => 0
+    }
+  } else {
+    0
+  }
+
+  Some(DiagnosticInfo::{
+    file,
+    line,
+    column,
+    category,
+    code,
+    code_number,
+    message,
+  })
+}
+
+///|
+/// File result for JSON output
+pub(all) struct FileResult {
+  file_path : String
+  success : Bool
+  compile_time_ms : Int64
+  diagnostics : Array[DiagnosticInfo]
+} derive(Show, ToJson)
+
+///|
+/// Summary stats for JSON output
+pub(all) struct SummaryStats {
+  total_files : Int
+  successful : Int
+  failed : Int
+  total_errors : Int
+  total_warnings : Int
+  total_time_ms : Int64
+} derive(Show, ToJson)
+
+///|
+/// Full JSON output structure
+pub(all) struct JsonOutput {
+  success : Bool
+  stats : SummaryStats
+  files : Array[FileResult]
+} derive(Show, ToJson)
+
+///|
+/// Build JSON output from compilation summary
+pub fn build_json_output(
+  summary : @coordinator.CompilationSummary,
+) -> JsonOutput {
+  let mut total_errors = 0
+  let mut total_warnings = 0
+  let files : Array[FileResult] = []
+
+  for result in summary.results {
+    let diags : Array[DiagnosticInfo] = []
+
+    for diag_str in result.diagnostics {
+      match parse_diagnostic_string(diag_str) {
+        Some(diag) => {
+          diags.push(diag)
+          if diag.category == "error" {
+            total_errors = total_errors + 1
+          } else if diag.category == "warning" {
+            total_warnings = total_warnings + 1
+          }
+        }
+        None => ()
+      }
+    }
+
+    files.push(FileResult::{
+      file_path: result.file_path,
+      success: result.success,
+      compile_time_ms: result.compile_time_ms,
+      diagnostics: diags,
+    })
+  }
+
+  JsonOutput::{
+    success: summary.failed == 0 && total_errors == 0,
+    stats: SummaryStats::{
+      total_files: summary.total_files,
+      successful: summary.successful,
+      failed: summary.failed,
+      total_errors,
+      total_warnings,
+      total_time_ms: summary.total_time_ms,
+    },
+    files,
+  }
+}
+
+///|
+/// Print JSON output for compilation summary
+pub fn print_json_summary(summary : @coordinator.CompilationSummary) -> Unit {
+  let output = build_json_output(summary)
+  println(output.to_json().stringify())
+}
