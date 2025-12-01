@@ -204,6 +204,45 @@ defmodule TSC.Options do
   end
 
   # ============================================================================
+  # File Watcher Options
+  # ============================================================================
+
+  @file_watcher_schema NimbleOptions.new!([
+    dirs: [
+      type: {:list, :string},
+      default: [],
+      doc: "List of directories to watch for changes"
+    ],
+    debounce_ms: [
+      type: :pos_integer,
+      default: 100,
+      doc: "Debounce delay in milliseconds before processing changes"
+    ],
+    extensions: [
+      type: {:list, :string},
+      default: [".ts", ".tsx"],
+      doc: "File extensions to watch"
+    ]
+  ])
+
+  @doc """
+  Returns the NimbleOptions schema for file watcher configuration.
+
+  ## Options
+
+  #{NimbleOptions.docs(@file_watcher_schema)}
+  """
+  def file_watcher_schema, do: @file_watcher_schema
+
+  @doc """
+  Validates file watcher options.
+  """
+  @spec validate_file_watcher(keyword()) :: {:ok, keyword()} | {:error, NimbleOptions.ValidationError.t()}
+  def validate_file_watcher(opts) do
+    NimbleOptions.validate(opts, @file_watcher_schema)
+  end
+
+  # ============================================================================
   # API Request Options
   # ============================================================================
 
@@ -285,6 +324,10 @@ defmodule TSC.Options do
 
   defp get_allowed_keys(:pool_supervisor) do
     ~w(pool_size binary_path)
+  end
+
+  defp get_allowed_keys(:file_watcher) do
+    ~w(dirs debounce_ms extensions)
   end
 
   defp get_allowed_keys(:api_check) do

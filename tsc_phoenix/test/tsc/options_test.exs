@@ -170,6 +170,40 @@ defmodule TSC.OptionsTest do
     end
   end
 
+  describe "validate_file_watcher/1" do
+    test "accepts valid options with defaults" do
+      assert {:ok, opts} = Options.validate_file_watcher([])
+
+      assert Keyword.fetch!(opts, :dirs) == []
+      assert Keyword.fetch!(opts, :debounce_ms) == 100
+      assert Keyword.fetch!(opts, :extensions) == [".ts", ".tsx"]
+    end
+
+    test "accepts custom directories and debounce" do
+      opts = [
+        dirs: ["./src", "./lib"],
+        debounce_ms: 200,
+        extensions: [".ts", ".tsx", ".js"]
+      ]
+
+      assert {:ok, validated} = Options.validate_file_watcher(opts)
+
+      assert Keyword.fetch!(validated, :dirs) == ["./src", "./lib"]
+      assert Keyword.fetch!(validated, :debounce_ms) == 200
+      assert Keyword.fetch!(validated, :extensions) == [".ts", ".tsx", ".js"]
+    end
+
+    test "rejects invalid debounce_ms (zero)" do
+      assert {:error, %NimbleOptions.ValidationError{}} =
+               Options.validate_file_watcher(debounce_ms: 0)
+    end
+
+    test "rejects invalid dirs type" do
+      assert {:error, %NimbleOptions.ValidationError{}} =
+               Options.validate_file_watcher(dirs: "./src")
+    end
+  end
+
   describe "validate_api_check/1" do
     test "accepts valid options with defaults" do
       assert {:ok, opts} = Options.validate_api_check([])
@@ -289,6 +323,11 @@ defmodule TSC.OptionsTest do
 
     test "pool_supervisor_schema returns NimbleOptions schema" do
       schema = Options.pool_supervisor_schema()
+      assert %NimbleOptions{} = schema
+    end
+
+    test "file_watcher_schema returns NimbleOptions schema" do
+      schema = Options.file_watcher_schema()
       assert %NimbleOptions{} = schema
     end
 

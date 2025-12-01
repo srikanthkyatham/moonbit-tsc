@@ -4,17 +4,20 @@ defmodule TSC.Watcher.FileWatcher do
 
   Watches directories for changes and triggers recompilation.
   Uses file_system library for cross-platform file watching.
+
+  ## Options
+
+  #{NimbleOptions.docs(TSC.Options.file_watcher_schema())}
   """
 
   use GenServer
 
   alias TSC.Coordinator
+  alias TSC.Options
 
   require Logger
 
-  @debounce_ms 100
-
-  defstruct [:watcher_pid, :dirs, :pending_changes, :debounce_ref, :watching]
+  defstruct [:watcher_pid, :dirs, :pending_changes, :debounce_ref, :watching, :debounce_ms, :extensions]
 
   # ============================================================================
   # Public API
@@ -61,13 +64,17 @@ defmodule TSC.Watcher.FileWatcher do
   # ============================================================================
 
   @impl true
-  def init(_opts) do
+  def init(opts) do
+    {:ok, validated} = Options.validate_file_watcher(opts)
+
     state = %__MODULE__{
       watcher_pid: nil,
-      dirs: [],
+      dirs: Keyword.fetch!(validated, :dirs),
       pending_changes: MapSet.new(),
       debounce_ref: nil,
-      watching: false
+      watching: false,
+      debounce_ms: Keyword.fetch!(validated, :debounce_ms),
+      extensions: Keyword.fetch!(validated, :extensions)
     }
 
     {:ok, state}
@@ -112,7 +119,7 @@ defmodule TSC.Watcher.FileWatcher do
 
   @impl true
   def handle_info({:file_event, _watcher_pid, {path, events}}, state) do
-    if should_process?(path, events) do
+    if should_process?(path, events, state.extensions) do
       # Add to pending changes
       new_pending = MapSet.put(state.pending_changes, path)
 
@@ -121,8 +128,8 @@ defmodule TSC.Watcher.FileWatcher do
         Process.cancel_timer(state.debounce_ref)
       end
 
-      # Set new debounce timer
-      ref = Process.send_after(self(), :process_changes, @debounce_ms)
+      # Set new debounce timer using configured debounce_ms
+      ref = Process.send_after(self(), :process_changes, state.debounce_ms)
 
       {:noreply, %{state | pending_changes: new_pending, debounce_ref: ref}}
     else
@@ -208,15 +215,17 @@ defmodule TSC.Watcher.FileWatcher do
     }
   end
 
-  defp should_process?(path, events) do
-    # Only process TypeScript files
-    ts_file? = String.ends_with?(path, ".ts") or String.ends_with?(path, ".tsx")
+  defp should_process?(path, events, extensions) do
+    # Only process files with configured extensions
+    has_extension? = Enum.any?(extensions, fn ext ->
+      String.ends_with?(path, ext)
+    end)
 
     # Only process modifications and creations
     relevant_event? = Enum.any?(events, fn event ->
       event in [:modified, :created, :renamed]
     end)
 
-    ts_file? and relevant_event?
+    has_extension? and relevant_event?
   end
 end
