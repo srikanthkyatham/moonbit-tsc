@@ -125,11 +125,8 @@ defmodule TSC.Worker.CLIWorker do
       args = build_args(file, options)
 
       case System.cmd(binary_path, args, stderr_to_stdout: true) do
-        {output, 0} ->
-          {:ok, parse_success_output(file, output)}
-
-        {output, exit_code} ->
-          {:ok, parse_error_output(file, output, exit_code)}
+        {output, _exit_code} ->
+          parse_json_output(output)
       end
     else
       Logger.warning("MoonBit binary not found at #{binary_path}")
@@ -138,8 +135,8 @@ defmodule TSC.Worker.CLIWorker do
   end
 
   defp build_args(file, options) do
-    # Always use --reportDiagnostics to get type errors/warnings in output
-    args = ["--reportDiagnostics", file]
+    # Use --json for structured JSON output
+    args = ["--json", file]
 
     args = if options[:verbose], do: args ++ ["--verbose"], else: args
     args = if options[:out_dir], do: args ++ ["--outDir", options[:out_dir]], else: args
@@ -147,28 +144,69 @@ defmodule TSC.Worker.CLIWorker do
     args
   end
 
-  defp parse_success_output(_file, output) do
-    # Parse CLI output for diagnostics using the Diagnostic module
-    diagnostics = Diagnostic.parse(output)
+  defp parse_json_output(output) do
+    case Jason.decode(output) do
+      {:ok, json} ->
+        {:ok, parse_json_response(json)}
+
+      {:error, _reason} ->
+        # Fallback to text parsing if JSON parsing fails
+        Logger.warning("Failed to parse JSON output, falling back to text parsing")
+        diagnostics = Diagnostic.parse(output)
+        {:ok, %{
+          diagnostics: diagnostics,
+          diagnostics_maps: Enum.map(diagnostics, &Diagnostic.to_map/1),
+          summary: Diagnostic.summary(diagnostics),
+          exports: %{},
+          success: Enum.empty?(Diagnostic.filter_by_category(diagnostics, :error))
+        }}
+    end
+  end
+
+  defp parse_json_response(json) do
+    # Parse the JSON response from the CLI
+    # JSON format: {success, stats, files: [{file_path, success, compile_time_ms, diagnostics}]}
+    files = Map.get(json, "files", [])
+
+    # Convert JSON diagnostics to Diagnostic structs
+    diagnostics =
+      files
+      |> Enum.flat_map(fn file -> Map.get(file, "diagnostics", []) end)
+      |> Enum.map(&json_diagnostic_to_struct/1)
+
+    stats = Map.get(json, "stats", %{})
 
     %{
       diagnostics: diagnostics,
       diagnostics_maps: Enum.map(diagnostics, &Diagnostic.to_map/1),
-      summary: Diagnostic.summary(diagnostics),
-      exports: %{},  # CLI doesn't output exports yet
-      success: Enum.empty?(Diagnostic.filter_by_category(diagnostics, :error))
+      summary: %{
+        total: length(diagnostics),
+        errors: stats["total_errors"] || 0,
+        warnings: stats["total_warnings"] || 0,
+        suggestions: 0,
+        by_type: diagnostics |> Enum.group_by(& &1.error_type) |> Enum.map(fn {k, v} -> {k, length(v)} end) |> Map.new(),
+        files_with_errors: length(files)
+      },
+      exports: %{},
+      success: Map.get(json, "success", false),
+      stats: stats
     }
   end
 
-  defp parse_error_output(_file, output, _exit_code) do
-    diagnostics = Diagnostic.parse(output)
+  defp json_diagnostic_to_struct(diag) do
+    code_number = diag["code_number"] || 0
 
-    %{
-      diagnostics: diagnostics,
-      diagnostics_maps: Enum.map(diagnostics, &Diagnostic.to_map/1),
-      summary: Diagnostic.summary(diagnostics),
-      exports: %{},
-      success: false
+    %Diagnostic{
+      file: diag["file"],
+      line: diag["line"],
+      column: diag["column"],
+      end_line: nil,
+      end_column: nil,
+      category: String.to_atom(diag["category"] || "error"),
+      code: diag["code"],
+      code_number: code_number,
+      message: diag["message"],
+      error_type: Diagnostic.categorize_error(code_number)
     }
   end
 
