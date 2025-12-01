@@ -14,7 +14,7 @@ pub(all) enum Command {
   Compile(Array[String], CLIOptions)
   CompileProject(String, CLIOptions) // tsconfig.json path
   BuildReferences(String, CLIOptions) // Build project with all references
-  ListImports(String) // List imports from a file
+  ListImports(String, Bool) // List imports from a file (path, json_output)
   Worker
   Version
   Help
@@ -111,7 +111,17 @@ pub fn parse_args(args : Array[String]) -> Result[Command, String] {
       if i >= args.length() {
         return Err("--list-imports requires a file path")
       }
-      return Ok(Command::ListImports(args[i]))
+      let file_path = args[i]
+      // Check if --json was already parsed or comes after
+      let mut list_json = json_output
+      // Look ahead for --json flag
+      for j = i + 1; j < args.length(); j = j + 1 {
+        if args[j] == "--json" {
+          list_json = true
+          break
+        }
+      }
+      return Ok(Command::ListImports(file_path, list_json))
     } else if arg == "--project" || arg == "-p" {
       i = i + 1
       if i >= args.length() {

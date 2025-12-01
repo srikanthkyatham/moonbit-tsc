@@ -29,7 +29,8 @@ async fn async_main() -> Unit {
     Ok(Command::Version) => print_version()
     Ok(Command::Worker) => run_worker_mode()
     Ok(Command::Init) => print_init_message()
-    Ok(Command::ListImports(file_path)) => run_list_imports(file_path)
+    Ok(Command::ListImports(file_path, json_output)) =>
+      run_list_imports(file_path, json_output)
     Ok(Command::Compile(files, options)) => run_compile(files, options)
     Ok(Command::CompileProject(tsconfig_path, options)) =>
       run_project_compile(tsconfig_path, options)
@@ -462,7 +463,7 @@ fn print_init_message() -> Unit {
 
 ///|
 /// List imports from a TypeScript file
-async fn run_list_imports(file_path : String) -> Unit raise Error {
+async fn run_list_imports(file_path : String, json_output : Bool) -> Unit raise Error {
   // Read the file
   let data = @fs.read_file(file_path)
   let source = data.text()
@@ -474,19 +475,94 @@ async fn run_list_imports(file_path : String) -> Unit raise Error {
       // Get imports using the new API
       let imports = @compiler.get_imports(source_file)
 
-      // Print each import
-      if imports.length() == 0 {
-        println("No imports found in " + file_path)
+      if json_output {
+        // JSON output format
+        print_list_imports_json(file_path, imports)
       } else {
-        println("Imports in " + file_path + ":")
-        for import_decl in imports {
-          let type_prefix = if import_decl.is_type_only { "(type) " } else { "" }
-          println("  " + type_prefix + import_decl.module_specifier)
+        // Text output format
+        if imports.length() == 0 {
+          println("No imports found in " + file_path)
+        } else {
+          println("Imports in " + file_path + ":")
+          for import_decl in imports {
+            let type_prefix = if import_decl.is_type_only { "(type) " } else { "" }
+            println("  " + type_prefix + import_decl.module_specifier)
+          }
         }
       }
     }
-    Err(_) => println("Error: Failed to parse " + file_path)
+    Err(_) => {
+      if json_output {
+        println("{\"file\": \"" + escape_json_string(file_path) + "\", \"error\": \"Failed to parse file\", \"imports\": []}")
+      } else {
+        println("Error: Failed to parse " + file_path)
+      }
+    }
   }
+}
+
+///|
+/// Print imports in JSON format
+fn print_list_imports_json(file_path : String, imports : Array[@compiler.ImportDeclaration]) -> Unit {
+  let mut json = "{\n"
+  json = json + "  \"file\": \"" + escape_json_string(file_path) + "\",\n"
+  json = json + "  \"imports\": ["
+
+  if imports.length() > 0 {
+    json = json + "\n"
+    for i, import_decl in imports {
+      json = json + "    {\n"
+      json = json + "      \"moduleSpecifier\": \"" + escape_json_string(import_decl.module_specifier) + "\",\n"
+      json = json + "      \"isTypeOnly\": " + import_decl.is_type_only.to_string()
+
+      // Add import clause details if present
+      match import_decl.import_clause {
+        Some(clause) => {
+          json = json + ",\n"
+          // Default import name
+          match clause.name {
+            Some(name) => json = json + "      \"defaultImport\": \"" + escape_json_string(name) + "\""
+            None => json = json + "      \"defaultImport\": null"
+          }
+
+          // Named bindings
+          match clause.named_bindings {
+            Some(@compiler.NamedImports::NamedImports(specifiers, _)) => {
+              json = json + ",\n      \"namedImports\": ["
+              for j, spec in specifiers {
+                json = json + "\"" + escape_json_string(spec.name) + "\""
+                if j < specifiers.length() - 1 {
+                  json = json + ", "
+                }
+              }
+              json = json + "]"
+            }
+            Some(@compiler.NamespaceImport(ns_name, _)) => {
+              json = json + ",\n      \"namespaceImport\": \"" + escape_json_string(ns_name) + "\""
+            }
+            None => ()
+          }
+        }
+        None => ()
+      }
+
+      json = json + "\n    }"
+      if i < imports.length() - 1 {
+        json = json + ","
+      }
+      json = json + "\n"
+    }
+    json = json + "  "
+  }
+
+  json = json + "]\n}"
+  println(json)
+}
+
+///|
+/// Escape a string for JSON output
+fn escape_json_string(s : String) -> String {
+  @compiler.escape_json_string(s)
 }
 
 ///|
