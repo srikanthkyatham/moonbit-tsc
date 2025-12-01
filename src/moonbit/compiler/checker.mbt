@@ -7854,16 +7854,48 @@ fn check_try_statement(
     Some(catch_clause) => {
       // Push a local scope for the catch block
       let checker = push_local_scope(checker)
+
+      // Check type annotation if present (TS2467)
+      let (catch_type, checker) = match catch_clause.type_annotation {
+        Some(type_node) => {
+          // Validate the type annotation is 'any' or 'unknown'
+          match get_type_from_type_node(checker, type_node) {
+            (Some(t), checker) => {
+              let is_valid = match t {
+                Any(_) | Unknown(_) => true
+                _ => false
+              }
+              if is_valid {
+                (t, checker)
+              } else {
+                // TS2467: Catch clause variable type must be 'any' or 'unknown'
+                let var_name = match catch_clause.variable_declaration {
+                  Some(Identifier(id)) => id.name
+                  _ => "e"
+                }
+                let checker = add_diagnostic_with_code(
+                  checker,
+                  "Catch clause variable type annotation must be 'any' or 'unknown' if specified.",
+                  get_node_location(type_node),
+                  TS2467,
+                )
+                any_type(checker)
+              }
+            }
+            (None, checker) => any_type(checker)
+          }
+        }
+        None =>
+          // No type annotation - default to 'any'
+          any_type(checker)
+      }
+
       // Add the catch clause variable to scope if present
       let checker = match catch_clause.variable_declaration {
         Some(var_decl) => {
           // The variable_declaration is typically an Identifier or BindingPattern
           match var_decl {
-            Identifier(id) => {
-              // Catch variable has type 'unknown' in strict mode, 'any' otherwise
-              let (catch_type, checker) = any_type(checker)
-              add_local_variable(checker, id.name, catch_type)
-            }
+            Identifier(id) => add_local_variable(checker, id.name, catch_type)
             _ => checker
           }
         }

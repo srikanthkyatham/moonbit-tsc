@@ -6443,7 +6443,7 @@ fn parse_try_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
       let parser = advance_parser(parser) // consume 'catch'
 
       // Optional parameter (can be identifier, array pattern, or object pattern)
-      let (parameter, parser) = match current_token(parser) {
+      let (parameter, type_annotation, parser) = match current_token(parser) {
         OpenParen(_) => {
           let parser = advance_parser(parser)
           // Parse catch parameter: identifier, array pattern, or object pattern
@@ -6471,18 +6471,16 @@ fn parse_try_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
               }
           }
           // Optional type annotation: catch (e: unknown)
-          let (param, parser) = match (param, current_token(parser)) {
+          let (param, type_annotation, parser) = match (param, current_token(parser)) {
             (Some(p), Colon(_)) => {
               let parser = advance_parser(parser)
-              // Parse the type but we don't store it in catch clause yet
-              // The type annotation is parsed but the catch variable binding
-              // will still work with the identifier/pattern
+              // Parse the type annotation
               match parse_type(parser) {
-                Ok((_, parser)) => (Some(p), parser)
-                Err(parser) => (Some(p), parser)
+                Ok((type_node, parser)) => (Some(p), Some(type_node), parser)
+                Err(parser) => (Some(p), None, parser)
               }
             }
-            (p, _) => (p, parser)
+            (p, _) => (p, None, parser)
           }
           let parser = match current_token(parser) {
             CloseParen(_) => advance_parser(parser)
@@ -6496,9 +6494,9 @@ fn parse_try_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
                 ),
               )
           }
-          (param, parser)
+          (param, type_annotation, parser)
         }
-        _ => (None, parser)
+        _ => (None, None, parser)
       }
 
       // Parse catch block
@@ -6517,6 +6515,7 @@ fn parse_try_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
       let catch_end = get_location(catch_block)
       let clause = CatchClause::{
         variable_declaration: parameter,
+        type_annotation,
         block: catch_block,
         location: SourceLocation::new(
           catch_start.file_path,

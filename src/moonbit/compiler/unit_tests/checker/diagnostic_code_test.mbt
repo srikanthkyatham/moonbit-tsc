@@ -4458,8 +4458,7 @@ test "DiagnosticCode - valid Promise-like interface" {
 // ============================================================================
 
 ///|
-test "DiagnosticCode - TS2467 catch clause variable type (not detected yet)" {
-  // Note: This tests the error code structure; detection not yet implemented
+test "DiagnosticCode - TS2467 catch clause variable type" {
   let source =
     #|try {
     #|  throw new Error("oops");
@@ -4468,11 +4467,10 @@ test "DiagnosticCode - TS2467 catch clause variable type (not detected yet)" {
     #|}
   let result = check_source(source)
   match result {
-    Ok(_) => () // Detection not implemented yet
+    Ok(_) => assert_true(false) // Should detect invalid catch type annotation
     Err(diagnostics) => {
-      if has_error(diagnostics, 2467) {
-        assert_true(has_message(diagnostics, "catch") || has_message(diagnostics, "any") || has_message(diagnostics, "unknown"))
-      }
+      // Should report TS2467 for non-any/unknown catch type annotation
+      assert_true(has_error(diagnostics, 2467))
     }
   }
 }

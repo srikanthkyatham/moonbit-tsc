@@ -1414,6 +1414,10 @@ fn transform_try_statement(ts : TryStatement, ctx : TransformerContext) -> Node 
             Some(vd) => Some(transform(vd, ctx))
             None => None
           },
+          type_annotation: match cc.type_annotation {
+            Some(ta) => Some(transform(ta, ctx))
+            None => None
+          },
           block: transform(cc.block, ctx),
           location: cc.location,
         })

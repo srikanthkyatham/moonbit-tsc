@@ -428,6 +428,7 @@ pub struct TryStatement {
 ///|
 pub struct CatchClause {
   variable_declaration : Node?
+  type_annotation : Node? // Optional type annotation: catch (e: unknown)
   block : Node
   location : SourceLocation
 } derive(Show)
