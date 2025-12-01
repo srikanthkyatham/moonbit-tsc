@@ -2055,12 +2055,66 @@ fn get_symbol_constructor_type(checker : TypeChecker) -> (Type, TypeChecker) {
 fn get_error_constructor_type(checker : TypeChecker) -> (Type, TypeChecker) {
   let (id, checker) = next_type_id(checker)
   let default_flags = TypeFlags::default()
+  let info = TypeInfo::{ id: 0, flags: default_flags }
 
-  // Error constructor returns an error object
+  // Error instance type - returned when constructed
+  let error_instance_properties : Map[String, PropertySignature] = Map::new()
+  error_instance_properties.set(
+    "message",
+    PropertySignature::{
+      name: "message",
+      prop_type: Type::String(info),
+      is_optional: false,
+      is_readonly: false,
+    },
+  )
+  error_instance_properties.set(
+    "name",
+    PropertySignature::{
+      name: "name",
+      prop_type: Type::String(info),
+      is_optional: false,
+      is_readonly: false,
+    },
+  )
+  error_instance_properties.set(
+    "stack",
+    PropertySignature::{
+      name: "stack",
+      prop_type: Type::String(info),
+      is_optional: true,
+      is_readonly: false,
+    },
+  )
+
+  let (instance_id, checker) = next_type_id(checker)
+  let error_instance_type = Type::Object(ObjectType::{
+    properties: error_instance_properties,
+    call_signatures: [],
+    construct_signatures: [],
+    index_signatures: [],
+    info: TypeInfo::{ id: instance_id, flags: default_flags },
+  })
+
+  // Construct signature: new Error(message?: string) => Error
+  let construct_sig = CheckerSignature::{
+    parameters: [
+      CheckerParameter::{
+        name: "message",
+        param_type: Type::String(info),
+        is_optional: true,
+        is_rest: false,
+      },
+    ],
+    return_type: error_instance_type,
+    type_parameters: [],
+  }
+
+  // Error constructor type with construct signature
   let error_type = Type::Object(ObjectType::{
     properties: Map::new(),
     call_signatures: [],
-    construct_signatures: [],
+    construct_signatures: [construct_sig],
     index_signatures: [],
     info: TypeInfo::{ id, flags: default_flags },
   })
@@ -4305,16 +4359,24 @@ fn infer_property_access_type(
     None => {
       // TS2459: Type has no property and no string index signature
       // Only emit if the object type is a concrete type (not any/unknown)
+      // Also don't error for 'this' expressions - TypeScript allows implicit property assignment
+      let is_this_expr = match prop.expression {
+        ThisExpression(_) => true
+        _ => false
+      }
       let checker = match object_type {
         Any(_) | Unknown(_) => checker // Don't error for any/unknown
-        Object(_) => {
-          add_diagnostic_with_code(
-            checker,
-            "Property '\{prop.name}' does not exist on type '\{type_to_string(object_type)}'",
-            get_node_location(prop.expression),
-            TS2339, // TS2339 is the standard "property does not exist" error
-          )
-        }
+        Object(_) =>
+          if is_this_expr {
+            checker // Don't error for property access on 'this' - allows implicit property assignment
+          } else {
+            add_diagnostic_with_code(
+              checker,
+              "Property '\{prop.name}' does not exist on type '\{type_to_string(object_type)}'",
+              get_node_location(prop.expression),
+              TS2339, // TS2339 is the standard "property does not exist" error
+            )
+          }
         _ => checker // Don't error for other types yet
       }
       any_type(checker)
@@ -6098,8 +6160,14 @@ fn check_function_declaration(
     }
   }
 
+  // Check function body first (so variables are declared in scope)
+  let checker = match func.body {
+    Some(body) => check_statement(checker, body)
+    None => checker
+  }
+
   // Check return type consistency if a return type is declared
-  // This must happen AFTER parameters are added to scope
+  // This must happen AFTER body is checked so variables are in scope
   let checker = match func.return_type {
     Some(return_type_node) =>
       match get_type_from_type_node(checker, return_type_node) {
@@ -6107,12 +6175,6 @@ fn check_function_declaration(
           check_return_type_consistency(c, func, declared_return)
         (None, c) => c
       }
-    None => checker
-  }
-
-  // Check function body
-  let checker = match func.body {
-    Some(body) => check_statement(checker, body)
     None => checker
   }
 
