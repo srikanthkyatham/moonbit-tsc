@@ -6393,3 +6393,98 @@ test "DiagnosticCode - TS2709 namespace import used as type in return type" {
     }
   }
 }
+
+// ============================================================================
+// TS2484: Export declaration conflicts
+// ============================================================================
+
+///|
+test "DiagnosticCode - TS2484 duplicate re-export same name" {
+  let source =
+    #|export { foo } from './a';
+    #|export { foo } from './b';
+  let result = check_source(source)
+  match result {
+    Ok(_) => fail!("Should have detected duplicate export")
+    Err(diagnostics) => {
+      assert_true(has_error(diagnostics, 2484))
+      assert_true(has_message(diagnostics, "Export declaration conflicts"))
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - TS2484 duplicate re-export with alias" {
+  let source =
+    #|export { foo as bar } from './a';
+    #|export { baz as bar } from './b';
+  let result = check_source(source)
+  match result {
+    Ok(_) => fail!("Should have detected duplicate export alias")
+    Err(diagnostics) => {
+      assert_true(has_error(diagnostics, 2484))
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - TS2484 different export names is fine" {
+  let source =
+    #|export { foo } from './a';
+    #|export { bar } from './b';
+    #|const x = 1;
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => {
+      // Should NOT have TS2484 for different export names
+      assert_true(not(has_error(diagnostics, 2484)))
+    }
+  }
+}
+
+// ============================================================================
+// TS2502: Referenced in its own base expression
+// ============================================================================
+
+///|
+test "DiagnosticCode - TS2502 class extends itself" {
+  let source =
+    #|class Foo extends Foo {}
+  let result = check_source(source)
+  match result {
+    Ok(_) => fail!("Should have detected class self-reference")
+    Err(diagnostics) => {
+      assert_true(has_error(diagnostics, 2502))
+      assert_true(has_message(diagnostics, "referenced directly or indirectly in its own base expression"))
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - TS2502 class extends different class is fine" {
+  let source =
+    #|class Base {}
+    #|class Derived extends Base {}
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => {
+      // Should NOT have TS2502 for normal inheritance
+      assert_true(not(has_error(diagnostics, 2502)))
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - TS2502 class extends with type arguments" {
+  let source =
+    #|class Container<T> extends Container<T> {}
+  let result = check_source(source)
+  match result {
+    Ok(_) => fail!("Should have detected class self-reference")
+    Err(diagnostics) => {
+      assert_true(has_error(diagnostics, 2502))
+    }
+  }
+}

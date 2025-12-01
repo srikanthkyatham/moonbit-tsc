@@ -1910,14 +1910,28 @@ fn declare_symbol(binder : Binder, name : String, symbol : Symbol) -> Binder {
         }
       } else {
         // Duplicate declaration - add diagnostic
+        // TS2484: Use specific error for export conflicts
+        let is_export_conflict = (
+            existing_symbol.kind == SymbolKind::ExportValue ||
+            existing_symbol.kind == SymbolKind::ExportType
+          ) &&
+          (symbol.kind == SymbolKind::ExportValue || symbol.kind == SymbolKind::ExportType)
+        let (message, code) = if is_export_conflict {
+          (
+            "Export declaration conflicts with exported declaration of '\{name}'.",
+            2484,
+          )
+        } else {
+          ("Duplicate identifier '" + name + "'", 2300)
+        }
         let diagnostic = Diagnostic::error(
-          "Duplicate identifier '" + name + "'",
+          message,
           SourceLocation::new(
             binder.file_path,
             Position::{ line: 0, column: 0, offset: 0 },
             Position::{ line: 0, column: 0, offset: 0 },
           ),
-          2300,
+          code,
         )
         let new_diagnostics = binder.diagnostics
         new_diagnostics.push(diagnostic)
