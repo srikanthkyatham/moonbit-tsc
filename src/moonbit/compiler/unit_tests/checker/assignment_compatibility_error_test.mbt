@@ -503,11 +503,10 @@ test "checker error detection - TS2540 readonly interface property" {
     #|config.name = "changed";
   let result = check_ts_source(source)
   match result {
-    Ok(_) => () // May not be implemented yet
+    Ok(_) => assert_true(false, msg="Expected error TS2540 but got no errors")
     Err(diagnostics) => {
-      if check_has_error_code(diagnostics, 2540) {
-        assert_true(check_has_error_message(diagnostics, "readonly"))
-      }
+      assert_true(check_has_error_code(diagnostics, 2540), msg="Expected error TS2540")
+      assert_true(check_has_error_message(diagnostics, "readonly"), msg="Expected 'readonly' in message")
     }
   }
 }
@@ -523,11 +522,10 @@ test "checker error detection - TS2540 readonly class property" {
     #|p.id = 2;
   let result = check_ts_source(source)
   match result {
-    Ok(_) => () // May not be implemented yet
+    Ok(_) => assert_true(false, msg="Expected error TS2540 but got no errors")
     Err(diagnostics) => {
-      if check_has_error_code(diagnostics, 2540) {
-        assert_true(check_has_error_message(diagnostics, "readonly"))
-      }
+      assert_true(check_has_error_code(diagnostics, 2540), msg="Expected error TS2540")
+      assert_true(check_has_error_message(diagnostics, "readonly"), msg="Expected 'readonly' in message")
     }
   }
 }

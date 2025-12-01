@@ -168,11 +168,10 @@ test "DiagnosticCode - TS2351 expression is not constructable" {
     #|new x();
   let result = check_source(source)
   match result {
-    Ok(_) => () // May not be implemented yet
+    Ok(_) => assert_true(false, msg="Expected error TS2351 but got no errors")
     Err(diagnostics) => {
-      if has_error(diagnostics, 2351) {
-        assert_true(has_message(diagnostics, "not constructable"))
-      }
+      assert_true(has_error(diagnostics, 2351), msg="Expected error TS2351")
+      assert_true(has_message(diagnostics, "not constructable"), msg="Expected 'not constructable' in message")
     }
   }
 }
@@ -224,11 +223,11 @@ test "DiagnosticCode - TS2365 operator cannot be applied" {
     #|const result = "hello" - "world";
   let result = check_source(source)
   match result {
-    Ok(_) => () // May not be implemented yet
+    Ok(_) => assert_true(false, msg="Expected error TS2365 but got no errors")
     Err(diagnostics) => {
-      if has_error(diagnostics, 2365) {
-        assert_true(has_message(diagnostics, "cannot be applied"))
-      }
+      assert_true(has_error(diagnostics, 2365), msg="Expected error TS2365")
+      assert_true(has_message(diagnostics, "cannot be applied"), msg="Expected 'cannot be applied' in message")
+      assert_true(has_message(diagnostics, "string"), msg="Expected 'string' in message")
     }
   }
 }
@@ -3975,10 +3974,12 @@ test "DiagnosticCode - TS2551: property does not exist did you mean" {
     #|const n = p.nme;
   let result = check_source(source)
   match result {
-    Ok(_) => assert_true(false) // Should detect typo
+    Ok(_) => assert_true(false, msg="Expected error TS2551 but got no errors")
     Err(diagnostics) => {
-      // May produce TS2339 for property not existing
-      assert_true(has_error(diagnostics, 2551) || has_error(diagnostics, 2339))
+      // Should produce TS2551 with "Did you mean" suggestion
+      assert_true(has_error(diagnostics, 2551), msg="Expected error TS2551")
+      assert_true(has_message(diagnostics, "Did you mean"), msg="Expected 'Did you mean' in message")
+      assert_true(has_message(diagnostics, "name"), msg="Expected 'name' suggestion in message")
     }
   }
 }

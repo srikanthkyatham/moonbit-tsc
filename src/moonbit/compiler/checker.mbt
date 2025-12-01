@@ -3083,6 +3083,17 @@ fn infer_binary_expression_type(
           }
           (checker, left_type)
         }
+        PropertyAccessExpression(prop) => {
+          // Check for readonly property assignment (TS2540)
+          let (object_type, c) = infer_type(checker, prop.expression)
+          let checker = check_readonly_property_assignment(
+            c,
+            object_type,
+            prop.name,
+            get_node_location(BinaryExpression(bin_expr)),
+          )
+          (checker, left_type)
+        }
         _ => (checker, left_type)
       }
       // Check type compatibility for assignments (using declared type for identifiers, inferred type for others)
@@ -4267,6 +4278,48 @@ fn check_const_assignment(
 }
 
 ///|
+/// Check assignment to readonly property (TS2540)
+fn check_readonly_property_assignment(
+  checker : TypeChecker,
+  object_type : Type,
+  prop_name : String,
+  location : SourceLocation,
+) -> TypeChecker {
+  match object_type {
+    Object(obj_type) => {
+      // Check if the property exists and is readonly
+      match obj_type.properties.get(prop_name) {
+        Some(prop_sig) =>
+          if prop_sig.is_readonly {
+            add_diagnostic_with_code(
+              checker,
+              "Cannot assign to '\{prop_name}' because it is a readonly property.",
+              location,
+              DiagnosticCode::TS2540,
+            )
+          } else {
+            checker
+          }
+        None => checker // Property not found, will be caught by other checks
+      }
+    }
+    TypeReference(type_ref) => {
+      // Resolve the type reference and check
+      match lookup_symbol(checker, type_ref.name) {
+        Some(symbol) =>
+          match get_symbol_type(checker, symbol) {
+            (Some(resolved), c) =>
+              check_readonly_property_assignment(c, resolved, prop_name, location)
+            (None, _) => checker
+          }
+        None => checker
+      }
+    }
+    _ => checker
+  }
+}
+
+///|
 /// Validate function return statements
 fn check_return_type_consistency(
   checker : TypeChecker,
@@ -4574,6 +4627,40 @@ fn class_has_static_member(
 }
 
 ///|
+/// Find a similar property name from an object type
+/// Returns Some(name) if a similar property is found, None otherwise
+fn find_similar_property(object_type : Type, prop_name : String) -> String? {
+  let properties = match object_type {
+    Object(obj_type) => obj_type.properties
+    _ => return None
+  }
+
+  let mut best_match : String? = None
+  let mut best_distance = 3 // Maximum distance threshold for suggestions
+
+  for entry in properties.iter() {
+    let candidate = entry.0
+    // Skip if the candidate is too different in length
+    let len_diff = if candidate.length() > prop_name.length() {
+      candidate.length() - prop_name.length()
+    } else {
+      prop_name.length() - candidate.length()
+    }
+    if len_diff > 2 {
+      continue
+    }
+
+    let distance = levenshtein_distance(prop_name, candidate)
+    if distance < best_distance && distance > 0 {
+      best_distance = distance
+      best_match = Some(candidate)
+    }
+  }
+
+  best_match
+}
+
+///|
 /// Check if a property is a static member of a class
 /// Returns (is_static, class_name) if the property is a static member
 /// Checks both TypeReference types and Object types with class_name tracking
@@ -4686,12 +4773,23 @@ fn infer_property_access_type(
               TS2576,
             )
           } else {
-            add_diagnostic_with_code(
-              checker,
-              "Property '\{prop.name}' does not exist on type '\{type_to_string(object_type)}'",
-              get_node_location(prop.expression),
-              TS2339, // TS2339 is the standard "property does not exist" error
-            )
+            // Check for similar property names to provide "Did you mean?" suggestions
+            match find_similar_property(object_type, prop.name) {
+              Some(suggestion) =>
+                add_diagnostic_with_code(
+                  checker,
+                  "Property '\{prop.name}' does not exist on type '\{type_to_string(object_type)}'. Did you mean '\{suggestion}'?",
+                  get_node_location(prop.expression),
+                  TS2551, // TS2551: Property does not exist, did you mean?
+                )
+              None =>
+                add_diagnostic_with_code(
+                  checker,
+                  "Property '\{prop.name}' does not exist on type '\{type_to_string(object_type)}'",
+                  get_node_location(prop.expression),
+                  TS2339, // TS2339 is the standard "property does not exist" error
+                )
+            }
           }
         _ => checker // Don't error for other types yet
       }
@@ -5045,6 +5143,24 @@ fn infer_new_expression_type(
           "'new' expression, whose target lacks a construct signature, implicitly has an 'any' type",
           get_node_location(new_expr.expression),
           TS2747,
+        )
+      // Primitive types are not constructable - emit TS2351
+      Number(_)
+      | String(_)
+      | Boolean(_)
+      | Void(_)
+      | Null(_)
+      | Undefined(_)
+      | NumberLiteral(_, _)
+      | StringLiteral(_, _)
+      | BooleanLiteral(_, _)
+      | Never(_)
+      | Symbol(_) =>
+        add_diagnostic_with_code(
+          checker,
+          "This expression is not constructable. Type '\{type_to_string(expr_type)}' has no construct signatures.",
+          get_node_location(new_expr.expression),
+          TS2351,
         )
       _ => checker
     }
@@ -6401,7 +6517,30 @@ fn check_tuple_assignability_detailed(
 }
 
 ///|
+/// Convert binary operator to string for error messages
+fn binary_operator_to_string(op : BinaryOperator) -> String {
+  match op {
+    Add => "+"
+    Subtract => "-"
+    Multiply => "*"
+    Divide => "/"
+    Remainder => "%"
+    Exponentiate => "**"
+    BitwiseAnd => "&"
+    BitwiseOr => "|"
+    BitwiseXor => "^"
+    LeftShift => "<<"
+    RightShift => ">>"
+    UnsignedRightShift => ">>>"
+    LogicalAnd => "&&"
+    LogicalOr => "||"
+    _ => "operator"
+  }
+}
+
+///|
 /// Check numeric operands
+/// Emits TS2365: Operator 'X' cannot be applied to types 'Y' and 'Z'
 fn check_numeric_operands(
   checker : TypeChecker,
   left : Type,
@@ -6409,22 +6548,19 @@ fn check_numeric_operands(
   operator : BinaryOperator,
   location : SourceLocation,
 ) -> TypeChecker {
-  let checker = if !is_numeric_type(left) {
+  let left_is_numeric = is_numeric_type(left)
+  let right_is_numeric = is_numeric_type(right)
+
+  // If both operands are non-numeric or one is non-numeric, emit TS2365
+  if not(left_is_numeric) || not(right_is_numeric) {
+    let op_str = binary_operator_to_string(operator)
+    let left_str = type_to_string(left)
+    let right_str = type_to_string(right)
     add_diagnostic_with_code(
       checker,
-      "Left operand must be of type 'number'",
+      "Operator '\{op_str}' cannot be applied to types '\{left_str}' and '\{right_str}'",
       location,
-      TS2363,
-    )
-  } else {
-    checker
-  }
-  if !is_numeric_type(right) {
-    add_diagnostic_with_code(
-      checker,
-      "Right operand must be of type 'number'",
-      location,
-      TS2363,
+      TS2365,
     )
   } else {
     checker
@@ -8146,11 +8282,13 @@ fn resolve_interface_type(
               None => any_type(checker)
             }
             checker = c
+            // Check if property has readonly modifier
+            let has_readonly = has_modifier(prop.modifiers, Modifier::Readonly)
             properties.set(prop.name, {
               name: prop.name,
               prop_type,
-              is_optional: false,
-              is_readonly: false,
+              is_optional: prop.is_optional,
+              is_readonly: has_readonly,
             })
           }
           MethodDeclaration(meth) => {
