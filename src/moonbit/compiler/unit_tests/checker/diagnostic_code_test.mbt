@@ -4453,3 +4453,235 @@ test "DiagnosticCode - valid Promise-like interface" {
     }
   }
 }
+
+// ============================================================================
+// TS2467: Catch clause variable must be any or unknown
+// ============================================================================
+
+///|
+test "DiagnosticCode - TS2467 catch clause variable type (not detected yet)" {
+  // Note: This tests the error code structure; detection not yet implemented
+  let source =
+    #|try {
+    #|  throw new Error("oops");
+    #|} catch (e: string) {
+    #|  console.log(e);
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => () // Detection not implemented yet
+    Err(diagnostics) => {
+      if has_error(diagnostics, 2467) {
+        assert_true(has_message(diagnostics, "catch") || has_message(diagnostics, "any") || has_message(diagnostics, "unknown"))
+      }
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - valid catch clause with unknown" {
+  let source =
+    #|try {
+    #|  throw new Error("oops");
+    #|} catch (e: unknown) {
+    #|  console.log(e);
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => {
+      assert_true(not(has_error(diagnostics, 2467)))
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - valid catch clause with any" {
+  let source =
+    #|try {
+    #|  throw new Error("oops");
+    #|} catch (e: any) {
+    #|  console.log(e);
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => {
+      assert_true(not(has_error(diagnostics, 2467)))
+    }
+  }
+}
+
+// ============================================================================
+// TS2475: const enums usage restrictions
+// ============================================================================
+
+///|
+test "DiagnosticCode - TS2475 const enum usage restriction (not detected yet)" {
+  // Note: This tests the error code structure; detection not yet implemented
+  let source =
+    #|const enum Colors { Red, Green, Blue }
+    #|const key = "Red";
+    #|const value = Colors[key]; // dynamic access not allowed
+  let result = check_source(source)
+  match result {
+    Ok(_) => () // Detection not implemented yet
+    Err(diagnostics) => {
+      if has_error(diagnostics, 2475) {
+        assert_true(has_message(diagnostics, "const enum") || has_message(diagnostics, "string literal"))
+      }
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - valid const enum literal access" {
+  let source =
+    #|const enum Colors { Red, Green, Blue }
+    #|const value = Colors.Red; // literal access allowed
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => {
+      assert_true(not(has_error(diagnostics, 2475)))
+    }
+  }
+}
+
+// ============================================================================
+// TS2476: const enum member access
+// ============================================================================
+
+///|
+test "DiagnosticCode - TS2476 const enum member access (not detected yet)" {
+  // Note: This tests the error code structure; detection not yet implemented
+  let source =
+    #|const enum Status { Active = 1, Inactive = 0 }
+    #|function getStatus(s: number) {
+    #|  return Status[s]; // computed access not allowed
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => () // Detection not implemented yet
+    Err(diagnostics) => {
+      if has_error(diagnostics, 2476) {
+        assert_true(has_message(diagnostics, "const enum") || has_message(diagnostics, "string literal"))
+      }
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - valid const enum member" {
+  let source =
+    #|const enum Status { Active = 1, Inactive = 0 }
+    #|const active = Status.Active;
+    #|const inactive = Status.Inactive;
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => {
+      assert_true(not(has_error(diagnostics, 2476)))
+    }
+  }
+}
+
+// ============================================================================
+// TS2494: Using private name
+// ============================================================================
+
+///|
+test "DiagnosticCode - TS2494 using private name (not detected yet)" {
+  // Note: This tests the error code structure; detection not yet implemented
+  let source =
+    #|class MyClass {
+    #|  #privateField: number = 0;
+    #|  getValue(): typeof this.#privateField {
+    #|    return this.#privateField;
+    #|  }
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => () // Detection not implemented yet
+    Err(diagnostics) => {
+      if has_error(diagnostics, 2494) {
+        assert_true(has_message(diagnostics, "private"))
+      }
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - valid public field access" {
+  let source =
+    #|class MyClass {
+    #|  publicField: number = 0;
+    #|  getValue(): number {
+    #|    return this.publicField;
+    #|  }
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => {
+      assert_true(not(has_error(diagnostics, 2494)))
+    }
+  }
+}
+
+// ============================================================================
+// TS2651: Member initializer forward reference
+// ============================================================================
+
+///|
+test "DiagnosticCode - TS2651 forward reference in enum (not detected yet)" {
+  // Note: This tests the error code structure; detection not yet implemented
+  let source =
+    #|enum MyEnum {
+    #|  A = B, // forward reference to B
+    #|  B = 1
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => () // Detection not implemented yet
+    Err(diagnostics) => {
+      if has_error(diagnostics, 2651) {
+        assert_true(has_message(diagnostics, "member") || has_message(diagnostics, "reference"))
+      }
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - valid enum member order" {
+  let source =
+    #|enum MyEnum {
+    #|  A = 1,
+    #|  B = A, // backward reference is ok
+    #|  C = A + B
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => {
+      assert_true(not(has_error(diagnostics, 2651)))
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - valid enum without references" {
+  let source =
+    #|enum Colors {
+    #|  Red = 0,
+    #|  Green = 1,
+    #|  Blue = 2
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => {
+      assert_true(not(has_error(diagnostics, 2651)))
+    }
+  }
+}

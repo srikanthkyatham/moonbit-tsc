@@ -224,6 +224,13 @@ pub enum MismatchReason {
   YieldExpressionImplicitlyAny // TS2764: 'yield' expression implicitly results in an 'any' type because its containing generator lacks a return-type annotation
   YieldOperandTypeInAsyncGenerator(String, String) // TS2770: Type of 'yield' operand in an async generator must either be a valid promise or must not contain a callable 'then' member
   TypeReferencedInThenMethod(String) // TS2771: Type '{0}' referenced when attempting to get type of 'then' method in a promise
+
+  // Enum & Catch Clause errors
+  CatchClauseVariableMustBeAnyOrUnknown(String) // TS2467: Catch clause variable type annotation must be 'any' or 'unknown' if specified
+  ConstEnumUsageRestriction(String) // TS2475: A const enum member can only be accessed using a string literal
+  ConstEnumMemberAccessRestriction(String) // TS2476: A const enum member can only be accessed using a string literal
+  UsingPrivateName(String, String) // TS2494: Using private name '{0}' as the type of '{1}'
+  MemberInitializerForwardReference(String, String) // TS2651: A member initializer in a enum declaration cannot reference members declared after it, including members defined in other enums
 } derive(Show, Eq)
 
 // ============================================================================
@@ -1067,6 +1074,17 @@ pub fn get_friendly_title(reason : MismatchReason) -> String {
       "YIELD OPERAND TYPE '" + operand_type + "' IN ASYNC GENERATOR"
     TypeReferencedInThenMethod(type_name) =>
       "TYPE '" + type_name + "' REFERENCED IN 'THEN' METHOD"
+    // Enum & Catch Clause errors
+    CatchClauseVariableMustBeAnyOrUnknown(var_name) =>
+      "CATCH CLAUSE VARIABLE '" + var_name + "' MUST BE 'any' OR 'unknown'"
+    ConstEnumUsageRestriction(enum_name) =>
+      "CONST ENUM '" + enum_name + "' USAGE RESTRICTION"
+    ConstEnumMemberAccessRestriction(member) =>
+      "CONST ENUM MEMBER '" + member + "' ACCESS RESTRICTION"
+    UsingPrivateName(private_name, context) =>
+      "USING PRIVATE NAME '" + private_name + "' IN '" + context + "'"
+    MemberInitializerForwardReference(member, referenced) =>
+      "MEMBER '" + member + "' CANNOT REFERENCE '" + referenced + "'"
   }
 }
 
@@ -1641,6 +1659,31 @@ pub fn get_why_explanation(reason : MismatchReason) -> String {
       "Type '" +
       type_name +
       "' is referenced when attempting to get the type of the 'then' method in a promise. This usually indicates a circular reference where a promise's fulfillment callback references the same type being resolved, creating an infinite type resolution loop."
+    // Enum & Catch Clause errors
+    CatchClauseVariableMustBeAnyOrUnknown(var_name) =>
+      "Catch clause variable '" +
+      var_name +
+      "' has a type annotation that is not 'any' or 'unknown'. In TypeScript, caught exceptions can be of any type at runtime (not just Error objects), so the type annotation must be either 'any' (allows any operations) or 'unknown' (requires type checking before use)."
+    ConstEnumUsageRestriction(enum_name) =>
+      "A const enum '" +
+      enum_name +
+      "' member can only be accessed using a string literal. Const enums are inlined at compile time, meaning the enum object doesn't exist at runtime. This restricts how you can access enum members - only literal member access (like MyEnum.Value) is allowed, not computed access."
+    ConstEnumMemberAccessRestriction(member) =>
+      "The const enum member '" +
+      member +
+      "' can only be accessed using a string literal. Because const enums are replaced with their literal values during compilation, dynamic property access (like enum[variable]) is not possible. The compiler needs to know at compile time which member is being accessed."
+    UsingPrivateName(private_name, context) =>
+      "Private name '" +
+      private_name +
+      "' is being used as the type of '" +
+      context +
+      "'. Private names (starting with #) are only accessible within the class that defines them. Using a private name in a type annotation exposes implementation details that should remain encapsulated."
+    MemberInitializerForwardReference(member, referenced) =>
+      "The initializer of enum member '" +
+      member +
+      "' references '" +
+      referenced +
+      "' which is declared after it. Enum members are evaluated in order, so earlier members cannot reference later ones. This prevents circular dependencies and ensures deterministic initialization order."
   }
 }
 
@@ -2840,6 +2883,82 @@ pub fn get_how_to_fix(
       fixes.push("Option 1: Break the circular reference")
       fixes.push("Option 2: Use a different type structure")
     }
+    // Enum & Catch Clause errors
+    CatchClauseVariableMustBeAnyOrUnknown(var_name) => {
+      fixes.push("Catch clause variable '" + var_name + "' must have type 'any' or 'unknown'.")
+      fixes.push("")
+      fixes.push("Option 1: Use 'unknown' (recommended - requires type narrowing):")
+      fixes.push("    try { ... } catch (e: unknown) {")
+      fixes.push("        if (e instanceof Error) {")
+      fixes.push("            console.log(e.message);")
+      fixes.push("        }")
+      fixes.push("    }")
+      fixes.push("")
+      fixes.push("Option 2: Use 'any' (less safe but allows any operations):")
+      fixes.push("    try { ... } catch (e: any) { ... }")
+      fixes.push("")
+      fixes.push("Option 3: Remove the type annotation (defaults to 'any'):")
+      fixes.push("    try { ... } catch (e) { ... }")
+    }
+    ConstEnumUsageRestriction(enum_name) => {
+      fixes.push("Const enum '" + enum_name + "' cannot be used with dynamic access.")
+      fixes.push("")
+      fixes.push("Const enums are inlined at compile time, so they don't exist at runtime.")
+      fixes.push("")
+      fixes.push("Option 1: Use literal member access:")
+      fixes.push("    const value = MyEnum.MemberName;")
+      fixes.push("")
+      fixes.push("Option 2: Convert to a regular enum (removes const):")
+      fixes.push("    enum MyEnum { ... }  // instead of const enum")
+      fixes.push("")
+      fixes.push("Option 3: Use 'preserveConstEnums' compiler option to keep the enum object")
+    }
+    ConstEnumMemberAccessRestriction(member) => {
+      fixes.push("Const enum member '" + member + "' must be accessed with a string literal.")
+      fixes.push("")
+      fixes.push("Because const enums are replaced with literal values during compilation,")
+      fixes.push("dynamic access like enum[variable] is not possible.")
+      fixes.push("")
+      fixes.push("Option 1: Use direct member access:")
+      fixes.push("    const val = MyEnum.Member;  // ✓ allowed")
+      fixes.push("")
+      fixes.push("Option 2: Use a regular enum instead of const enum")
+      fixes.push("")
+      fixes.push("Option 3: Create a lookup object manually:")
+      fixes.push("    const lookup = { A: 0, B: 1 } as const;")
+    }
+    UsingPrivateName(private_name, context) => {
+      fixes.push("Private name '#" + private_name + "' cannot be used as a type for '" + context + "'.")
+      fixes.push("")
+      fixes.push("Private class members (starting with #) are implementation details")
+      fixes.push("and cannot be exposed in type annotations.")
+      fixes.push("")
+      fixes.push("Option 1: Use a public type instead:")
+      fixes.push("    class MyClass {")
+      fixes.push("        private _data: DataType;  // Use TypeScript private")
+      fixes.push("        public getData(): DataType { ... }")
+      fixes.push("    }")
+      fixes.push("")
+      fixes.push("Option 2: Extract the type to a separate interface or type alias")
+    }
+    MemberInitializerForwardReference(member, referenced) => {
+      fixes.push("Enum member '" + member + "' cannot reference '" + referenced + "' declared after it.")
+      fixes.push("")
+      fixes.push("Enum members are evaluated in declaration order. Earlier members")
+      fixes.push("cannot reference later ones because they don't exist yet.")
+      fixes.push("")
+      fixes.push("Option 1: Reorder enum members so referenced members come first:")
+      fixes.push("    enum MyEnum {")
+      fixes.push("        " + referenced + " = 1,  // Move this first")
+      fixes.push("        " + member + " = " + referenced + ",  // Now it can reference")
+      fixes.push("    }")
+      fixes.push("")
+      fixes.push("Option 2: Use explicit values instead of references:")
+      fixes.push("    enum MyEnum {")
+      fixes.push("        " + member + " = 1,  // Use literal value")
+      fixes.push("        " + referenced + " = 1,")
+      fixes.push("    }")
+    }
   }
   fixes
 }
@@ -2975,6 +3094,12 @@ pub fn get_error_code(reason : MismatchReason) -> Int {
     YieldExpressionImplicitlyAny => 2764 // TS2764: 'yield' expression implicitly results in an 'any' type
     YieldOperandTypeInAsyncGenerator(_, _) => 2770 // TS2770: Type of yield operand in an async generator
     TypeReferencedInThenMethod(_) => 2771 // TS2771: Type is referenced in the type of the 'then' method
+    // Enum & Catch Clause errors
+    CatchClauseVariableMustBeAnyOrUnknown(_) => 2467 // TS2467: Catch clause variable type annotation must be 'any' or 'unknown'
+    ConstEnumUsageRestriction(_) => 2475 // TS2475: A const enum member can only be accessed using a string literal
+    ConstEnumMemberAccessRestriction(_) => 2476 // TS2476: A const enum member can only be accessed using a string literal
+    UsingPrivateName(_, _) => 2494 // TS2494: Using private name as type
+    MemberInitializerForwardReference(_, _) => 2651 // TS2651: A member initializer cannot reference members declared after it
   }
 }
 
