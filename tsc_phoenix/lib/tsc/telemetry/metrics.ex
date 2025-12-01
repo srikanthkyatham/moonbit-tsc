@@ -27,6 +27,10 @@ defmodule TSC.Telemetry.Metrics do
 
   def worker_crash, do: @prefix ++ [:worker, :crash]
 
+  # Phase timing events
+  def phase_start, do: @prefix ++ [:phase, :start]
+  def phase_stop, do: @prefix ++ [:phase, :stop]
+
   # ============================================================================
   # Emit Helpers
   # ============================================================================
@@ -161,5 +165,55 @@ defmodule TSC.Telemetry.Metrics do
       %{count: 1},
       %{worker_id: worker_id, reason: reason}
     )
+  end
+
+  @doc """
+  Emit phase start event.
+
+  Phases include:
+  - :parse - Parsing TypeScript source
+  - :resolve - Resolving imports and dependencies
+  - :bind - Symbol binding
+  - :check - Type checking
+  - :emit - Output generation
+  """
+  def emit_phase_start(phase, metadata \\ %{}) do
+    :telemetry.execute(
+      phase_start(),
+      %{system_time: System.system_time(:millisecond)},
+      Map.merge(%{phase: phase}, metadata)
+    )
+  end
+
+  @doc """
+  Emit phase stop event.
+  """
+  def emit_phase_stop(phase, duration_ms, metadata \\ %{}) do
+    :telemetry.execute(
+      phase_stop(),
+      %{duration: duration_ms},
+      Map.merge(%{phase: phase}, metadata)
+    )
+  end
+
+  @doc """
+  Measure the duration of a function and emit phase events.
+  Returns the function result.
+  """
+  def measure_phase(phase, metadata \\ %{}, fun) when is_function(fun, 0) do
+    emit_phase_start(phase, metadata)
+    start_time = System.monotonic_time(:millisecond)
+
+    try do
+      result = fun.()
+      duration = System.monotonic_time(:millisecond) - start_time
+      emit_phase_stop(phase, duration, Map.put(metadata, :status, :success))
+      result
+    rescue
+      e ->
+        duration = System.monotonic_time(:millisecond) - start_time
+        emit_phase_stop(phase, duration, Map.merge(metadata, %{status: :error, error: e}))
+        reraise e, __STACKTRACE__
+    end
   end
 end

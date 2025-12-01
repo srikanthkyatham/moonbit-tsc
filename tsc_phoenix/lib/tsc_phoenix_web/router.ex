@@ -28,7 +28,13 @@ defmodule TscPhoenixWeb.Router do
 
     post "/check", CheckController, :create
     get "/check/status", CheckController, :status
-    get "/metrics", CheckController, :metrics
+
+    # Metrics endpoints
+    get "/metrics", MetricsController, :summary
+    get "/metrics/prometheus", MetricsController, :prometheus
+    get "/metrics/json", MetricsController, :json_export
+    get "/metrics/phases", MetricsController, :phases
+    get "/metrics/history/:metric", MetricsController, :history
   end
 
   # Enable LiveDashboard in development

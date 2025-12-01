@@ -36,8 +36,31 @@ defmodule TSC.Telemetry.Reporter do
       errors_count: get_counter(:errors_count),
       warnings_count: get_counter(:warnings_count),
       worker_requests: get_counter(:worker_requests),
-      worker_crashes: get_counter(:worker_crashes)
+      worker_crashes: get_counter(:worker_crashes),
+      phases: get_phase_metrics()
     }
+  end
+
+  @doc """
+  Get phase timing metrics.
+  """
+  @spec get_phase_metrics() :: map()
+  def get_phase_metrics do
+    case :ets.lookup(@metrics_table, :phase_metrics) do
+      [{:phase_metrics, metrics}] -> metrics
+      [] -> %{}
+    end
+  end
+
+  @doc """
+  Get histogram data for a metric.
+  """
+  @spec get_histogram(atom()) :: map()
+  def get_histogram(name) do
+    case :ets.lookup(@metrics_table, :"#{name}_histogram") do
+      [{_, histogram}] -> histogram
+      [] -> %{buckets: %{}, sum: 0, count: 0}
+    end
   end
 
   @doc """
@@ -132,7 +155,8 @@ defmodule TSC.Telemetry.Reporter do
       {Metrics.project_check_stop(), &handle_project_check_stop/4},
       {Metrics.worker_crash(), &handle_worker_crash/4},
       {Metrics.worker_request_start(), &handle_worker_request_start/4},
-      {Metrics.worker_request_stop(), &handle_worker_request_stop/4}
+      {Metrics.worker_request_stop(), &handle_worker_request_stop/4},
+      {Metrics.phase_stop(), &handle_phase_stop/4}
     ]
 
     Enum.each(events, fn {event, handler} ->
@@ -162,6 +186,9 @@ defmodule TSC.Telemetry.Reporter do
     # Update counters
     inc_counter(:file_checks)
     add_counter(:total_duration_ms, measurements.duration)
+
+    # Update histogram
+    update_histogram(:file_check, measurements.duration)
 
     # Count errors/warnings from result
     case metadata.result do
@@ -207,6 +234,9 @@ defmodule TSC.Telemetry.Reporter do
       result: metadata.result
     }})
 
+    # Update histogram
+    update_histogram(:project_check, measurements.duration)
+
     broadcast_update(:project_check_stop, Map.merge(metadata, measurements))
   end
 
@@ -223,6 +253,34 @@ defmodule TSC.Telemetry.Reporter do
   defp handle_worker_request_stop(_event, measurements, metadata, _config) do
     broadcast_update(:worker_request_stop, Map.merge(metadata, measurements))
   end
+
+  defp handle_phase_stop(_event, measurements, metadata, _config) do
+    phase = metadata.phase
+    duration = measurements.duration
+
+    # Update phase metrics
+    phase_metrics = get_phase_metrics()
+    phase_data = Map.get(phase_metrics, phase, %{count: 0, total_ms: 0, min_ms: nil, max_ms: nil})
+
+    updated_data = %{
+      count: phase_data.count + 1,
+      total_ms: phase_data.total_ms + duration,
+      avg_ms: Float.round((phase_data.total_ms + duration) / (phase_data.count + 1), 2),
+      min_ms: min_value(phase_data.min_ms, duration),
+      max_ms: max_value(phase_data.max_ms, duration),
+      last_ms: duration
+    }
+
+    :ets.insert(@metrics_table, {:phase_metrics, Map.put(phase_metrics, phase, updated_data)})
+
+    broadcast_update(:phase_stop, Map.merge(metadata, %{duration: duration}))
+  end
+
+  defp min_value(nil, value), do: value
+  defp min_value(current, value), do: min(current, value)
+
+  defp max_value(nil, value), do: value
+  defp max_value(current, value), do: max(current, value)
 
   # ============================================================================
   # Helpers
@@ -265,6 +323,31 @@ defmodule TSC.Telemetry.Reporter do
   end
 
   defp add_counter(_name, _value), do: :ok
+
+  @histogram_buckets [10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000]
+
+  defp update_histogram(name, value) when is_number(value) do
+    key = :"#{name}_histogram"
+
+    histogram = case :ets.lookup(@metrics_table, key) do
+      [{^key, h}] -> h
+      [] -> %{buckets: %{}, sum: 0, count: 0}
+    end
+
+    # Find appropriate bucket
+    bucket = Enum.find(@histogram_buckets, :infinity, fn b -> value <= b end)
+
+    # Update histogram
+    updated = %{
+      buckets: Map.update(histogram.buckets, bucket, 1, &(&1 + 1)),
+      sum: histogram.sum + value,
+      count: histogram.count + 1
+    }
+
+    :ets.insert(@metrics_table, {key, updated})
+  end
+
+  defp update_histogram(_name, _value), do: :ok
 
   defp get_avg_duration do
     checks = get_counter(:file_checks)

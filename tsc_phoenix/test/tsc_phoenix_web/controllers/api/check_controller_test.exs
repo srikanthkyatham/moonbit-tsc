@@ -104,16 +104,19 @@ defmodule TscPhoenixWeb.API.CheckControllerTest do
   end
 
   describe "GET /api/metrics" do
-    test "returns metrics information", %{conn: conn} do
+    test "returns metrics summary", %{conn: conn} do
       conn = get(conn, ~p"/api/metrics")
 
       assert %{
         "metrics" => metrics,
-        "history" => history
+        "current_build" => _current_build,
+        "active_checks" => active_checks,
+        "active_count" => active_count
       } = json_response(conn, 200)
 
       assert is_map(metrics)
-      assert is_map(history)
+      assert is_list(active_checks)
+      assert is_integer(active_count)
     end
   end
 end
