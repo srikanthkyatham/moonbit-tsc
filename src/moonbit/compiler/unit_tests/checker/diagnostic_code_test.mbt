@@ -3289,7 +3289,24 @@ test "DiagnosticCode - valid non-ambient overloads" {
 }
 
 // TS2388: Function overload must not be static
-// This error applies to specific contexts - mostly a parser/semantic error
+///|
+test "DiagnosticCode - TS2388 mixed static overloads" {
+  let source =
+    #|class MyClass {
+    #|  method(x: string): string;
+    #|  static method(x: number): number;
+    #|  method(x: string | number): string | number { return x; }
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => fail!("Expected TS2388 error for mixing static and non-static overloads")
+    Err(diagnostics) => {
+      assert_true(has_error(diagnostics, 2388))
+      assert_true(has_message(diagnostics, "static"))
+    }
+  }
+}
+
 ///|
 test "DiagnosticCode - valid static method overload" {
   let source =
@@ -3302,6 +3319,7 @@ test "DiagnosticCode - valid static method overload" {
   match result {
     Ok(_) => assert_true(true)
     Err(diagnostics) => {
+      // Should NOT report TS2388 for consistent static overloads
       assert_true(not(has_error(diagnostics, 2388)))
     }
   }
@@ -3316,12 +3334,11 @@ test "DiagnosticCode - TS2389 impl signature not assignable" {
     #|function fn(x: boolean): boolean { return x; }
   let result = check_source(source)
   match result {
-    Ok(_) => () // May not be fully implemented
+    Ok(_) => fail!("Expected TS2389 error for incompatible implementation signature")
     Err(diagnostics) => {
-      // Should report TS2389 or TS2394
-      if has_error(diagnostics, 2389) || has_error(diagnostics, 2394) {
-        assert_true(true)
-      }
+      // Should report TS2389 for type mismatch
+      assert_true(has_error(diagnostics, 2389))
+      assert_true(has_message(diagnostics, "compatible") || has_message(diagnostics, "signature"))
     }
   }
 }

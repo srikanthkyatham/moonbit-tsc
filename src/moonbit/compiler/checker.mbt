@@ -8181,6 +8181,9 @@ fn check_class_declaration(
   let class_name = get_class_decl_name(class_decl)
   let checker = check_class_constructor_overloads(class_name, class_decl.members, checker)
 
+  // Check for method overloads static consistency (TS2388)
+  let checker = check_class_method_overloads(class_decl.members, checker)
+
   // Restore previous context flags
   {
     ..checker,

@@ -265,6 +265,10 @@ fn check_overload_compatibility(
   let impl_required = count_impl_required_params(impl_.parameters)
   let impl_total = impl_.parameters.length()
 
+  // Collect all parameter types from overloads for compatibility check
+  let overload_param_types = collect_overload_param_types(signatures)
+  let impl_param_types = collect_impl_param_types(impl_.parameters)
+
   for i = 0; i < signatures.length(); i = i + 1 {
     let sig = signatures[i]
 
@@ -307,7 +311,173 @@ fn check_overload_compatibility(
     }
   }
 
+  // Check TS2389: Implementation signature not assignable to overloads
+  // This checks if the implementation's param types can handle all overload param types
+  let type_errors = check_impl_param_type_compatibility(
+    overload_param_types,
+    impl_param_types,
+    impl_.location,
+  )
+  for err in type_errors {
+    errors.push(err)
+  }
+
   errors
+}
+
+///|
+/// Collect parameter types from all overload signatures
+fn collect_overload_param_types(
+  signatures : Array[OverloadSignature],
+) -> Array[Array[String]] {
+  // For each parameter position, collect all types that appear across overloads
+  let max_params = signatures.iter().map(fn(s) { s.parameters.length() }).fold(
+    init=0,
+    fn(a, b) { if a > b { a } else { b } },
+  )
+
+  let result : Array[Array[String]] = []
+  for i = 0; i < max_params; i = i + 1 {
+    let types_at_pos : Array[String] = []
+    for sig in signatures {
+      if i < sig.parameters.length() {
+        let param = sig.parameters[i]
+        match param.type_annotation {
+          Some(type_node) => {
+            let type_str = get_type_annotation_text(type_node)
+            if not(types_at_pos.contains(type_str)) {
+              types_at_pos.push(type_str)
+            }
+          }
+          None => {
+            if not(types_at_pos.contains("any")) {
+              types_at_pos.push("any")
+            }
+          }
+        }
+      }
+    }
+    result.push(types_at_pos)
+  }
+  result
+}
+
+///|
+/// Collect parameter types from implementation
+fn collect_impl_param_types(params : Array[Node]) -> Array[String] {
+  let result : Array[String] = []
+  for param_node in params {
+    match param_node {
+      Parameter(p) =>
+        match p.type_annotation {
+          Some(type_node) => result.push(get_type_annotation_text(type_node))
+          None => result.push("any")
+        }
+      _ => ()
+    }
+  }
+  result
+}
+
+///|
+/// Get text representation of a type annotation for comparison
+fn get_type_annotation_text(type_node : Node) -> String {
+  match type_node {
+    TypeReference(ref_) => ref_.type_name
+    KeywordType(kw) =>
+      match kw.kind {
+        Any => "any"
+        Unknown => "unknown"
+        Never => "never"
+        Void => "void"
+        Undefined => "undefined"
+        Null => "null"
+        Boolean => "boolean"
+        Number => "number"
+        String => "string"
+        Symbol => "symbol"
+        BigInt => "bigint"
+        Object => "object"
+        Const => "const"
+      }
+    UnionType(union) => {
+      let parts : Array[String] = []
+      for t in union.types {
+        parts.push(get_type_annotation_text(t))
+      }
+      parts.join(" | ")
+    }
+    _ => "unknown"
+  }
+}
+
+///|
+/// Check if implementation param types are compatible with overload param types
+fn check_impl_param_type_compatibility(
+  overload_types : Array[Array[String]],
+  impl_types : Array[String],
+  location : SourceLocation,
+) -> Array[OverloadError] {
+  let errors : Array[OverloadError] = []
+
+  for i = 0; i < impl_types.length() && i < overload_types.length(); i = i + 1 {
+    let impl_type = impl_types[i]
+    let expected_types = overload_types[i]
+
+    // Skip if impl has 'any' (accepts anything)
+    if impl_type == "any" {
+      continue
+    }
+
+    // Check if impl type can handle all overload types
+    // Implementation type must be a supertype (or union) of all overload types
+    let is_compatible = check_type_covers_all(impl_type, expected_types)
+    if not(is_compatible) {
+      let expected_union = expected_types.join(" | ")
+      errors.push({
+        kind: ParamTypeMismatch(0, i),
+        message: "This overload signature is not compatible with its implementation signature. " +
+          "Parameter " +
+          (i + 1).to_string() +
+          " has type '" +
+          impl_type +
+          "' but needs to accept '" +
+          expected_union +
+          "'.",
+        location,
+        code: 2389,
+      })
+      break // Only report first type mismatch
+    }
+  }
+
+  errors
+}
+
+///|
+/// Check if impl_type can cover all expected_types
+fn check_type_covers_all(impl_type : String, expected_types : Array[String]) -> Bool {
+  // Parse impl_type if it's a union
+  let impl_parts = impl_type.split(" | ").collect()
+
+  // Check if all expected types are covered by impl type
+  for expected in expected_types {
+    // 'any' in expected means anything is acceptable
+    if expected == "any" {
+      continue
+    }
+
+    // Check if this expected type is in impl's union
+    let is_covered = impl_parts.contains(expected) ||
+      impl_parts.contains("any") ||
+      impl_parts.contains("unknown")
+
+    if not(is_covered) {
+      return false
+    }
+  }
+
+  true
 }
 
 ///|
@@ -696,6 +866,226 @@ pub fn check_class_constructor_overloads(
   for err in result.errors {
     let diag = Diagnostic::error(err.message, err.location, err.code)
     checker.diagnostics.push(diag)
+  }
+
+  checker
+}
+
+// ============================================================================
+// Method Overload Checking (TS2388)
+// ============================================================================
+
+///|
+/// Overload signature for a method with static flag
+pub struct MethodOverloadSignature {
+  parameters : Array[OverloadParameter]
+  return_type : Node?
+  type_parameters : Array[TypeParameter]
+  location : SourceLocation
+  is_static : Bool
+  is_ambient : Bool
+} derive(Show)
+
+///|
+/// Collected method overloads for a class method
+pub struct MethodOverloads {
+  method_name : String
+  signatures : Array[MethodOverloadSignature]
+  implementation : MethodDeclaration?
+  implementation_location : SourceLocation?
+  implementation_is_static : Bool
+} derive(Show)
+
+///|
+/// Create empty method overloads
+pub fn MethodOverloads::empty(name : String) -> MethodOverloads {
+  {
+    method_name: name,
+    signatures: [],
+    implementation: None,
+    implementation_location: None,
+    implementation_is_static: false,
+  }
+}
+
+///|
+/// Check if a method has the static modifier
+fn method_has_static_modifier(modifiers : Array[Modifier]) -> Bool {
+  for m in modifiers {
+    match m {
+      Static => return true
+      _ => ()
+    }
+  }
+  false
+}
+
+///|
+/// Check if a method has the abstract modifier
+fn method_has_abstract_modifier(modifiers : Array[Modifier]) -> Bool {
+  for m in modifiers {
+    match m {
+      Abstract => return true
+      _ => ()
+    }
+  }
+  false
+}
+
+///|
+/// Collect method overloads from class members
+pub fn collect_method_overloads(
+  members : Array[Node],
+) -> Map[String, MethodOverloads] {
+  let overloads : Map[String, MethodOverloads] = Map::new()
+
+  for member in members {
+    match member {
+      MethodDeclaration(method) => {
+        // Skip abstract methods - they don't have bodies by design
+        if method_has_abstract_modifier(method.modifiers) {
+          continue
+        }
+
+        let name = method.name
+        let existing = overloads.get(name).unwrap_or(MethodOverloads::empty(name))
+        let is_static = method_has_static_modifier(method.modifiers)
+
+        // Check if this is a signature (no body) or implementation (has body)
+        match method.body {
+          None => {
+            // This is an overload signature
+            let sig = extract_method_overload_signature(method)
+            existing.signatures.push(sig)
+            overloads.set(name, existing)
+          }
+          Some(_) => {
+            // This is the implementation
+            let updated = {
+              ..existing,
+              implementation: Some(method),
+              implementation_location: Some(method.location),
+              implementation_is_static: is_static,
+            }
+            overloads.set(name, updated)
+          }
+        }
+      }
+      _ => ()
+    }
+  }
+
+  overloads
+}
+
+///|
+/// Extract overload signature from method declaration
+fn extract_method_overload_signature(
+  method : MethodDeclaration,
+) -> MethodOverloadSignature {
+  let parameters : Array[OverloadParameter] = []
+
+  for param_node in method.parameters {
+    match param_node {
+      Parameter(p) => {
+        parameters.push({
+          name: overload_get_param_name(p.name),
+          type_annotation: p.type_annotation,
+          is_optional: p.is_optional,
+          is_rest: p.is_rest,
+        })
+      }
+      _ => ()
+    }
+  }
+
+  let is_static = method_has_static_modifier(method.modifiers)
+  let is_ambient = overload_has_declare_modifier(method.modifiers)
+
+  {
+    parameters,
+    return_type: method.return_type,
+    type_parameters: method.type_parameters,
+    location: method.location,
+    is_static,
+    is_ambient,
+  }
+}
+
+///|
+/// Validate method overloads (TS2388, TS2391)
+pub fn validate_method_overloads(
+  overloads : MethodOverloads,
+) -> OverloadValidationResult {
+  let errors : Array[OverloadError] = []
+
+  // If there are no signatures, nothing to validate
+  if overloads.signatures.is_empty() {
+    return { errors, is_valid: true }
+  }
+
+  // Check TS2388: All overload signatures must have the same static modifier
+  let first_is_static = overloads.signatures[0].is_static
+  for i = 1; i < overloads.signatures.length(); i = i + 1 {
+    let sig = overloads.signatures[i]
+    if sig.is_static != first_is_static {
+      errors.push({
+        kind: AmbientMismatch, // Reusing for static mismatch
+        message: "Function overload must not be static.",
+        location: sig.location,
+        code: 2388,
+      })
+    }
+  }
+
+  // Check that implementation matches static-ness if it exists
+  match overloads.implementation {
+    Some(_) =>
+      if overloads.implementation_is_static != first_is_static {
+        errors.push({
+          kind: AmbientMismatch,
+          message: "Function overload must not be static.",
+          location: overloads.implementation_location.unwrap(),
+          code: 2388,
+        })
+      }
+    None => {
+      // Check TS2391: Missing implementation (for non-ambient overloads)
+      let has_non_ambient = overloads.signatures.iter().any(fn(s) {
+        not(s.is_ambient)
+      })
+      if has_non_ambient {
+        errors.push({
+          kind: MissingImplementation,
+          message: "Function implementation is missing or not immediately following the declaration.",
+          location: overloads.signatures[0].location,
+          code: 2391,
+        })
+      }
+    }
+  }
+
+  { errors, is_valid: errors.is_empty() }
+}
+
+///|
+/// Check method overloads in a class (TS2388)
+pub fn check_class_method_overloads(
+  members : Array[Node],
+  checker : TypeChecker,
+) -> TypeChecker {
+  let all_overloads = collect_method_overloads(members)
+
+  // Validate each method's overloads
+  for name, overloads in all_overloads {
+    let _ = name // unused but needed for iteration
+    let result = validate_method_overloads(overloads)
+
+    // Add diagnostics for any errors
+    for err in result.errors {
+      let diag = Diagnostic::error(err.message, err.location, err.code)
+      checker.diagnostics.push(diag)
+    }
   }
 
   checker
