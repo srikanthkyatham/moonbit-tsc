@@ -7987,6 +7987,9 @@ fn check_class_declaration(
     }
   }
 
+  // Check for abstract members in non-abstract class (TS2516)
+  let checker = check_abstract_members_in_non_abstract_class(checker, class_decl)
+
   // Restore previous context flags
   {
     ..checker,
@@ -7996,6 +7999,151 @@ fn check_class_declaration(
     in_constructor: prev_in_constructor,
     in_derived_class: prev_in_derived_class,
   }
+}
+
+///|
+/// Check that abstract members only appear in abstract classes (TS2516)
+fn check_abstract_members_in_non_abstract_class(
+  checker : TypeChecker,
+  class_decl : ClassDeclaration,
+) -> TypeChecker {
+  // If class is abstract, abstract members are allowed
+  if class_decl.is_abstract {
+    return checker
+  }
+
+  let mut checker = checker
+  for mem in class_decl.members {
+    match mem {
+      MethodDeclaration(method) =>
+        if is_abstract_modifier(method.modifiers) {
+          checker = add_diagnostic_with_code(
+            checker,
+            "Abstract methods can only appear within an abstract class.",
+            method.location,
+            TS2516,
+          )
+        }
+      PropertyDeclaration(prop) =>
+        if is_abstract_modifier(prop.modifiers) {
+          checker = add_diagnostic_with_code(
+            checker,
+            "Abstract methods can only appear within an abstract class.",
+            prop.location,
+            TS2516,
+          )
+        }
+      _ => ()
+    }
+  }
+
+  // Check that non-abstract class implements all abstract members from base class (TS2515)
+  checker = check_abstract_member_implementation(checker, class_decl)
+
+  checker
+}
+
+///|
+/// Check that non-abstract class implements all abstract members from base class (TS2515)
+fn check_abstract_member_implementation(
+  checker : TypeChecker,
+  class_decl : ClassDeclaration,
+) -> TypeChecker {
+  // Only check non-abstract classes that extend another class
+  if class_decl.is_abstract {
+    return checker
+  }
+
+  let mut checker = checker
+
+  // Get the base class from extends clause
+  for heritage_clause in class_decl.heritage_clauses {
+    if heritage_clause.kind == Extends {
+      for type_node in heritage_clause.types {
+        match type_node {
+          TypeReference(type_ref) => {
+            // Look up the base class by name
+            match lookup_symbol(checker, type_ref.type_name) {
+              Some(base_symbol) => {
+                // Get abstract members from base class
+                let abstract_members = get_abstract_members_from_symbol(base_symbol)
+
+                // Get implemented members in the derived class
+                let implemented_members = get_class_member_names(class_decl)
+
+                // Check each abstract member is implemented
+                for abstract_member in abstract_members {
+                  if not(implemented_members.contains(abstract_member.0)) {
+                    checker = add_diagnostic_with_code(
+                      checker,
+                      "Non-abstract class '\{get_class_decl_name(class_decl)}' does not implement inherited abstract member '\{abstract_member.0}' from class '\{type_ref.type_name}'.",
+                      class_decl.location,
+                      TS2515,
+                    )
+                  }
+                }
+              }
+              None => ()
+            }
+          }
+          _ => ()
+        }
+      }
+    }
+  }
+  checker
+}
+
+///|
+/// Get the class name from a class declaration for diagnostics
+fn get_class_decl_name(class_decl : ClassDeclaration) -> String {
+  match class_decl.name {
+    Some(Identifier(ident)) => ident.name
+    _ => "<anonymous>"
+  }
+}
+
+///|
+/// Get names of all members in a class
+fn get_class_member_names(class_decl : ClassDeclaration) -> Array[String] {
+  let names : Array[String] = []
+  for mem in class_decl.members {
+    match mem {
+      MethodDeclaration(method) => names.push(method.name)
+      PropertyDeclaration(prop) => names.push(prop.name)
+      _ => ()
+    }
+  }
+  names
+}
+
+///|
+/// Get abstract members from a symbol (returns array of (name, location) pairs)
+fn get_abstract_members_from_symbol(symbol : Symbol) -> Array[(String, SourceLocation)] {
+  let abstract_members : Array[(String, SourceLocation)] = []
+
+  for decl in symbol.declarations {
+    match decl {
+      ClassDeclaration(class_decl) => {
+        for mem in class_decl.members {
+          match mem {
+            MethodDeclaration(method) =>
+              if is_abstract_modifier(method.modifiers) {
+                abstract_members.push((method.name, method.location))
+              }
+            PropertyDeclaration(prop) =>
+              if is_abstract_modifier(prop.modifiers) {
+                abstract_members.push((prop.name, prop.location))
+              }
+            _ => ()
+          }
+        }
+      }
+      _ => ()
+    }
+  }
+
+  abstract_members
 }
 
 ///|

@@ -681,11 +681,100 @@ test "DiagnosticCode - TS2515 non-abstract class missing abstract member" {
     #|}
   let result = check_source(source)
   match result {
-    Ok(_) => () // May not be implemented yet
+    Ok(_) => fail!("Expected TS2515 error")
     Err(diagnostics) => {
-      if has_error(diagnostics, 2515) {
-        assert_true(has_message(diagnostics, "abstract"))
-      }
+      assert_true(has_error(diagnostics, 2515))
+      assert_true(has_message(diagnostics, "speak"))
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - TS2515 class implements abstract member" {
+  let source =
+    #|abstract class Animal {
+    #|  abstract speak(): void;
+    #|}
+    #|class Dog extends Animal {
+    #|  speak(): void { }
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => {
+      // Should NOT have TS2515 error
+      assert_true(not(has_error(diagnostics, 2515)))
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - TS2515 missing multiple abstract members" {
+  let source =
+    #|abstract class Shape {
+    #|  abstract area(): number;
+    #|  abstract perimeter(): number;
+    #|}
+    #|class Circle extends Shape {
+    #|  // missing both implementations
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => fail!("Expected TS2515 error")
+    Err(diagnostics) => {
+      assert_true(has_error(diagnostics, 2515))
+    }
+  }
+}
+
+// ============================================================================
+// TS2516: Abstract methods can only appear within an abstract class
+// ============================================================================
+
+///|
+test "DiagnosticCode - TS2516 abstract method in non-abstract class" {
+  let source =
+    #|class Dog {
+    #|  abstract speak(): void;
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => fail!("Expected TS2516 error")
+    Err(diagnostics) => {
+      assert_true(has_error(diagnostics, 2516))
+      assert_true(has_message(diagnostics, "abstract"))
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - TS2516 abstract property in non-abstract class" {
+  let source =
+    #|class Dog {
+    #|  abstract name: string;
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => fail!("Expected TS2516 error")
+    Err(diagnostics) => {
+      assert_true(has_error(diagnostics, 2516))
+      assert_true(has_message(diagnostics, "abstract"))
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - TS2516 valid abstract method in abstract class" {
+  let source =
+    #|abstract class Animal {
+    #|  abstract speak(): void;
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => {
+      // Should NOT have TS2516 error
+      assert_true(not(has_error(diagnostics, 2516)))
     }
   }
 }

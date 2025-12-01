@@ -311,13 +311,30 @@ fn print_summary(
   summary : @coordinator.CompilationSummary,
   options : CLIOptions,
 ) -> Unit {
+  // Track total diagnostics for summary
+  let mut total_errors = 0
+  let mut total_warnings = 0
+
   // Print any errors
   for result in summary.results {
-    if not(result.success) {
+    // Count diagnostics
+    for diag in result.diagnostics {
+      if diag.contains(" - error ") {
+        total_errors = total_errors + 1
+      } else if diag.contains(" - warning ") {
+        total_warnings = total_warnings + 1
+      }
+    }
+
+    // Print diagnostics if failed OR if --reportDiagnostics is set
+    if not(result.success) || options.report_diagnostics {
       for diag in result.diagnostics {
         println(diag)
       }
-    } else if options.verbose {
+    }
+
+    // Print compile info if verbose
+    if options.verbose && result.success {
       println(
         "  Compiled: " +
         result.file_path +
@@ -330,11 +347,22 @@ fn print_summary(
 
   // Print final summary
   println("")
-  if summary.failed == 0 {
+  if summary.failed == 0 && total_errors == 0 {
     println(
       "Successfully compiled " +
       summary.successful.to_string() +
       " file(s) in " +
+      summary.total_time_ms.to_string() +
+      "ms",
+    )
+  } else if summary.failed == 0 && total_errors > 0 {
+    // Type errors but compilation succeeded (TypeScript behavior)
+    println(
+      "Compiled " +
+      summary.successful.to_string() +
+      " file(s) with " +
+      total_errors.to_string() +
+      " error(s) in " +
       summary.total_time_ms.to_string() +
       "ms",
     )
@@ -348,6 +376,21 @@ fn print_summary(
       summary.total_time_ms.to_string() +
       "ms",
     )
+  }
+
+  // Print diagnostic counts if any
+  if options.report_diagnostics && (total_errors > 0 || total_warnings > 0) {
+    let mut msg = "Found "
+    if total_errors > 0 {
+      msg = msg + total_errors.to_string() + " error(s)"
+    }
+    if total_warnings > 0 {
+      if total_errors > 0 {
+        msg = msg + ", "
+      }
+      msg = msg + total_warnings.to_string() + " warning(s)"
+    }
+    println(msg)
   }
 }
 
@@ -380,6 +423,7 @@ fn print_help() -> Unit {
   println("  --watch, -w             Watch mode: recompile on file changes")
   println("  --watchInterval <ms>    Watch polling interval in ms (default: 500)")
   println("  --verbose               Verbose output")
+  println("  --reportDiagnostics     Report all diagnostics (errors/warnings)")
   println("  --init                  Generate tsconfig.json (future)")
   println("")
   println("Examples:")
