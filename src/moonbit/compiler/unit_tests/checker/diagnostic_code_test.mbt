@@ -2741,12 +2741,49 @@ test "DiagnosticCode - TS2367 condition always same value" {
     #|}
   let result = check_source(source)
   match result {
-    Ok(_) => () // May not be fully implemented
+    Ok(_) => fail!("Expected TS2367 error for comparing string with number")
     Err(diagnostics) => {
-      // Should report TS2367 or related comparison error
-      if has_error(diagnostics, 2367) {
-        assert_true(has_message(diagnostics, "always"))
-      }
+      // Should report TS2367 for comparing types with no overlap
+      assert_true(has_error(diagnostics, 2367))
+      assert_true(has_message(diagnostics, "always"))
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - valid strict equality same type" {
+  let source =
+    #|function check(x: string, y: string) {
+    #|  if (x === y) { // same types have overlap
+    #|    return true;
+    #|  }
+    #|  return false;
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(true) // Valid - same types
+    Err(diagnostics) => {
+      // Should NOT report TS2367 for same types
+      assert_false(has_error(diagnostics, 2367))
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - valid union null check" {
+  let source =
+    #|function check(x: string | null) {
+    #|  if (x === null) { // null is in union
+    #|    return "null";
+    #|  }
+    #|  return x;
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(true) // Valid - null is in union
+    Err(diagnostics) => {
+      // Should NOT report TS2367 for union member
+      assert_false(has_error(diagnostics, 2367))
     }
   }
 }
@@ -2840,12 +2877,10 @@ test "DiagnosticCode - TS2773 function condition always true" {
     #|}
   let result = check_source(source)
   match result {
-    Ok(_) => () // May not be fully implemented
+    Ok(_) => fail!("Expected TS2773 error")
     Err(diagnostics) => {
-      // Should report TS2773 or similar warning
-      if has_error(diagnostics, 2773) {
-        assert_true(has_message(diagnostics, "function") || has_message(diagnostics, "true"))
-      }
+      assert_true(has_error(diagnostics, 2773))
+      assert_true(has_message(diagnostics, "function") || has_message(diagnostics, "always"))
     }
   }
 }
