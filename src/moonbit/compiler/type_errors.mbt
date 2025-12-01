@@ -219,6 +219,11 @@ pub enum MismatchReason {
   ObjectRestAssignmentMustBeVariable(String) // TS2701: The target of an object rest assignment must be a variable or a property access
   ObjectRestAssignmentNotOptional(String) // TS2702: A rest element cannot have a property name and cannot be optional
   SpreadTypesMustBeFromObjectTypes(String) // TS2762: Spread types may only be created from object types
+
+  // Async/Generator/Yield errors
+  YieldExpressionImplicitlyAny // TS2764: 'yield' expression implicitly results in an 'any' type because its containing generator lacks a return-type annotation
+  YieldOperandTypeInAsyncGenerator(String, String) // TS2770: Type of 'yield' operand in an async generator must either be a valid promise or must not contain a callable 'then' member
+  TypeReferencedInThenMethod(String) // TS2771: Type '{0}' referenced when attempting to get type of 'then' method in a promise
 } derive(Show, Eq)
 
 // ============================================================================
@@ -1056,6 +1061,12 @@ pub fn get_friendly_title(reason : MismatchReason) -> String {
       "OBJECT REST ASSIGNMENT PROPERTY '" + prop + "' CANNOT BE OPTIONAL"
     SpreadTypesMustBeFromObjectTypes(typ) =>
       "SPREAD TYPES MAY ONLY BE CREATED FROM OBJECT TYPES (GOT '" + typ + "')"
+    // Async/Generator/Yield errors
+    YieldExpressionImplicitlyAny => "'YIELD' EXPRESSION IMPLICITLY HAS 'ANY' TYPE"
+    YieldOperandTypeInAsyncGenerator(operand_type, _) =>
+      "YIELD OPERAND TYPE '" + operand_type + "' IN ASYNC GENERATOR"
+    TypeReferencedInThenMethod(type_name) =>
+      "TYPE '" + type_name + "' REFERENCED IN 'THEN' METHOD"
   }
 }
 
@@ -1619,6 +1630,17 @@ pub fn get_why_explanation(reason : MismatchReason) -> String {
       "Spread types can only be created from object types, but got '" +
       typ +
       "'. When spreading in a type (like { ...T, extra: number }), T must be an object type whose properties can be enumerated."
+    // Async/Generator/Yield errors
+    YieldExpressionImplicitlyAny =>
+      "The 'yield' expression implicitly results in an 'any' type because its containing generator lacks a return-type annotation. TypeScript cannot infer the type of values yielded by the generator, so it defaults to 'any'. Adding a return type annotation to the generator function will help TypeScript understand the yielded values."
+    YieldOperandTypeInAsyncGenerator(operand_type, _) =>
+      "In an async generator, the type '" +
+      operand_type +
+      "' of the 'yield' operand must either be a valid promise or must not contain a callable 'then' member. This restriction exists because async generators handle promises specially, and a non-promise type with a 'then' method could cause unexpected behavior."
+    TypeReferencedInThenMethod(type_name) =>
+      "Type '" +
+      type_name +
+      "' is referenced when attempting to get the type of the 'then' method in a promise. This usually indicates a circular reference where a promise's fulfillment callback references the same type being resolved, creating an infinite type resolution loop."
   }
 }
 
@@ -2783,6 +2805,41 @@ pub fn get_how_to_fix(
       fixes.push("Use a constraint for generics:")
       fixes.push("    type Extend<T extends object> = { ...T, extra: number };")
     }
+    // Async/Generator/Yield errors
+    YieldExpressionImplicitlyAny => {
+      fixes.push("Add a return type annotation to your generator function:")
+      fixes.push("")
+      fixes.push("    function* myGenerator(): Generator<number, void, unknown> {")
+      fixes.push("        yield 1;")
+      fixes.push("        yield 2;")
+      fixes.push("    }")
+      fixes.push("")
+      fixes.push("The Generator<Y, R, N> type parameters are:")
+      fixes.push("    Y = type of yielded values")
+      fixes.push("    R = return type of the generator")
+      fixes.push("    N = type passed to next() method")
+    }
+    YieldOperandTypeInAsyncGenerator(operand_type, _) => {
+      fixes.push("In an async generator, the yield operand must be a valid promise")
+      fixes.push("or not have a callable 'then' member.")
+      fixes.push("")
+      fixes.push("Current operand type: " + operand_type)
+      fixes.push("")
+      fixes.push("Option 1: Remove the 'then' member from the type")
+      fixes.push("Option 2: Ensure the type is a proper Promise<T>")
+      fixes.push("Option 3: Wrap the value: yield Promise.resolve(value)")
+    }
+    TypeReferencedInThenMethod(type_name) => {
+      fixes.push("A circular type reference was detected in the promise chain.")
+      fixes.push("Type: " + type_name)
+      fixes.push("")
+      fixes.push("Check your promise type definitions for self-references:")
+      fixes.push("    // Problematic - T references itself through then()")
+      fixes.push("    type T = Promise<T>;")
+      fixes.push("")
+      fixes.push("Option 1: Break the circular reference")
+      fixes.push("Option 2: Use a different type structure")
+    }
   }
   fixes
 }
@@ -2914,6 +2971,10 @@ pub fn get_error_code(reason : MismatchReason) -> Int {
     ObjectRestAssignmentMustBeVariable(_) => 2701 // TS2701: Object rest assignment target must be variable
     ObjectRestAssignmentNotOptional(_) => 2702 // TS2702: Object rest assignment may not be optional
     SpreadTypesMustBeFromObjectTypes(_) => 2762 // TS2762: Spread types may only be created from object types
+    // Async/Generator/Yield errors
+    YieldExpressionImplicitlyAny => 2764 // TS2764: 'yield' expression implicitly results in an 'any' type
+    YieldOperandTypeInAsyncGenerator(_, _) => 2770 // TS2770: Type of yield operand in an async generator
+    TypeReferencedInThenMethod(_) => 2771 // TS2771: Type is referenced in the type of the 'then' method
   }
 }
 

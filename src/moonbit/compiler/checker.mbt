@@ -4989,12 +4989,56 @@ fn infer_yield_expression_type(
   match ye.expression {
     Some(expr) => {
       let (expr_type, checker) = infer_type(checker, expr)
+
+      // TS2770: Check if yield operand type has a problematic 'then' member
+      // In an async generator, the yield operand must either be a valid promise
+      // or must not contain a callable 'then' member
+      let checker = check_yield_operand_then_member(checker, expr_type, ye.location)
+
       // For yield*, should iterate over the expression
       // For plain yield, return the expression type
       (expr_type, checker)
     }
-    None => undefined_type(checker)
+    None => {
+      // TS2764: 'yield' expression implicitly results in an 'any' type
+      // because its containing generator lacks a return-type annotation
+      // Note: Full implementation requires tracking enclosing function context
+      undefined_type(checker)
+    }
   }
+}
+
+///|
+/// Check if the yield operand type has a problematic 'then' member (TS2770)
+/// Type of 'yield' operand in an async generator must either be a valid promise
+/// or must not contain a callable 'then' member
+fn check_yield_operand_then_member(
+  checker : TypeChecker,
+  operand_type : Type,
+  location : SourceLocation,
+) -> TypeChecker {
+  // Check if the type has a 'then' property that is callable but not a proper promise
+  // In an async generator, the yield operand must either be a valid promise
+  // or must not contain a callable 'then' member (TS2770)
+  // Full implementation would check enclosing async generator context
+  // For now, this is a placeholder for the check
+  ignore(operand_type)
+  ignore(location)
+  checker
+}
+
+///|
+/// Check for circular type reference in promise 'then' method (TS2771)
+/// Type '{0}' referenced when attempting to get type of 'then' method in a promise
+fn check_promise_then_circular_reference(
+  checker : TypeChecker,
+  type_name : String,
+  location : SourceLocation,
+) -> TypeChecker {
+  // This check is for detecting circular references when resolving promise types
+  // It's typically triggered when a type refers to itself through the 'then' callback
+  // Full implementation requires cycle detection during promise type resolution
+  checker
 }
 
 ///|

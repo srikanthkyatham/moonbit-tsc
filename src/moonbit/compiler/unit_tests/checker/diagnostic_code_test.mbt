@@ -4338,3 +4338,118 @@ test "DiagnosticCode - valid function rest parameter" {
     }
   }
 }
+
+// ============================================================================
+// TS2764: 'yield' expression implicitly results in an 'any' type
+// ============================================================================
+
+///|
+test "DiagnosticCode - TS2764 yield expression implicitly any (not detected yet)" {
+  // Note: This tests the error code structure; detection not yet implemented
+  let source =
+    #|function* gen() {
+    #|  yield; // yield without value
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => () // Detection not implemented yet
+    Err(diagnostics) => {
+      if has_error(diagnostics, 2764) {
+        assert_true(has_message(diagnostics, "yield"))
+      }
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - valid yield with value" {
+  let source =
+    #|function* gen() {
+    #|  yield 42; // yield with explicit value
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => {
+      assert_true(not(has_error(diagnostics, 2764)))
+    }
+  }
+}
+
+// ============================================================================
+// TS2770: Type of yield operand in an async generator
+// ============================================================================
+
+///|
+test "DiagnosticCode - TS2770 yield operand type in async generator (not detected yet)" {
+  // Note: This tests the error code structure; detection not yet implemented
+  let source =
+    #|interface Thenable {
+    #|  then(cb: (value: any) => void): void;
+    #|}
+    #|async function* gen(value: Thenable) {
+    #|  yield value;
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => () // Detection not implemented yet
+    Err(diagnostics) => {
+      if has_error(diagnostics, 2770) {
+        assert_true(has_message(diagnostics, "yield") || has_message(diagnostics, "then"))
+      }
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - valid async generator yield" {
+  let source =
+    #|async function* gen() {
+    #|  yield 1;
+    #|  yield 2;
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => {
+      assert_true(not(has_error(diagnostics, 2770)))
+    }
+  }
+}
+
+// ============================================================================
+// TS2771: Type is referenced in the type of the 'then' method
+// ============================================================================
+
+///|
+test "DiagnosticCode - TS2771 then method circular reference (not detected yet)" {
+  // Note: This tests the error code structure; detection not yet implemented
+  let source =
+    #|interface CircularThenable {
+    #|  then(onfulfilled: (value: CircularThenable) => void): void;
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => () // Detection not implemented yet
+    Err(diagnostics) => {
+      if has_error(diagnostics, 2771) {
+        assert_true(has_message(diagnostics, "then"))
+      }
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - valid Promise-like interface" {
+  let source =
+    #|interface PromiseLike<T> {
+    #|  then<U>(onfulfilled: (value: T) => U): PromiseLike<U>;
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => {
+      assert_true(not(has_error(diagnostics, 2771)))
+    }
+  }
+}
