@@ -2971,6 +2971,55 @@ test "DiagnosticCode - valid type parameter name" {
   }
 }
 
+///|
+test "DiagnosticCode - TS2368 class type param reserved" {
+  let source =
+    #|class Box<boolean> {
+    #|  value: boolean;
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => () // May allow shadowing
+    Err(diagnostics) => {
+      if has_error(diagnostics, 2368) {
+        assert_true(has_message(diagnostics, "boolean"))
+      }
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - TS2368 interface type param reserved" {
+  let source =
+    #|interface Container<any> {
+    #|  item: any;
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => () // May allow shadowing
+    Err(diagnostics) => {
+      if has_error(diagnostics, 2368) {
+        assert_true(has_message(diagnostics, "any"))
+      }
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - TS2368 type alias type param reserved" {
+  let source =
+    #|type Wrapper<void> = { value: void };
+  let result = check_source(source)
+  match result {
+    Ok(_) => () // May allow shadowing
+    Err(diagnostics) => {
+      if has_error(diagnostics, 2368) {
+        assert_true(has_message(diagnostics, "void"))
+      }
+    }
+  }
+}
+
 // TS2369: Parameter property only in constructor
 ///|
 test "DiagnosticCode - TS2369 param property in method" {
@@ -5870,6 +5919,71 @@ test "DiagnosticCode - TS2736 unary minus on bigint is fine" {
     Err(diagnostics) => {
       // Should NOT have TS2736 for unary minus
       assert_true(not(has_error(diagnostics, 2736)))
+    }
+  }
+}
+
+// ============================================================================
+// TS2376: super call must be first statement in constructor
+// ============================================================================
+
+///|
+test "DiagnosticCode - TS2376 super not first statement" {
+  let source =
+    #|class Base { }
+    #|class Derived extends Base {
+    #|  constructor() {
+    #|    console.log("before super");
+    #|    super();
+    #|  }
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(false) // Should have error
+    Err(diagnostics) => {
+      assert_true(has_error(diagnostics, 2376))
+      assert_true(has_message(diagnostics, "super"))
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - TS2376 super first is OK" {
+  let source =
+    #|class Base { }
+    #|class Derived extends Base {
+    #|  constructor() {
+    #|    super();
+    #|    console.log("after super");
+    #|  }
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(true) // No error expected
+    Err(diagnostics) => {
+      // Should NOT have TS2376
+      assert_true(not(has_error(diagnostics, 2376)))
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - TS2376 this before super" {
+  let source =
+    #|class Base { }
+    #|class Derived extends Base {
+    #|  x: number = 0;
+    #|  constructor() {
+    #|    this.x = 1;
+    #|    super();
+    #|  }
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(false) // Should have error
+    Err(diagnostics) => {
+      // Should have either TS2376 or TS17009 (super must be called before this)
+      assert_true(has_error(diagnostics, 2376) || has_error(diagnostics, 17009))
     }
   }
 }

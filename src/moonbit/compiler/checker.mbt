@@ -7301,6 +7301,9 @@ fn check_function_declaration(
   // Push a new local scope for the function
   let checker = push_local_scope(checker)
 
+  // Check type parameter names for reserved keywords (TS2368)
+  let checker = check_type_parameter_names(checker, func.type_parameters)
+
   // Add function parameters to the local scope
   // Also check rest parameters have array type (TS2370)
   let mut checker = checker
@@ -7785,6 +7788,7 @@ fn contains_super_call(node : Node) -> Bool {
 
 ///|
 /// Check for super() call requirement in derived class constructor (TS2377)
+/// Also checks that super() is the first statement (TS2376)
 fn check_super_call_in_constructor(
   checker : TypeChecker,
   class_decl : ClassDeclaration,
@@ -7797,17 +7801,66 @@ fn check_super_call_in_constructor(
   }
 
   // Check if constructor body contains super() call
-  if contains_super_call(body) {
-    return checker
+  if not(contains_super_call(body)) {
+    // Emit TS2377 error
+    return add_diagnostic_with_code(
+      checker,
+      "Constructors for derived classes must contain a 'super' call.",
+      location,
+      TS2377,
+    )
   }
 
-  // Emit TS2377 error
-  add_diagnostic_with_code(
-    checker,
-    "Constructors for derived classes must contain a 'super' call.",
-    location,
-    TS2377,
-  )
+  // Check if super() is the first statement (TS2376)
+  check_super_is_first_statement(checker, body)
+}
+
+///|
+/// Check that super() is the first statement in constructor (TS2376)
+fn check_super_is_first_statement(checker : TypeChecker, body : Node) -> TypeChecker {
+  match body {
+    BlockStatement(block) => {
+      // Find the first non-empty statement
+      for i = 0; i < block.statements.length(); i = i + 1 {
+        let stmt = block.statements[i]
+        // Check if this statement is a super() call
+        if is_super_call_statement(stmt) {
+          // super() is the first statement, OK
+          return checker
+        }
+        // If it's an empty statement or just a variable declaration without
+        // side effects, we might be lenient, but TypeScript is strict:
+        // any statement before super() is an error
+        // Report TS2376 with the location of this statement
+        return add_diagnostic_with_code(
+          checker,
+          "A 'super' call must be the first statement in the constructor when a class contains initialized properties, parameter properties, or private identifiers.",
+          get_node_location(stmt),
+          TS2376,
+        )
+      }
+      // Empty constructor body - should have been caught by TS2377
+      checker
+    }
+    _ => checker
+  }
+}
+
+///|
+/// Check if a statement is a super() call expression statement
+fn is_super_call_statement(stmt : Node) -> Bool {
+  match stmt {
+    ExpressionStatement(expr_stmt) =>
+      match expr_stmt.expression {
+        CallExpression(call) =>
+          match call.expression {
+            SuperExpression(_) => true
+            _ => false
+          }
+        _ => false
+      }
+    _ => false
+  }
 }
 
 ///|
@@ -7816,6 +7869,9 @@ fn check_class_declaration(
   checker : TypeChecker,
   class_decl : ClassDeclaration,
 ) -> TypeChecker {
+  // Check type parameter names for reserved keywords (TS2368)
+  let checker = check_type_parameter_names(checker, class_decl.type_parameters)
+
   // Build the class type so we can set current_this_type
   let (class_type, checker) = build_class_type_for_this(checker, class_decl)
 
@@ -8202,6 +8258,9 @@ fn check_interface_declaration(
   checker : TypeChecker,
   iface_decl : InterfaceDeclaration,
 ) -> TypeChecker {
+  // Check type parameter names for reserved keywords (TS2368)
+  let checker = check_type_parameter_names(checker, iface_decl.type_parameters)
+
   let mut checker = checker
   // First pass: collect index signature return types and validate param types
   let string_index_type : Ref[Type?] = { val: None }
@@ -8358,10 +8417,13 @@ fn check_interface_heritage_conflicts(
 
 ///|
 /// Check type alias declaration for TS2700 (rest types may only be from object types)
+/// and TS2368 (type parameter name cannot be reserved)
 fn check_type_alias_declaration(
   checker : TypeChecker,
   type_alias : TypeAliasDeclaration,
 ) -> TypeChecker {
+  // Check type parameter names for reserved keywords (TS2368)
+  let checker = check_type_parameter_names(checker, type_alias.type_parameters)
   check_type_node_for_rest_errors(checker, type_alias.type_node)
 }
 
@@ -9875,4 +9937,38 @@ pub fn validate_exact_optional_property_types(
   }
 
   diagnostics
+}
+
+// ============================================================================
+// Type Parameter Name Validation (TS2368)
+// ============================================================================
+
+///|
+/// Check if a type parameter name is a reserved TypeScript type name
+fn is_reserved_type_name(name : String) -> Bool {
+  match name {
+    "string" | "number" | "boolean" | "symbol" | "bigint" | "void" | "any" | "object" | "never" | "unknown" | "undefined" | "null" =>
+      true
+    _ => false
+  }
+}
+
+///|
+/// Check type parameter names for reserved keywords (TS2368)
+fn check_type_parameter_names(
+  checker : TypeChecker,
+  type_params : Array[TypeParameter],
+) -> TypeChecker {
+  let mut checker = checker
+  for param in type_params {
+    if is_reserved_type_name(param.name) {
+      checker = add_diagnostic_with_code(
+        checker,
+        "Type parameter name cannot be '\{param.name}'",
+        param.location,
+        TS2368,
+      )
+    }
+  }
+  checker
 }
