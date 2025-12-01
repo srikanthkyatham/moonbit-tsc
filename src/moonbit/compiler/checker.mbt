@@ -1601,6 +1601,8 @@ fn get_builtin_global_type(
     Some(get_number_constructor_type(checker))
   } else if name == "Boolean" {
     Some(get_boolean_constructor_type(checker))
+  } else if name == "require" {
+    Some(get_require_type(checker))
   } else {
     None
   }
@@ -1823,6 +1825,24 @@ fn get_math_type(checker : TypeChecker) -> (Type, TypeChecker) {
     is_readonly: false,
   }
   math_methods.set("random", random_method)
+
+  // Math.sqrt
+  let sqrt_method = PropertySignature::{
+    name: "sqrt",
+    prop_type: Type::Function(CheckerFunctionType::{
+      parameters: [CheckerParameter::{
+        name: "x",
+        param_type: Type::Number(info),
+        is_optional: false,
+        is_rest: false,
+      }],
+      return_type: Type::Number(info),
+      info,
+    }),
+    is_optional: false,
+    is_readonly: false,
+  }
+  math_methods.set("sqrt", sqrt_method)
 
   // Math.PI
   let pi_prop = PropertySignature::{
@@ -2361,6 +2381,30 @@ fn get_boolean_constructor_type(checker : TypeChecker) -> (Type, TypeChecker) {
   })
 
   (boolean_type, checker)
+}
+
+///|
+/// Get the type for the require function (Node.js CommonJS require)
+fn get_require_type(checker : TypeChecker) -> (Type, TypeChecker) {
+  let (id, checker) = next_type_id(checker)
+  let default_flags = TypeFlags::default()
+  let info = TypeInfo::{ id: 0, flags: default_flags }
+
+  // require(id: string) => any
+  let require_type = Type::Function(CheckerFunctionType::{
+    parameters: [
+      CheckerParameter::{
+        name: "id",
+        param_type: Type::String(info),
+        is_optional: false,
+        is_rest: false,
+      },
+    ],
+    return_type: Type::Any(info),
+    info: TypeInfo::{ id, flags: default_flags },
+  })
+
+  (require_type, checker)
 }
 
 ///|

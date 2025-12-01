@@ -2067,6 +2067,9 @@ fn parse_parameter(parser : Parser) -> Result[(Node, Parser), Parser] {
     _ => (None, parser)
   }
 
+  // Parameters with default values are effectively optional
+  let is_optional = is_optional || initializer.is_some()
+
   // Validate rest parameter constraints
   let parser = if is_rest {
     // TS1048: A rest parameter cannot be optional
