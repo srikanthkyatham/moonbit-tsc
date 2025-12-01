@@ -2795,11 +2795,10 @@ test "DiagnosticCode - TS2695 comma operator left unused" {
     #|const x = (1, 2, 3);
   let result = check_source(source)
   match result {
-    Ok(_) => () // May not be fully implemented
+    Ok(_) => fail!("Expected TS2695 error for comma operator with unused left side")
     Err(diagnostics) => {
-      if has_error(diagnostics, 2695) {
-        assert_true(has_message(diagnostics, "comma") || has_message(diagnostics, "unused"))
-      }
+      assert_true(has_error(diagnostics, 2695))
+      assert_true(has_message(diagnostics, "comma") || has_message(diagnostics, "unused"))
     }
   }
 }
@@ -2814,7 +2813,7 @@ test "DiagnosticCode - valid comma operator with side effects" {
     Ok(_) => assert_true(true) // Valid - left side has side effects
     Err(diagnostics) => {
       // Should not report TS2695 if side effect exists
-      assert_true(not(has_error(diagnostics, 2695)) || true) // May still warn
+      assert_true(not(has_error(diagnostics, 2695)))
     }
   }
 }

@@ -2577,11 +2577,26 @@ test "check regex type annotation" {
 // ============================================================================
 
 ///|
-test "check comma expression" {
-  let result = parse_bind_and_check("const x = (1, 2, 3);")
+test "check comma expression with side effects" {
+  // Comma expression where left side has side effects (function call)
+  let result = parse_bind_and_check("function f() { return 1; } const x = (f(), 2);")
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "check comma expression without side effects reports TS2695" {
+  // Comma expression where left side has no side effects should report TS2695
+  let result = parse_bind_and_check("const x = (1, 2, 3);")
+  match result {
+    Ok(_) => assert_true(false) // Should have diagnostics
+    Err(diags) => {
+      assert_true(diags.length() > 0)
+      let has_ts2695 = diags.iter().any(fn(d) { d.code == 2695 })
+      assert_true(has_ts2695)
+    }
   }
 }
 

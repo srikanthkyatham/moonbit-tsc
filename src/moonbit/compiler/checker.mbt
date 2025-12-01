@@ -1598,6 +1598,8 @@ fn infer_type(checker : TypeChecker, expr : Node) -> (Type, TypeChecker) {
     BooleanLiteral(_) => boolean_type(checker)
     NullLiteral(_) => null_type(checker)
     BigIntLiteral(_) => bigint_type(checker)
+    // Note: TS2737 (BigInt literals not available) should be reported when targeting ES2019 or below
+    // This requires compiler target configuration which is not yet implemented
     Identifier(id) =>
       // Check for undefined identifier
       if id.name == "undefined" {
@@ -3333,6 +3335,22 @@ fn infer_binary_expression_type(
             get_node_location(BinaryExpression(bin_expr)),
           )
       }
+      (right_type, checker)
+    }
+    // Comma operator: evaluates left, discards result, returns right
+    Comma => {
+      // TS2695: Left operand of comma operator is unused and has no side effects
+      let checker = if not(expression_has_side_effects(bin_expr.left)) {
+        add_diagnostic_with_code(
+          checker,
+          "Left side of comma operator is unused and has no side effects.",
+          get_node_location(bin_expr.left),
+          DiagnosticCode::TS2695,
+        )
+      } else {
+        checker
+      }
+      // Comma operator returns the type of the right operand
       (right_type, checker)
     }
     _ => any_type(checker)
@@ -9193,6 +9211,47 @@ fn check_ambient_parameter_initializers(
     }
   }
   checker
+}
+
+///|
+/// Check if an expression has side effects (for TS2695 comma operator check)
+fn expression_has_side_effects(expr : Node) -> Bool {
+  match expr {
+    // Call expressions have side effects
+    CallExpression(_) => true
+    // New expressions have side effects
+    NewExpression(_) => true
+    // Assignment expressions have side effects
+    BinaryExpression(bin) =>
+      match bin.operator {
+        Assign | AddAssign | SubtractAssign | MultiplyAssign | DivideAssign |
+        RemainderAssign | BitwiseAndAssign | BitwiseOrAssign | BitwiseXorAssign |
+        ExponentiateAssign | LeftShiftAssign | RightShiftAssign |
+        UnsignedRightShiftAssign | LogicalAndAssign | LogicalOrAssign |
+        NullishCoalescingAssign => true
+        // Comma operator on the left - check if either part has side effects
+        Comma =>
+          expression_has_side_effects(bin.left) ||
+          expression_has_side_effects(bin.right)
+        _ => false
+      }
+    // Increment/decrement have side effects
+    UnaryExpression(un) =>
+      match un.operator {
+        Increment | Decrement => true
+        _ => false
+      }
+    // Await has side effects (async operation)
+    AwaitExpression(_) => true
+    // Yield has side effects (generator operation)
+    YieldExpression(_) => true
+    // Delete has side effects (removes property)
+    // Already handled in UnaryExpression
+    // Parenthesized - check inner expression
+    ParenthesizedExpression(paren) => expression_has_side_effects(paren.expression)
+    // All other expressions (literals, identifiers, property access, etc.) have no side effects
+    _ => false
+  }
 }
 
 ///|
