@@ -94,9 +94,9 @@ defmodule TSC.Options do
       doc: "File content (if nil, reads from disk)"
     ],
     imported_types: [
-      type: :map,
+      type: {:custom, __MODULE__, :validate_imported_types, []},
       default: %{},
-      doc: "Map of imported type definitions from dependencies"
+      doc: "Map of imported type definitions from dependencies (string keys for file paths)"
     ],
     verbose: [
       type: :boolean,
@@ -292,4 +292,14 @@ defmodule TSC.Options do
   end
 
   defp get_allowed_keys(_), do: []
+
+  # ============================================================================
+  # Custom Type Validators
+  # ============================================================================
+
+  @doc """
+  Custom validator for imported_types map (allows string keys for file paths).
+  """
+  def validate_imported_types(value) when is_map(value), do: {:ok, value}
+  def validate_imported_types(value), do: {:error, "expected a map, got: #{inspect(value)}"}
 end
