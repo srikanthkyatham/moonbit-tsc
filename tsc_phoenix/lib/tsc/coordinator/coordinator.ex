@@ -13,7 +13,7 @@ defmodule TSC.Coordinator do
   #{NimbleOptions.docs(TSC.Options.check_project_schema())}
   """
 
-  alias TSC.Cache.{TypeCache, FileCache}
+  alias TSC.Cache.{TypeCache, FileCache, ErrorStore}
   alias TSC.Graph.DependencyGraph
   alias TSC.Worker.PoolSupervisor
   alias TSC.Telemetry.Metrics
@@ -204,6 +204,22 @@ defmodule TSC.Coordinator do
           length(files),
           duration,
           if(enhanced_result.success, do: :success, else: :errors)
+        )
+
+        # Store errors in ETS for persistence (convert structs to maps)
+        diagnostics_as_maps = Enum.map(data.diagnostics, fn
+          %TSC.Diagnostic{} = d -> TSC.Diagnostic.to_map(d)
+          %{__struct__: _} = d -> Map.from_struct(d)
+          d when is_map(d) -> d
+          _ -> %{}
+        end)
+        ErrorStore.put_from_files(files, diagnostics_as_maps)
+
+        # Broadcast results to LiveView subscribers
+        Phoenix.PubSub.broadcast(
+          TscPhoenix.PubSub,
+          "compiler:updates",
+          {:incremental_check_complete, enhanced_result}
         )
 
         {:ok, enhanced_result}

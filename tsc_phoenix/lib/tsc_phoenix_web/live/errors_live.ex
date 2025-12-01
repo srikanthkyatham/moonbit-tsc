@@ -9,16 +9,24 @@ defmodule TscPhoenixWeb.ErrorsLive do
   import TscPhoenixWeb.Live.Components.FileTree
   import TscPhoenixWeb.Live.Components.CodePreview
 
+  alias TSC.Cache.ErrorStore
+
   @impl true
   def mount(_params, _session, socket) do
     if connected?(socket) do
       Phoenix.PubSub.subscribe(TscPhoenix.PubSub, "compiler:updates")
     end
 
+    # Load projects and errors from ETS
+    projects = ErrorStore.list_projects()
+    {selected_project, errors} = load_latest_errors()
+
     socket =
       socket
       |> assign(:page_title, "Errors")
-      |> assign(:errors, [])
+      |> assign(:projects, projects)
+      |> assign(:selected_project, selected_project)
+      |> assign(:errors, errors)
       |> assign(:filter_category, "all")
       |> assign(:filter_type, "all")
       |> assign(:search, "")
@@ -29,6 +37,24 @@ defmodule TscPhoenixWeb.ErrorsLive do
       |> assign(:view_mode, :list)  # :list or :split
 
     {:ok, socket}
+  end
+
+  defp load_latest_errors do
+    case ErrorStore.get_latest() do
+      {:ok, project, diagnostics, _timestamp} ->
+        {project, Enum.map(diagnostics, &format_diagnostic/1)}
+      :not_found ->
+        {nil, []}
+    end
+  end
+
+  defp load_project_errors(project_path) do
+    case ErrorStore.get(project_path) do
+      {:ok, diagnostics, _timestamp} ->
+        Enum.map(diagnostics, &format_diagnostic/1)
+      :not_found ->
+        []
+    end
   end
 
   @impl true
@@ -42,7 +68,9 @@ defmodule TscPhoenixWeb.ErrorsLive do
         _ ->
           socket.assigns.errors
       end
-      |> Enum.uniq_by(&{&1[:file], &1[:line], &1[:column], &1[:code]})
+      |> Enum.uniq_by(fn error ->
+        {Map.get(error, :file), Map.get(error, :line), Map.get(error, :column), Map.get(error, :code)}
+      end)
       |> Enum.take(500)
 
     {:noreply, assign(socket, :errors, new_errors)}
@@ -51,7 +79,16 @@ defmodule TscPhoenixWeb.ErrorsLive do
   @impl true
   def handle_info({:incremental_check_complete, result}, socket) do
     formatted = Enum.map(result.diagnostics, &format_diagnostic/1)
-    {:noreply, assign(socket, :errors, formatted)}
+    projects = ErrorStore.list_projects()
+    {selected_project, _} = load_latest_errors()
+
+    socket =
+      socket
+      |> assign(:errors, formatted)
+      |> assign(:projects, projects)
+      |> assign(:selected_project, selected_project)
+
+    {:noreply, socket}
   end
 
   @impl true
@@ -70,6 +107,20 @@ defmodule TscPhoenixWeb.ErrorsLive do
   @impl true
   def handle_event("search", %{"search" => search}, socket) do
     {:noreply, assign(socket, :search, search)}
+  end
+
+  @impl true
+  def handle_event("select_project", %{"project" => project}, socket) do
+    errors = load_project_errors(project)
+
+    socket =
+      socket
+      |> assign(:selected_project, project)
+      |> assign(:errors, errors)
+      |> assign(:selected_file, nil)
+      |> assign(:selected_file_content, nil)
+
+    {:noreply, socket}
   end
 
   @impl true
@@ -187,6 +238,17 @@ defmodule TscPhoenixWeb.ErrorsLive do
           <span class="text-xl font-bold px-4">/ Errors</span>
         </div>
         <div class="flex-none gap-2">
+          <!-- Project Selector -->
+          <%= if length(@projects) > 0 do %>
+            <select class="select select-bordered" phx-change="select_project" name="project">
+              <%= for proj <- @projects do %>
+                <option value={proj.project} selected={@selected_project == proj.project}>
+                  <%= Path.basename(proj.project) %> (<%= proj.errors %> errors)
+                </option>
+              <% end %>
+            </select>
+          <% end %>
+
           <!-- Search -->
           <div class="form-control">
             <input
@@ -397,6 +459,11 @@ defmodule TscPhoenixWeb.ErrorsLive do
 
   defp format_diagnostic(%TSC.Diagnostic{} = d) do
     TSC.Diagnostic.to_map(d)
+  end
+
+  defp format_diagnostic(%{__struct__: _} = d) do
+    # Handle any other struct by converting to map
+    Map.from_struct(d)
   end
 
   defp format_diagnostic(d) when is_map(d), do: d

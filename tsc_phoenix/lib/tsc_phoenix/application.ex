@@ -18,6 +18,7 @@ defmodule TscPhoenix.Application do
       # Compiler core services
       TSC.Cache.TypeCache,
       TSC.Cache.FileCache,
+      TSC.Cache.ErrorStore,
       TSC.Telemetry.Reporter,
       TSC.Telemetry.Profiler,
       {TSC.Worker.PoolSupervisor, pool_size: pool_size()},
