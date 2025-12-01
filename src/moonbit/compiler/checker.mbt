@@ -1851,13 +1851,40 @@ fn infer_identifier_type(
                         TS2552,
                       )
                     None =>
-                      // No similar name found - emit TS2304
-                      add_diagnostic_with_code(
-                        checker,
-                        "Cannot find name '" + id.name + "'",
-                        id.location,
-                        TS2304,
-                      )
+                      // No similar name found - check for specialized error codes
+                      // TS2579: Test runner globals (Jest, Mocha, etc.)
+                      if is_test_runner_global(id.name) {
+                        add_diagnostic_with_code(
+                          checker,
+                          "Cannot find name '\{id.name}'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.",
+                          id.location,
+                          TS2579,
+                        )
+                      } else if is_dom_global(id.name) {
+                        // TS2580: DOM/Browser globals
+                        add_diagnostic_with_code(
+                          checker,
+                          "Cannot find name '\{id.name}'. Do you need to change your target library? Try changing the 'lib' compiler option to include 'dom'.",
+                          id.location,
+                          TS2580,
+                        )
+                      } else if is_es_library_global(id.name) {
+                        // TS2584: ES library globals (newer JS features)
+                        add_diagnostic_with_code(
+                          checker,
+                          "Cannot find name '\{id.name}'. Do you need to change your target library? Try changing the 'lib' compiler option to include a newer ES version.",
+                          id.location,
+                          TS2584,
+                        )
+                      } else {
+                        // Generic TS2304
+                        add_diagnostic_with_code(
+                          checker,
+                          "Cannot find name '" + id.name + "'",
+                          id.location,
+                          TS2304,
+                        )
+                      }
                   }
                   any_type(checker)
                 }
@@ -1866,6 +1893,97 @@ fn infer_identifier_type(
           }
       }
   }
+}
+
+///|
+/// Check if a name is a test runner global (Jest, Mocha, Jasmine, etc.)
+/// Used for TS2579 error
+fn is_test_runner_global(name : String) -> Bool {
+  // Jest globals
+  name == "describe" ||
+  name == "it" ||
+  name == "test" ||
+  name == "expect" ||
+  name == "beforeEach" ||
+  name == "afterEach" ||
+  name == "beforeAll" ||
+  name == "afterAll" ||
+  name == "jest" ||
+  // Mocha globals
+  name == "suite" ||
+  name == "context" ||
+  name == "specify" ||
+  name == "before" ||
+  name == "after" ||
+  // Jasmine globals
+  name == "jasmine" ||
+  name == "spyOn" ||
+  name == "fail" ||
+  name == "pending" ||
+  name == "fdescribe" ||
+  name == "fit" ||
+  name == "xdescribe" ||
+  name == "xit"
+}
+
+///|
+/// Check if a name is a DOM/Browser global
+/// Used for TS2580 error
+fn is_dom_global(name : String) -> Bool {
+  name == "document" ||
+  name == "window" ||
+  name == "navigator" ||
+  name == "location" ||
+  name == "history" ||
+  name == "localStorage" ||
+  name == "sessionStorage" ||
+  name == "fetch" ||
+  name == "XMLHttpRequest" ||
+  name == "WebSocket" ||
+  name == "Worker" ||
+  name == "ServiceWorker" ||
+  name == "Blob" ||
+  name == "File" ||
+  name == "FileReader" ||
+  name == "FormData" ||
+  name == "URL" ||
+  name == "URLSearchParams" ||
+  name == "HTMLElement" ||
+  name == "Element" ||
+  name == "Node" ||
+  name == "Event" ||
+  name == "EventTarget" ||
+  name == "MutationObserver" ||
+  name == "IntersectionObserver" ||
+  name == "ResizeObserver" ||
+  name == "requestAnimationFrame" ||
+  name == "cancelAnimationFrame" ||
+  name == "alert" ||
+  name == "confirm" ||
+  name == "prompt"
+}
+
+///|
+/// Check if a name is an ES library global (newer JS features)
+/// Used for TS2584 error
+fn is_es_library_global(name : String) -> Bool {
+  // ES2015+ features
+  name == "Proxy" ||
+  name == "Reflect" ||
+  name == "WeakMap" ||
+  name == "WeakSet" ||
+  name == "SharedArrayBuffer" ||
+  name == "Atomics" ||
+  // ES2017+ features
+  name == "AsyncIterator" ||
+  // ES2020+ features
+  name == "BigInt" ||
+  name == "globalThis" ||
+  // ES2021+ features
+  name == "FinalizationRegistry" ||
+  name == "WeakRef" ||
+  // Iterator helpers (ES2024+)
+  name == "Iterator"
 }
 
 ///|
