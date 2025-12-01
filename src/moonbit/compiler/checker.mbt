@@ -8338,11 +8338,83 @@ fn is_super_call_statement(stmt : Node) -> Bool {
 }
 
 ///|
+/// TS2502: Check if class references itself in its own base expression
+fn check_class_self_reference(
+  checker : TypeChecker,
+  class_decl : ClassDeclaration,
+) -> TypeChecker {
+  let class_name = get_class_decl_name(class_decl)
+  if class_name == "<anonymous>" {
+    return checker // Anonymous classes can't self-reference by name
+  }
+
+  // Check heritage clauses for self-reference
+  let mut checker = checker
+  for clause in class_decl.heritage_clauses {
+    if clause.kind == Extends {
+      // Check each type expression in the extends clause
+      for type_expr in clause.types {
+        match type_expr {
+          TypeReference(type_ref) =>
+            if type_ref.type_name == class_name {
+              checker = add_diagnostic_with_code(
+                checker,
+                "'\{class_name}' is referenced directly or indirectly in its own base expression.",
+                clause.location,
+                TS2502,
+              )
+            }
+          Identifier(id) =>
+            if id.name == class_name {
+              checker = add_diagnostic_with_code(
+                checker,
+                "'\{class_name}' is referenced directly or indirectly in its own base expression.",
+                clause.location,
+                TS2502,
+              )
+            }
+          // Handle property access like Namespace.ClassName
+          PropertyAccessExpression(prop_access) => {
+            let base_name = get_leftmost_identifier_name(
+              PropertyAccessExpression(prop_access),
+            )
+            if base_name == class_name {
+              checker = add_diagnostic_with_code(
+                checker,
+                "'\{class_name}' is referenced directly or indirectly in its own base expression.",
+                clause.location,
+                TS2502,
+              )
+            }
+          }
+          _ => ()
+        }
+      }
+    }
+  }
+  checker
+}
+
+///|
+/// Get the leftmost identifier name from a property access chain
+fn get_leftmost_identifier_name(expr : Node) -> String {
+  match expr {
+    Identifier(id) => id.name
+    PropertyAccessExpression(prop_access) =>
+      get_leftmost_identifier_name(prop_access.expression)
+    _ => ""
+  }
+}
+
+///|
 /// Check class declaration
 fn check_class_declaration(
   checker : TypeChecker,
   class_decl : ClassDeclaration,
 ) -> TypeChecker {
+  // TS2502: Check if class references itself in its own base expression
+  let checker = check_class_self_reference(checker, class_decl)
+
   // Check type parameter names for reserved keywords (TS2368)
   let checker = check_type_parameter_names(checker, class_decl.type_parameters)
 
@@ -9230,7 +9302,135 @@ fn check_enum_declaration(
   checker : TypeChecker,
   enum_decl : EnumDeclaration,
 ) -> TypeChecker {
-  check_enum_members(checker, enum_decl.members, enum_decl.is_const, 0)
+  // Collect all enum member names for forward reference checking
+  let all_member_names : Map[String, Bool] = Map::new()
+  for mem in enum_decl.members {
+    all_member_names.set(mem.name, true)
+  }
+  // Track seen members as we process them
+  let seen_members : Map[String, Bool] = Map::new()
+  check_enum_members_with_forward_check(
+    checker,
+    enum_decl.members,
+    enum_decl.is_const,
+    0,
+    seen_members,
+    all_member_names,
+  )
+}
+
+///|
+/// Check enum members with forward reference checking
+/// Validates that enum member initializers don't reference members defined later
+fn check_enum_members_with_forward_check(
+  checker : TypeChecker,
+  members : Array[EnumMember],
+  is_const : Bool,
+  index : Int,
+  seen_members : Map[String, Bool],
+  all_member_names : Map[String, Bool],
+) -> TypeChecker {
+  if index >= members.length() {
+    checker
+  } else {
+    let e_member = members[index]
+    // Check for forward references in the initializer
+    let checker = match e_member.initializer {
+      Some(init) =>
+        check_enum_initializer_forward_reference(
+          checker,
+          init,
+          seen_members,
+          all_member_names,
+          e_member.location,
+        )
+      None => checker
+    }
+    // Mark this member as seen
+    seen_members.set(e_member.name, true)
+    // Check the member itself
+    let checker = check_enum_member(checker, e_member, is_const)
+    check_enum_members_with_forward_check(
+      checker,
+      members,
+      is_const,
+      index + 1,
+      seen_members,
+      all_member_names,
+    )
+  }
+}
+
+///|
+/// Check if an enum initializer references a forward-declared member (TS2651)
+fn check_enum_initializer_forward_reference(
+  checker : TypeChecker,
+  expr : Node,
+  seen_members : Map[String, Bool],
+  all_member_names : Map[String, Bool],
+  location : SourceLocation,
+) -> TypeChecker {
+  match expr {
+    Identifier(id) =>
+      // If the identifier is an enum member that hasn't been seen yet, it's a forward reference
+      if all_member_names.contains(id.name) && not(seen_members.contains(id.name)) {
+        add_diagnostic_with_code(
+          checker,
+          "Enum member '\{id.name}' cannot be accessed before it is defined.",
+          location,
+          TS2651,
+        )
+      } else {
+        checker
+      }
+    PropertyAccessExpression(prop_access) =>
+      // Check if accessing a forward-declared member like MyEnum.ForwardMember
+      if all_member_names.contains(prop_access.name) &&
+        not(seen_members.contains(prop_access.name)) {
+        add_diagnostic_with_code(
+          checker,
+          "Enum member '\{prop_access.name}' cannot be accessed before it is defined.",
+          location,
+          TS2651,
+        )
+      } else {
+        checker
+      }
+    BinaryExpression(bin) => {
+      // Check both sides of binary expressions
+      let checker = check_enum_initializer_forward_reference(
+        checker,
+        bin.left,
+        seen_members,
+        all_member_names,
+        location,
+      )
+      check_enum_initializer_forward_reference(
+        checker,
+        bin.right,
+        seen_members,
+        all_member_names,
+        location,
+      )
+    }
+    UnaryExpression(un) =>
+      check_enum_initializer_forward_reference(
+        checker,
+        un.operand,
+        seen_members,
+        all_member_names,
+        location,
+      )
+    ParenthesizedExpression(paren) =>
+      check_enum_initializer_forward_reference(
+        checker,
+        paren.expression,
+        seen_members,
+        all_member_names,
+        location,
+      )
+    _ => checker
+  }
 }
 
 ///|
