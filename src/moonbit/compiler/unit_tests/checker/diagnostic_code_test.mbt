@@ -1060,11 +1060,10 @@ test "DiagnosticCode - TS2729 property used before initialization" {
     #|}
   let result = check_source(source)
   match result {
-    Ok(_) => () // May not be fully implemented
+    Ok(_) => assert_true(false) // Expected TS2729 error
     Err(diagnostics) => {
-      if has_error(diagnostics, 2729) {
-        assert_true(has_message(diagnostics, "initialization"))
-      }
+      assert_true(has_error(diagnostics, 2729))
+      assert_true(has_message(diagnostics, "initialization"))
     }
   }
 }
@@ -2795,7 +2794,7 @@ test "DiagnosticCode - TS2695 comma operator left unused" {
     #|const x = (1, 2, 3);
   let result = check_source(source)
   match result {
-    Ok(_) => fail!("Expected TS2695 error for comma operator with unused left side")
+    Ok(_) => assert_true(false) // Expected TS2695 error
     Err(diagnostics) => {
       assert_true(has_error(diagnostics, 2695))
       assert_true(has_message(diagnostics, "comma") || has_message(diagnostics, "unused"))
@@ -4249,6 +4248,21 @@ test "DiagnosticCode - valid new with construct signature" {
     Ok(_) => assert_true(true)
     Err(diagnostics) => {
       assert_true(not(has_error(diagnostics, 2747)))
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - TS2748: self-reference in initializer" {
+  // Variable referencing itself in its own initializer
+  let source =
+    #|let x = x + 1;
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(false) // Expected TS2748 error
+    Err(diagnostics) => {
+      assert_true(has_error(diagnostics, 2748))
+      assert_true(has_message(diagnostics, "initialization"))
     }
   }
 }

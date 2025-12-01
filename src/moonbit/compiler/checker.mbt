@@ -1508,6 +1508,9 @@ fn check_variable_declaration(
   checker : TypeChecker,
   decl : VariableDeclaration,
 ) -> TypeChecker {
+  // Check for TS2748: variable referencing itself in initializer (temporal dead zone)
+  let checker = check_variable_self_reference(checker, decl)
+
   // Get the declared type (if any)
   let (declared_type, checker) = match decl.type_annotation {
     Some(type_node) => get_type_from_type_node(checker, type_node)
@@ -8133,6 +8136,20 @@ fn check_class_declaration(
     }
   }
 
+  // For TS2729: Track properties not yet initialized (includes later properties with initializers)
+  // A property initializer cannot reference properties that appear later in the class
+  let not_yet_initialized : Map[String, Bool] = Map::new()
+  for mem in class_decl.members {
+    match mem {
+      PropertyDeclaration(prop) =>
+        if not(has_modifier(prop.modifiers, Modifier::Static)) {
+          // Add all non-static properties - we'll remove them as we process them
+          not_yet_initialized.set(prop.name, true)
+        }
+      _ => ()
+    }
+  }
+
   // Check class members (constructors, methods, properties)
   for i = 0; i < class_decl.members.length(); i = i + 1 {
     checker = match class_decl.members[i] {
@@ -8204,22 +8221,41 @@ fn check_class_declaration(
             // Also check method signatures without body for TS2369
             check_method_parameter_properties(checker, method_dec.parameters)
         }
-      PropertyDeclaration(prop) =>
+      PropertyDeclaration(prop) => {
+        // Check if this is a static property for TS2334
+        let is_static = has_modifier(prop.modifiers, Modifier::Static)
         match prop.initializer {
           Some(init) => {
-            // Check if this is a static property for TS2334
-            let is_static = has_modifier(prop.modifiers, Modifier::Static)
             let checker = if is_static {
               { ..checker, in_static_context: true }
             } else {
               checker
             }
+            // Check for TS2729: property forward reference (only for non-static properties)
+            let checker = if not(is_static) {
+              check_property_forward_reference(checker, init, not_yet_initialized)
+            } else {
+              checker
+            }
             let (_, c) = infer_type(checker, init)
-            // Restore in_static_context flag
-            if is_static { { ..c, in_static_context: false } } else { c }
+            // Restore in_static_context flag and mark property as initialized
+            let c = if is_static { { ..c, in_static_context: false } } else { c }
+            // Remove from not_yet_initialized after processing (for TS2729)
+            if not(is_static) {
+              not_yet_initialized.remove(prop.name)
+            }
+            c
           }
-          None => checker
+          None => {
+            // Property without initializer - still remove from not_yet_initialized
+            // (it's in uninitialized_props for TS2565 checking in constructor)
+            if not(is_static) {
+              not_yet_initialized.remove(prop.name)
+            }
+            checker
+          }
         }
+      }
       _ => checker
     }
   }
@@ -9322,6 +9358,186 @@ fn check_parameter_self_reference(
     }
   }
   checker
+}
+
+///|
+/// Check if an expression contains a reference to this.propName where propName is uninitialized (TS2729)
+fn check_property_forward_reference(
+  checker : TypeChecker,
+  expr : Node,
+  uninitialized_props : Map[String, Bool],
+) -> TypeChecker {
+  let mut checker = checker
+  match expr {
+    PropertyAccessExpression(pa) =>
+      match pa.expression {
+        ThisExpression(_) => {
+          // This is a this.propName access
+          if uninitialized_props.contains(pa.name) {
+            checker = add_diagnostic_with_code(
+              checker,
+              "Property '\{pa.name}' is used before its initialization.",
+              pa.location,
+              DiagnosticCode::TS2729,
+            )
+          }
+          checker
+        }
+        _ => check_property_forward_reference(checker, pa.expression, uninitialized_props)
+      }
+    BinaryExpression(bin) => {
+      checker = check_property_forward_reference(checker, bin.left, uninitialized_props)
+      check_property_forward_reference(checker, bin.right, uninitialized_props)
+    }
+    UnaryExpression(un) =>
+      check_property_forward_reference(checker, un.operand, uninitialized_props)
+    ConditionalExpression(cond) => {
+      checker = check_property_forward_reference(
+        checker,
+        cond.condition,
+        uninitialized_props,
+      )
+      checker = check_property_forward_reference(
+        checker,
+        cond.when_true,
+        uninitialized_props,
+      )
+      check_property_forward_reference(checker, cond.when_false, uninitialized_props)
+    }
+    CallExpression(call) => {
+      checker = check_property_forward_reference(
+        checker,
+        call.expression,
+        uninitialized_props,
+      )
+      for arg in call.arguments {
+        checker = check_property_forward_reference(checker, arg, uninitialized_props)
+      }
+      checker
+    }
+    NewExpression(new_expr) => {
+      checker = check_property_forward_reference(
+        checker,
+        new_expr.expression,
+        uninitialized_props,
+      )
+      match new_expr.arguments {
+        Some(args) =>
+          for arg in args {
+            checker = check_property_forward_reference(checker, arg, uninitialized_props)
+          }
+        None => ()
+      }
+      checker
+    }
+    ArrayLiteralExpression(arr) => {
+      for elem in arr.elements {
+        match elem {
+          Some(e) =>
+            checker = check_property_forward_reference(checker, e, uninitialized_props)
+          None => ()
+        }
+      }
+      checker
+    }
+    ObjectLiteralExpression(obj) => {
+      for prop in obj.properties {
+        match prop {
+          PropertyAssignment(_, initializer, _) =>
+            checker = check_property_forward_reference(
+              checker,
+              initializer,
+              uninitialized_props,
+            )
+          ShorthandProperty(_, _) => ()
+          SpreadAssignment(expression, _) =>
+            checker = check_property_forward_reference(
+              checker,
+              expression,
+              uninitialized_props,
+            )
+          MethodDeclaration(_, _, _) => ()
+          GetAccessor(_, _, _) => ()
+          SetAccessor(_, _, _) => ()
+          ComputedPropertyAssignment(key_expr, value_expr, _) => {
+            checker = check_property_forward_reference(
+              checker,
+              key_expr,
+              uninitialized_props,
+            )
+            checker = check_property_forward_reference(
+              checker,
+              value_expr,
+              uninitialized_props,
+            )
+          }
+        }
+      }
+      checker
+    }
+    ParenthesizedExpression(paren) =>
+      check_property_forward_reference(checker, paren.expression, uninitialized_props)
+    ElementAccessExpression(elem) => {
+      checker = check_property_forward_reference(
+        checker,
+        elem.expression,
+        uninitialized_props,
+      )
+      check_property_forward_reference(
+        checker,
+        elem.argument_expression,
+        uninitialized_props,
+      )
+    }
+    ArrowFunction(arrow) =>
+      // Don't recurse into arrow function bodies - they're evaluated lazily
+      checker
+    FunctionExpression(_) =>
+      // Don't recurse into function expressions - they're evaluated lazily
+      checker
+    TemplateExpression(tmpl) => {
+      for span in tmpl.template_spans {
+        checker = check_property_forward_reference(
+          checker,
+          span.expression,
+          uninitialized_props,
+        )
+      }
+      checker
+    }
+    AwaitExpression(await_expr) =>
+      check_property_forward_reference(checker, await_expr.expression, uninitialized_props)
+    _ => checker
+  }
+}
+
+///|
+/// Check for TS2748: variable referencing itself in initializer (temporal dead zone)
+fn check_variable_self_reference(
+  checker : TypeChecker,
+  decl : VariableDeclaration,
+) -> TypeChecker {
+  // Get the variable name
+  let var_name = match decl.name {
+    Identifier(id) => id.name
+    _ => return checker // Skip destructuring patterns for now
+  }
+
+  // Check if the initializer references the variable
+  match decl.initializer {
+    Some(init) =>
+      if expression_contains_identifier(init, var_name) {
+        add_diagnostic_with_code(
+          checker,
+          "Cannot access '\{var_name}' before initialization.",
+          decl.location,
+          DiagnosticCode::TS2748,
+        )
+      } else {
+        checker
+      }
+    None => checker
+  }
 }
 
 ///|

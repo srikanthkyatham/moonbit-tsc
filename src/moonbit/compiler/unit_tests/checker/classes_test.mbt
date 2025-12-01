@@ -485,13 +485,18 @@ test "unit/classes/circular - static inheritance" {
 }
 
 ///|
-test "unit/classes/circular - forward ref in class properties" {
+test "unit/classes/circular - forward ref in class properties reports TS2729" {
+  // Forward reference to uninitialized property should report TS2729
   let result = parse_bind_check_class(
     "class Test { _b = this._a; _a = 3; }",
   )
   match result {
-    Ok(typed) => assert_eq(typed.file_path, "test.ts")
-    Err(_) => assert_true(false)
+    Ok(_) => assert_true(false) // Should have TS2729 error
+    Err(diagnostics) => {
+      assert_true(diagnostics.length() > 0)
+      let has_ts2729 = diagnostics.iter().any(fn(d) { d.code == 2729 })
+      assert_true(has_ts2729)
+    }
   }
 }
 
