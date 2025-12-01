@@ -804,10 +804,13 @@ fn bind_interface_declaration(
   )
   let interface_node = Node::InterfaceDeclaration(interface)
   symbol = symbol.add_declaration(interface_node)
+  // Set the is_export flag based on the interface modifiers
+  let is_export = binder_has_export_modifier(interface.modifiers)
   symbol = {
     ..symbol,
     members: Some(members),
     value_declaration: Some(interface_node),
+    flags: { ..symbol.flags, is_export },
   }
   declare_symbol(binder, interface.name, symbol)
 }
@@ -981,6 +984,9 @@ fn bind_module_declaration(
       binder.next_symbol_id,
     )
     let symbol = symbol.add_declaration(Node::ModuleDeclaration(mod_decl))
+    // Set the is_export flag based on the module modifiers
+    let is_export = binder_has_export_modifier(mod_decl.modifiers)
+    let symbol = { ..symbol, flags: { ..symbol.flags, is_export } }
     let binder = declare_symbol(binder, mod_decl.name, symbol)
 
     // Push scope and container for module body
@@ -1872,14 +1878,29 @@ fn declare_symbol(binder : Binder, name : String, symbol : Symbol) -> Binder {
         if is_interface_merge ||
           is_namespace_merge ||
           is_interface_namespace_merge {
+          // TS2687: Check that all declarations have identical modifiers
+          let has_modifier_mismatch = existing_symbol.flags.is_export !=
+            symbol.flags.is_export
+          let binder_with_diagnostic = if has_modifier_mismatch {
+            let diagnostic = Diagnostic::error(
+              "All declarations of '\{name}' must have identical modifiers.",
+              get_symbol_location(symbol),
+              2687,
+            )
+            let new_diagnostics = binder.diagnostics
+            new_diagnostics.push(diagnostic)
+            { ..binder, diagnostics: new_diagnostics }
+          } else {
+            binder
+          }
           let merged_symbol = merge_symbols(existing_symbol, symbol)
           let new_symbols = scope.symbols
           new_symbols.set(name, merged_symbol)
           let updated_scope = { ..scope, symbols: new_symbols }
-          let scope_index = binder.scopes.length() - 1
-          let new_scopes = binder.scopes
+          let scope_index = binder_with_diagnostic.scopes.length() - 1
+          let new_scopes = binder_with_diagnostic.scopes
           new_scopes[scope_index] = updated_scope
-          { ..binder, scopes: new_scopes }
+          { ..binder_with_diagnostic, scopes: new_scopes }
         } else if is_function_overload || is_method_overload {
           // Add the new declaration to the existing symbol's declarations array
           match symbol.value_declaration {

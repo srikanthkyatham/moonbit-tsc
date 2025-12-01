@@ -108,6 +108,19 @@ pub fn detect_module_format(source_file : SourceFile) -> ModuleFormatInfo {
 }
 
 ///|
+/// Get all import declarations from a source file
+pub fn get_imports(source_file : SourceFile) -> Array[ImportDeclaration] {
+  let imports : Array[ImportDeclaration] = []
+  for stmt in source_file.statements {
+    match stmt {
+      ImportDeclaration(import_decl) => imports.push(import_decl)
+      _ => ()
+    }
+  }
+  imports
+}
+
+///|
 /// Analyze a statement for module format indicators
 fn analyze_statement_for_module_format(
   stmt : Node,

@@ -5451,18 +5451,16 @@ test "DiagnosticCode - TS2686 UMD global (not detected yet)" {
 // ============================================================================
 
 ///|
-test "DiagnosticCode - TS2687 identical modifiers (not detected yet)" {
-  // Note: This tests the error code structure; detection not yet implemented
+test "DiagnosticCode - TS2687 identical modifiers" {
   let source =
     #|interface Foo { a: number; }
     #|export interface Foo { b: string; } // mixed export/non-export
   let result = check_source(source)
   match result {
-    Ok(_) => () // Detection not implemented yet
+    Ok(_) => fail!("Expected TS2687 error")
     Err(diagnostics) => {
-      if has_error(diagnostics, 2687) {
-        assert_true(has_message(diagnostics, "modifiers") || has_message(diagnostics, "identical"))
-      }
+      assert_true(has_error(diagnostics, 2687))
+      assert_true(has_message(diagnostics, "identical modifiers"))
     }
   }
 }
@@ -5472,6 +5470,35 @@ test "DiagnosticCode - valid interface merging" {
   let source =
     #|interface Foo { a: number; }
     #|interface Foo { b: string; }
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => {
+      assert_true(not(has_error(diagnostics, 2687)))
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - TS2687 namespace merging with mismatched modifiers" {
+  let source =
+    #|namespace Bar { export const a = 1; }
+    #|export namespace Bar { export const b = 2; }
+  let result = check_source(source)
+  match result {
+    Ok(_) => fail!("Expected TS2687 error")
+    Err(diagnostics) => {
+      assert_true(has_error(diagnostics, 2687))
+      assert_true(has_message(diagnostics, "identical modifiers"))
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - valid namespace merging" {
+  let source =
+    #|export namespace Bar { export const a = 1; }
+    #|export namespace Bar { export const b = 2; }
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)

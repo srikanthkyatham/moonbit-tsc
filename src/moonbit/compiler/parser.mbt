@@ -4541,6 +4541,7 @@ fn parse_module_declaration_body(
                 body: Some(body),
                 is_ambient,
                 is_global_augmentation: false,
+                modifiers: [],
                 location: SourceLocation::new(
                   start_loc.file_path,
                   start_loc.start,
@@ -4567,6 +4568,7 @@ fn parse_module_declaration_body(
                 body: Some(nested),
                 is_ambient: false, // Dotted names are not ambient
                 is_global_augmentation: false,
+                modifiers: [],
                 location: SourceLocation::new(
                   start_loc.file_path,
                   start_loc.start,
@@ -4590,6 +4592,7 @@ fn parse_module_declaration_body(
             body: None,
             is_ambient,
             is_global_augmentation: false,
+            modifiers: [],
             location: start_loc,
           }),
           parser,
@@ -5483,6 +5486,20 @@ fn add_export_modifier(node : Node) -> Node {
         is_export: true,
         location: ied.location,
       })
+    ModuleDeclaration(md) => {
+      let new_modifiers : Array[Modifier] = [Modifier::Export]
+      for m in md.modifiers {
+        new_modifiers.push(m)
+      }
+      Node::ModuleDeclaration(ModuleDeclaration::{
+        name: md.name,
+        body: md.body,
+        is_ambient: md.is_ambient,
+        is_global_augmentation: md.is_global_augmentation,
+        modifiers: new_modifiers,
+        location: md.location,
+      })
+    }
     _ => node // For other nodes, return as-is
   }
 }
@@ -5556,6 +5573,7 @@ fn parse_declare_declaration(parser : Parser) -> Result[(Node, Parser), Parser] 
             body: Some(body),
             is_ambient: false,
             is_global_augmentation: true,
+            modifiers: [],
             location,
           }), parser))
         }

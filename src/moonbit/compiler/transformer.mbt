@@ -2317,6 +2317,7 @@ fn transform_module_declaration(
     },
     is_ambient: md.is_ambient,
     is_global_augmentation: md.is_global_augmentation,
+    modifiers: md.modifiers,
     location: md.location,
   })
 }
