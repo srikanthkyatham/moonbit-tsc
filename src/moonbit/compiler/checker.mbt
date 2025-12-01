@@ -8885,6 +8885,29 @@ fn check_type_node_for_rest_errors(checker : TypeChecker, node : Node) -> TypeCh
       }
       checker
     }
+    TupleType(tt) => {
+      // Check for TS2574: rest element type must be array type
+      let mut checker = checker
+      for elem in tt.element_types {
+        match elem {
+          RestType(rt) => {
+            // Check if the rest element type is an array type
+            match rt.element_type {
+              ArrayType(_) => () // Valid: ...number[]
+              _ =>
+                checker = add_diagnostic_with_code(
+                  checker,
+                  "A rest element type must be an array type.",
+                  rt.location,
+                  TS2574,
+                )
+            }
+          }
+          _ => ()
+        }
+      }
+      checker
+    }
     _ => checker
   }
 }

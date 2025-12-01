@@ -4713,6 +4713,32 @@ test "DiagnosticCode - valid object spread" {
 }
 
 ///|
+test "DiagnosticCode - TS2574: rest element type must be array" {
+  let source =
+    #|type BadTuple = [string, ...number]; // rest type must be array
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(false) // Should detect non-array rest type
+    Err(diagnostics) => {
+      assert_true(has_error(diagnostics, 2574))
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - valid tuple with rest array type" {
+  let source =
+    #|type GoodTuple = [string, ...number[]]; // valid rest array type
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => {
+      assert_true(not(has_error(diagnostics, 2574)))
+    }
+  }
+}
+
+///|
 test "DiagnosticCode - valid array spread" {
   let source =
     #|const arr1 = [1, 2, 3];
