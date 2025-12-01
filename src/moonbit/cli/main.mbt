@@ -29,6 +29,7 @@ async fn async_main() -> Unit {
     Ok(Command::Version) => print_version()
     Ok(Command::Worker) => run_worker_mode()
     Ok(Command::Init) => print_init_message()
+    Ok(Command::ListImports(file_path)) => run_list_imports(file_path)
     Ok(Command::Compile(files, options)) => run_compile(files, options)
     Ok(Command::CompileProject(tsconfig_path, options)) =>
       run_project_compile(tsconfig_path, options)
@@ -456,6 +457,30 @@ fn print_usage() -> Unit {
 fn print_init_message() -> Unit {
   println("The --init feature is not yet implemented.")
   println("Please create a tsconfig.json file manually.")
+}
+
+///|
+/// List imports from a TypeScript file
+async fn run_list_imports(file_path : String) -> Unit raise Error {
+  // Read the file
+  let source = @fs.read_to_string(file_path)
+
+  // Parse the file
+  let source_file = @compiler.parse_source(source, file_path)
+
+  // Get imports using the new API
+  let imports = @compiler.get_imports(source_file)
+
+  // Print each import
+  if imports.length() == 0 {
+    println("No imports found in " + file_path)
+  } else {
+    println("Imports in " + file_path + ":")
+    for import_decl in imports {
+      let type_prefix = if import_decl.is_type_only { "(type) " } else { "" }
+      println("  " + type_prefix + import_decl.module_specifier)
+    }
+  }
 }
 
 ///|
