@@ -20,6 +20,7 @@ defmodule TscPhoenixWeb.Router do
     live "/", DashboardLive, :index
     live "/metrics", MetricsLive, :index
     live "/errors", ErrorsLive, :index
+    live "/performance", PerformanceLive, :index
   end
 
   # REST API for CI/CD integration
@@ -35,6 +36,15 @@ defmodule TscPhoenixWeb.Router do
     get "/metrics/json", MetricsController, :json_export
     get "/metrics/phases", MetricsController, :phases
     get "/metrics/history/:metric", MetricsController, :history
+
+    # Performance profiling endpoints
+    get "/performance/memory", PerformanceController, :memory
+    get "/performance/processes", PerformanceController, :processes
+    get "/performance/ets", PerformanceController, :ets
+    post "/performance/sessions", PerformanceController, :start_session
+    post "/performance/sessions/:id/stop", PerformanceController, :stop_session
+    get "/performance/sessions", PerformanceController, :list_sessions
+    get "/performance/sessions/:id", PerformanceController, :get_session
   end
 
   # Enable LiveDashboard in development

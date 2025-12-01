@@ -19,6 +19,7 @@ defmodule TscPhoenix.Application do
       TSC.Cache.TypeCache,
       TSC.Cache.FileCache,
       TSC.Telemetry.Reporter,
+      TSC.Telemetry.Profiler,
       {TSC.Worker.PoolSupervisor, pool_size: pool_size()},
       TSC.Watcher.FileWatcher,
 
