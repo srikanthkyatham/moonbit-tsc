@@ -1583,6 +1583,24 @@ fn get_builtin_global_type(
     Some(get_json_type(checker))
   } else if name == "Math" {
     Some(get_math_type(checker))
+  } else if name == "Promise" {
+    Some(get_promise_type(checker))
+  } else if name == "Date" {
+    Some(get_date_type(checker))
+  } else if name == "String" {
+    Some(get_string_constructor_type(checker))
+  } else if name == "Symbol" {
+    Some(get_symbol_constructor_type(checker))
+  } else if name == "Error" {
+    Some(get_error_constructor_type(checker))
+  } else if name == "Array" {
+    Some(get_array_constructor_type(checker))
+  } else if name == "Object" {
+    Some(get_object_constructor_type(checker))
+  } else if name == "Number" {
+    Some(get_number_constructor_type(checker))
+  } else if name == "Boolean" {
+    Some(get_boolean_constructor_type(checker))
   } else {
     None
   }
@@ -1824,6 +1842,471 @@ fn get_math_type(checker : TypeChecker) -> (Type, TypeChecker) {
   })
 
   (math_type, checker)
+}
+
+///|
+/// Get the type for the Promise global constructor
+fn get_promise_type(checker : TypeChecker) -> (Type, TypeChecker) {
+  let (id, checker) = next_type_id(checker)
+  let promise_methods : Map[String, PropertySignature] = Map::new()
+  let default_flags = TypeFlags::default()
+  let info = TypeInfo::{ id: 0, flags: default_flags }
+
+  // Promise.resolve
+  let resolve_method = PropertySignature::{
+    name: "resolve",
+    prop_type: Type::Function(CheckerFunctionType::{
+      parameters: [CheckerParameter::{
+        name: "value",
+        param_type: Type::Any(info),
+        is_optional: true,
+        is_rest: false,
+      }],
+      return_type: Type::Any(info), // Returns Promise<T>
+      info,
+    }),
+    is_optional: false,
+    is_readonly: false,
+  }
+  promise_methods.set("resolve", resolve_method)
+
+  // Promise.reject
+  let reject_method = PropertySignature::{
+    name: "reject",
+    prop_type: Type::Function(CheckerFunctionType::{
+      parameters: [CheckerParameter::{
+        name: "reason",
+        param_type: Type::Any(info),
+        is_optional: true,
+        is_rest: false,
+      }],
+      return_type: Type::Any(info), // Returns Promise<never>
+      info,
+    }),
+    is_optional: false,
+    is_readonly: false,
+  }
+  promise_methods.set("reject", reject_method)
+
+  // Promise.all
+  let all_method = PropertySignature::{
+    name: "all",
+    prop_type: Type::Function(CheckerFunctionType::{
+      parameters: [CheckerParameter::{
+        name: "values",
+        param_type: Type::Any(info),
+        is_optional: false,
+        is_rest: false,
+      }],
+      return_type: Type::Any(info),
+      info,
+    }),
+    is_optional: false,
+    is_readonly: false,
+  }
+  promise_methods.set("all", all_method)
+
+  let promise_type = Type::Object(ObjectType::{
+    properties: promise_methods,
+    call_signatures: [],
+    construct_signatures: [],
+    index_signatures: [],
+    info: TypeInfo::{ id, flags: default_flags },
+  })
+
+  (promise_type, checker)
+}
+
+///|
+/// Get the type for the Date global constructor
+fn get_date_type(checker : TypeChecker) -> (Type, TypeChecker) {
+  let (id, checker) = next_type_id(checker)
+  let date_methods : Map[String, PropertySignature] = Map::new()
+  let default_flags = TypeFlags::default()
+  let info = TypeInfo::{ id: 0, flags: default_flags }
+
+  // Date.now
+  let now_method = PropertySignature::{
+    name: "now",
+    prop_type: Type::Function(CheckerFunctionType::{
+      parameters: [],
+      return_type: Type::Number(info),
+      info,
+    }),
+    is_optional: false,
+    is_readonly: false,
+  }
+  date_methods.set("now", now_method)
+
+  // Date.parse
+  let parse_method = PropertySignature::{
+    name: "parse",
+    prop_type: Type::Function(CheckerFunctionType::{
+      parameters: [CheckerParameter::{
+        name: "s",
+        param_type: Type::String(info),
+        is_optional: false,
+        is_rest: false,
+      }],
+      return_type: Type::Number(info),
+      info,
+    }),
+    is_optional: false,
+    is_readonly: false,
+  }
+  date_methods.set("parse", parse_method)
+
+  let date_type = Type::Object(ObjectType::{
+    properties: date_methods,
+    call_signatures: [],
+    construct_signatures: [],
+    index_signatures: [],
+    info: TypeInfo::{ id, flags: default_flags },
+  })
+
+  (date_type, checker)
+}
+
+///|
+/// Get the type for the String global constructor
+fn get_string_constructor_type(checker : TypeChecker) -> (Type, TypeChecker) {
+  let (id, checker) = next_type_id(checker)
+  let string_methods : Map[String, PropertySignature] = Map::new()
+  let default_flags = TypeFlags::default()
+  let info = TypeInfo::{ id: 0, flags: default_flags }
+
+  // String.fromCharCode
+  let from_char_code = PropertySignature::{
+    name: "fromCharCode",
+    prop_type: Type::Function(CheckerFunctionType::{
+      parameters: [CheckerParameter::{
+        name: "codes",
+        param_type: Type::Number(info),
+        is_optional: false,
+        is_rest: true,
+      }],
+      return_type: Type::String(info),
+      info,
+    }),
+    is_optional: false,
+    is_readonly: false,
+  }
+  string_methods.set("fromCharCode", from_char_code)
+
+  let string_type = Type::Object(ObjectType::{
+    properties: string_methods,
+    call_signatures: [],
+    construct_signatures: [],
+    index_signatures: [],
+    info: TypeInfo::{ id, flags: default_flags },
+  })
+
+  (string_type, checker)
+}
+
+///|
+/// Get the type for the Symbol global constructor
+fn get_symbol_constructor_type(checker : TypeChecker) -> (Type, TypeChecker) {
+  let (id, checker) = next_type_id(checker)
+  let symbol_methods : Map[String, PropertySignature] = Map::new()
+  let default_flags = TypeFlags::default()
+  let info = TypeInfo::{ id: 0, flags: default_flags }
+
+  // Symbol.for
+  let for_method = PropertySignature::{
+    name: "for",
+    prop_type: Type::Function(CheckerFunctionType::{
+      parameters: [CheckerParameter::{
+        name: "key",
+        param_type: Type::String(info),
+        is_optional: false,
+        is_rest: false,
+      }],
+      return_type: Type::Symbol(info),
+      info,
+    }),
+    is_optional: false,
+    is_readonly: false,
+  }
+  symbol_methods.set("for", for_method)
+
+  // Symbol.iterator
+  let iterator_prop = PropertySignature::{
+    name: "iterator",
+    prop_type: Type::Symbol(info),
+    is_optional: false,
+    is_readonly: true,
+  }
+  symbol_methods.set("iterator", iterator_prop)
+
+  let symbol_type = Type::Object(ObjectType::{
+    properties: symbol_methods,
+    call_signatures: [],
+    construct_signatures: [],
+    index_signatures: [],
+    info: TypeInfo::{ id, flags: default_flags },
+  })
+
+  (symbol_type, checker)
+}
+
+///|
+/// Get the type for the Error global constructor
+fn get_error_constructor_type(checker : TypeChecker) -> (Type, TypeChecker) {
+  let (id, checker) = next_type_id(checker)
+  let default_flags = TypeFlags::default()
+
+  // Error constructor returns an error object
+  let error_type = Type::Object(ObjectType::{
+    properties: Map::new(),
+    call_signatures: [],
+    construct_signatures: [],
+    index_signatures: [],
+    info: TypeInfo::{ id, flags: default_flags },
+  })
+
+  (error_type, checker)
+}
+
+///|
+/// Get the type for the Array global constructor
+fn get_array_constructor_type(checker : TypeChecker) -> (Type, TypeChecker) {
+  let (id, checker) = next_type_id(checker)
+  let array_methods : Map[String, PropertySignature] = Map::new()
+  let default_flags = TypeFlags::default()
+  let info = TypeInfo::{ id: 0, flags: default_flags }
+
+  // Array.isArray
+  let is_array_method = PropertySignature::{
+    name: "isArray",
+    prop_type: Type::Function(CheckerFunctionType::{
+      parameters: [CheckerParameter::{
+        name: "arg",
+        param_type: Type::Any(info),
+        is_optional: false,
+        is_rest: false,
+      }],
+      return_type: Type::Boolean(info),
+      info,
+    }),
+    is_optional: false,
+    is_readonly: false,
+  }
+  array_methods.set("isArray", is_array_method)
+
+  // Array.from
+  let from_method = PropertySignature::{
+    name: "from",
+    prop_type: Type::Function(CheckerFunctionType::{
+      parameters: [CheckerParameter::{
+        name: "arrayLike",
+        param_type: Type::Any(info),
+        is_optional: false,
+        is_rest: false,
+      }],
+      return_type: Type::Any(info),
+      info,
+    }),
+    is_optional: false,
+    is_readonly: false,
+  }
+  array_methods.set("from", from_method)
+
+  let array_type = Type::Object(ObjectType::{
+    properties: array_methods,
+    call_signatures: [],
+    construct_signatures: [],
+    index_signatures: [],
+    info: TypeInfo::{ id, flags: default_flags },
+  })
+
+  (array_type, checker)
+}
+
+///|
+/// Get the type for the Object global constructor
+fn get_object_constructor_type(checker : TypeChecker) -> (Type, TypeChecker) {
+  let (id, checker) = next_type_id(checker)
+  let object_methods : Map[String, PropertySignature] = Map::new()
+  let default_flags = TypeFlags::default()
+  let info = TypeInfo::{ id: 0, flags: default_flags }
+
+  // Object.keys
+  let keys_method = PropertySignature::{
+    name: "keys",
+    prop_type: Type::Function(CheckerFunctionType::{
+      parameters: [CheckerParameter::{
+        name: "o",
+        param_type: Type::Any(info),
+        is_optional: false,
+        is_rest: false,
+      }],
+      return_type: Type::Any(info), // string[]
+      info,
+    }),
+    is_optional: false,
+    is_readonly: false,
+  }
+  object_methods.set("keys", keys_method)
+
+  // Object.values
+  let values_method = PropertySignature::{
+    name: "values",
+    prop_type: Type::Function(CheckerFunctionType::{
+      parameters: [CheckerParameter::{
+        name: "o",
+        param_type: Type::Any(info),
+        is_optional: false,
+        is_rest: false,
+      }],
+      return_type: Type::Any(info),
+      info,
+    }),
+    is_optional: false,
+    is_readonly: false,
+  }
+  object_methods.set("values", values_method)
+
+  // Object.entries
+  let entries_method = PropertySignature::{
+    name: "entries",
+    prop_type: Type::Function(CheckerFunctionType::{
+      parameters: [CheckerParameter::{
+        name: "o",
+        param_type: Type::Any(info),
+        is_optional: false,
+        is_rest: false,
+      }],
+      return_type: Type::Any(info),
+      info,
+    }),
+    is_optional: false,
+    is_readonly: false,
+  }
+  object_methods.set("entries", entries_method)
+
+  // Object.assign
+  let assign_method = PropertySignature::{
+    name: "assign",
+    prop_type: Type::Function(CheckerFunctionType::{
+      parameters: [CheckerParameter::{
+        name: "target",
+        param_type: Type::Any(info),
+        is_optional: false,
+        is_rest: false,
+      }, CheckerParameter::{
+        name: "sources",
+        param_type: Type::Any(info),
+        is_optional: false,
+        is_rest: true,
+      }],
+      return_type: Type::Any(info),
+      info,
+    }),
+    is_optional: false,
+    is_readonly: false,
+  }
+  object_methods.set("assign", assign_method)
+
+  let object_type = Type::Object(ObjectType::{
+    properties: object_methods,
+    call_signatures: [],
+    construct_signatures: [],
+    index_signatures: [],
+    info: TypeInfo::{ id, flags: default_flags },
+  })
+
+  (object_type, checker)
+}
+
+///|
+/// Get the type for the Number global constructor
+fn get_number_constructor_type(checker : TypeChecker) -> (Type, TypeChecker) {
+  let (id, checker) = next_type_id(checker)
+  let number_methods : Map[String, PropertySignature] = Map::new()
+  let default_flags = TypeFlags::default()
+  let info = TypeInfo::{ id: 0, flags: default_flags }
+
+  // Number.isNaN
+  let is_nan_method = PropertySignature::{
+    name: "isNaN",
+    prop_type: Type::Function(CheckerFunctionType::{
+      parameters: [CheckerParameter::{
+        name: "number",
+        param_type: Type::Any(info),
+        is_optional: false,
+        is_rest: false,
+      }],
+      return_type: Type::Boolean(info),
+      info,
+    }),
+    is_optional: false,
+    is_readonly: false,
+  }
+  number_methods.set("isNaN", is_nan_method)
+
+  // Number.isFinite
+  let is_finite_method = PropertySignature::{
+    name: "isFinite",
+    prop_type: Type::Function(CheckerFunctionType::{
+      parameters: [CheckerParameter::{
+        name: "number",
+        param_type: Type::Any(info),
+        is_optional: false,
+        is_rest: false,
+      }],
+      return_type: Type::Boolean(info),
+      info,
+    }),
+    is_optional: false,
+    is_readonly: false,
+  }
+  number_methods.set("isFinite", is_finite_method)
+
+  // Number.parseInt
+  let parse_int_method = PropertySignature::{
+    name: "parseInt",
+    prop_type: Type::Function(CheckerFunctionType::{
+      parameters: [CheckerParameter::{
+        name: "string",
+        param_type: Type::String(info),
+        is_optional: false,
+        is_rest: false,
+      }],
+      return_type: Type::Number(info),
+      info,
+    }),
+    is_optional: false,
+    is_readonly: false,
+  }
+  number_methods.set("parseInt", parse_int_method)
+
+  let number_type = Type::Object(ObjectType::{
+    properties: number_methods,
+    call_signatures: [],
+    construct_signatures: [],
+    index_signatures: [],
+    info: TypeInfo::{ id, flags: default_flags },
+  })
+
+  (number_type, checker)
+}
+
+///|
+/// Get the type for the Boolean global constructor
+fn get_boolean_constructor_type(checker : TypeChecker) -> (Type, TypeChecker) {
+  let (id, checker) = next_type_id(checker)
+  let default_flags = TypeFlags::default()
+
+  let boolean_type = Type::Object(ObjectType::{
+    properties: Map::new(),
+    call_signatures: [],
+    construct_signatures: [],
+    index_signatures: [],
+    info: TypeInfo::{ id, flags: default_flags },
+  })
+
+  (boolean_type, checker)
 }
 
 ///|
@@ -5548,17 +6031,6 @@ fn check_function_declaration(
   checker : TypeChecker,
   func : FunctionDeclaration,
 ) -> TypeChecker {
-  // Check return type consistency if a return type is declared
-  let checker = match func.return_type {
-    Some(return_type_node) =>
-      match get_type_from_type_node(checker, return_type_node) {
-        (Some(declared_return), checker) =>
-          check_return_type_consistency(checker, func, declared_return)
-        (None, checker) => checker
-      }
-    None => checker
-  }
-
   // Clear any narrowed types from outer scope before entering function body
   let saved_narrowed_types = checker.narrowed_types
   let checker = clear_narrowed_types(checker)
@@ -5602,6 +6074,18 @@ fn check_function_declaration(
         }
       _ => ()
     }
+  }
+
+  // Check return type consistency if a return type is declared
+  // This must happen AFTER parameters are added to scope
+  let checker = match func.return_type {
+    Some(return_type_node) =>
+      match get_type_from_type_node(checker, return_type_node) {
+        (Some(declared_return), c) =>
+          check_return_type_consistency(c, func, declared_return)
+        (None, c) => c
+      }
+    None => checker
   }
 
   // Check function body
@@ -5778,19 +6262,39 @@ fn check_class_declaration(
       ConstructorDeclaration(ctor) =>
         match ctor.body {
           Some(body) => {
+            // Push local scope for constructor
+            let checker = push_local_scope(checker)
+            // Add constructor parameters to scope
+            let mut checker = checker
+            for param in ctor.parameters {
+              checker = add_parameter_to_scope(checker, param)
+            }
             // Check for property use before assignment (TS2565)
             let checker = check_property_use_before_assignment(
               checker,
               body,
               uninitialized_props,
             )
-            check_statement(checker, body)
+            let checker = check_statement(checker, body)
+            // Pop local scope
+            pop_local_scope(checker)
           }
           None => checker
         }
       MethodDeclaration(method_dec) =>
         match method_dec.body {
-          Some(body) => check_statement(checker, body)
+          Some(body) => {
+            // Push local scope for method
+            let checker = push_local_scope(checker)
+            // Add method parameters to scope
+            let mut checker = checker
+            for param in method_dec.parameters {
+              checker = add_parameter_to_scope(checker, param)
+            }
+            let checker = check_statement(checker, body)
+            // Pop local scope
+            pop_local_scope(checker)
+          }
           None => checker
         }
       PropertyDeclaration(prop) =>
