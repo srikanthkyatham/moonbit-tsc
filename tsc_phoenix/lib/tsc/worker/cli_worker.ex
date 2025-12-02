@@ -212,7 +212,42 @@ defmodule TSC.Worker.CLIWorker do
     args = if options[:verbose], do: args ++ ["--verbose"], else: args
     args = if options[:out_dir], do: args ++ ["--outDir", options[:out_dir]], else: args
 
+    # Add external types from cache if use_cached_types option is set
+    args = if options[:use_cached_types] do
+      external_types = build_external_types_json(files)
+      if external_types do
+        args ++ ["--external-types", external_types]
+      else
+        args
+      end
+    else
+      args
+    end
+
     args
+  end
+
+  defp build_external_types_json(files) do
+    # Get all cached module types except the files being compiled
+    # (we want types from dependencies, not the files themselves)
+    file_set = MapSet.new(files)
+
+    all_cached = TypeCache.keys()
+    |> Enum.reject(&MapSet.member?(file_set, &1))
+    |> Enum.reduce(%{"modules" => %{}}, fn path, acc ->
+      case TypeCache.get(path) do
+        {:ok, types} ->
+          put_in(acc, ["modules", path], types)
+        :not_found ->
+          acc
+      end
+    end)
+
+    if map_size(all_cached["modules"]) > 0 do
+      Jason.encode!(all_cached)
+    else
+      nil
+    end
   end
 
   defp parse_json_output(output) do
