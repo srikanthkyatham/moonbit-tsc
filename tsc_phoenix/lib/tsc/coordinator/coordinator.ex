@@ -436,26 +436,37 @@ defmodule TSC.Coordinator do
     end)
   end
 
-  # Fast dependency graph building using the Elixir-based ImportExtractor
-  # This is much faster than calling the CLI worker for each file
+  # Build dependency graph using the CLI for accurate AST-based import extraction
+  # This handles all TypeScript import syntaxes including import = require()
   defp build_dependency_graph_fast(files, concurrency) do
     DependencyGraph.clear()
 
     files
     |> Task.async_stream(
       fn file ->
-        case ImportExtractor.extract(file) do
-          {:ok, imports} ->
+        case PoolSupervisor.list_imports(file) do
+          {:ok, result} ->
             # Resolve imports to absolute paths
             dependencies =
-              imports
+              result.imports
               |> Enum.map(fn imp -> ImportExtractor.resolve(file, imp.specifier) end)
               |> Enum.reject(&is_nil/1)
 
             {file, dependencies}
 
           {:error, _reason} ->
-            {file, []}
+            # Fallback to Elixir parser if CLI fails
+            case ImportExtractor.extract(file) do
+              {:ok, imports} ->
+                dependencies =
+                  imports
+                  |> Enum.map(fn imp -> ImportExtractor.resolve(file, imp.specifier) end)
+                  |> Enum.reject(&is_nil/1)
+                {file, dependencies}
+
+              {:error, _} ->
+                {file, []}
+            end
         end
       end,
       max_concurrency: concurrency,
