@@ -1430,8 +1430,12 @@ fn parse_module_types(json : Json) -> ModuleTypes? {
 
   let module_types = ModuleTypes::empty(module_path)
 
-  // Parse named exports
-  match obj.get("named_exports") {
+  // Parse named exports - support both "exports" and "named_exports" keys
+  let exports_json = match obj.get("exports") {
+    Some(o) => Some(o)
+    None => obj.get("named_exports")
+  }
+  match exports_json {
     Some(Object(exports_obj)) => {
       for kv in exports_obj {
         let export_name = kv.0
@@ -2028,4 +2032,679 @@ fn parse_index_signature_v2(json : Json) -> IndexSignatureV2? {
   }
 
   Some(IndexSignatureV2::{ key_type, value_type, is_readonly })
+}
+
+// ============================================================================
+// JSON Serialization for ModuleTypes (string-based)
+// ============================================================================
+
+///|
+/// Serialize ModuleTypes to JSON string
+pub fn ModuleTypes::to_json_string(self : ModuleTypes) -> String {
+  let sb = StringBuilder::new()
+  sb.write_string("{")
+  sb.write_string("\"module_path\":\"")
+  sb.write_string(escape_json_str(self.module_path))
+  sb.write_string("\",\"exports\":{")
+
+  // Write named exports
+  let mut first = true
+  for kv in self.named_exports {
+    if not(first) {
+      sb.write_string(",")
+    }
+    first = false
+    sb.write_string("\"")
+    sb.write_string(escape_json_str(kv.0))
+    sb.write_string("\":")
+    sb.write_string(external_type_info_to_json_str(kv.1))
+  }
+
+  sb.write_string("},\"type_aliases\":{")
+
+  // Write type aliases
+  first = true
+  for kv in self.type_aliases {
+    if not(first) {
+      sb.write_string(",")
+    }
+    first = false
+    sb.write_string("\"")
+    sb.write_string(escape_json_str(kv.0))
+    sb.write_string("\":")
+    sb.write_string(type_alias_info_to_json_str(kv.1))
+  }
+
+  sb.write_string("},\"interfaces\":{")
+
+  // Write interfaces
+  first = true
+  for kv in self.interfaces {
+    if not(first) {
+      sb.write_string(",")
+    }
+    first = false
+    sb.write_string("\"")
+    sb.write_string(escape_json_str(kv.0))
+    sb.write_string("\":")
+    sb.write_string(object_type_to_json_str(kv.1))
+  }
+
+  sb.write_string("}")
+
+  // Write default export if present
+  match self.default_export {
+    Some(default_info) => {
+      sb.write_string(",\"default\":")
+      sb.write_string(external_type_info_to_json_str(default_info))
+    }
+    None => ()
+  }
+
+  sb.write_string("}")
+  sb.to_string()
+}
+
+///|
+/// Escape a string for JSON
+fn escape_json_str(s : String) -> String {
+  let sb = StringBuilder::new()
+  for c in s {
+    match c {
+      '"' => sb.write_string("\\\"")
+      '\\' => sb.write_string("\\\\")
+      '\n' => sb.write_string("\\n")
+      '\r' => sb.write_string("\\r")
+      '\t' => sb.write_string("\\t")
+      _ => sb.write_char(c)
+    }
+  }
+  sb.to_string()
+}
+
+///|
+/// Serialize ExternalTypeInfo to JSON string
+fn external_type_info_to_json_str(info : ExternalTypeInfo) -> String {
+  let sb = StringBuilder::new()
+  sb.write_string("{\"ty\":")
+  sb.write_string(type_v2_to_json_str(info.ty))
+  sb.write_string(",\"is_type_only\":")
+  sb.write_string(if info.is_type_only { "true" } else { "false" })
+  sb.write_string(",\"original_name\":\"")
+  sb.write_string(escape_json_str(info.original_name))
+  sb.write_string("\"}")
+  sb.to_string()
+}
+
+///|
+/// Serialize TypeAliasInfoV2 to JSON string
+fn type_alias_info_to_json_str(alias : TypeAliasInfoV2) -> String {
+  let sb = StringBuilder::new()
+  sb.write_string("{\"type_params\":[")
+  for i, param in alias.type_params {
+    if i > 0 {
+      sb.write_string(",")
+    }
+    sb.write_string(type_param_to_json_str(param))
+  }
+  sb.write_string("],\"body\":")
+  sb.write_string(type_v2_to_json_str(alias.body))
+  sb.write_string("}")
+  sb.to_string()
+}
+
+///|
+/// Serialize TypeV2 to JSON string
+fn type_v2_to_json_str(ty : TypeV2) -> String {
+  match ty {
+    TNumber => "{\"kind\":\"number\"}"
+    TString => "{\"kind\":\"string\"}"
+    TBoolean => "{\"kind\":\"boolean\"}"
+    TNull => "{\"kind\":\"null\"}"
+    TUndefined => "{\"kind\":\"undefined\"}"
+    TVoid => "{\"kind\":\"void\"}"
+    TNever => "{\"kind\":\"never\"}"
+    TAny => "{\"kind\":\"any\"}"
+    TUnknown => "{\"kind\":\"unknown\"}"
+    TSymbol => "{\"kind\":\"symbol\"}"
+    TBigInt => "{\"kind\":\"bigint\"}"
+    TError => "{\"kind\":\"error\"}"
+    TLiteralString(s) => {
+      let sb = StringBuilder::new()
+      sb.write_string("{\"kind\":\"literal_string\",\"value\":\"")
+      sb.write_string(escape_json_str(s))
+      sb.write_string("\"}")
+      sb.to_string()
+    }
+    TLiteralNumber(n) => {
+      let sb = StringBuilder::new()
+      sb.write_string("{\"kind\":\"literal_number\",\"value\":")
+      sb.write_string(n.to_string())
+      sb.write_string("}")
+      sb.to_string()
+    }
+    TLiteralBool(b) => {
+      if b {
+        "{\"kind\":\"literal_bool\",\"value\":true}"
+      } else {
+        "{\"kind\":\"literal_bool\",\"value\":false}"
+      }
+    }
+    TLiteralBigInt(s) => {
+      let sb = StringBuilder::new()
+      sb.write_string("{\"kind\":\"literal_bigint\",\"value\":\"")
+      sb.write_string(escape_json_str(s))
+      sb.write_string("\"}")
+      sb.to_string()
+    }
+    TArray(elem) => {
+      let sb = StringBuilder::new()
+      sb.write_string("{\"kind\":\"array\",\"element\":")
+      sb.write_string(type_v2_to_json_str(elem))
+      sb.write_string("}")
+      sb.to_string()
+    }
+    TTuple(elements) => {
+      let sb = StringBuilder::new()
+      sb.write_string("{\"kind\":\"tuple\",\"elements\":[")
+      for i, elem in elements {
+        if i > 0 {
+          sb.write_string(",")
+        }
+        sb.write_string(tuple_element_to_json_str(elem))
+      }
+      sb.write_string("]}")
+      sb.to_string()
+    }
+    TUnion(types) => {
+      let sb = StringBuilder::new()
+      sb.write_string("{\"kind\":\"union\",\"types\":[")
+      for i, t in types {
+        if i > 0 {
+          sb.write_string(",")
+        }
+        sb.write_string(type_v2_to_json_str(t))
+      }
+      sb.write_string("]}")
+      sb.to_string()
+    }
+    TIntersection(types) => {
+      let sb = StringBuilder::new()
+      sb.write_string("{\"kind\":\"intersection\",\"types\":[")
+      for i, t in types {
+        if i > 0 {
+          sb.write_string(",")
+        }
+        sb.write_string(type_v2_to_json_str(t))
+      }
+      sb.write_string("]}")
+      sb.to_string()
+    }
+    TObject(obj_type) => {
+      let sb = StringBuilder::new()
+      sb.write_string("{\"kind\":\"object\",")
+      sb.write_string(object_type_inner_to_json_str(obj_type))
+      sb.write_string("}")
+      sb.to_string()
+    }
+    TFunction(func_type) => {
+      let sb = StringBuilder::new()
+      sb.write_string("{\"kind\":\"function\",")
+      sb.write_string(function_type_inner_to_json_str(func_type))
+      sb.write_string("}")
+      sb.to_string()
+    }
+    TTypeParam(name, constraint) => {
+      let sb = StringBuilder::new()
+      sb.write_string("{\"kind\":\"type_param\",\"name\":\"")
+      sb.write_string(escape_json_str(name))
+      sb.write_string("\"")
+      match constraint {
+        Some(c) => {
+          sb.write_string(",\"constraint\":")
+          sb.write_string(type_v2_to_json_str(c))
+        }
+        None => ()
+      }
+      sb.write_string("}")
+      sb.to_string()
+    }
+    TGenericInstance(name, type_args) => {
+      let sb = StringBuilder::new()
+      sb.write_string("{\"kind\":\"generic\",\"name\":\"")
+      sb.write_string(escape_json_str(name))
+      sb.write_string("\",\"type_args\":[")
+      for i, arg in type_args {
+        if i > 0 {
+          sb.write_string(",")
+        }
+        sb.write_string(type_v2_to_json_str(arg))
+      }
+      sb.write_string("]}")
+      sb.to_string()
+    }
+    TConditional(cond) => {
+      let sb = StringBuilder::new()
+      sb.write_string("{\"kind\":\"conditional\",\"check\":")
+      sb.write_string(type_v2_to_json_str(cond.check_type))
+      sb.write_string(",\"extends\":")
+      sb.write_string(type_v2_to_json_str(cond.extends_type))
+      sb.write_string(",\"true_type\":")
+      sb.write_string(type_v2_to_json_str(cond.true_type))
+      sb.write_string(",\"false_type\":")
+      sb.write_string(type_v2_to_json_str(cond.false_type))
+      sb.write_string("}")
+      sb.to_string()
+    }
+    TMapped(mapped) => {
+      let sb = StringBuilder::new()
+      sb.write_string("{\"kind\":\"mapped\",\"type_param\":")
+      sb.write_string(type_param_to_json_str(mapped.type_param))
+      sb.write_string(",\"constraint\":")
+      sb.write_string(type_v2_to_json_str(mapped.constraint))
+      sb.write_string(",\"template_type\":")
+      sb.write_string(type_v2_to_json_str(mapped.template_type))
+      match mapped.name_type {
+        Some(nt) => {
+          sb.write_string(",\"name_type\":")
+          sb.write_string(type_v2_to_json_str(nt))
+        }
+        None => ()
+      }
+      sb.write_string("}")
+      sb.to_string()
+    }
+    TIndexAccess(idx) => {
+      let sb = StringBuilder::new()
+      sb.write_string("{\"kind\":\"index_access\",\"object\":")
+      sb.write_string(type_v2_to_json_str(idx.object_type))
+      sb.write_string(",\"index\":")
+      sb.write_string(type_v2_to_json_str(idx.index_type))
+      sb.write_string("}")
+      sb.to_string()
+    }
+    TTemplateLiteral(tmpl) => {
+      let sb = StringBuilder::new()
+      sb.write_string("{\"kind\":\"template_literal\",\"texts\":[")
+      for i, text in tmpl.texts {
+        if i > 0 {
+          sb.write_string(",")
+        }
+        sb.write_string("\"")
+        sb.write_string(escape_json_str(text))
+        sb.write_string("\"")
+      }
+      sb.write_string("],\"types\":[")
+      for i, t in tmpl.types {
+        if i > 0 {
+          sb.write_string(",")
+        }
+        sb.write_string(type_v2_to_json_str(t))
+      }
+      sb.write_string("]}")
+      sb.to_string()
+    }
+    TInfer(name) => {
+      let sb = StringBuilder::new()
+      sb.write_string("{\"kind\":\"infer\",\"name\":\"")
+      sb.write_string(escape_json_str(name))
+      sb.write_string("\"}")
+      sb.to_string()
+    }
+    TUniqueSymbol(sym) => {
+      let sb = StringBuilder::new()
+      sb.write_string("{\"kind\":\"unique_symbol\",\"name\":\"")
+      sb.write_string(escape_json_str(sym.name))
+      sb.write_string("\",\"id\":")
+      sb.write_string(sym.id.to_string())
+      match sym.description {
+        Some(d) => {
+          sb.write_string(",\"description\":\"")
+          sb.write_string(escape_json_str(d))
+          sb.write_string("\"")
+        }
+        None => ()
+      }
+      sb.write_string("}")
+      sb.to_string()
+    }
+  }
+}
+
+///|
+/// Serialize ObjectTypeV2 to JSON string (full object)
+fn object_type_to_json_str(obj_type : ObjectTypeV2) -> String {
+  let sb = StringBuilder::new()
+  sb.write_string("{")
+  sb.write_string(object_type_inner_to_json_str(obj_type))
+  sb.write_string("}")
+  sb.to_string()
+}
+
+///|
+/// Serialize ObjectTypeV2 inner fields to JSON string (without braces)
+fn object_type_inner_to_json_str(obj_type : ObjectTypeV2) -> String {
+  let sb = StringBuilder::new()
+
+  // Fields
+  sb.write_string("\"fields\":{")
+  let mut first = true
+  for kv in obj_type.fields {
+    if not(first) {
+      sb.write_string(",")
+    }
+    first = false
+    sb.write_string("\"")
+    sb.write_string(escape_json_str(kv.0))
+    sb.write_string("\":")
+    sb.write_string(field_info_to_json_str(kv.1))
+  }
+  sb.write_string("}")
+
+  // Symbol fields
+  if obj_type.symbol_fields.length() > 0 {
+    sb.write_string(",\"symbol_fields\":[")
+    for i, prop in obj_type.symbol_fields {
+      if i > 0 {
+        sb.write_string(",")
+      }
+      sb.write_string(symbol_property_to_json_str(prop))
+    }
+    sb.write_string("]")
+  }
+
+  // Call signatures
+  if obj_type.call_signatures.length() > 0 {
+    sb.write_string(",\"call_signatures\":[")
+    for i, sig in obj_type.call_signatures {
+      if i > 0 {
+        sb.write_string(",")
+      }
+      sb.write_string("{")
+      sb.write_string(function_type_inner_to_json_str(sig))
+      sb.write_string("}")
+    }
+    sb.write_string("]")
+  }
+
+  // Construct signatures
+  if obj_type.construct_signatures.length() > 0 {
+    sb.write_string(",\"construct_signatures\":[")
+    for i, sig in obj_type.construct_signatures {
+      if i > 0 {
+        sb.write_string(",")
+      }
+      sb.write_string("{")
+      sb.write_string(function_type_inner_to_json_str(sig))
+      sb.write_string("}")
+    }
+    sb.write_string("]")
+  }
+
+  // Index signature
+  match obj_type.index_signature {
+    Some(idx_sig) => {
+      sb.write_string(",\"index_signature\":")
+      sb.write_string(index_signature_to_json_str(idx_sig))
+    }
+    None => ()
+  }
+
+  // Class info
+  if obj_type.is_class {
+    sb.write_string(",\"is_class\":true")
+    match obj_type.class_name {
+      Some(name) => {
+        sb.write_string(",\"class_name\":\"")
+        sb.write_string(escape_json_str(name))
+        sb.write_string("\"")
+      }
+      None => ()
+    }
+  }
+
+  sb.to_string()
+}
+
+///|
+/// Serialize FieldInfoV2 to JSON string
+fn field_info_to_json_str(field : FieldInfoV2) -> String {
+  let sb = StringBuilder::new()
+  sb.write_string("{\"ty\":")
+  sb.write_string(type_v2_to_json_str(field.ty))
+  if field.optional {
+    sb.write_string(",\"optional\":true")
+  }
+  if field.is_readonly {
+    sb.write_string(",\"readonly\":true")
+  }
+  sb.write_string("}")
+  sb.to_string()
+}
+
+///|
+/// Serialize SymbolPropertyV2 to JSON string
+fn symbol_property_to_json_str(prop : SymbolPropertyV2) -> String {
+  let sb = StringBuilder::new()
+  sb.write_string("{\"symbol\":")
+  sb.write_string(symbol_key_to_json_str(prop.symbol))
+  sb.write_string(",\"field\":")
+  sb.write_string(field_info_to_json_str(prop.field))
+  sb.write_string("}")
+  sb.to_string()
+}
+
+///|
+/// Serialize SymbolKeyV2 to JSON string
+fn symbol_key_to_json_str(key : SymbolKeyV2) -> String {
+  match key {
+    WellKnown(sym) => {
+      let sb = StringBuilder::new()
+      sb.write_string("{\"type\":\"well_known\",\"name\":\"")
+      sb.write_string(escape_json_str(sym.property_name()))
+      sb.write_string("\"}")
+      sb.to_string()
+    }
+    Unique(name, id) => {
+      let sb = StringBuilder::new()
+      sb.write_string("{\"type\":\"unique\",\"name\":\"")
+      sb.write_string(escape_json_str(name))
+      sb.write_string("\",\"id\":")
+      sb.write_string(id.to_string())
+      sb.write_string("}")
+      sb.to_string()
+    }
+    Computed(expr) => {
+      let sb = StringBuilder::new()
+      sb.write_string("{\"type\":\"computed\",\"expr\":\"")
+      sb.write_string(escape_json_str(expr))
+      sb.write_string("\"}")
+      sb.to_string()
+    }
+  }
+}
+
+///|
+/// Serialize FunctionTypeV2 inner fields to JSON string (without braces)
+fn function_type_inner_to_json_str(func : FunctionTypeV2) -> String {
+  let sb = StringBuilder::new()
+  let mut has_prev = false
+
+  // Type parameters
+  if func.type_params.length() > 0 {
+    sb.write_string("\"type_params\":[")
+    for i, param in func.type_params {
+      if i > 0 {
+        sb.write_string(",")
+      }
+      sb.write_string(type_param_to_json_str(param))
+    }
+    sb.write_string("]")
+    has_prev = true
+  }
+
+  // Parameters
+  if has_prev {
+    sb.write_string(",")
+  }
+  sb.write_string("\"params\":[")
+  for i, param in func.params {
+    if i > 0 {
+      sb.write_string(",")
+    }
+    sb.write_string(param_info_to_json_str(param))
+  }
+  sb.write_string("]")
+
+  // Rest param
+  match func.rest_param {
+    Some(rest) => {
+      sb.write_string(",\"rest_param\":")
+      sb.write_string(param_info_to_json_str(rest))
+    }
+    None => ()
+  }
+
+  // Return type
+  sb.write_string(",\"return\":")
+  sb.write_string(type_v2_to_json_str(func.return_type))
+
+  // Type predicate
+  match func.type_predicate {
+    Some(pred) => {
+      sb.write_string(",\"type_predicate\":")
+      sb.write_string(type_predicate_to_json_str(pred))
+    }
+    None => ()
+  }
+
+  // This type
+  match func.this_type {
+    Some(this_ty) => {
+      sb.write_string(",\"this_type\":")
+      sb.write_string(type_v2_to_json_str(this_ty))
+    }
+    None => ()
+  }
+
+  sb.to_string()
+}
+
+///|
+/// Serialize TypeParamV2 to JSON string
+fn type_param_to_json_str(param : TypeParamV2) -> String {
+  let sb = StringBuilder::new()
+  sb.write_string("{\"name\":\"")
+  sb.write_string(escape_json_str(param.name))
+  sb.write_string("\"")
+  match param.constraint {
+    Some(c) => {
+      sb.write_string(",\"constraint\":")
+      sb.write_string(type_v2_to_json_str(c))
+    }
+    None => ()
+  }
+  match param.default_type {
+    Some(d) => {
+      sb.write_string(",\"default\":")
+      sb.write_string(type_v2_to_json_str(d))
+    }
+    None => ()
+  }
+  if param.is_const {
+    sb.write_string(",\"is_const\":true")
+  }
+  match param.variance {
+    Some(v) => {
+      sb.write_string(",\"variance\":\"")
+      sb.write_string(variance_to_string(v))
+      sb.write_string("\"")
+    }
+    None => ()
+  }
+  sb.write_string("}")
+  sb.to_string()
+}
+
+///|
+/// Serialize ParamInfoV2 to JSON string
+fn param_info_to_json_str(param : ParamInfoV2) -> String {
+  let sb = StringBuilder::new()
+  sb.write_string("{\"name\":\"")
+  sb.write_string(escape_json_str(param.name))
+  sb.write_string("\",\"ty\":")
+  sb.write_string(type_v2_to_json_str(param.ty))
+  if param.optional {
+    sb.write_string(",\"optional\":true")
+  }
+  if param.is_rest {
+    sb.write_string(",\"rest\":true")
+  }
+  sb.write_string("}")
+  sb.to_string()
+}
+
+///|
+/// Serialize TypePredicateV2 to JSON string
+fn type_predicate_to_json_str(pred : TypePredicateV2) -> String {
+  let sb = StringBuilder::new()
+  sb.write_string("{\"parameter_name\":\"")
+  sb.write_string(escape_json_str(pred.parameter_name))
+  sb.write_string("\",\"predicate_type\":")
+  sb.write_string(type_v2_to_json_str(pred.predicate_type))
+  if pred.is_asserts {
+    sb.write_string(",\"is_asserts\":true")
+  }
+  sb.write_string("}")
+  sb.to_string()
+}
+
+///|
+/// Serialize IndexSignatureV2 to JSON string
+fn index_signature_to_json_str(sig : IndexSignatureV2) -> String {
+  let sb = StringBuilder::new()
+  sb.write_string("{\"key_type\":")
+  sb.write_string(type_v2_to_json_str(sig.key_type))
+  sb.write_string(",\"value_type\":")
+  sb.write_string(type_v2_to_json_str(sig.value_type))
+  if sig.is_readonly {
+    sb.write_string(",\"readonly\":true")
+  }
+  sb.write_string("}")
+  sb.to_string()
+}
+
+///|
+/// Serialize TupleElementV2 to JSON string
+fn tuple_element_to_json_str(elem : TupleElementV2) -> String {
+  let sb = StringBuilder::new()
+  sb.write_string("{\"ty\":")
+  sb.write_string(type_v2_to_json_str(elem.ty))
+  if elem.optional {
+    sb.write_string(",\"optional\":true")
+  }
+  if elem.is_rest {
+    sb.write_string(",\"rest\":true")
+  }
+  match elem.label {
+    Some(l) => {
+      sb.write_string(",\"label\":\"")
+      sb.write_string(escape_json_str(l))
+      sb.write_string("\"")
+    }
+    None => ()
+  }
+  sb.write_string("}")
+  sb.to_string()
+}
+
+///|
+/// Convert Variance to string
+fn variance_to_string(v : Variance) -> String {
+  match v {
+    Covariant => "out"
+    Contravariant => "in"
+    Invariant => "inout"
+    Bivariant => "bivariant"
+  }
 }

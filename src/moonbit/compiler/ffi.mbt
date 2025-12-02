@@ -91,6 +91,7 @@ pub struct CompileResult {
   source_map : String?
   declaration : String?
   diagnostics : Array[Diagnostic]
+  module_types_json : String? // JSON string containing exported types for caching
 } derive(Show)
 
 ///|
@@ -102,6 +103,7 @@ fn CompileResult::failure(diagnostics : Array[Diagnostic]) -> CompileResult {
     source_map: None,
     declaration: None,
     diagnostics,
+    module_types_json: None,
   }
 }
 
@@ -158,6 +160,10 @@ pub fn compile_source(
             Err(diags) => diags
           }
 
+          // Extract module types for cross-file type checking cache
+          let module_types = extract_module_types(bound_source, file_path)
+          let module_types_json = Some(module_types.to_json_string())
+
           // If noEmit is enabled, skip all emit phases and return type check results only
           if options.no_emit {
             return {
@@ -166,6 +172,7 @@ pub fn compile_source(
               source_map: None,
               declaration: None,
               diagnostics: type_diagnostics,
+              module_types_json,
             }
           }
 
@@ -219,6 +226,7 @@ pub fn compile_source(
             source_map: source_map_json,
             declaration,
             diagnostics: type_diagnostics,
+            module_types_json,
           }
         }
       }
@@ -391,6 +399,10 @@ pub fn compile_source_with_external_types(
             Err(diags) => diags
           }
 
+          // Extract module types for cross-file type checking cache
+          let module_types = extract_module_types(bound_source, file_path)
+          let module_types_json = Some(module_types.to_json_string())
+
           // If noEmit is enabled, skip all emit phases and return type check results only
           if options.no_emit {
             return {
@@ -399,6 +411,7 @@ pub fn compile_source_with_external_types(
               source_map: None,
               declaration: None,
               diagnostics: type_diagnostics,
+              module_types_json,
             }
           }
 
@@ -452,6 +465,7 @@ pub fn compile_source_with_external_types(
             source_map: source_map_json,
             declaration,
             diagnostics: type_diagnostics,
+            module_types_json,
           }
         }
       }

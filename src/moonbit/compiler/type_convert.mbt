@@ -653,6 +653,7 @@ fn TypeChecker::create_type_info(self : TypeChecker) -> (TypeInfo, TypeChecker) 
     super_called: self.super_called,
     current_location: self.current_location,
     external_registry: self.external_registry,
+    import_map: self.import_map,
   }
   (info, new_checker)
 }

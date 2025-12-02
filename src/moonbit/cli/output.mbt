@@ -305,6 +305,7 @@ pub(all) struct FileResult {
   success : Bool
   compile_time_ms : Int64
   diagnostics : Array[DiagnosticInfo]
+  module_types_json : String? // Exported types for cross-file type checking cache
 } derive(Show, ToJson)
 
 ///|
@@ -357,6 +358,7 @@ pub fn build_json_output(
       success: result.success,
       compile_time_ms: result.compile_time_ms,
       diagnostics: diags,
+      module_types_json: result.module_types_json,
     })
   }
 

@@ -581,6 +581,7 @@ fn build_coordinator_options(options : CLIOptions) -> @coordinator.CoordinatorOp
     es_module_interop: false, // Default to false for CLI
     worker_count: options.parallel.unwrap_or(default_worker_count()),
     verbose: options.verbose,
+    external_types_json: options.external_types_json,
   }
 }
 
@@ -671,6 +672,7 @@ fn build_coordinator_options_from_tsconfig(
     es_module_interop,
     worker_count: cli_options.parallel.unwrap_or(default_worker_count()),
     verbose: cli_options.verbose,
+    external_types_json: cli_options.external_types_json,
   }
 }
 

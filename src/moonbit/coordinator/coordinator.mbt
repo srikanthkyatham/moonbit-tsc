@@ -14,6 +14,7 @@ pub(all) struct CoordinatorOptions {
   es_module_interop : Bool // Emit helpers for CommonJS/ES module interoperability
   worker_count : Int
   verbose : Bool
+  external_types_json : String? // JSON string containing external types for cross-file checking
 } derive(Show)
 
 ///|
@@ -30,6 +31,7 @@ pub fn CoordinatorOptions::default() -> CoordinatorOptions {
     es_module_interop: false,
     worker_count: 4, // Default to 4 workers
     verbose: false,
+    external_types_json: None,
   }
 }
 
@@ -154,7 +156,22 @@ fn compile_single(
   }
 
   let start_time = @async.now()
-  let result = @compiler.compile_source(source, file_path, compile_options)
+
+  // Use compile_source_with_external_types if external types are provided
+  let result = match options.external_types_json {
+    Some(external_types_json) =>
+      // Parse the JSON string into ExternalTypeRegistry
+      match @compiler.ExternalTypeRegistry::from_json(external_types_json) {
+        Some(registry) =>
+          @compiler.compile_source_with_external_types(source, file_path, compile_options, registry)
+        None =>
+          // If parsing fails, fall back to regular compilation
+          @compiler.compile_source(source, file_path, compile_options)
+      }
+    None =>
+      @compiler.compile_source(source, file_path, compile_options)
+  }
+
   let end_time = @async.now()
 
   @protocol.CompileResponse::from_result(file_path, result, end_time - start_time)

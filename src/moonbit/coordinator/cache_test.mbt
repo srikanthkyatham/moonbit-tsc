@@ -40,7 +40,9 @@ async test "cache - new cache is empty" {
 ///|
 async test "cache - miss on empty cache" {
   let cache = CompilationCache::new()
-  let result = get_cached(cache, "/test.ts", "const x = 1;", "es2015", false, false)
+  let result = get_cached(
+    cache, "/test.ts", "const x = 1;", "es2015", false, false,
+  )
   assert_true(result is None)
   let (_, _, misses) = get_stats(cache)
   assert_eq(misses, 1)
@@ -63,12 +65,12 @@ async test "cache - hit after put" {
     "var x = 1;",
     None,
     None,
+    None,
   )
 
   // Get entry
   let result = get_cached(cache, file_path, source, "es2015", false, false)
   assert_true(result is Some(_))
-
   match result {
     Some(entry) => {
       assert_eq(entry.javascript, "var x = 1;")
@@ -76,7 +78,6 @@ async test "cache - hit after put" {
     }
     None => assert_true(false)
   }
-
   let (size, hits, _) = get_stats(cache)
   assert_eq(size, 1)
   assert_eq(hits, 1)
@@ -98,10 +99,13 @@ async test "cache - miss when source changes" {
     "var x = 1;",
     None,
     None,
+    None,
   )
 
   // Get with different source
-  let result = get_cached(cache, file_path, "const x = 2;", "es2015", false, false)
+  let result = get_cached(
+    cache, file_path, "const x = 2;", "es2015", false, false,
+  )
   assert_true(result is None)
 }
 
@@ -112,7 +116,18 @@ async test "cache - miss when target changes" {
   let file_path = "/test.ts"
 
   // Put with es2015
-  put_cached(cache, file_path, source, "es2015", false, false, "const x = 1;", None, None)
+  put_cached(
+    cache,
+    file_path,
+    source,
+    "es2015",
+    false,
+    false,
+    "const x = 1;",
+    None,
+    None,
+    None,
+  )
 
   // Get with es5
   let result = get_cached(cache, file_path, source, "es5", false, false)
@@ -126,7 +141,18 @@ async test "cache - miss when source_map option changes" {
   let file_path = "/test.ts"
 
   // Put without source map
-  put_cached(cache, file_path, source, "es2015", false, false, "const x = 1;", None, None)
+  put_cached(
+    cache,
+    file_path,
+    source,
+    "es2015",
+    false,
+    false,
+    "const x = 1;",
+    None,
+    None,
+    None,
+  )
 
   // Get with source map
   let result = get_cached(cache, file_path, source, "es2015", true, false)
@@ -140,7 +166,18 @@ async test "cache - miss when declaration option changes" {
   let file_path = "/test.ts"
 
   // Put without declaration
-  put_cached(cache, file_path, source, "es2015", false, false, "const x = 1;", None, None)
+  put_cached(
+    cache,
+    file_path,
+    source,
+    "es2015",
+    false,
+    false,
+    "const x = 1;",
+    None,
+    None,
+    None,
+  )
 
   // Get with declaration
   let result = get_cached(cache, file_path, source, "es2015", false, true)
@@ -154,7 +191,18 @@ async test "cache - invalidate removes entry" {
   let file_path = "/test.ts"
 
   // Put entry
-  put_cached(cache, file_path, source, "es2015", false, false, "const x = 1;", None, None)
+  put_cached(
+    cache,
+    file_path,
+    source,
+    "es2015",
+    false,
+    false,
+    "const x = 1;",
+    None,
+    None,
+    None,
+  )
 
   // Verify it exists
   let result1 = get_cached(cache, file_path, source, "es2015", false, false)
@@ -173,15 +221,35 @@ async test "cache - clear removes all entries" {
   let cache = CompilationCache::new()
 
   // Put multiple entries
-  put_cached(cache, "/a.ts", "const a = 1;", "es2015", false, false, "const a = 1;", None, None)
-  put_cached(cache, "/b.ts", "const b = 2;", "es2015", false, false, "const b = 2;", None, None)
-
+  put_cached(
+    cache,
+    "/a.ts",
+    "const a = 1;",
+    "es2015",
+    false,
+    false,
+    "const a = 1;",
+    None,
+    None,
+    None,
+  )
+  put_cached(
+    cache,
+    "/b.ts",
+    "const b = 2;",
+    "es2015",
+    false,
+    false,
+    "const b = 2;",
+    None,
+    None,
+    None,
+  )
   let (size1, _, _) = get_stats(cache)
   assert_eq(size1, 2)
 
   // Clear
   clear(cache)
-
   let (size2, hits, misses) = get_stats(cache)
   assert_eq(size2, 0)
   assert_eq(hits, 0)
@@ -193,7 +261,6 @@ async test "cache - stores source map and declaration" {
   let cache = CompilationCache::new()
   let source = "export const x: number = 1;"
   let file_path = "/test.ts"
-
   put_cached(
     cache,
     file_path,
@@ -204,8 +271,8 @@ async test "cache - stores source map and declaration" {
     "export const x = 1;",
     Some("{\"version\":3}"),
     Some("export declare const x: number;"),
+    None,
   )
-
   let result = get_cached(cache, file_path, source, "es2015", true, true)
   match result {
     Some(entry) => {
@@ -227,8 +294,8 @@ test "cache - to_response creates valid response" {
     javascript: "const x = 1;",
     source_map: Some("{\"version\":3}"),
     declaration: Some("declare const x: number;"),
+    module_types_json: None,
   }
-
   let response = to_response(entry, "/test.ts")
   assert_eq(response.file_path, "/test.ts")
   assert_eq(response.success, true)
@@ -241,11 +308,42 @@ test "cache - to_response creates valid response" {
 ///|
 async test "cache - multiple files" {
   let cache = CompilationCache::new()
-
-  put_cached(cache, "/a.ts", "const a = 1;", "es2015", false, false, "const a = 1;", None, None)
-  put_cached(cache, "/b.ts", "const b = 2;", "es5", false, false, "var b = 2;", None, None)
-  put_cached(cache, "/c.ts", "const c = 3;", "es2015", true, false, "const c = 3;", Some("{}"), None)
-
+  put_cached(
+    cache,
+    "/a.ts",
+    "const a = 1;",
+    "es2015",
+    false,
+    false,
+    "const a = 1;",
+    None,
+    None,
+    None,
+  )
+  put_cached(
+    cache,
+    "/b.ts",
+    "const b = 2;",
+    "es5",
+    false,
+    false,
+    "var b = 2;",
+    None,
+    None,
+    None,
+  )
+  put_cached(
+    cache,
+    "/c.ts",
+    "const c = 3;",
+    "es2015",
+    true,
+    false,
+    "const c = 3;",
+    Some("{}"),
+    None,
+    None,
+  )
   let (size, _, _) = get_stats(cache)
   assert_eq(size, 3)
 
@@ -253,7 +351,6 @@ async test "cache - multiple files" {
   let a = get_cached(cache, "/a.ts", "const a = 1;", "es2015", false, false)
   let b = get_cached(cache, "/b.ts", "const b = 2;", "es5", false, false)
   let c = get_cached(cache, "/c.ts", "const c = 3;", "es2015", true, false)
-
   assert_true(a is Some(_))
   assert_true(b is Some(_))
   assert_true(c is Some(_))

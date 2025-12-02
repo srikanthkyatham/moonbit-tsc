@@ -285,6 +285,7 @@ pub struct TypeChecker {
   super_called : Bool // Tracks if super() has been called in constructor (for TS17009)
   current_location : SourceLocation // Current location being checked (for TS2590 and similar)
   external_registry : ExternalTypeRegistry? // Registry of types from other modules for cross-file checking
+  import_map : Map[String, (String, String)] // Map from local name -> (module_specifier, original_name)
 } derive(Show)
 
 ///|
@@ -354,6 +355,7 @@ pub fn TypeChecker::new_with_options(
       Position::{ line: 0, column: 0, offset: 0 },
     ),
     external_registry: None,
+    import_map: Map::new(),
   }
 }
 
@@ -1489,10 +1491,15 @@ pub fn check_source_file_with_external_types(
     target,
   )
 
-  // Store external registry in checker for type resolution
-  // Note: The TypeChecker itself doesn't directly use the registry,
-  // but when we create a TypeEnv for v2 checking, we populate it with external types
-  let checker = { ..checker, external_registry: Some(external_registry) }
+  // Build import map from module_info.imports
+  let import_map = build_import_map(bound.module_info.imports, bound.file_path)
+
+  // Store external registry and import map in checker for type resolution
+  let checker = {
+    ..checker,
+    external_registry: Some(external_registry),
+    import_map,
+  }
 
   // Push a top-level scope for the source file so local variables are tracked
   let checker = push_local_scope(checker)
@@ -1518,6 +1525,369 @@ pub fn check_source_file_with_external_types(
   } else {
     Err(checker.diagnostics)
   }
+}
+
+///|
+/// Build import map from ImportInfo array
+/// Maps local name -> (module_specifier, original_name)
+fn build_import_map(
+  imports : Array[ImportInfo],
+  current_file : String,
+) -> Map[String, (String, String)] {
+  let import_map : Map[String, (String, String)] = Map::new()
+
+  for import_info in imports {
+    let module_spec = import_info.module_specifier
+
+    // Resolve relative path to absolute path
+    let resolved_module = resolve_module_path(module_spec, current_file)
+
+    // Handle default import
+    match import_info.default_import {
+      Some(local_name) => import_map.set(local_name, (resolved_module, "default"))
+      None => ()
+    }
+
+    // Handle namespace import (import * as ns from 'mod')
+    match import_info.namespace_import {
+      Some(local_name) => import_map.set(local_name, (resolved_module, "*"))
+      None => ()
+    }
+
+    // Handle named imports
+    for named in import_info.named_imports {
+      let (property_name, local_name) = named
+      // If property_name is different, that's the original name
+      // e.g., import { foo as bar } -> property_name="foo", local_name="bar"
+      let original_name = if property_name.length() > 0 {
+        property_name
+      } else {
+        local_name
+      }
+      import_map.set(local_name, (resolved_module, original_name))
+    }
+  }
+
+  import_map
+}
+
+///|
+/// Resolve a module specifier relative to the current file
+fn resolve_module_path(module_spec : String, current_file : String) -> String {
+  // Handle relative imports (./foo, ../bar)
+  if module_spec.has_prefix("./") || module_spec.has_prefix("../") {
+    // Get directory of current file
+    let dir = get_directory_from_path(current_file)
+
+    // Join with module specifier and normalize
+    let joined = if dir.length() > 0 {
+      dir + "/" + module_spec
+    } else {
+      module_spec
+    }
+
+    // Add .ts extension if not present
+    let with_ext = if joined.has_suffix(".ts") || joined.has_suffix(".tsx") {
+      joined
+    } else {
+      joined + ".ts"
+    }
+
+    // Normalize path (remove ./ and resolve ../)
+    normalize_import_path(with_ext)
+  } else {
+    // Non-relative import (node_modules, etc.) - return as-is
+    module_spec
+  }
+}
+
+///|
+/// Get directory from a file path
+fn get_directory_from_path(path : String) -> String {
+  let mut last_slash = -1
+  for i = 0; i < path.length(); i = i + 1 {
+    if path[i] == '/' {
+      last_slash = i
+    }
+  }
+  if last_slash >= 0 {
+    substring(path, 0, last_slash)
+  } else {
+    ""
+  }
+}
+
+///|
+/// Normalize an import path by resolving . and .. components
+fn normalize_import_path(path : String) -> String {
+  let parts = split_path(path)
+  let result : Array[String] = []
+
+  for part in parts {
+    if part == "." {
+      // Skip current directory
+      continue
+    } else if part == ".." {
+      // Go up one directory
+      if result.length() > 0 && result[result.length() - 1] != ".." {
+        let _ = result.pop()
+      } else {
+        result.push(part)
+      }
+    } else if part.length() > 0 {
+      result.push(part)
+    }
+  }
+
+  "/" + result.iter().fold(init="", fn(acc, part) {
+    if acc.length() == 0 { part } else { acc + "/" + part }
+  })
+}
+
+///|
+/// Split a path by /
+fn split_path(path : String) -> Array[String] {
+  let parts : Array[String] = []
+  let mut current = ""
+  for c in path {
+    if c == '/' {
+      if current.length() > 0 {
+        parts.push(current)
+        current = ""
+      }
+    } else {
+      current = current + c.to_string()
+    }
+  }
+  if current.length() > 0 {
+    parts.push(current)
+  }
+  parts
+}
+
+///|
+/// Get substring of a string
+fn substring(s : String, start : Int, end : Int) -> String {
+  let mut result = ""
+  for i = start; i < end && i < s.length(); i = i + 1 {
+    result = result + s[i].unsafe_to_char().to_string()
+  }
+  result
+}
+
+///|
+/// Resolve type from external registry for an imported symbol
+fn resolve_import_type(checker : TypeChecker, name : String) -> Type? {
+  // Check if this name is an import
+  match checker.import_map.get(name) {
+    None => None
+    Some((module_path, original_name)) => {
+      // Look up in external registry
+      match checker.external_registry {
+        None => None
+        Some(registry) => {
+          if original_name == "default" {
+            // Default import
+            match registry.lookup_default(module_path) {
+              Some(info) => Some(type_v2_to_type(info.ty))
+              None => None
+            }
+          } else if original_name == "*" {
+            // Namespace import - create module type
+            match registry.get_module(module_path) {
+              Some(module_types) => Some(module_types_to_object_type(module_types))
+              None => None
+            }
+          } else {
+            // Named import
+            match registry.lookup_export(module_path, original_name) {
+              Some(info) => Some(type_v2_to_type(info.ty))
+              None => None
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+///|
+/// Create a default TypeInfo for conversions from TypeV2
+fn default_type_info() -> TypeInfo {
+  TypeInfo::{ id: 0, flags: TypeFlags::default() }
+}
+
+///|
+/// Convert TypeV2 to Type
+fn type_v2_to_type(ty : TypeV2) -> Type {
+  let info = default_type_info()
+  match ty {
+    TNumber => Number(info)
+    TString => String(info)
+    TBoolean => Boolean(info)
+    TUndefined => Undefined(info)
+    TNull => Null(info)
+    TVoid => Void(info)
+    TAny => Any(info)
+    TUnknown => Unknown(info)
+    TNever => Never(info)
+    TBigInt => BigInt(info)
+    TSymbol => Symbol(info)
+    TUniqueSymbol(_) => Symbol(info) // Treat unique symbols as regular symbols for now
+    TObject(obj) => {
+      let props : Map[String, PropertySignature] = Map::new()
+      for entry in obj.fields {
+        let (name, field) = entry
+        props.set(name, PropertySignature::{
+          name: name,
+          prop_type: type_v2_to_type(field.ty),
+          is_optional: field.optional,
+          is_readonly: field.is_readonly,
+        })
+      }
+      Object(ObjectType::{
+        properties: props,
+        call_signatures: [],
+        construct_signatures: [],
+        index_signatures: [],
+        info: info,
+        class_name: obj.class_name,
+      })
+    }
+    TArray(elem) => Array(CheckerArrayType::{
+      element_type: type_v2_to_type(elem),
+      info: info,
+    })
+    TTuple(elements) => {
+      let elem_types = elements.map(fn(elem) {
+        TupleElement::{
+          element_type: type_v2_to_type(elem.ty),
+          is_optional: elem.optional,
+          is_rest: elem.is_rest,
+          label: elem.label,
+        }
+      })
+      Tuple(CheckerTupleType::{
+        element_types: elem_types,
+        info: info,
+      })
+    }
+    TFunction(func) => {
+      let params = func.params.map(fn(p) {
+        CheckerParameter::{
+          name: p.name,
+          param_type: type_v2_to_type(p.ty),
+          is_optional: p.optional,
+          is_rest: p.is_rest,
+        }
+      })
+      Function(CheckerFunctionType::{
+        parameters: params,
+        return_type: type_v2_to_type(func.return_type),
+        info: info,
+      })
+    }
+    TUnion(types) => {
+      let converted = types.map(type_v2_to_type)
+      Union(CheckerUnionType::{
+        types: converted,
+        info: info,
+      })
+    }
+    TIntersection(types) => {
+      let converted = types.map(type_v2_to_type)
+      Intersection(CheckerIntersectionType::{
+        types: converted,
+        info: info,
+      })
+    }
+    TLiteralString(s) => StringLiteral(s, info)
+    TLiteralNumber(n) => NumberLiteral(n, info)
+    TLiteralBool(b) => BooleanLiteral(b, info)
+    TLiteralBigInt(_) => BigInt(info) // BigInt literal treated as BigInt type
+    TGenericInstance(name, type_args) => TypeReference(TypeReferenceType::{
+      name: name,
+      type_arguments: type_args.map(type_v2_to_type),
+      info: info,
+    })
+    TTypeParam(name, constraint) => {
+      // Type parameters are represented as type references for now
+      TypeReference(TypeReferenceType::{
+        name: name,
+        type_arguments: [],
+        info: info,
+      })
+    }
+    TConditional(cond) => Conditional(CheckerConditionalType::{
+      check_type: type_v2_to_type(cond.check_type),
+      extends_type: type_v2_to_type(cond.extends_type),
+      true_type: type_v2_to_type(cond.true_type),
+      false_type: type_v2_to_type(cond.false_type),
+      info: info,
+    })
+    TIndexAccess(idx) => IndexAccess(CheckerIndexAccessType::{
+      object_type: type_v2_to_type(idx.object_type),
+      index_type: type_v2_to_type(idx.index_type),
+      info: info,
+    })
+    TMapped(mapped) => Mapped(CheckerMappedType::{
+      type_parameter: CheckerTypeParameter::{
+        name: mapped.type_param.name,
+        constraint: match mapped.type_param.constraint {
+          Some(c) => Some(type_v2_to_type(c))
+          None => None
+        },
+        default_type: match mapped.type_param.default_type {
+          Some(d) => Some(type_v2_to_type(d))
+          None => None
+        },
+      },
+      name_type: match mapped.name_type {
+        Some(n) => Some(type_v2_to_type(n))
+        None => None
+      },
+      template_type: type_v2_to_type(mapped.template_type),
+      readonly_modifier: MappedModifier::Unchanged,
+      optional_modifier: MappedModifier::Unchanged,
+      info: info,
+    })
+    TInfer(name) => Infer(CheckerInferType::{
+      type_parameter_name: name,
+      info: info,
+    })
+    TTemplateLiteral(tpl) => TemplateLiteral(CheckerTemplateLiteralType::{
+      texts: tpl.texts,
+      types: tpl.types.map(type_v2_to_type),
+      info: info,
+    })
+    TError => Error(info)
+  }
+}
+
+///|
+/// Convert ModuleTypes to an Object type (for namespace imports)
+fn module_types_to_object_type(module_types : ModuleTypes) -> Type {
+  let props : Map[String, PropertySignature] = Map::new()
+  let type_info = default_type_info()
+
+  for entry in module_types.named_exports {
+    let (name, export_info) = entry
+    props.set(name, PropertySignature::{
+      name: name,
+      prop_type: type_v2_to_type(export_info.ty),
+      is_optional: false,
+      is_readonly: true,
+    })
+  }
+
+  Object(ObjectType::{
+    properties: props,
+    call_signatures: [],
+    construct_signatures: [],
+    index_signatures: [],
+    info: type_info,
+    class_name: None,
+  })
 }
 
 ///|
@@ -2250,53 +2620,59 @@ fn infer_identifier_type(
               match get_builtin_global_type(checker, id.name) {
                 Some((builtin_type, c)) => (builtin_type, c)
                 None => {
-                  // Variable not found - try to find a similar name for suggestion
-                  let suggestion = find_similar_name_in_scope(checker, id.name)
-                  let checker = match suggestion {
-                    Some(similar_name) =>
-                      add_diagnostic_with_code(
-                        checker,
-                        "Cannot find name '\{id.name}'. Did you mean '\{similar_name}'?",
-                        id.location,
-                        TS2552,
-                      )
-                    None =>
-                      // No similar name found - check for specialized error codes
-                      // TS2579: Test runner globals (Jest, Mocha, etc.)
-                      if is_test_runner_global(id.name) {
-                        add_diagnostic_with_code(
-                          checker,
-                          "Cannot find name '\{id.name}'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.",
-                          id.location,
-                          TS2579,
-                        )
-                      } else if is_dom_global(id.name) {
-                        // TS2580: DOM/Browser globals
-                        add_diagnostic_with_code(
-                          checker,
-                          "Cannot find name '\{id.name}'. Do you need to change your target library? Try changing the 'lib' compiler option to include 'dom'.",
-                          id.location,
-                          TS2580,
-                        )
-                      } else if is_es_library_global(id.name) {
-                        // TS2584: ES library globals (newer JS features)
-                        add_diagnostic_with_code(
-                          checker,
-                          "Cannot find name '\{id.name}'. Do you need to change your target library? Try changing the 'lib' compiler option to include a newer ES version.",
-                          id.location,
-                          TS2584,
-                        )
-                      } else {
-                        // Generic TS2304
-                        add_diagnostic_with_code(
-                          checker,
-                          "Cannot find name '" + id.name + "'",
-                          id.location,
-                          TS2304,
-                        )
+                  // Check for imported types from external modules
+                  match resolve_import_type(checker, id.name) {
+                    Some(imported_type) => (imported_type, checker)
+                    None => {
+                      // Variable not found - try to find a similar name for suggestion
+                      let suggestion = find_similar_name_in_scope(checker, id.name)
+                      let checker = match suggestion {
+                        Some(similar_name) =>
+                          add_diagnostic_with_code(
+                            checker,
+                            "Cannot find name '\{id.name}'. Did you mean '\{similar_name}'?",
+                            id.location,
+                            TS2552,
+                          )
+                        None =>
+                          // No similar name found - check for specialized error codes
+                          // TS2579: Test runner globals (Jest, Mocha, etc.)
+                          if is_test_runner_global(id.name) {
+                            add_diagnostic_with_code(
+                              checker,
+                              "Cannot find name '\{id.name}'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.",
+                              id.location,
+                              TS2579,
+                            )
+                          } else if is_dom_global(id.name) {
+                            // TS2580: DOM/Browser globals
+                            add_diagnostic_with_code(
+                              checker,
+                              "Cannot find name '\{id.name}'. Do you need to change your target library? Try changing the 'lib' compiler option to include 'dom'.",
+                              id.location,
+                              TS2580,
+                            )
+                          } else if is_es_library_global(id.name) {
+                            // TS2584: ES library globals (newer JS features)
+                            add_diagnostic_with_code(
+                              checker,
+                              "Cannot find name '\{id.name}'. Do you need to change your target library? Try changing the 'lib' compiler option to include a newer ES version.",
+                              id.location,
+                              TS2584,
+                            )
+                          } else {
+                            // Generic TS2304
+                            add_diagnostic_with_code(
+                              checker,
+                              "Cannot find name '" + id.name + "'",
+                              id.location,
+                              TS2304,
+                            )
+                          }
                       }
+                      any_type(checker)
+                    }
                   }
-                  any_type(checker)
                 }
               }
             }
@@ -3338,6 +3714,16 @@ fn infer_symbol_type(
   checker : TypeChecker,
   symbol : Symbol,
 ) -> (Type, TypeChecker) {
+  // For Alias symbols (imports), try to resolve from external registry
+  if symbol.kind == SymbolKind::Alias {
+    match resolve_import_type(checker, symbol.name) {
+      Some(imported_type) => {
+        return (imported_type, checker)
+      }
+      None => ()
+    }
+  }
+
   match symbol.value_declaration {
     Some(node) => infer_declaration_type(checker, node, symbol)
     None => any_type(checker)

@@ -12,6 +12,7 @@ pub(all) struct CacheEntry {
   javascript : String // Compiled output
   source_map : String? // Optional source map
   declaration : String? // Optional declaration
+  module_types_json : String? // Optional module types JSON for cross-file type checking
 } derive(Show)
 
 ///|
@@ -126,6 +127,7 @@ pub async fn put_cached(
   javascript : String,
   source_map : String?,
   declaration : String?,
+  module_types_json : String?,
 ) -> Unit {
   cache.lock.acquire()
   put_cached_internal(
@@ -138,6 +140,7 @@ pub async fn put_cached(
     javascript,
     source_map,
     declaration,
+    module_types_json,
   )
   cache.lock.release()
 }
@@ -154,6 +157,7 @@ fn put_cached_internal(
   javascript : String,
   source_map : String?,
   declaration : String?,
+  module_types_json : String?,
 ) -> Unit {
   let source_hash = hash_source(source)
   let entry = CacheEntry::{
@@ -164,6 +168,7 @@ fn put_cached_internal(
     javascript,
     source_map,
     declaration,
+    module_types_json,
   }
   cache.entries[file_path] = entry
 }
@@ -209,5 +214,6 @@ pub fn to_response(
     declaration: entry.declaration,
     diagnostics: [],
     compile_time_ms: 0, // Cached, no compile time
+    module_types_json: entry.module_types_json,
   }
 }

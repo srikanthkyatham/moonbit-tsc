@@ -57,6 +57,7 @@ pub(all) struct CompileResponse {
   declaration : String?
   diagnostics : Array[String]
   compile_time_ms : Int64
+  module_types_json : String? // JSON string containing exported types for caching
 } derive(Show, ToJson, FromJson)
 
 ///|
@@ -75,6 +76,7 @@ pub fn CompileResponse::from_result(
     declaration: result.declaration,
     diagnostics,
     compile_time_ms,
+    module_types_json: result.module_types_json,
   }
 }
 
@@ -92,6 +94,7 @@ pub fn CompileResponse::error(
     declaration: None,
     diagnostics: [message],
     compile_time_ms: 0,
+    module_types_json: None,
   }
 }
 
