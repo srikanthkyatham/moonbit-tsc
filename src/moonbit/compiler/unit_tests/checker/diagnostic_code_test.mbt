@@ -6640,3 +6640,36 @@ test "DiagnosticCode - TS2502 class extends with type arguments" {
     Err(diagnostics) => assert_true(has_error(diagnostics, 2502))
   }
 }
+
+///|
+test "DiagnosticCode - TS2737 BigInt literals not available for ES2015" {
+  let source =
+    #|const big = 123n;
+  let result = check_source_with_target(source, @compiler.Target::ES2015)
+  match result {
+    Ok(_) => fail("Should have detected BigInt literal error for ES2015 target")
+    Err(diagnostics) => assert_true(has_error(diagnostics, 2737))
+  }
+}
+
+///|
+test "DiagnosticCode - TS2737 BigInt literals allowed for ES2020" {
+  let source =
+    #|const big = 123n;
+  let result = check_source_with_target(source, @compiler.Target::ES2020)
+  match result {
+    Ok(tf) => assert_true(tf.diagnostics.length() == 0)
+    Err(_) => fail("Should not have errors for BigInt with ES2020 target")
+  }
+}
+
+///|
+test "DiagnosticCode - TS2737 BigInt literals allowed for ESNext" {
+  let source =
+    #|const big = 123n;
+  let result = check_source_with_target(source, @compiler.Target::ESNext)
+  match result {
+    Ok(tf) => assert_true(tf.diagnostics.length() == 0)
+    Err(_) => fail("Should not have errors for BigInt with ESNext target")
+  }
+}
