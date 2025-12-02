@@ -496,3 +496,39 @@ pub fn get_compiler_info() -> CompilerInfo {
     description: "High-performance TypeScript compiler with MoonBit + Zig architecture",
   }
 }
+
+///|
+/// Parse and bind a source file to get full binding information
+/// including triple-slash directives, module info, and symbols
+pub fn parse_and_bind(
+  source : String,
+  file_path : String,
+) -> Result[BoundSourceFile, Array[Diagnostic]] {
+  let tokens = scan_all_v2(source, file_path)
+  match parse_source_file(tokens, file_path) {
+    Err(diagnostics) => Err(diagnostics)
+    Ok(source_file) => bind_source_file(source_file)
+  }
+}
+
+///|
+/// Extract triple-slash reference paths from source
+/// Returns an array of file paths referenced via /// <reference path="..." />
+pub fn extract_reference_paths(
+  source : String,
+  file_path : String,
+) -> Array[String] {
+  let paths : Array[String] = []
+  match parse_and_bind(source, file_path) {
+    Ok(bound) => {
+      for directive in bound.triple_slash_directives {
+        match directive.kind {
+          ReferencePath(path) => paths.push(path)
+          _ => () // Ignore other directive types
+        }
+      }
+    }
+    Err(_) => () // Return empty array on parse failure
+  }
+  paths
+}

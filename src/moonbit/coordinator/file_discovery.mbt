@@ -8,8 +8,20 @@ let max_concurrent_reads : Int = 32
 ///|
 /// Check if a file is a TypeScript file (not declaration file)
 pub fn is_typescript_file(path : String) -> Bool {
-  (path.ends_with(".ts") || path.ends_with(".tsx")) &&
-  not(path.ends_with(".d.ts"))
+  (path.has_suffix(".ts") || path.has_suffix(".tsx")) &&
+  not(path.has_suffix(".d.ts"))
+}
+
+///|
+/// Check if a file is a declaration file (.d.ts)
+pub fn is_declaration_file(path : String) -> Bool {
+  path.has_suffix(".d.ts")
+}
+
+///|
+/// Check if a file is any TypeScript file (including declaration files)
+pub fn is_any_typescript_file(path : String) -> Bool {
+  path.has_suffix(".ts") || path.has_suffix(".tsx")
 }
 
 ///|
@@ -42,7 +54,7 @@ async fn walk_directory(dir : String, files : Array[String]) -> Unit raise Error
     async fn(current_dir, entries) {
       for entry in entries {
         let full_path = current_dir + "/" + entry
-        if is_typescript_file(entry) {
+        if is_typescript_file(full_path) {
           files.push(full_path)
         }
       }

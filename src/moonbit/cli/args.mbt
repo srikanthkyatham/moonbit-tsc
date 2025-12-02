@@ -15,6 +15,7 @@ pub(all) enum Command {
   CompileProject(String, CLIOptions) // tsconfig.json path
   BuildReferences(String, CLIOptions) // Build project with all references
   ListImports(String, Bool) // List imports from a file (path, json_output)
+  JsonCompile(Array[String], CLIOptions) // JSON output mode for Phoenix API
   Worker
   Version
   Help
@@ -75,6 +76,7 @@ pub fn parse_args(args : Array[String]) -> Result[Command, String] {
   let mut report_diagnostics = false
   let mut json_output = false
   let mut external_types_json : String? = None
+  let mut json_mode = false
 
   let mut i = 1 // Skip program name
 
@@ -87,6 +89,8 @@ pub fn parse_args(args : Array[String]) -> Result[Command, String] {
       return Ok(Command::Help)
     } else if arg == "--worker" {
       return Ok(Command::Worker)
+    } else if arg == "--json" {
+      json_mode = true
     } else if arg == "--init" {
       return Ok(Command::Init)
     } else if arg == "--build" || arg == "-b" {
@@ -214,6 +218,9 @@ pub fn parse_args(args : Array[String]) -> Result[Command, String] {
       if files.length() == 0 {
         // No files and no project - show help
         Ok(Command::Help)
+      } else if json_mode {
+        // JSON output mode (used by Phoenix API)
+        Ok(Command::JsonCompile(files, options))
       } else {
         Ok(Command::Compile(files, options))
       }

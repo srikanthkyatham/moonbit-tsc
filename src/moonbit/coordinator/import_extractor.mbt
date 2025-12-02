@@ -10,6 +10,15 @@ pub struct ImportResult {
 }
 
 ///|
+/// Result of extracting imports and references from a file
+pub struct ImportAndReferenceResult {
+  path : String
+  imports : Array[String] // Module specifiers (e.g., "./utils", "lodash")
+  references : Array[String] // Reference paths (e.g., "./types.d.ts")
+  errors : Array[String]
+}
+
+///|
 /// Extract imports from TypeScript source code
 pub fn extract_imports(source : String, file_path : String) -> ImportResult {
   match @compiler.parse_only(source, file_path) {
@@ -23,6 +32,42 @@ pub fn extract_imports(source : String, file_path : String) -> ImportResult {
         errors.push(diag.message)
       }
       { path: file_path, imports: [], errors }
+    }
+  }
+}
+
+///|
+/// Extract both imports and triple-slash reference paths from TypeScript source code
+pub fn extract_imports_and_references(source : String, file_path : String) -> ImportAndReferenceResult {
+  match @compiler.parse_and_bind(source, file_path) {
+    Ok(bound_source) => {
+      // Extract imports from AST statements
+      let imports : Array[String] = []
+      for statement in bound_source.statements {
+        match statement {
+          @compiler.ImportDeclaration(import_decl) =>
+            imports.push(import_decl.module_specifier)
+          _ => ()
+        }
+      }
+
+      // Extract reference paths from triple-slash directives
+      let references : Array[String] = []
+      for directive in bound_source.triple_slash_directives {
+        match directive.kind {
+          @compiler.ReferencePath(path) => references.push(path)
+          _ => () // Ignore other directive types (types, lib, etc.)
+        }
+      }
+
+      { path: file_path, imports, references, errors: [] }
+    }
+    Err(diagnostics) => {
+      let errors : Array[String] = []
+      for diag in diagnostics {
+        errors.push(diag.message)
+      }
+      { path: file_path, imports: [], references: [], errors }
     }
   }
 }
@@ -76,6 +121,25 @@ pub fn resolve_import_path(
   } else {
     // Bare import (node_modules) - not tracked in dependency graph
     None
+  }
+}
+
+///|
+/// Resolve a reference path to an absolute file path
+/// Reference paths are always relative and can include .d.ts files
+pub fn resolve_reference_path(
+  reference_path : String,
+  from_file : String,
+) -> String? {
+  // Reference paths are always relative (unlike imports which can be bare)
+  if reference_path.has_prefix("./") || reference_path.has_prefix("../") {
+    let dir = get_directory(from_file)
+    let resolved = resolve_relative_path(dir, reference_path)
+    Some(resolved)
+  } else {
+    // Treat non-prefixed paths as relative to the current file
+    let dir = get_directory(from_file)
+    Some(dir + "/" + reference_path)
   }
 }
 
@@ -137,25 +201,33 @@ pub fn build_dependency_graph(
 ) -> DependencyDag {
   let dag = DependencyDag::new()
 
-  // Store resolved imports and content hash for each file
+  // Store resolved imports/references and content hash for each file
   let file_data : Array[(String, Array[String], Int64)] = []
 
-  // First pass: extract imports, compute hash, and create empty nodes
+  // First pass: extract imports and references, compute hash, and create empty nodes
   for file in files {
     let (path, source) = file // read_files returns (path, content)
-    let result = extract_imports(source, path)
+    let result = extract_imports_and_references(source, path)
     let content_hash = hash_source(source)
 
     // Resolve imports to absolute paths
-    let resolved_imports : Array[String] = []
+    let resolved_deps : Array[String] = []
     for module_spec in result.imports {
       match resolve_import_path(module_spec, path) {
-        Some(resolved) => resolved_imports.push(resolved)
+        Some(resolved) => resolved_deps.push(resolved)
         None => () // Skip bare imports (node_modules)
       }
     }
 
-    file_data.push((path, resolved_imports, content_hash))
+    // Resolve reference paths to absolute paths
+    for ref_path in result.references {
+      match resolve_reference_path(ref_path, path) {
+        Some(resolved) => resolved_deps.push(resolved)
+        None => ()
+      }
+    }
+
+    file_data.push((path, resolved_deps, content_hash))
 
     // Add node with no imports first (all edges_in empty)
     add_node(dag, path, [], content_hash)
@@ -163,10 +235,65 @@ pub fn build_dependency_graph(
 
   // Second pass: add edges now that all nodes exist
   for data in file_data {
-    let (path, imports, content_hash) = data
-    // Re-add the node with its imports, which will update edges properly
-    add_node(dag, path, imports, content_hash)
+    let (path, deps, content_hash) = data
+    // Re-add the node with its dependencies (imports + references), which will update edges properly
+    add_node(dag, path, deps, content_hash)
   }
 
   dag
+}
+
+///|
+/// Collect all triple-slash reference paths from source files
+/// Returns the resolved absolute paths of referenced files (typically .d.ts)
+pub fn collect_reference_paths(
+  files : Array[(String, String)], // (path, source) pairs
+) -> Array[String] {
+  let references : Array[String] = []
+  let seen : Map[String, Bool] = Map::new()
+
+  for file in files {
+    let (path, source) = file
+    let result = extract_imports_and_references(source, path)
+
+    for ref_path in result.references {
+      match resolve_reference_path(ref_path, path) {
+        Some(resolved) => {
+          // Only add if not already seen
+          match seen.get(resolved) {
+            Some(_) => ()
+            None => {
+              seen.set(resolved, true)
+              references.push(resolved)
+            }
+          }
+        }
+        None => ()
+      }
+    }
+  }
+
+  references
+}
+
+///|
+/// Filter reference paths to only include files not already in the file set
+pub fn filter_new_references(
+  references : Array[String],
+  existing_files : Array[String],
+) -> Array[String] {
+  let existing_set : Map[String, Bool] = Map::new()
+  for file in existing_files {
+    existing_set.set(file, true)
+  }
+
+  let new_refs : Array[String] = []
+  for ref in references {
+    match existing_set.get(ref) {
+      Some(_) => () // Already in the file set
+      None => new_refs.push(ref)
+    }
+  }
+
+  new_refs
 }

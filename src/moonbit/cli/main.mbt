@@ -12,26 +12,25 @@ fn main {
 /// Async main function
 async fn async_main() -> Unit {
   let args = @env.args()
-
   match parse_args(args) {
     Err(msg) => {
       println("Error: " + msg)
       print_usage()
     }
-    Ok(Command::Help) => {
+    Ok(Command::Help) =>
       // Check for tsconfig.json auto-detection before showing help
       if try_auto_detect_tsconfig() {
         run_project_compile("tsconfig.json", CLIOptions::default())
       } else {
         print_help()
       }
-    }
     Ok(Command::Version) => print_version()
     Ok(Command::Worker) => run_worker_mode()
     Ok(Command::Init) => print_init_message()
     Ok(Command::ListImports(file_path, json_output)) =>
       run_list_imports(file_path, json_output)
     Ok(Command::Compile(files, options)) => run_compile(files, options)
+    Ok(Command::JsonCompile(files, options)) => run_json_compile(files, options)
     Ok(Command::CompileProject(tsconfig_path, options)) =>
       run_project_compile(tsconfig_path, options)
     Ok(Command::BuildReferences(tsconfig_path, options)) =>
@@ -73,18 +72,43 @@ async fn run_single_compile(
 
   // Discover files
   let file_paths = @coordinator.discover_files(file_patterns)
-
   if file_paths.length() == 0 {
     println("No TypeScript files found")
     return
   }
-
   if options.verbose {
     println("Found " + file_paths.length().to_string() + " file(s)")
   }
 
   // Read all files (now uses parallel reading with semaphore)
   let files = @coordinator.read_files(file_paths)
+
+  // Collect triple-slash reference paths and load any additional .d.ts files
+  let reference_paths = @coordinator.collect_reference_paths(files)
+  let new_refs = @coordinator.filter_new_references(reference_paths, file_paths)
+
+  // Load referenced .d.ts files
+  let all_files = if new_refs.length() > 0 {
+    if options.verbose {
+      println(
+        "Loading " +
+        new_refs.length().to_string() +
+        " referenced declaration file(s)",
+      )
+    }
+    let ref_files = @coordinator.read_files(new_refs)
+    // Combine original files with referenced files
+    let combined : Array[(String, String)] = []
+    for f in ref_files {
+      combined.push(f)
+    }
+    for f in files {
+      combined.push(f)
+    }
+    combined
+  } else {
+    files
+  }
 
   // Get executable path (self)
   let executable = @env.args()[0]
@@ -93,13 +117,60 @@ async fn run_single_compile(
   let coord_options = build_coordinator_options(options)
 
   // Compile files
-  let summary = @coordinator.compile_parallel(executable, files, coord_options)
+  let summary = @coordinator.compile_parallel(
+    executable, all_files, coord_options,
+  )
 
   // Write output files
   write_all_outputs(summary.results, options)
 
   // Print summary
   print_summary(summary, options)
+}
+
+///|
+/// Run JSON compilation mode (used by Phoenix API)
+/// Reads files, discovers referenced .d.ts files, compiles, and outputs JSON
+async fn run_json_compile(
+  file_paths : Array[String],
+  options : CLIOptions,
+) -> Unit raise Error {
+  // Read all files
+  let files = @coordinator.read_files(file_paths)
+
+  // Collect triple-slash reference paths and load any additional .d.ts files
+  let reference_paths = @coordinator.collect_reference_paths(files)
+  let new_refs = @coordinator.filter_new_references(reference_paths, file_paths)
+
+  // Load referenced .d.ts files
+  let all_files = if new_refs.length() > 0 {
+    let ref_files = @coordinator.read_files(new_refs)
+    // Combine original files with referenced files (refs first for proper ordering)
+    let combined : Array[(String, String)] = []
+    for f in ref_files {
+      combined.push(f)
+    }
+    for f in files {
+      combined.push(f)
+    }
+    combined
+  } else {
+    files
+  }
+
+  // Build coordinator options
+  let coord_options = build_coordinator_options(options)
+
+  // Get executable path (self)
+  let executable = @env.args()[0]
+
+  // Compile files
+  let summary = @coordinator.compile_parallel(
+    executable, all_files, coord_options,
+  )
+
+  // Output JSON response
+  print_json_summary(summary)
 }
 
 ///|
@@ -115,12 +186,10 @@ async fn run_watch_mode(
 
   // Initial compilation
   let file_paths = @coordinator.discover_files(file_patterns)
-
   if file_paths.length() == 0 {
     println("No TypeScript files found")
     return
   }
-
   @coordinator.print_watch_message(
     "Watching " + file_paths.length().to_string() + " file(s)...",
   )
@@ -128,9 +197,10 @@ async fn run_watch_mode(
   // Read all files and build initial dependency graph
   let files = @coordinator.read_files(file_paths)
   let dag = @coordinator.build_dependency_graph(files)
-
   if options.verbose {
-    @coordinator.print_watch_message("Built dependency graph for incremental compilation")
+    @coordinator.print_watch_message(
+      "Built dependency graph for incremental compilation",
+    )
   }
 
   // Initialize watch state
@@ -138,7 +208,6 @@ async fn run_watch_mode(
 
   // Do initial compilation of all files
   compile_files_with_dag(file_paths, files, options)
-
   @coordinator.print_watch_message("Waiting for file changes...")
 
   // Watch loop
@@ -154,7 +223,6 @@ async fn run_watch_mode(
 
     // Check for changes
     let changed = @coordinator.check_for_changes(watch_state)
-
     if changed.length() > 0 {
       @coordinator.print_watch_message(
         "File change detected: " + changed.length().to_string() + " file(s)",
@@ -183,7 +251,6 @@ async fn run_watch_mode(
 
       // Get all files that need recompilation (changed + dependents) in order
       let to_recompile = @coordinator.get_recompilation_order(dag, changed)
-
       if options.verbose {
         @coordinator.print_watch_message(
           "Recompiling " +
@@ -197,7 +264,6 @@ async fn run_watch_mode(
 
       // Recompile files in topological order
       compile_files_with_dag(to_recompile, files_to_compile, options)
-
       @coordinator.print_watch_message("Waiting for file changes...")
     }
   }
@@ -232,7 +298,6 @@ async fn compile_files_with_dag(
       println("  Compiled: " + result.file_path)
     }
   }
-
   if summary.failed == 0 {
     @coordinator.print_watch_message(
       "Compiled " +
@@ -285,7 +350,6 @@ async fn compile_files(
       println("  Compiled: " + result.file_path)
     }
   }
-
   if summary.failed == 0 {
     @coordinator.print_watch_message(
       "Compiled " +
@@ -423,18 +487,26 @@ fn print_help() -> Unit {
   println("  --project, -p <path>    Compile project from tsconfig.json")
   println("  --build, -b <path>      Build project with all references")
   println("  --list-imports <file>   List all imports from a TypeScript file")
-  println("  --target <target>       ECMAScript target (es5, es2015, esnext, etc.)")
+  println(
+    "  --target <target>       ECMAScript target (es5, es2015, esnext, etc.)",
+  )
   println("  --outDir <dir>          Output directory")
   println("  --sourceMap             Generate external source map files")
   println("  --inlineSourceMap       Embed source maps in JavaScript files")
   println("  --declaration           Generate .d.ts declaration files")
   println("  --parallel <n>          Number of parallel workers (default: 4)")
   println("  --watch, -w             Watch mode: recompile on file changes")
-  println("  --watchInterval <ms>    Watch polling interval in ms (default: 500)")
+  println(
+    "  --watchInterval <ms>    Watch polling interval in ms (default: 500)",
+  )
   println("  --verbose               Verbose output")
   println("  --reportDiagnostics     Report all diagnostics (errors/warnings)")
-  println("  --json                  Output results as JSON for tooling integration")
-  println("  --external-types <json> JSON string with external types for cross-file checking")
+  println(
+    "  --json                  Output results as JSON for tooling integration",
+  )
+  println(
+    "  --external-types <json> JSON string with external types for cross-file checking",
+  )
   println("  --init                  Generate tsconfig.json (future)")
   println("")
   println("Examples:")
@@ -445,7 +517,9 @@ fn print_help() -> Unit {
   println("  moonbit-tsc --project tsconfig.json")
   println("  moonbit-tsc -p ./tsconfig.build.json --verbose")
   println("  moonbit-tsc --build tsconfig.json        # Build with references")
-  println("  moonbit-tsc --json src/index.ts          # JSON output for tooling")
+  println(
+    "  moonbit-tsc --json src/index.ts          # JSON output for tooling",
+  )
 }
 
 ///|
@@ -464,7 +538,10 @@ fn print_init_message() -> Unit {
 
 ///|
 /// List imports from a TypeScript file
-async fn run_list_imports(file_path : String, json_output : Bool) -> Unit raise Error {
+async fn run_list_imports(
+  file_path : String,
+  json_output : Bool,
+) -> Unit raise Error {
   // Read the file
   let data = @fs.read_file(file_path)
   let source = data.text()
@@ -475,46 +552,57 @@ async fn run_list_imports(file_path : String, json_output : Bool) -> Unit raise 
     Ok(source_file) => {
       // Get imports using the new API
       let imports = @compiler.get_imports(source_file)
-
       if json_output {
         // JSON output format
         print_list_imports_json(file_path, imports)
-      } else {
         // Text output format
-        if imports.length() == 0 {
-          println("No imports found in " + file_path)
-        } else {
-          println("Imports in " + file_path + ":")
-          for import_decl in imports {
-            let type_prefix = if import_decl.is_type_only { "(type) " } else { "" }
-            println("  " + type_prefix + import_decl.module_specifier)
+      } else if imports.length() == 0 {
+        println("No imports found in " + file_path)
+      } else {
+        println("Imports in " + file_path + ":")
+        for import_decl in imports {
+          let type_prefix = if import_decl.is_type_only {
+            "(type) "
+          } else {
+            ""
           }
+          println("  " + type_prefix + import_decl.module_specifier)
         }
       }
     }
-    Err(_) => {
+    Err(_) =>
       if json_output {
-        println("{\"file\": \"" + escape_json_string(file_path) + "\", \"error\": \"Failed to parse file\", \"imports\": []}")
+        println(
+          "{\"file\": \"" +
+          escape_json_string(file_path) +
+          "\", \"error\": \"Failed to parse file\", \"imports\": []}",
+        )
       } else {
         println("Error: Failed to parse " + file_path)
       }
-    }
   }
 }
 
 ///|
 /// Print imports in JSON format
-fn print_list_imports_json(file_path : String, imports : Array[@compiler.ImportDeclaration]) -> Unit {
+fn print_list_imports_json(
+  file_path : String,
+  imports : Array[@compiler.ImportDeclaration],
+) -> Unit {
   let mut json = "{\n"
   json = json + "  \"file\": \"" + escape_json_string(file_path) + "\",\n"
   json = json + "  \"imports\": ["
-
   if imports.length() > 0 {
     json = json + "\n"
     for i, import_decl in imports {
       json = json + "    {\n"
-      json = json + "      \"moduleSpecifier\": \"" + escape_json_string(import_decl.module_specifier) + "\",\n"
-      json = json + "      \"isTypeOnly\": " + import_decl.is_type_only.to_string()
+      json = json +
+        "      \"moduleSpecifier\": \"" +
+        escape_json_string(import_decl.module_specifier) +
+        "\",\n"
+      json = json +
+        "      \"isTypeOnly\": " +
+        import_decl.is_type_only.to_string()
 
       // Add import clause details if present
       match import_decl.import_clause {
@@ -522,7 +610,11 @@ fn print_list_imports_json(file_path : String, imports : Array[@compiler.ImportD
           json = json + ",\n"
           // Default import name
           match clause.name {
-            Some(name) => json = json + "      \"defaultImport\": \"" + escape_json_string(name) + "\""
+            Some(name) =>
+              json = json +
+                "      \"defaultImport\": \"" +
+                escape_json_string(name) +
+                "\""
             None => json = json + "      \"defaultImport\": null"
           }
 
@@ -538,15 +630,16 @@ fn print_list_imports_json(file_path : String, imports : Array[@compiler.ImportD
               }
               json = json + "]"
             }
-            Some(@compiler.NamespaceImport(ns_name, _)) => {
-              json = json + ",\n      \"namespaceImport\": \"" + escape_json_string(ns_name) + "\""
-            }
+            Some(@compiler.NamespaceImport(ns_name, _)) =>
+              json = json +
+                ",\n      \"namespaceImport\": \"" +
+                escape_json_string(ns_name) +
+                "\""
             None => ()
           }
         }
         None => ()
       }
-
       json = json + "\n    }"
       if i < imports.length() - 1 {
         json = json + ","
@@ -555,7 +648,6 @@ fn print_list_imports_json(file_path : String, imports : Array[@compiler.ImportD
     }
     json = json + "  "
   }
-
   json = json + "]\n}"
   println(json)
 }
@@ -568,7 +660,9 @@ fn escape_json_string(s : String) -> String {
 
 ///|
 /// Build CoordinatorOptions from CLIOptions
-fn build_coordinator_options(options : CLIOptions) -> @coordinator.CoordinatorOptions {
+fn build_coordinator_options(
+  options : CLIOptions,
+) -> @coordinator.CoordinatorOptions {
   let source_map_mode = get_effective_source_map(options)
   @coordinator.CoordinatorOptions::{
     target: get_effective_cli_target(options),
@@ -626,8 +720,8 @@ fn build_coordinator_options_from_tsconfig(
     Some(opts) =>
       match opts.module_kind {
         Some(@config.CommonJS) => @compiler.CommonJS
-        _ => @compiler.ESModule // Default to ESModule
-      }
+        _ => @compiler.ESModule
+      } // Default to ESModule
     None => @compiler.ESModule
   }
 
@@ -660,7 +754,6 @@ fn build_coordinator_options_from_tsconfig(
     Some(opts) => opts.es_module_interop.unwrap_or(false)
     None => false
   }
-
   @coordinator.CoordinatorOptions::{
     target,
     module_kind,
@@ -682,7 +775,7 @@ fn build_coordinator_options_from_tsconfig(
 fn build_cli_options_from_tsconfig(
   tsconfig : @config.TSConfig,
   cli_options : CLIOptions,
-  project_dir~ : String? = None,
+  project_dir? : String? = None,
 ) -> CLIOptions {
   // Get outDir from tsconfig if not specified in CLI
   let out_dir = match cli_options.out_dir {
@@ -725,12 +818,7 @@ fn build_cli_options_from_tsconfig(
         None => Some(SourceMapMode::None)
       }
   }
-
-  {
-    ..cli_options,
-    out_dir,
-    source_map_mode,
-  }
+  { ..cli_options, out_dir, source_map_mode }
 }
 
 ///|
@@ -752,9 +840,14 @@ async fn run_project_compile(
   let project_dir = get_tsconfig_directory(tsconfig_path)
 
   // Build effective options
-  let coord_options = build_coordinator_options_from_tsconfig(tsconfig, cli_options)
-  let effective_cli = build_cli_options_from_tsconfig(tsconfig, cli_options, project_dir=Some(project_dir))
-
+  let coord_options = build_coordinator_options_from_tsconfig(
+    tsconfig, cli_options,
+  )
+  let effective_cli = build_cli_options_from_tsconfig(
+    tsconfig,
+    cli_options,
+    project_dir=Some(project_dir),
+  )
   if cli_options.verbose {
     println("Target: " + coord_options.target)
     println("Source maps: " + coord_options.source_map.to_string())
@@ -764,12 +857,10 @@ async fn run_project_compile(
 
   // Discover files based on tsconfig
   let file_paths = discover_project_files(tsconfig, project_dir)
-
   if file_paths.length() == 0 {
     println("No TypeScript files found in project")
     return
   }
-
   if cli_options.verbose {
     println("Found " + file_paths.length().to_string() + " file(s)")
   }
@@ -792,11 +883,40 @@ async fn run_project_single_compile(
   // Read all files
   let files = @coordinator.read_files(file_paths)
 
+  // Collect triple-slash reference paths and load any additional .d.ts files
+  let reference_paths = @coordinator.collect_reference_paths(files)
+  let new_refs = @coordinator.filter_new_references(reference_paths, file_paths)
+
+  // Load referenced .d.ts files
+  let all_files = if new_refs.length() > 0 {
+    if options.verbose {
+      println(
+        "Loading " +
+        new_refs.length().to_string() +
+        " referenced declaration file(s)",
+      )
+    }
+    let ref_files = @coordinator.read_files(new_refs)
+    // Combine original files with referenced files (refs first for proper ordering)
+    let combined : Array[(String, String)] = []
+    for f in ref_files {
+      combined.push(f)
+    }
+    for f in files {
+      combined.push(f)
+    }
+    combined
+  } else {
+    files
+  }
+
   // Get executable path (self)
   let executable = @env.args()[0]
 
   // Compile files
-  let summary = @coordinator.compile_parallel(executable, files, coord_options)
+  let summary = @coordinator.compile_parallel(
+    executable, all_files, coord_options,
+  )
 
   // Write output files
   write_all_outputs(summary.results, options)
@@ -814,7 +934,6 @@ async fn run_project_watch_mode(
 ) -> Unit raise Error {
   println("Starting watch mode with incremental compilation...")
   println("")
-
   @coordinator.print_watch_message(
     "Watching " + file_paths.length().to_string() + " file(s)...",
   )
@@ -822,9 +941,10 @@ async fn run_project_watch_mode(
   // Read all files and build initial dependency graph
   let files = @coordinator.read_files(file_paths)
   let dag = @coordinator.build_dependency_graph(files)
-
   if options.verbose {
-    @coordinator.print_watch_message("Built dependency graph for incremental compilation")
+    @coordinator.print_watch_message(
+      "Built dependency graph for incremental compilation",
+    )
   }
 
   // Initialize watch state
@@ -832,7 +952,6 @@ async fn run_project_watch_mode(
 
   // Do initial compilation
   compile_project_files(file_paths, files, options, coord_options)
-
   @coordinator.print_watch_message("Waiting for file changes...")
 
   // Watch loop
@@ -841,7 +960,6 @@ async fn run_project_watch_mode(
 
     // Check for changes
     let changed = @coordinator.check_for_changes(watch_state)
-
     if changed.length() > 0 {
       @coordinator.print_watch_message(
         "File change detected: " + changed.length().to_string() + " file(s)",
@@ -868,7 +986,6 @@ async fn run_project_watch_mode(
 
       // Get files to recompile
       let to_recompile = @coordinator.get_recompilation_order(dag, changed)
-
       if options.verbose {
         @coordinator.print_watch_message(
           "Recompiling " +
@@ -879,8 +996,9 @@ async fn run_project_watch_mode(
 
       // Read and compile
       let files_to_compile = @coordinator.read_files(to_recompile)
-      compile_project_files(to_recompile, files_to_compile, options, coord_options)
-
+      compile_project_files(
+        to_recompile, files_to_compile, options, coord_options,
+      )
       @coordinator.print_watch_message("Waiting for file changes...")
     }
   }
@@ -910,7 +1028,6 @@ async fn compile_project_files(
       println("  Compiled: " + result.file_path)
     }
   }
-
   if summary.failed == 0 {
     @coordinator.print_watch_message(
       "Compiled " +
@@ -981,7 +1098,6 @@ async fn discover_project_files(
       filtered.push(file)
     }
   }
-
   filtered
 }
 
@@ -1035,16 +1151,12 @@ async fn run_build_references(
 
   // Load project graph with all references
   let graph = @config.load_project_graph(tsconfig_path)
-
   if graph.projects.length() == 0 {
     println("No projects found")
     return
   }
-
   println(
-    "Found " +
-    graph.projects.length().to_string() +
-    " project(s) to build",
+    "Found " + graph.projects.length().to_string() + " project(s) to build",
   )
   println("")
 
@@ -1053,7 +1165,6 @@ async fn run_build_references(
   let mut total_success = 0
   let mut total_failed = 0
   let start_time = @async.now()
-
   for project_path in graph.build_order {
     // Find the project config
     let mut project_config : @config.TSConfig? = None
@@ -1063,34 +1174,36 @@ async fn run_build_references(
         break
       }
     }
-
-    guard project_config is Some(config) else {
-      continue
-    }
+    guard project_config is Some(config) else { continue }
 
     // Get project directory
     let project_dir = get_tsconfig_directory(project_path)
-
     println("Building: " + project_path)
 
     // Build coordinator options from config
-    let coord_options = build_coordinator_options_from_tsconfig(config, cli_options)
-    let effective_cli = build_cli_options_from_tsconfig(config, cli_options, project_dir=Some(project_dir))
+    let coord_options = build_coordinator_options_from_tsconfig(
+      config, cli_options,
+    )
+    let effective_cli = build_cli_options_from_tsconfig(
+      config,
+      cli_options,
+      project_dir=Some(project_dir),
+    )
 
     // Discover files for this project
     let file_paths = discover_project_files(config, project_dir)
-
     if file_paths.length() == 0 {
       println("  No files to compile")
       continue
     }
-
     println("  Found " + file_paths.length().to_string() + " file(s)")
 
     // Read and compile files
     let files = @coordinator.read_files(file_paths)
     let executable = @env.args()[0]
-    let summary = @coordinator.compile_parallel(executable, files, coord_options)
+    let summary = @coordinator.compile_parallel(
+      executable, files, coord_options,
+    )
 
     // Write output files
     write_all_outputs(summary.results, effective_cli)
@@ -1127,15 +1240,12 @@ async fn run_build_references(
     }
     println("")
   }
-
   let end_time = @async.now()
   let total_time = end_time - start_time
 
   // Print final summary
   println("Build complete:")
-  println(
-    "  Projects: " + graph.projects.length().to_string(),
-  )
+  println("  Projects: " + graph.projects.length().to_string())
   println("  Total files: " + total_files.to_string())
   println("  Successful: " + total_success.to_string())
   if total_failed > 0 {
