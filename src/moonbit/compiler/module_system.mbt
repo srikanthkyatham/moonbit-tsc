@@ -109,11 +109,38 @@ pub fn detect_module_format(source_file : SourceFile) -> ModuleFormatInfo {
 
 ///|
 /// Get all import declarations from a source file
+/// Includes both ES6 imports and TypeScript import equals declarations
 pub fn get_imports(source_file : SourceFile) -> Array[ImportDeclaration] {
   let imports : Array[ImportDeclaration] = []
   for stmt in source_file.statements {
     match stmt {
       ImportDeclaration(import_decl) => imports.push(import_decl)
+      ImportEqualsDeclaration(import_equals) => {
+        // Convert ImportEqualsDeclaration to ImportDeclaration format
+        // import x = require("module") -> extract "module" as module_specifier
+        match import_equals.module_reference {
+          ExternalModuleReference(module_specifier, loc) => {
+            // Create an ImportDeclaration with the name as default import
+            let import_clause = ImportClause::{
+              name: Some(import_equals.name),
+              named_bindings: None,
+              location: loc,
+            }
+            let import_decl = ImportDeclaration::{
+              import_clause: Some(import_clause),
+              module_specifier: module_specifier,
+              is_type_only: import_equals.is_type_only,
+              location: import_equals.location,
+            }
+            imports.push(import_decl)
+          }
+          EntityName(_) => {
+            // import x = M.N - namespace import, not a module import
+            // Skip these as they reference other namespaces, not modules
+            ()
+          }
+        }
+      }
       _ => ()
     }
   }
