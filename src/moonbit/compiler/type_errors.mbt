@@ -935,22 +935,22 @@ pub fn get_friendly_title(reason : MismatchReason) -> String {
     UnaryPlusBigInt => "UNARY '+' CANNOT BE APPLIED TO BIGINT"
     // Module/Import resolution errors
     FileIsNotModule(file) => "FILE '" + file + "' IS NOT A MODULE"
-    CannotFindModule(module) => "CANNOT FIND MODULE '" + module + "'"
+    CannotFindModule(mod_name) => "CANNOT FIND MODULE '" + mod_name + "'"
     CannotFindGlobalType(name) => "CANNOT FIND GLOBAL TYPE '" + name + "'"
     ImportPathCannotEndWithExtension(path, ext) =>
       "IMPORT PATH '" + path + "' CANNOT END WITH '" + ext + "'"
-    CannotFindModuleOrTypeDeclarations(module) =>
-      "CANNOT FIND MODULE '" + module + "' OR TYPE DECLARATIONS"
-    NamespaceHasNoExportedMember(ns, member) =>
-      "NAMESPACE '" + ns + "' HAS NO EXPORTED MEMBER '" + member + "'"
+    CannotFindModuleOrTypeDeclarations(mod_name) =>
+      "CANNOT FIND MODULE '" + mod_name + "' OR TYPE DECLARATIONS"
+    NamespaceHasNoExportedMember(ns, mem) =>
+      "NAMESPACE '" + ns + "' HAS NO EXPORTED MEMBER '" + mem + "'"
     CannotUseNamespaceAsType(ns) =>
       "CANNOT USE NAMESPACE '" + ns + "' AS A TYPE"
     CannotUseNamespaceAsValue(ns) =>
       "CANNOT USE NAMESPACE '" + ns + "' AS A VALUE"
-    CannotFindModuleSetModuleResolution(module) =>
-      "CANNOT FIND MODULE '" + module + "' - CHECK MODULE RESOLUTION"
-    ModuleHasNoExportedMember(module, member) =>
-      "MODULE '" + module + "' HAS NO EXPORTED MEMBER '" + member + "'"
+    CannotFindModuleSetModuleResolution(mod_name) =>
+      "CANNOT FIND MODULE '" + mod_name + "' - CHECK MODULE RESOLUTION"
+    ModuleHasNoExportedMember(mod_name, mem) =>
+      "MODULE '" + mod_name + "' HAS NO EXPORTED MEMBER '" + mem + "'"
     // Type Assignment & Compatibility errors
     InterfaceCannotExtendTypes(iface, _) =>
       "INTERFACE '" + iface + "' CANNOT EXTEND INCOMPATIBLE TYPES"
@@ -1100,12 +1100,12 @@ pub fn get_friendly_title(reason : MismatchReason) -> String {
       "CATCH CLAUSE VARIABLE '" + var_name + "' MUST BE 'any' OR 'unknown'"
     ConstEnumUsageRestriction(enum_name) =>
       "CONST ENUM '" + enum_name + "' USAGE RESTRICTION"
-    ConstEnumMemberAccessRestriction(member) =>
-      "CONST ENUM MEMBER '" + member + "' ACCESS RESTRICTION"
+    ConstEnumMemberAccessRestriction(mem) =>
+      "CONST ENUM MEMBER '" + mem + "' ACCESS RESTRICTION"
     UsingPrivateName(private_name, context) =>
       "USING PRIVATE NAME '" + private_name + "' IN '" + context + "'"
-    MemberInitializerForwardReference(member, referenced) =>
-      "MEMBER '" + member + "' CANNOT REFERENCE '" + referenced + "'"
+    MemberInitializerForwardReference(mem, referenced) =>
+      "MEMBER '" + mem + "' CANNOT REFERENCE '" + referenced + "'"
     // Module & Export errors
     ExportDeclarationConflicts(name, _) =>
       "EXPORT DECLARATION CONFLICTS WITH '" + name + "'"
@@ -1322,9 +1322,9 @@ pub fn get_why_explanation(reason : MismatchReason) -> String {
       "The file '" +
       file +
       "' does not contain any exports (export statements) and therefore cannot be imported as a module. In TypeScript, a file is only considered a module if it has at least one import or export statement."
-    CannotFindModule(module) =>
+    CannotFindModule(mod_name) =>
       "TypeScript cannot locate the module '" +
-      module +
+      mod_name +
       "'. This could be because the module path is incorrect, the module doesn't exist, or the module resolution settings don't include this path."
     CannotFindGlobalType(name) =>
       "The global type '" +
@@ -1334,17 +1334,17 @@ pub fn get_why_explanation(reason : MismatchReason) -> String {
       "Import paths in TypeScript should not include the file extension '" +
       ext +
       "'. TypeScript will automatically resolve the correct file based on your module resolution settings."
-    CannotFindModuleOrTypeDeclarations(module) =>
+    CannotFindModuleOrTypeDeclarations(mod_name) =>
       "TypeScript cannot find the module '" +
-      module +
+      mod_name +
       "' or its corresponding type declarations (.d.ts file). For npm packages, you may need to install @types/" +
-      module +
+      mod_name +
       " for type information."
-    NamespaceHasNoExportedMember(ns, member) =>
+    NamespaceHasNoExportedMember(ns, mem) =>
       "The namespace '" +
       ns +
       "' exists but does not export a member named '" +
-      member +
+      mem +
       "'. Check the namespace definition to see what members are available."
     CannotUseNamespaceAsType(ns) =>
       "'" +
@@ -1354,15 +1354,15 @@ pub fn get_why_explanation(reason : MismatchReason) -> String {
       "'" +
       ns +
       "' refers to a namespace, but you're trying to use it as a value. You need to access a specific member of the namespace."
-    CannotFindModuleSetModuleResolution(module) =>
+    CannotFindModuleSetModuleResolution(mod_name) =>
       "TypeScript cannot find the module '" +
-      module +
+      mod_name +
       "'. This might be because your moduleResolution setting doesn't match how modules are installed in your project."
-    ModuleHasNoExportedMember(module, member) =>
+    ModuleHasNoExportedMember(mod_name, mem) =>
       "The module '" +
-      module +
+      mod_name +
       "' exists but does not export a member named '" +
-      member +
+      mem +
       "'. Check the module's exports or look at its type definitions."
     // Type Assignment & Compatibility errors
     InterfaceCannotExtendTypes(iface, types) =>
@@ -1725,9 +1725,9 @@ pub fn get_why_explanation(reason : MismatchReason) -> String {
       "A const enum '" +
       enum_name +
       "' member can only be accessed using a string literal. Const enums are inlined at compile time, meaning the enum object doesn't exist at runtime. This restricts how you can access enum members - only literal member access (like MyEnum.Value) is allowed, not computed access."
-    ConstEnumMemberAccessRestriction(member) =>
+    ConstEnumMemberAccessRestriction(mem) =>
       "The const enum member '" +
-      member +
+      mem +
       "' can only be accessed using a string literal. Because const enums are replaced with their literal values during compilation, dynamic property access (like enum[variable]) is not possible. The compiler needs to know at compile time which member is being accessed."
     UsingPrivateName(private_name, context) =>
       "Private name '" +
@@ -1735,9 +1735,9 @@ pub fn get_why_explanation(reason : MismatchReason) -> String {
       "' is being used as the type of '" +
       context +
       "'. Private names (starting with #) are only accessible within the class that defines them. Using a private name in a type annotation exposes implementation details that should remain encapsulated."
-    MemberInitializerForwardReference(member, referenced) =>
+    MemberInitializerForwardReference(mem, referenced) =>
       "The initializer of enum member '" +
-      member +
+      mem +
       "' references '" +
       referenced +
       "' which is declared after it. Enum members are evaluated in order, so earlier members cannot reference later ones. This prevents circular dependencies and ensures deterministic initialization order."
@@ -2288,12 +2288,12 @@ pub fn get_how_to_fix(
       fixes.push("    export const myValue = ...;")
       fixes.push("    export function myFunction() { ... }")
     }
-    CannotFindModule(module) => {
+    CannotFindModule(mod_name) => {
       fixes.push("Check if the module path is correct:")
-      fixes.push("    import { something } from './" + module + "';  // Relative path")
+      fixes.push("    import { something } from './" + mod_name + "';  // Relative path")
       fixes.push("")
       fixes.push("Or install the package if it's from npm:")
-      fixes.push("    npm install " + module)
+      fixes.push("    npm install " + mod_name)
     }
     CannotFindGlobalType(name) => {
       fixes.push("Add the required lib to your tsconfig.json:")
@@ -2308,19 +2308,19 @@ pub fn get_how_to_fix(
       fixes.push("    // Instead of: import { x } from './module" + ext + "'")
       fixes.push("    // Use:        import { x } from './module'")
     }
-    CannotFindModuleOrTypeDeclarations(module) => {
-      fixes.push("Install type definitions for '" + module + "':")
-      fixes.push("    npm install --save-dev @types/" + module)
+    CannotFindModuleOrTypeDeclarations(mod_name) => {
+      fixes.push("Install type definitions for '" + mod_name + "':")
+      fixes.push("    npm install --save-dev @types/" + mod_name)
       fixes.push("")
       fixes.push("Or create a type declaration file (.d.ts) if types don't exist.")
     }
-    NamespaceHasNoExportedMember(ns, member) => {
+    NamespaceHasNoExportedMember(ns, mem) => {
       fixes.push("Check available exports from namespace '" + ns + "'.")
-      fixes.push("Verify that '" + member + "' is spelled correctly.")
+      fixes.push("Verify that '" + mem + "' is spelled correctly.")
       fixes.push("")
       fixes.push("If you want to add this member, export it from the namespace:")
       fixes.push("    namespace " + ns + " {")
-      fixes.push("        export const " + member + " = ...;")
+      fixes.push("        export const " + mem + " = ...;")
       fixes.push("    }")
     }
     CannotUseNamespaceAsType(ns) => {
@@ -2335,19 +2335,20 @@ pub fn get_how_to_fix(
       fixes.push("    const x = " + ns + ".someValue;")
       fixes.push("    " + ns + ".someFunction();")
     }
-    CannotFindModuleSetModuleResolution(module) => {
+    CannotFindModuleSetModuleResolution(mod_name) => {
       fixes.push("Try setting moduleResolution in tsconfig.json:")
       fixes.push("    { \"compilerOptions\": { \"moduleResolution\": \"node\" } }")
       fixes.push("")
       fixes.push("Or for Node.js ESM:")
       fixes.push("    { \"compilerOptions\": { \"moduleResolution\": \"node16\" } }")
+      ignore(mod_name)
     }
-    ModuleHasNoExportedMember(module, member) => {
+    ModuleHasNoExportedMember(mod_name, mem) => {
       fixes.push("Check the module's exports for the correct name.")
-      fixes.push("The member '" + member + "' may not be exported or may be named differently.")
+      fixes.push("The mem '" + mem + "' may not be exported or may be named differently.")
       fixes.push("")
       fixes.push("Try using default import if the module has a default export:")
-      fixes.push("    import module from '" + module + "';")
+      fixes.push("    import mod from '" + mod_name + "';")
     }
     // Type Assignment & Compatibility errors
     InterfaceCannotExtendTypes(iface, types) => {
@@ -3048,8 +3049,8 @@ pub fn get_how_to_fix(
       fixes.push("")
       fixes.push("Option 3: Use 'preserveConstEnums' compiler option to keep the enum object")
     }
-    ConstEnumMemberAccessRestriction(member) => {
-      fixes.push("Const enum member '" + member + "' must be accessed with a string literal.")
+    ConstEnumMemberAccessRestriction(mem) => {
+      fixes.push("Const enum member '" + mem + "' must be accessed with a string literal.")
       fixes.push("")
       fixes.push("Because const enums are replaced with literal values during compilation,")
       fixes.push("dynamic access like enum[variable] is not possible.")
@@ -3076,8 +3077,8 @@ pub fn get_how_to_fix(
       fixes.push("")
       fixes.push("Option 2: Extract the type to a separate interface or type alias")
     }
-    MemberInitializerForwardReference(member, referenced) => {
-      fixes.push("Enum member '" + member + "' cannot reference '" + referenced + "' declared after it.")
+    MemberInitializerForwardReference(mem, referenced) => {
+      fixes.push("Enum member '" + mem + "' cannot reference '" + referenced + "' declared after it.")
       fixes.push("")
       fixes.push("Enum members are evaluated in declaration order. Earlier members")
       fixes.push("cannot reference later ones because they don't exist yet.")
@@ -3085,12 +3086,12 @@ pub fn get_how_to_fix(
       fixes.push("Option 1: Reorder enum members so referenced members come first:")
       fixes.push("    enum MyEnum {")
       fixes.push("        " + referenced + " = 1,  // Move this first")
-      fixes.push("        " + member + " = " + referenced + ",  // Now it can reference")
+      fixes.push("        " + mem + " = " + referenced + ",  // Now it can reference")
       fixes.push("    }")
       fixes.push("")
       fixes.push("Option 2: Use explicit values instead of references:")
       fixes.push("    enum MyEnum {")
-      fixes.push("        " + member + " = 1,  // Use literal value")
+      fixes.push("        " + mem + " = 1,  // Use literal value")
       fixes.push("        " + referenced + " = 1,")
       fixes.push("    }")
     }

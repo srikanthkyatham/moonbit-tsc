@@ -774,8 +774,8 @@ pub fn collect_constructor_overloads(
 ) -> ConstructorOverloads {
   let mut overloads = ConstructorOverloads::empty(class_name)
 
-  for member in members {
-    match member {
+  for mem in members {
+    match mem {
       ConstructorDeclaration(ctor) =>
         match ctor.body {
           None => {
@@ -939,23 +939,23 @@ pub fn collect_method_overloads(
 ) -> Map[String, MethodOverloads] {
   let overloads : Map[String, MethodOverloads] = Map::new()
 
-  for member in members {
-    match member {
-      MethodDeclaration(method) => {
+  for mem in members {
+    match mem {
+      MethodDeclaration(meth) => {
         // Skip abstract methods - they don't have bodies by design
-        if method_has_abstract_modifier(method.modifiers) {
+        if method_has_abstract_modifier(meth.modifiers) {
           continue
         }
 
-        let name = method.name
+        let name = meth.name
         let existing = overloads.get(name).unwrap_or(MethodOverloads::empty(name))
-        let is_static = method_has_static_modifier(method.modifiers)
+        let is_static = method_has_static_modifier(meth.modifiers)
 
         // Check if this is a signature (no body) or implementation (has body)
-        match method.body {
+        match meth.body {
           None => {
             // This is an overload signature
-            let sig = extract_method_overload_signature(method)
+            let sig = extract_method_overload_signature(meth)
             existing.signatures.push(sig)
             overloads.set(name, existing)
           }
@@ -963,8 +963,8 @@ pub fn collect_method_overloads(
             // This is the implementation
             let updated = {
               ..existing,
-              implementation: Some(method),
-              implementation_location: Some(method.location),
+              implementation: Some(meth),
+              implementation_location: Some(meth.location),
               implementation_is_static: is_static,
             }
             overloads.set(name, updated)
@@ -981,11 +981,11 @@ pub fn collect_method_overloads(
 ///|
 /// Extract overload signature from method declaration
 fn extract_method_overload_signature(
-  method : MethodDeclaration,
+  meth : MethodDeclaration,
 ) -> MethodOverloadSignature {
   let parameters : Array[OverloadParameter] = []
 
-  for param_node in method.parameters {
+  for param_node in meth.parameters {
     match param_node {
       Parameter(p) => {
         parameters.push({
@@ -999,14 +999,14 @@ fn extract_method_overload_signature(
     }
   }
 
-  let is_static = method_has_static_modifier(method.modifiers)
-  let is_ambient = overload_has_declare_modifier(method.modifiers)
+  let is_static = method_has_static_modifier(meth.modifiers)
+  let is_ambient = overload_has_declare_modifier(meth.modifiers)
 
   {
     parameters,
-    return_type: method.return_type,
-    type_parameters: method.type_parameters,
-    location: method.location,
+    return_type: meth.return_type,
+    type_parameters: meth.type_parameters,
+    location: meth.location,
     is_static,
     is_ambient,
   }

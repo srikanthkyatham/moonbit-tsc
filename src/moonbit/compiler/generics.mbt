@@ -203,8 +203,8 @@ pub fn ast_type_to_v2(env : TypeEnv, node : Node) -> TypeV2 {
     // Type literal (object type)
     TypeLiteral(tl) => {
       let fields : Map[String, FieldInfoV2] = Map::new()
-      for member in tl.members {
-        match member {
+      for mem in tl.members {
+        match mem {
           TypeLiteralProperty(prop) => {
             let prop_ty = match prop.type_node {
               Some(t) => ast_type_to_v2(env, t)

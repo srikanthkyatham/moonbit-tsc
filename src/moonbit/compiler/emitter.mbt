@@ -856,11 +856,11 @@ fn class_uses_decorators(cd : ClassDeclaration) -> Bool {
     return true
   }
   // Check member decorators and parameter decorators
-  for member in cd.members {
-    if get_member_decorators(member).length() > 0 {
+  for mem in cd.members {
+    if get_member_decorators(mem).length() > 0 {
       return true
     }
-    if has_parameter_decorators(member) {
+    if has_parameter_decorators(mem) {
       return true
     }
   }
@@ -888,8 +888,8 @@ fn source_file_uses_param_decorators(sf : SourceFile) -> Bool {
   for stmt in sf.statements {
     match stmt {
       ClassDeclaration(cd) =>
-        for member in cd.members {
-          if has_parameter_decorators(member) {
+        for mem in cd.members {
+          if has_parameter_decorators(mem) {
             return true
           }
         }
@@ -901,8 +901,8 @@ fn source_file_uses_param_decorators(sf : SourceFile) -> Bool {
 
 ///|
 /// Get the name of a class member for decorator emission
-fn get_member_name(member : Node) -> String? {
-  match member {
+fn get_member_name(class_mem : Node) -> String? {
+  match class_mem {
     MethodDeclaration(md) => Some(md.name)
     PropertyDeclaration(pd) => Some(pd.name)
     GetAccessor(ga) => Some(ga.name)
@@ -914,8 +914,8 @@ fn get_member_name(member : Node) -> String? {
 ///|
 /// Get the design:type for a class member
 /// Methods and accessors are Function, properties use their type annotation
-fn get_member_design_type(member : Node) -> String {
-  match member {
+fn get_member_design_type(class_mem : Node) -> String {
+  match class_mem {
     MethodDeclaration(_) => "Function"
     GetAccessor(_) => "Function"
     SetAccessor(_) => "Function"
@@ -926,8 +926,8 @@ fn get_member_design_type(member : Node) -> String {
 
 ///|
 /// Get the return type for a class member (for design:returntype)
-fn get_member_return_type(member : Node) -> String {
-  match member {
+fn get_member_return_type(class_mem : Node) -> String {
+  match class_mem {
     MethodDeclaration(md) => type_to_runtime(md.return_type)
     GetAccessor(ga) => type_to_runtime(ga.return_type)
     SetAccessor(_) => "void 0" // Setters return void
@@ -938,8 +938,8 @@ fn get_member_return_type(member : Node) -> String {
 
 ///|
 /// Get decorators from a class member
-fn get_member_decorators(member : Node) -> Array[Node] {
-  match member {
+fn get_member_decorators(class_mem : Node) -> Array[Node] {
+  match class_mem {
     MethodDeclaration(md) => md.decorators
     PropertyDeclaration(pd) => pd.decorators
     GetAccessor(ga) => ga.decorators
@@ -951,8 +951,8 @@ fn get_member_decorators(member : Node) -> Array[Node] {
 
 ///|
 /// Get parameters from a class member
-fn get_member_parameters(member : Node) -> Array[Node] {
-  match member {
+fn get_member_parameters(class_mem : Node) -> Array[Node] {
+  match class_mem {
     MethodDeclaration(md) => md.parameters
     ConstructorDeclaration(cd) => cd.parameters
     SetAccessor(sa) => [sa.parameter]
@@ -962,8 +962,8 @@ fn get_member_parameters(member : Node) -> Array[Node] {
 
 ///|
 /// Check if a member has any parameter decorators
-fn has_parameter_decorators(member : Node) -> Bool {
-  let params = get_member_parameters(member)
+fn has_parameter_decorators(class_mem : Node) -> Bool {
+  let params = get_member_parameters(class_mem)
   for param in params {
     match param {
       Parameter(p) =>
@@ -978,8 +978,8 @@ fn has_parameter_decorators(member : Node) -> Bool {
 
 ///|
 /// Check if a member is static
-fn is_static_member(member : Node) -> Bool {
-  match member {
+fn is_static_member(class_mem : Node) -> Bool {
+  match class_mem {
     MethodDeclaration(md) =>
       md.modifiers.iter().any(fn(m) { m == Modifier::Static })
     PropertyDeclaration(pd) =>

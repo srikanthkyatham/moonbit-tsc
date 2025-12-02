@@ -1039,7 +1039,7 @@ fn bind_module_declaration(
     let symbol = {
       ..symbol,
       flags: { ..symbol.flags, is_export },
-      exports: if exports.size() > 0 { Some(exports) } else { None },
+      exports: if exports.length() > 0 { Some(exports) } else { None },
     }
     declare_symbol(binder, mod_decl.name, symbol)
   }

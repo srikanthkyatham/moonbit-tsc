@@ -513,7 +513,7 @@ fn is_array_like_type(t : Type) -> Bool {
     Any(_) | Unknown(_) => true // Any/unknown can be array-like
     Union(union_type) =>
       // All members of union must be array-like
-      union_type.types.iter().all(fn(member) { is_array_like_type(member) })
+      union_type.types.iter().all(fn(mem) { is_array_like_type(mem) })
     Object(obj_type) =>
       // Check if has numeric index signature
       obj_type.index_signatures.iter().any(fn(idx_sig) {
@@ -1759,7 +1759,7 @@ fn check_inferred_type_accessibility(
   if not(has_export_modifier(func.modifiers)) {
     return checker
   }
-  if func.return_type.is_some() {
+  if func.return_type is Some(_) {
     return checker // Has explicit return type, no issue
   }
 
@@ -1923,8 +1923,8 @@ fn collect_type_names_from_type_node_inner(node : Node, names : Array[String]) -
     }
     TypeLiteral(type_literal) => {
       // Check property types in type literal (members is Array[Node])
-      for member in type_literal.members {
-        match member {
+      for mem in type_literal.members {
+        match mem {
           TypeLiteralProperty(prop) =>
             match prop.type_node {
               Some(t) => collect_type_names_from_type_node_inner(t, names)
@@ -3460,7 +3460,7 @@ fn infer_overloaded_function_type(
         checker = c
 
         // Only add overload signatures (those without body), not the implementation
-        if func.body.is_none() {
+        if func.body is None {
           call_signatures.push({
             parameters,
             return_type,
@@ -3503,7 +3503,7 @@ fn infer_class_declaration_type(
   }
 
   // Check for circular reference (class referring to itself in initializer)
-  if checker.resolving_symbols.get(symbol.id).is_some() {
+  if checker.resolving_symbols.get(symbol.id) is Some(_) {
     // Circular reference detected - return 'any' type to allow property access
     // This allows `static origin = new Point(0, 0)` and `static ref = X.data` to work
     return any_type(checker)
@@ -5573,15 +5573,15 @@ fn get_class_member_visibility(
     Some(symbol) =>
       match symbol.value_declaration {
         Some(ClassDeclaration(class_decl)) => {
-          for member in class_decl.members {
-            match member {
+          for mem in class_decl.members {
+            match mem {
               PropertyDeclaration(prop) =>
                 if prop.name == member_name {
                   return get_visibility_from_modifiers(prop.modifiers)
                 }
-              MethodDeclaration(method) =>
-                if method.name == member_name {
-                  return get_visibility_from_modifiers(method.modifiers)
+              MethodDeclaration(meth) =>
+                if meth.name == member_name {
+                  return get_visibility_from_modifiers(meth.modifiers)
                 }
               GetAccessor(getter) =>
                 if getter.name == member_name {
@@ -5796,8 +5796,8 @@ fn class_has_static_member(
             if prop.name == prop_name && is_static_modifier(prop.modifiers) {
               return true
             }
-          MethodDeclaration(method) =>
-            if method.name == prop_name && is_static_modifier(method.modifiers) {
+          MethodDeclaration(meth) =>
+            if meth.name == prop_name && is_static_modifier(meth.modifiers) {
               return true
             }
           GetAccessor(ga) =>
@@ -6773,12 +6773,12 @@ fn check_promise_then_circular_reference(
   location : SourceLocation,
 ) -> TypeChecker {
   // Look for a 'then' method in the interface
-  for member in members {
-    match member {
-      MethodDeclaration(method) =>
-        if method.name == "then" {
+  for mem in members {
+    match mem {
+      MethodDeclaration(meth) =>
+        if meth.name == "then" {
           // Check if any parameter's callback type references the interface itself
-          for param in method.parameters {
+          for param in meth.parameters {
             match param {
               Parameter(p) =>
                 match p.type_annotation {
@@ -8265,8 +8265,8 @@ fn types_have_overlap(left : Type, right : Type) -> Bool {
   // Handle union types - check if ANY member overlaps
   match left {
     Union(u) => {
-      for member in u.types {
-        if types_have_overlap(member, right) {
+      for mem in u.types {
+        if types_have_overlap(mem, right) {
           return true
         }
       }
@@ -8276,8 +8276,8 @@ fn types_have_overlap(left : Type, right : Type) -> Bool {
   }
   match right {
     Union(u) => {
-      for member in u.types {
-        if types_have_overlap(left, member) {
+      for mem in u.types {
+        if types_have_overlap(left, mem) {
           return true
         }
       }
@@ -8357,7 +8357,7 @@ fn check_function_declaration(
   func : FunctionDeclaration,
 ) -> TypeChecker {
   // Check for TS2371: parameter initializer in ambient declaration
-  let is_ambient = is_ambient_declaration(func.modifiers) || func.body.is_none()
+  let is_ambient = is_ambient_declaration(func.modifiers) || func.body is None
   let checker = if is_ambient {
     check_ambient_parameter_initializers(checker, func.parameters)
   } else {
@@ -8424,7 +8424,7 @@ fn check_function_declaration(
 
   // Track generator function context for TS2764
   let checker = if func.is_generator {
-    let has_return_type = func.return_type.is_some()
+    let has_return_type = func.return_type is Some(_)
     enter_generator_function(checker, has_return_type)
   } else {
     checker
@@ -8575,7 +8575,7 @@ fn check_condition_always_true(
         Object(obj) =>
           // Object types are always truthy (when not null/undefined)
           // Only report if strictNullChecks is implied and no call signatures
-          if obj.call_signatures.is_empty() && obj.class_name.is_some() {
+          if obj.call_signatures.is_empty() && obj.class_name is Some(_) {
             return add_diagnostic_with_code(
               checker,
               "This condition will always return true since this '\{type_to_string(cond_type)}' is always defined.",
@@ -9120,7 +9120,7 @@ fn check_class_declaration(
   for mem in class_decl.members {
     match mem {
       PropertyDeclaration(prop) =>
-        if prop.initializer.is_none() {
+        if prop.initializer is None {
           // Property without initializer - needs to be assigned in constructor
           uninitialized_props.set(prop.name, prop.location)
         }
@@ -9287,12 +9287,12 @@ fn check_abstract_members_in_non_abstract_class(
   let mut checker = checker
   for mem in class_decl.members {
     match mem {
-      MethodDeclaration(method) =>
-        if is_abstract_modifier(method.modifiers) {
+      MethodDeclaration(meth) =>
+        if is_abstract_modifier(meth.modifiers) {
           checker = add_diagnostic_with_code(
             checker,
             "Abstract methods can only appear within an abstract class.",
-            method.location,
+            meth.location,
             TS2516,
           )
         }
@@ -9381,7 +9381,7 @@ fn get_class_member_names(class_decl : ClassDeclaration) -> Array[String] {
   let names : Array[String] = []
   for mem in class_decl.members {
     match mem {
-      MethodDeclaration(method) => names.push(method.name)
+      MethodDeclaration(meth) => names.push(meth.name)
       PropertyDeclaration(prop) => names.push(prop.name)
       _ => ()
     }
@@ -9399,9 +9399,9 @@ fn get_abstract_members_from_symbol(symbol : Symbol) -> Array[(String, SourceLoc
       ClassDeclaration(class_decl) => {
         for mem in class_decl.members {
           match mem {
-            MethodDeclaration(method) =>
-              if is_abstract_modifier(method.modifiers) {
-                abstract_members.push((method.name, method.location))
+            MethodDeclaration(meth) =>
+              if is_abstract_modifier(meth.modifiers) {
+                abstract_members.push((meth.name, meth.location))
               }
             PropertyDeclaration(prop) =>
               if is_abstract_modifier(prop.modifiers) {
@@ -10134,10 +10134,10 @@ fn check_enum_members(
 /// Validates that the initializer (if present) is a valid enum initializer
 fn check_enum_member(
   checker : TypeChecker,
-  member : EnumMember,
+  enum_mem : EnumMember,
   is_const : Bool,
 ) -> TypeChecker {
-  match member.initializer {
+  match enum_mem.initializer {
     Some(init) => {
       // Infer the type of the initializer
       let (init_type, checker) = infer_type(checker, init)
@@ -10146,7 +10146,7 @@ fn check_enum_member(
         checker,
         init_type,
         init,
-        member.location,
+        enum_mem.location,
         is_const,
       )
     }
@@ -10451,7 +10451,7 @@ fn check_ambient_parameter_initializers(
   for param_node in parameters {
     match param_node {
       Parameter(p) =>
-        if p.initializer.is_some() {
+        if p.initializer is Some(_) {
           checker = add_diagnostic_with_code(
             checker,
             "A parameter initializer is only allowed in a function or constructor implementation.",
@@ -10775,7 +10775,7 @@ fn get_type_parameters_from_symbol(symbol : Symbol) -> Array[TypeParameter] {
 fn count_required_type_params_from_ast(type_params : Array[TypeParameter]) -> Int {
   let mut count = 0
   for param in type_params {
-    if param.default.is_none() {
+    if param.default is None {
       count = count + 1
     }
   }
@@ -11070,8 +11070,8 @@ fn get_type_from_type_node(
       let construct_signatures : Array[CheckerSignature] = []
       let index_signatures : Array[IndexSignature] = []
 
-      for member in type_literal.members {
-        match member {
+      for mem in type_literal.members {
+        match mem {
           TypeLiteralProperty(tl_prop) => {
             // Get property type
             let (prop_type, c) = match tl_prop.type_node {
@@ -11367,7 +11367,7 @@ fn type_to_string(t : Type) -> String {
     Infer(inf) => "infer \{inf.type_parameter_name}"
     Function(_) => "function"
     Object(_) => "object"
-    TypeReference(ref) => ref.name
+    TypeReference(type_ref) => type_ref.name
     Error(_) => "error"
   }
 }
@@ -11805,7 +11805,7 @@ pub fn validate_verbatim_module_syntax(
 
                   // Check if this symbol is a type-only symbol in the local scope
                   // Since we can't resolve cross-file imports, we check local declarations
-                  if type_only_symbols.get(local_name).or(false) {
+                  if type_only_symbols.get(local_name).unwrap_or(false) {
                     diagnostics.push(
                       Diagnostic::{
                         code: 1485,
@@ -11852,7 +11852,7 @@ pub fn validate_verbatim_module_syntax(
               }
 
               // Check if this symbol is a type-only symbol
-              if type_only_symbols.get(local_name).or(false) {
+              if type_only_symbols.get(local_name).unwrap_or(false) {
                 diagnostics.push(
                   Diagnostic::{
                     code: 1486,
@@ -11922,8 +11922,8 @@ fn exact_opt_find_interface_properties(
     match stmt {
       InterfaceDeclaration(iface) =>
         if iface.name == type_name {
-          for member in iface.members {
-            match member {
+          for mem in iface.members {
+            match mem {
               PropertyDeclaration(prop_decl) =>
                 props.set(
                   prop_decl.name,
@@ -11941,8 +11941,8 @@ fn exact_opt_find_interface_properties(
           // Handle type alias to object type
           match type_alias.type_node {
             TypeLiteral(tl) =>
-              for member in tl.members {
-                match member {
+              for mem in tl.members {
+                match mem {
                   PropertyDeclaration(prop_decl) =>
                     props.set(
                       prop_decl.name,
@@ -12064,7 +12064,7 @@ fn check_type_parameter_names(
     }
 
     // TS2706: Check required type params don't follow optional
-    let has_default = param.default.is_some()
+    let has_default = param.default is Some(_)
     if has_default {
       if not(seen_optional) {
         seen_optional = true
