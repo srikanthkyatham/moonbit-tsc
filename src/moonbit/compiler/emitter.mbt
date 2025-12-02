@@ -1615,13 +1615,28 @@ fn emit_import_equals_declaration(
   ied : ImportEqualsDeclaration,
   ctx : EmitterContext,
 ) -> String {
-  // For internal module references (M.X), typically emits nothing
-  // because the namespace alias is erased at runtime
-  // Only emit if the reference is to an external module (require)
-  // For now, emit nothing for internal namespace aliases
-  ignore(ied)
-  ignore(ctx)
-  ""
+  let indent = ctx.get_indent()
+  let export_prefix = if ied.is_export { "exports." } else { "" }
+
+  match ied.module_reference {
+    ModuleReference::ExternalModuleReference(module_path, _) => {
+      // import X = require("module") -> const X = require("module") or exports.X = require("module")
+      if ied.is_export {
+        indent + export_prefix + ied.name + " = require(\"" + module_path + "\");"
+      } else {
+        indent + "const " + ied.name + " = require(\"" + module_path + "\");"
+      }
+    }
+    ModuleReference::EntityName(entity) => {
+      // import X = M.N -> const X = M.N or exports.X = M.N
+      let entity_str = emit(entity, ctx)
+      if ied.is_export {
+        indent + export_prefix + ied.name + " = " + entity_str + ";"
+      } else {
+        indent + "const " + ied.name + " = " + entity_str + ";"
+      }
+    }
+  }
 }
 
 ///|

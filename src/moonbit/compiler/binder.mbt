@@ -59,6 +59,7 @@ fn is_module_file(statements : Array[Node]) -> Bool {
   for i = 0; i < statements.length(); i = i + 1 {
     match statements[i] {
       ImportDeclaration(_) => return true
+      ImportEqualsDeclaration(_) => return true
       ExportDeclaration(_) => return true
       ExportAssignment(_) => return true
       FunctionDeclaration(f) =>
@@ -197,6 +198,10 @@ fn bind_statement(binder : Binder, node : Node) -> Binder {
     // Import declaration
     ImportDeclaration(import_decl) =>
       bind_import_declaration(binder, import_decl)
+
+    // Import equals declaration (import X = require("module") or import X = M.N)
+    ImportEqualsDeclaration(import_equals) =>
+      bind_import_equals_declaration(binder, import_equals)
 
     // Export declaration
     ExportDeclaration(export_decl) =>
@@ -1112,6 +1117,21 @@ fn bind_import_specifiers_aux(
     let binder = declare_symbol(binder, local_name, symbol)
     bind_import_specifiers_aux(binder, specifiers, index + 1)
   }
+}
+
+///|
+/// Bind import equals declaration (import X = require("module") or import X = M.N)
+fn bind_import_equals_declaration(
+  binder : Binder,
+  import_equals : ImportEqualsDeclaration,
+) -> Binder {
+  // Declare the import name as an alias
+  let symbol = Symbol::new(
+    import_equals.name,
+    SymbolKind::Alias,
+    binder.next_symbol_id,
+  )
+  declare_symbol(binder, import_equals.name, symbol)
 }
 
 ///|

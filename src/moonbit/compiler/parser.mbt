@@ -2360,6 +2360,52 @@ fn parse_identifier(parser : Parser) -> Result[(Identifier, Parser), Parser] {
 }
 
 ///|
+/// Parse an entity name starting from a given identifier token
+/// The first_token is the current token that has NOT been consumed yet
+fn parse_entity_name_from(parser : Parser, first_token : Token) -> (Node, Parser) {
+  match first_token {
+    Identifier(name, loc) => {
+      let mut parser = advance_parser(parser) // consume the first identifier
+      let mut result : Node = Node::Identifier(Identifier::{ name, location: loc })
+      // Parse any following .identifier chains
+      while true {
+        match current_token(parser) {
+          Dot(_) => {
+            parser = advance_parser(parser) // consume '.'
+            match current_token(parser) {
+              Identifier(prop_name, prop_loc) => {
+                parser = advance_parser(parser)
+                let start_loc = get_node_location(result)
+                result = Node::PropertyAccessExpression(PropertyAccessExpression::{
+                  expression: result,
+                  name: prop_name,
+                  location: SourceLocation::new(
+                    start_loc.file_path,
+                    start_loc.start,
+                    prop_loc.end,
+                  ),
+                })
+              }
+              _ => break
+            }
+          }
+          _ => break
+        }
+      }
+      (result, parser)
+    }
+    _ => {
+      // Return empty identifier as fallback
+      let loc = current_token(parser).location()
+      (
+        Node::Identifier(Identifier::{ name: "", location: loc }),
+        parser,
+      )
+    }
+  }
+}
+
+///|
 /// Parse an entity name (qualified name like M, M.N, M.N.O)
 /// Used for import equals declarations: import X = M.N
 fn parse_entity_name(parser : Parser) -> (Node, Parser) {
@@ -4658,12 +4704,76 @@ fn parse_import_declaration(parser : Parser) -> Result[(Node, Parser), Parser] {
   let (default_import, parser) = match current_token(parser) {
     Identifier(name, _) => {
       let parser = advance_parser(parser)
-      // Check for import equals declaration: import X = M.N
+      // Check for import equals declaration: import X = M.N or import X = require("module")
       match current_token(parser) {
         Equals(_) => {
           // This is an import equals declaration
           let parser = advance_parser(parser) // consume '='
-          let (module_reference, parser) = parse_entity_name(parser)
+          // Check for require("module") syntax
+          let (module_reference, parser) = match current_token(parser) {
+            Identifier(id_name, req_loc) =>
+              if id_name == "require" {
+                // Parse require("module")
+                let parser = advance_parser(parser) // consume 'require'
+                match current_token(parser) {
+                  OpenParen(_) => {
+                    let parser = advance_parser(parser) // consume '('
+                    match current_token(parser) {
+                      StringLiteral(module_path, str_loc) => {
+                        let parser = advance_parser(parser) // consume string
+                        match current_token(parser) {
+                          CloseParen(_) => {
+                            let parser = advance_parser(parser) // consume ')'
+                            (
+                              ModuleReference::ExternalModuleReference(
+                                module_path,
+                                str_loc,
+                              ),
+                              parser,
+                            )
+                          }
+                          _ => {
+                            // Fall back to entity name parsing
+                            let (entity, parser) = parse_entity_name_from(
+                              parser,
+                              Identifier(id_name, req_loc),
+                            )
+                            (ModuleReference::EntityName(entity), parser)
+                          }
+                        }
+                      }
+                      _ => {
+                        // Fall back to entity name parsing
+                        let (entity, parser) = parse_entity_name_from(
+                          parser,
+                          Identifier(id_name, req_loc),
+                        )
+                        (ModuleReference::EntityName(entity), parser)
+                      }
+                    }
+                  }
+                  _ => {
+                    // Not require(), parse as entity name
+                    let (entity, parser) = parse_entity_name_from(
+                      parser,
+                      Identifier(id_name, req_loc),
+                    )
+                    (ModuleReference::EntityName(entity), parser)
+                  }
+                }
+              } else {
+                // Regular entity name
+                let (entity, parser) = parse_entity_name_from(
+                  parser,
+                  Identifier(id_name, req_loc),
+                )
+                (ModuleReference::EntityName(entity), parser)
+              }
+            _ => {
+              let (entity, parser) = parse_entity_name(parser)
+              (ModuleReference::EntityName(entity), parser)
+            }
+          }
           // Consume optional semicolon
           let parser = match current_token(parser) {
             Semicolon(_) => advance_parser(parser)
@@ -4676,6 +4786,7 @@ fn parse_import_declaration(parser : Parser) -> Result[(Node, Parser), Parser] {
                 name,
                 module_reference,
                 is_export: false,
+                is_type_only: false,
                 location: SourceLocation::new(
                   start_loc.file_path,
                   start_loc.start,
@@ -5484,6 +5595,7 @@ fn add_export_modifier(node : Node) -> Node {
         name: ied.name,
         module_reference: ied.module_reference,
         is_export: true,
+        is_type_only: ied.is_type_only,
         location: ied.location,
       })
     ModuleDeclaration(md) => {

@@ -2405,3 +2405,49 @@ test "emit super property access" {
   )
   assert_true(js.contains("super.method()"))
 }
+
+// ============================================================================
+// Import Equals Declaration Tests (import X = require())
+// ============================================================================
+
+///|
+/// Test: Emit import equals with require() - CommonJS
+test "emit import equals require commonjs" {
+  let js = compile_to_commonjs("import fs = require('fs');")
+  println("Import equals require CommonJS:\n\{js}")
+  assert_true(js.contains("const fs = require(\"fs\")"))
+  assert_false(js.contains("import fs ="))
+}
+
+///|
+/// Test: Emit import equals with require() - ESModule
+test "emit import equals require esmodule" {
+  let js = compile_to_js("import fs = require('fs');")
+  println("Import equals require ESModule:\n\{js}")
+  // In ESModule mode, it should still emit require() for import = require() syntax
+  assert_true(js.contains("const fs = require(\"fs\")"))
+}
+
+///|
+/// Test: Emit export import equals with require() - CommonJS
+test "emit export import equals require commonjs" {
+  let js = compile_to_commonjs("export import fs = require('fs');")
+  println("Export import equals require CommonJS:\n\{js}")
+  assert_true(js.contains("exports.fs = require(\"fs\")"))
+}
+
+///|
+/// Test: Emit import equals with entity name (namespace alias)
+test "emit import equals entity name" {
+  let js = compile_to_js("import A = B;")
+  println("Import equals entity name:\n\{js}")
+  assert_true(js.contains("const A = B"))
+}
+
+///|
+/// Test: Emit import equals with dotted entity name
+test "emit import equals dotted entity name" {
+  let js = compile_to_js("import C = M.N.O;")
+  println("Import equals dotted entity name:\n\{js}")
+  assert_true(js.contains("const C = M.N.O"))
+}

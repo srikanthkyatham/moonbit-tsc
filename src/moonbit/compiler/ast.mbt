@@ -274,12 +274,20 @@ pub struct ImportDeclaration {
 } derive(Show)
 
 ///|
-/// Import equals declaration: import X = M.N or export import X = N
+/// Import equals declaration: import X = M.N or import X = require("module")
 pub struct ImportEqualsDeclaration {
   name : String
-  module_reference : Node // Can be Identifier or PropertyAccessExpression (e.g., M.N)
+  module_reference : ModuleReference // Either entity name or external module reference
   is_export : Bool // True for "export import X = N"
+  is_type_only : Bool // True for "import type X = require(...)"
   location : SourceLocation
+} derive(Show)
+
+///|
+/// Module reference in import equals declaration
+pub enum ModuleReference {
+  EntityName(Node) // M.N - Identifier or PropertyAccessExpression
+  ExternalModuleReference(String, SourceLocation) // require("module")
 } derive(Show)
 
 ///|
