@@ -12,7 +12,7 @@
 
 ///|
 test "unit/type_errors/type_mismatch_error_creation" {
-  let error = @compiler.type_mismatch(
+  let _error = @compiler.type_mismatch(
     @compiler.TypePath::root(),
     @compiler.create_string_type(),
     @compiler.create_number_type(),
@@ -64,11 +64,7 @@ test "unit/type_errors/excess_property_error_creation" {
 
 ///|
 test "unit/type_errors/param_count_mismatch_creation" {
-  let error = @compiler.param_count_mismatch(
-    @compiler.TypePath::root(),
-    3,
-    5,
-  )
+  let error = @compiler.param_count_mismatch(@compiler.TypePath::root(), 3, 5)
   assert_true(error.suggestions.length() > 0)
 }
 
@@ -169,11 +165,7 @@ test "unit/type_errors/detailed_format_has_header" {
     @compiler.create_number_type(),
   )
   let detailed = @compiler.format_detailed_error(
-    error,
-    "src/app.ts",
-    42,
-    10,
-    "const x: number = \"hello\";",
+    error, "src/app.ts", 42, 10, "const x: number = \"hello\";",
   )
 
   // Should have header with title
@@ -188,11 +180,7 @@ test "unit/type_errors/detailed_format_has_file_path" {
     @compiler.create_number_type(),
   )
   let detailed = @compiler.format_detailed_error(
-    error,
-    "src/app.ts",
-    42,
-    10,
-    "const x: number = \"hello\";",
+    error, "src/app.ts", 42, 10, "const x: number = \"hello\";",
   )
 
   // Should have file path
@@ -207,11 +195,7 @@ test "unit/type_errors/detailed_format_has_why_section" {
     @compiler.create_number_type(),
   )
   let detailed = @compiler.format_detailed_error(
-    error,
-    "src/app.ts",
-    42,
-    10,
-    "const x: number = \"hello\";",
+    error, "src/app.ts", 42, 10, "const x: number = \"hello\";",
   )
 
   // Should have "WHY THIS HAPPENS" section
@@ -226,11 +210,7 @@ test "unit/type_errors/detailed_format_has_fix_section" {
     @compiler.create_number_type(),
   )
   let detailed = @compiler.format_detailed_error(
-    error,
-    "src/app.ts",
-    42,
-    10,
-    "const x: number = \"hello\";",
+    error, "src/app.ts", 42, 10, "const x: number = \"hello\";",
   )
 
   // Should have "HOW TO FIX" section
@@ -245,11 +225,7 @@ test "unit/type_errors/detailed_format_has_learn_more" {
     @compiler.create_number_type(),
   )
   let detailed = @compiler.format_detailed_error(
-    error,
-    "src/app.ts",
-    42,
-    10,
-    "const x: number = \"hello\";",
+    error, "src/app.ts", 42, 10, "const x: number = \"hello\";",
   )
 
   // Should have "LEARN MORE" section with doc links
@@ -269,11 +245,7 @@ test "unit/type_errors/to_detailed_error_has_location" {
     @compiler.create_string_type(),
   )
   let detailed = @compiler.to_detailed_error(
-    error,
-    "file.ts",
-    5,
-    3,
-    "const s: string = true;",
+    error, "file.ts", 5, 3, "const s: string = true;",
   )
 
   // Check location format
@@ -288,11 +260,7 @@ test "unit/type_errors/to_detailed_error_has_title" {
     @compiler.create_string_type(),
   )
   let detailed = @compiler.to_detailed_error(
-    error,
-    "file.ts",
-    5,
-    3,
-    "const s: string = true;",
+    error, "file.ts", 5, 3, "const s: string = true;",
   )
 
   // Check title
@@ -307,11 +275,7 @@ test "unit/type_errors/to_detailed_error_has_doc_link" {
     @compiler.create_string_type(),
   )
   let detailed = @compiler.to_detailed_error(
-    error,
-    "file.ts",
-    5,
-    3,
-    "const s: string = true;",
+    error, "file.ts", 5, 3, "const s: string = true;",
   )
 
   // Check doc link contains error code
@@ -326,11 +290,7 @@ test "unit/type_errors/to_detailed_error_has_how_to_fix" {
     @compiler.create_string_type(),
   )
   let detailed = @compiler.to_detailed_error(
-    error,
-    "file.ts",
-    5,
-    3,
-    "const s: string = true;",
+    error, "file.ts", 5, 3, "const s: string = true;",
   )
 
   // Check how_to_fix is populated
@@ -345,11 +305,7 @@ test "unit/type_errors/to_detailed_error_has_why_error" {
     @compiler.create_string_type(),
   )
   let detailed = @compiler.to_detailed_error(
-    error,
-    "file.ts",
-    5,
-    3,
-    "const s: string = true;",
+    error, "file.ts", 5, 3, "const s: string = true;",
   )
 
   // Check why_error is populated
@@ -369,11 +325,7 @@ test "unit/type_errors/scenario/string_to_number_detailed" {
     @compiler.create_number_type(),
   )
   let detailed = @compiler.format_detailed_error(
-    error,
-    "app.ts",
-    1,
-    19,
-    "const x: number = \"hello\";",
+    error, "app.ts", 1, 19, "const x: number = \"hello\";",
   )
 
   // Verify it contains all the helpful information
@@ -389,11 +341,7 @@ test "unit/type_errors/scenario/undefined_variable_detailed" {
   // Simulate: console.log(undefinedVar);
   let error = @compiler.unbound_variable_error("undefinedVar")
   let detailed = @compiler.format_detailed_error(
-    error,
-    "main.ts",
-    10,
-    13,
-    "console.log(undefinedVar);",
+    error, "main.ts", 10, 13, "console.log(undefinedVar);",
   )
 
   // Should have helpful content
@@ -409,11 +357,7 @@ test "unit/type_errors/scenario/not_callable_detailed" {
     @compiler.create_empty_object_type(),
   )
   let detailed = @compiler.format_detailed_error(
-    error,
-    "test.ts",
-    2,
-    1,
-    "obj();",
+    error, "test.ts", 2, 1, "obj();",
   )
 
   // Should explain the issue

@@ -1901,3 +1901,10 @@ fn emit_decl_expression(node : Node) -> String {
     _ => "unknown"
   }
 }
+
+// Suppress warnings for functions reserved for future use
+fn init {
+  ignore(collect_reexports)
+  ignore(emit_flattened_export)
+  ignore(filter_imports_for_declaration)
+}

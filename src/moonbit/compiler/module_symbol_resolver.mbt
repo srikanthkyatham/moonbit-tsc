@@ -9,15 +9,15 @@
 /// Exported symbol information from a module
 pub struct ExportedSymbol {
   /// Name as exported (may differ from original name)
-  pub exported_name : String
+  exported_name : String
   /// Original name in the source module
-  pub original_name : String
+  original_name : String
   /// Symbol ID in the source module
-  pub symbol_id : Int
+  symbol_id : Int
   /// Whether this is a type-only export
-  pub is_type_only : Bool
+  is_type_only : Bool
   /// Whether this is a re-export from another module
-  pub re_exported_from : String?
+  re_exported_from : String?
 } derive(Show)
 
 ///|
@@ -26,8 +26,8 @@ pub fn ExportedSymbol::new(
   exported_name : String,
   original_name : String,
   symbol_id : Int,
-  is_type_only~ : Bool = false,
-  re_exported_from~ : String? = None,
+  is_type_only? : Bool = false,
+  re_exported_from? : String? = None,
 ) -> ExportedSymbol {
   { exported_name, original_name, symbol_id, is_type_only, re_exported_from }
 }
@@ -36,13 +36,13 @@ pub fn ExportedSymbol::new(
 /// Module export information
 pub struct ModuleExports {
   /// Path to the module file
-  pub module_path : String
+  module_path : String
   /// Named exports: { exportedName -> ExportedSymbol }
-  pub named_exports : Map[String, ExportedSymbol]
+  named_exports : Map[String, ExportedSymbol]
   /// Default export (if any)
-  pub default_export : ExportedSymbol?
+  default_export : ExportedSymbol?
   /// Whether this module has `export * from` (namespace re-export)
-  pub star_exports : Array[String] // Module paths that are re-exported with *
+  star_exports : Array[String] // Module paths that are re-exported with *
 } derive(Show)
 
 ///|
@@ -111,19 +111,19 @@ pub fn ModuleExports::get_export_names(self : ModuleExports) -> Array[String] {
 /// Resolved import binding - links local symbol to imported symbol
 pub struct ImportBinding {
   /// Local name used in this file
-  pub local_name : String
+  local_name : String
   /// Local symbol ID
-  pub local_symbol_id : Int
+  local_symbol_id : Int
   /// Source module path (resolved)
-  pub source_module : String
+  source_module : String
   /// Name in the source module
-  pub imported_name : String
+  imported_name : String
   /// Symbol ID in the source module (if resolved)
-  pub mut resolved_symbol_id : Int?
+  mut resolved_symbol_id : Int?
   /// Whether this is a type-only import
-  pub is_type_only : Bool
+  is_type_only : Bool
   /// Import kind
-  pub kind : ImportBindingKind
+  kind : ImportBindingKind
 } derive(Show)
 
 ///|
@@ -134,7 +134,7 @@ pub fn ImportBinding::new(
   source_module : String,
   imported_name : String,
   kind : ImportBindingKind,
-  is_type_only~ : Bool = false,
+  is_type_only? : Bool = false,
 ) -> ImportBinding {
   {
     local_name,
@@ -276,7 +276,6 @@ pub fn ModuleSymbolResolver::link_imports(
   file_path : String,
 ) -> Array[Diagnostic] {
   let diagnostics : Array[Diagnostic] = []
-
   match self.import_bindings.get(file_path) {
     Some(bindings) =>
       for binding in bindings {
@@ -284,7 +283,6 @@ pub fn ModuleSymbolResolver::link_imports(
       }
     None => ()
   }
-
   diagnostics
 }
 
@@ -298,9 +296,9 @@ fn link_single_import(
 ) -> Unit {
   // Get module exports
   match resolver.module_exports_cache.get(binding.source_module) {
-    Some(exports) => {
+    Some(exports) =>
       match binding.kind {
-        DefaultImport => {
+        DefaultImport =>
           match exports.default_export {
             Some(exp) => binding.resolved_symbol_id = Some(exp.symbol_id)
             None => {
@@ -312,8 +310,7 @@ fn link_single_import(
               diagnostics.push(diag)
             }
           }
-        }
-        NamedImport => {
+        NamedImport =>
           match exports.get_export(binding.imported_name) {
             Some(exp) => binding.resolved_symbol_id = Some(exp.symbol_id)
             None => {
@@ -326,18 +323,14 @@ fn link_single_import(
               diagnostics.push(diag)
             }
           }
-        }
-        NamespaceImport => {
+        NamespaceImport =>
           // Namespace import doesn't need to resolve to a specific symbol
           // The entire module namespace is the "symbol"
           binding.resolved_symbol_id = Some(-2) // Marker for namespace
-        }
       }
-    }
-    None => {
+    None =>
       // Module not yet processed - this shouldn't happen in proper resolution order
       ()
-    }
   }
 }
 
@@ -379,6 +372,7 @@ pub fn ModuleSymbolResolver::finish_processing(
   // Clear and repopulate
   while self.processing_stack.length() > 0 {
     let _ = self.processing_stack.pop()
+
   }
   for path in new_stack {
     self.processing_stack.push(path)
@@ -409,10 +403,8 @@ pub fn ModuleSymbolResolver::resolve_import(
   module_specifier : String,
   containing_file : String,
 ) -> Result[String, ResolutionFailure] {
-  match self.module_resolver.resolve_module_name(
-    module_specifier,
-    containing_file,
-  ) {
+  match
+    self.module_resolver.resolve_module_name(module_specifier, containing_file) {
     Ok(resolved) => Ok(resolved.resolved_file_name)
     Err(failure) => Err(failure)
   }
@@ -430,18 +422,21 @@ pub fn ModuleSymbolResolver::resolve_all_exports(
   module_path : String,
 ) -> Map[String, ExportedSymbol] {
   let all_exports : Map[String, ExportedSymbol] = Map::new()
-
   match self.module_exports_cache.get(module_path) {
     Some(exports) => {
       // Add direct exports
-      exports.named_exports.each(fn(name, symbol) { all_exports.set(name, symbol) })
+      exports.named_exports.each(fn(name, symbol) {
+        all_exports.set(name, symbol)
+      })
 
       // Process star exports recursively
       for star_path in exports.star_exports {
         // Resolve the star export path
         match self.module_resolver.resolve_module_name(star_path, module_path) {
           Ok(resolved) => {
-            let star_exports_map = self.resolve_all_exports(resolved.resolved_file_name)
+            let star_exports_map = self.resolve_all_exports(
+              resolved.resolved_file_name,
+            )
             star_exports_map.each(fn(name, symbol) {
               // Don't override direct exports
               if all_exports.get(name) is None {
@@ -455,7 +450,6 @@ pub fn ModuleSymbolResolver::resolve_all_exports(
     }
     None => ()
   }
-
   all_exports
 }
 

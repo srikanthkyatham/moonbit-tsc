@@ -22,7 +22,6 @@ pub fn parse_jsdoc(content : String) -> JSDocParseResult {
   let description_lines : Array[String] = []
   let mut in_tags = false
   let mut i = 0
-
   while i < lines.length() {
     let trimmed = trim_jsdoc_line(lines[i])
 
@@ -32,7 +31,6 @@ pub fn parse_jsdoc(content : String) -> JSDocParseResult {
       // Check if this is a multi-line tag like @example
       let tag_end = find_whitespace_or_end(trimmed, 1)
       let tag_name = @utils.substr(trimmed, start=1, end=tag_end)
-
       if tag_name == "example" {
         // Collect all lines until next tag or end
         let rest = if tag_end < trimmed.length() {
@@ -59,18 +57,20 @@ pub fn parse_jsdoc(content : String) -> JSDocParseResult {
           }
           i = i + 1
         }
-        let example_content = example_lines.iter().fold(
-          init="",
-          fn(acc, line) {
+        let example_content = example_lines
+          .iter()
+          .fold(init="", fn(acc, line) {
             if acc.length() == 0 {
               line
             } else {
               acc + "\n" + line
             }
-          },
-        )
+          })
         tags.push(
-          JSDocTag::Example(JSDocExample::{ content: example_content, location: dummy_loc }),
+          JSDocTag::Example(JSDocExample::{
+            content: example_content,
+            location: dummy_loc,
+          }),
         )
         continue // Skip the i increment at the end since we already moved forward
       } else {
@@ -85,17 +85,15 @@ pub fn parse_jsdoc(content : String) -> JSDocParseResult {
     }
     i = i + 1
   }
-
-  let description = description_lines.iter().fold(
-    init="",
-    fn(acc, line) {
+  let description = description_lines
+    .iter()
+    .fold(init="", fn(acc, line) {
       if acc.length() == 0 {
         line
       } else {
         acc + "\n" + line
       }
-    },
-  )
+    })
   JSDocParseResult::{ description, tags }
 }
 
@@ -199,7 +197,7 @@ fn trim_trailing_whitespace(s : String) -> String {
       None => break
     }
   }
-  @utils.substr(s, start=0, end=end)
+  @utils.substr(s, start=0, end~)
 }
 
 ///|
@@ -209,7 +207,9 @@ fn parse_jsdoc_tag(line : String, loc : SourceLocation) -> JSDocTag? {
   let tag_end = find_whitespace_or_end(line, 1)
   let tag_name = @utils.substr(line, start=1, end=tag_end)
   let rest = if tag_end < line.length() {
-    trim_leading_whitespace(@utils.substr(line, start=tag_end, end=line.length()))
+    trim_leading_whitespace(
+      @utils.substr(line, start=tag_end, end=line.length()),
+    )
   } else {
     ""
   }
@@ -290,7 +290,9 @@ fn parse_jsdoc_typedef_tag(content : String, loc : SourceLocation) -> JSDocTag {
   let name_end = find_whitespace_or_end(rest, 0)
   let name = @utils.substr(rest, start=0, end=name_end)
   let description = if name_end < rest.length() {
-    trim_leading_whitespace(@utils.substr(rest, start=name_end, end=rest.length()))
+    trim_leading_whitespace(
+      @utils.substr(rest, start=name_end, end=rest.length()),
+    )
   } else {
     ""
   }
@@ -376,7 +378,7 @@ fn extract_jsdoc_type(content : String) -> (String?, String) {
       i = i + 1
     }
     if end > 1 {
-      let type_str = @utils.substr(trimmed, start=1, end=end)
+      let type_str = @utils.substr(trimmed, start=1, end~)
       let rest = @utils.substr(trimmed, start=end + 1, end=trimmed.length())
       (Some(type_str), trim_leading_whitespace(rest))
     } else {
@@ -403,7 +405,11 @@ fn extract_jsdoc_param_name(content : String) -> (String, Bool, String) {
       } else {
         name_part
       }
-      let rest = @utils.substr(trimmed, start=bracket_end + 1, end=trimmed.length())
+      let rest = @utils.substr(
+        trimmed,
+        start=bracket_end + 1,
+        end=trimmed.length(),
+      )
       return (name, true, trim_leading_whitespace(rest))
     }
   }
@@ -457,7 +463,7 @@ fn trim_leading_whitespace(s : String) -> String {
       None => break
     }
   }
-  @utils.substr(s, start=start, end=s.length())
+  @utils.substr(s, start~, end=s.length())
 }
 
 ///|

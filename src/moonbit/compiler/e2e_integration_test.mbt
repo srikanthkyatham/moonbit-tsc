@@ -82,7 +82,9 @@ test "e2e: arrow function" {
 
 ///|
 test "e2e: class declaration" {
-  let js = e2e_compile_to_js("class Person { constructor(name) { this.name = name; } }")
+  let js = e2e_compile_to_js(
+    "class Person { constructor(name) { this.name = name; } }",
+  )
   assert_true(js.contains("class Person"))
 }
 
@@ -315,13 +317,17 @@ test "e2e: throw statement" {
 
 ///|
 test "e2e: break statement" {
-  let js = e2e_compile_to_js("for (let i = 0; i < 10; i++) { if (i === 5) break; }")
+  let js = e2e_compile_to_js(
+    "for (let i = 0; i < 10; i++) { if (i === 5) break; }",
+  )
   assert_true(js.contains("break"))
 }
 
 ///|
 test "e2e: continue statement" {
-  let js = e2e_compile_to_js("for (let i = 0; i < 10; i++) { if (i === 5) continue; sum += i; }")
+  let js = e2e_compile_to_js(
+    "for (let i = 0; i < 10; i++) { if (i === 5) continue; sum += i; }",
+  )
   assert_true(js.contains("continue"))
 }
 
@@ -337,26 +343,34 @@ test "e2e: jest describe block" {
 
 ///|
 test "e2e: jest test function" {
-  let js = e2e_compile_to_js("test('should add numbers', () => { expect(1 + 1).toBe(2); });")
+  let js = e2e_compile_to_js(
+    "test('should add numbers', () => { expect(1 + 1).toBe(2); });",
+  )
   assert_true(js.contains("test"))
   assert_true(js.contains("expect"))
 }
 
 ///|
 test "e2e: jest it function" {
-  let js = e2e_compile_to_js("it('should work correctly', () => { expect(true).toBeTruthy(); });")
+  let js = e2e_compile_to_js(
+    "it('should work correctly', () => { expect(true).toBeTruthy(); });",
+  )
   assert_true(js.contains("it"))
 }
 
 ///|
 test "e2e: jest nested describe" {
-  let js = e2e_compile_to_js("describe('Outer', () => { describe('Inner', () => { test('nested test', () => {}); }); });")
+  let js = e2e_compile_to_js(
+    "describe('Outer', () => { describe('Inner', () => { test('nested test', () => {}); }); });",
+  )
   assert_true(js.contains("describe"))
 }
 
 ///|
 test "e2e: jest async test" {
-  let js = e2e_compile_to_js("test('async test', async () => { const result = await fetchData(); expect(result).toBeDefined(); });")
+  let js = e2e_compile_to_js(
+    "test('async test', async () => { const result = await fetchData(); expect(result).toBeDefined(); });",
+  )
   assert_true(js.contains("async"))
   assert_true(js.contains("await"))
 }
@@ -375,19 +389,25 @@ test "e2e: jest afterEach" {
 
 ///|
 test "e2e: jest beforeAll" {
-  let js = e2e_compile_to_js("beforeAll(async () => { await initializeDatabase(); });")
+  let js = e2e_compile_to_js(
+    "beforeAll(async () => { await initializeDatabase(); });",
+  )
   assert_true(js.contains("beforeAll"))
 }
 
 ///|
 test "e2e: jest afterAll" {
-  let js = e2e_compile_to_js("afterAll(async () => { await closeConnection(); });")
+  let js = e2e_compile_to_js(
+    "afterAll(async () => { await closeConnection(); });",
+  )
   assert_true(js.contains("afterAll"))
 }
 
 ///|
 test "e2e: jest expect matchers" {
-  let js = e2e_compile_to_js("expect(value).toBe(expected); expect(arr).toContain(item); expect(obj).toEqual({ a: 1 });")
+  let js = e2e_compile_to_js(
+    "expect(value).toBe(expected); expect(arr).toContain(item); expect(obj).toEqual({ a: 1 });",
+  )
   assert_true(js.contains("toBe"))
   assert_true(js.contains("toContain"))
   assert_true(js.contains("toEqual"))
@@ -395,13 +415,17 @@ test "e2e: jest expect matchers" {
 
 ///|
 test "e2e: jest test.each" {
-  let js = e2e_compile_to_js("test.each([[1, 2, 3], [2, 3, 5]])('add(%i, %i) = %i', (a, b, expected) => { expect(a + b).toBe(expected); });")
+  let js = e2e_compile_to_js(
+    "test.each([[1, 2, 3], [2, 3, 5]])('add(%i, %i) = %i', (a, b, expected) => { expect(a + b).toBe(expected); });",
+  )
   assert_true(js.contains("test.each"))
 }
 
 ///|
 test "e2e: jest describe.each" {
-  let js = e2e_compile_to_js("describe.each([['mobile'], ['desktop']])('on %s', (viewport) => { test('renders correctly', () => {}); });")
+  let js = e2e_compile_to_js(
+    "describe.each([['mobile'], ['desktop']])('on %s', (viewport) => { test('renders correctly', () => {}); });",
+  )
   assert_true(js.contains("describe.each"))
 }
 
@@ -424,14 +448,18 @@ test "e2e: playwright test.describe" {
 
 ///|
 test "e2e: playwright test with page fixture" {
-  let js = e2e_compile_to_js("test('should display data', async ({ page }) => { await page.goto('/'); });")
+  let js = e2e_compile_to_js(
+    "test('should display data', async ({ page }) => { await page.goto('/'); });",
+  )
   assert_true(js.contains("page"))
   assert_true(js.contains("goto"))
 }
 
 ///|
 test "e2e: playwright test with destructured fixtures" {
-  let js = e2e_compile_to_js("test('admin test', async ({ page, context, browser }) => { });")
+  let js = e2e_compile_to_js(
+    "test('admin test', async ({ page, context, browser }) => { });",
+  )
   assert_true(js.contains("page"))
   assert_true(js.contains("context"))
   assert_true(js.contains("browser"))
@@ -439,33 +467,43 @@ test "e2e: playwright test with destructured fixtures" {
 
 ///|
 test "e2e: playwright page interactions" {
-  let js = e2e_compile_to_js("test('clicks button', async ({ page }) => { await page.click('button'); await page.fill('input', 'text'); });")
+  let js = e2e_compile_to_js(
+    "test('clicks button', async ({ page }) => { await page.click('button'); await page.fill('input', 'text'); });",
+  )
   assert_true(js.contains("click"))
   assert_true(js.contains("fill"))
 }
 
 ///|
 test "e2e: playwright locators" {
-  let js = e2e_compile_to_js("test('finds element', async ({ page }) => { const btn = page.locator('button'); await btn.click(); });")
+  let js = e2e_compile_to_js(
+    "test('finds element', async ({ page }) => { const btn = page.locator('button'); await btn.click(); });",
+  )
   assert_true(js.contains("locator"))
 }
 
 ///|
 test "e2e: playwright expect assertions" {
-  let js = e2e_compile_to_js("test('visible element', async ({ page }) => { await expect(page.locator('h1')).toBeVisible(); });")
+  let js = e2e_compile_to_js(
+    "test('visible element', async ({ page }) => { await expect(page.locator('h1')).toBeVisible(); });",
+  )
   assert_true(js.contains("expect"))
   assert_true(js.contains("toBeVisible"))
 }
 
 ///|
 test "e2e: playwright test.beforeEach" {
-  let js = e2e_compile_to_js("test.beforeEach(async ({ page }) => { await page.goto('/login'); });")
+  let js = e2e_compile_to_js(
+    "test.beforeEach(async ({ page }) => { await page.goto('/login'); });",
+  )
   assert_true(js.contains("test.beforeEach"))
 }
 
 ///|
 test "e2e: playwright test.afterEach" {
-  let js = e2e_compile_to_js("test.afterEach(async ({ page }) => { await page.close(); });")
+  let js = e2e_compile_to_js(
+    "test.afterEach(async ({ page }) => { await page.close(); });",
+  )
   assert_true(js.contains("test.afterEach"))
 }
 
@@ -477,13 +515,17 @@ test "e2e: playwright test.use" {
 
 ///|
 test "e2e: playwright test.skip" {
-  let js = e2e_compile_to_js("test.skip('skipped test', async ({ page }) => { });")
+  let js = e2e_compile_to_js(
+    "test.skip('skipped test', async ({ page }) => { });",
+  )
   assert_true(js.contains("test.skip"))
 }
 
 ///|
 test "e2e: playwright test.only" {
-  let js = e2e_compile_to_js("test.only('focused test', async ({ page }) => { });")
+  let js = e2e_compile_to_js(
+    "test.only('focused test', async ({ page }) => { });",
+  )
   assert_true(js.contains("test.only"))
 }
 
@@ -546,7 +588,7 @@ test "e2e: hashbang is preserved in output" {
 ///|
 test "e2e: hashbang at start of output" {
   let js = e2e_compile_with_hashbang("#!/usr/bin/env node\nconst x = 1;")
-  assert_true(js.starts_with("#!/usr/bin/env node"))
+  assert_true(js.has_prefix("#!/usr/bin/env node"))
 }
 
 ///|

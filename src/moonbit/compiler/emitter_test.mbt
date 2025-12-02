@@ -679,7 +679,9 @@ test "emit regular enum" {
 ///|
 /// Test: Const enum value is inlined
 test "emit const enum with inlined values" {
-  let js = compile_to_js("const enum Direction { Up = 1, Down = 2 }; let x = Direction.Up;")
+  let js = compile_to_js(
+    "const enum Direction { Up = 1, Down = 2 }; let x = Direction.Up;",
+  )
   println("Const enum inlined output:\n\{js}")
   // Const enum declaration should NOT be emitted
   assert_false(js.contains("const Direction"))
@@ -690,7 +692,9 @@ test "emit const enum with inlined values" {
 ///|
 /// Test: Const enum auto-increment values
 test "emit const enum auto-increment" {
-  let js = compile_to_js("const enum Color { Red, Green, Blue }; let c = Color.Green;")
+  let js = compile_to_js(
+    "const enum Color { Red, Green, Blue }; let c = Color.Green;",
+  )
   println("Const enum auto-increment output:\n\{js}")
   // Color.Green should be inlined to 1 (auto-increment from 0)
   assert_true(js.contains("let c = 1"))
@@ -699,7 +703,9 @@ test "emit const enum auto-increment" {
 ///|
 /// Test: String enum is emitted correctly
 test "emit string enum" {
-  let js = compile_to_js("enum Direction { Up = 'UP', Down = 'DOWN', Left = 'LEFT', Right = 'RIGHT' }")
+  let js = compile_to_js(
+    "enum Direction { Up = 'UP', Down = 'DOWN', Left = 'LEFT', Right = 'RIGHT' }",
+  )
   println("String enum output:\n\{js}")
   // String enum should be emitted as a const object
   assert_true(js.contains("const Direction"))
@@ -719,7 +725,9 @@ test "emit enum with computed values" {
 ///|
 /// Test: Enum with bitwise operations
 test "emit enum with bitwise operations" {
-  let js = compile_to_js("enum Flags { None = 0, Read = 1, Write = 2, Execute = 4, All = 7 }")
+  let js = compile_to_js(
+    "enum Flags { None = 0, Read = 1, Write = 2, Execute = 4, All = 7 }",
+  )
   println("Bitwise enum output:\n\{js}")
   assert_true(js.contains("const Flags"))
 }
@@ -737,7 +745,9 @@ test "emit declare enum" {
 ///|
 /// Test: Const enum with string values is inlined
 test "emit const string enum inlined" {
-  let js = compile_to_js("const enum Status { Active = 'active', Inactive = 'inactive' }; let s = Status.Active;")
+  let js = compile_to_js(
+    "const enum Status { Active = 'active', Inactive = 'inactive' }; let s = Status.Active;",
+  )
   println("Const string enum output:\n\{js}")
   // Const string enum should be inlined
   assert_true(js.contains("let s = \"active\""))
@@ -754,7 +764,9 @@ test "emit enum auto-increment after explicit" {
 ///|
 /// Test: Const enum with negative value
 test "emit const enum negative" {
-  let js = compile_to_js("const enum Offset { Minus1 = -1, Zero = 0, Plus1 = 1 }; let x = Offset.Minus1;")
+  let js = compile_to_js(
+    "const enum Offset { Minus1 = -1, Zero = 0, Plus1 = 1 }; let x = Offset.Minus1;",
+  )
   println("Const enum negative output:\n\{js}")
   // Should inline -1
   assert_true(js.contains("let x = -1"))
@@ -955,7 +967,9 @@ test "emit class with single decorator" {
 ///|
 /// Test: Emit class with decorator factory (with arguments)
 test "emit class with decorator factory" {
-  let js = compile_to_js("@Component({ selector: 'app' }) class AppComponent { }")
+  let js = compile_to_js(
+    "@Component({ selector: 'app' }) class AppComponent { }",
+  )
   println("Decorator factory JS:\n\{js}")
   // Decorated class should use let ClassName = class ClassName pattern
   assert_true(js.contains("let AppComponent = class AppComponent"))
@@ -992,7 +1006,9 @@ test "emit class without decorators unchanged" {
 ///|
 /// Test: Emit decorated class with class body
 test "emit decorated class with members" {
-  let js = compile_to_js("@injectable class Service { name = 'test'; getValue() { return 42; } }")
+  let js = compile_to_js(
+    "@injectable class Service { name = 'test'; getValue() { return 42; } }",
+  )
   println("Decorated class with members:\n\{js}")
   assert_true(js.contains("let Service = class Service"))
   assert_true(js.contains("__decorate"))
@@ -1036,7 +1052,9 @@ test "emit export decorated class" {
 ///|
 /// Test: Emit decorated class with constructor
 test "emit decorated class with constructor" {
-  let js = compile_to_js("@singleton class Database { constructor(url) { this.url = url; } }")
+  let js = compile_to_js(
+    "@singleton class Database { constructor(url) { this.url = url; } }",
+  )
   println("Decorated class with constructor:\n\{js}")
   assert_true(js.contains("let Database = class Database"))
   assert_true(js.contains("constructor(url)"))
@@ -1069,7 +1087,9 @@ test "emit decorator with arrow function arg" {
 ///|
 /// Test: Emit multiple decorator factories
 test "emit multiple decorator factories" {
-  let js = compile_to_js("@Module({ imports: [] }) @Controller('/api') class ApiModule { }")
+  let js = compile_to_js(
+    "@Module({ imports: [] }) @Controller('/api') class ApiModule { }",
+  )
   println("Multiple decorator factories:\n\{js}")
   assert_true(js.contains("let ApiModule = class ApiModule"))
   assert_true(js.contains("__decorate"))
@@ -1142,7 +1162,9 @@ test "emit static method with decorator" {
 ///|
 /// Test: Emit getter with decorator
 test "emit getter with decorator" {
-  let js = compile_to_js("class MyClass { @computed get value() { return 42; } }")
+  let js = compile_to_js(
+    "class MyClass { @computed get value() { return 42; } }",
+  )
   println("Getter with decorator:\n\{js}")
   assert_true(js.contains("__decorate"))
   assert_true(js.contains("computed"))
@@ -1153,7 +1175,9 @@ test "emit getter with decorator" {
 ///|
 /// Test: Emit setter with decorator
 test "emit setter with decorator" {
-  let js = compile_to_js("class MyClass { @validate set name(val) { this._name = val; } }")
+  let js = compile_to_js(
+    "class MyClass { @validate set name(val) { this._name = val; } }",
+  )
   println("Setter with decorator:\n\{js}")
   assert_true(js.contains("__decorate"))
   assert_true(js.contains("validate"))
@@ -1164,7 +1188,9 @@ test "emit setter with decorator" {
 ///|
 /// Test: Emit class with both class and member decorators
 test "emit class with class and member decorators" {
-  let js = compile_to_js("@Component class MyComponent { @Input() data; @Output() change() { } }")
+  let js = compile_to_js(
+    "@Component class MyComponent { @Input() data; @Output() change() { } }",
+  )
   println("Class with class and member decorators:\n\{js}")
   // Should have class decorator
   assert_true(js.contains("Component"))
@@ -1214,7 +1240,9 @@ test "emit constructor with parameter decorator" {
 ///|
 /// Test: Emit constructor with parameter decorator factory
 test "emit constructor with parameter decorator factory" {
-  let js = compile_to_js("class MyClass { constructor(@Inject('Logger') logger) { } }")
+  let js = compile_to_js(
+    "class MyClass { constructor(@Inject('Logger') logger) { } }",
+  )
   println("Constructor with param decorator factory:\n\{js}")
   assert_true(js.contains("__decorate"))
   assert_true(js.contains("__param"))
@@ -1224,7 +1252,9 @@ test "emit constructor with parameter decorator factory" {
 ///|
 /// Test: Emit constructor with multiple parameter decorators
 test "emit constructor with multiple parameter decorators" {
-  let js = compile_to_js("class MyClass { constructor(@inject @optional service) { } }")
+  let js = compile_to_js(
+    "class MyClass { constructor(@inject @optional service) { } }",
+  )
   println("Constructor with multiple param decorators:\n\{js}")
   assert_true(js.contains("__decorate"))
   assert_true(js.contains("__param(0, inject)"))
@@ -1234,7 +1264,9 @@ test "emit constructor with multiple parameter decorators" {
 ///|
 /// Test: Emit constructor with decorators on multiple parameters
 test "emit constructor with decorators on multiple parameters" {
-  let js = compile_to_js("class MyClass { constructor(@inject a, @optional b) { } }")
+  let js = compile_to_js(
+    "class MyClass { constructor(@inject a, @optional b) { } }",
+  )
   println("Constructor with decorators on multiple params:\n\{js}")
   assert_true(js.contains("__decorate"))
   assert_true(js.contains("__param(0, inject)"))
@@ -1266,7 +1298,9 @@ test "emit method with method and parameter decorators" {
 ///|
 /// Test: Emit class with both class and constructor param decorators
 test "emit class with class and constructor param decorators" {
-  let js = compile_to_js("@Injectable class Service { constructor(@inject dep) { } }")
+  let js = compile_to_js(
+    "@Injectable class Service { constructor(@inject dep) { } }",
+  )
   println("Class with class and constructor param decorators:\n\{js}")
   assert_true(js.contains("__decorate"))
   assert_true(js.contains("Injectable"))
@@ -1292,7 +1326,9 @@ test "emit __decorate helper for class decorator" {
   let js = compile_to_js("@Component class MyClass { }")
   println("Class decorator with helper:\n\{js}")
   // Should start with the __decorate helper definition
-  assert_true(js.contains("var __decorate = (this && this.__decorate) || function"))
+  assert_true(
+    js.contains("var __decorate = (this && this.__decorate) || function"),
+  )
   assert_true(js.contains("arguments.length"))
   assert_true(js.contains("Object.getOwnPropertyDescriptor"))
 }
@@ -1303,7 +1339,9 @@ test "emit __decorate helper for member decorator" {
   let js = compile_to_js("class MyClass { @log myMethod() { } }")
   println("Member decorator with helper:\n\{js}")
   // Should have the __decorate helper definition
-  assert_true(js.contains("var __decorate = (this && this.__decorate) || function"))
+  assert_true(
+    js.contains("var __decorate = (this && this.__decorate) || function"),
+  )
 }
 
 ///|
@@ -1312,7 +1350,9 @@ test "emit __param helper for parameter decorator" {
   let js = compile_to_js("class MyClass { constructor(@inject service) { } }")
   println("Parameter decorator with helpers:\n\{js}")
   // Should have both __decorate and __param helper definitions
-  assert_true(js.contains("var __decorate = (this && this.__decorate) || function"))
+  assert_true(
+    js.contains("var __decorate = (this && this.__decorate) || function"),
+  )
   assert_true(js.contains("var __param = (this && this.__param) || function"))
 }
 
@@ -1332,7 +1372,9 @@ test "emit no __param helper for class decorator only" {
   let js = compile_to_js("@Component class MyClass { }")
   println("Class decorator only, no __param:\n\{js}")
   // Should have __decorate but NOT __param
-  assert_true(js.contains("var __decorate = (this && this.__decorate) || function"))
+  assert_true(
+    js.contains("var __decorate = (this && this.__decorate) || function"),
+  )
   assert_true(js.contains("var __param") == false)
 }
 
@@ -1342,7 +1384,9 @@ test "emit no __param helper for member decorator only" {
   let js = compile_to_js("class MyClass { @log myMethod() { } }")
   println("Member decorator only, no __param:\n\{js}")
   // Should have __decorate but NOT __param
-  assert_true(js.contains("var __decorate = (this && this.__decorate) || function"))
+  assert_true(
+    js.contains("var __decorate = (this && this.__decorate) || function"),
+  )
   assert_true(js.contains("var __param") == false)
 }
 
@@ -1352,7 +1396,9 @@ test "emit both helpers for method parameter decorator" {
   let js = compile_to_js("class MyClass { myMethod(@validate arg) { } }")
   println("Method param decorator with helpers:\n\{js}")
   // Should have both helpers
-  assert_true(js.contains("var __decorate = (this && this.__decorate) || function"))
+  assert_true(
+    js.contains("var __decorate = (this && this.__decorate) || function"),
+  )
   assert_true(js.contains("var __param = (this && this.__param) || function"))
 }
 
@@ -1364,8 +1410,8 @@ test "emit helper at top of file" {
   // __decorate should appear before class definition
   let decorate_pos = js.find("var __decorate")
   let class_pos = js.find("class MyClass")
-  assert_true(decorate_pos.is_some())
-  assert_true(class_pos.is_some())
+  assert_true(decorate_pos is Some(_))
+  assert_true(class_pos is Some(_))
   // decorate_pos should be less than class_pos
   match (decorate_pos, class_pos) {
     (Some(d), Some(c)) => assert_true(d < c)
@@ -1382,7 +1428,9 @@ test "emit helper at top of file" {
 test "emit __metadata helper for decorators" {
   let js = compile_to_js("@Component class MyClass { }")
   println("Metadata helper:\n\{js}")
-  assert_true(js.contains("var __metadata = (this && this.__metadata) || function"))
+  assert_true(
+    js.contains("var __metadata = (this && this.__metadata) || function"),
+  )
   assert_true(js.contains("Reflect.metadata"))
 }
 
@@ -1406,16 +1454,22 @@ test "emit design:type for property with type" {
 ///|
 /// Test: design:paramtypes for method with typed parameters
 test "emit design:paramtypes for method" {
-  let js = compile_to_js("class MyClass { @log myMethod(a: string, b: number) { } }")
+  let js = compile_to_js(
+    "class MyClass { @log myMethod(a: string, b: number) { } }",
+  )
   println("Method design:paramtypes:\n\{js}")
   // Type annotations are preserved for decorated methods
-  assert_true(js.contains("__metadata(\"design:paramtypes\", [String, Number])"))
+  assert_true(
+    js.contains("__metadata(\"design:paramtypes\", [String, Number])"),
+  )
 }
 
 ///|
 /// Test: design:returntype for method with return type
 test "emit design:returntype for method" {
-  let js = compile_to_js("class MyClass { @log myMethod(): string { return ''; } }")
+  let js = compile_to_js(
+    "class MyClass { @log myMethod(): string { return ''; } }",
+  )
   println("Method design:returntype:\n\{js}")
   // Type annotations are preserved for decorated methods
   assert_true(js.contains("__metadata(\"design:returntype\", String)"))
@@ -1425,7 +1479,9 @@ test "emit design:returntype for method" {
 /// Test: design:paramtypes for class with constructor params
 /// Type annotations are preserved when class has decorators
 test "emit design:paramtypes for constructor" {
-  let js = compile_to_js("@Injectable class MyService { constructor(dep: Logger) { } }")
+  let js = compile_to_js(
+    "@Injectable class MyService { constructor(dep: Logger) { } }",
+  )
   println("Constructor design:paramtypes:\n\{js}")
   // Type annotations are preserved for decorated classes
   assert_true(js.contains("__metadata(\"design:paramtypes\", [Logger])"))
@@ -1434,7 +1490,9 @@ test "emit design:paramtypes for constructor" {
 ///|
 /// Test: design:type Function for getter with return type
 test "emit design:type for getter" {
-  let js = compile_to_js("class MyClass { @computed get value(): number { return 42; } }")
+  let js = compile_to_js(
+    "class MyClass { @computed get value(): number { return 42; } }",
+  )
   println("Getter design:type:\n\{js}")
   assert_true(js.contains("__metadata(\"design:type\", Function)"))
   // Type annotations are preserved for decorated getters
@@ -1444,7 +1502,9 @@ test "emit design:type for getter" {
 ///|
 /// Test: design:paramtypes for setter with typed parameter
 test "emit design:paramtypes for setter" {
-  let js = compile_to_js("class MyClass { @validate set name(val: string) { } }")
+  let js = compile_to_js(
+    "class MyClass { @validate set name(val: string) { } }",
+  )
   println("Setter design:paramtypes:\n\{js}")
   assert_true(js.contains("__metadata(\"design:type\", Function)"))
   // Type annotations are preserved for decorated setters
@@ -1454,7 +1514,9 @@ test "emit design:paramtypes for setter" {
 ///|
 /// Test: Interface types preserved in metadata
 test "emit interface type for decorated method params" {
-  let js = compile_to_js("class MyClass { @log myMethod(config: MyInterface) { } }")
+  let js = compile_to_js(
+    "class MyClass { @log myMethod(config: MyInterface) { } }",
+  )
   println("Complex type design:paramtypes:\n\{js}")
   // Type annotations are preserved for decorated methods
   assert_true(js.contains("__metadata(\"design:paramtypes\", [MyInterface])"))
@@ -1533,7 +1595,9 @@ test "emit abstract class with concrete method" {
 ///|
 /// Test: abstract property is omitted from output
 test "emit abstract class with abstract property - property omitted" {
-  let js = compile_to_js("abstract class Animal { abstract readonly name: string; }")
+  let js = compile_to_js(
+    "abstract class Animal { abstract readonly name: string; }",
+  )
   println("Abstract class with abstract property:\n\{js}")
   // Abstract class should emit as regular class
   assert_true(js.contains("class Animal"))
@@ -1544,7 +1608,9 @@ test "emit abstract class with abstract property - property omitted" {
 ///|
 /// Test: class extending another class
 test "emit class extending another class" {
-  let js = compile_to_js("class Dog extends Animal { speak() { console.log('woof'); } }")
+  let js = compile_to_js(
+    "class Dog extends Animal { speak() { console.log('woof'); } }",
+  )
   println("Class extending another class:\n\{js}")
   assert_true(js.contains("class Dog extends Animal"))
   assert_true(js.contains("speak()"))
@@ -1666,7 +1732,9 @@ test "emit JSX element with expression child classic" {
 ///|
 /// Test: JSX element with multiple children
 test "emit JSX element with multiple children classic" {
-  let js = compile_jsx_classic("const x = <div><span>A</span><span>B</span></div>;")
+  let js = compile_jsx_classic(
+    "const x = <div><span>A</span><span>B</span></div>;",
+  )
   println("JSX with multiple children classic:\n\{js}")
   assert_true(js.contains("React.createElement"))
   assert_true(js.contains("\"div\""))
@@ -1743,7 +1811,9 @@ test "emit JSX spread attributes classic" {
 ///|
 /// Test: `this` parameter is omitted from JavaScript output
 test "emit function with this parameter - this is omitted" {
-  let js = compile_to_js("function greet(this: Person, name: string): void { console.log(name); }")
+  let js = compile_to_js(
+    "function greet(this: Person, name: string): void { console.log(name); }",
+  )
   println("Function with this parameter:\n\{js}")
   // The output should have the function but `this` parameter should be omitted
   assert_true(js.contains("function greet(name)"))
@@ -1754,7 +1824,9 @@ test "emit function with this parameter - this is omitted" {
 ///|
 /// Test: method with this parameter
 test "emit method with this parameter - this is omitted" {
-  let js = compile_to_js("class Dog { speak(this: Dog, sound: string) { console.log(sound); } }")
+  let js = compile_to_js(
+    "class Dog { speak(this: Dog, sound: string) { console.log(sound); } }",
+  )
   println("Method with this parameter:\n\{js}")
   // The method should only have `sound` parameter
   assert_true(js.contains("speak(sound)"))
@@ -2054,7 +2126,9 @@ test "commonjs emit named imports" {
 ///|
 /// Test: CommonJS import - named imports with alias
 test "commonjs emit named imports with alias" {
-  let js = compile_to_commonjs("import { readFile as read, writeFile as write } from 'fs';")
+  let js = compile_to_commonjs(
+    "import { readFile as read, writeFile as write } from 'fs';",
+  )
   println("CommonJS named imports with alias:\n\{js}")
   assert_true(js.contains("require(\"fs\")"))
   assert_true(js.contains("readFile: read"))
@@ -2191,7 +2265,7 @@ test "source map generated when enabled" {
   let source = "const x = 42;"
   let result = compile_with_source_map(source)
   assert_true(result.success)
-  assert_true(result.source_map.is_some())
+  assert_true(result.source_map is Some(_))
   match result.source_map {
     Some(sm) => {
       println("Source map:\n\{sm}")
@@ -2210,7 +2284,7 @@ test "inline sources includes sourcesContent" {
   let source = "const greeting = \"hello world\";"
   let result = compile_with_inline_sources(source)
   assert_true(result.success)
-  assert_true(result.source_map.is_some())
+  assert_true(result.source_map is Some(_))
   match result.source_map {
     Some(sm) => {
       println("Source map with inline sources:\n\{sm}")
@@ -2229,7 +2303,7 @@ test "source map without inline sources excludes sourcesContent" {
   let source = "const x = 123;"
   let result = compile_with_source_map(source)
   assert_true(result.success)
-  assert_true(result.source_map.is_some())
+  assert_true(result.source_map is Some(_))
   match result.source_map {
     Some(sm) => {
       println("Source map without inline sources:\n\{sm}")
@@ -2271,7 +2345,7 @@ test "inline source map flag enables source map generation" {
   let result = compile_source("const y = 99;", "test.ts", options)
   assert_true(result.success)
   // Even though source_map is false, inline_source_map should trigger generation
-  assert_true(result.source_map.is_some())
+  assert_true(result.source_map is Some(_))
   println("Inline source map flag test passed")
 }
 
@@ -2317,13 +2391,17 @@ test "esModuleInterop option accepted" {
 ///|
 /// Test: Emit super call expression
 test "emit super call expression" {
-  let js = compile_to_js("class Child extends Parent { constructor() { super(1, 2, 3); } }")
+  let js = compile_to_js(
+    "class Child extends Parent { constructor() { super(1, 2, 3); } }",
+  )
   assert_true(js.contains("super(1, 2, 3)"))
 }
 
 ///|
 /// Test: Emit super property access
 test "emit super property access" {
-  let js = compile_to_js("class Child extends Parent { method() { return super.method(); } }")
+  let js = compile_to_js(
+    "class Child extends Parent { method() { return super.method(); } }",
+  )
   assert_true(js.contains("super.method()"))
 }

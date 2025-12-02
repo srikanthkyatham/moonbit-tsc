@@ -797,7 +797,7 @@ fn instantiate_generic_type(
 
 ///|
 /// Extract type parameters from a type (helper for instantiation)
-fn get_type_parameters_from_type(t : Type) -> Array[CheckerTypeParameter] {
+fn get_type_parameters_from_type(_t : Type) -> Array[CheckerTypeParameter] {
   // For now, return empty - full implementation would track type parameters
   // on function/class/interface types
   []
@@ -1981,7 +1981,7 @@ fn check_variable_declaration(
   let checker = match decl.initializer {
     Some(init) =>
       match get_const_enum_name(checker, init) {
-        Some(enum_name) =>
+        Some(_) =>
           add_diagnostic_with_code(
             checker,
             "'const' enums can only be used in property or index access expressions or the right hand side of an import declaration or export assignment or type query.",
@@ -4060,7 +4060,6 @@ fn infer_unary_expression_type(
     TypeOf => string_type(checker) // typeof always returns a string
     Void => undefined_type(checker) // void operator always returns undefined
     Delete => boolean_type(checker) // delete operator returns boolean
-    _ => any_type(checker)
   }
 }
 
@@ -5556,7 +5555,7 @@ fn get_class_property_type(
 
 ///|
 /// Visibility enum for class members
-enum MemberVisibility {
+priv enum MemberVisibility {
   Public
   Private
   Protected
@@ -6145,7 +6144,7 @@ fn infer_element_access_type(
 
   // Check for const enum access restrictions (TS2476)
   let checker = match get_const_enum_name(checker, elem.expression) {
-    Some(enum_name) =>
+    Some(_) =>
       // For const enums, only string literal access is allowed
       match elem.argument_expression {
         StringLiteral(_) => checker // Valid: Colors["Red"]
@@ -7289,7 +7288,7 @@ fn infer_conditional_type(
   checker : TypeChecker,
   cond : ConditionalExpression,
 ) -> (Type, TypeChecker) {
-  let (condition_type, checker) = infer_type(checker, cond.condition)
+  let (_condition_type, checker) = infer_type(checker, cond.condition)
   let (then_type, checker) = infer_type(checker, cond.when_true)
   let (else_type, checker) = infer_type(checker, cond.when_false)
 
@@ -7686,7 +7685,6 @@ fn check_assignment_detailed(
     (Error(_), _) | (_, Error(_)) => return checker
     // Unknown is only assignable to unknown or any
     (_, Unknown(_)) => return checker
-    (Unknown(_), Unknown(_)) => return checker
     // Nothing is assignable to never
     (_, Never(_)) =>
       return add_diagnostic_with_code(
@@ -8150,7 +8148,7 @@ fn check_numeric_operands(
 fn check_numeric_operand(
   checker : TypeChecker,
   operand : Type,
-  operator : UnaryOperator,
+  _operator : UnaryOperator,
   location : SourceLocation,
 ) -> TypeChecker {
   if !is_numeric_type(operand) {
@@ -8169,10 +8167,10 @@ fn check_numeric_operand(
 /// Check boolean operands
 fn check_boolean_operands(
   checker : TypeChecker,
-  left : Type,
-  right : Type,
-  operator : BinaryOperator,
-  location : SourceLocation,
+  _left : Type,
+  _right : Type,
+  _operator : BinaryOperator,
+  _location : SourceLocation,
 ) -> TypeChecker {
   // Note: In TypeScript, any type can be used in boolean context
   // This is a simplified check
@@ -10323,7 +10321,7 @@ fn check_try_statement(
                 (t, checker)
               } else {
                 // TS2467: Catch clause variable type must be 'any' or 'unknown'
-                let var_name = match catch_clause.variable_declaration {
+                let _var_name = match catch_clause.variable_declaration {
                   Some(Identifier(id)) => id.name
                   _ => "e"
                 }
@@ -10705,7 +10703,7 @@ fn check_property_forward_reference(
         uninitialized_props,
       )
     }
-    ArrowFunction(arrow) =>
+    ArrowFunction(_) =>
       // Don't recurse into arrow function bodies - they're evaluated lazily
       checker
     FunctionExpression(_) =>
@@ -11765,7 +11763,7 @@ pub fn validate_isolated_modules(
 /// TS1486: 'X' is a type and must be exported using a type-only export when 'verbatimModuleSyntax' is enabled.
 pub fn validate_verbatim_module_syntax(
   bound : BoundSourceFile,
-  file_path : String,
+  _file_path : String,
 ) -> Array[Diagnostic] {
   let diagnostics : Array[Diagnostic] = []
 
@@ -11904,7 +11902,7 @@ fn exact_opt_is_undefined_literal(expr : Node) -> Bool {
 
 ///|
 /// Property info for exactOptionalPropertyTypes checking
-struct ExactOptPropertyInfo {
+priv struct ExactOptPropertyInfo {
   is_optional : Bool
   type_node : Node?
 }
@@ -12081,4 +12079,11 @@ fn check_type_parameter_names(
     }
   }
   checker
+}
+
+// Suppress warnings for functions reserved for future use
+fn init {
+  ignore(check_type_arguments)
+  ignore(get_class_name_from_symbol_declarations)
+  ignore(check_enum_members)
 }

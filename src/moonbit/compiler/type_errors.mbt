@@ -512,8 +512,7 @@ pub fn bigint_number_mixing_error(
     reason: BigIntNumberMixing(operator),
     children: [],
     suggestions: [
-      "Convert one operand to match the other type",
-      "Use BigInt(n) to convert number to bigint",
+      "Convert one operand to match the other type", "Use BigInt(n) to convert number to bigint",
       "Use Number(n) to convert bigint to number (may lose precision)",
     ],
   }
@@ -529,8 +528,7 @@ pub fn unary_plus_bigint_error() -> TypeMismatchError {
     reason: UnaryPlusBigInt,
     children: [],
     suggestions: [
-      "Unary '+' cannot be applied to bigint",
-      "Use Number(value) if you need to convert to number",
+      "Unary '+' cannot be applied to bigint", "Use Number(value) if you need to convert to number",
       "Use 0n + value or just value for bigint",
     ],
   }
@@ -903,7 +901,8 @@ pub fn get_friendly_title(reason : MismatchReason) -> String {
     IntersectionNotSatisfied(_) => "INTERSECTION TYPE NOT SATISFIED"
     NoOverloadMatches(count) =>
       "NO OVERLOAD MATCHES (" + count.to_string() + " tried)"
-    OverloadCandidateFailed(index) => "OVERLOAD " + index.to_string() + " FAILED"
+    OverloadCandidateFailed(index) =>
+      "OVERLOAD " + index.to_string() + " FAILED"
     OverloadNotCompatibleWithImpl(index) =>
       "OVERLOAD " + index.to_string() + " NOT COMPATIBLE WITH IMPLEMENTATION"
     OverloadMissingImplementation(name) =>
@@ -912,7 +911,8 @@ pub fn get_friendly_title(reason : MismatchReason) -> String {
       "OVERLOAD AMBIENT MISMATCH FOR '" + name + "'"
     PrivateMemberAccess(name, _) => "PRIVATE MEMBER '" + name + "'"
     ProtectedMemberAccess(name, _) => "PROTECTED MEMBER '" + name + "'"
-    AbstractClassInstantiation(name) => "CANNOT INSTANTIATE ABSTRACT CLASS '" + name + "'"
+    AbstractClassInstantiation(name) =>
+      "CANNOT INSTANTIATE ABSTRACT CLASS '" + name + "'"
     AbstractMemberNotImplemented(name, _) =>
       "ABSTRACT MEMBER '" + name + "' NOT IMPLEMENTED"
     OverrideReturnTypeMismatch(name, _) =>
@@ -925,7 +925,8 @@ pub fn get_friendly_title(reason : MismatchReason) -> String {
       "OVERRIDE ACCESSIBILITY MISMATCH '" + name + "'"
     // Super call validation
     ThisBeforeSuperCall => "'THIS' BEFORE 'SUPER' CALL"
-    SuperCallRequired(class_name) => "MISSING 'SUPER' CALL IN '" + class_name + "'"
+    SuperCallRequired(class_name) =>
+      "MISSING 'SUPER' CALL IN '" + class_name + "'"
     SuperCallOutsideConstructor => "'SUPER' CALL OUTSIDE CONSTRUCTOR"
     SuperPropertyOutsideClass => "'SUPER' OUTSIDE DERIVED CLASS"
     SuperCallInStaticMethod => "'SUPER' CALL IN STATIC METHOD"
@@ -981,7 +982,11 @@ pub fn get_friendly_title(reason : MismatchReason) -> String {
     TypeDoesNotSatisfyConstraintAlt(typ, constraint) =>
       "TYPE '" + typ + "' DOES NOT SATISFY CONSTRAINT '" + constraint + "'"
     TypeNotAssignableSameNameDifferentTypes(typ1, typ2, _) =>
-      "TYPE '" + typ1 + "' NOT ASSIGNABLE TO '" + typ2 + "' (DIFFERENT TYPES SAME NAME)"
+      "TYPE '" +
+      typ1 +
+      "' NOT ASSIGNABLE TO '" +
+      typ2 +
+      "' (DIFFERENT TYPES SAME NAME)"
     TypeNotAssignableGeneric(from, to) =>
       "TYPE '" + from + "' IS NOT ASSIGNABLE TO TYPE '" + to + "'"
     PropertyTypesIncompatibleAlt(prop, _, _) =>
@@ -993,8 +998,7 @@ pub fn get_friendly_title(reason : MismatchReason) -> String {
       "INVALID 'INSTANCEOF' RIGHT-HAND SIDE (TYPE '" + typ + "')"
     ConditionAlwaysSameValue(result, _) =>
       "CONDITION ALWAYS RETURNS '" + result + "'"
-    LeftSideCommaUnused(_) =>
-      "LEFT SIDE OF COMMA OPERATOR UNUSED"
+    LeftSideCommaUnused(_) => "LEFT SIDE OF COMMA OPERATOR UNUSED"
     CannotUseInOperator(_, typ) =>
       "CANNOT USE 'IN' OPERATOR WITH TYPE '" + typ + "'"
     ConditionAlwaysTrueFunction(name) =>
@@ -1002,9 +1006,14 @@ pub fn get_friendly_title(reason : MismatchReason) -> String {
     ConditionAlwaysTrue(typ) =>
       "CONDITION ALWAYS TRUE ('" + typ + "' IS ALWAYS DEFINED)"
     OperatorCannotBeApplied(op, left, right) =>
-      "OPERATOR '" + op + "' CANNOT BE APPLIED TO '" + left + "' AND '" + right + "'"
-    BigIntLiteralsNotAvailable =>
-      "BIGINT LITERALS NOT AVAILABLE"
+      "OPERATOR '" +
+      op +
+      "' CANNOT BE APPLIED TO '" +
+      left +
+      "' AND '" +
+      right +
+      "'"
+    BigIntLiteralsNotAvailable => "BIGINT LITERALS NOT AVAILABLE"
     // Function & Parameter errors
     TypeParamNameCannotBe(name) =>
       "TYPE PARAMETER NAME CANNOT BE '" + name + "'"
@@ -1016,7 +1025,9 @@ pub fn get_friendly_title(reason : MismatchReason) -> String {
     ParamCannotReferenceSelf(param) =>
       "PARAMETER '" + param + "' CANNOT REFERENCE ITSELF"
     OverloadSignaturesAmbientMismatch(name) =>
-      "OVERLOAD SIGNATURES FOR '" + name + "' MUST ALL BE AMBIENT OR NON-AMBIENT"
+      "OVERLOAD SIGNATURES FOR '" +
+      name +
+      "' MUST ALL BE AMBIENT OR NON-AMBIENT"
     FunctionOverloadMustNotBeStatic(name) =>
       "FUNCTION OVERLOAD '" + name + "' MUST NOT BE STATIC"
     FunctionImplSignatureNotAssignable(name) =>
@@ -1028,7 +1039,13 @@ pub fn get_friendly_title(reason : MismatchReason) -> String {
     RequiredTypeParamAfterOptional(param) =>
       "REQUIRED TYPE PARAMETER '" + param + "' AFTER OPTIONAL"
     GenericTypeRequiresTypeArgs(name, min, max) =>
-      "GENERIC TYPE '" + name + "' REQUIRES " + min.to_string() + "-" + max.to_string() + " TYPE ARGS"
+      "GENERIC TYPE '" +
+      name +
+      "' REQUIRES " +
+      min.to_string() +
+      "-" +
+      max.to_string() +
+      " TYPE ARGS"
     // For-in/For-of errors
     ForInLeftMustBeVariable(expr) =>
       "FOR...IN LEFT-HAND SIDE MUST BE VARIABLE (GOT '" + expr + "')"
@@ -1039,8 +1056,7 @@ pub fn get_friendly_title(reason : MismatchReason) -> String {
     // Property & Index errors
     TypeHasNoPropertyAndNoStringIndex(typ, prop) =>
       "TYPE '" + typ + "' HAS NO PROPERTY '" + prop + "' AND NO STRING INDEX"
-    TypeIsNotArrayType(typ) =>
-      "TYPE '" + typ + "' IS NOT AN ARRAY TYPE"
+    TypeIsNotArrayType(typ) => "TYPE '" + typ + "' IS NOT AN ARRAY TYPE"
     TypeCannotBeUsedAsIndex(typ) =>
       "TYPE '" + typ + "' CANNOT BE USED AS INDEX TYPE"
     IndexSignatureOnlyPermitsReading(typ) =>
@@ -1050,7 +1066,13 @@ pub fn get_friendly_title(reason : MismatchReason) -> String {
     PropertyUsedBeforeInit(prop) =>
       "PROPERTY '" + prop + "' USED BEFORE INITIALIZATION"
     PropertyIncompatibleWithIndexSig(prop, prop_type, index_type) =>
-      "PROPERTY '" + prop + "' OF TYPE '" + prop_type + "' INCOMPATIBLE WITH INDEX TYPE '" + index_type + "'"
+      "PROPERTY '" +
+      prop +
+      "' OF TYPE '" +
+      prop_type +
+      "' INCOMPATIBLE WITH INDEX TYPE '" +
+      index_type +
+      "'"
     PropertyHasConflictingDeclarations(prop) =>
       "PROPERTY '" + prop + "' HAS CONFLICTING DECLARATIONS"
     NewExprTargetLacksConstructSig(typ) =>
@@ -1065,7 +1087,13 @@ pub fn get_friendly_title(reason : MismatchReason) -> String {
     TypeNotArrayOrStringDownlevel(typ) =>
       "TYPE '" + typ + "' IS NOT ARRAY OR STRING (USE --DOWNLEVELITERATION)"
     PropertyDoesNotExistDidYouMean(prop, typ, suggestion) =>
-      "PROPERTY '" + prop + "' DOES NOT EXIST ON '" + typ + "' - DID YOU MEAN '" + suggestion + "'?"
+      "PROPERTY '" +
+      prop +
+      "' DOES NOT EXIST ON '" +
+      typ +
+      "' - DID YOU MEAN '" +
+      suggestion +
+      "'?"
     CannotFindNameDidYouMean(name, suggestion) =>
       "CANNOT FIND NAME '" + name + "' - DID YOU MEAN '" + suggestion + "'?"
     ExpectedNArgsButGotMore(expected, actual) =>
@@ -1090,7 +1118,8 @@ pub fn get_friendly_title(reason : MismatchReason) -> String {
     SpreadTypesMustBeFromObjectTypes(typ) =>
       "SPREAD TYPES MAY ONLY BE CREATED FROM OBJECT TYPES (GOT '" + typ + "')"
     // Async/Generator/Yield errors
-    YieldExpressionImplicitlyAny => "'YIELD' EXPRESSION IMPLICITLY HAS 'ANY' TYPE"
+    YieldExpressionImplicitlyAny =>
+      "'YIELD' EXPRESSION IMPLICITLY HAS 'ANY' TYPE"
     YieldOperandTypeInAsyncGenerator(operand_type, _) =>
       "YIELD OPERAND TYPE '" + operand_type + "' IN ASYNC GENERATOR"
     TypeReferencedInThenMethod(type_name) =>
@@ -1116,11 +1145,14 @@ pub fn get_friendly_title(reason : MismatchReason) -> String {
     ReferencedInOwnBaseExpression(name) =>
       "'" + name + "' REFERENCED IN ITS OWN BASE EXPRESSION"
     InferredTypeReferencesInaccessible(name, inaccessible) =>
-      "INFERRED TYPE OF '" + name + "' REFERENCES INACCESSIBLE '" + inaccessible + "'"
+      "INFERRED TYPE OF '" +
+      name +
+      "' REFERENCES INACCESSIBLE '" +
+      inaccessible +
+      "'"
     CannotAugmentModule(module_name) =>
       "CANNOT AUGMENT MODULE '" + module_name + "'"
-    RefersToUMDGlobal(name) =>
-      "'" + name + "' REFERS TO UMD GLOBAL"
+    RefersToUMDGlobal(name) => "'" + name + "' REFERS TO UMD GLOBAL"
     DeclarationsMustHaveIdenticalModifiers(name) =>
       "DECLARATIONS OF '" + name + "' MUST HAVE IDENTICAL MODIFIERS"
     CannotFindTypeDefinitionFile(name) =>
@@ -1128,20 +1160,22 @@ pub fn get_friendly_title(reason : MismatchReason) -> String {
     // Type Complexity & Inference errors
     PropertyIsStaticMemberOfType(prop, type_name) =>
       "PROPERTY '" + prop + "' IS A STATIC MEMBER OF TYPE '" + type_name + "'"
-    UnusedTsExpectErrorDirective =>
-      "UNUSED '@ts-expect-error' DIRECTIVE"
+    UnusedTsExpectErrorDirective => "UNUSED '@ts-expect-error' DIRECTIVE"
     CannotFindNameTestRunner(name) =>
       "CANNOT FIND NAME '" + name + "' (TEST RUNNER TYPES)"
     CannotFindNameTargetLibrary(name, _) =>
       "CANNOT FIND NAME '" + name + "' (TARGET LIBRARY)"
     CannotFindNameTargetLibraryAlt(name, _) =>
       "CANNOT FIND NAME '" + name + "' (TARGET LIBRARY)"
-    ExpressionProducesUnionTooComplex =>
-      "EXPRESSION PRODUCES UNION TOO COMPLEX"
+    ExpressionProducesUnionTooComplex => "EXPRESSION PRODUCES UNION TOO COMPLEX"
     CannotImportTypeDeclarationFiles(file) =>
       "CANNOT IMPORT TYPE DECLARATION FILE '" + file + "'"
     InferredTypeCannotBeNamed(name, reference) =>
-      "INFERRED TYPE OF '" + name + "' CANNOT BE NAMED WITHOUT '" + reference + "'"
+      "INFERRED TYPE OF '" +
+      name +
+      "' CANNOT BE NAMED WITHOUT '" +
+      reference +
+      "'"
   }
 }
 
@@ -1835,19 +1869,17 @@ pub fn get_how_to_fix(
       fixes.push(
         "Option 1: Ensure the source value has the correct structure to match the expected type.",
       )
-      fixes.push("Option 2: Use a type assertion if you're certain the types are compatible:")
+      fixes.push(
+        "Option 2: Use a type assertion if you're certain the types are compatible:",
+      )
       fixes.push("          value as ExpectedType")
       fixes.push(
         "Option 3: Check if there's a type mismatch in your function parameters or return values.",
       )
     }
     MissingProperty(name) => {
-      fixes.push(
-        "Add the missing property '" + name + "' to your object:",
-      )
-      fixes.push(
-        "    { ...existingObj, " + name + ": /* value */ }",
-      )
+      fixes.push("Add the missing property '" + name + "' to your object:")
+      fixes.push("    { ...existingObj, " + name + ": /* value */ }")
       fixes.push("")
       fixes.push(
         "Or mark the property as optional in the target type using '?':",
@@ -1856,28 +1888,36 @@ pub fn get_how_to_fix(
     }
     ExcessProperty(name) => {
       fixes.push(
-        "Option 1: Remove the extra property '" + name + "' from your object literal.",
+        "Option 1: Remove the extra property '" +
+        name +
+        "' from your object literal.",
       )
       fixes.push("")
       fixes.push(
         "Option 2: If you need the property, add it to the target type definition.",
       )
       fixes.push("")
-      fixes.push("Option 3: Use a type assertion to bypass excess property checking:")
+      fixes.push(
+        "Option 3: Use a type assertion to bypass excess property checking:",
+      )
       fixes.push("    const obj = { " + name + ": value } as TargetType;")
       fixes.push("")
-      fixes.push("Option 4: Add an index signature to allow additional properties:")
+      fixes.push(
+        "Option 4: Add an index signature to allow additional properties:",
+      )
       fixes.push("    interface Target { [key: string]: unknown; }")
     }
     PropertyTypeMismatch(name) => {
       fixes.push(
-        "Fix the type of property '" + name + "' in your source value to match the expected type.",
+        "Fix the type of property '" +
+        name +
+        "' in your source value to match the expected type.",
       )
       fixes.push("")
-      fixes.push("If you're certain the types are compatible, use a type assertion:")
       fixes.push(
-        "    { " + name + ": value as ExpectedPropertyType }",
+        "If you're certain the types are compatible, use a type assertion:",
       )
+      fixes.push("    { " + name + ": value as ExpectedPropertyType }")
     }
     ParamCountMismatch(expected_count, actual_count) =>
       if actual_count > expected_count {
@@ -1900,7 +1940,11 @@ pub fn get_how_to_fix(
       }
     ParamTypeMismatch(index, name) => {
       fixes.push(
-        "Fix the type of argument at position " + index.to_string() + " ('" + name + "').",
+        "Fix the type of argument at position " +
+        index.to_string() +
+        " ('" +
+        name +
+        "').",
       )
       fixes.push("")
       fixes.push("Example:")
@@ -1908,13 +1952,13 @@ pub fn get_how_to_fix(
       fixes.push("    // Use:        fn(correctValue as ExpectedType)")
     }
     ReturnTypeMismatch => {
-      fixes.push(
-        "Ensure your function returns a value of the expected type.",
-      )
+      fixes.push("Ensure your function returns a value of the expected type.")
       fixes.push("")
       fixes.push("Example fix:")
       fixes.push("    function example(): ExpectedType {")
-      fixes.push("        return correctValue; // Make sure this matches ExpectedType")
+      fixes.push(
+        "        return correctValue; // Make sure this matches ExpectedType",
+      )
       fixes.push("    }")
     }
     NoUnionMemberMatches =>
@@ -1934,13 +1978,13 @@ pub fn get_how_to_fix(
       }
     TypeArgMismatch(name, _) => {
       fixes.push(
-        "Ensure the type argument for '" + name + "' is consistent throughout your code.",
+        "Ensure the type argument for '" +
+        name +
+        "' is consistent throughout your code.",
       )
       fixes.push("")
       fixes.push("Example:")
-      fixes.push(
-        "    // If you have: const arr: Array<number> = [1, 2, 3];",
-      )
+      fixes.push("    // If you have: const arr: Array<number> = [1, 2, 3];")
       fixes.push(
         "    // Don't do:   arr.push('string'); // Type argument mismatch!",
       )
@@ -1958,7 +2002,9 @@ pub fn get_how_to_fix(
       fixes.push("Provide an explicit type argument for '" + name + "':")
       fixes.push("    genericFunction<ExplicitType>(value)")
       fixes.push("")
-      fixes.push("Or ensure the context provides enough information for inference.")
+      fixes.push(
+        "Or ensure the context provides enough information for inference.",
+      )
     }
     ReadonlyMutation(name) => {
       fixes.push(
@@ -1972,11 +2018,15 @@ pub fn get_how_to_fix(
       fixes.push(
         "       const updated = { ...original, " + name + ": newValue };",
       )
-      fixes.push("2. Remove 'readonly' from the property definition if mutation is needed.")
+      fixes.push(
+        "2. Remove 'readonly' from the property definition if mutation is needed.",
+      )
     }
     OptionalToRequired(name) => {
       fixes.push(
-        "Ensure '" + name + "' is always defined before using it as a required value:",
+        "Ensure '" +
+        name +
+        "' is always defined before using it as a required value:",
       )
       fixes.push("    if (obj." + name + " !== undefined) {")
       fixes.push("        useAsRequired(obj." + name + ");")
@@ -2004,9 +2054,15 @@ pub fn get_how_to_fix(
         "'.",
       )
       fixes.push("")
-      fixes.push("Either change your value or update the type to accept both literals:")
       fixes.push(
-        "    type AllowedValues = '" + expected_lit + "' | '" + actual_lit + "';",
+        "Either change your value or update the type to accept both literals:",
+      )
+      fixes.push(
+        "    type AllowedValues = '" +
+        expected_lit +
+        "' | '" +
+        actual_lit +
+        "';",
       )
     }
     LiteralToWide => {
@@ -2017,8 +2073,12 @@ pub fn get_how_to_fix(
       fixes.push("    const obj = { key: 'value' } as const;")
     }
     CircularReference => {
-      fixes.push("Break the circular reference by using a type alias or interface:")
-      fixes.push("    type Node = { next?: Node };  // OK: optional breaks cycle")
+      fixes.push(
+        "Break the circular reference by using a type alias or interface:",
+      )
+      fixes.push(
+        "    type Node = { next?: Node };  // OK: optional breaks cycle",
+      )
       fixes.push("")
       fixes.push("Or restructure your types to avoid self-reference.")
     }
@@ -2033,7 +2093,9 @@ pub fn get_how_to_fix(
       fixes.push("")
       match actual {
         TObject(_) => {
-          fixes.push("If this is an object, check if you meant to access a method:")
+          fixes.push(
+            "If this is an object, check if you meant to access a method:",
+          )
           fixes.push("    // Instead of: obj()")
           fixes.push("    // Try:        obj.methodName()")
         }
@@ -2087,9 +2149,7 @@ pub fn get_how_to_fix(
     }
     NoOverloadMatches(count) => {
       fixes.push(
-        "None of the " +
-        count.to_string() +
-        " overload(s) match your call.",
+        "None of the " + count.to_string() + " overload(s) match your call.",
       )
       fixes.push("")
       fixes.push("Options to fix:")
@@ -2097,11 +2157,15 @@ pub fn get_how_to_fix(
         "1. Check the argument types and count match one of the overloads",
       )
       fixes.push("2. Check for typos in the function name")
-      fixes.push("3. Add a type annotation to help TypeScript select the right overload:")
+      fixes.push(
+        "3. Add a type annotation to help TypeScript select the right overload:",
+      )
       fixes.push("       functionName<ExplicitType>(...args)")
     }
     OverloadCandidateFailed(_) => {
-      fixes.push("This overload candidate didn't match. Check the error above for details.")
+      fixes.push(
+        "This overload candidate didn't match. Check the error above for details.",
+      )
       fixes.push("")
       fixes.push(
         "If you expected this overload to match, ensure argument types are compatible.",
@@ -2114,29 +2178,43 @@ pub fn get_how_to_fix(
         " is not compatible with implementation.",
       )
       fixes.push("")
-      fixes.push("The implementation must be able to handle all overload signatures.")
-      fixes.push("Make sure the implementation's parameter types are supertypes of all overloads':")
+      fixes.push(
+        "The implementation must be able to handle all overload signatures.",
+      )
+      fixes.push(
+        "Make sure the implementation's parameter types are supertypes of all overloads':",
+      )
       fixes.push("    function foo(x: string): string;       // overload 1")
       fixes.push("    function foo(x: number): number;       // overload 2")
-      fixes.push("    function foo(x: string | number): string | number { // impl")
+      fixes.push(
+        "    function foo(x: string | number): string | number { // impl",
+      )
       fixes.push("      return x;")
       fixes.push("    }")
     }
     OverloadMissingImplementation(name) => {
-      fixes.push("Function '" + name + "' has overload signatures but no implementation.")
+      fixes.push(
+        "Function '" + name + "' has overload signatures but no implementation.",
+      )
       fixes.push("")
       fixes.push("Add an implementation after the overload signatures:")
       fixes.push("    function " + name + "(x: string): string;  // overload")
       fixes.push("    function " + name + "(x: number): number;  // overload")
-      fixes.push("    function " + name + "(x: string | number): string | number {")
+      fixes.push(
+        "    function " + name + "(x: string | number): string | number {",
+      )
       fixes.push("      // implementation goes here")
       fixes.push("      return x;")
       fixes.push("    }")
     }
     OverloadAmbientMismatch(name) => {
-      fixes.push("Overload signatures for '" + name + "' mix ambient and non-ambient.")
+      fixes.push(
+        "Overload signatures for '" + name + "' mix ambient and non-ambient.",
+      )
       fixes.push("")
-      fixes.push("Either all overloads should be ambient (in a .d.ts file or declare context):")
+      fixes.push(
+        "Either all overloads should be ambient (in a .d.ts file or declare context):",
+      )
       fixes.push("    declare function " + name + "(x: string): string;")
       fixes.push("    declare function " + name + "(x: number): number;")
       fixes.push("")
@@ -2153,7 +2231,9 @@ pub fn get_how_to_fix(
       fixes.push("Options to fix:")
       fixes.push("1. Access this property from within the class methods only")
       fixes.push("2. Add a public getter method:")
-      fixes.push("       public get" + name + "() { return this." + name + "; }")
+      fixes.push(
+        "       public get" + name + "() { return this." + name + "; }",
+      )
       fixes.push("3. Change the property to public or protected if appropriate")
     }
     ProtectedMemberAccess(name, declared_in) => {
@@ -2178,7 +2258,11 @@ pub fn get_how_to_fix(
     }
     AbstractMemberNotImplemented(name, base_class) => {
       fixes.push(
-        "Abstract member '" + name + "' from '" + base_class + "' must be implemented.",
+        "Abstract member '" +
+        name +
+        "' from '" +
+        base_class +
+        "' must be implemented.",
       )
       fixes.push("")
       fixes.push("Add the implementation in your class:")
@@ -2187,7 +2271,9 @@ pub fn get_how_to_fix(
     OverrideReturnTypeMismatch(name, _) => {
       fixes.push("Override method '" + name + "' has incompatible return type.")
       fixes.push("")
-      fixes.push("Ensure the return type is assignable to the base method's return type.")
+      fixes.push(
+        "Ensure the return type is assignable to the base method's return type.",
+      )
     }
     OverrideParamCountMismatch(name, base_count, _) => {
       fixes.push(
@@ -2203,12 +2289,16 @@ pub fn get_how_to_fix(
       )
     }
     OverrideParamTypeMismatch(name, _, _) => {
-      fixes.push("Override method '" + name + "' has incompatible parameter type.")
+      fixes.push(
+        "Override method '" + name + "' has incompatible parameter type.",
+      )
       fixes.push("")
       fixes.push("Ensure parameter types are compatible with the base method.")
     }
     OverrideAccessibilityMismatch(name, base_acc, _) => {
-      fixes.push("Override member '" + name + "' is more restrictive than base.")
+      fixes.push(
+        "Override member '" + name + "' is more restrictive than base.",
+      )
       fixes.push("")
       fixes.push("Keep or widen accessibility to: " + base_acc)
     }
@@ -2221,7 +2311,9 @@ pub fn get_how_to_fix(
       fixes.push("    }")
     }
     SuperCallRequired(class_name) => {
-      fixes.push("Add a 'super()' call to the constructor of '" + class_name + "':")
+      fixes.push(
+        "Add a 'super()' call to the constructor of '" + class_name + "':",
+      )
       fixes.push("    constructor() {")
       fixes.push("        super();  // Required in derived classes")
       fixes.push("        // ... rest of constructor")
@@ -2230,7 +2322,9 @@ pub fn get_how_to_fix(
     SuperCallOutsideConstructor => {
       fixes.push("Move the 'super()' call inside the constructor.")
       fixes.push("")
-      fixes.push("If you meant to call a parent method, use 'super.methodName()' instead:")
+      fixes.push(
+        "If you meant to call a parent method, use 'super.methodName()' instead:",
+      )
       fixes.push("    someMethod() {")
       fixes.push("        super.someMethod();  // Call parent's method")
       fixes.push("    }")
@@ -2246,19 +2340,27 @@ pub fn get_how_to_fix(
     SuperCallInStaticMethod => {
       fixes.push("Remove the 'super()' call from the static method.")
       fixes.push("")
-      fixes.push("Static methods cannot use 'super()' because they don't have instance context.")
+      fixes.push(
+        "Static methods cannot use 'super()' because they don't have instance context.",
+      )
       fixes.push("If you need parent class static methods, call them by name:")
       fixes.push("    static method() {")
       fixes.push("        ParentClass.staticMethod();")
       fixes.push("    }")
     }
     SuperPropertyAccess(name) => {
-      fixes.push("The property '" + name + "' doesn't exist on the parent class.")
+      fixes.push(
+        "The property '" + name + "' doesn't exist on the parent class.",
+      )
       fixes.push("")
       fixes.push("Options:")
       fixes.push("1. Check the property name for typos")
       fixes.push("2. Add the property/method to the base class")
-      fixes.push("3. Use 'this." + name + "' if accessing a property defined in this class")
+      fixes.push(
+        "3. Use 'this." +
+        name +
+        "' if accessing a property defined in this class",
+      )
     }
     // BigInt errors
     BigIntNumberMixing(_) => {
@@ -2267,7 +2369,9 @@ pub fn get_how_to_fix(
       fixes.push("Option 1: Convert to bigint:")
       fixes.push("    const result = bigintValue + BigInt(numberValue);")
       fixes.push("")
-      fixes.push("Option 2: Convert to number (may lose precision for large values):")
+      fixes.push(
+        "Option 2: Convert to number (may lose precision for large values):",
+      )
       fixes.push("    const result = Number(bigintValue) + numberValue;")
     }
     UnaryPlusBigInt => {
@@ -2290,14 +2394,18 @@ pub fn get_how_to_fix(
     }
     CannotFindModule(mod_name) => {
       fixes.push("Check if the module path is correct:")
-      fixes.push("    import { something } from './" + mod_name + "';  // Relative path")
+      fixes.push(
+        "    import { something } from './" + mod_name + "';  // Relative path",
+      )
       fixes.push("")
       fixes.push("Or install the package if it's from npm:")
       fixes.push("    npm install " + mod_name)
     }
     CannotFindGlobalType(name) => {
       fixes.push("Add the required lib to your tsconfig.json:")
-      fixes.push("    { \"compilerOptions\": { \"lib\": [\"ES2015\", \"DOM\"] } }")
+      fixes.push(
+        "    { \"compilerOptions\": { \"lib\": [\"ES2015\", \"DOM\"] } }",
+      )
       fixes.push("")
       fixes.push("Common libs for global types:")
       fixes.push("    ES2015+ for Promise, Symbol, Map, Set, etc.")
@@ -2312,13 +2420,17 @@ pub fn get_how_to_fix(
       fixes.push("Install type definitions for '" + mod_name + "':")
       fixes.push("    npm install --save-dev @types/" + mod_name)
       fixes.push("")
-      fixes.push("Or create a type declaration file (.d.ts) if types don't exist.")
+      fixes.push(
+        "Or create a type declaration file (.d.ts) if types don't exist.",
+      )
     }
     NamespaceHasNoExportedMember(ns, mem) => {
       fixes.push("Check available exports from namespace '" + ns + "'.")
       fixes.push("Verify that '" + mem + "' is spelled correctly.")
       fixes.push("")
-      fixes.push("If you want to add this member, export it from the namespace:")
+      fixes.push(
+        "If you want to add this member, export it from the namespace:",
+      )
       fixes.push("    namespace " + ns + " {")
       fixes.push("        export const " + mem + " = ...;")
       fixes.push("    }")
@@ -2337,26 +2449,44 @@ pub fn get_how_to_fix(
     }
     CannotFindModuleSetModuleResolution(mod_name) => {
       fixes.push("Try setting moduleResolution in tsconfig.json:")
-      fixes.push("    { \"compilerOptions\": { \"moduleResolution\": \"node\" } }")
+      fixes.push(
+        "    { \"compilerOptions\": { \"moduleResolution\": \"node\" } }",
+      )
       fixes.push("")
       fixes.push("Or for Node.js ESM:")
-      fixes.push("    { \"compilerOptions\": { \"moduleResolution\": \"node16\" } }")
+      fixes.push(
+        "    { \"compilerOptions\": { \"moduleResolution\": \"node16\" } }",
+      )
       ignore(mod_name)
     }
     ModuleHasNoExportedMember(mod_name, mem) => {
       fixes.push("Check the module's exports for the correct name.")
-      fixes.push("The mem '" + mem + "' may not be exported or may be named differently.")
+      fixes.push(
+        "The mem '" + mem + "' may not be exported or may be named differently.",
+      )
       fixes.push("")
       fixes.push("Try using default import if the module has a default export:")
       fixes.push("    import mod from '" + mod_name + "';")
     }
     // Type Assignment & Compatibility errors
     InterfaceCannotExtendTypes(iface, types) => {
-      fixes.push("Option 1: Remove conflicting extends from interface '" + iface + "':")
-      fixes.push("    interface " + iface + " extends " + (if types.length() > 0 { types[0] } else { "Type1" }) + " { }")
+      fixes.push(
+        "Option 1: Remove conflicting extends from interface '" + iface + "':",
+      )
+      fixes.push(
+        "    interface " +
+        iface +
+        " extends " +
+        (if types.length() > 0 { types[0] } else { "Type1" }) +
+        " { }",
+      )
       fixes.push("")
-      fixes.push("Option 2: Create a merged interface that resolves the conflicts:")
-      fixes.push("    interface Merged { /* resolve conflicting properties */ }")
+      fixes.push(
+        "Option 2: Create a merged interface that resolves the conflicts:",
+      )
+      fixes.push(
+        "    interface Merged { /* resolve conflicting properties */ }",
+      )
       fixes.push("    interface " + iface + " extends Merged { }")
     }
     PropertyMissingInType(prop, _) => {
@@ -2394,8 +2524,20 @@ pub fn get_how_to_fix(
       fixes.push("    class MyClass { static prop = MyClass.staticValue; }")
     }
     TypeDoesNotSatisfyConstraint(typ, constraint) => {
-      fixes.push("Ensure type '" + typ + "' has all required properties from '" + constraint + "':")
-      fixes.push("    interface " + typ + " extends " + constraint + " { /* properties */ }")
+      fixes.push(
+        "Ensure type '" +
+        typ +
+        "' has all required properties from '" +
+        constraint +
+        "':",
+      )
+      fixes.push(
+        "    interface " +
+        typ +
+        " extends " +
+        constraint +
+        " { /* properties */ }",
+      )
       fixes.push("")
       fixes.push("Or adjust the generic constraint to be less restrictive.")
     }
@@ -2414,14 +2556,18 @@ pub fn get_how_to_fix(
       fixes.push("    class MyClass { constructor() { } }")
     }
     ConversionMayBeMistake(from, to) => {
-      fixes.push("If this conversion is intentional, use 'unknown' as intermediate:")
+      fixes.push(
+        "If this conversion is intentional, use 'unknown' as intermediate:",
+      )
       fixes.push("    (value as unknown) as " + to)
       fixes.push("")
       fixes.push("Or reconsider if you're converting to the correct type.")
       fixes.push("Current: " + from + " -> " + to)
     }
     TypeCannotBeAssignedToType(_, to) => {
-      fixes.push("Ensure the source type has all required properties of '" + to + "'.")
+      fixes.push(
+        "Ensure the source type has all required properties of '" + to + "'.",
+      )
       fixes.push("")
       fixes.push("Or use a type assertion if you're certain:")
       fixes.push("    value as " + to)
@@ -2440,11 +2586,19 @@ pub fn get_how_to_fix(
       fixes.push("    // ... and " + more.to_string() + " more properties")
     }
     TypeDoesNotSatisfyConstraintAlt(typ, constraint) => {
-      fixes.push("Ensure type '" + typ + "' implements all requirements of '" + constraint + "'.")
+      fixes.push(
+        "Ensure type '" +
+        typ +
+        "' implements all requirements of '" +
+        constraint +
+        "'.",
+      )
       fixes.push("Check that all required properties and methods exist.")
     }
     TypeNotAssignableSameNameDifferentTypes(_, _, _) => {
-      fixes.push("These types have the same name but come from different sources.")
+      fixes.push(
+        "These types have the same name but come from different sources.",
+      )
       fixes.push("Options:")
       fixes.push("  1. Import from the same source")
       fixes.push("  2. Use type aliases to distinguish them")
@@ -2458,7 +2612,9 @@ pub fn get_how_to_fix(
     }
     PropertyTypesIncompatibleAlt(prop, type1, type2) => {
       fixes.push("Property '" + prop + "' must have compatible types.")
-      fixes.push("Change from '" + type1 + "' to '" + type2 + "' or vice versa.")
+      fixes.push(
+        "Change from '" + type1 + "' to '" + type2 + "' or vice versa.",
+      )
       fixes.push("")
       fixes.push("Or use a union type: " + type1 + " | " + type2)
     }
@@ -2480,7 +2636,9 @@ pub fn get_how_to_fix(
       fixes.push("    x instanceof Array")
     }
     ConditionAlwaysSameValue(_, _) => {
-      fixes.push("This comparison can never succeed/fail due to type incompatibility.")
+      fixes.push(
+        "This comparison can never succeed/fail due to type incompatibility.",
+      )
       fixes.push("")
       fixes.push("Options:")
       fixes.push("  1. Check if your types are correct")
@@ -2520,7 +2678,9 @@ pub fn get_how_to_fix(
       fixes.push("Options:")
       fixes.push("  1. Remove the unnecessary null check")
       fixes.push("  2. Check if strictNullChecks is enabled")
-      fixes.push("  3. If the type should be nullable, update the type annotation")
+      fixes.push(
+        "  3. If the type should be nullable, update the type annotation",
+      )
     }
     OperatorCannotBeApplied(op, left, right) => {
       fixes.push("Operator '" + op + "' is not valid for these types.")
@@ -2610,12 +2770,16 @@ pub fn get_how_to_fix(
       fixes.push("    }")
     }
     FunctionImplSignatureNotAssignable(name) => {
-      fixes.push("Update the implementation of '" + name + "' to handle all overloads.")
+      fixes.push(
+        "Update the implementation of '" + name + "' to handle all overloads.",
+      )
       fixes.push("")
       fixes.push("The implementation must accept all parameter combinations:")
       fixes.push("    function " + name + "(x: string): string;")
       fixes.push("    function " + name + "(x: number): number;")
-      fixes.push("    function " + name + "(x: string | number): string | number {")
+      fixes.push(
+        "    function " + name + "(x: string | number): string | number {",
+      )
       fixes.push("        return x;")
       fixes.push("    }")
     }
@@ -2653,10 +2817,18 @@ pub fn get_how_to_fix(
       fixes.push("Provide the correct number of type arguments:")
       fixes.push("")
       if min == max {
-        fixes.push("    " + name + "<Type1" + (if max > 1 { ", Type2" } else { "" }) + ">")
+        fixes.push(
+          "    " +
+          name +
+          "<Type1" +
+          (if max > 1 { ", Type2" } else { "" }) +
+          ">",
+        )
       } else {
         fixes.push("    " + name + "<Type1>  // minimum " + min.to_string())
-        fixes.push("    " + name + "<Type1, Type2, ...>  // up to " + max.to_string())
+        fixes.push(
+          "    " + name + "<Type1, Type2, ...>  // up to " + max.to_string(),
+        )
       }
     }
     // For-in/For-of errors
@@ -2700,7 +2872,9 @@ pub fn get_how_to_fix(
       fixes.push("        " + prop + ": SomeType;")
       fixes.push("    }")
       fixes.push("")
-      fixes.push("Option 2: Add a string index signature to allow arbitrary properties:")
+      fixes.push(
+        "Option 2: Add a string index signature to allow arbitrary properties:",
+      )
       fixes.push("    interface MyType {")
       fixes.push("        [key: string]: any;")
       fixes.push("    }")
@@ -2759,21 +2933,29 @@ pub fn get_how_to_fix(
       fixes.push("    class MyClass {")
       fixes.push("        " + prop + ": SomeType;")
       fixes.push("        constructor() {")
-      fixes.push("            this." + prop + " = initialValue; // Initialize first")
+      fixes.push(
+        "            this." + prop + " = initialValue; // Initialize first",
+      )
       fixes.push("            this.use" + prop + "(); // Then use")
       fixes.push("        }")
       fixes.push("    }")
       fixes.push("")
-      fixes.push("Or use the definite assignment assertion (!) if you're certain:")
+      fixes.push(
+        "Or use the definite assignment assertion (!) if you're certain:",
+      )
       fixes.push("    " + prop + "!: SomeType;")
     }
     PropertyIncompatibleWithIndexSig(prop, prop_type, index_type) => {
-      fixes.push("Property '" + prop + "' type must be assignable to index type.")
+      fixes.push(
+        "Property '" + prop + "' type must be assignable to index type.",
+      )
       fixes.push("")
       fixes.push("Option 1: Change the property type to match the index:")
       fixes.push("    interface Fixed {")
       fixes.push("        [key: string]: " + index_type + ";")
-      fixes.push("        " + prop + ": " + index_type + ";  // compatible type")
+      fixes.push(
+        "        " + prop + ": " + index_type + ";  // compatible type",
+      )
       fixes.push("    }")
       fixes.push("")
       fixes.push("Option 2: Widen the index signature type:")
@@ -2784,13 +2966,19 @@ pub fn get_how_to_fix(
       fixes.push("")
       fixes.push("Ensure all interfaces/types declare the same type:")
       fixes.push("    interface A { " + prop + ": string; }")
-      fixes.push("    interface B extends A { " + prop + ": string; }  // same type")
+      fixes.push(
+        "    interface B extends A { " + prop + ": string; }  // same type",
+      )
       fixes.push("")
-      fixes.push("Or use compatible types (e.g., narrower in derived interface):")
+      fixes.push(
+        "Or use compatible types (e.g., narrower in derived interface):",
+      )
       fixes.push("    interface A { " + prop + ": string | number; }")
-      fixes.push("    interface B extends A { " + prop + ": string; }  // narrower OK")
+      fixes.push(
+        "    interface B extends A { " + prop + ": string; }  // narrower OK",
+      )
     }
-    NewExprTargetLacksConstructSig(typ) => {
+    NewExprTargetLacksConstructSig(_typ) => {
       fixes.push("Ensure the target has a construct signature:")
       fixes.push("")
       fixes.push("Use a class:")
@@ -2827,7 +3015,9 @@ pub fn get_how_to_fix(
       fixes.push("    class MyClass {")
       fixes.push("        readonly " + prop + ": SomeType;")
       fixes.push("        constructor(value: SomeType) {")
-      fixes.push("            this." + prop + " = value;  // direct 'this' access")
+      fixes.push(
+        "            this." + prop + " = value;  // direct 'this' access",
+      )
       fixes.push("        }")
       fixes.push("    }")
       fixes.push("")
@@ -2877,7 +3067,9 @@ pub fn get_how_to_fix(
       fixes.push("Or import the missing name if it's from another module.")
     }
     ExpectedNArgsButGotMore(expected, actual) => {
-      fixes.push("The function expects at most " + expected.to_string() + " arguments.")
+      fixes.push(
+        "The function expects at most " + expected.to_string() + " arguments.",
+      )
       fixes.push("You provided " + actual.to_string() + " arguments.")
       fixes.push("")
       fixes.push("Remove extra arguments or use a rest parameter:")
@@ -2895,7 +3087,9 @@ pub fn get_how_to_fix(
       fixes.push("    const arr = Array.from(iterable);")
     }
     NoOverloadExpectsNArgs(n) => {
-      fixes.push("No function overload accepts " + n.to_string() + " arguments.")
+      fixes.push(
+        "No function overload accepts " + n.to_string() + " arguments.",
+      )
       fixes.push("")
       fixes.push("Check the function's type definitions for valid signatures:")
       fixes.push("    function fn(a: string): void;")
@@ -2957,10 +3151,14 @@ pub fn get_how_to_fix(
       fixes.push("")
       fixes.push("Valid examples:")
       fixes.push("    const { a, ...rest } = obj;  // rest is a variable")
-      fixes.push("    const { a, ...obj.prop } = source;  // property access OK")
+      fixes.push(
+        "    const { a, ...obj.prop } = source;  // property access OK",
+      )
       fixes.push("")
       fixes.push("Invalid:")
-      fixes.push("    const { a, ...fn() } = obj;  // function call not allowed")
+      fixes.push(
+        "    const { a, ...fn() } = obj;  // function call not allowed",
+      )
     }
     ObjectRestAssignmentNotOptional(prop) => {
       fixes.push("Remove the optional modifier from the rest element:")
@@ -2988,7 +3186,9 @@ pub fn get_how_to_fix(
     YieldExpressionImplicitlyAny => {
       fixes.push("Add a return type annotation to your generator function:")
       fixes.push("")
-      fixes.push("    function* myGenerator(): Generator<number, void, unknown> {")
+      fixes.push(
+        "    function* myGenerator(): Generator<number, void, unknown> {",
+      )
       fixes.push("        yield 1;")
       fixes.push("        yield 2;")
       fixes.push("    }")
@@ -2999,7 +3199,9 @@ pub fn get_how_to_fix(
       fixes.push("    N = type passed to next() method")
     }
     YieldOperandTypeInAsyncGenerator(operand_type, _) => {
-      fixes.push("In an async generator, the yield operand must be a valid promise")
+      fixes.push(
+        "In an async generator, the yield operand must be a valid promise",
+      )
       fixes.push("or not have a callable 'then' member.")
       fixes.push("")
       fixes.push("Current operand type: " + operand_type)
@@ -3021,9 +3223,15 @@ pub fn get_how_to_fix(
     }
     // Enum & Catch Clause errors
     CatchClauseVariableMustBeAnyOrUnknown(var_name) => {
-      fixes.push("Catch clause variable '" + var_name + "' must have type 'any' or 'unknown'.")
+      fixes.push(
+        "Catch clause variable '" +
+        var_name +
+        "' must have type 'any' or 'unknown'.",
+      )
       fixes.push("")
-      fixes.push("Option 1: Use 'unknown' (recommended - requires type narrowing):")
+      fixes.push(
+        "Option 1: Use 'unknown' (recommended - requires type narrowing):",
+      )
       fixes.push("    try { ... } catch (e: unknown) {")
       fixes.push("        if (e instanceof Error) {")
       fixes.push("            console.log(e.message);")
@@ -3037,9 +3245,13 @@ pub fn get_how_to_fix(
       fixes.push("    try { ... } catch (e) { ... }")
     }
     ConstEnumUsageRestriction(enum_name) => {
-      fixes.push("Const enum '" + enum_name + "' cannot be used with dynamic access.")
+      fixes.push(
+        "Const enum '" + enum_name + "' cannot be used with dynamic access.",
+      )
       fixes.push("")
-      fixes.push("Const enums are inlined at compile time, so they don't exist at runtime.")
+      fixes.push(
+        "Const enums are inlined at compile time, so they don't exist at runtime.",
+      )
       fixes.push("")
       fixes.push("Option 1: Use literal member access:")
       fixes.push("    const value = MyEnum.MemberName;")
@@ -3047,12 +3259,20 @@ pub fn get_how_to_fix(
       fixes.push("Option 2: Convert to a regular enum (removes const):")
       fixes.push("    enum MyEnum { ... }  // instead of const enum")
       fixes.push("")
-      fixes.push("Option 3: Use 'preserveConstEnums' compiler option to keep the enum object")
+      fixes.push(
+        "Option 3: Use 'preserveConstEnums' compiler option to keep the enum object",
+      )
     }
     ConstEnumMemberAccessRestriction(mem) => {
-      fixes.push("Const enum member '" + mem + "' must be accessed with a string literal.")
+      fixes.push(
+        "Const enum member '" +
+        mem +
+        "' must be accessed with a string literal.",
+      )
       fixes.push("")
-      fixes.push("Because const enums are replaced with literal values during compilation,")
+      fixes.push(
+        "Because const enums are replaced with literal values during compilation,",
+      )
       fixes.push("dynamic access like enum[variable] is not possible.")
       fixes.push("")
       fixes.push("Option 1: Use direct member access:")
@@ -3064,9 +3284,17 @@ pub fn get_how_to_fix(
       fixes.push("    const lookup = { A: 0, B: 1 } as const;")
     }
     UsingPrivateName(private_name, context) => {
-      fixes.push("Private name '#" + private_name + "' cannot be used as a type for '" + context + "'.")
+      fixes.push(
+        "Private name '#" +
+        private_name +
+        "' cannot be used as a type for '" +
+        context +
+        "'.",
+      )
       fixes.push("")
-      fixes.push("Private class members (starting with #) are implementation details")
+      fixes.push(
+        "Private class members (starting with #) are implementation details",
+      )
       fixes.push("and cannot be exposed in type annotations.")
       fixes.push("")
       fixes.push("Option 1: Use a public type instead:")
@@ -3075,18 +3303,32 @@ pub fn get_how_to_fix(
       fixes.push("        public getData(): DataType { ... }")
       fixes.push("    }")
       fixes.push("")
-      fixes.push("Option 2: Extract the type to a separate interface or type alias")
+      fixes.push(
+        "Option 2: Extract the type to a separate interface or type alias",
+      )
     }
     MemberInitializerForwardReference(mem, referenced) => {
-      fixes.push("Enum member '" + mem + "' cannot reference '" + referenced + "' declared after it.")
+      fixes.push(
+        "Enum member '" +
+        mem +
+        "' cannot reference '" +
+        referenced +
+        "' declared after it.",
+      )
       fixes.push("")
-      fixes.push("Enum members are evaluated in declaration order. Earlier members")
+      fixes.push(
+        "Enum members are evaluated in declaration order. Earlier members",
+      )
       fixes.push("cannot reference later ones because they don't exist yet.")
       fixes.push("")
-      fixes.push("Option 1: Reorder enum members so referenced members come first:")
+      fixes.push(
+        "Option 1: Reorder enum members so referenced members come first:",
+      )
       fixes.push("    enum MyEnum {")
       fixes.push("        " + referenced + " = 1,  // Move this first")
-      fixes.push("        " + mem + " = " + referenced + ",  // Now it can reference")
+      fixes.push(
+        "        " + mem + " = " + referenced + ",  // Now it can reference",
+      )
       fixes.push("    }")
       fixes.push("")
       fixes.push("Option 2: Use explicit values instead of references:")
@@ -3097,7 +3339,9 @@ pub fn get_how_to_fix(
     }
     // Module & Export errors
     ExportDeclarationConflicts(name, _) => {
-      fixes.push("Export declaration for '" + name + "' conflicts with another export.")
+      fixes.push(
+        "Export declaration for '" + name + "' conflicts with another export.",
+      )
       fixes.push("")
       fixes.push("Option 1: Remove the duplicate export:")
       fixes.push("    export { " + name + " };  // Keep only one export")
@@ -3123,19 +3367,25 @@ pub fn get_how_to_fix(
       fixes.push("    }")
     }
     ModuleCanOnlyBeReferencedWithESImport(module_name) => {
-      fixes.push("Module '" + module_name + "' requires ES module import syntax.")
+      fixes.push(
+        "Module '" + module_name + "' requires ES module import syntax.",
+      )
       fixes.push("")
       fixes.push("Option 1: Use default import with esModuleInterop:")
       fixes.push("    import " + module_name + " from '" + module_name + "';")
       fixes.push("")
       fixes.push("Option 2: Use namespace import:")
-      fixes.push("    import * as " + module_name + " from '" + module_name + "';")
+      fixes.push(
+        "    import * as " + module_name + " from '" + module_name + "';",
+      )
       fixes.push("")
       fixes.push("Option 3: Enable esModuleInterop in tsconfig.json:")
       fixes.push("    { \"compilerOptions\": { \"esModuleInterop\": true } }")
     }
     ReferencedInOwnBaseExpression(name) => {
-      fixes.push("'" + name + "' cannot reference itself in its base expression.")
+      fixes.push(
+        "'" + name + "' cannot reference itself in its base expression.",
+      )
       fixes.push("")
       fixes.push("A class or type cannot extend itself directly or indirectly.")
       fixes.push("")
@@ -3147,9 +3397,17 @@ pub fn get_how_to_fix(
       fixes.push("    class " + name + " extends Base { ... }")
     }
     InferredTypeReferencesInaccessible(name, inaccessible) => {
-      fixes.push("The inferred type of '" + name + "' references inaccessible type '" + inaccessible + "'.")
+      fixes.push(
+        "The inferred type of '" +
+        name +
+        "' references inaccessible type '" +
+        inaccessible +
+        "'.",
+      )
       fixes.push("")
-      fixes.push("Option 1: Add an explicit type annotation with a public type:")
+      fixes.push(
+        "Option 1: Add an explicit type annotation with a public type:",
+      )
       fixes.push("    export const " + name + ": PublicType = ...;")
       fixes.push("")
       fixes.push("Option 2: Make the referenced type public/exported:")
@@ -3158,9 +3416,13 @@ pub fn get_how_to_fix(
       fixes.push("Option 3: Use a type that doesn't depend on internal types")
     }
     CannotAugmentModule(module_name) => {
-      fixes.push("Cannot augment module '" + module_name + "' with value exports.")
+      fixes.push(
+        "Cannot augment module '" + module_name + "' with value exports.",
+      )
       fixes.push("")
-      fixes.push("Module augmentation only works with ES modules or namespaces.")
+      fixes.push(
+        "Module augmentation only works with ES modules or namespaces.",
+      )
       fixes.push("")
       fixes.push("Option 1: Ensure the target is a proper module:")
       fixes.push("    // The module should have import/export statements")
@@ -3171,7 +3433,9 @@ pub fn get_how_to_fix(
       fixes.push("    }")
     }
     RefersToUMDGlobal(name) => {
-      fixes.push("'" + name + "' refers to a UMD global but this file is a module.")
+      fixes.push(
+        "'" + name + "' refers to a UMD global but this file is a module.",
+      )
       fixes.push("")
       fixes.push("In modules, UMD globals must be imported explicitly.")
       fixes.push("")
@@ -3181,14 +3445,20 @@ pub fn get_how_to_fix(
       fixes.push("Option 2: Import as namespace:")
       fixes.push("    import * as " + name + " from '" + name + "';")
       fixes.push("")
-      fixes.push("Option 3: If you need the global, remove import/export to make this a script")
+      fixes.push(
+        "Option 3: If you need the global, remove import/export to make this a script",
+      )
     }
     DeclarationsMustHaveIdenticalModifiers(name) => {
-      fixes.push("All declarations of '" + name + "' must have identical modifiers.")
+      fixes.push(
+        "All declarations of '" + name + "' must have identical modifiers.",
+      )
       fixes.push("")
       fixes.push("When merging declarations, modifiers must be consistent.")
       fixes.push("")
-      fixes.push("Option 1: Make all declarations have the same export modifier:")
+      fixes.push(
+        "Option 1: Make all declarations have the same export modifier:",
+      )
       fixes.push("    export interface " + name + " { ... }")
       fixes.push("    export interface " + name + " { ... }  // Both exported")
       fixes.push("")
@@ -3212,9 +3482,13 @@ pub fn get_how_to_fix(
     }
     // Type Complexity & Inference errors
     PropertyIsStaticMemberOfType(prop, type_name) => {
-      fixes.push("Property '" + prop + "' is a static member of '" + type_name + "'.")
+      fixes.push(
+        "Property '" + prop + "' is a static member of '" + type_name + "'.",
+      )
       fixes.push("")
-      fixes.push("Static members are accessed on the class itself, not on instances.")
+      fixes.push(
+        "Static members are accessed on the class itself, not on instances.",
+      )
       fixes.push("")
       fixes.push("Option 1: Access it on the class directly:")
       fixes.push("    " + type_name + "." + prop + "  // ✓ correct")
@@ -3222,20 +3496,30 @@ pub fn get_how_to_fix(
       fixes.push("Option 2: If you have an instance, use the constructor:")
       fixes.push("    instance.constructor." + prop)
       fixes.push("")
-      fixes.push("Option 3: If this should be an instance member, remove 'static' from the declaration")
+      fixes.push(
+        "Option 3: If this should be an instance member, remove 'static' from the declaration",
+      )
     }
     UnusedTsExpectErrorDirective => {
-      fixes.push("The '@ts-expect-error' directive is unused - no error on the following line.")
+      fixes.push(
+        "The '@ts-expect-error' directive is unused - no error on the following line.",
+      )
       fixes.push("")
       fixes.push("Option 1: Remove the directive if the error was fixed:")
       fixes.push("    // @ts-expect-error  <-- remove this line")
       fixes.push("")
       fixes.push("Option 2: Check if the error is on a different line")
       fixes.push("")
-      fixes.push("Option 3: If you're suppressing a potential future error, use @ts-ignore instead")
+      fixes.push(
+        "Option 3: If you're suppressing a potential future error, use @ts-ignore instead",
+      )
     }
     CannotFindNameTestRunner(name) => {
-      fixes.push("Cannot find name '" + name + "'. This is typically a test runner global.")
+      fixes.push(
+        "Cannot find name '" +
+        name +
+        "'. This is typically a test runner global.",
+      )
       fixes.push("")
       fixes.push("Option 1: Install type definitions for your test framework:")
       fixes.push("    npm install --save-dev @types/jest      // for Jest")
@@ -3252,12 +3536,16 @@ pub fn get_how_to_fix(
       fixes.push("    { \"compilerOptions\": { \"target\": \"ES2020\" } }")
       fixes.push("")
       fixes.push("Option 2: Add lib entries to include the feature:")
-      fixes.push("    { \"compilerOptions\": { \"lib\": [\"ES2020\", \"DOM\"] } }")
+      fixes.push(
+        "    { \"compilerOptions\": { \"lib\": [\"ES2020\", \"DOM\"] } }",
+      )
       fixes.push("")
       fixes.push("Option 3: Use a polyfill for older targets")
     }
     CannotFindNameTargetLibraryAlt(name, target) => {
-      fixes.push("Cannot find name '" + name + "'. Not available in target: " + target)
+      fixes.push(
+        "Cannot find name '" + name + "'. Not available in target: " + target,
+      )
       fixes.push("")
       fixes.push("Option 1: Update your compilation target:")
       fixes.push("    { \"compilerOptions\": { \"target\": \"ESNext\" } }")
@@ -3270,15 +3558,21 @@ pub fn get_how_to_fix(
     ExpressionProducesUnionTooComplex => {
       fixes.push("The union type is too complex for TypeScript to represent.")
       fixes.push("")
-      fixes.push("Option 1: Simplify the type by breaking it into smaller parts:")
+      fixes.push(
+        "Option 1: Simplify the type by breaking it into smaller parts:",
+      )
       fixes.push("    type Part1 = A | B | C;")
       fixes.push("    type Part2 = D | E | F;")
       fixes.push("    type Combined = Part1 | Part2;")
       fixes.push("")
       fixes.push("Option 2: Use a more general type:")
-      fixes.push("    type Result = string | number;  // instead of literal unions")
+      fixes.push(
+        "    type Result = string | number;  // instead of literal unions",
+      )
       fixes.push("")
-      fixes.push("Option 3: Review recursive types that might expand infinitely")
+      fixes.push(
+        "Option 3: Review recursive types that might expand infinitely",
+      )
     }
     CannotImportTypeDeclarationFiles(file) => {
       fixes.push("Cannot import type declaration file '" + file + "' directly.")
@@ -3289,11 +3583,19 @@ pub fn get_how_to_fix(
       fixes.push("Option 2: Use type-only import if you only need types:")
       fixes.push("    import type { Type } from 'module';")
       fixes.push("")
-      fixes.push("Option 3: Use triple-slash reference for ambient declarations:")
+      fixes.push(
+        "Option 3: Use triple-slash reference for ambient declarations:",
+      )
       fixes.push("    /// <reference types=\"module\" />")
     }
     InferredTypeCannotBeNamed(name, reference) => {
-      fixes.push("The inferred type of '" + name + "' cannot be named without '" + reference + "'.")
+      fixes.push(
+        "The inferred type of '" +
+        name +
+        "' cannot be named without '" +
+        reference +
+        "'.",
+      )
       fixes.push("")
       fixes.push("Option 1: Add an explicit type annotation:")
       fixes.push("    export function " + name + "(): ExplicitType { ... }")
@@ -3311,10 +3613,14 @@ pub fn get_how_to_fix(
 /// Get the appropriate TypeScript error code for a mismatch reason
 pub fn get_error_code(reason : MismatchReason) -> Int {
   match reason {
-    IncompatibleTypes | PropertyTypeMismatch(_) | LiteralMismatch(_, _) | LiteralToWide =>
-      2322
-    MissingProperty(_) | ExcessProperty(_) | OptionalToRequired(_) | IndexSignatureMismatch =>
-      2322
+    IncompatibleTypes
+    | PropertyTypeMismatch(_)
+    | LiteralMismatch(_, _)
+    | LiteralToWide => 2322
+    MissingProperty(_)
+    | ExcessProperty(_)
+    | OptionalToRequired(_)
+    | IndexSignatureMismatch => 2322
     ParamCountMismatch(_, _) => 2554
     ParamTypeMismatch(_, _) => 2345
     ReturnTypeMismatch => 2355
@@ -3492,7 +3798,6 @@ pub fn format_detailed_error(
   // ── Location & Code Snippet ─────────────────────────────────────────────
   let line_num_str = line.to_string()
   let padding = string_repeat(" ", line_num_str.length())
-
   output = output + padding + " |\n"
   output = output + line_num_str + " | " + source_line + "\n"
   output = output + padding + " | " + string_repeat(" ", column - 1) + "^"
@@ -3502,10 +3807,7 @@ pub fn format_detailed_error(
 
   // ── What Went Wrong (Rust style) ────────────────────────────────────────
   output = output + "I found a type error:\n\n"
-  output = output +
-    "    Expected: " +
-    format_type_v2(error.expected) +
-    "\n"
+  output = output + "    Expected: " + format_type_v2(error.expected) + "\n"
   output = output + "    Found:    " + format_type_v2(error.actual) + "\n\n"
 
   // ── Why This Happens (Elm educational style) ────────────────────────────
@@ -3531,10 +3833,7 @@ pub fn format_detailed_error(
   if error.children.length() > 0 {
     output = output + "\nRELATED ISSUES:\n"
     for child in error.children {
-      output = output +
-        "    - " +
-        get_friendly_title(child.reason) +
-        "\n"
+      output = output + "    - " + get_friendly_title(child.reason) + "\n"
       output = output +
         "      " +
         format_type_v2(child.actual) +
@@ -3546,12 +3845,16 @@ pub fn format_detailed_error(
 
   // ── Documentation Link ──────────────────────────────────────────────────
   output = output + "\nLEARN MORE:\n"
-  output = output + "    Error TS" + code.to_string() + ": " + get_error_doc_url(code) + "\n"
+  output = output +
+    "    Error TS" +
+    code.to_string() +
+    ": " +
+    get_error_doc_url(code) +
+    "\n"
   output = output +
     "    TypeScript Handbook: " +
     get_handbook_url("2/types-from-types") +
     "\n"
-
   output
 }
 
@@ -3569,20 +3872,17 @@ pub fn to_detailed_error(
 
   // Convert children recursively
   for child in error.children {
-    related.push(
-      to_detailed_error(child, file_path, line, column, ""),
-    )
+    related.push(to_detailed_error(child, file_path, line, column, ""))
   }
-
   {
     title: get_friendly_title(error.reason),
     code,
     location: file_path + ":" + line.to_string() + ":" + column.to_string(),
     code_snippet: source_line,
     what_went_wrong: "Expected " +
-      format_type_v2(error.expected) +
-      ", found " +
-      format_type_v2(error.actual),
+    format_type_v2(error.expected) +
+    ", found " +
+    format_type_v2(error.actual),
     why_error: get_why_explanation(error.reason),
     how_to_fix: get_how_to_fix(error.reason, error.actual, error.expected),
     doc_link: get_error_doc_url(code),
@@ -3711,8 +4011,7 @@ pub fn decorator_must_return_value_error(
     what_went_wrong: "The decorator function does not return a valid value.",
     why_error: "Decorators are functions that receive the target (class, method, etc.) and optionally return a replacement or modified version. A decorator that returns nothing will have no effect.",
     how_to_fix: [
-      "Ensure your decorator function returns a value",
-      "For class decorators, return a class constructor",
+      "Ensure your decorator function returns a value", "For class decorators, return a class constructor",
       "For method decorators, return a property descriptor or undefined",
     ],
     doc_link: get_error_doc_url(1241),
@@ -3758,10 +4057,10 @@ pub fn decorator_signature_mismatch_error(
     code_snippet: "@" + decorator_name,
     what_went_wrong: "The decorator function signature does not match what's expected for this target.",
     why_error: "Different decorator types have different signatures:\n" +
-      "- Class: (target: Function) => Function\n" +
-      "- Method: (target: Object, propertyKey: string, descriptor: PropertyDescriptor) => PropertyDescriptor\n" +
-      "- Property: (target: Object, propertyKey: string) => void\n" +
-      "- Parameter: (target: Object, propertyKey: string, parameterIndex: number) => void",
+    "- Class: (target: Function) => Function\n" +
+    "- Method: (target: Object, propertyKey: string, descriptor: PropertyDescriptor) => PropertyDescriptor\n" +
+    "- Property: (target: Object, propertyKey: string) => void\n" +
+    "- Parameter: (target: Object, propertyKey: string, parameterIndex: number) => void",
     how_to_fix: [
       "Expected signature: " + expected,
       "Actual signature: " + actual,
@@ -3815,8 +4114,7 @@ pub fn const_enum_non_constant_error(
     what_went_wrong: "Const enum members can only have constant initializers.",
     why_error: "Const enums are completely inlined at compile time. This means their values must be computable at compile time - no function calls, variables, or complex expressions are allowed.",
     how_to_fix: [
-      "Use only literal values (numbers, strings)",
-      "Use simple arithmetic expressions (1 + 2, 10 * 2)",
+      "Use only literal values (numbers, strings)", "Use simple arithmetic expressions (1 + 2, 10 * 2)",
       "Reference other const enum members from the same enum",
     ],
     doc_link: get_error_doc_url(2474),
@@ -3839,8 +4137,7 @@ pub fn ambient_enum_computed_error(
     what_went_wrong: "Ambient (declare) enum members can only have constant initializers.",
     why_error: "Ambient enums describe external values that already exist. Their values must be constant so TypeScript knows what values to expect at runtime.",
     how_to_fix: [
-      "Use only literal numbers or strings",
-      "Remove the complex expression",
+      "Use only literal numbers or strings", "Remove the complex expression",
     ],
     doc_link: get_error_doc_url(1066),
     related: [],
@@ -3862,8 +4159,7 @@ pub fn heterogeneous_enum_error(
     what_went_wrong: "This enum mixes string and numeric values incorrectly.",
     why_error: "While TypeScript allows heterogeneous enums (mixing strings and numbers), you cannot have auto-incrementing numeric members after string members, and you cannot have computed values in string enums.",
     how_to_fix: [
-      "Use only string values throughout the enum",
-      "Use only numeric values throughout the enum",
+      "Use only string values throughout the enum", "Use only numeric values throughout the enum",
       "If mixing, ensure all members after string values have explicit initializers",
     ],
     doc_link: get_error_doc_url(2553),
@@ -3886,8 +4182,7 @@ pub fn enum_circular_reference_error(
     what_went_wrong: "Enum member cannot reference itself or create a circular dependency.",
     why_error: "Enum values are computed in order. A member cannot reference itself or later members because their values haven't been computed yet.",
     how_to_fix: [
-      "Only reference members defined earlier in the enum",
-      "Use a literal value instead",
+      "Only reference members defined earlier in the enum", "Use a literal value instead",
     ],
     doc_link: get_error_doc_url(2477),
     related: [],
@@ -3912,14 +4207,13 @@ pub fn numeric_index_not_assignable_error(
     location,
     code_snippet: "[key: number]: " + numeric_type,
     what_went_wrong: "Numeric index type '" +
-      numeric_type +
-      "' is not assignable to string index type '" +
-      string_type +
-      "'.",
+    numeric_type +
+    "' is not assignable to string index type '" +
+    string_type +
+    "'.",
     why_error: "In JavaScript, numeric property keys are converted to strings (e.g., obj[0] is the same as obj['0']). Therefore, the type returned by numeric indexing must be a subtype of the type returned by string indexing.",
     how_to_fix: [
-      "Make the numeric index type a subtype of the string index type",
-      "Change: { [n: number]: T1; [s: string]: T2 } where T1 extends T2",
+      "Make the numeric index type a subtype of the string index type", "Change: { [n: number]: T1; [s: string]: T2 } where T1 extends T2",
       "Or use a common base type for both index signatures",
     ],
     doc_link: get_error_doc_url(2413),
@@ -3940,12 +4234,11 @@ pub fn invalid_index_key_type_error(
     location,
     code_snippet: "[key: " + key_type + "]",
     what_went_wrong: "An index signature parameter type must be 'string', 'number', or 'symbol'. Got '" +
-      key_type +
-      "'.",
+    key_type +
+    "'.",
     why_error: "TypeScript only supports three types of index signatures: string, number, and symbol. These correspond to JavaScript's property access mechanisms.",
     how_to_fix: [
-      "Use 'string' for string key access: [key: string]: T",
-      "Use 'number' for array-like access: [key: number]: T",
+      "Use 'string' for string key access: [key: string]: T", "Use 'number' for array-like access: [key: number]: T",
       "Use 'symbol' for symbol key access: [key: symbol]: T",
     ],
     doc_link: get_error_doc_url(1023),
@@ -3968,16 +4261,15 @@ pub fn property_not_assignable_to_index_error(
     location,
     code_snippet: property_name + ": " + property_type,
     what_went_wrong: "Property '" +
-      property_name +
-      "' of type '" +
-      property_type +
-      "' is not assignable to string index type '" +
-      index_type +
-      "'.",
+    property_name +
+    "' of type '" +
+    property_type +
+    "' is not assignable to string index type '" +
+    index_type +
+    "'.",
     why_error: "When an interface has an index signature, all explicitly declared properties must have types that are assignable to the index signature's value type.",
     how_to_fix: [
-      "Change the property type to be compatible with the index signature",
-      "Use a union type in the index signature: [key: string]: T1 | T2",
+      "Change the property type to be compatible with the index signature", "Use a union type in the index signature: [key: string]: T1 | T2",
       "Remove the index signature if not all properties should conform to it",
     ],
     doc_link: get_error_doc_url(2411),
@@ -3999,14 +4291,13 @@ pub fn missing_index_signature_error(
     location,
     code_snippet: object_type + "[" + key_type + "]",
     what_went_wrong: "Type '" +
-      key_type +
-      "' cannot be used to index type '" +
-      object_type +
-      "'.",
+    key_type +
+    "' cannot be used to index type '" +
+    object_type +
+    "'.",
     why_error: "The object type doesn't have an index signature that allows accessing properties with the given key type. Index signatures explicitly declare that arbitrary keys of a certain type are allowed.",
     how_to_fix: [
-      "Add an index signature: { [key: string]: T }",
-      "Use a specific property name instead of a dynamic key",
+      "Add an index signature: { [key: string]: T }", "Use a specific property name instead of a dynamic key",
       "Cast the object to Record<string, T> if you're sure it has arbitrary string keys",
     ],
     doc_link: get_error_doc_url(2536),
@@ -4026,8 +4317,7 @@ pub fn readonly_index_mismatch_error(location : String) -> DetailedError {
     what_went_wrong: "Cannot assign from a mutable index signature to a readonly index signature.",
     why_error: "A readonly index signature guarantees that values cannot be modified through indexing. Allowing assignment from a mutable source would violate this guarantee.",
     how_to_fix: [
-      "Make the source index signature readonly as well",
-      "Remove the readonly modifier from the target if mutation is needed",
+      "Make the source index signature readonly as well", "Remove the readonly modifier from the target if mutation is needed",
       "Use a type assertion if you're sure the mutation is safe",
     ],
     doc_link: get_error_doc_url(2542),
@@ -4049,14 +4339,13 @@ pub fn element_implicit_any_error(
     location,
     code_snippet: object_type + "[" + key_type + "]",
     what_went_wrong: "Element implicitly has an 'any' type because expression of type '" +
-      key_type +
-      "' can't be used to index type '" +
-      object_type +
-      "'.",
+    key_type +
+    "' can't be used to index type '" +
+    object_type +
+    "'.",
     why_error: "With noImplicitAny enabled, TypeScript requires explicit types when accessing properties with dynamic keys. This helps catch potential runtime errors.",
     how_to_fix: [
-      "Add an index signature to the type: { [key: string]: T }",
-      "Use keyof typeof obj to ensure the key is valid",
+      "Add an index signature to the type: { [key: string]: T }", "Use keyof typeof obj to ensure the key is valid",
       "Add a type assertion if you're sure the access is valid",
     ],
     doc_link: get_error_doc_url(7053),
