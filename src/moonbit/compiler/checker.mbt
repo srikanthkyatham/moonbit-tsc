@@ -2940,6 +2940,10 @@ fn get_builtin_global_type(
     Some(get_boolean_constructor_type(checker))
   } else if name == "require" {
     Some(get_require_type(checker))
+  } else if name == "exports" {
+    Some(get_exports_type(checker))
+  } else if name == "module" {
+    Some(get_module_type(checker))
   } else {
     None
   }
@@ -3799,6 +3803,80 @@ fn get_require_type(checker : TypeChecker) -> (Type, TypeChecker) {
   })
 
   (require_type, checker)
+}
+
+///|
+/// Get the type for the exports object (Node.js CommonJS exports)
+/// exports is typed as { [key: string]: any } to allow dynamic property assignment
+fn get_exports_type(checker : TypeChecker) -> (Type, TypeChecker) {
+  let (id, checker) = next_type_id(checker)
+  let default_flags = TypeFlags::default()
+  let info = TypeInfo::{ id, flags: default_flags }
+
+  // exports is an object with an index signature: { [key: string]: any }
+  // This allows assignments like exports.foo = ... and exports["bar"] = ...
+  let string_index = IndexSignature::{
+    parameter_name: "key",
+    parameter_type: Type::String(TypeInfo::{ id: 0, flags: default_flags }),
+    return_type: Type::Any(TypeInfo::{ id: 0, flags: default_flags }),
+    is_readonly: false,
+  }
+
+  let exports_type = Type::Object(ObjectType::{
+    properties: Map::new(),
+    call_signatures: [],
+    construct_signatures: [],
+    index_signatures: [string_index],
+    info,
+    class_name: None,
+  })
+
+  (exports_type, checker)
+}
+
+///|
+/// Get the type for the module object (Node.js CommonJS module)
+/// module is typed as { exports: { [key: string]: any } }
+fn get_module_type(checker : TypeChecker) -> (Type, TypeChecker) {
+  let (id, checker) = next_type_id(checker)
+  let default_flags = TypeFlags::default()
+  let info = TypeInfo::{ id, flags: default_flags }
+
+  // module.exports is the same type as exports
+  let string_index = IndexSignature::{
+    parameter_name: "key",
+    parameter_type: Type::String(TypeInfo::{ id: 0, flags: default_flags }),
+    return_type: Type::Any(TypeInfo::{ id: 0, flags: default_flags }),
+    is_readonly: false,
+  }
+
+  let exports_inner_type = Type::Object(ObjectType::{
+    properties: Map::new(),
+    call_signatures: [],
+    construct_signatures: [],
+    index_signatures: [string_index],
+    info: TypeInfo::{ id: 0, flags: default_flags },
+    class_name: None,
+  })
+
+  let module_properties : Map[String, PropertySignature] = Map::new()
+  module_properties.set("exports", PropertySignature::{
+    name: "exports",
+    prop_type: exports_inner_type,
+    is_optional: false,
+    is_readonly: false,
+  })
+
+  let module_type = Type::Object(ObjectType::{
+    properties: module_properties,
+    call_signatures: [],
+    construct_signatures: [],
+    index_signatures: [],
+    info,
+    class_name: None,
+  })
+
+  (module_type, checker)
 }
 
 ///|
@@ -12985,11 +13063,240 @@ pub fn extract_module_types(
         module_types.global_namespaces.set(md.name, ns_type)
       }
 
+      // CommonJS: exports.xxx = value  or  module.exports = value
+      ExpressionStatement(es) => {
+        match es.expression {
+          // exports.xxx = value
+          BinaryExpression(be) if be.operator == Assign => {
+            match be.left {
+              // exports.propertyName = ... OR module.exports = ...
+              PropertyAccessExpression(pae) => {
+                match pae.expression {
+                  Identifier(id) if id.name == "exports" => {
+                    // Found exports.xxx = value, extract type from RHS
+                    let ty = expression_to_type_v2(env, be.right)
+                    let info = ExternalTypeInfo::value(ty, pae.name)
+                    module_types.add_export(pae.name, info)
+                  }
+                  // module.exports = value (whole module assignment)
+                  // pae.expression = Identifier("module"), pae.name = "exports"
+                  Identifier(id) if id.name == "module" && pae.name == "exports" => {
+                    // module.exports = value or module.exports = { ... }
+                    extract_module_exports_assignment(env, module_types, be.right)
+                  }
+                  // module.exports.xxx = value (nested property)
+                  PropertyAccessExpression(inner_pae) =>
+                    match inner_pae.expression {
+                      Identifier(inner_id) if inner_id.name == "module" && inner_pae.name == "exports" => {
+                        // module.exports.xxx = value
+                        let ty = expression_to_type_v2(env, be.right)
+                        let info = ExternalTypeInfo::value(ty, pae.name)
+                        module_types.add_export(pae.name, info)
+                      }
+                      _ => ()
+                    }
+                  _ => ()
+                }
+              }
+              _ => ()
+            }
+          }
+          _ => ()
+        }
+      }
+
       _ => ()
     }
   }
 
   module_types
+}
+
+///|
+/// Extract exports from module.exports = expression
+/// Handles: module.exports = { a, b } or module.exports = someValue
+fn extract_module_exports_assignment(
+  env : TypeEnv,
+  module_types : ModuleTypes,
+  expression : Node,
+) -> Unit {
+  match expression {
+    // module.exports = { key1: value1, key2: value2 }
+    ObjectLiteralExpression(ole) => {
+      for prop in ole.properties {
+        match prop {
+          // PropertyAssignment(name: String, value: Node, location: SourceLocation)
+          PropertyAssignment(name, value, _) => {
+            if name.length() > 0 {
+              let ty = expression_to_type_v2(env, value)
+              let info = ExternalTypeInfo::value(ty, name)
+              module_types.add_export(name, info)
+            }
+          }
+          // ShorthandProperty(name: String, location: SourceLocation)
+          ShorthandProperty(name, _) => {
+            let ty = TAny // shorthand { foo } - just use any for now
+            let info = ExternalTypeInfo::value(ty, name)
+            module_types.add_export(name, info)
+          }
+          _ => ()
+        }
+      }
+    }
+    // module.exports = identifier (re-export everything from identifier)
+    Identifier(_) => {
+      // Could resolve the identifier's type, but for now just mark as any
+      ()
+    }
+    // module.exports = function() { ... }
+    FunctionExpression(fe) => {
+      let ty = function_expression_to_type_v2(env, fe)
+      let info = ExternalTypeInfo::value(ty, "default")
+      module_types.named_exports.set("default", info)
+    }
+    _ => ()
+  }
+}
+
+///|
+/// Convert a function expression to TypeV2
+fn function_expression_to_type_v2(env : TypeEnv, fe : FunctionExpression) -> TypeV2 {
+  let params : Array[ParamInfoV2] = []
+  for param in fe.parameters {
+    match param {
+      Parameter(p) => {
+        let param_name = match p.name {
+          Identifier(id) => id.name
+          _ => "_"
+        }
+        let param_type = match p.type_annotation {
+          Some(type_node) => ast_type_to_v2(env, type_node)
+          None => TAny
+        }
+        params.push(ParamInfoV2::{
+          name: param_name,
+          ty: param_type,
+          optional: p.is_optional,
+          is_rest: p.is_rest,
+        })
+      }
+      _ => ()
+    }
+  }
+  let return_type = match fe.return_type {
+    Some(type_node) => ast_type_to_v2(env, type_node)
+    None => TAny
+  }
+  TFunction(FunctionTypeV2::{
+    type_params: [],
+    params,
+    rest_param: None,
+    return_type,
+    type_predicate: None,
+    this_type: None,
+  })
+}
+
+///|
+/// Convert an expression to TypeV2 for CommonJS export type inference
+fn expression_to_type_v2(env : TypeEnv, expr : Node) -> TypeV2 {
+  match expr {
+    // Literal values
+    NumericLiteral(_) => TNumber
+    StringLiteral(_) => TString
+    BooleanLiteral(bl) => if bl.value { TLiteralBool(true) } else { TLiteralBool(false) }
+    NullLiteral(_) => TNull
+
+    // Function expressions
+    FunctionExpression(fe) => function_expression_to_type_v2(env, fe)
+    ArrowFunction(af) => arrow_function_to_type_v2(env, af)
+
+    // Object literals - create object type
+    ObjectLiteralExpression(ole) => {
+      let fields : Map[String, FieldInfoV2] = Map::new()
+      for prop in ole.properties {
+        match prop {
+          // PropertyAssignment(name: String, value: Node, location: SourceLocation)
+          PropertyAssignment(name, value, _) => {
+            if name.length() > 0 {
+              let ty = expression_to_type_v2(env, value)
+              fields.set(name, FieldInfoV2::{
+                ty,
+                optional: false,
+                is_readonly: false,
+              })
+            }
+          }
+          // ShorthandProperty(name: String, location: SourceLocation)
+          ShorthandProperty(name, _) => {
+            fields.set(name, FieldInfoV2::{
+              ty: TAny,
+              optional: false,
+              is_readonly: false,
+            })
+          }
+          _ => ()
+        }
+      }
+      TObject(ObjectTypeV2::{
+        fields,
+        symbol_fields: [],
+        call_signatures: [],
+        construct_signatures: [],
+        index_signature: None,
+        is_class: false,
+        class_name: None,
+      })
+    }
+
+    // Array literals
+    ArrayLiteralExpression(_) => TArray(TAny)
+
+    // Identifiers - try to resolve from scope, fallback to any
+    Identifier(_) => TAny
+
+    // Default to any for complex expressions
+    _ => TAny
+  }
+}
+
+///|
+/// Convert an arrow function to TypeV2
+fn arrow_function_to_type_v2(env : TypeEnv, af : ArrowFunction) -> TypeV2 {
+  let params : Array[ParamInfoV2] = []
+  for param in af.parameters {
+    match param {
+      Parameter(p) => {
+        let param_name = match p.name {
+          Identifier(id) => id.name
+          _ => "_"
+        }
+        let param_type = match p.type_annotation {
+          Some(type_node) => ast_type_to_v2(env, type_node)
+          None => TAny
+        }
+        params.push(ParamInfoV2::{
+          name: param_name,
+          ty: param_type,
+          optional: p.is_optional,
+          is_rest: p.is_rest,
+        })
+      }
+      _ => ()
+    }
+  }
+  let return_type = match af.return_type {
+    Some(type_node) => ast_type_to_v2(env, type_node)
+    None => TAny
+  }
+  TFunction(FunctionTypeV2::{
+    type_params: [],
+    params,
+    rest_param: None,
+    return_type,
+    type_predicate: None,
+    this_type: None,
+  })
 }
 
 ///|

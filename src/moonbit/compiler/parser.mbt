@@ -1116,8 +1116,21 @@ fn parse_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
     }
     KeywordEnum(_) => parse_enum_declaration(parser, false)
 
-    // Namespace/module declaration
-    KeywordNamespace(_) | KeywordModule(_) => parse_module_declaration(parser)
+    // Namespace declaration
+    KeywordNamespace(_) => parse_module_declaration(parser)
+
+    // Module declaration OR module.exports (CommonJS)
+    KeywordModule(_) => {
+      // Check if this is module.exports (CommonJS pattern)
+      if parser.position + 1 < parser.tokens.length() {
+        match parser.tokens[parser.position + 1] {
+          Dot(_) => parse_expression_statement(parser) // module.exports
+          _ => parse_module_declaration(parser)
+        }
+      } else {
+        parse_module_declaration(parser)
+      }
+    }
 
     // Import declaration or dynamic import expression
     KeywordImport(_) => {
@@ -2345,6 +2358,9 @@ fn parse_identifier(parser : Parser) -> Result[(Identifier, Parser), Parser] {
   match current_token(parser) {
     Identifier(name, loc) =>
       Ok((Identifier::{ name, location: loc }, advance_parser(parser)))
+    // Handle "module" keyword used as identifier (CommonJS)
+    KeywordModule(loc) =>
+      Ok((Identifier::{ name: "module", location: loc }, advance_parser(parser)))
     _ => {
       let loc = current_token(parser).location()
       Err(

@@ -1495,6 +1495,15 @@ fn parse_primary_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
       }
     }
 
+    // Module keyword used as identifier (e.g., module.exports in CommonJS)
+    KeywordModule(loc) =>
+      Ok(
+        (
+          Node::Identifier(Identifier::{ name: "module", location: loc }),
+          advance_parser(parser),
+        ),
+      )
+
     _ =>
       Err(
         add_error(
