@@ -1804,9 +1804,17 @@ fn check_variable_statement(
   // Check if this is an ambient declaration (declare const/let/var)
   let is_ambient = is_ambient_declaration(var_stmt.modifiers)
 
+  // Check if this is an exported variable (for TS2494 check)
+  let is_exported = has_export_modifier(var_stmt.modifiers)
+
   for i = 0; i < var_stmt.declarations.length(); i = i + 1 {
     let decl = var_stmt.declarations[i]
     checker = check_variable_declaration(checker, decl)
+
+    // TS2494: Check if exported variable uses private type
+    if is_exported {
+      checker = check_exported_variable_private_type(checker, decl)
+    }
 
     // Track uninitialized variables for TS2454 (definite assignment)
     // Only track if NOT ambient declaration and has type annotation but no initializer
@@ -1821,6 +1829,128 @@ fn check_variable_statement(
     }
   }
   checker
+}
+
+///|
+/// Check TS2494: Exported variable using private type
+fn check_exported_variable_private_type(
+  checker : TypeChecker,
+  decl : VariableDeclaration,
+) -> TypeChecker {
+  // Get the variable name
+  let var_name = match decl.name {
+    Identifier(id) => id.name
+    _ => return checker // Skip binding patterns for now
+  }
+
+  // First check type annotation node directly for type references
+  // This catches cases where the annotation is a direct reference to a private type
+  match decl.type_annotation {
+    Some(type_node) => {
+      let type_names = collect_type_names_from_type_node(type_node)
+      for name in type_names {
+        if not(is_symbol_exported(checker, name)) {
+          return add_diagnostic_with_code(
+            checker,
+            "Exported variable '\{var_name}' has or is using private name '\{name}'.",
+            decl.location,
+            TS2494,
+          )
+        }
+      }
+      checker
+    }
+    None =>
+      // No annotation - check inferred type from initializer
+      match decl.initializer {
+        Some(init) => {
+          let (t, checker) = infer_type(checker, init)
+          let type_names = collect_type_reference_names(t)
+          for name in type_names {
+            if not(is_symbol_exported(checker, name)) {
+              return add_diagnostic_with_code(
+                checker,
+                "Exported variable '\{var_name}' has or is using private name '\{name}'.",
+                decl.location,
+                TS2494,
+              )
+            }
+          }
+          checker
+        }
+        None => checker
+      }
+  }
+}
+
+///|
+/// Collect type names from a type annotation node (before resolution)
+fn collect_type_names_from_type_node(node : Node) -> Array[String] {
+  let names : Array[String] = []
+  collect_type_names_from_type_node_inner(node, names)
+  names
+}
+
+///|
+/// Helper to recursively collect type names from type annotation nodes
+fn collect_type_names_from_type_node_inner(node : Node, names : Array[String]) -> Unit {
+  match node {
+    TypeReference(type_ref) => {
+      names.push(type_ref.type_name)
+      // Also check type arguments
+      for arg in type_ref.type_arguments {
+        collect_type_names_from_type_node_inner(arg, names)
+      }
+    }
+    UnionType(union_type) => {
+      for t in union_type.types {
+        collect_type_names_from_type_node_inner(t, names)
+      }
+    }
+    IntersectionType(intersection_type) => {
+      for t in intersection_type.types {
+        collect_type_names_from_type_node_inner(t, names)
+      }
+    }
+    ArrayType(arr_type) => {
+      collect_type_names_from_type_node_inner(arr_type.element_type, names)
+    }
+    TupleType(tuple_type) => {
+      // element_types is Array[Node]
+      for elem in tuple_type.element_types {
+        collect_type_names_from_type_node_inner(elem, names)
+      }
+    }
+    TypeLiteral(type_literal) => {
+      // Check property types in type literal (members is Array[Node])
+      for member in type_literal.members {
+        match member {
+          TypeLiteralProperty(prop) =>
+            match prop.type_node {
+              Some(t) => collect_type_names_from_type_node_inner(t, names)
+              None => ()
+            }
+          _ => ()
+        }
+      }
+    }
+    FunctionType(func_type) => {
+      // Check return type
+      collect_type_names_from_type_node_inner(func_type.return_type, names)
+      // Check parameter types
+      for param in func_type.parameters {
+        match param {
+          Parameter(p) =>
+            match p.type_annotation {
+              Some(t) => collect_type_names_from_type_node_inner(t, names)
+              None => ()
+            }
+          _ => ()
+        }
+      }
+    }
+    _ => () // Other node types don't contain type references
+  }
 }
 
 ///|

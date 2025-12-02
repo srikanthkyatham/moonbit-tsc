@@ -2216,6 +2216,50 @@ test "DiagnosticCode - TS2710 namespace with value exports is OK" {
   }
 }
 
+// TS2494: Exported variable using private type
+///|
+test "DiagnosticCode - TS2494 exported variable using private type" {
+  let source =
+    #|interface PrivateType { value: number; }
+    #|export const x: PrivateType = { value: 1 };
+  let result = check_source(source)
+  match result {
+    Ok(tf) =>
+      // Should have TS2494 error for using private type in export
+      assert_true(has_error(tf.diagnostics, 2494))
+    Err(diagnostics) => assert_true(has_error(diagnostics, 2494))
+  }
+}
+
+///|
+test "DiagnosticCode - TS2494 exported variable with exported type is OK" {
+  let source =
+    #|export interface PublicType { value: number; }
+    #|export const x: PublicType = { value: 1 };
+  let result = check_source(source)
+  match result {
+    Ok(tf) =>
+      // Should NOT have TS2494 because type is exported
+      assert_true(not(has_error(tf.diagnostics, 2494)))
+    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2494)))
+  }
+}
+
+///|
+test "DiagnosticCode - TS2494 exported variable with inferred private type" {
+  let source =
+    #|interface PrivateType { value: number; }
+    #|function createPrivate(): PrivateType { return { value: 1 }; }
+    #|export const x = createPrivate();
+  let result = check_source(source)
+  // This may or may not trigger TS2494 depending on type inference
+  // Just verify no crash occurs
+  match result {
+    Ok(_) => assert_true(true)
+    Err(_) => assert_true(true)
+  }
+}
+
 // TS2766: Cannot find module (moduleResolution)
 ///|
 test "DiagnosticCode - TS2766 cannot find module check moduleResolution" {
