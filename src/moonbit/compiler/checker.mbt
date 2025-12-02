@@ -2696,15 +2696,24 @@ fn infer_identifier_type(
             Some(symbol) => {
               // Check for TS2710: Cannot use namespace as a value
               // Only if namespace has no value exports (only type exports)
+              // BUT first check if this is a namespace import from an external module
+              // (e.g., import * as m1 from "m1") - those should resolve from registry
               if is_namespace_symbol(symbol) &&
                 not(namespace_has_value_exports(symbol)) {
-                let checker = add_diagnostic_with_code(
-                  checker,
-                  "Cannot use namespace '\{id.name}' as a value.",
-                  id.location,
-                  TS2710,
-                )
-                return any_type(checker)
+                // Before reporting error, check if this is an imported namespace
+                // that has exports in the external registry
+                match resolve_import_type(checker, id.name) {
+                  Some(imported_type) => return (imported_type, checker)
+                  None => {
+                    let checker = add_diagnostic_with_code(
+                      checker,
+                      "Cannot use namespace '\{id.name}' as a value.",
+                      id.location,
+                      TS2710,
+                    )
+                    return any_type(checker)
+                  }
+                }
               }
               // Get type from symbol
               match get_symbol_type(checker, symbol) {
@@ -12932,10 +12941,35 @@ pub fn extract_module_types(
   bound_file : BoundSourceFile,
   file_path : String,
 ) -> ModuleTypes {
+  // Call the extended version without external registry
+  extract_module_types_with_registry(bound_file, file_path, None)
+}
+
+///|
+/// Extract module types with access to external registry for resolving require() calls.
+/// This enables proper type inference for CommonJS require chains.
+pub fn extract_module_types_with_registry(
+  bound_file : BoundSourceFile,
+  file_path : String,
+  external_registry : ExternalTypeRegistry?,
+) -> ModuleTypes {
   let module_types = ModuleTypes::empty(file_path)
 
   // Create a base environment to convert AST types to TypeV2
   let env = TypeEnv::with_builtins()
+
+  // First pass: collect require() bindings (var x = require('mod'))
+  let require_bindings : Map[String, String] = collect_require_bindings(
+    bound_file.statements,
+    file_path,
+  )
+
+  // Create CommonJS context for resolving require() bindings
+  let cjs_ctx = CommonJSTypeContext::{
+    env,
+    require_bindings,
+    external_registry,
+  }
 
   for statement in bound_file.statements {
     match statement {
@@ -13074,7 +13108,8 @@ pub fn extract_module_types(
                 match pae.expression {
                   Identifier(id) if id.name == "exports" => {
                     // Found exports.xxx = value, extract type from RHS
-                    let ty = expression_to_type_v2(env, be.right)
+                    // Use context to resolve require() bindings
+                    let ty = expression_to_type_v2_with_context(cjs_ctx, be.right)
                     let info = ExternalTypeInfo::value(ty, pae.name)
                     module_types.add_export(pae.name, info)
                   }
@@ -13082,14 +13117,14 @@ pub fn extract_module_types(
                   // pae.expression = Identifier("module"), pae.name = "exports"
                   Identifier(id) if id.name == "module" && pae.name == "exports" => {
                     // module.exports = value or module.exports = { ... }
-                    extract_module_exports_assignment(env, module_types, be.right)
+                    extract_module_exports_assignment_with_context(cjs_ctx, module_types, be.right)
                   }
                   // module.exports.xxx = value (nested property)
                   PropertyAccessExpression(inner_pae) =>
                     match inner_pae.expression {
                       Identifier(inner_id) if inner_id.name == "module" && inner_pae.name == "exports" => {
                         // module.exports.xxx = value
-                        let ty = expression_to_type_v2(env, be.right)
+                        let ty = expression_to_type_v2_with_context(cjs_ctx, be.right)
                         let info = ExternalTypeInfo::value(ty, pae.name)
                         module_types.add_export(pae.name, info)
                       }
@@ -13120,6 +13155,22 @@ fn extract_module_exports_assignment(
   module_types : ModuleTypes,
   expression : Node,
 ) -> Unit {
+  // Use simple context for backward compatibility
+  extract_module_exports_assignment_with_context(
+    simple_cjs_context(env),
+    module_types,
+    expression,
+  )
+}
+
+///|
+/// Extract exports from module.exports = expression with CommonJS context
+/// This version can resolve require() bindings for proper type inference
+fn extract_module_exports_assignment_with_context(
+  ctx : CommonJSTypeContext,
+  module_types : ModuleTypes,
+  expression : Node,
+) -> Unit {
   match expression {
     // module.exports = { key1: value1, key2: value2 }
     ObjectLiteralExpression(ole) => {
@@ -13128,14 +13179,15 @@ fn extract_module_exports_assignment(
           // PropertyAssignment(name: String, value: Node, location: SourceLocation)
           PropertyAssignment(name, value, _) => {
             if name.length() > 0 {
-              let ty = expression_to_type_v2(env, value)
+              let ty = expression_to_type_v2_with_context(ctx, value)
               let info = ExternalTypeInfo::value(ty, name)
               module_types.add_export(name, info)
             }
           }
           // ShorthandProperty(name: String, location: SourceLocation)
           ShorthandProperty(name, _) => {
-            let ty = TAny // shorthand { foo } - just use any for now
+            // Try to resolve from require bindings
+            let ty = resolve_identifier_type(ctx, name)
             let info = ExternalTypeInfo::value(ty, name)
             module_types.add_export(name, info)
           }
@@ -13144,13 +13196,23 @@ fn extract_module_exports_assignment(
       }
     }
     // module.exports = identifier (re-export everything from identifier)
-    Identifier(_) => {
-      // Could resolve the identifier's type, but for now just mark as any
-      ()
+    Identifier(id) => {
+      // Try to resolve from require bindings
+      let ty = resolve_identifier_type(ctx, id.name)
+      match ty {
+        TObject(obj) => {
+          // Re-export all fields from the resolved type
+          obj.fields.each(fn(field_name, field_info) {
+            let info = ExternalTypeInfo::value(field_info.ty, field_name)
+            module_types.add_export(field_name, info)
+          })
+        }
+        _ => () // Can't resolve, skip
+      }
     }
     // module.exports = function() { ... }
     FunctionExpression(fe) => {
-      let ty = function_expression_to_type_v2(env, fe)
+      let ty = function_expression_to_type_v2(ctx.env, fe)
       let info = ExternalTypeInfo::value(ty, "default")
       module_types.named_exports.set("default", info)
     }
@@ -13198,8 +13260,110 @@ fn function_expression_to_type_v2(env : TypeEnv, fe : FunctionExpression) -> Typ
 }
 
 ///|
+/// Collect require() bindings from CommonJS variable declarations
+/// Returns a map from variable name to resolved module path
+fn collect_require_bindings(
+  statements : Array[Node],
+  current_file : String,
+) -> Map[String, String] {
+  let bindings : Map[String, String] = Map::new()
+
+  for statement in statements {
+    match statement {
+      // var x = require('mod') or const x = require('mod')
+      VariableStatement(vs) => {
+        for vd in vs.declarations {
+          // Check if initializer is a require() call
+          match vd.initializer {
+            Some(init) => {
+              match init {
+                CallExpression(ce) => {
+                  // Check if this is require('...')
+                  match ce.expression {
+                    Identifier(id) if id.name == "require" => {
+                      // Get the module specifier from the first argument
+                      if ce.arguments.length() > 0 {
+                        match ce.arguments[0] {
+                          StringLiteral(sl) => {
+                            // Get the variable name
+                            let var_name = match vd.name {
+                              Identifier(vid) => vid.name
+                              _ => ""
+                            }
+                            if var_name.length() > 0 {
+                              // Resolve the module path
+                              let resolved = resolve_require_path(
+                                sl.value,
+                                current_file,
+                              )
+                              bindings.set(var_name, resolved)
+                            }
+                          }
+                          _ => ()
+                        }
+                      }
+                    }
+                    _ => ()
+                  }
+                }
+                _ => ()
+              }
+            }
+            None => ()
+          }
+        }
+      }
+      _ => ()
+    }
+  }
+
+  bindings
+}
+
+///|
+/// Resolve a require() module specifier to an absolute path
+fn resolve_require_path(specifier : String, current_file : String) -> String {
+  if specifier.has_prefix("./") || specifier.has_prefix("../") {
+    // Relative path - resolve relative to current file
+    let dir = get_directory_from_path(current_file)
+    let joined = if dir.length() > 0 { dir + "/" + specifier } else { specifier }
+    // Normalize and return
+    normalize_import_path(joined)
+  } else {
+    // Bare specifier (node_modules) - return as-is for now
+    // The external registry will handle the mapping
+    specifier
+  }
+}
+
+///|
+/// Context for CommonJS expression type inference
+struct CommonJSTypeContext {
+  env : TypeEnv
+  require_bindings : Map[String, String] // variable name -> resolved module path
+  external_registry : ExternalTypeRegistry?
+}
+
+///|
+/// Create a simple context without require resolution
+fn simple_cjs_context(env : TypeEnv) -> CommonJSTypeContext {
+  CommonJSTypeContext::{
+    env,
+    require_bindings: Map::new(),
+    external_registry: None,
+  }
+}
+
+///|
 /// Convert an expression to TypeV2 for CommonJS export type inference
 fn expression_to_type_v2(env : TypeEnv, expr : Node) -> TypeV2 {
+  // Use simple context for backward compatibility
+  expression_to_type_v2_with_context(simple_cjs_context(env), expr)
+}
+
+///|
+/// Convert an expression to TypeV2 with full CommonJS context for require resolution
+fn expression_to_type_v2_with_context(ctx : CommonJSTypeContext, expr : Node) -> TypeV2 {
   match expr {
     // Literal values
     NumericLiteral(_) => TNumber
@@ -13208,8 +13372,8 @@ fn expression_to_type_v2(env : TypeEnv, expr : Node) -> TypeV2 {
     NullLiteral(_) => TNull
 
     // Function expressions
-    FunctionExpression(fe) => function_expression_to_type_v2(env, fe)
-    ArrowFunction(af) => arrow_function_to_type_v2(env, af)
+    FunctionExpression(fe) => function_expression_to_type_v2(ctx.env, fe)
+    ArrowFunction(af) => arrow_function_to_type_v2(ctx.env, af)
 
     // Object literals - create object type
     ObjectLiteralExpression(ole) => {
@@ -13219,7 +13383,7 @@ fn expression_to_type_v2(env : TypeEnv, expr : Node) -> TypeV2 {
           // PropertyAssignment(name: String, value: Node, location: SourceLocation)
           PropertyAssignment(name, value, _) => {
             if name.length() > 0 {
-              let ty = expression_to_type_v2(env, value)
+              let ty = expression_to_type_v2_with_context(ctx, value)
               fields.set(name, FieldInfoV2::{
                 ty,
                 optional: false,
@@ -13229,8 +13393,10 @@ fn expression_to_type_v2(env : TypeEnv, expr : Node) -> TypeV2 {
           }
           // ShorthandProperty(name: String, location: SourceLocation)
           ShorthandProperty(name, _) => {
+            // For shorthand properties, try to resolve from require bindings
+            let ty = resolve_identifier_type(ctx, name)
             fields.set(name, FieldInfoV2::{
-              ty: TAny,
+              ty,
               optional: false,
               is_readonly: false,
             })
@@ -13252,12 +13418,86 @@ fn expression_to_type_v2(env : TypeEnv, expr : Node) -> TypeV2 {
     // Array literals
     ArrayLiteralExpression(_) => TArray(TAny)
 
-    // Identifiers - try to resolve from scope, fallback to any
-    Identifier(_) => TAny
+    // Identifiers - try to resolve from require bindings, then fallback to any
+    Identifier(id) => resolve_identifier_type(ctx, id.name)
+
+    // Property access on identifier - try to resolve the base from require bindings
+    PropertyAccessExpression(pae) => {
+      match pae.expression {
+        Identifier(id) => {
+          // Try to resolve base.property from require bindings
+          let base_type = resolve_identifier_type(ctx, id.name)
+          // If we got an object type, try to look up the property
+          match base_type {
+            TObject(obj) => {
+              match obj.fields.get(pae.name) {
+                Some(field) => field.ty
+                None => TAny
+              }
+            }
+            _ => TAny
+          }
+        }
+        _ => TAny
+      }
+    }
 
     // Default to any for complex expressions
     _ => TAny
   }
+}
+
+///|
+/// Resolve an identifier to its type using require bindings and external registry
+fn resolve_identifier_type(ctx : CommonJSTypeContext, name : String) -> TypeV2 {
+  // Check if this identifier is a require binding
+  match ctx.require_bindings.get(name) {
+    Some(module_path) => {
+      // Found a require binding, try to resolve from external registry
+      match ctx.external_registry {
+        Some(registry) => {
+          // First, resolve bare specifier to absolute path using module mappings
+          // e.g., "m2" -> "/path/to/node_modules/m2/entry.js"
+          let resolved_path = registry.resolve_module(module_path)
+
+          // Get the module's exports as an object type
+          match registry.get_module(resolved_path) {
+            Some(module_types) => module_types_to_type_v2(module_types)
+            None => TAny
+          }
+        }
+        None => TAny
+      }
+    }
+    None => TAny
+  }
+}
+
+///|
+/// Convert ModuleTypes to a TypeV2 object type
+fn module_types_to_type_v2(module_types : ModuleTypes) -> TypeV2 {
+  let fields : Map[String, FieldInfoV2] = Map::new()
+
+  // Add all named exports as fields
+  module_types.named_exports.each(fn(name, info) {
+    if name != "default" {
+      fields.set(name, FieldInfoV2::{
+        ty: info.ty,
+        optional: false,
+        is_readonly: false,
+      })
+    }
+  })
+
+  TObject(ObjectTypeV2::{
+    fields,
+    symbol_fields: [],
+    call_signatures: [],
+    construct_signatures: [],
+    index_signature: None,
+    is_class: false,
+    class_name: None,
+  })
 }
 
 ///|

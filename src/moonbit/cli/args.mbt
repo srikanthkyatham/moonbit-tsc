@@ -91,6 +91,7 @@ pub fn parse_args(args : Array[String]) -> Result[Command, String] {
       return Ok(Command::Worker)
     } else if arg == "--json" {
       json_mode = true
+      json_output = true // Also set json_output for --list-imports
     } else if arg == "--init" {
       return Ok(Command::Init)
     } else if arg == "--build" || arg == "-b" {

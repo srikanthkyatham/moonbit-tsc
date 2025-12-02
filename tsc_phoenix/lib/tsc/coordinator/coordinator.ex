@@ -200,9 +200,18 @@ defmodule TSC.Coordinator do
     end
 
     # First compile node_modules dependencies to populate type cache
+    # Recursively discover and compile transitive node_modules dependencies
     _nm_result = if length(node_modules_files) > 0 do
-      Logger.info("Compiling #{length(node_modules_files)} node_modules files for type information...")
-      PoolSupervisor.check_files(node_modules_files, %{})
+      Logger.info("Compiling #{length(node_modules_files)} initial node_modules files...")
+
+      # Recursively discover transitive dependencies in node_modules
+      all_nm_files = discover_transitive_node_modules(node_modules_files, concurrency)
+      Logger.info("Total node_modules files after transitive discovery: #{length(all_nm_files)}")
+
+      # Sort node_modules files in dependency order and compile
+      # First pass: compile leaf modules (no dependencies)
+      # Then compile modules that depend on them, etc.
+      compile_node_modules_in_order(all_nm_files, concurrency)
     else
       {:ok, %{}}
     end
@@ -444,6 +453,126 @@ defmodule TSC.Coordinator do
           acc
       end
     end)
+  end
+
+  # Recursively discover all transitive node_modules dependencies
+  defp discover_transitive_node_modules(initial_files, concurrency) do
+    discover_transitive_node_modules(initial_files, MapSet.new(), concurrency)
+  end
+
+  defp discover_transitive_node_modules([], seen, _concurrency), do: MapSet.to_list(seen)
+
+  defp discover_transitive_node_modules(files_to_check, seen, concurrency) do
+    # Add current files to seen set
+    new_seen = Enum.reduce(files_to_check, seen, fn f, acc -> MapSet.put(acc, f) end)
+
+    # Extract imports from each file and resolve to absolute paths
+    new_deps =
+      files_to_check
+      |> Task.async_stream(
+        fn file ->
+          case PoolSupervisor.list_imports(file) do
+            {:ok, result} ->
+              result.imports
+              |> Enum.map(fn imp -> ImportExtractor.resolve(file, imp.specifier) end)
+              |> Enum.reject(&is_nil/1)
+              |> Enum.filter(&String.contains?(&1, "node_modules"))
+
+            {:error, _} ->
+              # Try Elixir parser fallback
+              case ImportExtractor.extract(file) do
+                {:ok, imports} ->
+                  imports
+                  |> Enum.map(fn imp -> ImportExtractor.resolve(file, imp.specifier) end)
+                  |> Enum.reject(&is_nil/1)
+                  |> Enum.filter(&String.contains?(&1, "node_modules"))
+
+                {:error, _} ->
+                  []
+              end
+          end
+        end,
+        max_concurrency: concurrency,
+        timeout: 30_000
+      )
+      |> Enum.flat_map(fn
+        {:ok, deps} -> deps
+        {:exit, _} -> []
+      end)
+      |> Enum.reject(&MapSet.member?(new_seen, &1))
+      |> Enum.uniq()
+
+    # Recursively discover dependencies of new files
+    if length(new_deps) > 0 do
+      discover_transitive_node_modules(new_deps, new_seen, concurrency)
+    else
+      MapSet.to_list(new_seen)
+    end
+  end
+
+  # Compile node_modules files in dependency order
+  # Files with no dependencies are compiled first, then files that depend on them
+  defp compile_node_modules_in_order(files, concurrency) do
+    # Build a simple dependency map
+    dep_map =
+      files
+      |> Task.async_stream(
+        fn file ->
+          deps =
+            case PoolSupervisor.list_imports(file) do
+              {:ok, result} ->
+                result.imports
+                |> Enum.map(fn imp -> ImportExtractor.resolve(file, imp.specifier) end)
+                |> Enum.reject(&is_nil/1)
+                |> Enum.filter(&String.contains?(&1, "node_modules"))
+
+              {:error, _} ->
+                []
+            end
+
+          {file, deps}
+        end,
+        max_concurrency: concurrency,
+        timeout: 30_000
+      )
+      |> Enum.reduce(%{}, fn
+        {:ok, {file, deps}}, acc -> Map.put(acc, file, deps)
+        {:exit, _}, acc -> acc
+      end)
+
+    # Topological sort - compile files with no dependencies first
+    file_set = MapSet.new(files)
+    compile_in_levels(files, dep_map, file_set, [])
+  end
+
+  defp compile_in_levels([], _dep_map, _file_set, _compiled), do: {:ok, %{}}
+
+  defp compile_in_levels(remaining, dep_map, file_set, compiled) do
+    compiled_set = MapSet.new(compiled)
+
+    # Find files whose dependencies are all compiled (or not in our set)
+    {ready, not_ready} =
+      Enum.split_with(remaining, fn file ->
+        deps = Map.get(dep_map, file, [])
+
+        Enum.all?(deps, fn dep ->
+          MapSet.member?(compiled_set, dep) or not MapSet.member?(file_set, dep)
+        end)
+      end)
+
+    if length(ready) == 0 and length(not_ready) > 0 do
+      # Circular dependency or missing deps - just compile what's left
+      Logger.warning("Possible circular dependency in node_modules, compiling remaining #{length(not_ready)} files")
+      PoolSupervisor.check_files(not_ready, %{use_cached_types: true})
+    else
+      # Compile ready files
+      if length(ready) > 0 do
+        PoolSupervisor.check_files(ready, %{use_cached_types: true})
+      end
+
+      # Continue with remaining
+      compile_in_levels(not_ready, dep_map, file_set, compiled ++ ready)
+    end
   end
 
   # Build dependency graph using the CLI for accurate AST-based import extraction

@@ -400,7 +400,12 @@ pub fn compile_source_with_external_types(
           }
 
           // Extract module types for cross-file type checking cache
-          let module_types = extract_module_types(bound_source, file_path)
+          // Use external registry to resolve require() chains for proper type inference
+          let module_types = extract_module_types_with_registry(
+            bound_source,
+            file_path,
+            Some(external_registry),
+          )
           let module_types_json = Some(module_types.to_json_string())
 
           // If noEmit is enabled, skip all emit phases and return type check results only
