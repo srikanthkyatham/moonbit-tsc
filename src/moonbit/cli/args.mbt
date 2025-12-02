@@ -36,6 +36,7 @@ pub(all) struct CLIOptions {
   report_diagnostics : Bool // Always report diagnostics, even when successful
   json_output : Bool // Output results as JSON for tooling integration
   external_types_json : String? // JSON string containing external types for cross-file checking
+  no_emit : Bool // Only run type checking, don't emit JavaScript
 } derive(Show)
 
 ///|
@@ -53,6 +54,7 @@ pub fn CLIOptions::default() -> CLIOptions {
     report_diagnostics: false,
     json_output: false,
     external_types_json: None,
+    no_emit: false,
   }
 }
 
@@ -77,6 +79,7 @@ pub fn parse_args(args : Array[String]) -> Result[Command, String] {
   let mut json_output = false
   let mut external_types_json : String? = None
   let mut json_mode = false
+  let mut no_emit = false
 
   let mut i = 1 // Skip program name
 
@@ -113,6 +116,7 @@ pub fn parse_args(args : Array[String]) -> Result[Command, String] {
         report_diagnostics: false,
         json_output: false,
         external_types_json: None,
+        no_emit: false,
       }
       return Ok(Command::BuildReferences(build_path, options))
     } else if arg == "--list-imports" {
@@ -189,6 +193,8 @@ pub fn parse_args(args : Array[String]) -> Result[Command, String] {
         return Err("--external-types requires a JSON string")
       }
       external_types_json = Some(args[i])
+    } else if arg == "--noEmit" {
+      no_emit = true
     } else if arg.has_prefix("-") {
       return Err("Unknown option: " + arg)
     } else {
@@ -210,6 +216,7 @@ pub fn parse_args(args : Array[String]) -> Result[Command, String] {
     report_diagnostics,
     json_output,
     external_types_json,
+    no_emit,
   }
 
   // If --project was specified, use project mode

@@ -676,6 +676,7 @@ fn build_coordinator_options(
     worker_count: options.parallel.unwrap_or(default_worker_count()),
     verbose: options.verbose,
     external_types_json: options.external_types_json,
+    no_emit: options.no_emit,
   }
 }
 
@@ -754,6 +755,16 @@ fn build_coordinator_options_from_tsconfig(
     Some(opts) => opts.es_module_interop.unwrap_or(false)
     None => false
   }
+  // Get noEmit from tsconfig if not specified in CLI
+  let no_emit = if cli_options.no_emit {
+    true
+  } else {
+    match tsconfig.compiler_options {
+      Some(opts) => opts.no_emit.unwrap_or(false)
+      None => false
+    }
+  }
+
   @coordinator.CoordinatorOptions::{
     target,
     module_kind,
@@ -766,6 +777,7 @@ fn build_coordinator_options_from_tsconfig(
     worker_count: cli_options.parallel.unwrap_or(default_worker_count()),
     verbose: cli_options.verbose,
     external_types_json: cli_options.external_types_json,
+    no_emit,
   }
 }
 

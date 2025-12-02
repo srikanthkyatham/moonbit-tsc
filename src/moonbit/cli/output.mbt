@@ -105,6 +105,11 @@ pub async fn write_output(
     return
   }
 
+  // Skip all output if noEmit is set
+  if options.no_emit {
+    return
+  }
+
   let out_dir = match options.out_dir {
     Some(dir) => dir
     None => get_directory(response.file_path)

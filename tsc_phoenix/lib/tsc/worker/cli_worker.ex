@@ -211,6 +211,7 @@ defmodule TSC.Worker.CLIWorker do
 
     args = if options[:verbose], do: args ++ ["--verbose"], else: args
     args = if options[:out_dir], do: args ++ ["--outDir", options[:out_dir]], else: args
+    args = if options[:no_emit], do: args ++ ["--noEmit"], else: args
 
     # Add external types from cache if use_cached_types option is set
     args = if options[:use_cached_types] do

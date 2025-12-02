@@ -15,6 +15,7 @@ pub(all) struct CoordinatorOptions {
   worker_count : Int
   verbose : Bool
   external_types_json : String? // JSON string containing external types for cross-file checking
+  no_emit : Bool // Only run type checking, don't emit JavaScript
 } derive(Show)
 
 ///|
@@ -32,6 +33,7 @@ pub fn CoordinatorOptions::default() -> CoordinatorOptions {
     worker_count: 4, // Default to 4 workers
     verbose: false,
     external_types_json: None,
+    no_emit: false,
   }
 }
 
@@ -237,7 +239,7 @@ fn compile_single(
     exact_optional_property_types: false,
     no_unchecked_indexed_access: false,
     verbatim_module_syntax: false,
-    no_emit: false,
+    no_emit: options.no_emit,
     es_module_interop: options.es_module_interop,
     no_implicit_any: false,
     strict_null_checks: false,

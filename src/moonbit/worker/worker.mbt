@@ -52,7 +52,7 @@ fn process_request(json_str : String) -> @protocol.CompileResponse {
     exact_optional_property_types: false,
     no_unchecked_indexed_access: false,
     verbatim_module_syntax: false,
-    no_emit: false,
+    no_emit: request.no_emit,
     es_module_interop: request.es_module_interop,
     no_implicit_any: false,
     strict_null_checks: false,
