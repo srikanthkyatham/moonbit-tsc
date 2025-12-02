@@ -66,18 +66,30 @@ pub async fn compile_parallel(
     }
   }
 
+  // Pre-pass: Extract global namespaces from all .d.ts files
+  // This ensures global declarations are available to all files during compilation
+  let global_namespaces = extract_global_namespaces_from_dts_files(files)
+
+  // Build combined external types JSON that includes global namespaces
+  let combined_options = if global_namespaces.length() > 0 {
+    let combined_json = build_external_types_with_globals(options.external_types_json, global_namespaces)
+    { ..options, external_types_json: Some(combined_json) }
+  } else {
+    options
+  }
+
   // Pre-allocate results array
   let results : Array[@protocol.CompileResponse?] = Array::make(files.length(), None)
 
   // Use semaphore to limit concurrency to worker_count
-  let sem = @semaphore.Semaphore::new(options.worker_count)
+  let sem = @semaphore.Semaphore::new(combined_options.worker_count)
 
   // Compile all files in parallel using task group
   @async.with_task_group(fn(group) {
     for i = 0; i < files.length(); i = i + 1 {
       let idx = i
       let (file_path, source) = files[i]
-      let opts = options
+      let opts = combined_options
 
       let _ = group.spawn(async fn() {
         // Acquire semaphore to limit concurrency
@@ -121,6 +133,88 @@ pub async fn compile_parallel(
     failed,
     total_time_ms: end_time - start_time,
   }
+}
+
+///|
+/// Extract global namespaces from all .d.ts files
+/// Returns a list of (module_path, global_namespaces_json) pairs
+fn extract_global_namespaces_from_dts_files(
+  files : Array[(String, String)],
+) -> Array[(String, String)] {
+  let result : Array[(String, String)] = []
+
+  for file in files {
+    let (file_path, source) = file
+    // Only process .d.ts files
+    if file_path.ends_with(".d.ts") {
+      // Parse and extract module types
+      match @compiler.extract_module_types_from_source(source, file_path) {
+        Some(module_types) => {
+          // Serialize just the global_namespaces part
+          let json = module_types.to_json_string()
+          result.push((file_path, json))
+        }
+        None => ()
+      }
+    }
+  }
+
+  result
+}
+
+///|
+/// Build combined external types JSON including global namespaces
+fn build_external_types_with_globals(
+  existing_json : String?,
+  global_ns_files : Array[(String, String)],
+) -> String {
+  let sb = StringBuilder::new()
+  sb.write_string("{\"modules\":{")
+
+  let mut first = true
+
+  // Add entries from global namespace files
+  for entry in global_ns_files {
+    let (file_path, module_json) = entry
+    if not(first) {
+      sb.write_string(",")
+    }
+    first = false
+    sb.write_string("\"")
+    sb.write_string(escape_json_string(file_path))
+    sb.write_string("\":")
+    sb.write_string(module_json)
+  }
+
+  // If there's existing external types JSON, we'd need to merge it
+  // For now, we just use the global namespaces
+  match existing_json {
+    Some(_) => {
+      // TODO: Merge existing external types
+      ()
+    }
+    None => ()
+  }
+
+  sb.write_string("}}")
+  sb.to_string()
+}
+
+///|
+/// Escape a string for JSON
+fn escape_json_string(s : String) -> String {
+  let sb = StringBuilder::new()
+  for c in s {
+    match c {
+      '"' => sb.write_string("\\\"")
+      '\\' => sb.write_string("\\\\")
+      '\n' => sb.write_string("\\n")
+      '\r' => sb.write_string("\\r")
+      '\t' => sb.write_string("\\t")
+      _ => sb.write_char(c)
+    }
+  }
+  sb.to_string()
 }
 
 ///|

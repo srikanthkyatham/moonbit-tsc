@@ -1229,6 +1229,9 @@ pub struct ModuleTypes {
   type_aliases : Map[String, TypeAliasInfoV2]
   /// Interfaces defined in this module
   interfaces : Map[String, ObjectTypeV2]
+  /// Global namespaces declared in this module (for .d.ts files)
+  /// Maps namespace name to its exported members
+  global_namespaces : Map[String, ObjectTypeV2]
 } derive(Show, Eq)
 
 ///|
@@ -1240,6 +1243,7 @@ pub fn ModuleTypes::empty(module_path : String) -> ModuleTypes {
     default_export: None,
     type_aliases: Map::new(),
     interfaces: Map::new(),
+    global_namespaces: Map::new(),
   }
 }
 
@@ -1361,6 +1365,25 @@ pub fn ExternalTypeRegistry::lookup_interface(
     Some(module_types) => module_types.interfaces.get(name)
     None => None
   }
+}
+
+///|
+/// Look up a global namespace by name across all modules.
+/// This searches for namespace declarations like `declare module M1 { ... }` in .d.ts files.
+/// Returns the first matching namespace found.
+pub fn ExternalTypeRegistry::lookup_global_namespace(
+  self : ExternalTypeRegistry,
+  name : String,
+) -> ObjectTypeV2? {
+  // Search through all registered modules for the namespace
+  for entry in self.modules {
+    let (_, module_types) = entry
+    match module_types.global_namespaces.get(name) {
+      Some(ns_type) => return Some(ns_type)
+      None => continue
+    }
+  }
+  None
 }
 
 // ============================================================================
@@ -1486,6 +1509,23 @@ fn parse_module_types(json : Json) -> ModuleTypes? {
         match parse_object_type_v2(iface_json) {
           Some(obj_type) => {
             module_types.interfaces.set(iface_name, obj_type)
+          }
+          None => ()
+        }
+      }
+    }
+    _ => ()
+  }
+
+  // Parse global namespaces
+  match obj.get("global_namespaces") {
+    Some(Object(ns_obj)) => {
+      for kv in ns_obj {
+        let ns_name = kv.0
+        let ns_json = kv.1
+        match parse_object_type_v2(ns_json) {
+          Some(obj_type) => {
+            module_types.global_namespaces.set(ns_name, obj_type)
           }
           None => ()
         }
@@ -2080,6 +2120,21 @@ pub fn ModuleTypes::to_json_string(self : ModuleTypes) -> String {
   // Write interfaces
   first = true
   for kv in self.interfaces {
+    if not(first) {
+      sb.write_string(",")
+    }
+    first = false
+    sb.write_string("\"")
+    sb.write_string(escape_json_str(kv.0))
+    sb.write_string("\":")
+    sb.write_string(object_type_to_json_str(kv.1))
+  }
+
+  sb.write_string("},\"global_namespaces\":{")
+
+  // Write global namespaces
+  first = true
+  for kv in self.global_namespaces {
     if not(first) {
       sb.write_string(",")
     }

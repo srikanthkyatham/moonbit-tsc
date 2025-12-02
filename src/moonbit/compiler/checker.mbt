@@ -1712,6 +1712,47 @@ fn resolve_import_type(checker : TypeChecker, name : String) -> Type? {
 }
 
 ///|
+/// Convert ObjectTypeV2 to ObjectType
+fn object_type_v2_to_type(obj : ObjectTypeV2) -> ObjectType {
+  let info = default_type_info()
+  let props : Map[String, PropertySignature] = Map::new()
+  for entry in obj.fields {
+    let (name, field) = entry
+    props.set(name, PropertySignature::{
+      name: name,
+      prop_type: type_v2_to_type(field.ty),
+      is_optional: field.optional,
+      is_readonly: field.is_readonly,
+    })
+  }
+  ObjectType::{
+    properties: props,
+    call_signatures: [],
+    construct_signatures: [],
+    index_signatures: [],
+    info: info,
+    class_name: obj.class_name,
+  }
+}
+
+///|
+/// Resolve a global namespace from external types (e.g., declare module M1 in .d.ts files)
+fn resolve_global_namespace(checker : TypeChecker, name : String) -> Type? {
+  match checker.external_registry {
+    None => None
+    Some(registry) => {
+      match registry.lookup_global_namespace(name) {
+        Some(ns_type) => {
+          let obj_type = object_type_v2_to_type(ns_type)
+          Some(Object(obj_type))
+        }
+        None => None
+      }
+    }
+  }
+}
+
+///|
 /// Create a default TypeInfo for conversions from TypeV2
 fn default_type_info() -> TypeInfo {
   TypeInfo::{ id: 0, flags: TypeFlags::default() }
@@ -2624,53 +2665,59 @@ fn infer_identifier_type(
                   match resolve_import_type(checker, id.name) {
                     Some(imported_type) => (imported_type, checker)
                     None => {
-                      // Variable not found - try to find a similar name for suggestion
-                      let suggestion = find_similar_name_in_scope(checker, id.name)
-                      let checker = match suggestion {
-                        Some(similar_name) =>
-                          add_diagnostic_with_code(
-                            checker,
-                            "Cannot find name '\{id.name}'. Did you mean '\{similar_name}'?",
-                            id.location,
-                            TS2552,
-                          )
-                        None =>
-                          // No similar name found - check for specialized error codes
-                          // TS2579: Test runner globals (Jest, Mocha, etc.)
-                          if is_test_runner_global(id.name) {
-                            add_diagnostic_with_code(
-                              checker,
-                              "Cannot find name '\{id.name}'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.",
-                              id.location,
-                              TS2579,
-                            )
-                          } else if is_dom_global(id.name) {
-                            // TS2580: DOM/Browser globals
-                            add_diagnostic_with_code(
-                              checker,
-                              "Cannot find name '\{id.name}'. Do you need to change your target library? Try changing the 'lib' compiler option to include 'dom'.",
-                              id.location,
-                              TS2580,
-                            )
-                          } else if is_es_library_global(id.name) {
-                            // TS2584: ES library globals (newer JS features)
-                            add_diagnostic_with_code(
-                              checker,
-                              "Cannot find name '\{id.name}'. Do you need to change your target library? Try changing the 'lib' compiler option to include a newer ES version.",
-                              id.location,
-                              TS2584,
-                            )
-                          } else {
-                            // Generic TS2304
-                            add_diagnostic_with_code(
-                              checker,
-                              "Cannot find name '" + id.name + "'",
-                              id.location,
-                              TS2304,
-                            )
+                      // Check for global namespaces from external types (e.g., declare module M1 in .d.ts files)
+                      match resolve_global_namespace(checker, id.name) {
+                        Some(ns_type) => (ns_type, checker)
+                        None => {
+                          // Variable not found - try to find a similar name for suggestion
+                          let suggestion = find_similar_name_in_scope(checker, id.name)
+                          let checker = match suggestion {
+                            Some(similar_name) =>
+                              add_diagnostic_with_code(
+                                checker,
+                                "Cannot find name '\{id.name}'. Did you mean '\{similar_name}'?",
+                                id.location,
+                                TS2552,
+                              )
+                            None =>
+                              // No similar name found - check for specialized error codes
+                              // TS2579: Test runner globals (Jest, Mocha, etc.)
+                              if is_test_runner_global(id.name) {
+                                add_diagnostic_with_code(
+                                  checker,
+                                  "Cannot find name '\{id.name}'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.",
+                                  id.location,
+                                  TS2579,
+                                )
+                              } else if is_dom_global(id.name) {
+                                // TS2580: DOM/Browser globals
+                                add_diagnostic_with_code(
+                                  checker,
+                                  "Cannot find name '\{id.name}'. Do you need to change your target library? Try changing the 'lib' compiler option to include 'dom'.",
+                                  id.location,
+                                  TS2580,
+                                )
+                              } else if is_es_library_global(id.name) {
+                                // TS2584: ES library globals (newer JS features)
+                                add_diagnostic_with_code(
+                                  checker,
+                                  "Cannot find name '\{id.name}'. Do you need to change your target library? Try changing the 'lib' compiler option to include a newer ES version.",
+                                  id.location,
+                                  TS2584,
+                                )
+                              } else {
+                                // Generic TS2304
+                                add_diagnostic_with_code(
+                                  checker,
+                                  "Cannot find name '" + id.name + "'",
+                                  id.location,
+                                  TS2304,
+                                )
+                              }
                           }
+                          any_type(checker)
+                        }
                       }
-                      any_type(checker)
                     }
                   }
                 }
@@ -12864,11 +12911,137 @@ pub fn extract_module_types(
           module_types.add_export(ed.name, info)
         }
 
+      // Module/Namespace declaration (e.g., declare module M1 { ... })
+      // These become global namespaces in .d.ts files
+      ModuleDeclaration(md) => {
+        // Extract namespace members and add to global_namespaces
+        let ns_type = module_declaration_to_object_type(env, bound_file.global_scope, md)
+        module_types.global_namespaces.set(md.name, ns_type)
+      }
+
       _ => ()
     }
   }
 
   module_types
+}
+
+///|
+/// Convert a module/namespace declaration to an ObjectType
+/// This extracts the exported members from the namespace
+fn module_declaration_to_object_type(
+  env : TypeEnv,
+  scope : Scope,
+  md : ModuleDeclaration,
+) -> ObjectTypeV2 {
+  let fields : Map[String, FieldInfoV2] = Map::new()
+  let call_signatures : Array[FunctionTypeV2] = []
+  let construct_signatures : Array[FunctionTypeV2] = []
+
+  // Look up the namespace symbol in the scope to get its exports
+  match scope.symbols.get(md.name) {
+    Some(symbol) =>
+      match symbol.exports {
+        Some(exports) =>
+          // Process each exported member
+          exports.each(fn(name, sym) {
+            let ty = match sym.value_declaration {
+              Some(FunctionDeclaration(fd)) => function_declaration_to_type(env, fd)
+              Some(VariableStatement(vs)) =>
+                if vs.declarations.length() > 0 {
+                  variable_declaration_to_type(env, vs.declarations[0])
+                } else {
+                  TAny
+                }
+              Some(ClassDeclaration(cd)) => class_declaration_to_type(env, cd)
+              Some(InterfaceDeclaration(iface)) =>
+                TObject(interface_declaration_to_object_type(env, iface))
+              _ => TAny
+            }
+            fields.set(name, FieldInfoV2::{
+              ty,
+              optional: false,
+              is_readonly: false,
+            })
+          })
+        None => ()
+      }
+    None => ()
+  }
+
+  // Also scan the module body directly for declarations
+  match md.body {
+    Some(BlockStatement(block)) =>
+      for stmt in block.statements {
+        match stmt {
+          FunctionDeclaration(fd) =>
+            if has_export_modifier_in_list(fd.modifiers) {
+              match fd.name {
+                Some(Identifier(id)) => {
+                  let ty = function_declaration_to_type(env, fd)
+                  fields.set(id.name, FieldInfoV2::{
+                    ty,
+                    optional: false,
+                    is_readonly: false,
+                  })
+                }
+                _ => ()
+              }
+            }
+          VariableStatement(vs) =>
+            if has_export_modifier_in_list(vs.modifiers) {
+              for decl in vs.declarations {
+                match decl.name {
+                  Identifier(id) => {
+                    let ty = variable_declaration_to_type(env, decl)
+                    fields.set(id.name, FieldInfoV2::{
+                      ty,
+                      optional: false,
+                      is_readonly: false,
+                    })
+                  }
+                  _ => ()
+                }
+              }
+            }
+          InterfaceDeclaration(iface) =>
+            if has_export_modifier_in_list(iface.modifiers) {
+              let ty = TObject(interface_declaration_to_object_type(env, iface))
+              fields.set(iface.name, FieldInfoV2::{
+                ty,
+                optional: false,
+                is_readonly: false,
+              })
+            }
+          ClassDeclaration(cd) =>
+            if has_export_modifier_in_list(cd.modifiers) {
+              match cd.name {
+                Some(Identifier(id)) => {
+                  let ty = class_declaration_to_type(env, cd)
+                  fields.set(id.name, FieldInfoV2::{
+                    ty,
+                    optional: false,
+                    is_readonly: false,
+                  })
+                }
+                _ => ()
+              }
+            }
+          _ => ()
+        }
+      }
+    _ => ()
+  }
+
+  ObjectTypeV2::{
+    fields,
+    symbol_fields: [],
+    call_signatures,
+    construct_signatures,
+    index_signature: None,
+    is_class: false,
+    class_name: None,
+  }
 }
 
 ///|
@@ -13034,6 +13207,20 @@ fn variable_declaration_to_type(env : TypeEnv, decl : VariableDeclaration) -> Ty
         Some(NullLiteral(_)) => TNull
         _ => TAny
       }
+  }
+}
+
+///|
+/// Extract module types from source code string for cross-file type checking.
+/// This parses, binds, and extracts types in one step.
+pub fn extract_module_types_from_source(
+  source : String,
+  file_path : String,
+) -> ModuleTypes? {
+  // Parse and bind the source
+  match parse_and_bind(source, file_path) {
+    Ok(bound_file) => Some(extract_module_types(bound_file, file_path))
+    Err(_) => None
   }
 }
 
