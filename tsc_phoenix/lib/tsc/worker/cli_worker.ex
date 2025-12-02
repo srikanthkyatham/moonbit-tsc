@@ -15,6 +15,7 @@ defmodule TSC.Worker.CLIWorker do
   alias TSC.Telemetry.Metrics
   alias TSC.Options
   alias TSC.Diagnostic
+  alias TSC.Cache.TypeCache
 
   require Logger
 
@@ -235,7 +236,7 @@ defmodule TSC.Worker.CLIWorker do
 
   defp parse_json_response(json) do
     # Parse the JSON response from the CLI
-    # JSON format: {success, stats, files: [{file_path, success, compile_time_ms, diagnostics}]}
+    # JSON format: {success, stats, files: [{file_path, success, compile_time_ms, diagnostics, module_types_json}]}
     files = Map.get(json, "files", [])
 
     # Convert JSON diagnostics to Diagnostic structs
@@ -245,6 +246,9 @@ defmodule TSC.Worker.CLIWorker do
       |> Enum.map(&json_diagnostic_to_struct/1)
 
     stats = Map.get(json, "stats", %{})
+
+    # Extract and cache module types from each file
+    module_types_map = extract_and_cache_module_types(files)
 
     %{
       diagnostics: diagnostics,
@@ -257,10 +261,35 @@ defmodule TSC.Worker.CLIWorker do
         by_type: diagnostics |> Enum.group_by(& &1.error_type) |> Enum.map(fn {k, v} -> {k, length(v)} end) |> Map.new(),
         files_with_errors: length(files)
       },
-      exports: %{},
+      exports: module_types_map,
       success: Map.get(json, "success", false),
       stats: stats
     }
+  end
+
+  defp extract_and_cache_module_types(files) do
+    files
+    |> Enum.reduce(%{}, fn file, acc ->
+      file_path = Map.get(file, "file_path")
+      module_types_json = Map.get(file, "module_types_json")
+
+      if file_path && module_types_json do
+        # Parse the module types JSON
+        case Jason.decode(module_types_json) do
+          {:ok, module_types} ->
+            # Store in TypeCache for cross-file type checking
+            TypeCache.put(file_path, module_types)
+            Logger.debug("Cached module types for #{file_path}")
+            Map.put(acc, file_path, module_types)
+
+          {:error, reason} ->
+            Logger.warning("Failed to parse module_types_json for #{file_path}: #{inspect(reason)}")
+            acc
+        end
+      else
+        acc
+      end
+    end)
   end
 
   defp json_diagnostic_to_struct(diag) do
