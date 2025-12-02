@@ -5114,3 +5114,478 @@ test "check qualified type name in function parameter" {
     Err(_) => assert_true(false)
   }
 }
+
+// ============================================================================
+// Cross-File Module Resolution Tests
+// ============================================================================
+
+///|
+test "ResolvedModuleExports - from_bound_file with exports" {
+  // Test parsing a source with exports to verify export collection
+  let source = "export function foo() {} export const bar = 1;"
+  let tokens = @compiler.scan_all_v2(source, "module.ts")
+  match @compiler.parse_source_file(tokens, "module.ts") {
+    Ok(source_file) =>
+      match @compiler.bind_source_file(source_file) {
+        Ok(bound_file) => {
+          let module_exports = @compiler.ResolvedModuleExports::from_bound_file(
+            bound_file,
+            "module.ts",
+          )
+          assert_true(module_exports.is_module)
+          assert_eq(module_exports.has_default_export, false)
+          assert_true(module_exports.exports.contains("foo"))
+          assert_true(module_exports.exports.contains("bar"))
+        }
+        Err(_) => assert_true(false)
+      }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "ResolvedModuleExports - from_bound_file with default export" {
+  // Test parsing a source with default export
+  let source = "export default function foo() {}"
+  let tokens = @compiler.scan_all_v2(source, "module.ts")
+  match @compiler.parse_source_file(tokens, "module.ts") {
+    Ok(source_file) =>
+      match @compiler.bind_source_file(source_file) {
+        Ok(bound_file) => {
+          let module_exports = @compiler.ResolvedModuleExports::from_bound_file(
+            bound_file,
+            "module.ts",
+          )
+          assert_true(module_exports.is_module)
+          assert_eq(module_exports.has_default_export, true)
+        }
+        Err(_) => assert_true(false)
+      }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "ResolvedModuleExports - from_bound_file non-module script" {
+  // Test parsing a source with no imports/exports (not a module)
+  let source = "const x = 1; function foo() {}"
+  let tokens = @compiler.scan_all_v2(source, "script.ts")
+  match @compiler.parse_source_file(tokens, "script.ts") {
+    Ok(source_file) =>
+      match @compiler.bind_source_file(source_file) {
+        Ok(bound_file) => {
+          let module_exports = @compiler.ResolvedModuleExports::from_bound_file(
+            bound_file,
+            "script.ts",
+          )
+          assert_eq(module_exports.is_module, false)
+          assert_eq(module_exports.has_default_export, false)
+        }
+        Err(_) => assert_true(false)
+      }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "ResolvedModuleExports - from_bound_file with export declaration" {
+  // Test parsing a source with export declaration
+  let source = "const foo = 1; export { foo };"
+  let tokens = @compiler.scan_all_v2(source, "module.ts")
+  match @compiler.parse_source_file(tokens, "module.ts") {
+    Ok(source_file) =>
+      match @compiler.bind_source_file(source_file) {
+        Ok(bound_file) => {
+          let module_exports = @compiler.ResolvedModuleExports::from_bound_file(
+            bound_file,
+            "module.ts",
+          )
+          assert_true(module_exports.is_module)
+          assert_true(module_exports.exports.contains("foo"))
+        }
+        Err(_) => assert_true(false)
+      }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "ResolvedModuleExports - from_bound_file with type exports" {
+  // Test parsing a source with interface and type exports
+  let source = "export interface Foo { x: number; } export type Bar = string;"
+  let tokens = @compiler.scan_all_v2(source, "module.ts")
+  match @compiler.parse_source_file(tokens, "module.ts") {
+    Ok(source_file) =>
+      match @compiler.bind_source_file(source_file) {
+        Ok(bound_file) => {
+          let module_exports = @compiler.ResolvedModuleExports::from_bound_file(
+            bound_file,
+            "module.ts",
+          )
+          assert_true(module_exports.is_module)
+          assert_true(module_exports.exports.contains("Foo"))
+          assert_true(module_exports.exports.contains("Bar"))
+        }
+        Err(_) => assert_true(false)
+      }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "ResolvedModuleExports - from_bound_file with class export" {
+  // Test parsing a source with class export
+  let source = "export class MyClass { constructor() {} }"
+  let tokens = @compiler.scan_all_v2(source, "module.ts")
+  match @compiler.parse_source_file(tokens, "module.ts") {
+    Ok(source_file) =>
+      match @compiler.bind_source_file(source_file) {
+        Ok(bound_file) => {
+          let module_exports = @compiler.ResolvedModuleExports::from_bound_file(
+            bound_file,
+            "module.ts",
+          )
+          assert_true(module_exports.is_module)
+          assert_true(module_exports.exports.contains("MyClass"))
+        }
+        Err(_) => assert_true(false)
+      }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "ResolvedModuleExports - from_bound_file with enum export" {
+  // Test parsing a source with enum export
+  let source = "export enum Color { Red, Green, Blue }"
+  let tokens = @compiler.scan_all_v2(source, "module.ts")
+  match @compiler.parse_source_file(tokens, "module.ts") {
+    Ok(source_file) =>
+      match @compiler.bind_source_file(source_file) {
+        Ok(bound_file) => {
+          let module_exports = @compiler.ResolvedModuleExports::from_bound_file(
+            bound_file,
+            "module.ts",
+          )
+          assert_true(module_exports.is_module)
+          assert_true(module_exports.exports.contains("Color"))
+        }
+        Err(_) => assert_true(false)
+      }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "create_module_not_found_diagnostic_with_location - generates TS2307" {
+  let loc = @compiler.SourceLocation::new(
+    "test.ts",
+    @compiler.Position::new(0, 0, 0),
+    @compiler.Position::new(0, 30, 30),
+  )
+  let diag = @compiler.create_module_not_found_diagnostic_with_location("./missing", loc)
+  assert_eq(diag.code, 2307)
+  assert_true(diag.message.contains("Cannot find module"))
+  assert_true(diag.message.contains("./missing"))
+}
+
+///|
+test "create_file_not_module_diagnostic - generates TS2306" {
+  let loc = @compiler.SourceLocation::new(
+    "test.ts",
+    @compiler.Position::new(0, 0, 0),
+    @compiler.Position::new(0, 30, 30),
+  )
+  let diag = @compiler.create_file_not_module_diagnostic("./script", loc)
+  assert_eq(diag.code, 2306)
+  assert_true(diag.message.contains("is not a module"))
+  assert_true(diag.message.contains("./script"))
+}
+
+///|
+test "create_export_not_found_diagnostic_with_location - generates TS2305" {
+  let loc = @compiler.SourceLocation::new(
+    "test.ts",
+    @compiler.Position::new(0, 0, 0),
+    @compiler.Position::new(0, 30, 30),
+  )
+  let diag = @compiler.create_export_not_found_diagnostic_with_location("foo", "./module", loc)
+  assert_eq(diag.code, 2305)
+  assert_true(diag.message.contains("no exported member"))
+  assert_true(diag.message.contains("foo"))
+  assert_true(diag.message.contains("./module"))
+}
+
+///|
+test "create_no_default_export_diagnostic_with_location - generates TS1192" {
+  let loc = @compiler.SourceLocation::new(
+    "test.ts",
+    @compiler.Position::new(0, 0, 0),
+    @compiler.Position::new(0, 30, 30),
+  )
+  let diag = @compiler.create_no_default_export_diagnostic_with_location("./module", loc)
+  assert_eq(diag.code, 1192)
+  assert_true(diag.message.contains("no default export"))
+  assert_true(diag.message.contains("./module"))
+}
+
+// ============================================================================
+// Cross-File Type Checking Tests
+// ============================================================================
+
+///|
+test "ExternalTypeRegistry - basic creation and lookup" {
+  // Test using extract_module_types to create real types
+  let source = "export function add(a: number, b: number): number { return a + b; }"
+  let tokens = @compiler.scan_all_v2(source, "utils.ts")
+  match @compiler.parse_source_file(tokens, "utils.ts") {
+    Ok(source_file) =>
+      match @compiler.bind_source_file(source_file) {
+        Ok(bound_file) => {
+          let registry = @compiler.ExternalTypeRegistry::new()
+          let module_types = @compiler.extract_module_types(bound_file, "./utils.ts")
+          registry.register_module("./utils.ts", module_types)
+
+          // Lookup should work
+          match registry.lookup_export("./utils.ts", "add") {
+            Some(found_info) => {
+              assert_eq(found_info.original_name, "add")
+              assert_true(not(found_info.is_type_only))
+            }
+            None => assert_true(false)
+          }
+
+          // Non-existent export should return None
+          match registry.lookup_export("./utils.ts", "missing") {
+            Some(_) => assert_true(false)
+            None => assert_true(true)
+          }
+        }
+        Err(_) => assert_true(false)
+      }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "ExternalTypeRegistry - type-only exports" {
+  // Test using extract_module_types with a type alias (which is type-only)
+  let source = "export type UserId = string;"
+  let tokens = @compiler.scan_all_v2(source, "types.ts")
+  match @compiler.parse_source_file(tokens, "types.ts") {
+    Ok(source_file) =>
+      match @compiler.bind_source_file(source_file) {
+        Ok(bound_file) => {
+          let registry = @compiler.ExternalTypeRegistry::new()
+          let module_types = @compiler.extract_module_types(bound_file, "./types.ts")
+          registry.register_module("./types.ts", module_types)
+
+          match registry.lookup_export("./types.ts", "UserId") {
+            Some(found_info) => {
+              assert_eq(found_info.original_name, "UserId")
+              assert_true(found_info.is_type_only)
+            }
+            None => assert_true(false)
+          }
+        }
+        Err(_) => assert_true(false)
+      }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "ImportBindingInfo - named import" {
+  let binding = @compiler.ImportBindingInfo::named("./utils.ts", "helper")
+  assert_eq(binding.module_path, "./utils.ts")
+  assert_eq(binding.imported_name, "helper")
+  assert_true(not(binding.is_default))
+  assert_true(not(binding.is_namespace))
+}
+
+///|
+test "ImportBindingInfo - default import" {
+  let binding = @compiler.ImportBindingInfo::default("./utils.ts")
+  assert_eq(binding.module_path, "./utils.ts")
+  assert_true(binding.is_default)
+  assert_true(not(binding.is_namespace))
+}
+
+///|
+test "ImportBindingInfo - namespace import" {
+  let binding = @compiler.ImportBindingInfo::namespace("./utils.ts")
+  assert_eq(binding.module_path, "./utils.ts")
+  assert_true(binding.is_namespace)
+  assert_true(not(binding.is_default))
+}
+
+///|
+test "TypeEnv - with_external_registry" {
+  let registry = @compiler.ExternalTypeRegistry::new()
+  let env = @compiler.TypeEnv::with_external_registry(registry)
+
+  // Should have external_registry set
+  match env.external_registry {
+    Some(_) => assert_true(true)
+    None => assert_true(false)
+  }
+}
+
+///|
+test "TypeEnv - with_import_binding" {
+  // Test using extract_module_types to create real types
+  let source = "export function add(a: number, b: number): number { return a + b; }"
+  let tokens = @compiler.scan_all_v2(source, "utils.ts")
+  match @compiler.parse_source_file(tokens, "utils.ts") {
+    Ok(source_file) =>
+      match @compiler.bind_source_file(source_file) {
+        Ok(bound_file) => {
+          let registry = @compiler.ExternalTypeRegistry::new()
+          let module_types = @compiler.extract_module_types(bound_file, "./utils.ts")
+          registry.register_module("./utils.ts", module_types)
+
+          let env = @compiler.TypeEnv::with_external_registry(registry)
+
+          // Add import binding
+          let binding = @compiler.ImportBindingInfo::named("./utils.ts", "add")
+          let env = env.with_import_binding("add", binding)
+
+          // The lookup_imported should find the type
+          match env.lookup_imported("add") {
+            Some(_ty) => {
+              // Successfully resolved the imported type
+              assert_true(true)
+            }
+            None => assert_true(false)
+          }
+        }
+        Err(_) => assert_true(false)
+      }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "extract_module_types - extracts exported function" {
+  let source = "export function add(a: number, b: number): number { return a + b; }"
+  let tokens = @compiler.scan_all_v2(source, "utils.ts")
+  match @compiler.parse_source_file(tokens, "utils.ts") {
+    Ok(source_file) =>
+      match @compiler.bind_source_file(source_file) {
+        Ok(bound_file) => {
+          let module_types = @compiler.extract_module_types(bound_file, "utils.ts")
+          match module_types.get_export("add") {
+            Some(info) => {
+              assert_eq(info.original_name, "add")
+              assert_true(not(info.is_type_only))
+            }
+            None => assert_true(false)
+          }
+        }
+        Err(_) => assert_true(false)
+      }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "extract_module_types - extracts exported variable" {
+  let source = "export const PI: number = 3.14159;"
+  let tokens = @compiler.scan_all_v2(source, "constants.ts")
+  match @compiler.parse_source_file(tokens, "constants.ts") {
+    Ok(source_file) =>
+      match @compiler.bind_source_file(source_file) {
+        Ok(bound_file) => {
+          let module_types = @compiler.extract_module_types(bound_file, "constants.ts")
+          match module_types.get_export("PI") {
+            Some(info) => {
+              assert_eq(info.original_name, "PI")
+              assert_true(not(info.is_type_only))
+            }
+            None => assert_true(false)
+          }
+        }
+        Err(_) => assert_true(false)
+      }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "extract_module_types - extracts exported interface" {
+  let source = "export interface User { name: string; age: number; }"
+  let tokens = @compiler.scan_all_v2(source, "types.ts")
+  match @compiler.parse_source_file(tokens, "types.ts") {
+    Ok(source_file) =>
+      match @compiler.bind_source_file(source_file) {
+        Ok(bound_file) => {
+          let module_types = @compiler.extract_module_types(bound_file, "types.ts")
+          match module_types.get_export("User") {
+            Some(info) => {
+              assert_eq(info.original_name, "User")
+              assert_true(info.is_type_only)
+            }
+            None => assert_true(false)
+          }
+          // Also check interfaces map
+          match module_types.interfaces.get("User") {
+            Some(_) => assert_true(true)
+            None => assert_true(false)
+          }
+        }
+        Err(_) => assert_true(false)
+      }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "extract_module_types - extracts exported type alias" {
+  let source = "export type UserId = string;"
+  let tokens = @compiler.scan_all_v2(source, "types.ts")
+  match @compiler.parse_source_file(tokens, "types.ts") {
+    Ok(source_file) =>
+      match @compiler.bind_source_file(source_file) {
+        Ok(bound_file) => {
+          let module_types = @compiler.extract_module_types(bound_file, "types.ts")
+          match module_types.get_export("UserId") {
+            Some(info) => {
+              assert_eq(info.original_name, "UserId")
+              assert_true(info.is_type_only)
+            }
+            None => assert_true(false)
+          }
+          // Also check type_aliases map
+          match module_types.type_aliases.get("UserId") {
+            Some(_) => assert_true(true)
+            None => assert_true(false)
+          }
+        }
+        Err(_) => assert_true(false)
+      }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "extract_module_types - extracts exported class" {
+  let source = "export class Calculator { add(a: number, b: number): number { return a + b; } }"
+  let tokens = @compiler.scan_all_v2(source, "calc.ts")
+  match @compiler.parse_source_file(tokens, "calc.ts") {
+    Ok(source_file) =>
+      match @compiler.bind_source_file(source_file) {
+        Ok(bound_file) => {
+          let module_types = @compiler.extract_module_types(bound_file, "calc.ts")
+          match module_types.get_export("Calculator") {
+            Some(info) => {
+              assert_eq(info.original_name, "Calculator")
+              assert_true(not(info.is_type_only))
+            }
+            None => assert_true(false)
+          }
+        }
+        Err(_) => assert_true(false)
+      }
+    Err(_) => assert_true(false)
+  }
+}

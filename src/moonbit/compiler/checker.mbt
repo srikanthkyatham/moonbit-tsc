@@ -284,6 +284,7 @@ pub struct TypeChecker {
   in_derived_class : Bool // Tracks if we're in a class that extends another (for TS2335)
   super_called : Bool // Tracks if super() has been called in constructor (for TS17009)
   current_location : SourceLocation // Current location being checked (for TS2590 and similar)
+  external_registry : ExternalTypeRegistry? // Registry of types from other modules for cross-file checking
 } derive(Show)
 
 ///|
@@ -352,6 +353,7 @@ pub fn TypeChecker::new_with_options(
       Position::{ line: 0, column: 0, offset: 0 },
       Position::{ line: 0, column: 0, offset: 0 },
     ),
+    external_registry: None,
   }
 }
 
@@ -1445,6 +1447,53 @@ pub fn check_source_file_with_options(
     no_unchecked_indexed_access,
     target,
   )
+  // Push a top-level scope for the source file so local variables are tracked
+  let checker = push_local_scope(checker)
+  let checker = check_statements(checker, bound.statements)
+  // Pop the top-level scope
+  let checker = pop_local_scope(checker)
+
+  // Check for unused @ts-expect-error directives (TS2578)
+  let checker = check_unused_ts_expect_error_directives(
+    checker,
+    bound.ts_expect_error_directives,
+  )
+
+  // Return result
+  let typed_file : TypedFile = {
+    file_path: bound.file_path,
+    statements: bound.statements,
+    types: checker.node_types,
+    diagnostics: checker.diagnostics,
+  }
+  if checker.diagnostics.is_empty() {
+    Ok(typed_file)
+  } else {
+    Err(checker.diagnostics)
+  }
+}
+
+///|
+/// Check a bound source file with external types from other modules
+/// This enables cross-file type checking by providing types from imported modules.
+pub fn check_source_file_with_external_types(
+  bound : BoundSourceFile,
+  external_registry : ExternalTypeRegistry,
+  no_unchecked_indexed_access : Bool,
+  target : Target,
+) -> CheckResult {
+  let checker = TypeChecker::new_with_options(
+    bound.file_path,
+    Some(bound.global_scope),
+    no_unchecked_indexed_access,
+    target,
+  )
+
+  // Store external registry in checker for type resolution
+  // Note: The TypeChecker itself doesn't directly use the registry,
+  // but when we create a TypeEnv for v2 checking, we populate it with external types
+  let checker = { ..checker, external_registry: Some(external_registry) }
+
   // Push a top-level scope for the source file so local variables are tracked
   let checker = push_local_scope(checker)
   let checker = check_statements(checker, bound.statements)
@@ -10278,6 +10327,220 @@ fn check_import_declaration(
 }
 
 ///|
+/// Module export information for cross-file validation
+pub struct ResolvedModuleExports {
+  /// File path of the module
+  file_path : String
+  /// Whether this file is a module (has imports/exports)
+  is_module : Bool
+  /// Whether this module has a default export
+  has_default_export : Bool
+  /// Set of exported names
+  exports : @hashset.HashSet[String]
+} derive(Show)
+
+///|
+/// Validate import against resolved module exports
+/// This checks for TS2307 (module not found), TS2305 (no exported member),
+/// TS2306 (not a module), TS1192 (no default export)
+pub fn validate_import_resolution(
+  import_decl : ImportDeclaration,
+  module_registry : Map[String, ResolvedModuleExports],
+) -> Array[Diagnostic] {
+  let diagnostics : Array[Diagnostic] = []
+  let module_spec = import_decl.module_specifier
+
+  // Check if module exists in registry
+  match module_registry.get(module_spec) {
+    None => {
+      // TS2307: Cannot find module
+      diagnostics.push(create_module_not_found_diagnostic_with_location(module_spec, import_decl.location))
+    }
+    Some(module_exports) => {
+      // Check if the file is a module (has exports)
+      if not(module_exports.is_module) {
+        // TS2306: File is not a module
+        diagnostics.push(create_file_not_module_diagnostic(module_spec, import_decl.location))
+      } else {
+        // Validate import clause
+        match import_decl.import_clause {
+          Some(clause) => {
+            // Check default import
+            match clause.name {
+              Some(_default_name) => {
+                if not(module_exports.has_default_export) {
+                  // TS1192: Module has no default export
+                  diagnostics.push(create_no_default_export_diagnostic_with_location(
+                    module_spec,
+                    import_decl.location,
+                  ))
+                }
+              }
+              None => ()
+            }
+
+            // Check named bindings
+            match clause.named_bindings {
+              Some(NamedImports(specifiers, _)) => {
+                for specifier in specifiers {
+                  let import_name = match specifier.property_name {
+                    Some(prop) => prop
+                    None => specifier.name
+                  }
+                  if not(module_exports.exports.contains(import_name)) {
+                    // TS2305: Module has no exported member
+                    diagnostics.push(create_export_not_found_diagnostic_with_location(
+                      import_name,
+                      module_spec,
+                      specifier.location,
+                    ))
+                  }
+                }
+              }
+              Some(NamespaceImport(_, _)) => {
+                // Namespace import is always valid if the module exists
+                ()
+              }
+              None => ()
+            }
+          }
+          None => {
+            // Side-effect import (import 'module') - always valid if module exists
+            ()
+          }
+        }
+      }
+    }
+  }
+  diagnostics
+}
+
+///|
+/// Create module exports from a bound source file
+pub fn ResolvedModuleExports::from_bound_file(
+  bound_file : BoundSourceFile,
+  file_path : String,
+) -> ResolvedModuleExports {
+  let exports : @hashset.HashSet[String] = @hashset.new()
+  let mut has_default = false
+  let mut is_module = false
+
+  // Check for imports/exports to determine if it's a module
+  for statement in bound_file.statements {
+    match statement {
+      ImportDeclaration(_) | ImportEqualsDeclaration(_) => is_module = true
+      ExportDeclaration(ed) => {
+        is_module = true
+        match ed.export_clause {
+          Some(NamedExports(specifiers, _)) => {
+            for spec in specifiers {
+              // ExportSpecifier: name is String, property_name is String?
+              // export { foo } -> name = "foo", property_name = None
+              // export { foo as bar } -> name = "bar", property_name = Some("foo")
+              // The exported name is always `name`
+              exports.add(spec.name)
+            }
+          }
+          Some(NamespaceExport(name, _)) => {
+            exports.add(name)
+          }
+          None => ()  // export * from 'mod'
+        }
+      }
+      ExportAssignment(_) => {
+        is_module = true
+        // Both export = and export default create a default export
+        has_default = true
+      }
+      FunctionDeclaration(fd) => {
+        if has_export_modifier_in_list(fd.modifiers) {
+          is_module = true
+          if has_default_modifier_in_list(fd.modifiers) {
+            has_default = true
+          } else {
+            // fd.name is Node? - extract name from Identifier
+            match fd.name {
+              Some(Identifier(id)) => exports.add(id.name)
+              _ => ()
+            }
+          }
+        }
+      }
+      ClassDeclaration(cd) => {
+        if has_export_modifier_in_list(cd.modifiers) {
+          is_module = true
+          if has_default_modifier_in_list(cd.modifiers) {
+            has_default = true
+          } else {
+            // cd.name is Node? - extract name from Identifier
+            match cd.name {
+              Some(Identifier(id)) => exports.add(id.name)
+              _ => ()
+            }
+          }
+        }
+      }
+      VariableStatement(vs) => {
+        if has_export_modifier_in_list(vs.modifiers) {
+          is_module = true
+          for decl in vs.declarations {
+            match decl.name {
+              Identifier(id) => exports.add(id.name)
+              _ => ()
+            }
+          }
+        }
+      }
+      InterfaceDeclaration(iface) => {
+        if has_export_modifier_in_list(iface.modifiers) {
+          is_module = true
+          exports.add(iface.name)
+        }
+      }
+      TypeAliasDeclaration(td) => {
+        if has_export_modifier_in_list(td.modifiers) {
+          is_module = true
+          exports.add(td.name)
+        }
+      }
+      EnumDeclaration(ed) => {
+        if has_export_modifier_in_list(ed.modifiers) {
+          is_module = true
+          exports.add(ed.name)
+        }
+      }
+      _ => ()
+    }
+  }
+
+  { file_path, is_module, has_default_export: has_default, exports }
+}
+
+///|
+/// Check if modifiers contain export keyword
+fn has_export_modifier_in_list(modifiers : Array[Modifier]) -> Bool {
+  for modifier in modifiers {
+    match modifier {
+      Export => return true
+      _ => ()
+    }
+  }
+  false
+}
+
+///|
+/// Check if modifiers contain default keyword
+fn has_default_modifier_in_list(modifiers : Array[Modifier]) -> Bool {
+  for modifier in modifiers {
+    match modifier {
+      Default => return true
+      _ => ()
+    }
+  }
+  false
+}
+
+///|
 /// Remove file extension from a module path for TS2691 suggestion
 fn remove_extension(path : String) -> String {
   if path.has_suffix(".d.ts") {
@@ -12079,6 +12342,313 @@ fn check_type_parameter_names(
     }
   }
   checker
+}
+
+// ============================================================================
+// Extract ModuleTypes for Cross-File Type Checking
+// ============================================================================
+
+///|
+/// Extract module types from a bound source file for cross-file type checking.
+/// This creates a ModuleTypes object containing all exported types.
+pub fn extract_module_types(
+  bound_file : BoundSourceFile,
+  file_path : String,
+) -> ModuleTypes {
+  let module_types = ModuleTypes::empty(file_path)
+
+  // Create a base environment to convert AST types to TypeV2
+  let env = TypeEnv::with_builtins()
+
+  for statement in bound_file.statements {
+    match statement {
+      // Export declaration: export { a, b } or export { a as b }
+      ExportDeclaration(ed) =>
+        match ed.export_clause {
+          Some(NamedExports(specifiers, _)) =>
+            for spec in specifiers {
+              // Get type from global scope if available
+              let ty = resolve_export_type(bound_file.global_scope, spec.name, env)
+              let info = ExternalTypeInfo::value(ty, spec.name)
+              module_types.add_export(spec.name, info)
+            }
+          Some(NamespaceExport(name, _)) => {
+            // Namespace re-export - add as any for now
+            let info = ExternalTypeInfo::value(TAny, name)
+            module_types.add_export(name, info)
+          }
+          None => () // export * from 'mod' - handled by module resolver
+        }
+
+      // Export assignment: export = x or export default x
+      ExportAssignment(ea) => {
+        let ty = match ea.expression {
+          Identifier(id) => resolve_export_type(bound_file.global_scope, id.name, env)
+          _ => TAny
+        }
+        let info = if ea.is_export_equals {
+          ExternalTypeInfo::value(ty, "=")
+        } else {
+          ExternalTypeInfo::value(ty, "default")
+        }
+        // Store in a special key for default
+        module_types.named_exports.set("default", info)
+      }
+
+      // Exported function declaration
+      FunctionDeclaration(fd) =>
+        if has_export_modifier_in_list(fd.modifiers) {
+          match fd.name {
+            Some(Identifier(id)) => {
+              let ty = function_declaration_to_type(env, fd)
+              let is_default = has_default_modifier_in_list(fd.modifiers)
+              if is_default {
+                let info = ExternalTypeInfo::value(ty, id.name)
+                module_types.named_exports.set("default", info)
+              } else {
+                let info = ExternalTypeInfo::value(ty, id.name)
+                module_types.add_export(id.name, info)
+              }
+            }
+            _ => ()
+          }
+        }
+
+      // Exported class declaration
+      ClassDeclaration(cd) =>
+        if has_export_modifier_in_list(cd.modifiers) {
+          match cd.name {
+            Some(Identifier(id)) => {
+              let ty = class_declaration_to_type(env, cd)
+              let is_default = has_default_modifier_in_list(cd.modifiers)
+              if is_default {
+                let info = ExternalTypeInfo::value(ty, id.name)
+                module_types.named_exports.set("default", info)
+              } else {
+                let info = ExternalTypeInfo::value(ty, id.name)
+                module_types.add_export(id.name, info)
+              }
+            }
+            _ => ()
+          }
+        }
+
+      // Exported variable statement
+      VariableStatement(vs) =>
+        if has_export_modifier_in_list(vs.modifiers) {
+          for decl in vs.declarations {
+            match decl.name {
+              Identifier(id) => {
+                let ty = variable_declaration_to_type(env, decl)
+                let info = ExternalTypeInfo::value(ty, id.name)
+                module_types.add_export(id.name, info)
+              }
+              _ => ()
+            }
+          }
+        }
+
+      // Exported type alias
+      TypeAliasDeclaration(tad) =>
+        if has_export_modifier_in_list(tad.modifiers) {
+          let ty = ast_type_to_v2(env, tad.type_node)
+          let alias_info = TypeAliasInfoV2::{ type_params: [], body: ty }
+          module_types.type_aliases.set(tad.name, alias_info)
+          // Also add to named exports as type-only
+          let info = ExternalTypeInfo::type_only(ty, tad.name)
+          module_types.add_export(tad.name, info)
+        }
+
+      // Exported interface
+      InterfaceDeclaration(iface) =>
+        if has_export_modifier_in_list(iface.modifiers) {
+          let obj_type = interface_declaration_to_object_type(env, iface)
+          module_types.interfaces.set(iface.name, obj_type)
+          // Also add to named exports as type-only
+          let info = ExternalTypeInfo::type_only(TObject(obj_type), iface.name)
+          module_types.add_export(iface.name, info)
+        }
+
+      // Exported enum
+      EnumDeclaration(ed) =>
+        if has_export_modifier_in_list(ed.modifiers) {
+          // Create a simple object type for the enum
+          let ty = TAny // Enums are complex - use any for now
+          let info = ExternalTypeInfo::value(ty, ed.name)
+          module_types.add_export(ed.name, info)
+        }
+
+      _ => ()
+    }
+  }
+
+  module_types
+}
+
+///|
+/// Resolve the type of an export from the global scope
+fn resolve_export_type(scope : Scope, name : String, env : TypeEnv) -> TypeV2 {
+  match scope.symbols.get(name) {
+    None => TAny
+    Some(symbol) =>
+      match symbol.value_declaration {
+        None => TAny
+        Some(decl) =>
+          match decl {
+            FunctionDeclaration(fd) => function_declaration_to_type(env, fd)
+            ClassDeclaration(cd) => class_declaration_to_type(env, cd)
+            VariableStatement(vs) =>
+              // Get the type of the first declaration
+              if vs.declarations.length() > 0 {
+                variable_declaration_to_type(env, vs.declarations[0])
+              } else {
+                TAny
+              }
+            TypeAliasDeclaration(tad) => ast_type_to_v2(env, tad.type_node)
+            InterfaceDeclaration(iface) =>
+              TObject(interface_declaration_to_object_type(env, iface))
+            _ => TAny
+          }
+      }
+  }
+}
+
+///|
+/// Convert a class declaration to TypeV2
+fn class_declaration_to_type(env : TypeEnv, cd : ClassDeclaration) -> TypeV2 {
+  let fields : Map[String, FieldInfoV2] = Map::new()
+  let call_signatures : Array[FunctionTypeV2] = []
+  let construct_signatures : Array[FunctionTypeV2] = []
+
+  for mem in cd.members {
+    match mem {
+      PropertyDeclaration(prop) => {
+        let ty = match prop.type_annotation {
+          Some(type_node) => ast_type_to_v2(env, type_node)
+          None => TAny
+        }
+        fields.set(prop.name, FieldInfoV2::{
+          ty,
+          optional: prop.is_optional,
+          is_readonly: false,
+        })
+      }
+      MethodDeclaration(meth) => {
+        let params = meth.parameters.map(fn(p) {
+          match p {
+            Parameter(param) => {
+              let ty = match param.type_annotation {
+                Some(type_node) => ast_type_to_v2(env, type_node)
+                None => TAny
+              }
+              ParamInfoV2::{
+                name: match param.name {
+                  Identifier(id) => id.name
+                  _ => "arg"
+                },
+                ty,
+                optional: param.is_optional,
+                is_rest: param.is_rest,
+              }
+            }
+            _ => ParamInfoV2::required("arg", TAny)
+          }
+        })
+        let return_ty = match meth.return_type {
+          Some(type_node) => ast_type_to_v2(env, type_node)
+          None => TAny
+        }
+        let func_type = FunctionTypeV2::{
+          type_params: [],
+          params,
+          rest_param: None,
+          return_type: return_ty,
+          type_predicate: None,
+          this_type: None,
+        }
+        fields.set(meth.name, FieldInfoV2::{
+          ty: TFunction(func_type),
+          optional: meth.is_optional,
+          is_readonly: false,
+        })
+      }
+      ConstructorDeclaration(ctor) => {
+        let params = ctor.parameters.map(fn(p) {
+          match p {
+            Parameter(param) => {
+              let ty = match param.type_annotation {
+                Some(type_node) => ast_type_to_v2(env, type_node)
+                None => TAny
+              }
+              ParamInfoV2::{
+                name: match param.name {
+                  Identifier(id) => id.name
+                  _ => "arg"
+                },
+                ty,
+                optional: param.is_optional,
+                is_rest: param.is_rest,
+              }
+            }
+            _ => ParamInfoV2::required("arg", TAny)
+          }
+        })
+        let class_name = match cd.name {
+          Some(Identifier(id)) => Some(id.name)
+          _ => None
+        }
+        let instance_type = TObject(ObjectTypeV2::{
+          fields,
+          symbol_fields: [],
+          call_signatures: [],
+          construct_signatures: [],
+          index_signature: None,
+          is_class: true,
+          class_name,
+        })
+        construct_signatures.push(FunctionTypeV2::{
+          type_params: [],
+          params,
+          rest_param: None,
+          return_type: instance_type,
+          type_predicate: None,
+          this_type: None,
+        })
+      }
+      _ => ()
+    }
+  }
+
+  // Return the class type (with construct signature)
+  TObject(ObjectTypeV2::{
+    fields,
+    symbol_fields: [],
+    call_signatures,
+    construct_signatures,
+    index_signature: None,
+    is_class: true,
+    class_name: match cd.name {
+      Some(Identifier(id)) => Some(id.name)
+      _ => None
+    },
+  })
+}
+
+///|
+/// Convert a variable declaration to TypeV2
+fn variable_declaration_to_type(env : TypeEnv, decl : VariableDeclaration) -> TypeV2 {
+  match decl.type_annotation {
+    Some(type_node) => ast_type_to_v2(env, type_node)
+    None =>
+      // Try to infer from initializer
+      match decl.initializer {
+        Some(StringLiteral(_)) => TString
+        Some(NumericLiteral(_)) => TNumber
+        Some(BooleanLiteral(_)) => TBoolean
+        Some(NullLiteral(_)) => TNull
+        _ => TAny
+      }
+  }
 }
 
 // Suppress warnings for functions reserved for future use

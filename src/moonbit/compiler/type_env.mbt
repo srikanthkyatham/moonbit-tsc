@@ -9,6 +9,45 @@ pub struct TypeAliasInfoV2 {
 } derive(Show, Eq)
 
 ///|
+/// Import binding info - maps local name to external module/export
+pub struct ImportBindingInfo {
+  /// Module path the import comes from
+  module_path : String
+  /// Name in the source module (may differ from local name for renamed imports)
+  imported_name : String
+  /// Whether this is a default import
+  is_default : Bool
+  /// Whether this is a namespace import (import * as ns)
+  is_namespace : Bool
+} derive(Show, Eq)
+
+///|
+/// Create a named import binding
+pub fn ImportBindingInfo::named(
+  module_path : String,
+  imported_name : String,
+) -> ImportBindingInfo {
+  { module_path, imported_name, is_default: false, is_namespace: false }
+}
+
+///|
+/// Create a default import binding
+pub fn ImportBindingInfo::default(module_path : String) -> ImportBindingInfo {
+  {
+    module_path,
+    imported_name: "default",
+    is_default: true,
+    is_namespace: false,
+  }
+}
+
+///|
+/// Create a namespace import binding
+pub fn ImportBindingInfo::namespace(module_path : String) -> ImportBindingInfo {
+  { module_path, imported_name: "*", is_default: false, is_namespace: true }
+}
+
+///|
 /// Type environment with scoped bindings
 /// Supports lexical scoping through parent chain
 pub struct TypeEnv {
@@ -18,6 +57,10 @@ pub struct TypeEnv {
   type_params : Map[String, TypeParamV2]
   narrowings : Map[String, TypeV2]
   parent : TypeEnv?
+  /// External type registry for cross-file type resolution
+  external_registry : ExternalTypeRegistry?
+  /// Import bindings: local_name -> ImportBindingInfo
+  import_bindings : Map[String, ImportBindingInfo]
 } derive(Show, Eq)
 
 ///|
@@ -30,6 +73,25 @@ pub fn TypeEnv::new() -> TypeEnv {
     type_params: Map::new(),
     narrowings: Map::new(),
     parent: None,
+    external_registry: None,
+    import_bindings: Map::new(),
+  }
+}
+
+///|
+/// Create a new type environment with external type registry
+pub fn TypeEnv::with_external_registry(
+  registry : ExternalTypeRegistry,
+) -> TypeEnv {
+  {
+    variables: Map::new(),
+    type_aliases: Map::new(),
+    interfaces: Map::new(),
+    type_params: Map::new(),
+    narrowings: Map::new(),
+    parent: None,
+    external_registry: Some(registry),
+    import_bindings: Map::new(),
   }
 }
 
@@ -43,6 +105,8 @@ pub fn TypeEnv::child(self : TypeEnv) -> TypeEnv {
     type_params: Map::new(),
     narrowings: Map::new(),
     parent: Some(self),
+    external_registry: self.external_registry,
+    import_bindings: self.import_bindings,
   }
 }
 
@@ -87,6 +151,8 @@ pub fn TypeEnv::closure_child(self : TypeEnv) -> TypeEnv {
     type_params: Map::new(),
     narrowings: inherited_narrowings,
     parent: Some(self),
+    external_registry: self.external_registry,
+    import_bindings: self.import_bindings,
   }
 }
 
@@ -101,10 +167,67 @@ pub fn TypeEnv::lookup(self : TypeEnv, name : String) -> TypeV2? {
       match self.variables.get(name) {
         Some(ty) => Some(ty)
         None =>
-          // Finally check parent scope
-          match self.parent {
-            Some(p) => p.lookup(name)
-            None => None
+          // Check import bindings for external types
+          match self.lookup_imported(name) {
+            Some(ty) => Some(ty)
+            None =>
+              // Finally check parent scope
+              match self.parent {
+                Some(p) => p.lookup(name)
+                None => None
+              }
+          }
+      }
+  }
+}
+
+///|
+/// Look up a type from an imported symbol
+pub fn TypeEnv::lookup_imported(self : TypeEnv, name : String) -> TypeV2? {
+  // Check if this name is an import binding
+  match self.import_bindings.get(name) {
+    None => None
+    Some(binding) =>
+      // Look up the type from the external registry
+      match self.external_registry {
+        None => None
+        Some(registry) =>
+          if binding.is_default {
+            // Default import - look up default export
+            match registry.lookup_default(binding.module_path) {
+              Some(info) => Some(info.ty)
+              None => None
+            }
+          } else if binding.is_namespace {
+            // Namespace import - create an object type with all exports
+            match registry.get_module(binding.module_path) {
+              None => None
+              Some(module_types) => {
+                // Build an object type from all exports
+                let fields : Map[String, FieldInfoV2] = Map::new()
+                for kv in module_types.named_exports {
+                  fields.set(kv.0, FieldInfoV2::required(kv.1.ty))
+                }
+                Some(
+                  TObject(ObjectTypeV2::{
+                    fields,
+                    symbol_fields: [],
+                    call_signatures: [],
+                    construct_signatures: [],
+                    index_signature: None,
+                    is_class: false,
+                    class_name: None,
+                  }),
+                )
+              }
+            }
+          } else {
+            // Named import - look up specific export
+            match
+              registry.lookup_export(binding.module_path, binding.imported_name) {
+              Some(info) => Some(info.ty)
+              None => None
+            }
           }
       }
   }
@@ -172,6 +295,27 @@ pub fn TypeEnv::lookup_type_param(
 }
 
 ///|
+/// Add an import binding (returns new environment)
+pub fn TypeEnv::with_import_binding(
+  self : TypeEnv,
+  local_name : String,
+  binding : ImportBindingInfo,
+) -> TypeEnv {
+  let new_bindings = self.import_bindings
+  new_bindings.set(local_name, binding)
+  {
+    variables: self.variables,
+    type_aliases: self.type_aliases,
+    interfaces: self.interfaces,
+    type_params: self.type_params,
+    narrowings: self.narrowings,
+    parent: self.parent,
+    external_registry: self.external_registry,
+    import_bindings: new_bindings,
+  }
+}
+
+///|
 /// Add a variable binding (returns new environment)
 pub fn TypeEnv::with_variable(
   self : TypeEnv,
@@ -187,6 +331,8 @@ pub fn TypeEnv::with_variable(
     type_params: self.type_params,
     narrowings: self.narrowings,
     parent: self.parent,
+    external_registry: self.external_registry,
+    import_bindings: self.import_bindings,
   }
 }
 
@@ -207,6 +353,8 @@ pub fn TypeEnv::with_variables(
     type_params: self.type_params,
     narrowings: self.narrowings,
     parent: self.parent,
+    external_registry: self.external_registry,
+    import_bindings: self.import_bindings,
   }
 }
 
@@ -226,6 +374,8 @@ pub fn TypeEnv::with_type_alias(
     type_params: self.type_params,
     narrowings: self.narrowings,
     parent: self.parent,
+    external_registry: self.external_registry,
+    import_bindings: self.import_bindings,
   }
 }
 
@@ -251,6 +401,8 @@ pub fn TypeEnv::with_interface(
     type_params: self.type_params,
     narrowings: self.narrowings,
     parent: self.parent,
+    external_registry: self.external_registry,
+    import_bindings: self.import_bindings,
   }
 }
 
@@ -271,6 +423,8 @@ pub fn TypeEnv::with_type_params(
     type_params: new_params,
     narrowings: self.narrowings,
     parent: self.parent,
+    external_registry: self.external_registry,
+    import_bindings: self.import_bindings,
   }
 }
 
@@ -290,6 +444,8 @@ pub fn TypeEnv::with_narrowing(
     type_params: self.type_params,
     narrowings: new_narrowings,
     parent: self.parent,
+    external_registry: self.external_registry,
+    import_bindings: self.import_bindings,
   }
 }
 
@@ -310,6 +466,8 @@ pub fn TypeEnv::with_narrowings(
     type_params: self.type_params,
     narrowings: new_narrowings,
     parent: self.parent,
+    external_registry: self.external_registry,
+    import_bindings: self.import_bindings,
   }
 }
 
@@ -323,6 +481,8 @@ pub fn TypeEnv::clear_narrowings(self : TypeEnv) -> TypeEnv {
     type_params: self.type_params,
     narrowings: Map::new(),
     parent: self.parent,
+    external_registry: self.external_registry,
+    import_bindings: self.import_bindings,
   }
 }
 
@@ -706,6 +866,8 @@ fn merge_narrowing_envs(
     type_params: base.type_params,
     narrowings: merged_narrowings,
     parent: base.parent,
+    external_registry: base.external_registry,
+    import_bindings: base.import_bindings,
   }
 }
 
@@ -835,7 +997,7 @@ pub fn TypeEnv::apply_global_augmentation(
   // Process each declaration in the augmentation
   augmentation.declarations.each(fn(name, symbol) {
     match symbol.kind {
-      SymbolKind::Interface => {
+      SymbolKind::Interface =>
         // Get the interface type from the symbol's declarations
         match symbol.value_declaration {
           Some(InterfaceDeclaration(iface_decl)) => {
@@ -845,12 +1007,10 @@ pub fn TypeEnv::apply_global_augmentation(
           }
           _ => ()
         }
-      }
-      SymbolKind::Variable => {
+      SymbolKind::Variable =>
         // Add variable to scope - use the symbol's members or type
         env = env.with_variable(name, TAny)
-      }
-      SymbolKind::Function => {
+      SymbolKind::Function =>
         // Add function to scope
         match symbol.value_declaration {
           Some(FunctionDeclaration(func_decl)) => {
@@ -859,8 +1019,7 @@ pub fn TypeEnv::apply_global_augmentation(
           }
           _ => ()
         }
-      }
-      SymbolKind::Type => {
+      SymbolKind::Type =>
         // Add type alias
         match symbol.value_declaration {
           Some(TypeAliasDeclaration(alias_decl)) => {
@@ -872,7 +1031,6 @@ pub fn TypeEnv::apply_global_augmentation(
           }
           _ => ()
         }
-      }
       _ => ()
     }
   })
@@ -902,7 +1060,6 @@ fn interface_declaration_to_object_type(
   let call_signatures : Array[FunctionTypeV2] = []
   let construct_signatures : Array[FunctionTypeV2] = []
   let mut index_signature : IndexSignatureV2? = None
-
   for m in iface.members {
     match m {
       PropertyDeclaration(prop) => {
@@ -978,7 +1135,6 @@ fn interface_declaration_to_object_type(
       _ => ()
     }
   }
-
   ObjectTypeV2::{
     fields,
     symbol_fields: [],
@@ -1028,4 +1184,181 @@ fn function_declaration_to_type(
     type_predicate: None,
     this_type: None,
   })
+}
+
+// ============================================================================
+// External Type Registry - Cross-file Type Checking Support
+// ============================================================================
+
+///|
+/// Information about an exported type from another module
+pub struct ExternalTypeInfo {
+  /// Type of the exported symbol
+  ty : TypeV2
+  /// Whether this is a type-only export (interface, type alias)
+  is_type_only : Bool
+  /// Original name in the source module
+  original_name : String
+} derive(Show, Eq)
+
+///|
+/// Create a value export info
+pub fn ExternalTypeInfo::value(ty : TypeV2, name : String) -> ExternalTypeInfo {
+  { ty, is_type_only: false, original_name: name }
+}
+
+///|
+/// Create a type-only export info
+pub fn ExternalTypeInfo::type_only(
+  ty : TypeV2,
+  name : String,
+) -> ExternalTypeInfo {
+  { ty, is_type_only: true, original_name: name }
+}
+
+///|
+/// Module type information - types exported from a single module
+pub struct ModuleTypes {
+  /// Path to the module
+  module_path : String
+  /// Named exports: export_name -> ExternalTypeInfo
+  named_exports : Map[String, ExternalTypeInfo]
+  /// Default export (if any)
+  default_export : ExternalTypeInfo?
+  /// Type aliases defined in this module
+  type_aliases : Map[String, TypeAliasInfoV2]
+  /// Interfaces defined in this module
+  interfaces : Map[String, ObjectTypeV2]
+} derive(Show, Eq)
+
+///|
+/// Create empty module types
+pub fn ModuleTypes::empty(module_path : String) -> ModuleTypes {
+  {
+    module_path,
+    named_exports: Map::new(),
+    default_export: None,
+    type_aliases: Map::new(),
+    interfaces: Map::new(),
+  }
+}
+
+///|
+/// Add a named export
+pub fn ModuleTypes::add_export(
+  self : ModuleTypes,
+  name : String,
+  info : ExternalTypeInfo,
+) -> Unit {
+  self.named_exports.set(name, info)
+}
+
+///|
+/// Set the default export
+pub fn ModuleTypes::set_default(
+  self : ModuleTypes,
+  info : ExternalTypeInfo,
+) -> Unit {
+  // We need to create a new ModuleTypes to update default_export
+  // Since we can't mutate an optional field directly, use a workaround
+  // by using a mutable map entry pattern
+  self.named_exports.set("__default__", info)
+}
+
+///|
+/// Get an export by name
+pub fn ModuleTypes::get_export(
+  self : ModuleTypes,
+  name : String,
+) -> ExternalTypeInfo? {
+  self.named_exports.get(name)
+}
+
+///|
+/// Get the default export
+pub fn ModuleTypes::get_default(self : ModuleTypes) -> ExternalTypeInfo? {
+  self.default_export
+}
+
+///|
+/// External type registry - holds types from all external modules
+pub struct ExternalTypeRegistry {
+  /// Module path -> ModuleTypes
+  modules : Map[String, ModuleTypes]
+} derive(Show, Eq)
+
+///|
+/// Create a new empty registry
+pub fn ExternalTypeRegistry::new() -> ExternalTypeRegistry {
+  { modules: Map::new() }
+}
+
+///|
+/// Register a module's types
+pub fn ExternalTypeRegistry::register_module(
+  self : ExternalTypeRegistry,
+  module_path : String,
+  module_types : ModuleTypes,
+) -> Unit {
+  self.modules.set(module_path, module_types)
+}
+
+///|
+/// Get a module's types
+pub fn ExternalTypeRegistry::get_module(
+  self : ExternalTypeRegistry,
+  module_path : String,
+) -> ModuleTypes? {
+  self.modules.get(module_path)
+}
+
+///|
+/// Look up an exported type from a module
+pub fn ExternalTypeRegistry::lookup_export(
+  self : ExternalTypeRegistry,
+  module_path : String,
+  export_name : String,
+) -> ExternalTypeInfo? {
+  match self.modules.get(module_path) {
+    Some(module_types) => module_types.get_export(export_name)
+    None => None
+  }
+}
+
+///|
+/// Look up the default export from a module
+pub fn ExternalTypeRegistry::lookup_default(
+  self : ExternalTypeRegistry,
+  module_path : String,
+) -> ExternalTypeInfo? {
+  match self.modules.get(module_path) {
+    Some(module_types) => module_types.get_default()
+    None => None
+  }
+}
+
+///|
+/// Look up a type alias from a module
+pub fn ExternalTypeRegistry::lookup_type_alias(
+  self : ExternalTypeRegistry,
+  module_path : String,
+  name : String,
+) -> TypeAliasInfoV2? {
+  match self.modules.get(module_path) {
+    Some(module_types) => module_types.type_aliases.get(name)
+    None => None
+  }
+}
+
+///|
+/// Look up an interface from a module
+pub fn ExternalTypeRegistry::lookup_interface(
+  self : ExternalTypeRegistry,
+  module_path : String,
+  name : String,
+) -> ObjectTypeV2? {
+  match self.modules.get(module_path) {
+    Some(module_types) => module_types.interfaces.get(name)
+    None => None
+  }
 }

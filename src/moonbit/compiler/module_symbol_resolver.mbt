@@ -497,3 +497,60 @@ fn create_export_not_found_diagnostic(
     },
   }
 }
+
+///|
+/// Create diagnostic for module not found with location (TS2307)
+pub fn create_module_not_found_diagnostic_with_location(
+  module_specifier : String,
+  location : SourceLocation,
+) -> Diagnostic {
+  Diagnostic::{
+    category: DiagnosticCategory::Error,
+    code: 2307, // TS2307: Cannot find module
+    message: "Cannot find module '" + module_specifier + "' or its corresponding type declarations.",
+    location,
+  }
+}
+
+///|
+/// Create diagnostic for file is not a module (TS2306)
+pub fn create_file_not_module_diagnostic(
+  file_path : String,
+  location : SourceLocation,
+) -> Diagnostic {
+  Diagnostic::{
+    category: DiagnosticCategory::Error,
+    code: 2306, // TS2306: File is not a module
+    message: "File '" + file_path + "' is not a module.",
+    location,
+  }
+}
+
+///|
+/// Create diagnostic for module has no exported member with location (TS2305)
+pub fn create_export_not_found_diagnostic_with_location(
+  export_name : String,
+  module_path : String,
+  location : SourceLocation,
+) -> Diagnostic {
+  Diagnostic::{
+    category: DiagnosticCategory::Error,
+    code: 2305, // TS2305: Module has no exported member
+    message: "Module '" + module_path + "' has no exported member '" + export_name + "'.",
+    location,
+  }
+}
+
+///|
+/// Create diagnostic for no default export with location (TS1192)
+pub fn create_no_default_export_diagnostic_with_location(
+  module_path : String,
+  location : SourceLocation,
+) -> Diagnostic {
+  Diagnostic::{
+    category: DiagnosticCategory::Error,
+    code: 1192, // TS1192: Module has no default export
+    message: "Module '" + module_path + "' has no default export.",
+    location,
+  }
+}
