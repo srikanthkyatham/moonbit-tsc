@@ -147,16 +147,16 @@ defmodule TSC.Telemetry.Reporter do
 
   defp attach_handlers do
     events = [
-      {Metrics.file_check_start(), &handle_file_check_start/4},
-      {Metrics.file_check_stop(), &handle_file_check_stop/4},
-      {Metrics.cache_hit(), &handle_cache_hit/4},
-      {Metrics.cache_miss(), &handle_cache_miss/4},
-      {Metrics.project_check_start(), &handle_project_check_start/4},
-      {Metrics.project_check_stop(), &handle_project_check_stop/4},
-      {Metrics.worker_crash(), &handle_worker_crash/4},
-      {Metrics.worker_request_start(), &handle_worker_request_start/4},
-      {Metrics.worker_request_stop(), &handle_worker_request_stop/4},
-      {Metrics.phase_stop(), &handle_phase_stop/4}
+      {Metrics.file_check_start(), &__MODULE__.handle_file_check_start/4},
+      {Metrics.file_check_stop(), &__MODULE__.handle_file_check_stop/4},
+      {Metrics.cache_hit(), &__MODULE__.handle_cache_hit/4},
+      {Metrics.cache_miss(), &__MODULE__.handle_cache_miss/4},
+      {Metrics.project_check_start(), &__MODULE__.handle_project_check_start/4},
+      {Metrics.project_check_stop(), &__MODULE__.handle_project_check_stop/4},
+      {Metrics.worker_crash(), &__MODULE__.handle_worker_crash/4},
+      {Metrics.worker_request_start(), &__MODULE__.handle_worker_request_start/4},
+      {Metrics.worker_request_stop(), &__MODULE__.handle_worker_request_stop/4},
+      {Metrics.phase_stop(), &__MODULE__.handle_phase_stop/4}
     ]
 
     Enum.each(events, fn {event, handler} ->
@@ -169,7 +169,7 @@ defmodule TSC.Telemetry.Reporter do
     end)
   end
 
-  defp handle_file_check_start(_event, _measurements, metadata, _config) do
+  def handle_file_check_start(_event, _measurements, metadata, _config) do
     # Add to active checks
     active = get_active_checks()
     :ets.insert(@metrics_table, {:active_checks, [metadata.file | active]})
@@ -178,7 +178,7 @@ defmodule TSC.Telemetry.Reporter do
     broadcast_update(:file_check_start, metadata)
   end
 
-  defp handle_file_check_stop(_event, measurements, metadata, _config) do
+  def handle_file_check_stop(_event, measurements, metadata, _config) do
     # Remove from active checks
     active = get_active_checks() |> List.delete(metadata.file)
     :ets.insert(@metrics_table, {:active_checks, active})
@@ -205,17 +205,17 @@ defmodule TSC.Telemetry.Reporter do
     broadcast_update(:file_check_stop, Map.merge(metadata, %{duration: measurements.duration}))
   end
 
-  defp handle_cache_hit(_event, _measurements, metadata, _config) do
+  def handle_cache_hit(_event, _measurements, metadata, _config) do
     inc_counter(:cache_hits)
     broadcast_update(:cache_hit, metadata)
   end
 
-  defp handle_cache_miss(_event, _measurements, metadata, _config) do
+  def handle_cache_miss(_event, _measurements, metadata, _config) do
     inc_counter(:cache_misses)
     broadcast_update(:cache_miss, metadata)
   end
 
-  defp handle_project_check_start(_event, measurements, metadata, _config) do
+  def handle_project_check_start(_event, measurements, metadata, _config) do
     :ets.insert(@metrics_table, {:current_build, %{
       files_count: measurements.files_count,
       start_time: measurements.system_time,
@@ -226,7 +226,7 @@ defmodule TSC.Telemetry.Reporter do
     broadcast_update(:project_check_start, Map.merge(metadata, measurements))
   end
 
-  defp handle_project_check_stop(_event, measurements, metadata, _config) do
+  def handle_project_check_stop(_event, measurements, metadata, _config) do
     :ets.insert(@metrics_table, {:current_build, %{
       files_count: measurements.files_count,
       duration: measurements.duration,
@@ -240,21 +240,21 @@ defmodule TSC.Telemetry.Reporter do
     broadcast_update(:project_check_stop, Map.merge(metadata, measurements))
   end
 
-  defp handle_worker_crash(_event, _measurements, metadata, _config) do
+  def handle_worker_crash(_event, _measurements, metadata, _config) do
     inc_counter(:worker_crashes)
     broadcast_update(:worker_crash, metadata)
   end
 
-  defp handle_worker_request_start(_event, _measurements, metadata, _config) do
+  def handle_worker_request_start(_event, _measurements, metadata, _config) do
     inc_counter(:worker_requests)
     broadcast_update(:worker_request_start, metadata)
   end
 
-  defp handle_worker_request_stop(_event, measurements, metadata, _config) do
+  def handle_worker_request_stop(_event, measurements, metadata, _config) do
     broadcast_update(:worker_request_stop, Map.merge(metadata, measurements))
   end
 
-  defp handle_phase_stop(_event, measurements, metadata, _config) do
+  def handle_phase_stop(_event, measurements, metadata, _config) do
     phase = metadata.phase
     duration = measurements.duration
 
