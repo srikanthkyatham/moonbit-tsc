@@ -187,18 +187,28 @@ defmodule TSC.Coordinator do
     Metrics.emit_project_check_start(length(files))
 
     # Optionally build dependency graph and order files
-    {ordered_files, graph_stats} = if use_dependency_order do
-      build_dependency_graph_fast(files, concurrency)
+    {ordered_files, graph_stats, node_modules_files} = if use_dependency_order do
+      {nm_files, _} = build_dependency_graph_fast(files, concurrency)
       levels = DependencyGraph.topological_levels(files)
       ordered = List.flatten(levels)
       stats = DependencyGraph.stats()
       Logger.info("Dependency graph: #{stats.files} files, #{stats.edges} edges, #{length(levels)} levels")
-      {ordered, Map.put(stats, :levels, length(levels))}
+      Logger.info("Found #{length(nm_files)} node_modules dependencies")
+      {ordered, Map.put(stats, :levels, length(levels)), nm_files}
     else
-      {files, nil}
+      {files, nil, []}
     end
 
-    result = PoolSupervisor.check_files(ordered_files)
+    # First compile node_modules dependencies to populate type cache
+    _nm_result = if length(node_modules_files) > 0 do
+      Logger.info("Compiling #{length(node_modules_files)} node_modules files for type information...")
+      PoolSupervisor.check_files(node_modules_files, %{})
+    else
+      {:ok, %{}}
+    end
+
+    # Now compile project files with cached types from node_modules
+    result = PoolSupervisor.check_files(ordered_files, %{use_cached_types: true})
 
     duration = System.monotonic_time(:millisecond) - start_time
 
@@ -441,6 +451,9 @@ defmodule TSC.Coordinator do
   defp build_dependency_graph_fast(files, concurrency) do
     DependencyGraph.clear()
 
+    # Track node_modules files separately
+    node_modules_files = :ets.new(:node_modules_files, [:set, :public])
+
     files
     |> Task.async_stream(
       fn file ->
@@ -449,7 +462,14 @@ defmodule TSC.Coordinator do
             # Resolve imports to absolute paths
             dependencies =
               result.imports
-              |> Enum.map(fn imp -> ImportExtractor.resolve(file, imp.specifier) end)
+              |> Enum.map(fn imp ->
+                resolved = ImportExtractor.resolve(file, imp.specifier)
+                # Track node_modules files
+                if resolved && String.contains?(resolved, "node_modules") do
+                  :ets.insert(node_modules_files, {resolved, true})
+                end
+                resolved
+              end)
               |> Enum.reject(&is_nil/1)
 
             {file, dependencies}
@@ -460,7 +480,14 @@ defmodule TSC.Coordinator do
               {:ok, imports} ->
                 dependencies =
                   imports
-                  |> Enum.map(fn imp -> ImportExtractor.resolve(file, imp.specifier) end)
+                  |> Enum.map(fn imp ->
+                    resolved = ImportExtractor.resolve(file, imp.specifier)
+                    # Track node_modules files
+                    if resolved && String.contains?(resolved, "node_modules") do
+                      :ets.insert(node_modules_files, {resolved, true})
+                    end
+                    resolved
+                  end)
                   |> Enum.reject(&is_nil/1)
                 {file, dependencies}
 
@@ -479,5 +506,11 @@ defmodule TSC.Coordinator do
       {:exit, reason} ->
         Logger.warning("Failed to extract imports: #{inspect(reason)}")
     end)
+
+    # Collect and return node_modules files
+    nm_files = :ets.tab2list(node_modules_files) |> Enum.map(fn {path, _} -> path end)
+    :ets.delete(node_modules_files)
+
+    {nm_files, :ok}
   end
 end
