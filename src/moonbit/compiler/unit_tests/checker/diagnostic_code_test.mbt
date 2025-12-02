@@ -2192,12 +2192,27 @@ test "DiagnosticCode - TS2710 cannot use namespace as value" {
     #|const x = MyNamespace; // Using namespace directly as value
   let result = check_source(source)
   match result {
-    Ok(_) => () // May allow this in some contexts
-    Err(diagnostics) => {
-      if has_error(diagnostics, 2710) {
-        assert_true(has_message(diagnostics, "namespace") || has_message(diagnostics, "value"))
-      }
-    }
+    Ok(tf) =>
+      // Should have TS2710 error when using type-only namespace as value
+      assert_true(has_error(tf.diagnostics, 2710))
+    Err(diagnostics) => assert_true(has_error(diagnostics, 2710))
+  }
+}
+
+///|
+test "DiagnosticCode - TS2710 namespace with value exports is OK" {
+  // Namespace with value exports can be used as a value
+  let source =
+    #|namespace MyNamespace {
+    #|  export const value = 1;
+    #|}
+    #|const x = MyNamespace;
+  let result = check_source(source)
+  match result {
+    Ok(tf) =>
+      // Should NOT have TS2710 because namespace has value exports
+      assert_true(not(has_error(tf.diagnostics, 2710)))
+    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2710)))
   }
 }
 

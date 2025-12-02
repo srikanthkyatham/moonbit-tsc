@@ -2045,7 +2045,19 @@ fn infer_identifier_type(
         None =>
           // Fall back to global scope lookup
           match lookup_symbol(checker, id.name) {
-            Some(symbol) =>
+            Some(symbol) => {
+              // Check for TS2710: Cannot use namespace as a value
+              // Only if namespace has no value exports (only type exports)
+              if is_namespace_symbol(symbol) &&
+                not(namespace_has_value_exports(symbol)) {
+                let checker = add_diagnostic_with_code(
+                  checker,
+                  "Cannot use namespace '\{id.name}' as a value.",
+                  id.location,
+                  TS2710,
+                )
+                return any_type(checker)
+              }
               // Get type from symbol
               match get_symbol_type(checker, symbol) {
                 (Some(t), c) => (t, c)
@@ -2053,6 +2065,7 @@ fn infer_identifier_type(
                   // Symbol exists but type not yet computed - infer from declaration
                   infer_symbol_type(c, symbol)
               }
+            }
             None => {
               // Check for built-in globals before emitting error
               match get_builtin_global_type(checker, id.name) {
@@ -2202,6 +2215,37 @@ fn is_es_library_global(name : String) -> Bool {
   name == "WeakRef" ||
   // Iterator helpers (ES2024+)
   name == "Iterator"
+}
+
+///|
+/// Check if a symbol is a namespace/module (for TS2694, TS2710 checks)
+fn is_namespace_symbol(symbol : Symbol) -> Bool {
+  symbol.kind == Module
+}
+
+///|
+/// Check if a namespace has only type exports (no value exports)
+/// Used for TS2710 - namespace can only be used as value if it has value members
+fn namespace_has_value_exports(symbol : Symbol) -> Bool {
+  match symbol.exports {
+    Some(exports) => {
+      // Check if any export is a value (not just types)
+      let mut has_value = false
+      exports.each(fn(_name, exp_symbol) {
+        // Values: Variable, Function, Class, Enum, EnumMember
+        // Types: Interface, Type, TypeParameter
+        if exp_symbol.kind == Variable ||
+          exp_symbol.kind == Function ||
+          exp_symbol.kind == Class ||
+          exp_symbol.kind == Enum ||
+          exp_symbol.kind == EnumMember {
+          has_value = true
+        }
+      })
+      has_value
+    }
+    None => false
+  }
 }
 
 ///|
@@ -5798,80 +5842,144 @@ fn get_class_name_from_symbol_declarations(sym : Symbol) -> String {
 }
 
 ///|
+/// Check if an expression is a namespace identifier and return the symbol
+fn get_namespace_symbol_from_expr(
+  checker : TypeChecker,
+  expr : Node,
+) -> Symbol? {
+  match expr {
+    Identifier(id) =>
+      match lookup_symbol(checker, id.name) {
+        Some(symbol) =>
+          if is_namespace_symbol(symbol) {
+            Some(symbol)
+          } else {
+            None
+          }
+        None => None
+      }
+    _ => None
+  }
+}
+
+///|
 /// Infer property access type
 fn infer_property_access_type(
   checker : TypeChecker,
   prop : PropertyAccessExpression,
 ) -> (Type, TypeChecker) {
-  let (object_type, checker) = infer_type(checker, prop.expression)
-  let (prop_type_opt, checker) = lookup_property_in_type(
-    checker,
-    object_type,
-    prop.name,
-  )
-  match prop_type_opt {
-    Some(prop_type) => {
-      // Check visibility (TS2341: private, TS2445: protected)
-      let checker = check_member_visibility(
-        checker,
-        object_type,
-        prop.name,
-        prop.location,
-      )
-      (prop_type, checker)
-    }
-    None => {
-      // TS2459: Type has no property and no string index signature
-      // Only emit if the object type is a concrete type (not any/unknown)
-      // Also don't error for 'this' expressions - TypeScript allows implicit property assignment
-      let is_this_expr = match prop.expression {
-        ThisExpression(_) => true
-        _ => false
-      }
-
-      // Check if this is a static member being accessed on an instance (TS2576)
-      let (is_static_member, class_name) = check_is_static_member_of_class(
-        checker,
-        object_type,
-        prop.name,
-        prop.expression,
-      )
-
-      let checker = match object_type {
-        Any(_) | Unknown(_) => checker // Don't error for any/unknown
-        Object(_) | TypeReference(_) =>
-          if is_this_expr {
-            checker // Don't error for property access on 'this' - allows implicit property assignment
-          } else if is_static_member {
-            // TS2576: Property 'X' is a static member of type 'Y'
-            add_diagnostic_with_code(
-              checker,
-              "Property '\{prop.name}' is a static member of type '\{class_name}'",
-              get_node_location(prop.expression),
-              TS2576,
-            )
-          } else {
-            // Check for similar property names to provide "Did you mean?" suggestions
-            match find_similar_property(object_type, prop.name) {
-              Some(suggestion) =>
-                add_diagnostic_with_code(
-                  checker,
-                  "Property '\{prop.name}' does not exist on type '\{type_to_string(object_type)}'. Did you mean '\{suggestion}'?",
-                  get_node_location(prop.expression),
-                  TS2551, // TS2551: Property does not exist, did you mean?
-                )
-              None =>
-                add_diagnostic_with_code(
-                  checker,
-                  "Property '\{prop.name}' does not exist on type '\{type_to_string(object_type)}'",
-                  get_node_location(prop.expression),
-                  TS2339, // TS2339 is the standard "property does not exist" error
-                )
+  // Check if base expression is a namespace - handle TS2694
+  let namespace_sym = get_namespace_symbol_from_expr(checker, prop.expression)
+  match namespace_sym {
+    Some(ns_symbol) => {
+      // This is namespace member access - look up in exports
+      let ns_name = ns_symbol.name
+      match ns_symbol.exports {
+        Some(exports) =>
+          match exports.get(prop.name) {
+            Some(member_symbol) => {
+              // Found the exported member - get its type
+              match get_symbol_type(checker, member_symbol) {
+                (Some(t), c) => (t, c)
+                (None, c) => infer_symbol_type(c, member_symbol)
+              }
+            }
+            None => {
+              // TS2694: Namespace has no exported member
+              let checker = add_diagnostic_with_code(
+                checker,
+                "Namespace '\{ns_name}' has no exported member '\{prop.name}'.",
+                prop.location,
+                TS2694,
+              )
+              any_type(checker)
             }
           }
-        _ => checker // Don't error for other types yet
+        None => {
+          // Namespace has no exports - TS2694
+          let checker = add_diagnostic_with_code(
+            checker,
+            "Namespace '\{ns_name}' has no exported member '\{prop.name}'.",
+            prop.location,
+            TS2694,
+          )
+          any_type(checker)
+        }
       }
-      any_type(checker)
+    }
+    None => {
+      // Not a namespace - normal property access
+      let (object_type, checker) = infer_type(checker, prop.expression)
+      let (prop_type_opt, checker) = lookup_property_in_type(
+        checker,
+        object_type,
+        prop.name,
+      )
+      match prop_type_opt {
+        Some(prop_type) => {
+          // Check visibility (TS2341: private, TS2445: protected)
+          let checker = check_member_visibility(
+            checker,
+            object_type,
+            prop.name,
+            prop.location,
+          )
+          (prop_type, checker)
+        }
+        None => {
+          // TS2459: Type has no property and no string index signature
+          // Only emit if the object type is a concrete type (not any/unknown)
+          // Also don't error for 'this' expressions - TypeScript allows implicit property assignment
+          let is_this_expr = match prop.expression {
+            ThisExpression(_) => true
+            _ => false
+          }
+
+          // Check if this is a static member being accessed on an instance (TS2576)
+          let (is_static_member, class_name) = check_is_static_member_of_class(
+            checker,
+            object_type,
+            prop.name,
+            prop.expression,
+          )
+
+          let checker = match object_type {
+            Any(_) | Unknown(_) => checker // Don't error for any/unknown
+            Object(_) | TypeReference(_) =>
+              if is_this_expr {
+                checker // Don't error for property access on 'this' - allows implicit property assignment
+              } else if is_static_member {
+                // TS2576: Property 'X' is a static member of type 'Y'
+                add_diagnostic_with_code(
+                  checker,
+                  "Property '\{prop.name}' is a static member of type '\{class_name}'",
+                  get_node_location(prop.expression),
+                  TS2576,
+                )
+              } else {
+                // Check for similar property names to provide "Did you mean?" suggestions
+                match find_similar_property(object_type, prop.name) {
+                  Some(suggestion) =>
+                    add_diagnostic_with_code(
+                      checker,
+                      "Property '\{prop.name}' does not exist on type '\{type_to_string(object_type)}'. Did you mean '\{suggestion}'?",
+                      get_node_location(prop.expression),
+                      TS2551, // TS2551: Property does not exist, did you mean?
+                    )
+                  None =>
+                    add_diagnostic_with_code(
+                      checker,
+                      "Property '\{prop.name}' does not exist on type '\{type_to_string(object_type)}'",
+                      get_node_location(prop.expression),
+                      TS2339, // TS2339 is the standard "property does not exist" error
+                    )
+                }
+              }
+            _ => checker // Don't error for other types yet
+          }
+          any_type(checker)
+        }
+      }
     }
   }
 }

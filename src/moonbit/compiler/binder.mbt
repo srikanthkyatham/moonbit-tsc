@@ -171,6 +171,7 @@ fn bind_statement(binder : Binder, node : Node) -> Binder {
         binder,
         var_stmt.declarations,
         var_stmt.is_const,
+        binder_has_export_modifier(var_stmt.modifiers),
       )
 
     // Function declaration
@@ -503,8 +504,9 @@ fn bind_variable_declarations(
   binder : Binder,
   declarations : Array[VariableDeclaration],
   is_const : Bool,
+  is_export : Bool,
 ) -> Binder {
-  bind_variable_declarations_aux(binder, declarations, is_const, 0)
+  bind_variable_declarations_aux(binder, declarations, is_const, is_export, 0)
 }
 
 ///|
@@ -512,14 +514,21 @@ fn bind_variable_declarations_aux(
   binder : Binder,
   declarations : Array[VariableDeclaration],
   is_const : Bool,
+  is_export : Bool,
   index : Int,
 ) -> Binder {
   if index >= declarations.length() {
     binder
   } else {
     let decl = declarations[index]
-    let binder = bind_variable_declaration(binder, decl, is_const)
-    bind_variable_declarations_aux(binder, declarations, is_const, index + 1)
+    let binder = bind_variable_declaration(binder, decl, is_const, is_export)
+    bind_variable_declarations_aux(
+      binder,
+      declarations,
+      is_const,
+      is_export,
+      index + 1,
+    )
   }
 }
 
@@ -528,9 +537,10 @@ fn bind_variable_declaration(
   binder : Binder,
   decl : VariableDeclaration,
   is_const : Bool,
+  is_export : Bool,
 ) -> Binder {
   // Bind the pattern (identifier, array pattern, or object pattern)
-  let binder = bind_binding_pattern(binder, decl.name, is_const)
+  let binder = bind_binding_pattern(binder, decl.name, is_const, is_export)
 
   // Bind initializer expression if present
   match decl.initializer {
@@ -545,6 +555,7 @@ fn bind_binding_pattern(
   binder : Binder,
   pattern : Node,
   is_const : Bool,
+  is_export : Bool,
 ) -> Binder {
   match pattern {
     Identifier(id) => {
@@ -558,6 +569,10 @@ fn bind_binding_pattern(
       if is_const {
         symbol = { ..symbol, flags: { ..symbol.flags, is_const: true } }
       }
+      // Set export flag on symbol
+      if is_export {
+        symbol = { ..symbol, flags: { ..symbol.flags, is_export: true } }
+      }
       declare_symbol(binder, id.name, symbol)
     }
     ArrayBindingPattern(array_pattern) => {
@@ -565,7 +580,7 @@ fn bind_binding_pattern(
       for i = 0; i < array_pattern.elements.length(); i = i + 1 {
         match array_pattern.elements[i] {
           Some(element) =>
-            binder = bind_binding_pattern(binder, element, is_const)
+            binder = bind_binding_pattern(binder, element, is_const, is_export)
           None => () // Hole in pattern
         }
       }
@@ -575,7 +590,7 @@ fn bind_binding_pattern(
       let mut binder = binder
       for i = 0; i < obj_pattern.properties.length(); i = i + 1 {
         let prop = obj_pattern.properties[i]
-        binder = bind_binding_pattern(binder, prop.name, is_const)
+        binder = bind_binding_pattern(binder, prop.name, is_const, is_export)
       }
       binder
     }
@@ -596,6 +611,13 @@ fn bind_function_declaration(
   }
   let symbol = Symbol::new(name, SymbolKind::Function, binder.next_symbol_id)
   let symbol = symbol.add_declaration(Node::FunctionDeclaration(func))
+  // Set is_export flag if function has export modifier
+  let is_export = binder_has_export_modifier(func.modifiers)
+  let symbol = if is_export {
+    { ..symbol, flags: { ..symbol.flags, is_export: true } }
+  } else {
+    symbol
+  }
   let binder = declare_symbol(binder, name, symbol)
 
   // Create new scope and container for function body
@@ -978,6 +1000,34 @@ fn bind_module_declaration(
     pop_scope(binder)
   } else {
     // Regular namespace declaration
+    // Push scope and container for module body first
+    let binder = push_scope(binder)
+    let binder = push_container(binder, ContainerKind::Module)
+
+    // Bind module body if present
+    // We need to extract statements from the BlockStatement and bind them directly
+    // (instead of calling bind_statement which would create another nested scope)
+    let binder = match mod_decl.body {
+      Some(BlockStatement(block)) => bind_statements(binder, block.statements)
+      Some(body) => bind_statement(binder, body)
+      None => binder
+    }
+
+    // Capture exports from the module scope before popping
+    let module_scope = current_scope(binder)
+    let exports : SymbolTable = Map::new()
+    module_scope.symbols.each(fn(name, sym) {
+      // Only include exported members
+      if sym.flags.is_export {
+        exports.set(name, sym)
+      }
+    })
+
+    // Pop container and scope
+    let binder = pop_container(binder)
+    let binder = pop_scope(binder)
+
+    // Now create the namespace symbol with the captured exports
     let symbol = Symbol::new(
       mod_decl.name,
       SymbolKind::Module,
@@ -986,22 +1036,12 @@ fn bind_module_declaration(
     let symbol = symbol.add_declaration(Node::ModuleDeclaration(mod_decl))
     // Set the is_export flag based on the module modifiers
     let is_export = binder_has_export_modifier(mod_decl.modifiers)
-    let symbol = { ..symbol, flags: { ..symbol.flags, is_export } }
-    let binder = declare_symbol(binder, mod_decl.name, symbol)
-
-    // Push scope and container for module body
-    let binder = push_scope(binder)
-    let binder = push_container(binder, ContainerKind::Module)
-
-    // Bind module body if present
-    let binder = match mod_decl.body {
-      Some(body) => bind_statement(binder, body)
-      None => binder
+    let symbol = {
+      ..symbol,
+      flags: { ..symbol.flags, is_export },
+      exports: if exports.size() > 0 { Some(exports) } else { None },
     }
-
-    // Pop container and scope
-    let binder = pop_container(binder)
-    pop_scope(binder)
+    declare_symbol(binder, mod_decl.name, symbol)
   }
 }
 
@@ -1208,7 +1248,7 @@ fn bind_catch_variable(binder : Binder, var_decl : Node) -> Binder {
     }
     // Handle binding patterns like `catch ({ message })` or `catch ([first, second])`
     ArrayBindingPattern(_) | ObjectBindingPattern(_) =>
-      bind_binding_pattern(binder, var_decl, false)
+      bind_binding_pattern(binder, var_decl, false, false)
     _ => binder
   }
 }
