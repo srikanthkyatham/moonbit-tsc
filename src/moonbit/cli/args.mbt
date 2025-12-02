@@ -34,6 +34,7 @@ pub(all) struct CLIOptions {
   watch_interval : Int // Polling interval in milliseconds
   report_diagnostics : Bool // Always report diagnostics, even when successful
   json_output : Bool // Output results as JSON for tooling integration
+  external_types_json : String? // JSON string containing external types for cross-file checking
 } derive(Show)
 
 ///|
@@ -50,6 +51,7 @@ pub fn CLIOptions::default() -> CLIOptions {
     watch_interval: 500, // Default 500ms polling interval
     report_diagnostics: false,
     json_output: false,
+    external_types_json: None,
   }
 }
 
@@ -72,6 +74,7 @@ pub fn parse_args(args : Array[String]) -> Result[Command, String] {
   let mut project : String? = None
   let mut report_diagnostics = false
   let mut json_output = false
+  let mut external_types_json : String? = None
 
   let mut i = 1 // Skip program name
 
@@ -104,6 +107,7 @@ pub fn parse_args(args : Array[String]) -> Result[Command, String] {
         watch_interval: 500,
         report_diagnostics: false,
         json_output: false,
+        external_types_json: None,
       }
       return Ok(Command::BuildReferences(build_path, options))
     } else if arg == "--list-imports" {
@@ -174,6 +178,12 @@ pub fn parse_args(args : Array[String]) -> Result[Command, String] {
       } catch {
         _ => return Err("--parallel requires a valid number")
       }
+    } else if arg == "--external-types" {
+      i = i + 1
+      if i >= args.length() {
+        return Err("--external-types requires a JSON string")
+      }
+      external_types_json = Some(args[i])
     } else if arg.has_prefix("-") {
       return Err("Unknown option: " + arg)
     } else {
@@ -194,6 +204,7 @@ pub fn parse_args(args : Array[String]) -> Result[Command, String] {
     watch_interval,
     report_diagnostics,
     json_output,
+    external_types_json,
   }
 
   // If --project was specified, use project mode

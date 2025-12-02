@@ -67,8 +67,30 @@ fn process_request(json_str : String) -> @protocol.CompileResponse {
   // Measure compilation time
   let start_time = @async.now()
 
-  // Compile the source
-  let result = @compiler.compile_source(request.source, request.file_path, options)
+  // Compile the source - use external types if provided
+  let result = match request.external_types_json {
+    Some(json_str) => {
+      // Parse external types JSON and use with cross-file type checking
+      match @compiler.ExternalTypeRegistry::from_json(json_str) {
+        Some(registry) => {
+          @compiler.compile_source_with_external_types(
+            request.source,
+            request.file_path,
+            options,
+            registry,
+          )
+        }
+        None => {
+          // Failed to parse external types, fall back to regular compilation
+          @compiler.compile_source(request.source, request.file_path, options)
+        }
+      }
+    }
+    None => {
+      // No external types, use regular compilation
+      @compiler.compile_source(request.source, request.file_path, options)
+    }
+  }
 
   let end_time = @async.now()
   let compile_time_ms = end_time - start_time

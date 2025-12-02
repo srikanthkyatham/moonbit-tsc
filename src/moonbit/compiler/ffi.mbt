@@ -333,6 +333,133 @@ pub fn format_all_diagnostics(diagnostics : Array[Diagnostic]) -> String {
 }
 
 ///|
+/// Main compilation function with external types - compiles with cross-file type checking
+/// Uses the external type registry for resolving imported types
+pub fn compile_source_with_external_types(
+  source : String,
+  file_path : String,
+  options : CompileOptions,
+  external_registry : ExternalTypeRegistry,
+) -> CompileResult {
+  // Phase 1: Scan source into tokens
+  let tokens = scan_all_v2(source, file_path)
+
+  // Phase 2: Parse tokens into AST
+  match parse_source_file(tokens, file_path) {
+    Err(diagnostics) => CompileResult::failure(diagnostics)
+    Ok(source_file) => {
+      // Phase 3: Bind the AST (symbol resolution)
+      match bind_source_file(source_file) {
+        Err(diagnostics) => CompileResult::failure(diagnostics)
+        Ok(bound_source) => {
+          // Phase 3.5: Validate isolatedModules constraints if enabled
+          let isolated_modules_diagnostics = if options.isolated_modules {
+            validate_isolated_modules(bound_source, file_path)
+          } else {
+            []
+          }
+
+          // If isolatedModules validation failed, return errors
+          if isolated_modules_diagnostics.length() > 0 {
+            return CompileResult::failure(isolated_modules_diagnostics)
+          }
+
+          // Phase 3.6: Validate verbatimModuleSyntax constraints if enabled
+          let verbatim_module_diagnostics = if options.verbatim_module_syntax {
+            validate_verbatim_module_syntax(bound_source, file_path)
+          } else {
+            []
+          }
+
+          // If verbatimModuleSyntax validation failed, return errors
+          if verbatim_module_diagnostics.length() > 0 {
+            return CompileResult::failure(verbatim_module_diagnostics)
+          }
+
+          // Phase 4: Type check WITH external types
+          let check_result = check_source_file_with_external_types(
+            bound_source,
+            external_registry,
+            options.no_unchecked_indexed_access,
+            options.target,
+          )
+
+          // Collect type errors but continue compilation
+          // TypeScript behavior: emit JavaScript even with type errors
+          let type_diagnostics = match check_result {
+            Ok(typed_file) => typed_file.diagnostics
+            Err(diags) => diags
+          }
+
+          // If noEmit is enabled, skip all emit phases and return type check results only
+          if options.no_emit {
+            return {
+              success: true,
+              javascript: "",
+              source_map: None,
+              declaration: None,
+              diagnostics: type_diagnostics,
+            }
+          }
+
+          // Phase 5: Transform AST (remove types, downlevel features)
+          let transformer_ctx = TransformerContext::new(options.target)
+          let transformed_node = transform(SourceFile(source_file), transformer_ctx)
+
+          // Extract the transformed source file
+          let transformed_sf = match transformed_node {
+            SourceFile(sf) => sf
+            _ => source_file // Fallback, should not happen
+          }
+
+          // Phase 6: Emit JavaScript
+          let emitter_ctx = EmitterContext::with_options(
+            options.module_kind,
+            options.always_strict,
+          )
+          // Generate source map if requested (either external or inline)
+          let needs_source_map = options.source_map || options.inline_source_map
+          let (javascript, source_map_json) = if needs_source_map {
+            // Pass original source when inline_sources is enabled
+            let original_source : String? = if options.inline_sources {
+              Some(source)
+            } else {
+              None
+            }
+            emit_with_source_map_internal(
+              transformed_sf,
+              file_path,
+              options.module_kind,
+              options.always_strict,
+              original_source~,
+            )
+          } else {
+            (emit(SourceFile(transformed_sf), emitter_ctx), None)
+          }
+
+          // Phase 7: Emit declaration file if requested
+          let declaration = if options.declaration {
+            let decl_ctx = DeclarationEmitterContext::default()
+            Some(emit_declaration_file(source_file, decl_ctx))
+          } else {
+            None
+          }
+
+          // Return result with any type errors as warnings
+          {
+            success: true,
+            javascript,
+            source_map: source_map_json,
+            declaration,
+            diagnostics: type_diagnostics,
+          }
+        }
+      }
+    }
+  }
+}
+
+///|
 /// Get compiler version string
 pub fn get_compiler_version() -> String {
   "0.1.0"

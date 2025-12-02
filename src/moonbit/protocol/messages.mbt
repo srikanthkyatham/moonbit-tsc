@@ -14,6 +14,7 @@ pub(all) struct CompileRequest {
   declaration : Bool
   always_strict : Bool
   es_module_interop : Bool // Emit helpers for CommonJS/ES module interoperability
+  external_types_json : String? // JSON string containing external types for cross-file checking
 } derive(Show, ToJson, FromJson)
 
 ///|
@@ -29,6 +30,7 @@ pub fn CompileRequest::new(
   declaration~ : Bool = false,
   always_strict~ : Bool = false,
   es_module_interop~ : Bool = false,
+  external_types_json~ : String? = None,
 ) -> CompileRequest {
   {
     file_path,
@@ -41,6 +43,7 @@ pub fn CompileRequest::new(
     declaration,
     always_strict,
     es_module_interop,
+    external_types_json,
   }
 }
 

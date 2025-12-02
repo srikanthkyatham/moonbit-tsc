@@ -434,6 +434,7 @@ fn print_help() -> Unit {
   println("  --verbose               Verbose output")
   println("  --reportDiagnostics     Report all diagnostics (errors/warnings)")
   println("  --json                  Output results as JSON for tooling integration")
+  println("  --external-types <json> JSON string with external types for cross-file checking")
   println("  --init                  Generate tsconfig.json (future)")
   println("")
   println("Examples:")

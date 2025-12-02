@@ -1362,3 +1362,670 @@ pub fn ExternalTypeRegistry::lookup_interface(
     None => None
   }
 }
+
+// ============================================================================
+// JSON Parsing for External Type Registry
+// ============================================================================
+
+///|
+/// Parse ExternalTypeRegistry from JSON string
+/// JSON format:
+/// {
+///   "modules": {
+///     "/path/to/module.ts": {
+///       "module_path": "/path/to/module.ts",
+///       "named_exports": { "name": { "ty": {...}, "is_type_only": false, "original_name": "name" } },
+///       "default_export": null | { "ty": {...}, "is_type_only": false, "original_name": "default" },
+///       "type_aliases": {},
+///       "interfaces": {}
+///     }
+///   }
+/// }
+pub fn ExternalTypeRegistry::from_json(json_str : String) -> ExternalTypeRegistry? {
+  try {
+    let json = @json.parse(json_str)
+    parse_external_registry(json)
+  } catch {
+    _ => None
+  }
+}
+
+///|
+/// Parse registry from JSON value
+fn parse_external_registry(json : Json) -> ExternalTypeRegistry? {
+  guard json is Object(obj) else {
+    return None
+  }
+
+  let registry = ExternalTypeRegistry::new()
+
+  match obj.get("modules") {
+    Some(Object(modules_obj)) => {
+      for kv in modules_obj {
+        let module_path = kv.0
+        let module_json = kv.1
+        match parse_module_types(module_json) {
+          Some(module_types) => registry.register_module(module_path, module_types)
+          None => ()
+        }
+      }
+    }
+    _ => ()
+  }
+
+  Some(registry)
+}
+
+///|
+/// Parse ModuleTypes from JSON
+fn parse_module_types(json : Json) -> ModuleTypes? {
+  guard json is Object(obj) else {
+    return None
+  }
+
+  let module_path = match obj.get("module_path") {
+    Some(String(s)) => s
+    _ => return None
+  }
+
+  let module_types = ModuleTypes::empty(module_path)
+
+  // Parse named exports
+  match obj.get("named_exports") {
+    Some(Object(exports_obj)) => {
+      for kv in exports_obj {
+        let export_name = kv.0
+        let export_json = kv.1
+        match parse_external_type_info(export_json) {
+          Some(info) => module_types.add_export(export_name, info)
+          None => ()
+        }
+      }
+    }
+    _ => ()
+  }
+
+  // Parse default export
+  match obj.get("default_export") {
+    Some(Null) | None => ()
+    Some(export_json) => {
+      match parse_external_type_info(export_json) {
+        Some(info) => module_types.set_default(info)
+        None => ()
+      }
+    }
+  }
+
+  // Parse type aliases
+  match obj.get("type_aliases") {
+    Some(Object(aliases_obj)) => {
+      for kv in aliases_obj {
+        let alias_name = kv.0
+        let alias_json = kv.1
+        match parse_type_alias_info(alias_json) {
+          Some(info) => {
+            module_types.type_aliases.set(alias_name, info)
+          }
+          None => ()
+        }
+      }
+    }
+    _ => ()
+  }
+
+  // Parse interfaces
+  match obj.get("interfaces") {
+    Some(Object(ifaces_obj)) => {
+      for kv in ifaces_obj {
+        let iface_name = kv.0
+        let iface_json = kv.1
+        match parse_object_type_v2(iface_json) {
+          Some(obj_type) => {
+            module_types.interfaces.set(iface_name, obj_type)
+          }
+          None => ()
+        }
+      }
+    }
+    _ => ()
+  }
+
+  Some(module_types)
+}
+
+///|
+/// Parse ExternalTypeInfo from JSON
+fn parse_external_type_info(json : Json) -> ExternalTypeInfo? {
+  guard json is Object(obj) else {
+    return None
+  }
+
+  let ty = match obj.get("ty") {
+    Some(ty_json) => parse_type_v2(ty_json)
+    None => return None
+  }
+
+  let is_type_only = match obj.get("is_type_only") {
+    Some(True) => true
+    _ => false
+  }
+
+  let original_name = match obj.get("original_name") {
+    Some(String(s)) => s
+    _ => ""
+  }
+
+  Some(ExternalTypeInfo::{ ty, is_type_only, original_name })
+}
+
+///|
+/// Parse TypeAliasInfoV2 from JSON
+fn parse_type_alias_info(json : Json) -> TypeAliasInfoV2? {
+  guard json is Object(obj) else {
+    return None
+  }
+
+  let type_params : Array[TypeParamV2] = match obj.get("type_params") {
+    Some(Array(arr)) => {
+      let params : Array[TypeParamV2] = []
+      for item in arr {
+        match parse_type_param_v2(item) {
+          Some(param) => params.push(param)
+          None => ()
+        }
+      }
+      params
+    }
+    _ => []
+  }
+
+  let body = match obj.get("body") {
+    Some(body_json) => parse_type_v2(body_json)
+    None => return None
+  }
+
+  Some(TypeAliasInfoV2::{ type_params, body })
+}
+
+///|
+/// Parse TypeParamV2 from JSON
+fn parse_type_param_v2(json : Json) -> TypeParamV2? {
+  guard json is Object(obj) else {
+    return None
+  }
+
+  let name = match obj.get("name") {
+    Some(String(s)) => s
+    _ => return None
+  }
+
+  let constraint : TypeV2? = match obj.get("constraint") {
+    Some(Null) | None => None
+    Some(c_json) => Some(parse_type_v2(c_json))
+  }
+
+  let default_type : TypeV2? = match obj.get("default") {
+    Some(Null) | None => None
+    Some(d_json) => Some(parse_type_v2(d_json))
+  }
+
+  let is_const = match obj.get("is_const") {
+    Some(True) => true
+    _ => false
+  }
+
+  let variance : Variance? = match obj.get("variance") {
+    Some(String("in")) => Some(Contravariant)
+    Some(String("out")) => Some(Covariant)
+    Some(String("inout")) => Some(Invariant)
+    Some(String("bivariant")) => Some(Bivariant)
+    _ => None
+  }
+
+  Some(TypeParamV2::{ name, constraint, default_type, is_const, variance })
+}
+
+///|
+/// Parse TypeV2 from JSON
+/// JSON format for types:
+/// { "kind": "number" }
+/// { "kind": "string" }
+/// { "kind": "boolean" }
+/// { "kind": "null" }
+/// { "kind": "undefined" }
+/// { "kind": "void" }
+/// { "kind": "never" }
+/// { "kind": "any" }
+/// { "kind": "unknown" }
+/// { "kind": "symbol" }
+/// { "kind": "bigint" }
+/// { "kind": "literal_string", "value": "hello" }
+/// { "kind": "literal_number", "value": 42 }
+/// { "kind": "literal_bool", "value": true }
+/// { "kind": "array", "element": {...} }
+/// { "kind": "union", "types": [...] }
+/// { "kind": "intersection", "types": [...] }
+/// { "kind": "object", "fields": {...}, ... }
+/// { "kind": "function", "params": [...], "return": {...}, ... }
+/// { "kind": "type_param", "name": "T", "constraint": null }
+/// { "kind": "generic", "name": "Array", "args": [...] }
+fn parse_type_v2(json : Json) -> TypeV2 {
+  guard json is Object(obj) else {
+    return TAny
+  }
+
+  let kind = match obj.get("kind") {
+    Some(String(s)) => s
+    _ => return TAny
+  }
+
+  match kind {
+    "number" => TNumber
+    "string" => TString
+    "boolean" => TBoolean
+    "null" => TNull
+    "undefined" => TUndefined
+    "void" => TVoid
+    "never" => TNever
+    "any" => TAny
+    "unknown" => TUnknown
+    "symbol" => TSymbol
+    "bigint" => TBigInt
+    "error" => TError
+
+    "literal_string" => {
+      match obj.get("value") {
+        Some(String(v)) => TLiteralString(v)
+        _ => TString
+      }
+    }
+
+    "literal_number" => {
+      match obj.get("value") {
+        Some(Number(v)) => TLiteralNumber(v)
+        _ => TNumber
+      }
+    }
+
+    "literal_bool" => {
+      match obj.get("value") {
+        Some(True) => TLiteralBool(true)
+        Some(False) => TLiteralBool(false)
+        _ => TBoolean
+      }
+    }
+
+    "literal_bigint" => {
+      match obj.get("value") {
+        Some(String(v)) => TLiteralBigInt(v)
+        _ => TBigInt
+      }
+    }
+
+    "array" => {
+      match obj.get("element") {
+        Some(elem_json) => TArray(parse_type_v2(elem_json))
+        _ => TArray(TAny)
+      }
+    }
+
+    "tuple" => {
+      match obj.get("elements") {
+        Some(Array(elems)) => {
+          let elements : Array[TupleElementV2] = []
+          for elem in elems {
+            elements.push(parse_tuple_element_v2(elem))
+          }
+          TTuple(elements)
+        }
+        _ => TTuple([])
+      }
+    }
+
+    "union" => {
+      match obj.get("types") {
+        Some(Array(types)) => {
+          let parsed : Array[TypeV2] = []
+          for t in types {
+            parsed.push(parse_type_v2(t))
+          }
+          TUnion(parsed)
+        }
+        _ => TAny
+      }
+    }
+
+    "intersection" => {
+      match obj.get("types") {
+        Some(Array(types)) => {
+          let parsed : Array[TypeV2] = []
+          for t in types {
+            parsed.push(parse_type_v2(t))
+          }
+          TIntersection(parsed)
+        }
+        _ => TAny
+      }
+    }
+
+    "object" => {
+      match parse_object_type_v2(json) {
+        Some(obj_type) => TObject(obj_type)
+        None => TObject(ObjectTypeV2::empty())
+      }
+    }
+
+    "function" => {
+      match parse_function_type_v2(json) {
+        Some(func_type) => TFunction(func_type)
+        None => TFunction(FunctionTypeV2::any())
+      }
+    }
+
+    "type_param" => {
+      let name = match obj.get("name") {
+        Some(String(s)) => s
+        _ => "T"
+      }
+      let constraint = match obj.get("constraint") {
+        Some(Null) | None => None
+        Some(c_json) => Some(parse_type_v2(c_json))
+      }
+      TTypeParam(name, constraint)
+    }
+
+    "generic" => {
+      let name = match obj.get("name") {
+        Some(String(s)) => s
+        _ => ""
+      }
+      let args = match obj.get("args") {
+        Some(Array(arr)) => {
+          let parsed : Array[TypeV2] = []
+          for a in arr {
+            parsed.push(parse_type_v2(a))
+          }
+          parsed
+        }
+        _ => []
+      }
+      TGenericInstance(name, args)
+    }
+
+    _ => TAny
+  }
+}
+
+///|
+/// Parse TupleElementV2 from JSON
+fn parse_tuple_element_v2(json : Json) -> TupleElementV2 {
+  guard json is Object(obj) else {
+    return TupleElementV2::required(TAny)
+  }
+
+  let ty = match obj.get("ty") {
+    Some(ty_json) => parse_type_v2(ty_json)
+    _ => TAny
+  }
+
+  let optional = match obj.get("optional") {
+    Some(True) => true
+    _ => false
+  }
+
+  let is_rest = match obj.get("rest") {
+    Some(True) => true
+    _ => false
+  }
+
+  let label = match obj.get("label") {
+    Some(String(s)) => Some(s)
+    _ => None
+  }
+
+  TupleElementV2::{ ty, optional, is_rest, label }
+}
+
+///|
+/// Parse ObjectTypeV2 from JSON
+fn parse_object_type_v2(json : Json) -> ObjectTypeV2? {
+  guard json is Object(obj) else {
+    return None
+  }
+
+  let fields : Map[String, FieldInfoV2] = Map::new()
+
+  match obj.get("fields") {
+    Some(Object(fields_obj)) => {
+      for kv in fields_obj {
+        let field_name = kv.0
+        let field_json = kv.1
+        match parse_field_info_v2(field_json) {
+          Some(info) => fields.set(field_name, info)
+          None => ()
+        }
+      }
+    }
+    _ => ()
+  }
+
+  let call_signatures : Array[FunctionTypeV2] = match obj.get("call_signatures") {
+    Some(Array(sigs)) => {
+      let parsed : Array[FunctionTypeV2] = []
+      for sig in sigs {
+        match parse_function_type_v2(sig) {
+          Some(f) => parsed.push(f)
+          None => ()
+        }
+      }
+      parsed
+    }
+    _ => []
+  }
+
+  let construct_signatures : Array[FunctionTypeV2] = match obj.get("construct_signatures") {
+    Some(Array(sigs)) => {
+      let parsed : Array[FunctionTypeV2] = []
+      for sig in sigs {
+        match parse_function_type_v2(sig) {
+          Some(f) => parsed.push(f)
+          None => ()
+        }
+      }
+      parsed
+    }
+    _ => []
+  }
+
+  let index_signature = match obj.get("index_signature") {
+    Some(Null) | None => None
+    Some(idx_json) => parse_index_signature_v2(idx_json)
+  }
+
+  let is_class = match obj.get("is_class") {
+    Some(True) => true
+    _ => false
+  }
+
+  let class_name = match obj.get("class_name") {
+    Some(String(s)) => Some(s)
+    _ => None
+  }
+
+  Some(ObjectTypeV2::{
+    fields,
+    symbol_fields: [],
+    call_signatures,
+    construct_signatures,
+    index_signature,
+    is_class,
+    class_name,
+  })
+}
+
+///|
+/// Parse FieldInfoV2 from JSON
+fn parse_field_info_v2(json : Json) -> FieldInfoV2? {
+  guard json is Object(obj) else {
+    return None
+  }
+
+  let ty = match obj.get("ty") {
+    Some(ty_json) => parse_type_v2(ty_json)
+    _ => TAny
+  }
+
+  let optional = match obj.get("optional") {
+    Some(True) => true
+    _ => false
+  }
+
+  let is_readonly = match obj.get("readonly") {
+    Some(True) => true
+    _ => false
+  }
+
+  Some(FieldInfoV2::{ ty, optional, is_readonly })
+}
+
+///|
+/// Parse FunctionTypeV2 from JSON
+fn parse_function_type_v2(json : Json) -> FunctionTypeV2? {
+  guard json is Object(obj) else {
+    return None
+  }
+
+  let type_params : Array[TypeParamV2] = match obj.get("type_params") {
+    Some(Array(arr)) => {
+      let parsed : Array[TypeParamV2] = []
+      for item in arr {
+        match parse_type_param_v2(item) {
+          Some(param) => parsed.push(param)
+          None => ()
+        }
+      }
+      parsed
+    }
+    _ => []
+  }
+
+  let params : Array[ParamInfoV2] = match obj.get("params") {
+    Some(Array(arr)) => {
+      let parsed : Array[ParamInfoV2] = []
+      for item in arr {
+        parsed.push(parse_param_info_v2(item))
+      }
+      parsed
+    }
+    _ => []
+  }
+
+  let rest_param = match obj.get("rest_param") {
+    Some(Null) | None => None
+    Some(rest_json) => Some(parse_param_info_v2(rest_json))
+  }
+
+  let return_type = match obj.get("return") {
+    Some(ret_json) => parse_type_v2(ret_json)
+    _ => TVoid
+  }
+
+  let type_predicate = match obj.get("type_predicate") {
+    Some(Null) | None => None
+    Some(pred_json) => parse_type_predicate_v2(pred_json)
+  }
+
+  let this_type = match obj.get("this_type") {
+    Some(Null) | None => None
+    Some(this_json) => Some(parse_type_v2(this_json))
+  }
+
+  Some(FunctionTypeV2::{
+    type_params,
+    params,
+    rest_param,
+    return_type,
+    type_predicate,
+    this_type,
+  })
+}
+
+///|
+/// Parse ParamInfoV2 from JSON
+fn parse_param_info_v2(json : Json) -> ParamInfoV2 {
+  guard json is Object(obj) else {
+    return ParamInfoV2::required("arg", TAny)
+  }
+
+  let name = match obj.get("name") {
+    Some(String(s)) => s
+    _ => "arg"
+  }
+
+  let ty = match obj.get("ty") {
+    Some(ty_json) => parse_type_v2(ty_json)
+    _ => TAny
+  }
+
+  let optional = match obj.get("optional") {
+    Some(True) => true
+    _ => false
+  }
+
+  let is_rest = match obj.get("rest") {
+    Some(True) => true
+    _ => false
+  }
+
+  ParamInfoV2::{ name, ty, optional, is_rest }
+}
+
+///|
+/// Parse TypePredicateV2 from JSON
+fn parse_type_predicate_v2(json : Json) -> TypePredicateV2? {
+  guard json is Object(obj) else {
+    return None
+  }
+
+  let parameter_name = match obj.get("parameter_name") {
+    Some(String(s)) => s
+    _ => return None
+  }
+
+  let predicate_type = match obj.get("predicate_type") {
+    Some(Null) | None => TAny
+    Some(ty_json) => parse_type_v2(ty_json)
+  }
+
+  let is_asserts = match obj.get("is_asserts") {
+    Some(True) => true
+    _ => false
+  }
+
+  Some(TypePredicateV2::{ parameter_name, predicate_type, is_asserts })
+}
+
+///|
+/// Parse IndexSignatureV2 from JSON
+fn parse_index_signature_v2(json : Json) -> IndexSignatureV2? {
+  guard json is Object(obj) else {
+    return None
+  }
+
+  let key_type = match obj.get("key_type") {
+    Some(kt_json) => parse_type_v2(kt_json)
+    _ => TString
+  }
+
+  let value_type = match obj.get("value_type") {
+    Some(vt_json) => parse_type_v2(vt_json)
+    _ => TAny
+  }
+
+  let is_readonly = match obj.get("readonly") {
+    Some(True) => true
+    _ => false
+  }
+
+  Some(IndexSignatureV2::{ key_type, value_type, is_readonly })
+}
