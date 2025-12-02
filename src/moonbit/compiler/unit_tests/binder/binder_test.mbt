@@ -1428,3 +1428,371 @@ test "complex function with all control flow constructs" {
     Err(_) => assert_true(false)
   }
 }
+
+// ============================================================================
+// Export Flag Tests (is_export in SymbolFlags)
+// ============================================================================
+
+///|
+test "exported class has is_export flag set" {
+  let source = "export class MyClass {}"
+  match parse_and_bind(source) {
+    Ok(bound_file) => {
+      let symbol = bound_file.global_scope.symbols.get("MyClass")
+      assert_true(symbol is Some(_))
+      match symbol {
+        Some(s) => {
+          assert_true(is_class_kind(s.kind))
+          assert_eq(s.flags.is_export, true)
+        }
+        None => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "non-exported class has is_export flag false" {
+  let source = "class MyClass {}"
+  match parse_and_bind(source) {
+    Ok(bound_file) => {
+      let symbol = bound_file.global_scope.symbols.get("MyClass")
+      assert_true(symbol is Some(_))
+      match symbol {
+        Some(s) => {
+          assert_true(is_class_kind(s.kind))
+          assert_eq(s.flags.is_export, false)
+        }
+        None => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "exported interface has is_export flag set" {
+  let source = "export interface IFoo { x: number; }"
+  match parse_and_bind(source) {
+    Ok(bound_file) => {
+      let symbol = bound_file.global_scope.symbols.get("IFoo")
+      assert_true(symbol is Some(_))
+      match symbol {
+        Some(s) => {
+          assert_true(is_interface_kind(s.kind))
+          assert_eq(s.flags.is_export, true)
+        }
+        None => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "non-exported interface has is_export flag false" {
+  let source = "interface IFoo { x: number; }"
+  match parse_and_bind(source) {
+    Ok(bound_file) => {
+      let symbol = bound_file.global_scope.symbols.get("IFoo")
+      assert_true(symbol is Some(_))
+      match symbol {
+        Some(s) => {
+          assert_true(is_interface_kind(s.kind))
+          assert_eq(s.flags.is_export, false)
+        }
+        None => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "exported enum has is_export flag set" {
+  let source = "export enum Color { Red, Green, Blue }"
+  match parse_and_bind(source) {
+    Ok(bound_file) => {
+      let symbol = bound_file.global_scope.symbols.get("Color")
+      assert_true(symbol is Some(_))
+      match symbol {
+        Some(s) => {
+          assert_true(is_enum_kind(s.kind))
+          assert_eq(s.flags.is_export, true)
+        }
+        None => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "non-exported enum has is_export flag false" {
+  let source = "enum Color { Red, Green, Blue }"
+  match parse_and_bind(source) {
+    Ok(bound_file) => {
+      let symbol = bound_file.global_scope.symbols.get("Color")
+      assert_true(symbol is Some(_))
+      match symbol {
+        Some(s) => {
+          assert_true(is_enum_kind(s.kind))
+          assert_eq(s.flags.is_export, false)
+        }
+        None => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "exported const enum has both is_export and is_const flags" {
+  let source = "export const enum Status { Active, Inactive }"
+  match parse_and_bind(source) {
+    Ok(bound_file) => {
+      let symbol = bound_file.global_scope.symbols.get("Status")
+      assert_true(symbol is Some(_))
+      match symbol {
+        Some(s) => {
+          assert_true(is_enum_kind(s.kind))
+          assert_eq(s.flags.is_export, true)
+          assert_eq(s.flags.is_const, true)
+        }
+        None => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "exported type alias has is_export flag set" {
+  let source = "export type StringOrNumber = string | number;"
+  match parse_and_bind(source) {
+    Ok(bound_file) => {
+      let symbol = bound_file.global_scope.symbols.get("StringOrNumber")
+      assert_true(symbol is Some(_))
+      match symbol {
+        Some(s) => {
+          assert_true(is_type_kind(s.kind))
+          assert_eq(s.flags.is_export, true)
+        }
+        None => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "non-exported type alias has is_export flag false" {
+  let source = "type StringOrNumber = string | number;"
+  match parse_and_bind(source) {
+    Ok(bound_file) => {
+      let symbol = bound_file.global_scope.symbols.get("StringOrNumber")
+      assert_true(symbol is Some(_))
+      match symbol {
+        Some(s) => {
+          assert_true(is_type_kind(s.kind))
+          assert_eq(s.flags.is_export, false)
+        }
+        None => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "exported function has is_export flag set" {
+  let source = "export function foo() {}"
+  match parse_and_bind(source) {
+    Ok(bound_file) => {
+      let symbol = bound_file.global_scope.symbols.get("foo")
+      assert_true(symbol is Some(_))
+      match symbol {
+        Some(s) => {
+          assert_true(is_function_kind(s.kind))
+          assert_eq(s.flags.is_export, true)
+        }
+        None => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "non-exported function has is_export flag false" {
+  let source = "function foo() {}"
+  match parse_and_bind(source) {
+    Ok(bound_file) => {
+      let symbol = bound_file.global_scope.symbols.get("foo")
+      assert_true(symbol is Some(_))
+      match symbol {
+        Some(s) => {
+          assert_true(is_function_kind(s.kind))
+          assert_eq(s.flags.is_export, false)
+        }
+        None => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "exported variable has is_export flag set" {
+  let source = "export const x = 1;"
+  match parse_and_bind(source) {
+    Ok(bound_file) => {
+      let symbol = bound_file.global_scope.symbols.get("x")
+      assert_true(symbol is Some(_))
+      match symbol {
+        Some(s) => {
+          assert_true(is_variable_kind(s.kind))
+          assert_eq(s.flags.is_export, true)
+        }
+        None => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "non-exported variable has is_export flag false" {
+  let source = "const x = 1;"
+  match parse_and_bind(source) {
+    Ok(bound_file) => {
+      let symbol = bound_file.global_scope.symbols.get("x")
+      assert_true(symbol is Some(_))
+      match symbol {
+        Some(s) => {
+          assert_true(is_variable_kind(s.kind))
+          assert_eq(s.flags.is_export, false)
+        }
+        None => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "exported class using type in exported variable - no private name error" {
+  // This is the actual bug case that was fixed:
+  // export class d {};
+  // export var x: d;  // Should NOT report "using private name 'd'"
+  let source = "export class d {}; export var x: d;"
+  match parse_and_bind(source) {
+    Ok(bound_file) => {
+      // Class 'd' should be exported
+      let d_symbol = bound_file.global_scope.symbols.get("d")
+      assert_true(d_symbol is Some(_))
+      match d_symbol {
+        Some(s) => {
+          assert_true(is_class_kind(s.kind))
+          assert_eq(s.flags.is_export, true)
+        }
+        None => assert_true(false)
+      }
+      // Variable 'x' should be exported
+      let x_symbol = bound_file.global_scope.symbols.get("x")
+      assert_true(x_symbol is Some(_))
+      match x_symbol {
+        Some(s) => {
+          assert_true(is_variable_kind(s.kind))
+          assert_eq(s.flags.is_export, true)
+        }
+        None => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "multiple exported declarations all have is_export flag" {
+  let source = "export class A {}; export interface B {}; export type C = string; export enum D { X }; export function e() {}; export const f = 1;"
+  match parse_and_bind(source) {
+    Ok(bound_file) => {
+      // Check all symbols have is_export = true
+      let names = ["A", "B", "C", "D", "e", "f"]
+      for i = 0; i < names.length(); i = i + 1 {
+        let name = names[i]
+        let symbol = bound_file.global_scope.symbols.get(name)
+        assert_true(symbol is Some(_))
+        match symbol {
+          Some(s) => assert_eq(s.flags.is_export, true)
+          None => assert_true(false)
+        }
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "mixed exported and non-exported declarations" {
+  let source = "export class Exported {}; class NotExported {};"
+  match parse_and_bind(source) {
+    Ok(bound_file) => {
+      // Exported class
+      let exported = bound_file.global_scope.symbols.get("Exported")
+      assert_true(exported is Some(_))
+      match exported {
+        Some(s) => assert_eq(s.flags.is_export, true)
+        None => assert_true(false)
+      }
+      // Non-exported class
+      let not_exported = bound_file.global_scope.symbols.get("NotExported")
+      assert_true(not_exported is Some(_))
+      match not_exported {
+        Some(s) => assert_eq(s.flags.is_export, false)
+        None => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "export default class has is_export flag" {
+  let source = "export default class MyClass {}"
+  match parse_and_bind(source) {
+    Ok(bound_file) => {
+      let symbol = bound_file.global_scope.symbols.get("MyClass")
+      assert_true(symbol is Some(_))
+      match symbol {
+        Some(s) => {
+          assert_true(is_class_kind(s.kind))
+          assert_eq(s.flags.is_export, true)
+        }
+        None => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "export default function has is_export flag" {
+  let source = "export default function myFunc() {}"
+  match parse_and_bind(source) {
+    Ok(bound_file) => {
+      let symbol = bound_file.global_scope.symbols.get("myFunc")
+      assert_true(symbol is Some(_))
+      match symbol {
+        Some(s) => {
+          assert_true(is_function_kind(s.kind))
+          assert_eq(s.flags.is_export, true)
+        }
+        None => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}

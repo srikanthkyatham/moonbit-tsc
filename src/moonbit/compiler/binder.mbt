@@ -656,6 +656,9 @@ fn bind_class_declaration(
   }
   let symbol = Symbol::new(name, SymbolKind::Class, binder.next_symbol_id)
   let symbol = symbol.add_declaration(Node::ClassDeclaration(class_decl))
+  // Set is_export flag if class has export modifier
+  let is_export = binder_has_export_modifier(class_decl.modifiers)
+  let symbol = { ..symbol, flags: { ..symbol.flags, is_export } }
   let binder = declare_symbol(binder, name, symbol)
 
   // Create new scope and container for class body
@@ -853,11 +856,12 @@ fn bind_enum_declaration(
     SymbolKind::Enum,
     binder.next_symbol_id,
   )
-  // Set is_const flag for const enums
+  // Set is_const flag for const enums and is_export flag for exported enums
+  let is_export = binder_has_export_modifier(enum_decl.modifiers)
   let symbol = if enum_decl.is_const {
-    { ..symbol, flags: { ..symbol.flags, is_const: true } }
+    { ..symbol, flags: { ..symbol.flags, is_const: true, is_export } }
   } else {
-    symbol
+    { ..symbol, flags: { ..symbol.flags, is_export } }
   }
   let symbol = symbol.add_declaration(Node::EnumDeclaration(enum_decl))
   let binder = declare_symbol(binder, enum_decl.name, symbol)
@@ -915,6 +919,9 @@ fn bind_type_alias_declaration(
     binder.next_symbol_id,
   )
   let symbol = symbol.add_declaration(Node::TypeAliasDeclaration(type_alias))
+  // Set is_export flag if type alias has export modifier
+  let is_export = binder_has_export_modifier(type_alias.modifiers)
+  let symbol = { ..symbol, flags: { ..symbol.flags, is_export } }
   let binder = declare_symbol(binder, type_alias.name, symbol)
 
   // Push scope for type parameters
