@@ -159,12 +159,53 @@ defmodule TSC.Project.TsConfig do
   end
 
   defp remove_json_comments(content) do
-    content
-    # Remove single-line comments
-    |> String.replace(~r{//[^\n]*}, "")
-    # Remove multi-line comments
-    |> String.replace(~r{/\*[\s\S]*?\*/}, "")
+    # Properly handle comments while preserving strings
+    # This is a simplified approach - we process character by character
+    remove_comments_preserving_strings(content, "", false, nil)
   end
+
+  defp remove_comments_preserving_strings("", acc, _in_string, _), do: acc
+
+  # Handle escape sequences in strings
+  defp remove_comments_preserving_strings(<<"\\"::utf8, c::utf8, rest::binary>>, acc, true, quote) do
+    remove_comments_preserving_strings(rest, acc <> "\\" <> <<c::utf8>>, true, quote)
+  end
+
+  # Handle string start/end
+  defp remove_comments_preserving_strings(<<"\"", rest::binary>>, acc, false, nil) do
+    remove_comments_preserving_strings(rest, acc <> "\"", true, "\"")
+  end
+
+  defp remove_comments_preserving_strings(<<"\"", rest::binary>>, acc, true, "\"") do
+    remove_comments_preserving_strings(rest, acc <> "\"", false, nil)
+  end
+
+  # Handle single-line comments (only outside strings)
+  defp remove_comments_preserving_strings(<<"//", rest::binary>>, acc, false, nil) do
+    # Skip until newline
+    rest = skip_to_newline(rest)
+    remove_comments_preserving_strings(rest, acc, false, nil)
+  end
+
+  # Handle multi-line comments (only outside strings)
+  defp remove_comments_preserving_strings(<<"/*", rest::binary>>, acc, false, nil) do
+    # Skip until */
+    rest = skip_to_end_of_comment(rest)
+    remove_comments_preserving_strings(rest, acc, false, nil)
+  end
+
+  # Normal character
+  defp remove_comments_preserving_strings(<<c::utf8, rest::binary>>, acc, in_string, quote) do
+    remove_comments_preserving_strings(rest, acc <> <<c::utf8>>, in_string, quote)
+  end
+
+  defp skip_to_newline(""), do: ""
+  defp skip_to_newline(<<"\n", rest::binary>>), do: "\n" <> rest
+  defp skip_to_newline(<<_::utf8, rest::binary>>), do: skip_to_newline(rest)
+
+  defp skip_to_end_of_comment(""), do: ""
+  defp skip_to_end_of_comment(<<"*/", rest::binary>>), do: rest
+  defp skip_to_end_of_comment(<<_::utf8, rest::binary>>), do: skip_to_end_of_comment(rest)
 
   defp build_config(path, json) do
     root_dir = Path.dirname(path)
