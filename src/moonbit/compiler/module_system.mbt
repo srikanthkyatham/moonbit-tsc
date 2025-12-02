@@ -109,7 +109,7 @@ pub fn detect_module_format(source_file : SourceFile) -> ModuleFormatInfo {
 
 ///|
 /// Get all import declarations from a source file
-/// Includes both ES6 imports and TypeScript import equals declarations
+/// Includes ES6 imports, TypeScript import equals declarations, and CommonJS require() calls
 pub fn get_imports(source_file : SourceFile) -> Array[ImportDeclaration] {
   let imports : Array[ImportDeclaration] = []
   for stmt in source_file.statements {
@@ -141,10 +141,77 @@ pub fn get_imports(source_file : SourceFile) -> Array[ImportDeclaration] {
           }
         }
       }
+      VariableStatement(var_stmt) => {
+        // Check for CommonJS: const x = require("module")
+        for decl in var_stmt.declarations {
+          match decl.initializer {
+            Some(init) => {
+              // Extract variable name from the name node
+              let var_name = match decl.name {
+                Identifier(id) => id.name
+                _ => "" // Binding patterns like { a, b } = require(...) - use empty name
+              }
+              extract_require_import(init, var_name, imports)
+            }
+            None => ()
+          }
+        }
+      }
+      ExpressionStatement(expr_stmt) => {
+        // Check for side-effect require: require("module")
+        extract_require_import(expr_stmt.expression, "", imports)
+      }
       _ => ()
     }
   }
   imports
+}
+
+///|
+/// Extract require() calls and convert to ImportDeclaration
+fn extract_require_import(
+  expr : Node,
+  var_name : String,
+  imports : Array[ImportDeclaration],
+) -> Unit {
+  match expr {
+    CallExpression(call) => {
+      // Check if callee is "require"
+      match call.expression {
+        Identifier(id) if id.name == "require" => {
+          // Extract module specifier from first argument
+          if call.arguments.length() > 0 {
+            match call.arguments[0] {
+              StringLiteral(lit) => {
+                let loc = call.location
+                let import_clause : ImportClause? = if var_name.length() > 0 {
+                  Some(
+                    ImportClause::{
+                      name: Some(var_name),
+                      named_bindings: None,
+                      location: loc,
+                    },
+                  )
+                } else {
+                  None
+                }
+                let import_decl = ImportDeclaration::{
+                  import_clause,
+                  module_specifier: lit.value,
+                  is_type_only: false,
+                  location: loc,
+                }
+                imports.push(import_decl)
+              }
+              _ => ()
+            }
+          }
+        }
+        _ => ()
+      }
+    }
+    _ => ()
+  }
 }
 
 ///|
