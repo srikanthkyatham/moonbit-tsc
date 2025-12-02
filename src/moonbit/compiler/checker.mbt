@@ -1492,7 +1492,7 @@ pub fn check_source_file_with_external_types(
   )
 
   // Build import map from module_info.imports
-  let import_map = build_import_map(bound.module_info.imports, bound.file_path)
+  let import_map = build_import_map(bound.module_info.imports, bound.file_path, external_registry)
 
   // Store external registry and import map in checker for type resolution
   let checker = {
@@ -1529,18 +1529,19 @@ pub fn check_source_file_with_external_types(
 
 ///|
 /// Build import map from ImportInfo array
-/// Maps local name -> (module_specifier, original_name)
+/// Maps local name -> (resolved_module_path, original_name)
 fn build_import_map(
   imports : Array[ImportInfo],
   current_file : String,
+  registry : ExternalTypeRegistry,
 ) -> Map[String, (String, String)] {
   let import_map : Map[String, (String, String)] = Map::new()
 
   for import_info in imports {
     let module_spec = import_info.module_specifier
 
-    // Resolve relative path to absolute path
-    let resolved_module = resolve_module_path(module_spec, current_file)
+    // Resolve module path - first try registry mappings, then relative path resolution
+    let resolved_module = resolve_module_path_with_registry(module_spec, current_file, registry)
 
     // Handle default import
     match import_info.default_import {
@@ -1572,7 +1573,37 @@ fn build_import_map(
 }
 
 ///|
-/// Resolve a module specifier relative to the current file
+/// Resolve a module specifier using the registry mappings (for node_modules) and relative paths
+fn resolve_module_path_with_registry(module_spec : String, current_file : String, registry : ExternalTypeRegistry) -> String {
+  // Handle relative imports (./foo, ../bar)
+  if module_spec.has_prefix("./") || module_spec.has_prefix("../") {
+    // Get directory of current file
+    let dir = get_directory_from_path(current_file)
+
+    // Join with module specifier and normalize
+    let joined = if dir.length() > 0 {
+      dir + "/" + module_spec
+    } else {
+      module_spec
+    }
+
+    // Add .ts extension if not present
+    let with_ext = if joined.has_suffix(".ts") || joined.has_suffix(".tsx") {
+      joined
+    } else {
+      joined + ".ts"
+    }
+
+    // Normalize path (remove ./ and resolve ../)
+    normalize_import_path(with_ext)
+  } else {
+    // Non-relative import (node_modules, etc.) - try registry first
+    registry.resolve_module(module_spec)
+  }
+}
+
+///|
+/// Resolve a module specifier relative to the current file (legacy, used without registry)
 fn resolve_module_path(module_spec : String, current_file : String) -> String {
   // Handle relative imports (./foo, ../bar)
   if module_spec.has_prefix("./") || module_spec.has_prefix("../") {
@@ -1704,6 +1735,33 @@ fn resolve_import_type(checker : TypeChecker, name : String) -> Type? {
               Some(info) => Some(type_v2_to_type(info.ty))
               None => None
             }
+          }
+        }
+      }
+    }
+  }
+}
+
+///|
+/// Lookup a member of an imported namespace from external types
+/// For imports like "import * as m4 from 'm4'", look up m4.foo in the external registry
+fn lookup_imported_namespace_member(checker : TypeChecker, namespace_name : String, member_name : String) -> Type? {
+  // Check if this namespace is an import
+  match checker.import_map.get(namespace_name) {
+    None => None
+    Some((module_path, original_name)) => {
+      // Only handle namespace imports (import * as ns)
+      if original_name != "*" {
+        return None
+      }
+      // Look up in external registry
+      match checker.external_registry {
+        None => None
+        Some(registry) => {
+          // Look up the export from the module
+          match registry.lookup_export(module_path, member_name) {
+            Some(info) => Some(type_v2_to_type(info.ty))
+            None => None
           }
         }
       }
@@ -6485,18 +6543,35 @@ fn infer_property_access_type(
     Some(ns_symbol) => {
       // This is namespace member access - look up in exports
       let ns_name = ns_symbol.name
-      match ns_symbol.exports {
-        Some(exports) =>
-          match exports.get(prop.name) {
-            Some(member_symbol) => {
-              // Found the exported member - get its type
-              match get_symbol_type(checker, member_symbol) {
-                (Some(t), c) => (t, c)
-                (None, c) => infer_symbol_type(c, member_symbol)
+
+      // First try to look up in external registry (for imports like "import * as m4 from 'm4'")
+      match lookup_imported_namespace_member(checker, ns_name, prop.name) {
+        Some(member_type) => (member_type, checker)
+        None => {
+          // Fall back to local symbol exports
+          match ns_symbol.exports {
+            Some(exports) =>
+              match exports.get(prop.name) {
+                Some(member_symbol) => {
+                  // Found the exported member - get its type
+                  match get_symbol_type(checker, member_symbol) {
+                    (Some(t), c) => (t, c)
+                    (None, c) => infer_symbol_type(c, member_symbol)
+                  }
+                }
+                None => {
+                  // TS2694: Namespace has no exported member
+                  let checker = add_diagnostic_with_code(
+                    checker,
+                    "Namespace '\{ns_name}' has no exported member '\{prop.name}'.",
+                    prop.location,
+                    TS2694,
+                  )
+                  any_type(checker)
+                }
               }
-            }
             None => {
-              // TS2694: Namespace has no exported member
+              // Namespace has no exports - TS2694
               let checker = add_diagnostic_with_code(
                 checker,
                 "Namespace '\{ns_name}' has no exported member '\{prop.name}'.",
@@ -6506,15 +6581,6 @@ fn infer_property_access_type(
               any_type(checker)
             }
           }
-        None => {
-          // Namespace has no exports - TS2694
-          let checker = add_diagnostic_with_code(
-            checker,
-            "Namespace '\{ns_name}' has no exported member '\{prop.name}'.",
-            prop.location,
-            TS2694,
-          )
-          any_type(checker)
         }
       }
     }

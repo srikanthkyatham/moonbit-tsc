@@ -1289,12 +1289,14 @@ pub fn ModuleTypes::get_default(self : ModuleTypes) -> ExternalTypeInfo? {
 pub struct ExternalTypeRegistry {
   /// Module path -> ModuleTypes
   modules : Map[String, ModuleTypes]
+  /// Module specifier -> resolved file path (for bare imports like "lodash" -> "/path/to/node_modules/lodash/index.d.ts")
+  module_mappings : Map[String, String]
 } derive(Show, Eq)
 
 ///|
 /// Create a new empty registry
 pub fn ExternalTypeRegistry::new() -> ExternalTypeRegistry {
-  { modules: Map::new() }
+  { modules: Map::new(), module_mappings: Map::new() }
 }
 
 ///|
@@ -1305,6 +1307,28 @@ pub fn ExternalTypeRegistry::register_module(
   module_types : ModuleTypes,
 ) -> Unit {
   self.modules.set(module_path, module_types)
+}
+
+///|
+/// Register a module mapping (specifier -> resolved path)
+pub fn ExternalTypeRegistry::register_mapping(
+  self : ExternalTypeRegistry,
+  specifier : String,
+  resolved_path : String,
+) -> Unit {
+  self.module_mappings.set(specifier, resolved_path)
+}
+
+///|
+/// Resolve a module specifier to its file path
+pub fn ExternalTypeRegistry::resolve_module(
+  self : ExternalTypeRegistry,
+  specifier : String,
+) -> String {
+  match self.module_mappings.get(specifier) {
+    Some(path) => path
+    None => specifier // Return as-is if no mapping exists
+  }
 }
 
 ///|
@@ -1430,6 +1454,24 @@ fn parse_external_registry(json : Json) -> ExternalTypeRegistry? {
         match parse_module_types(module_json) {
           Some(module_types) => registry.register_module(module_path, module_types)
           None => ()
+        }
+      }
+    }
+    _ => ()
+  }
+
+  // Parse module mappings (specifier -> resolved path)
+  match obj.get("module_mappings") {
+    Some(Object(mappings_obj)) => {
+      for kv in mappings_obj {
+        let specifier = kv.0
+        match kv.1 {
+          String(resolved_path) => {
+            // Debug output - uncomment to see mapping registration
+            // println("DEBUG: Registering mapping: \(specifier) -> \(resolved_path)")
+            registry.register_mapping(specifier, resolved_path)
+          }
+          _ => ()
         }
       }
     }

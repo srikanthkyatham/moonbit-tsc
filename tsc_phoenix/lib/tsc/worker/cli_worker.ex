@@ -243,7 +243,17 @@ defmodule TSC.Worker.CLIWorker do
       end
     end)
 
-    if map_size(all_cached["modules"]) > 0 do
+    # Get module mappings (specifier -> resolved_path)
+    module_mappings = TypeCache.get_all_mappings()
+
+    # Add module_mappings to the JSON if there are any
+    all_cached = if map_size(module_mappings) > 0 do
+      Map.put(all_cached, "module_mappings", module_mappings)
+    else
+      all_cached
+    end
+
+    if map_size(all_cached["modules"]) > 0 or map_size(module_mappings) > 0 do
       Jason.encode!(all_cached)
     else
       nil

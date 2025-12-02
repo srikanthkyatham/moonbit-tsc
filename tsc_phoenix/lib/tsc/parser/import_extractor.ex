@@ -68,9 +68,15 @@ defmodule TSC.Parser.ImportExtractor do
       String.starts_with?(specifier, "/") ->
         resolve_with_extensions(specifier)
 
-      # Node module - return nil (external dependency)
+      # Node module - try to resolve via node_modules
       true ->
-        nil
+        case TSC.Resolver.NodeModulesResolver.resolve(specifier, source_file) do
+          {:ok, path} ->
+            # Store the mapping for later use in external types
+            TSC.Cache.TypeCache.put_mapping(specifier, path)
+            path
+          :not_found -> nil
+        end
     end
   end
 

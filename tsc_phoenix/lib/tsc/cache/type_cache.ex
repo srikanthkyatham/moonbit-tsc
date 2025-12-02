@@ -14,6 +14,7 @@ defmodule TSC.Cache.TypeCache do
   alias TSC.Options
 
   @table :tsc_type_cache
+  @mappings_table :tsc_module_mappings
   @default_cache_dir ".tsc_cache"
   @cache_file "type_cache.etf"
   @tsconfig_hash_file "tsconfig_hash.txt"
@@ -146,6 +147,49 @@ defmodule TSC.Cache.TypeCache do
     end)
   end
 
+  # ============================================================================
+  # Module Mappings API (specifier -> resolved path)
+  # ============================================================================
+
+  @doc """
+  Store a module mapping (specifier -> resolved_path).
+  Used for bare imports like "lodash" -> "/path/to/node_modules/lodash/index.d.ts"
+  """
+  @spec put_mapping(String.t(), String.t()) :: :ok
+  def put_mapping(specifier, resolved_path) do
+    :ets.insert(@mappings_table, {specifier, resolved_path})
+    :ok
+  end
+
+  @doc """
+  Get a module mapping by specifier.
+  """
+  @spec get_mapping(String.t()) :: {:ok, String.t()} | :not_found
+  def get_mapping(specifier) do
+    case :ets.lookup(@mappings_table, specifier) do
+      [{^specifier, resolved_path}] -> {:ok, resolved_path}
+      [] -> :not_found
+    end
+  end
+
+  @doc """
+  Get all module mappings as a map.
+  """
+  @spec get_all_mappings() :: map()
+  def get_all_mappings do
+    :ets.tab2list(@mappings_table)
+    |> Map.new()
+  end
+
+  @doc """
+  Clear all module mappings.
+  """
+  @spec clear_mappings() :: :ok
+  def clear_mappings do
+    :ets.delete_all_objects(@mappings_table)
+    :ok
+  end
+
   @doc """
   Save cache to disk.
   """
@@ -210,8 +254,18 @@ defmodule TSC.Cache.TypeCache do
       write_concurrency: true
     ])
 
+    # Create mappings table for bare import -> resolved path mappings
+    mappings_table = :ets.new(@mappings_table, [
+      :named_table,
+      :public,
+      :set,
+      read_concurrency: true,
+      write_concurrency: true
+    ])
+
     state = %{
       table: table,
+      mappings_table: mappings_table,
       opts: validated_opts(opts)
     }
 
