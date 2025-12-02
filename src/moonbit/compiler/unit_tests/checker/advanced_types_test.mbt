@@ -221,9 +221,7 @@ test "unit/advanced/index-access - array element type" {
 
 ///|
 test "unit/advanced/index-access - tuple element" {
-  let result = parse_bind_check_advanced(
-    "type First<T extends any[]> = T[0];",
-  )
+  let result = parse_bind_check_advanced("type First<T extends any[]> = T[0];")
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(_) => assert_true(false)
@@ -243,9 +241,7 @@ test "unit/advanced/index-access - nested access" {
 
 ///|
 test "unit/advanced/index-access - keyof with index" {
-  let result = parse_bind_check_advanced(
-    "type Values<T> = T[keyof T];",
-  )
+  let result = parse_bind_check_advanced("type Values<T> = T[keyof T];")
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(_) => assert_true(false)
@@ -258,9 +254,7 @@ test "unit/advanced/index-access - keyof with index" {
 
 ///|
 test "unit/advanced/template-literal - basic template" {
-  let result = parse_bind_check_advanced(
-    "type Greeting = `Hello, ${string}!`;",
-  )
+  let result = parse_bind_check_advanced("type Greeting = `Hello, ${string}!`;")
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(_) => assert_true(false)
@@ -469,9 +463,7 @@ test "unit/advanced/utility - NonNullable usage" {
 
 ///|
 test "unit/advanced/utility - ReturnType usage" {
-  let result = parse_bind_check_advanced(
-    "type T0 = ReturnType<() => string>;",
-  )
+  let result = parse_bind_check_advanced("type T0 = ReturnType<() => string>;")
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(_) => assert_true(false)
@@ -1041,7 +1033,7 @@ test "unit/utility/InstanceType - extracts instance type from class" {
 }
 
 ///|
-test "unit/utility/ThisParameterType - extracts this parameter type" {
+test "unit/utility/ThisParameterType - extracts this parameter type from function" {
   let result = parse_bind_check_advanced(
     "function greet(this: { name: string }): string { return this.name; } type ThisType = ThisParameterType<typeof greet>;",
   )
@@ -1192,9 +1184,7 @@ test "unit/symbol/symbol-type-annotation - function with symbol parameter" {
 
 ///|
 test "unit/symbol/symbol-variable - variable with symbol type" {
-  let result = parse_bind_check_advanced(
-    "let sym: symbol = Symbol('test');",
-  )
+  let result = parse_bind_check_advanced("let sym: symbol = Symbol('test');")
   match result {
     Ok(_) => assert_true(true)
     Err(_) => assert_true(false)
@@ -1203,9 +1193,7 @@ test "unit/symbol/symbol-variable - variable with symbol type" {
 
 ///|
 test "unit/symbol/symbol-union-type - symbol in union type" {
-  let result = parse_bind_check_advanced(
-    "type Key = string | symbol;",
-  )
+  let result = parse_bind_check_advanced("type Key = string | symbol;")
   match result {
     Ok(_) => assert_true(true)
     Err(_) => assert_true(false)
@@ -1225,9 +1213,7 @@ test "unit/symbol/multiple-unique-symbols - multiple const unique symbols" {
 
 ///|
 test "unit/symbol/symbol-property-access - accessing Symbol.iterator" {
-  let result = parse_bind_check_advanced(
-    "const iter = Symbol.iterator;",
-  )
+  let result = parse_bind_check_advanced("const iter = Symbol.iterator;")
   match result {
     Ok(_) => assert_true(true)
     Err(_) => assert_true(false)
@@ -1258,7 +1244,9 @@ test "unit/bigint/type-annotation - bigint type annotation" {
 
 ///|
 test "unit/bigint/arithmetic - bigint addition" {
-  let result = parse_bind_check_advanced("const a = 10n; const b = 20n; const c = a + b;")
+  let result = parse_bind_check_advanced(
+    "const a = 10n; const b = 20n; const c = a + b;",
+  )
   match result {
     Ok(_) => assert_true(true)
     Err(_) => assert_true(false)
@@ -1267,7 +1255,9 @@ test "unit/bigint/arithmetic - bigint addition" {
 
 ///|
 test "unit/bigint/arithmetic - bigint subtraction" {
-  let result = parse_bind_check_advanced("const a = 100n; const b = 20n; const c = a - b;")
+  let result = parse_bind_check_advanced(
+    "const a = 100n; const b = 20n; const c = a - b;",
+  )
   match result {
     Ok(_) => assert_true(true)
     Err(_) => assert_true(false)
@@ -1276,7 +1266,9 @@ test "unit/bigint/arithmetic - bigint subtraction" {
 
 ///|
 test "unit/bigint/arithmetic - bigint multiplication" {
-  let result = parse_bind_check_advanced("const a = 10n; const b = 20n; const c = a * b;")
+  let result = parse_bind_check_advanced(
+    "const a = 10n; const b = 20n; const c = a * b;",
+  )
   match result {
     Ok(_) => assert_true(true)
     Err(_) => assert_true(false)
@@ -1285,7 +1277,9 @@ test "unit/bigint/arithmetic - bigint multiplication" {
 
 ///|
 test "unit/bigint/arithmetic - bigint division" {
-  let result = parse_bind_check_advanced("const a = 100n; const b = 10n; const c = a / b;")
+  let result = parse_bind_check_advanced(
+    "const a = 100n; const b = 10n; const c = a / b;",
+  )
   match result {
     Ok(_) => assert_true(true)
     Err(_) => assert_true(false)
@@ -1294,7 +1288,9 @@ test "unit/bigint/arithmetic - bigint division" {
 
 ///|
 test "unit/bigint/bitwise - bigint bitwise operations" {
-  let result = parse_bind_check_advanced("const a = 10n; const b = 3n; const c = a & b; const d = a | b;")
+  let result = parse_bind_check_advanced(
+    "const a = 10n; const b = 3n; const c = a & b; const d = a | b;",
+  )
   match result {
     Ok(_) => assert_true(true)
     Err(_) => assert_true(false)
@@ -1341,7 +1337,9 @@ test "unit/bigint/array - array of bigints" {
 
 ///|
 test "unit/bigint/comparison - bigint comparison" {
-  let result = parse_bind_check_advanced("const a = 10n; const b = 20n; const c = a < b;")
+  let result = parse_bind_check_advanced(
+    "const a = 10n; const b = 20n; const c = a < b;",
+  )
   match result {
     Ok(_) => assert_true(true)
     Err(_) => assert_true(false)
