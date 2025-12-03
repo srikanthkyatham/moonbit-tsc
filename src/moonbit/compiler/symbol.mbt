@@ -570,6 +570,7 @@ pub enum DiagnosticCode {
   TS2700 // Rest types may only be created from object types
   TS2701 // The target of an object rest assignment must be a variable or a property access
   TS2702 // The target of an object rest assignment may not be an optional property access
+  TS2703 // The operand of a 'delete' operator must be a property reference
   TS2704 // An iterator must have a 'next()' method
   TS2706 // Required type parameters may not follow optional type parameters
   TS2707 // Generic type '{0}' requires between {1} and {2} type arguments
@@ -891,6 +892,7 @@ pub fn DiagnosticCode::to_int(self : DiagnosticCode) -> Int {
     TS2700 => 2700
     TS2701 => 2701
     TS2702 => 2702
+    TS2703 => 2703
     TS2704 => 2704
     TS2706 => 2706
     TS2707 => 2707

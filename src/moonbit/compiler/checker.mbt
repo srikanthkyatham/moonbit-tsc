@@ -4933,7 +4933,26 @@ fn infer_unary_expression_type(
     }
     TypeOf => string_type(checker) // typeof always returns a string
     Void => undefined_type(checker) // void operator always returns undefined
-    Delete => boolean_type(checker) // delete operator returns boolean
+    Delete => {
+      // TS2703: The operand of a 'delete' operator must be a property reference
+      let checker = match un_expr.operand {
+        PropertyAccessExpression(_) | ElementAccessExpression(_) | OptionalChain(_) =>
+          // Valid delete targets
+          checker
+        Identifier(_) =>
+          // delete on identifier is allowed in non-strict mode (though it's a no-op)
+          checker
+        _ =>
+          // Invalid delete target (e.g., literals, template expressions)
+          add_diagnostic_with_code(
+            checker,
+            "The operand of a 'delete' operator must be a property reference.",
+            get_node_location(un_expr.operand),
+            TS2703,
+          )
+      }
+      boolean_type(checker)
+    }
   }
 }
 
@@ -7496,12 +7515,15 @@ fn infer_tagged_template_expression_type(
   // First, infer the type of the tag expression
   let (tag_type, checker) = infer_type(checker, tte.tag)
 
-  // Check template expressions to validate them
+  // Collect template expression types for checking against call signature
   let mut checker = checker
+  let expr_types : Array[(Type, SourceLocation)] = []
   match tte.template {
     TemplateExpression(template) => {
       for i = 0; i < template.template_spans.length(); i = i + 1 {
-        let (_, c) = infer_type(checker, template.template_spans[i].expression)
+        let span = template.template_spans[i]
+        let (expr_type, c) = infer_type(checker, span.expression)
+        expr_types.push((expr_type, get_node_location(span.expression)))
         checker = c
       }
     }
@@ -7513,22 +7535,120 @@ fn infer_tagged_template_expression_type(
   match tag_type {
     Any(_) => any_type(checker)
     Function(func) => {
+      // Check template expression types against function parameters (skip first param which is TemplateStringsArray)
+      let checker = check_tagged_template_args(checker, func.parameters, expr_types)
       // The return type of the tag function is the result type
       (func.return_type, checker)
     }
     // For other types, try to find a call signature
     Object(obj) => {
       if obj.call_signatures.length() > 0 {
+        // Check template expression types against call signature parameters
+        let sig = obj.call_signatures[0]
+        let checker = check_tagged_template_args(checker, sig.parameters, expr_types)
         // Use the first call signature's return type
-        (obj.call_signatures[0].return_type, checker)
+        (sig.return_type, checker)
       } else {
-        // No call signature, return any
+        // TS2349: No call signature - report error
+        let type_name = type_to_string(tag_type)
+        let checker = add_diagnostic_with_code(
+          checker,
+          "This expression is not callable. Type '" + type_name + "' has no call signatures.",
+          get_node_location(tte.tag),
+          TS2349,
+        )
         any_type(checker)
       }
+    }
+    // String, Number, Boolean types are not callable
+    String(_) | StringLiteral(_) | TemplateLiteral(_) => {
+      // TS2349: String types are not callable
+      let type_name = type_to_string(tag_type)
+      let checker = add_diagnostic_with_code(
+        checker,
+        "This expression is not callable. Type '" + type_name + "' has no call signatures.",
+        get_node_location(tte.tag),
+        TS2349,
+      )
+      any_type(checker)
+    }
+    Number(_) | NumberLiteral(_) | BigInt(_) | Boolean(_) | BooleanLiteral(_) => {
+      // TS2349: Primitive types are not callable
+      let type_name = type_to_string(tag_type)
+      let checker = add_diagnostic_with_code(
+        checker,
+        "This expression is not callable. Type '" + type_name + "' has no call signatures.",
+        get_node_location(tte.tag),
+        TS2349,
+      )
+      any_type(checker)
     }
     // For unknown or other types, return any
     _ => any_type(checker)
   }
+}
+
+///|
+/// Check tagged template interpolation arguments against call signature parameters
+fn check_tagged_template_args(
+  checker : TypeChecker,
+  parameters : Array[CheckerParameter],
+  expr_types : Array[(Type, SourceLocation)],
+) -> TypeChecker {
+  // Tagged templates have: first param = TemplateStringsArray, rest params = interpolation values
+  // Skip the first parameter (TemplateStringsArray) and check the rest
+  if parameters.length() < 2 {
+    return checker
+  }
+
+  let mut checker = checker
+
+  // Check if last parameter is a rest parameter
+  let last_param = parameters[parameters.length() - 1]
+  if last_param.is_rest {
+    // Rest parameter - all interpolation values must be assignable to the rest element type
+    let rest_element_type = match last_param.param_type {
+      Array(arr) => arr.element_type
+      _ => last_param.param_type
+    }
+
+    for i = 0; i < expr_types.length(); i = i + 1 {
+      let (expr_type, loc) = expr_types[i]
+      if not(is_assignable(expr_type, rest_element_type)) {
+        // TS2345: Argument of type 'X' is not assignable to parameter of type 'Y'
+        let expr_type_str = type_to_string(expr_type)
+        let param_type_str = type_to_string(rest_element_type)
+        checker = add_diagnostic_with_code(
+          checker,
+          "Argument of type '" + expr_type_str + "' is not assignable to parameter of type '" + param_type_str + "'.",
+          loc,
+          TS2345,
+        )
+      }
+    }
+  } else {
+    // Regular parameters (starting from index 1, skipping TemplateStringsArray)
+    for i = 0; i < expr_types.length(); i = i + 1 {
+      let param_index = i + 1  // Skip first param
+      if param_index < parameters.length() {
+        let param = parameters[param_index]
+        let (expr_type, loc) = expr_types[i]
+        if not(is_assignable(expr_type, param.param_type)) {
+          // TS2345: Argument of type 'X' is not assignable to parameter of type 'Y'
+          let expr_type_str = type_to_string(expr_type)
+          let param_type_str = type_to_string(param.param_type)
+          checker = add_diagnostic_with_code(
+            checker,
+            "Argument of type '" + expr_type_str + "' is not assignable to parameter of type '" + param_type_str + "'.",
+            loc,
+            TS2345,
+          )
+        }
+      }
+    }
+  }
+
+  checker
 }
 
 ///|

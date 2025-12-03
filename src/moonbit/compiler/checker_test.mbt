@@ -5589,3 +5589,185 @@ test "extract_module_types - extracts exported class" {
     Err(_) => assert_true(false)
   }
 }
+
+// ============================================================================
+// Tagged Template Type Checking Tests
+// ============================================================================
+
+///|
+test "TS2703 delete expression must be property reference" {
+  // delete on a template literal should report TS2703
+  let source = "delete `abc`;"
+  let tokens = @compiler.scan_all_v2(source, "test.ts")
+  let result = @compiler.parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) =>
+      match @compiler.bind_source_file(source_file) {
+        Ok(bound_file) =>
+          match @compiler.check_source_file(bound_file) {
+            Ok(typed) => {
+              // Should have TS2703
+              assert_true(typed.diagnostics.length() > 0)
+              assert_true(typed.diagnostics[0].code == 2703)
+            }
+            Err(diagnostics) => {
+              assert_true(diagnostics.length() > 0)
+              assert_true(diagnostics[0].code == 2703)
+            }
+          }
+        Err(_) => assert_true(false)
+      }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "TS2349 template literal not callable as tag" {
+  // Using a template literal as a tag should report TS2349
+  let source = "`hello` `world`;"
+  let tokens = @compiler.scan_all_v2(source, "test.ts")
+  let result = @compiler.parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) =>
+      match @compiler.bind_source_file(source_file) {
+        Ok(bound_file) =>
+          match @compiler.check_source_file(bound_file) {
+            Ok(typed) => {
+              // Should have TS2349
+              assert_true(typed.diagnostics.length() > 0)
+              assert_true(typed.diagnostics[0].code == 2349)
+            }
+            Err(diagnostics) => {
+              assert_true(diagnostics.length() > 0)
+              assert_true(diagnostics[0].code == 2349)
+            }
+          }
+        Err(_) => assert_true(false)
+      }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "TS2345 tagged template incompatible argument types" {
+  // Passing number to a tag expecting boolean should report TS2345
+  let source = "function tag(strs: TemplateStringsArray, ...rest: boolean[]): void {} tag `abc${1}def`;"
+  let tokens = @compiler.scan_all_v2(source, "test.ts")
+  let result = @compiler.parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) =>
+      match @compiler.bind_source_file(source_file) {
+        Ok(bound_file) =>
+          match @compiler.check_source_file(bound_file) {
+            Ok(typed) => {
+              // Should have TS2345
+              let has_2345 = typed.diagnostics.iter().any(
+                fn(d) { d.code == 2345 },
+              )
+              assert_true(has_2345)
+            }
+            Err(diagnostics) => {
+              let has_2345 = diagnostics.iter().any(
+                fn(d) { d.code == 2345 },
+              )
+              assert_true(has_2345)
+            }
+          }
+        Err(_) => assert_true(false)
+      }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "tagged template with valid argument types should pass" {
+  // Passing boolean to a tag expecting boolean should work
+  let source = "function tag(strs: TemplateStringsArray, ...rest: boolean[]): void {} tag `abc${true}def`;"
+  let tokens = @compiler.scan_all_v2(source, "test.ts")
+  let result = @compiler.parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) =>
+      match @compiler.bind_source_file(source_file) {
+        Ok(bound_file) =>
+          match @compiler.check_source_file(bound_file) {
+            Ok(typed) => {
+              // Should have no TS2345 errors
+              let has_2345 = typed.diagnostics.iter().any(
+                fn(d) { d.code == 2345 },
+              )
+              assert_true(not(has_2345))
+            }
+            Err(diagnostics) => {
+              let has_2345 = diagnostics.iter().any(
+                fn(d) { d.code == 2345 },
+              )
+              assert_true(not(has_2345))
+            }
+          }
+        Err(_) => assert_true(false)
+      }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "delete on property access is valid" {
+  // delete on property access should not report error
+  let source = "const obj = { a: 1 }; delete obj.a;"
+  let tokens = @compiler.scan_all_v2(source, "test.ts")
+  let result = @compiler.parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) =>
+      match @compiler.bind_source_file(source_file) {
+        Ok(bound_file) =>
+          match @compiler.check_source_file(bound_file) {
+            Ok(typed) => {
+              // Should have no TS2703 errors
+              let has_2703 = typed.diagnostics.iter().any(
+                fn(d) { d.code == 2703 },
+              )
+              assert_true(not(has_2703))
+            }
+            Err(diagnostics) => {
+              let has_2703 = diagnostics.iter().any(
+                fn(d) { d.code == 2703 },
+              )
+              assert_true(not(has_2703))
+            }
+          }
+        Err(_) => assert_true(false)
+      }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "callable tag function is valid" {
+  // Tag function with call signature should work
+  let source = "declare function tag(strs: TemplateStringsArray): string; const result = tag `hello`;"
+  let tokens = @compiler.scan_all_v2(source, "test.ts")
+  let result = @compiler.parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) =>
+      match @compiler.bind_source_file(source_file) {
+        Ok(bound_file) =>
+          match @compiler.check_source_file(bound_file) {
+            Ok(typed) => {
+              // Should have no TS2349 errors
+              let has_2349 = typed.diagnostics.iter().any(
+                fn(d) { d.code == 2349 },
+              )
+              assert_true(not(has_2349))
+            }
+            Err(diagnostics) => {
+              let has_2349 = diagnostics.iter().any(
+                fn(d) { d.code == 2349 },
+              )
+              assert_true(not(has_2349))
+            }
+          }
+        Err(_) => assert_true(false)
+      }
+    Err(_) => assert_true(false)
+  }
+}
