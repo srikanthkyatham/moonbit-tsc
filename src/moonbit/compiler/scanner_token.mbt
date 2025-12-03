@@ -521,6 +521,14 @@ fn scan_single_token_v2(
           )
           (TemplateHead(content.to_string(), loc), rest2)
         }
+        TemplateScanResultV2::Unterminated(rest2) => {
+          let loc = SourceLocation::new(
+            file_path,
+            Position::new(start_line, start_col, start_offset),
+            Position::new(state.line, state.col, state.offset),
+          )
+          (ScanError("Unterminated template literal.", 1160, loc), rest2)
+        }
       }
     }
 

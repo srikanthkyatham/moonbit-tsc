@@ -114,6 +114,15 @@ fn tokenize_with_template_tracking(
           // Should not happen for continuation, but handle gracefully
           abort("Unexpected Head result from template continuation")
         }
+        TemplateScanResultV2::Unterminated(rest) => {
+          let loc = make_loc(start_line, start_col, start_offset)
+          let token = ScanError("Unterminated template literal.", 1160, loc)
+          tokens.push(token)
+          prev_token = Some(token)
+          template_depth -= 1
+          ignore(brace_depth_stack.pop())
+          code = rest
+        }
       }
       continue
     }
@@ -271,6 +280,15 @@ fn tokenize_with_jsx_support(
         }
         TemplateScanResultV2::Head(_) =>
           abort("Unexpected Head result from template continuation")
+        TemplateScanResultV2::Unterminated(rest) => {
+          let loc = make_loc(start_line, start_col, start_offset)
+          let token = ScanError("Unterminated template literal.", 1160, loc)
+          tokens.push(token)
+          prev_token = Some(token)
+          template_depth -= 1
+          ignore(brace_depth_stack.pop())
+          code = rest
+        }
       }
       continue
     }
@@ -1159,6 +1177,15 @@ pub fn tokenize_v2(source : String, file_path : String) -> Array[Token] {
             Position::new(state.line, state.col, state.offset),
           )
           tokens.push(TemplateHead(content.to_string(), loc))
+          continue rest2
+        }
+        TemplateScanResultV2::Unterminated(rest2) => {
+          let loc = SourceLocation::new(
+            file_path,
+            Position::new(start_line, start_col, start_offset),
+            Position::new(state.line, state.col, state.offset),
+          )
+          tokens.push(ScanError("Unterminated template literal.", 1160, loc))
           continue rest2
         }
       }

@@ -14,6 +14,9 @@ pub enum CommentDirectiveKind {
 ///|
 /// Token represents a lexical token in the source code
 pub enum Token {
+  // Scanner Errors
+  ScanError(String, Int, SourceLocation) // message, error code, location
+
   // Literals
   NumericLiteral(String, SourceLocation)
   BigIntLiteral(String, SourceLocation) // 123n, 0xFFn, 0o77n, 0b1010n
@@ -378,7 +381,8 @@ pub fn Token::location(self : Token) -> SourceLocation {
     | CommentDirective(_, _, loc)
     | EOF(loc)
     | Unknown(_, loc)
-    | SmartQuote(_, _, loc) => loc
+    | SmartQuote(_, _, loc)
+    | ScanError(_, _, loc) => loc
   }
 }
 

@@ -334,6 +334,7 @@ pub enum DiagnosticCode {
   // Syntax Errors (1xxx)
   // ============================================================================
   TS1155 // 'const' declarations must be initialized
+  TS1160 // Unterminated template literal
 
   // ============================================================================
   // Name Resolution Errors (2304-2318)
@@ -705,6 +706,7 @@ pub fn DiagnosticCode::to_int(self : DiagnosticCode) -> Int {
   match self {
     // Syntax Errors (1xxx)
     TS1155 => 1155
+    TS1160 => 1160
     // Name Resolution Errors (2304-2318)
     TS2304 => 2304
     TS2305 => 2305
@@ -1005,6 +1007,7 @@ pub fn DiagnosticCode::from_int(code : Int) -> DiagnosticCode? {
   match code {
     // Syntax Errors (1xxx)
     1155 => Some(TS1155)
+    1160 => Some(TS1160)
     // Name Resolution Errors (2304-2318)
     2304 => Some(TS2304)
     2305 => Some(TS2305)

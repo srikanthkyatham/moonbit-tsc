@@ -305,7 +305,7 @@ fn scan_template_literal_v2(
   content : StringBuilder,
 ) -> TemplateScanResultV2 {
   loop code {
-    [] as remaining => Complete(remaining)
+    [] as remaining => Unterminated(remaining) // EOF without closing backtick
     ['`', .. rest] => {
       state.col += 1
       state.offset += 1
@@ -444,7 +444,7 @@ fn scan_template_continuation_v2(
   content : StringBuilder,
 ) -> TemplateScanResultV2 {
   loop code {
-    [] as remaining => Complete(remaining) // Unterminated
+    [] as remaining => Unterminated(remaining) // EOF without closing backtick
     ['`', .. rest] => {
       state.col += 1
       state.offset += 1

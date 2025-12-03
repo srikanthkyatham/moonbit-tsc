@@ -888,6 +888,7 @@ pub fn parse_source_file(
   // Extract triple-slash directive tokens, hashbang, ts-expect-error directives, and filter out comment tokens
   let directive_tokens : Array[(String, SourceLocation)] = []
   let ts_expect_error_directives : Array[SourceLocation] = []
+  let scanner_errors : Array[Diagnostic] = []
   let filtered_tokens : Array[Token] = []
   let mut hashbang : String? = None
   for i = 0; i < tokens.length(); i = i + 1 {
@@ -903,6 +904,10 @@ pub fn parse_source_file(
       }
       CommentDirective(_, _, _) => ()  // Skip other comment directives (@ts-ignore, @ts-nocheck, etc.)
       JSDocComment(_, _) => ()  // Skip JSDoc comments - handled separately
+      ScanError(message, code, loc) => {
+        // Convert scanner errors to diagnostics
+        scanner_errors.push(Diagnostic::error(message, loc, code))
+      }
       token => filtered_tokens.push(token)
     }
   }
@@ -916,8 +921,13 @@ pub fn parse_source_file(
   }
   let (statements, parser) = parse_statements(parser)
   let eof_token = current_token(parser)
-  if parser.diagnostics.length() > 0 {
-    Err(parser.diagnostics)
+  // Combine scanner errors with parser diagnostics
+  let all_diagnostics = scanner_errors.copy()
+  for d in parser.diagnostics {
+    all_diagnostics.push(d)
+  }
+  if all_diagnostics.length() > 0 {
+    Err(all_diagnostics)
   } else {
     Ok(SourceFile::{
       file_path,

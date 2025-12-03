@@ -24,4 +24,5 @@ priv enum TemplateScanResultV2 {
   Complete(StringView) // Full template literal or template tail
   Head(StringView) // Template head (has interpolation after)
   Middle(StringView) // Template middle (has interpolation after)
+  Unterminated(StringView) // Unterminated template literal (reached EOF)
 }
