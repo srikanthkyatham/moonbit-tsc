@@ -3,6 +3,7 @@
 
 ///|
 /// Skip whitespace and comments, returning remaining code
+/// Also handles UTF-8 BOM (Byte Order Mark) which is \uFEFF
 fn skip_whitespace_v2(code : StringView, state : ScanState) -> StringView {
   loop code {
     [' ' | '\t', .. rest] => {
@@ -18,6 +19,13 @@ fn skip_whitespace_v2(code : StringView, state : ScanState) -> StringView {
       state.line += 1
       state.col = 1
       state.offset += 1
+      continue rest
+    }
+    // UTF-8 BOM (Byte Order Mark) - \uFEFF (0xEF 0xBB 0xBF in UTF-8)
+    // TypeScript treats BOM as whitespace
+    ['\u{FEFF}', .. rest] => {
+      // BOM is 3 bytes in UTF-8 but 1 character
+      state.offset += 3
       continue rest
     }
     [.. "//", .. rest] => {
@@ -329,6 +337,7 @@ fn scan_hashbang_v2(
 ///|
 /// Skip whitespace and regular comments, but NOT JSDoc or directives
 /// Returns (code_after_skip, Option<special_comment_token>)
+/// Also handles UTF-8 BOM (Byte Order Mark) which is \uFEFF
 fn skip_whitespace_with_special_comments_v2(
   code : StringView,
   state : ScanState,
@@ -349,6 +358,13 @@ fn skip_whitespace_with_special_comments_v2(
       state.line += 1
       state.col = 1
       state.offset += 1
+      continue rest
+    }
+    // UTF-8 BOM (Byte Order Mark) - \uFEFF (0xEF 0xBB 0xBF in UTF-8)
+    // TypeScript treats BOM as whitespace
+    ['\u{FEFF}', .. rest] => {
+      // BOM is 3 bytes in UTF-8 but 1 character
+      state.offset += 3
       continue rest
     }
     // Check for JSDoc comment first (/** but not /**/)
