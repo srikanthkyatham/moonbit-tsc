@@ -5771,3 +5771,41 @@ test "callable tag function is valid" {
     Err(_) => assert_true(false)
   }
 }
+
+///|
+test "TS2367 template literal equality with no overlap" {
+  // Comparing template literals that evaluate to different strings should report TS2367
+  let source = "const x = `abc${0}abc` === `abc`;"
+  let tokens = @compiler.scan_all_v2(source, "test.ts")
+  let result = @compiler.parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) =>
+      match @compiler.bind_source_file(source_file) {
+        Ok(bound_file) =>
+          match @compiler.check_source_file(bound_file) {
+            Ok(typed) => {
+              // Should have TS2367
+              let has_2367 = typed.diagnostics.iter().any(
+                fn(d) { d.code == 2367 },
+              )
+              if not(has_2367) {
+                println("Expected TS2367 error but got none")
+                println("Diagnostics count: \{typed.diagnostics.length()}")
+                for d in typed.diagnostics {
+                  println("  - TS\{d.code}: \{d.message}")
+                }
+              }
+              assert_true(has_2367)
+            }
+            Err(diagnostics) => {
+              let has_2367 = diagnostics.iter().any(
+                fn(d) { d.code == 2367 },
+              )
+              assert_true(has_2367)
+            }
+          }
+        Err(_) => assert_true(false)
+      }
+    Err(_) => assert_true(false)
+  }
+}

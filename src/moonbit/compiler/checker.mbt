@@ -849,6 +849,15 @@ fn type_is_bigint(t : Type) -> Bool {
 }
 
 ///|
+/// Check if a Type is string-like (string, string literal, or template literal)
+fn type_is_string_like(t : Type) -> Bool {
+  match t {
+    String(_) | StringLiteral(_, _) | TemplateLiteral(_) => true
+    _ => false
+  }
+}
+
+///|
 /// Get the error type (used for type errors)
 pub fn error_type(checker : TypeChecker) -> (Type, TypeChecker) {
   let (info, checker) = create_type_info(checker)
@@ -4622,21 +4631,24 @@ fn infer_binary_expression_type(
   match bin_expr.operator {
     // Addition: can be number + number -> number OR string + string -> string OR bigint + bigint -> bigint
     Add =>
-      // Check if either operand is a string
-      match (left_type, right_type) {
-        (String(_), _) | (_, String(_)) => string_type(checker)
-        (BigInt(_), BigInt(_)) =>
-          // bigint + bigint -> bigint
-          bigint_type(checker)
-        _ => {
-          let checker = check_numeric_operands(
-            checker,
-            left_type,
-            right_type,
-            bin_expr.operator,
-            get_node_location(BinaryExpression(bin_expr)),
-          )
-          number_type(checker)
+      // Check if either operand is a string (including template literals and string literals)
+      if type_is_string_like(left_type) || type_is_string_like(right_type) {
+        string_type(checker)
+      } else {
+        match (left_type, right_type) {
+          (BigInt(_), BigInt(_)) =>
+            // bigint + bigint -> bigint
+            bigint_type(checker)
+          _ => {
+            let checker = check_numeric_operands(
+              checker,
+              left_type,
+              right_type,
+              bin_expr.operator,
+              get_node_location(BinaryExpression(bin_expr)),
+            )
+            number_type(checker)
+          }
         }
       }
     // Arithmetic operators: number op number -> number OR bigint op bigint -> bigint
@@ -7494,15 +7506,66 @@ fn infer_template_expression_type(
   checker : TypeChecker,
   template : TemplateExpression,
 ) -> (Type, TypeChecker) {
-  // Check all template spans
+  // Build a template literal type that captures the structure
+  // texts: ["head_text", "span1_text", "span2_text", ...]
+  // types: [expr1_type, expr2_type, ...]
+
+  let texts : Array[String] = []
+  let types : Array[Type] = []
   let mut checker = checker
+
+  // First text part is the head
+  texts.push(template.head)
+
+  // Check if all expressions are literal AST nodes (not inferred types)
+  // This determines if we can create a precise template literal type
+  let mut all_literal_nodes = true
+
+  // Process each template span
   for i = 0; i < template.template_spans.length(); i = i + 1 {
-    let (_, c) = infer_type(checker, template.template_spans[i].expression)
+    let span = template.template_spans[i]
+
+    // Check if this expression is a literal AST node
+    let is_literal_node = match span.expression {
+      NumericLiteral(_) | Node::StringLiteral(_) | Node::BooleanLiteral(_) =>
+        true
+      _ => false
+    }
+    if not(is_literal_node) {
+      all_literal_nodes = false
+    }
+
+    // Create the appropriate type for the template
+    // For literal nodes, create literal types; otherwise, use inferred type
+    let (expr_type, c) = match span.expression {
+      NumericLiteral(lit) => {
+        let num_val = @strconv.parse_double(lit.value) catch { _ => 0.0 }
+        number_literal_type(checker, num_val)
+      }
+      Node::StringLiteral(lit) => string_literal_type(checker, lit.value)
+      Node::BooleanLiteral(lit) => boolean_literal_type(checker, lit.value)
+      _ => infer_type(checker, span.expression)
+    }
     checker = c
+    types.push(expr_type)
+    texts.push(span.literal)
   }
 
-  // Template expressions always result in strings
-  string_type(checker)
+  // If all expression nodes are literals (or no expressions), return a template literal type
+  // Otherwise, fall back to string type
+  if all_literal_nodes {
+    // Create a template literal type (even for templates without expressions)
+    let (info, checker) = create_type_info(checker)
+    let tl_type : Type = Type::TemplateLiteral({
+      texts,
+      types,
+      info,
+    })
+    (tl_type, checker)
+  } else {
+    // Fall back to plain string type for non-literal expressions
+    string_type(checker)
+  }
 }
 
 ///|
@@ -9428,7 +9491,15 @@ fn types_have_overlap(left : Type, right : Type) -> Bool {
       (StringLiteral(s1, _), StringLiteral(s2, _)) => s1 == s2
       // Different boolean literals have no overlap
       (BooleanLiteral(b1, _), BooleanLiteral(b2, _)) => b1 == b2
-      // Base type vs literal always overlap (e.g., number vs 42)
+      // Template literal vs string literal - check if evaluated values could match
+      (TemplateLiteral(tl), StringLiteral(s, _)) =>
+        template_literal_matches_string(tl, s)
+      (StringLiteral(s, _), TemplateLiteral(tl)) =>
+        template_literal_matches_string(tl, s)
+      // Template literal vs template literal - check if they could produce same string
+      (TemplateLiteral(tl1), TemplateLiteral(tl2)) =>
+        template_literals_could_match(tl1, tl2)
+      // Base type vs literal always overlap (e.g., number vs 42, string vs "hello")
       _ => true
     }
   } else {
@@ -9438,11 +9509,91 @@ fn types_have_overlap(left : Type, right : Type) -> Bool {
 }
 
 ///|
+/// Check if a template literal type could match a given string literal
+/// For template literals with expressions, we can only match if:
+/// 1. The template has no expressions and the text matches exactly
+/// 2. The template has expressions but the string could be produced by any value of those expressions
+fn template_literal_matches_string(tl : CheckerTemplateLiteralType, s : String) -> Bool {
+  // If template has no types (no expressions), just concatenate texts and compare
+  if tl.types.length() == 0 {
+    // No expressions - just check if concatenated texts match
+    let mut full_text = ""
+    for text in tl.texts {
+      full_text = full_text + text
+    }
+    full_text == s
+  } else {
+    // Template has expressions - check if evaluated values could match
+    // Get the evaluated string value if possible
+    let evaluated = evaluate_template_literal_to_string(tl)
+    match evaluated {
+      Some(eval_str) => eval_str == s
+      None => {
+        // Cannot evaluate (has non-literal expressions)
+        // Check if the string at least starts with first text part
+        if tl.texts.length() > 0 && not(s.has_prefix(tl.texts[0])) {
+          return false
+        }
+        // Has non-literal expressions, could potentially match any value
+        // Be conservative and say they could overlap
+        true
+      }
+    }
+  }
+}
+
+///|
+/// Try to evaluate a template literal type to a concrete string
+/// Returns Some(string) if all expressions are literals, None otherwise
+fn evaluate_template_literal_to_string(tl : CheckerTemplateLiteralType) -> String? {
+  // texts has one more element than types (for template `a${b}c`, texts=["a","c"], types=[typeof b])
+  let mut result = ""
+
+  for i = 0; i < tl.texts.length(); i = i + 1 {
+    result = result + tl.texts[i]
+    if i < tl.types.length() {
+      // Try to get the literal value of the expression type
+      match tl.types[i] {
+        StringLiteral(s, _) => result = result + s
+        NumberLiteral(n, _) => result = result + n.to_string()
+        BooleanLiteral(b, _) => result = result + (if b { "true" } else { "false" })
+        _ => return None // Non-literal type, can't evaluate
+      }
+    }
+  }
+  Some(result)
+}
+
+///|
+/// Check if two template literals could produce the same string
+fn template_literals_could_match(tl1 : CheckerTemplateLiteralType, tl2 : CheckerTemplateLiteralType) -> Bool {
+  // Try to evaluate both to concrete strings
+  let eval1 = evaluate_template_literal_to_string(tl1)
+  let eval2 = evaluate_template_literal_to_string(tl2)
+  match (eval1, eval2) {
+    (Some(s1), Some(s2)) => s1 == s2
+    _ => {
+      // At least one can't be evaluated - check if structure could match
+      // If first texts are different, they likely can't match
+      if tl1.texts.length() > 0 && tl2.texts.length() > 0 {
+        if tl1.texts[0] != tl2.texts[0] &&
+           not(tl1.texts[0].has_prefix(tl2.texts[0])) &&
+           not(tl2.texts[0].has_prefix(tl1.texts[0])) {
+          return false
+        }
+      }
+      // Be conservative - they might match
+      true
+    }
+  }
+}
+
+///|
 /// Get type category for overlap checking
 fn get_type_category(t : Type) -> String {
   match t {
     Number(_) | NumberLiteral(_, _) => "number"
-    String(_) | StringLiteral(_, _) => "string"
+    String(_) | StringLiteral(_, _) | TemplateLiteral(_) => "string"
     Boolean(_) | BooleanLiteral(_, _) => "boolean"
     BigInt(_) => "bigint"
     Symbol(_) => "symbol"
@@ -11732,14 +11883,28 @@ fn check_switch_statement(
   checker : TypeChecker,
   switch_stmt : SwitchStatement,
 ) -> TypeChecker {
-  let (_, checker) = infer_type(checker, switch_stmt.expression)
+  // Infer the type of the switch expression
+  let (switch_type, checker) = infer_type(checker, switch_stmt.expression)
   let mut checker = checker
+
   for i = 0; i < switch_stmt.cases.length(); i = i + 1 {
     let case_clause = switch_stmt.cases[i]
     match case_clause.expression {
       Some(case_expr) => {
-        let (_, c) = infer_type(checker, case_expr)
-        checker = check_statements(c, case_clause.statements)
+        let (case_type, c) = infer_type(checker, case_expr)
+        checker = c
+
+        // TS2678: Check if case type is comparable to switch expression type
+        if not(types_have_overlap(case_type, switch_type)) {
+          checker = add_diagnostic_with_code(
+            checker,
+            "Type '\{type_to_string(case_type)}' is not comparable to type '\{type_to_string(switch_type)}'.",
+            get_node_location(case_expr),
+            TS2678,
+          )
+        }
+
+        checker = check_statements(checker, case_clause.statements)
       }
       None =>
         // Default case
@@ -12769,7 +12934,13 @@ fn type_to_string(t : Type) -> String {
     Conditional(cond) =>
       "\{type_to_string(cond.check_type)} extends \{type_to_string(cond.extends_type)} ? \{type_to_string(cond.true_type)} : \{type_to_string(cond.false_type)}"
     Mapped(_) => "{ [K in ...]: ... }"
-    TemplateLiteral(_) => "`...`"
+    TemplateLiteral(tl) => {
+      // Try to evaluate to a concrete string for better error messages
+      match evaluate_template_literal_to_string(tl) {
+        Some(s) => "\"\{s}\""
+        None => "`...`"
+      }
+    }
     IndexAccess(ia) =>
       "\{type_to_string(ia.object_type)}[\{type_to_string(ia.index_type)}]"
     Infer(inf) => "infer \{inf.type_parameter_name}"

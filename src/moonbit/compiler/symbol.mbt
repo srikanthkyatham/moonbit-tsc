@@ -549,6 +549,7 @@ pub enum DiagnosticCode {
   // ============================================================================
   TS2673 // Constructor of class '{0}' is private and only accessible within the class declaration
   TS2674 // Constructor of class '{0}' is protected and only accessible within the class declaration
+  TS2678 // Type '{0}' is not comparable to type '{1}'
   TS2681 // A constructor cannot have a 'this' parameter
   TS2683 // 'this' implicitly has type 'any' because it does not have a type annotation
   TS2684 // The 'this' context of type '{0}' is not assignable to method's 'this' of type '{1}'
@@ -874,6 +875,7 @@ pub fn DiagnosticCode::to_int(self : DiagnosticCode) -> Int {
     // This Context Errors (2673-2690)
     TS2673 => 2673
     TS2674 => 2674
+    TS2678 => 2678
     TS2681 => 2681
     TS2683 => 2683
     TS2684 => 2684
@@ -1173,6 +1175,7 @@ pub fn DiagnosticCode::from_int(code : Int) -> DiagnosticCode? {
     // This Context Errors (2673-2690)
     2673 => Some(TS2673)
     2674 => Some(TS2674)
+    2678 => Some(TS2678)
     2681 => Some(TS2681)
     2683 => Some(TS2683)
     2684 => Some(TS2684)
