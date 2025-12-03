@@ -292,6 +292,7 @@ pub struct TypeChecker {
 /// Local scope for tracking variable types in function bodies
 pub struct LocalScope {
   variables : Map[String, Type] // Variable name -> Type
+  const_vars : @hashset.HashSet[String] // Set of const variable names
 } derive(Show)
 
 ///|
@@ -370,7 +371,9 @@ fn next_type_id(checker : TypeChecker) -> (Int, TypeChecker) {
 /// Push a new local scope onto the scope stack
 fn push_local_scope(checker : TypeChecker) -> TypeChecker {
   let scopes = checker.local_scopes
-  scopes.push(LocalScope::{ variables: Map::new() })
+  scopes.push(
+    LocalScope::{ variables: Map::new(), const_vars: @hashset.new() },
+  )
   { ..checker, local_scopes: scopes }
 }
 
@@ -464,6 +467,53 @@ fn add_local_variable(
 }
 
 ///|
+/// Add a const variable to the current local scope
+fn add_local_const_variable(
+  checker : TypeChecker,
+  name : String,
+  var_type : Type,
+) -> TypeChecker {
+  let scopes = checker.local_scopes
+  if scopes.length() > 0 {
+    let scope = scopes[scopes.length() - 1]
+    scope.variables.set(name, var_type)
+    scope.const_vars.insert(name)
+  }
+  { ..checker, local_scopes: scopes }
+}
+
+///|
+/// Check if a local variable is const
+fn is_local_const_variable(checker : TypeChecker, name : String) -> Bool {
+  let scopes = checker.local_scopes
+  for i = scopes.length() - 1; i >= 0; i = i - 1 {
+    if scopes[i].const_vars.contains(name) {
+      return true
+    }
+  }
+  false
+}
+
+///|
+/// Check assignment to local const variable
+fn check_local_const_assignment(
+  checker : TypeChecker,
+  var_name : String,
+  location : SourceLocation,
+) -> TypeChecker {
+  if is_local_const_variable(checker, var_name) {
+    add_diagnostic_with_code(
+      checker,
+      "Cannot assign to '" + var_name + "' because it is a constant.",
+      location,
+      DiagnosticCode::TS2588,
+    )
+  } else {
+    checker
+  }
+}
+
+///|
 /// Look up a variable type in local scopes (innermost first)
 fn lookup_local_variable(checker : TypeChecker, name : String) -> Type? {
   // Search from innermost scope to outermost
@@ -537,6 +587,7 @@ fn add_array_binding_elements_to_scope(
   checker : TypeChecker,
   arr_pat : ArrayBindingPattern,
   _arr_type : Type,
+  is_const : Bool,
 ) -> TypeChecker {
   let mut checker = checker
   for elem in arr_pat.elements {
@@ -546,7 +597,11 @@ fn add_array_binding_elements_to_scope(
           Identifier(id) => {
             // Get the element type from array, or any if unknown
             let (elem_type, c) = any_type(checker)
-            checker = add_local_variable(c, id.name, elem_type)
+            checker = if is_const {
+              add_local_const_variable(c, id.name, elem_type)
+            } else {
+              add_local_variable(c, id.name, elem_type)
+            }
           }
           _ => ()
         }
@@ -562,6 +617,7 @@ fn add_object_binding_elements_to_scope(
   checker : TypeChecker,
   obj_pat : ObjectBindingPattern,
   _obj_type : Type,
+  is_const : Bool,
 ) -> TypeChecker {
   let mut checker = checker
   for prop in obj_pat.properties {
@@ -576,7 +632,11 @@ fn add_object_binding_elements_to_scope(
     }
     if name != "" {
       let (prop_type, c) = any_type(checker)
-      checker = add_local_variable(c, name, prop_type)
+      checker = if is_const {
+        add_local_const_variable(c, name, prop_type)
+      } else {
+        add_local_variable(c, name, prop_type)
+      }
     }
   }
   checker
@@ -2327,7 +2387,7 @@ fn check_variable_statement(
 
   for i = 0; i < var_stmt.declarations.length(); i = i + 1 {
     let decl = var_stmt.declarations[i]
-    checker = check_variable_declaration(checker, decl)
+    checker = check_variable_declaration(checker, decl, var_stmt.is_const)
 
     // TS1155: 'const' declarations must be initialized
     // Only check if NOT ambient declaration (declare const x: T is allowed)
@@ -2496,6 +2556,7 @@ fn collect_type_names_from_type_node_inner(node : Node, names : Array[String]) -
 fn check_variable_declaration(
   checker : TypeChecker,
   decl : VariableDeclaration,
+  is_const : Bool,
 ) -> TypeChecker {
   // Check for TS2748: variable referencing itself in initializer (temporal dead zone)
   let checker = check_variable_self_reference(checker, decl)
@@ -2569,14 +2630,20 @@ fn check_variable_declaration(
   }
 
   // Get the variable name and add to local scope
+  // Use add_local_const_variable for const declarations to track const-ness
   let checker = match decl.name {
-    Identifier(id) => add_local_variable(checker, id.name, var_type)
+    Identifier(id) =>
+      if is_const {
+        add_local_const_variable(checker, id.name, var_type)
+      } else {
+        add_local_variable(checker, id.name, var_type)
+      }
     ArrayBindingPattern(arr_pat) =>
       // For array destructuring, add each element's name to scope
-      add_array_binding_elements_to_scope(checker, arr_pat, var_type)
+      add_array_binding_elements_to_scope(checker, arr_pat, var_type, is_const)
     ObjectBindingPattern(obj_pat) =>
       // For object destructuring, add each property to scope
-      add_object_binding_elements_to_scope(checker, obj_pat, var_type)
+      add_object_binding_elements_to_scope(checker, obj_pat, var_type, is_const)
     _ => checker
   }
 
@@ -4531,22 +4598,39 @@ fn infer_binary_expression_type(
       // For identifiers, we need to get the declared type (not narrowed type) for assignment checking
       let (checker, target_type) = match bin_expr.left {
         Identifier(id) => {
-          let (checker, declared_type_opt) = match
-            lookup_symbol(checker, id.name) {
-            Some(symbol) => {
-              let c = check_const_assignment(
+          // Check for const assignment in global scope
+          let checker = match lookup_symbol(checker, id.name) {
+            Some(symbol) =>
+              check_const_assignment(
                 checker,
                 id.name,
                 symbol,
                 get_node_location(BinaryExpression(bin_expr)),
               )
-              // Get the declared type (not narrowed) for assignment checking
-              match get_symbol_type(c, symbol) {
-                (Some(t), c2) => (c2, Some(t))
-                (None, c2) => (c2, None)
+            None => checker
+          }
+          // Check for const assignment in local scope
+          let checker = check_local_const_assignment(
+            checker,
+            id.name,
+            get_node_location(BinaryExpression(bin_expr)),
+          )
+          // First check local scopes (for function parameters and local variables)
+          let (checker, declared_type_opt) = match
+            lookup_local_variable(checker, id.name) {
+            Some(local_type) => (checker, Some(local_type))
+            None =>
+              // Fall back to global scope lookup
+              match lookup_symbol(checker, id.name) {
+                Some(symbol) => {
+                  // Get the declared type (not narrowed) for assignment checking
+                  match get_symbol_type(checker, symbol) {
+                    (Some(t), c2) => (c2, Some(t))
+                    (None, c2) => (c2, None)
+                  }
+                }
+                None => (checker, None) // Can't find symbol, skip type check
               }
-            }
-            None => (checker, None) // Can't find symbol, skip type check
           }
           // Assignment invalidates type narrowing for this variable
           let checker = remove_narrowed_type(checker, id.name)

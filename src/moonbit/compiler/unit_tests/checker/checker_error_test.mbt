@@ -1505,3 +1505,91 @@ test "unit/checker/error - default parameter" {
     Err(_) => assert_true(false)
   }
 }
+
+// ============================================================================
+// Parameter Type Errors in Function Bodies
+// ============================================================================
+
+///|
+test "unit/checker/error/TS2322 - assign string to number parameter" {
+  // Test that assigning a string to a number-typed parameter inside function body is detected
+  let result = parse_bind_check_errors(
+    "function test(x: number) { x = \"bad\"; }",
+  )
+  match result {
+    Ok(_) => assert_true(false) // Should have reported an error
+    Err(diagnostics) => {
+      assert_true(diagnostics.length() > 0)
+      assert_true(has_diagnostic_code(diagnostics, 2322))
+      assert_true(has_diagnostic_containing(diagnostics, "not assignable"))
+    }
+  }
+}
+
+///|
+test "unit/checker/error/TS2322 - assign boolean to string parameter" {
+  let result = parse_bind_check_errors(
+    "function test(s: string) { s = true; }",
+  )
+  match result {
+    Ok(_) => assert_true(false)
+    Err(diagnostics) => {
+      assert_true(diagnostics.length() > 0)
+      assert_true(has_diagnostic_code(diagnostics, 2322))
+    }
+  }
+}
+
+///|
+test "unit/checker/error/TS2322 - parameter type error in arrow function" {
+  let result = parse_bind_check_errors(
+    "const f = (x: number) => { x = \"bad\"; };",
+  )
+  match result {
+    Ok(_) => assert_true(false)
+    Err(diagnostics) => {
+      assert_true(diagnostics.length() > 0)
+      assert_true(has_diagnostic_code(diagnostics, 2322))
+    }
+  }
+}
+
+///|
+test "unit/checker/error/TS2322 - parameter type error in function expression" {
+  let result = parse_bind_check_errors(
+    "const f = function(x: number) { x = \"bad\"; };",
+  )
+  match result {
+    Ok(_) => assert_true(false)
+    Err(diagnostics) => {
+      assert_true(diagnostics.length() > 0)
+      assert_true(has_diagnostic_code(diagnostics, 2322))
+    }
+  }
+}
+
+///|
+test "unit/checker/error/TS2322 - parameter type error in template substitution" {
+  let result = parse_bind_check_errors(
+    "`${function (x: number) { x = \"bad\"; } }`",
+  )
+  match result {
+    Ok(_) => assert_true(false)
+    Err(diagnostics) => {
+      assert_true(diagnostics.length() > 0)
+      assert_true(has_diagnostic_code(diagnostics, 2322))
+    }
+  }
+}
+
+///|
+test "unit/checker/error - valid parameter assignment" {
+  // Test that assigning a valid type to a parameter is accepted
+  let result = parse_bind_check_errors(
+    "function test(x: number) { x = 42; }",
+  )
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false) // Should not have errors
+  }
+}
