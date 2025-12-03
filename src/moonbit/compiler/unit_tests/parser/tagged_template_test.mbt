@@ -266,3 +266,62 @@ test "parse readonly index signature after method" {
     #|}
   assert_true(parse_succeeds(code))
 }
+
+// ============================================================================
+// Generic Function Type Tests - <T>(...) => T syntax
+// ============================================================================
+
+///|
+test "parse generic function type - simple" {
+  // Generic function type: <T>(x: T) => T
+  let code = "type F = <T>(x: T) => T;"
+  assert_true(parse_succeeds(code))
+}
+
+///|
+test "parse generic function type - multiple type params" {
+  // Generic function type: <T, U>(x: T, y: U) => [T, U]
+  let code = "type F = <T, U>(x: T, y: U) => [T, U];"
+  assert_true(parse_succeeds(code))
+}
+
+///|
+test "parse generic function type - with constraints" {
+  // Generic function type with constraint: <T extends object>(x: T) => T
+  let code = "type F = <T extends object>(x: T) => T;"
+  assert_true(parse_succeeds(code))
+}
+
+///|
+test "parse generic function type - in object property" {
+  // Generic function type as object property
+  let code =
+    #|declare let obj: {
+    #|    prop: <T>(x: T) => T
+    #|}
+  assert_true(parse_succeeds(code))
+}
+
+///|
+test "parse generic function type - with callback parameter" {
+  // Generic function type with callback: <T>(strs: string[], x: (input: T) => T) => T
+  let code = "type F = <T>(strs: string[], x: (input: T) => T) => { result: T };"
+  assert_true(parse_succeeds(code))
+}
+
+///|
+test "parse generic function type - nested in interface" {
+  // Generic function type in interface
+  let code =
+    #|interface I {
+    #|    method: <T>(x: T) => T;
+    #|}
+  assert_true(parse_succeeds(code))
+}
+
+///|
+test "parse generic function type - default type parameter" {
+  // Generic function type with default: <T = string>(x: T) => T
+  let code = "type F = <T = string>(x: T) => T;"
+  assert_true(parse_succeeds(code))
+}

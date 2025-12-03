@@ -2451,3 +2451,47 @@ test "emit import equals dotted entity name" {
   println("Import equals dotted entity name:\n\{js}")
   assert_true(js.contains("const C = M.N.O"))
 }
+
+// ============================================================================
+// Tagged Template with Type Arguments Tests
+// ============================================================================
+
+///|
+/// Test: Emit tagged template - basic without type args
+test "emit tagged template basic" {
+  let js = compile_to_js("const x = tag `hello`;")
+  println("Tagged template basic:\n\{js}")
+  // Note: emitter outputs without space between tag and backtick
+  assert_true(js.contains("tag`hello`"))
+}
+
+///|
+/// Test: Emit tagged template with type arguments - type args stripped
+test "emit tagged template with type arguments" {
+  let js = compile_to_js("declare function f<T>(strs: TemplateStringsArray): T; const x = f<string> `hello`;")
+  println("Tagged template with type arguments:\n\{js}")
+  // Type arguments should be stripped in the output
+  assert_true(js.contains("f`hello`"))
+  // The <string> should NOT appear in the output
+  assert_true(not(js.contains("<string>")))
+}
+
+///|
+/// Test: Emit tagged template with multiple type arguments
+test "emit tagged template with multiple type arguments" {
+  let js = compile_to_js("declare function g<T, U>(strs: TemplateStringsArray): T; const y = g<number, string> `world`;")
+  println("Tagged template with multiple type arguments:\n\{js}")
+  assert_true(js.contains("g`world`"))
+  // Neither type argument should appear
+  assert_true(not(js.contains("<number")))
+  assert_true(not(js.contains("string>")))
+}
+
+///|
+/// Test: Emit tagged template with type arguments and interpolation
+test "emit tagged template with type arguments and interpolation" {
+  let js = compile_to_js("declare function f<T>(strs: TemplateStringsArray, ...args: any[]): T; const z = f<boolean> `hello ${42} world`;")
+  println("Tagged template with type args and interpolation:\n\{js}")
+  assert_true(js.contains("f`hello ${42} world`"))
+  assert_true(not(js.contains("<boolean>")))
+}

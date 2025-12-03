@@ -1266,6 +1266,57 @@ fn parse_primary_type_with_readonly(
         ),
       )
     }
+    LessThan(_) => {
+      // Generic function type: <T>(param: T) => T
+      // or generic construct signature: new <T>(param: T) => T
+      let (type_params, parser) = parse_type_parameters(parser)
+
+      // Expect '(' for function parameters
+      match current_token(parser) {
+        OpenParen(_) => {
+          let parser = advance_parser(parser) // consume '('
+          let (parameters, parser) = parse_parameter_list(parser)
+
+          // Expect =>
+          match current_token(parser) {
+            Arrow(_) => {
+              let parser = advance_parser(parser)
+              match parse_type(parser) {
+                Ok((return_type, parser)) =>
+                  Ok(
+                    (
+                      Node::FunctionType(FunctionType::{
+                        type_parameters: type_params,
+                        parameters,
+                        return_type,
+                        location: loc,
+                      }),
+                      parser,
+                    ),
+                  )
+                Err(p) => Err(p)
+              }
+            }
+            _ =>
+              Err(
+                add_error(
+                  parser,
+                  "Expected '=>' in generic function type",
+                  current_token(parser).location(),
+                ),
+              )
+          }
+        }
+        _ =>
+          Err(
+            add_error(
+              parser,
+              "Expected '(' after type parameters in generic function type",
+              current_token(parser).location(),
+            ),
+          )
+      }
+    }
     OpenParen(_) => {
       // Function type: (param: type, ...) => returnType
       let parser = advance_parser(parser) // consume '('
