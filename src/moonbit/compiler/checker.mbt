@@ -514,6 +514,115 @@ fn check_local_const_assignment(
 }
 
 ///|
+/// Hoist var declarations in a statement block to the current local scope.
+/// This ensures that var declarations are visible even in their own initializers.
+/// Only hoists `var` declarations, not `let` or `const` (which have temporal dead zone).
+fn hoist_var_declarations(checker : TypeChecker, stmt : Node) -> TypeChecker {
+  let (any_t, checker) = any_type(checker)
+  match stmt {
+    BlockStatement(block) => {
+      let mut checker = checker
+      for s in block.statements {
+        checker = hoist_var_declarations(checker, s)
+      }
+      checker
+    }
+    VariableStatement(var_stmt) => {
+      // Only hoist `var`, not `let` or `const`
+      if var_stmt.is_let || var_stmt.is_const {
+        return checker
+      }
+      let mut checker = checker
+      for decl in var_stmt.declarations {
+        checker = hoist_var_decl_binding(checker, decl.name, any_t)
+      }
+      checker
+    }
+    // Recurse into statements that can contain var declarations
+    IfStatement(if_stmt) => {
+      let checker = hoist_var_declarations(checker, if_stmt.then_statement)
+      match if_stmt.else_statement {
+        Some(else_stmt) => hoist_var_declarations(checker, else_stmt)
+        None => checker
+      }
+    }
+    WhileStatement(while_stmt) =>
+      hoist_var_declarations(checker, while_stmt.statement)
+    DoWhileStatement(do_stmt) =>
+      hoist_var_declarations(checker, do_stmt.statement)
+    ForStatement(for_stmt) => {
+      let checker = match for_stmt.initializer {
+        Some(init) => hoist_var_declarations(checker, init)
+        None => checker
+      }
+      hoist_var_declarations(checker, for_stmt.statement)
+    }
+    ForInStatement(for_in) => {
+      let checker = hoist_var_declarations(checker, for_in.initializer)
+      hoist_var_declarations(checker, for_in.statement)
+    }
+    ForOfStatement(for_of) => {
+      let checker = hoist_var_declarations(checker, for_of.initializer)
+      hoist_var_declarations(checker, for_of.statement)
+    }
+    SwitchStatement(switch_stmt) => {
+      let mut checker = checker
+      for clause in switch_stmt.cases {
+        for s in clause.statements {
+          checker = hoist_var_declarations(checker, s)
+        }
+      }
+      checker
+    }
+    TryStatement(try_stmt) => {
+      let checker = hoist_var_declarations(checker, try_stmt.try_block)
+      let checker = match try_stmt.catch_clause {
+        Some(catch_clause) => hoist_var_declarations(checker, catch_clause.block)
+        None => checker
+      }
+      match try_stmt.finally_block {
+        Some(finally_block) => hoist_var_declarations(checker, finally_block)
+        None => checker
+      }
+    }
+    WithStatement(with_stmt) =>
+      hoist_var_declarations(checker, with_stmt.statement)
+    LabeledStatement(labeled) =>
+      hoist_var_declarations(checker, labeled.statement)
+    _ => checker
+  }
+}
+
+///|
+/// Add a var binding to the current local scope during hoisting
+fn hoist_var_decl_binding(checker : TypeChecker, name : Node, var_type : Type) -> TypeChecker {
+  match name {
+    Identifier(id) => add_local_variable(checker, id.name, var_type)
+    ArrayBindingPattern(pattern) => {
+      let mut checker = checker
+      for elem in pattern.elements {
+        match elem {
+          Some(binding_node) =>
+            // Elements can be Identifier or nested patterns
+            checker = hoist_var_decl_binding(checker, binding_node, var_type)
+          None => ()
+        }
+      }
+      checker
+    }
+    ObjectBindingPattern(pattern) => {
+      let mut checker = checker
+      for elem in pattern.properties {
+        // The name field is the binding target (Identifier or nested pattern)
+        checker = hoist_var_decl_binding(checker, elem.name, var_type)
+      }
+      checker
+    }
+    _ => checker
+  }
+}
+
+///|
 /// Look up a variable type in local scopes (innermost first)
 fn lookup_local_variable(checker : TypeChecker, name : String) -> Type? {
   // Search from innermost scope to outermost
@@ -3513,10 +3622,32 @@ fn get_string_constructor_type(checker : TypeChecker) -> (Type, TypeChecker) {
   }
   string_methods.set("fromCharCode", from_char_code)
 
+  // Create String instance type (the result of new String())
+  let string_instance_type = Type::Object(ObjectType::{
+    properties: Map::new(),
+    call_signatures: [],
+    construct_signatures: [],
+    index_signatures: [],
+    info: TypeInfo::{ id, flags: default_flags },
+    class_name: Some("String"),
+  })
+
+  // Construct signature: new String(value?) => String
+  let construct_sig = CheckerSignature::{
+    parameters: [CheckerParameter::{
+      name: "value",
+      param_type: Type::Any(info),
+      is_optional: true,
+      is_rest: false,
+    }],
+    return_type: string_instance_type,
+    type_parameters: [],
+  }
+
   let string_type = Type::Object(ObjectType::{
     properties: string_methods,
     call_signatures: [],
-    construct_signatures: [],
+    construct_signatures: [construct_sig],
     index_signatures: [],
     info: TypeInfo::{ id, flags: default_flags },
     class_name: None,
@@ -4761,6 +4892,8 @@ fn infer_unary_expression_type(
   match un_expr.operator {
     Plus => {
       // TS2736: Operator '+' cannot be applied to type 'bigint'
+      // Note: Unary + is a type coercion operator that converts any value to number
+      // It works on strings, objects, etc. - only bigint is an error
       let checker = if type_is_bigint(operand_type) {
         add_diagnostic_with_code(
           checker,
@@ -4769,12 +4902,8 @@ fn infer_unary_expression_type(
           TS2736,
         )
       } else {
-        check_numeric_operand(
-          checker,
-          operand_type,
-          un_expr.operator,
-          get_node_location(UnaryExpression(un_expr)),
-        )
+        // Unary + converts any value to number, no error for strings/objects
+        checker
       }
       number_type(checker)
     }
@@ -9245,7 +9374,14 @@ fn check_function_declaration(
     checker
   }
 
-  // Check function body first (so variables are declared in scope)
+  // Hoist var declarations to the function scope before checking body
+  // This ensures self-references like `var x = yield \`${ x }\`` work correctly
+  let checker = match func.body {
+    Some(body) => hoist_var_declarations(checker, body)
+    None => checker
+  }
+
+  // Check function body
   let checker = match func.body {
     Some(body) => check_statement(checker, body)
     None => checker
