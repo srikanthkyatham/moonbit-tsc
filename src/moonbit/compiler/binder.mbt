@@ -1934,12 +1934,19 @@ fn declare_symbol(binder : Binder, name : String, symbol : Symbol) -> Binder {
           existing_symbol.kind == SymbolKind::Module &&
           symbol.kind == SymbolKind::Interface
         )
+      // Allow var declaration merging (multiple var declarations of same name are allowed in TypeScript)
+      // This is used for patterns like: var x = expr; var x: Type;
+      let is_var_merge = existing_symbol.kind == SymbolKind::Variable &&
+        symbol.kind == SymbolKind::Variable &&
+        not(existing_symbol.flags.is_const) &&
+        not(symbol.flags.is_const)
       if is_function_overload ||
         is_method_overload ||
         is_getter_setter_pair ||
         is_interface_merge ||
         is_namespace_merge ||
-        is_interface_namespace_merge {
+        is_interface_namespace_merge ||
+        is_var_merge {
         // Overload, getter/setter pair, or mergeable declaration - allow it
         // For interface/namespace merging or function overloads, merge the symbols
         if is_interface_merge ||
@@ -1994,6 +2001,10 @@ fn declare_symbol(binder : Binder, name : String, symbol : Symbol) -> Binder {
             }
             None => binder
           }
+        } else if is_var_merge {
+          // For var merging, keep the existing symbol (ignore the duplicate declaration)
+          // This is used for patterns like: var x = expr; var x: Type;
+          binder
         } else {
           binder
         }

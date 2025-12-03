@@ -279,7 +279,9 @@ fn check_overload_compatibility(
 
     // The implementation's required params must be <= each overload's required params
     // (implementation must be able to handle all overloads)
-    if impl_required > sig_required {
+    // Exception: If implementation has 0 parameters, it's a "catch-all" implementation
+    // that TypeScript allows for any overload pattern (common pattern: function f() { ... })
+    if impl_total > 0 && impl_required > sig_required {
       errors.push({
         kind: ParamCountMismatch(i, sig_required),
         message: "Overload signature is not compatible with function implementation. " +
@@ -296,7 +298,10 @@ fn check_overload_compatibility(
 
     // The implementation should have at least as many total parameters as the overload
     // (to handle all parameters that could be passed)
-    if impl_total < sig_total && not(overload_has_rest_param(impl_.parameters)) {
+    // Exception: If implementation has 0 parameters, it's a "catch-all" that accepts any args
+    if impl_total > 0 &&
+      impl_total < sig_total &&
+      not(overload_has_rest_param(impl_.parameters)) {
       errors.push({
         kind: NotCompatibleWithImpl(i),
         message: "Overload signature is not compatible with function implementation. " +
