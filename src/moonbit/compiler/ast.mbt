@@ -686,10 +686,11 @@ pub struct TemplateSpan {
 } derive(Show)
 
 ///|
-/// Tagged template expression: tag`template`
+/// Tagged template expression: tag`template` or tag<T>`template`
 pub struct TaggedTemplateExpression {
   tag : Node // The tag expression (e.g., html, sql, or any expression)
   template : Node // The template literal (TemplateExpression)
+  type_arguments : Array[Node] // Optional type arguments for generic tagged templates (e.g., tag<T>`...`)
   location : SourceLocation
 } derive(Show)
 

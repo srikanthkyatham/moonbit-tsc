@@ -1981,9 +1981,12 @@ fn transform_tagged_template_expression(
   // Transform both the tag and the template
   let transformed_tag = transform(tte.tag, ctx)
   let transformed_template = transform(tte.template, ctx)
+  // Transform type arguments if present
+  let transformed_type_args = tte.type_arguments.map(fn(arg) { transform(arg, ctx) })
   TaggedTemplateExpression({
     tag: transformed_tag,
     template: transformed_template,
+    type_arguments: transformed_type_args,
     location: tte.location,
   })
 }

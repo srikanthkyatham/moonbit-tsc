@@ -1148,8 +1148,23 @@ fn parse_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
     // Export declaration
     KeywordExport(_) => parse_export_declaration(parser)
 
-    // Declare (ambient) declaration
-    KeywordDeclare(_) => parse_declare_declaration(parser)
+    // Declare (ambient) declaration or expression statement
+    // "declare" can be used as an identifier (e.g., function name) when followed by:
+    // - Template literal: declare `hello`
+    // - Open paren: declare()
+    // - Type arguments: declare<T>
+    KeywordDeclare(_) => {
+      // Look ahead to see if this is an expression statement
+      if parser.position + 1 < parser.tokens.length() {
+        match parser.tokens[parser.position + 1] {
+          TemplateLiteral(_, _) | TemplateHead(_, _) | OpenParen(_) | LessThan(_) =>
+            parse_expression_statement(parser)
+          _ => parse_declare_declaration(parser)
+        }
+      } else {
+        parse_declare_declaration(parser)
+      }
+    }
 
     // Using statement (TS 5.2+): using x = expr;
     KeywordUsing(start_loc) => parse_using_statement(parser, start_loc, false)
@@ -1804,10 +1819,27 @@ fn parse_function_declaration(
   }
 
   // Function name (optional for function expressions and export default)
+  // Keywords like 'declare' can be used as function names
   let (name, parser) = match current_token(parser) {
     Identifier(id_name, loc) =>
       (
         Some(Node::Identifier(Identifier::{ name: id_name, location: loc })),
+        advance_parser(parser),
+      )
+    // Contextual keywords that can be used as function names
+    KeywordDeclare(loc) =>
+      (
+        Some(Node::Identifier(Identifier::{ name: "declare", location: loc })),
+        advance_parser(parser),
+      )
+    KeywordAsync(loc) =>
+      (
+        Some(Node::Identifier(Identifier::{ name: "async", location: loc })),
+        advance_parser(parser),
+      )
+    KeywordUsing(loc) =>
+      (
+        Some(Node::Identifier(Identifier::{ name: "using", location: loc })),
         advance_parser(parser),
       )
     _ => (None, parser) // Anonymous function - no error, name is optional

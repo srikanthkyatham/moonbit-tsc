@@ -304,10 +304,15 @@ fn make_simple_parameter(id : Identifier) -> Node {
 }
 
 ///|
-/// Parse optional function name (identifier)
+/// Parse optional function name (identifier or contextual keyword)
+/// Keywords like 'declare' can be used as function names
 fn parse_optional_function_name(parser : Parser) -> (String?, Parser) {
   match current_token(parser) {
     Identifier(fname, _) => (Some(fname), advance_parser(parser))
+    // Contextual keywords that can be used as function names
+    KeywordDeclare(_) => (Some("declare"), advance_parser(parser))
+    KeywordAsync(_) => (Some("async"), advance_parser(parser))
+    KeywordUsing(_) => (Some("using"), advance_parser(parser))
     _ => (None, parser)
   }
 }
