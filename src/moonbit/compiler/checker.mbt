@@ -2329,6 +2329,22 @@ fn check_variable_statement(
     let decl = var_stmt.declarations[i]
     checker = check_variable_declaration(checker, decl)
 
+    // TS1155: 'const' declarations must be initialized
+    // Only check if NOT ambient declaration (declare const x: T is allowed)
+    if var_stmt.is_const && not(is_ambient) {
+      match decl.initializer {
+        None => {
+          checker = add_diagnostic_with_code(
+            checker,
+            "'const' declarations must be initialized.",
+            decl.location,
+            TS1155,
+          )
+        }
+        Some(_) => ()
+      }
+    }
+
     // TS2494: Check if exported variable uses private type
     if is_exported {
       checker = check_exported_variable_private_type(checker, decl)

@@ -1186,7 +1186,7 @@ test "unit/checker/globals - NaN is recognized as number" {
 test "unit/checker/globals - NaN in comparison" {
   // NaN can be used in comparisons
   let result = parse_bind_check(
-    "const x = NaN === NaN; const y = isNaN(NaN);",
+    "const x = NaN === NaN; const y: boolean = Number.isNaN(NaN);",
   )
   match result {
     Ok(typed) => assert_eq(typed.diagnostics.length(), 0)

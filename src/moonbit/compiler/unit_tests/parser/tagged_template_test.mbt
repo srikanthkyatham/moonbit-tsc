@@ -173,3 +173,96 @@ test "parse template with object and function mixed" {
   let code = "var x = `${ {a: 1} } ${ function f() { return {b: 2}; } }`;"
   assert_true(parse_succeeds(code))
 }
+
+// ============================================================================
+// Interface Method + Index Signature Tests (ASI fix)
+// ============================================================================
+
+///|
+test "parse interface with method and index signature - no semicolon" {
+  // Method without semicolon followed by index signature on new line
+  // The [ should NOT be parsed as array suffix of void
+  let code =
+    #|interface I {
+    #|    foo(): void
+    #|    [x: number]: I;
+    #|}
+  assert_true(parse_succeeds(code))
+}
+
+///|
+test "parse interface with method semicolon and index signature" {
+  // Method with semicolon followed by index signature
+  let code =
+    #|interface I {
+    #|    foo(): void;
+    #|    [x: number]: I;
+    #|}
+  assert_true(parse_succeeds(code))
+}
+
+///|
+test "parse interface with multiple methods and index signature" {
+  // Multiple methods followed by index signature
+  let code =
+    #|interface I {
+    #|    foo(): void
+    #|    bar(): string
+    #|    [x: string]: any;
+    #|}
+  assert_true(parse_succeeds(code))
+}
+
+///|
+test "parse interface with property and index signature - no semicolon" {
+  // Property without semicolon followed by index signature
+  let code =
+    #|interface I {
+    #|    prop: number
+    #|    [x: string]: number;
+    #|}
+  assert_true(parse_succeeds(code))
+}
+
+///|
+test "parse type literal with property and index signature" {
+  // Type literal version - using arrow function syntax for methods
+  let code =
+    #|type T = {
+    #|    foo: () => void;
+    #|    [x: number]: T;
+    #|}
+  assert_true(parse_succeeds(code))
+}
+
+///|
+test "parse interface with generic method and index signature" {
+  // Generic method followed by index signature
+  let code =
+    #|interface I {
+    #|    foo<T>(): T
+    #|    [x: number]: any;
+    #|}
+  assert_true(parse_succeeds(code))
+}
+
+///|
+test "parse array type on same line is still valid" {
+  // Array type suffix on same line should work
+  let code =
+    #|interface I {
+    #|    foo(): void[];
+    #|}
+  assert_true(parse_succeeds(code))
+}
+
+///|
+test "parse readonly index signature after method" {
+  // Readonly index signature after method
+  let code =
+    #|interface I {
+    #|    foo(): void
+    #|    readonly [x: string]: number;
+    #|}
+  assert_true(parse_succeeds(code))
+}
