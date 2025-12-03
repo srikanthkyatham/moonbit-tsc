@@ -1056,3 +1056,88 @@ test "unit/checker/narrowing - function scope clears narrowing" {
     Err(_) => assert_true(false)
   }
 }
+
+// ============================================================================
+// Function Expression Self-Reference Tests
+// ============================================================================
+
+///|
+test "unit/checker/function-expr - named function expression can reference itself" {
+  // Named function expressions should be able to reference their own name
+  // This is valid TypeScript: function y() { return y; }
+  let result = parse_bind_check(
+    "var x = function y() { return y; };",
+  )
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(diagnostics) => {
+      // Should NOT have "Cannot find name 'y'" error
+      for diag in diagnostics {
+        assert_false(diag.message.contains("Cannot find name 'y'"))
+      }
+    }
+  }
+}
+
+///|
+test "unit/checker/function-expr - embedded in template literal" {
+  // Function expression embedded in template literal should be able to self-reference
+  let result = parse_bind_check(
+    "var x = `abc${ function y() { return y; } }def`;",
+  )
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(diagnostics) => {
+      // Should NOT have "Cannot find name 'y'" error
+      for diag in diagnostics {
+        assert_false(diag.message.contains("Cannot find name 'y'"))
+      }
+    }
+  }
+}
+
+///|
+test "unit/checker/function-expr - recursive factorial" {
+  // Common pattern: recursive function expression
+  let result = parse_bind_check(
+    "var factorial = function f(n: number): number { return n <= 1 ? 1 : n * f(n - 1); };",
+  )
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(diagnostics) => {
+      // Should NOT have "Cannot find name 'f'" error
+      for diag in diagnostics {
+        assert_false(diag.message.contains("Cannot find name 'f'"))
+      }
+    }
+  }
+}
+
+///|
+test "unit/checker/function-expr - anonymous function has no self-reference" {
+  // Anonymous function expressions don't create a binding
+  let result = parse_bind_check(
+    "var x = function() { return 42; };",
+  )
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/checker/function-expr - name not visible outside" {
+  // The function name should NOT be visible outside the function body
+  // This SHOULD produce an error for 'y'
+  let result = parse_bind_check(
+    "var x = function y() { return 1; }; var z = y;",
+  )
+  match result {
+    Ok(_) => assert_true(false) // Should have error - y not visible outside
+    Err(diagnostics) => {
+      // Should have "Cannot find name 'y'" error
+      let has_error = diagnostics.iter().any(fn(d) { d.message.contains("Cannot find name 'y'") })
+      assert_true(has_error)
+    }
+  }
+}

@@ -7534,8 +7534,11 @@ fn infer_function_expression_type(
   }
 
   // Build a function type from the function expression and add parameters to local scope
-  let params : Array[CheckerParameter] = []
   let mut checker = checker
+
+  // First, build the function type so we can add the function name binding
+  // We need to do a preliminary pass to build the type before adding it to scope
+  let preliminary_params : Array[CheckerParameter] = []
   for param_node in fe.parameters {
     match param_node {
       Parameter(p) => {
@@ -7554,19 +7557,17 @@ fn infer_function_expression_type(
           Identifier(id) => id.name
           _ => ""
         }
-        params.push({
+        preliminary_params.push({
           name: param_name,
           param_type,
           is_optional: p.is_optional,
           is_rest: p.is_rest,
         })
-        // Add parameter to local scope for body checking
-        checker = add_local_variable(checker, param_name, param_type)
       }
       _ => ()
     }
   }
-  let (return_type, checker) = match fe.return_type {
+  let (preliminary_return_type, checker) = match fe.return_type {
     Some(type_node) => {
       let (type_opt, c) = get_type_from_type_node(checker, type_node)
       match type_opt {
@@ -7575,6 +7576,24 @@ fn infer_function_expression_type(
       }
     }
     None => any_type(checker)
+  }
+
+  // If the function expression has a name, add it to the local scope
+  // This allows self-reference like: function y() { return y; }
+  let (func_info, checker) = create_type_info(checker)
+  let func_type : Type = Type::Function({
+    parameters: preliminary_params,
+    return_type: preliminary_return_type,
+    info: func_info,
+  })
+  let mut checker = match fe.name {
+    Some(name) => add_local_variable(checker, name, func_type)
+    None => checker
+  }
+
+  // Now add parameters to local scope for body checking
+  for param in preliminary_params {
+    checker = add_local_variable(checker, param.name, param.param_type)
   }
 
   // Check function body for errors (including await expressions)
@@ -7593,8 +7612,8 @@ fn infer_function_expression_type(
   // Pop the local scope
   let checker = pop_local_scope(checker)
 
-  let (info, checker) = create_type_info(checker)
-  (Function({ parameters: params, return_type, info }), checker)
+  // Return the function type we already built
+  (func_type, checker)
 }
 
 ///|
