@@ -2335,11 +2335,15 @@ fn check_variable_statement(
     }
 
     // Track uninitialized variables for TS2454 (definite assignment)
-    // Only track if NOT ambient declaration and has type annotation but no initializer
-    if not(is_ambient) {
+    // Only track if:
+    // 1. NOT ambient declaration
+    // 2. Has type annotation but no initializer
+    // 3. Is let or const (NOT var - var is hoisted and initialized to undefined)
+    let is_block_scoped = var_stmt.is_let || var_stmt.is_const
+    if not(is_ambient) && is_block_scoped {
       match (decl.name, decl.type_annotation, decl.initializer) {
         (Identifier(id), Some(_), None) => {
-          // Variable declared with type but no initializer - track it
+          // Block-scoped variable declared with type but no initializer - track it
           checker.uninitialized_vars.set(id.name, decl.location.start.line)
         }
         _ => ()
@@ -2619,6 +2623,8 @@ fn infer_type(checker : TypeChecker, expr : Node) -> (Type, TypeChecker) {
     NewExpression(new_expr) => infer_new_expression_type(checker, new_expr)
     TemplateExpression(template) =>
       infer_template_expression_type(checker, template)
+    TaggedTemplateExpression(tte) =>
+      infer_tagged_template_expression_type(checker, tte)
     ThisExpression(this_expr) => infer_this_type(checker, this_expr.location)
     SpreadExpression(spread) => infer_type(checker, spread.expression)
     OptionalChain(oc) => infer_optional_chain_type(checker, oc)
@@ -2953,6 +2959,18 @@ fn get_builtin_global_type(
     Some(get_exports_type(checker))
   } else if name == "module" {
     Some(get_module_type(checker))
+  } else if name == "Infinity" {
+    // Infinity is a global constant of type number
+    let (id, checker) = next_type_id(checker)
+    Some((Type::Number(TypeInfo::{ id, flags: TypeFlags::default() }), checker))
+  } else if name == "NaN" {
+    // NaN is a global constant of type number
+    let (id, checker) = next_type_id(checker)
+    Some((Type::Number(TypeInfo::{ id, flags: TypeFlags::default() }), checker))
+  } else if name == "undefined" {
+    // undefined is a global constant
+    let (id, checker) = next_type_id(checker)
+    Some((Type::Undefined(TypeInfo::{ id, flags: TypeFlags::default() }), checker))
   } else {
     None
   }
@@ -7185,6 +7203,51 @@ fn infer_template_expression_type(
 
   // Template expressions always result in strings
   string_type(checker)
+}
+
+///|
+/// Infer tagged template expression type
+/// Tagged templates like html`<div>${x}</div>` or sql`SELECT * FROM ${table}`
+fn infer_tagged_template_expression_type(
+  checker : TypeChecker,
+  tte : TaggedTemplateExpression,
+) -> (Type, TypeChecker) {
+  // First, infer the type of the tag expression
+  let (tag_type, checker) = infer_type(checker, tte.tag)
+
+  // Check template expressions to validate them
+  let mut checker = checker
+  match tte.template {
+    TemplateExpression(template) => {
+      for i = 0; i < template.template_spans.length(); i = i + 1 {
+        let (_, c) = infer_type(checker, template.template_spans[i].expression)
+        checker = c
+      }
+    }
+    // NoSubstitutionTemplateLiteral is just a string literal, no expressions to check
+    _ => ()
+  }
+
+  // If the tag is typed as 'any', the result is 'any'
+  match tag_type {
+    Any(_) => any_type(checker)
+    Function(func) => {
+      // The return type of the tag function is the result type
+      (func.return_type, checker)
+    }
+    // For other types, try to find a call signature
+    Object(obj) => {
+      if obj.call_signatures.length() > 0 {
+        // Use the first call signature's return type
+        (obj.call_signatures[0].return_type, checker)
+      } else {
+        // No call signature, return any
+        any_type(checker)
+      }
+    }
+    // For unknown or other types, return any
+    _ => any_type(checker)
+  }
 }
 
 ///|

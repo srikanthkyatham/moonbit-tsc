@@ -130,8 +130,20 @@ fn parse_array_type_suffix_with_readonly(
   let mut first_array = true
   while true {
     match current_token(parser) {
-      OpenBracket(_) => {
-        let start_loc = get_location(type_node)
+      OpenBracket(bracket_loc) => {
+        // Check for ASI (Automatic Semicolon Insertion) context:
+        // If [ is on a different line than the base type, it might be a new statement/member
+        // rather than an array/indexed access suffix
+        let type_loc = get_location(type_node)
+        if bracket_loc.start.line != type_loc.end.line {
+          // [ is on a different line - treat it as a new member, not array suffix
+          // This handles cases like:
+          //   foo(): void
+          //   [x: number]: I;
+          // where [x: number] is an index signature, not void[x: number]
+          break
+        }
+        let start_loc = type_loc
         parser = advance_parser(parser)
         match current_token(parser) {
           CloseBracket(_) => {

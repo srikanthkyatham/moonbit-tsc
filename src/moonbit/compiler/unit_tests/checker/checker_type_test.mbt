@@ -1141,3 +1141,143 @@ test "unit/checker/function-expr - name not visible outside" {
     }
   }
 }
+
+// ============================================================================
+// Global Built-in Constants Tests (Infinity, NaN, undefined)
+// ============================================================================
+
+///|
+test "unit/checker/globals - Infinity is recognized as number" {
+  // Infinity should be a global constant of type number
+  let result = parse_bind_check(
+    "const x: number = Infinity;",
+  )
+  match result {
+    Ok(typed) => assert_eq(typed.diagnostics.length(), 0)
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/checker/globals - Infinity in arithmetic" {
+  // Infinity can be used in arithmetic operations
+  let result = parse_bind_check(
+    "const x = 1 / Infinity; const y = Infinity + 1;",
+  )
+  match result {
+    Ok(typed) => assert_eq(typed.diagnostics.length(), 0)
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/checker/globals - NaN is recognized as number" {
+  // NaN should be a global constant of type number
+  let result = parse_bind_check(
+    "const x: number = NaN;",
+  )
+  match result {
+    Ok(typed) => assert_eq(typed.diagnostics.length(), 0)
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/checker/globals - NaN in comparison" {
+  // NaN can be used in comparisons
+  let result = parse_bind_check(
+    "const x = NaN === NaN; const y = isNaN(NaN);",
+  )
+  match result {
+    Ok(typed) => assert_eq(typed.diagnostics.length(), 0)
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/checker/globals - undefined is recognized" {
+  // undefined should be a global constant
+  let result = parse_bind_check(
+    "const x: undefined = undefined;",
+  )
+  match result {
+    Ok(typed) => assert_eq(typed.diagnostics.length(), 0)
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/checker/globals - undefined in union type" {
+  // undefined can be used in union types
+  let result = parse_bind_check(
+    "const x: string | undefined = undefined;",
+  )
+  match result {
+    Ok(typed) => assert_eq(typed.diagnostics.length(), 0)
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/checker/globals - negative Infinity" {
+  // -Infinity should work as well
+  let result = parse_bind_check(
+    "const x: number = -Infinity;",
+  )
+  match result {
+    Ok(typed) => assert_eq(typed.diagnostics.length(), 0)
+    Err(_) => assert_true(false)
+  }
+}
+
+// ============================================================================
+// Tagged Template Expression Type Tests
+// ============================================================================
+
+///|
+test "unit/checker/tagged-template - any tag returns any" {
+  // When tag has type 'any', result should be 'any'
+  let result = parse_bind_check(
+    "declare var tag: any; const x = tag `hello`;",
+  )
+  match result {
+    Ok(typed) => assert_eq(typed.diagnostics.length(), 0)
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/checker/tagged-template - function tag returns function return type" {
+  // Tag function's return type should be the expression type
+  let result = parse_bind_check(
+    "function tag(strs: TemplateStringsArray): number { return 42; } const x: number = tag `hello`;",
+  )
+  match result {
+    Ok(typed) => assert_eq(typed.diagnostics.length(), 0)
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/checker/tagged-template - with template interpolation" {
+  // Tagged template with interpolations
+  let result = parse_bind_check(
+    "function tag(strs: TemplateStringsArray, ...vals: any[]): string { return ''; } const x: string = tag `a ${1} b ${2}`;",
+  )
+  match result {
+    Ok(typed) => assert_eq(typed.diagnostics.length(), 0)
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/checker/tagged-template - checks interpolation expressions" {
+  // Interpolation expressions should be type-checked
+  let result = parse_bind_check(
+    "function tag(strs: TemplateStringsArray, ...vals: any[]): void {} const y = 42; tag `value: ${y}`;",
+  )
+  match result {
+    Ok(typed) => assert_eq(typed.diagnostics.length(), 0)
+    Err(_) => assert_true(false)
+  }
+}
