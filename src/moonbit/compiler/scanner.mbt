@@ -44,6 +44,9 @@ fn tokenize_with_template_tracking(
   let tokens : Array[Token] = []
   let state : ScanState = { line: 1, col: 1, offset: 0 }
   let mut template_depth = 0
+  // Track brace depth within template expressions to handle embedded object literals and functions
+  // Use a stack: each element represents brace depth at that template nesting level
+  let brace_depth_stack : Array[Int] = []
   let mut scan_continuation = false
   let mut code : StringView = source[:]
   let mut prev_token : Token? = None
@@ -91,6 +94,8 @@ fn tokenize_with_template_tracking(
           tokens.push(token)
           prev_token = Some(token)
           template_depth -= 1
+          // Pop brace depth tracking for this template level
+          ignore(brace_depth_stack.pop())
           code = rest
         }
         TemplateScanResultV2::Middle(rest) => {
@@ -98,6 +103,11 @@ fn tokenize_with_template_tracking(
           let token = TemplateMiddle(content.to_string(), loc)
           tokens.push(token)
           prev_token = Some(token)
+          // Reset brace depth for the next expression in this template
+          if brace_depth_stack.length() > 0 {
+            let idx = brace_depth_stack.length() - 1
+            brace_depth_stack[idx] = 0
+          }
           code = rest
         }
         TemplateScanResultV2::Head(_) => {
@@ -136,11 +146,31 @@ fn tokenize_with_template_tracking(
     tokens.push(token)
     code = rest
 
-    // Track template depth and trigger continuation scanning
+    // Track template depth, brace depth, and trigger continuation scanning
     match token {
-      TemplateHead(_, _) => template_depth += 1
+      TemplateHead(_, _) => {
+        template_depth += 1
+        brace_depth_stack.push(0) // Start tracking braces for this template level
+      }
       TemplateLiteral(_, _) => () // Simple template, no interpolation
-      CloseBrace(_) if template_depth > 0 => scan_continuation = true
+      OpenBrace(_) =>
+        // Increment brace depth if we're inside a template expression
+        if template_depth > 0 && brace_depth_stack.length() > 0 {
+          let idx = brace_depth_stack.length() - 1
+          brace_depth_stack[idx] = brace_depth_stack[idx] + 1
+        }
+      CloseBrace(_) =>
+        if template_depth > 0 && brace_depth_stack.length() > 0 {
+          let idx = brace_depth_stack.length() - 1
+          if brace_depth_stack[idx] > 0 {
+            // This is a closing brace from nested structure (object/function)
+            brace_depth_stack[idx] = brace_depth_stack[idx] - 1
+          } else {
+            // This is the closing brace of the template expression
+            scan_continuation = true
+          }
+        }
+      // Note: TemplateMiddle and TemplateTail are handled in the scan_continuation block above
       EOF(_) => break
       _ => ()
     }
@@ -160,6 +190,8 @@ fn tokenize_with_jsx_support(
   let tokens : Array[Token] = []
   let state : ScanState = { line: 1, col: 1, offset: 0 }
   let mut template_depth = 0
+  // Track brace depth within template expressions to handle embedded object literals and functions
+  let brace_depth_stack : Array[Int] = []
   let mut scan_template_continuation = false
   let mut code : StringView = source[:]
   let mut prev_token : Token? = None
@@ -221,6 +253,8 @@ fn tokenize_with_jsx_support(
           tokens.push(token)
           prev_token = Some(token)
           template_depth -= 1
+          // Pop brace depth tracking for this template level
+          ignore(brace_depth_stack.pop())
           code = rest
         }
         TemplateScanResultV2::Middle(rest) => {
@@ -228,6 +262,11 @@ fn tokenize_with_jsx_support(
           let token = TemplateMiddle(content.to_string(), loc)
           tokens.push(token)
           prev_token = Some(token)
+          // Reset brace depth for the next expression in this template
+          if brace_depth_stack.length() > 0 {
+            let idx = brace_depth_stack.length() - 1
+            brace_depth_stack[idx] = 0
+          }
           code = rest
         }
         TemplateScanResultV2::Head(_) =>
@@ -297,11 +336,26 @@ fn tokenize_with_jsx_support(
             )
             tokens.push(token)
             code = rest
-            // Track template depth
+            // Track template depth and brace depth
             match token {
-              TemplateHead(_, _) => template_depth += 1
-              CloseBrace(_) if template_depth > 0 =>
-                scan_template_continuation = true
+              TemplateHead(_, _) => {
+                template_depth += 1
+                brace_depth_stack.push(0)
+              }
+              OpenBrace(_) =>
+                if template_depth > 0 && brace_depth_stack.length() > 0 {
+                  let idx = brace_depth_stack.length() - 1
+                  brace_depth_stack[idx] = brace_depth_stack[idx] + 1
+                }
+              CloseBrace(_) =>
+                if template_depth > 0 && brace_depth_stack.length() > 0 {
+                  let idx = brace_depth_stack.length() - 1
+                  if brace_depth_stack[idx] > 0 {
+                    brace_depth_stack[idx] = brace_depth_stack[idx] - 1
+                  } else {
+                    scan_template_continuation = true
+                  }
+                }
               EOF(_) => break
               _ => ()
             }
@@ -504,10 +558,26 @@ fn tokenize_with_jsx_support(
             )
             tokens.push(token)
             code = rest
+            // Track template depth and brace depth
             match token {
-              TemplateHead(_, _) => template_depth += 1
-              CloseBrace(_) if template_depth > 0 =>
-                scan_template_continuation = true
+              TemplateHead(_, _) => {
+                template_depth += 1
+                brace_depth_stack.push(0)
+              }
+              OpenBrace(_) =>
+                if template_depth > 0 && brace_depth_stack.length() > 0 {
+                  let idx = brace_depth_stack.length() - 1
+                  brace_depth_stack[idx] = brace_depth_stack[idx] + 1
+                }
+              CloseBrace(_) =>
+                if template_depth > 0 && brace_depth_stack.length() > 0 {
+                  let idx = brace_depth_stack.length() - 1
+                  if brace_depth_stack[idx] > 0 {
+                    brace_depth_stack[idx] = brace_depth_stack[idx] - 1
+                  } else {
+                    scan_template_continuation = true
+                  }
+                }
               EOF(_) => break
               _ => ()
             }

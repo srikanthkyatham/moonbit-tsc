@@ -121,3 +121,55 @@ test "parse chained tagged template" {
   let code = "function tag(strs: TemplateStringsArray): typeof tag { return tag; } tag `a` `b`;"
   assert_true(parse_succeeds(code))
 }
+
+// ============================================================================
+// Embedded Expressions Tests - Object Literals and Functions in Templates
+// ============================================================================
+
+///|
+test "parse template with embedded object literal" {
+  let code = "var x = `abc${ { x: 10, y: 20 } }def`;"
+  assert_true(parse_succeeds(code))
+}
+
+///|
+test "parse template with embedded empty object" {
+  let code = "var x = `abc${ {} }def`;"
+  assert_true(parse_succeeds(code))
+}
+
+///|
+test "parse template with embedded nested object" {
+  let code = "var x = `abc${ { a: { b: 1 } } }def`;"
+  assert_true(parse_succeeds(code))
+}
+
+///|
+test "parse template with embedded function expression" {
+  let code = "var x = `abc${ function y() { return y; } }def`;"
+  assert_true(parse_succeeds(code))
+}
+
+///|
+test "parse template with embedded arrow function" {
+  let code = "var x = `abc${ () => { return 1; } }def`;"
+  assert_true(parse_succeeds(code))
+}
+
+///|
+test "parse template with embedded IIFE" {
+  let code = "var x = `abc${ (function() { return 42; })() }def`;"
+  assert_true(parse_succeeds(code))
+}
+
+///|
+test "parse template with multiple embedded objects" {
+  let code = "var x = `${ {a: 1} } middle ${ {b: 2} }`;"
+  assert_true(parse_succeeds(code))
+}
+
+///|
+test "parse template with object and function mixed" {
+  let code = "var x = `${ {a: 1} } ${ function f() { return {b: 2}; } }`;"
+  assert_true(parse_succeeds(code))
+}
