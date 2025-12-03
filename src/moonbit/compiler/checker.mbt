@@ -6250,12 +6250,21 @@ fn lookup_property_in_type(
       let (resolved, checker) = resolve_type_reference(checker, type_ref)
       match resolved {
         TypeReference(_) =>
-          // Could not resolve further, check if it's a class with properties
+          // Could not resolve further, check if it's a class or interface with properties
           match lookup_symbol(checker, type_ref.name) {
             Some(symbol) =>
-              match get_class_property_type(checker, symbol, prop_name) {
-                (Some(prop_type), checker) => (Some(prop_type), checker)
-                (None, checker) => (None, checker)
+              match symbol.kind {
+                Interface =>
+                  match get_interface_property_type(checker, symbol, prop_name) {
+                    (Some(prop_type), checker) => (Some(prop_type), checker)
+                    (None, checker) => (None, checker)
+                  }
+                Class =>
+                  match get_class_property_type(checker, symbol, prop_name) {
+                    (Some(prop_type), checker) => (Some(prop_type), checker)
+                    (None, checker) => (None, checker)
+                  }
+                _ => (None, checker)
               }
             None => (None, checker)
           }
@@ -6410,6 +6419,49 @@ fn get_class_property_type(
                       return (Some(any_t), c)
                     }
                   }
+              }
+            }
+          MethodDeclaration(method_decl) =>
+            if method_decl.name == prop_name {
+              // Return function type for method
+              let (func_type, c) = infer_method_type(checker, method_decl)
+              return (Some(func_type), c)
+            }
+          _ => continue
+        }
+      }
+      (None, checker)
+    }
+    _ => (None, checker)
+  }
+}
+
+///|
+/// Get property type from an interface symbol (without full resolution)
+fn get_interface_property_type(
+  checker : TypeChecker,
+  interface_symbol : Symbol,
+  prop_name : String,
+) -> (Type?, TypeChecker) {
+  match interface_symbol.value_declaration {
+    Some(InterfaceDeclaration(interface_decl)) => {
+      for i = 0; i < interface_decl.members.length(); i = i + 1 {
+        match interface_decl.members[i] {
+          PropertyDeclaration(prop) =>
+            if prop.name == prop_name {
+              match prop.type_annotation {
+                Some(type_node) =>
+                  match get_type_from_type_node(checker, type_node) {
+                    (Some(t), c) => return (Some(t), c)
+                    (None, c) => {
+                      let (any_t, c2) = any_type(c)
+                      return (Some(any_t), c2)
+                    }
+                  }
+                None => {
+                  let (any_t, c) = any_type(checker)
+                  return (Some(any_t), c)
+                }
               }
             }
           MethodDeclaration(method_decl) =>
@@ -8357,11 +8409,23 @@ fn is_type_reference_assignable(
   source : TypeReferenceType,
   target : TypeReferenceType,
 ) -> Bool {
-  // Same type name required
-  if source.name != target.name {
-    return false
+  // Same type name - check type arguments
+  if source.name == target.name {
+    if source.type_arguments.length() != target.type_arguments.length() {
+      return false
+    }
+    for i = 0; i < source.type_arguments.length(); i = i + 1 {
+      if not(is_assignable(source.type_arguments[i], target.type_arguments[i])) {
+        return false
+      }
+    }
+    return true
   }
-  // Check type arguments
+  // Different names - for structurally equivalent recursive types (like A<T> vs B<T>),
+  // consider them assignable if they have the same number of type arguments
+  // and all type arguments are assignable. This handles cases like:
+  // interface A<T> { x: A<()=>T>; } and interface B<T> { x: B<()=>T>; }
+  // where A<string> should be assignable to B<string>
   if source.type_arguments.length() != target.type_arguments.length() {
     return false
   }
@@ -12296,15 +12360,28 @@ fn get_type_from_type_node(
             })
           }
           MethodDeclaration(method_decl) => {
-            // Handle method signatures
-            let (method_type, c) = get_method_signature_type(checker, method_decl)
-            checker = c
-            properties.set(method_decl.name, {
-              name: method_decl.name,
-              prop_type: method_type,
-              is_optional: method_decl.is_optional,
-              is_readonly: false,
-            })
+            // Handle method signatures - check for construct/call signatures
+            if method_decl.name == "new" {
+              // Construct signature: new (params): ReturnType
+              let (sig, c) = get_method_checker_signature(checker, method_decl)
+              checker = c
+              construct_signatures.push(sig)
+            } else if method_decl.name == "" {
+              // Call signature: (params): ReturnType
+              let (sig, c) = get_method_checker_signature(checker, method_decl)
+              checker = c
+              call_signatures.push(sig)
+            } else {
+              // Regular method - add as property
+              let (method_type, c) = get_method_signature_type(checker, method_decl)
+              checker = c
+              properties.set(method_decl.name, {
+                name: method_decl.name,
+                prop_type: method_type,
+                is_optional: method_decl.is_optional,
+                is_readonly: false,
+              })
+            }
           }
           _ => ()
         }
@@ -12378,6 +12455,52 @@ fn convert_mapped_modifier(ast_mod : MappedTypeModifier) -> MappedModifier {
     Plus => MappedModifier::Add
     Minus => MappedModifier::Remove
   }
+}
+
+///|
+/// Get CheckerSignature from a method declaration (for construct/call signatures)
+fn get_method_checker_signature(
+  checker : TypeChecker,
+  method_decl : MethodDeclaration,
+) -> (CheckerSignature, TypeChecker) {
+  // Build parameters
+  let mut checker = checker
+  let parameters : Array[CheckerParameter] = []
+
+  for param in method_decl.parameters {
+    match param {
+      Parameter(p) => {
+        let (param_type, c) = match p.type_annotation {
+          Some(type_node) =>
+            match get_type_from_type_node(checker, type_node) {
+              (Some(t), c2) => (t, c2)
+              (None, c2) => any_type(c2)
+            }
+          None => any_type(checker)
+        }
+        checker = c
+        parameters.push({
+          name: get_parameter_name(p.name),
+          param_type,
+          is_optional: p.is_optional,
+          is_rest: p.is_rest,
+        })
+      }
+      _ => ()
+    }
+  }
+
+  // Get return type
+  let (return_type, checker) = match method_decl.return_type {
+    Some(rt) =>
+      match get_type_from_type_node(checker, rt) {
+        (Some(t), c) => (t, c)
+        (None, c) => any_type(c)
+      }
+    None => any_type(checker)
+  }
+
+  ({ parameters, return_type, type_parameters: [] }, checker)
 }
 
 ///|
@@ -12631,17 +12754,16 @@ fn resolve_interface_type(
 ) -> (Type?, TypeChecker) {
   // Check for circular reference (interface referring to itself in members)
   if checker.resolving_symbols.get(interface_symbol.id) is Some(_) {
-    // Circular reference detected - return a placeholder empty Object type
+    // Circular reference detected - return a TypeReference to the interface name
+    // This ensures that when interface I has a call signature returning I,
+    // the return type correctly refers back to the interface
     let (info, checker) = create_type_info(checker)
     return (
       Some(
-        Type::Object({
-          properties: Map::new(),
-          call_signatures: [],
-          construct_signatures: [],
-          index_signatures: [],
+        Type::TypeReference({
+          name: interface_symbol.name,
+          type_arguments: [],
           info,
-          class_name: None,
         }),
       ),
       checker,

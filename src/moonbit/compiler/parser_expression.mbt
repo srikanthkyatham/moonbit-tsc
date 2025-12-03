@@ -678,6 +678,81 @@ fn parse_member_expression_for_new(parser : Parser) -> Result[(Node, Parser), Pa
         }
       }
 
+      // Tagged template literal: tag`template` (simple, no interpolation)
+      TemplateLiteral(value, loc) => {
+        let start_loc = get_location(left)
+        parser = advance_parser(parser)
+        let template = Node::TemplateExpression(TemplateExpression::{
+          head: value,
+          template_spans: [],
+          location: loc,
+        })
+        left = Node::TaggedTemplateExpression(TaggedTemplateExpression::{
+          tag: left,
+          template,
+          type_arguments: [],
+          location: start_loc,
+        })
+      }
+
+      // Tagged template with interpolation: tag`head${expr}...`
+      TemplateHead(head, loc) => {
+        let start_loc = get_location(left)
+        parser = advance_parser(parser)
+        let template_spans : Array[TemplateSpan] = []
+        let mut current_parser = parser
+        while true {
+          // Parse the interpolated expression
+          match parse_expression(current_parser) {
+            Ok((expr, p)) => {
+              current_parser = p
+              // Expect CloseBrace
+              match current_token(current_parser) {
+                CloseBrace(_) => {
+                  current_parser = advance_parser(current_parser)
+                  // Check for TemplateTail or TemplateMiddle
+                  match current_token(current_parser) {
+                    TemplateTail(tail_text, span_loc) => {
+                      template_spans.push(TemplateSpan::{
+                        expression: expr,
+                        literal: tail_text,
+                        location: span_loc,
+                      })
+                      current_parser = advance_parser(current_parser)
+                      break
+                    }
+                    TemplateMiddle(middle_text, span_loc) => {
+                      template_spans.push(TemplateSpan::{
+                        expression: expr,
+                        literal: middle_text,
+                        location: span_loc,
+                      })
+                      current_parser = advance_parser(current_parser)
+                      // Continue loop to parse next expression
+                    }
+                    _ => return Err(add_error(current_parser, "Unexpected token", current_token(current_parser).location()))
+                  }
+                }
+                _ => return Err(add_error_with_code(current_parser, ExpectedCloseBrace.to_message(), current_token(current_parser).location(), ExpectedCloseBrace))
+              }
+            }
+            Err(p) => return Err(p)
+          }
+        }
+        parser = current_parser
+        let template = Node::TemplateExpression(TemplateExpression::{
+          head,
+          template_spans,
+          location: loc,
+        })
+        left = Node::TaggedTemplateExpression(TaggedTemplateExpression::{
+          tag: left,
+          template,
+          type_arguments: [],
+          location: start_loc,
+        })
+      }
+
       // Stop at OpenParen (call arguments will be handled by new expression parser)
       // Stop at anything else
       _ => should_continue = false
@@ -1356,54 +1431,28 @@ fn parse_primary_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
               )
           }
         }
-        // Parse the constructor identifier (e.g., Foo)
-        Identifier(name, loc) => {
-          let expr = Node::Identifier(Identifier::{ name, location: loc })
-          let parser = advance_parser(parser) // consume identifier
-
-          // Check for optional arguments
-          match current_token(parser) {
-            OpenParen(_) => {
-              let parser = advance_parser(parser) // consume '('
-              let parser = increment_depth(parser)
-
-              // Parse arguments
-              let (args, parser) = parse_argument_list(parser)
-              let parser = decrement_depth(parser)
-              match expect(parser, fn(t) { matches_close_paren(t) }) {
-                Ok(parser) =>
-                  Ok(
-                    (
-                      make_new_expression(expr, Some(args), start_loc),
-                      advance_parser(parser),
-                    ),
-                  )
-                Err(parser) => Err(parser)
+        // Handle any valid expression for new target
+        // This includes: Identifier, nested new, property access, templates, etc.
+        _ =>
+          // Use parse_member_expression_for_new to handle the full range of targets
+          match parse_member_expression_for_new(parser) {
+            Ok((expr, parser)) =>
+              // Check for optional arguments
+              match current_token(parser) {
+                OpenParen(_) => {
+                  let parser = advance_parser(parser) // consume '('
+                  let parser = increment_depth(parser)
+                  let (args, parser) = parse_argument_list(parser)
+                  let parser = decrement_depth(parser)
+                  // Note: parse_argument_list already consumes the closing ')'
+                  Ok((make_new_expression(expr, Some(args), start_loc), parser))
+                }
+                _ =>
+                  // No arguments
+                  Ok((make_new_expression(expr, None, start_loc), parser))
               }
-            }
-            _ =>
-              // No arguments
-              Ok((make_new_expression(expr, None, start_loc), parser))
-          }
-        }
-        // Handle nested new expressions: new new Foo()
-        KeywordNew(_) => {
-          // Recursively parse the inner new expression
-          match parse_primary_expression(parser) {
-            Ok((inner_expr, next_parser)) =>
-              Ok((make_new_expression(inner_expr, None, start_loc), next_parser))
             Err(p) => Err(p)
           }
-        }
-        _ =>
-          Err(
-            add_error_with_code(
-              parser,
-              IdentifierExpected.to_message(),
-              start_loc,
-              IdentifierExpected,
-            ),
-          )
       }
     }
 

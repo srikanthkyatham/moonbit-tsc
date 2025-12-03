@@ -1038,9 +1038,22 @@ fn parse_primary_type_with_readonly(
                     parser = advance_parser(parser)
                     match parse_type(parser) {
                       Ok((return_type, p)) => {
-                        let _ = params
-                        let _ = return_type
-                        // For now, just skip construct signatures
+                        // Create a MethodDeclaration with name "new" for construct signature
+                        members.push(
+                          Node::MethodDeclaration(MethodDeclaration::{
+                            name: "new",
+                            parameters: params,
+                            return_type: Some(return_type),
+                            body: None,
+                            type_parameters: [],
+                            decorators: [],
+                            modifiers: [],
+                            is_optional: false,
+                            is_async: false,
+                            is_generator: false,
+                            location: member_loc,
+                          }),
+                        )
                         parser = p
                         // Optional semicolon
                         match current_token(parser) {
