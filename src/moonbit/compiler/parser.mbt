@@ -4035,10 +4035,16 @@ fn parse_interface_declaration(
               _ => ()
             }
           }
-          // Construct signature: new(): returnType
+          // Construct signature: new(): returnType or new <T>(): returnType
           KeywordNew(_) => {
             let new_loc = current_token(parser).location()
             parser = advance_parser(parser) // consume 'new'
+            // Check for optional type parameters: new <T>()
+            let (type_params, parser2) = match current_token(parser) {
+              LessThan(_) => parse_type_parameters(parser)
+              _ => ([], parser)
+            }
+            parser = parser2
             match current_token(parser) {
               OpenParen(_) => {
                 parser = advance_parser(parser)
@@ -4064,7 +4070,7 @@ fn parse_interface_declaration(
                 members.push(
                   Node::MethodDeclaration(MethodDeclaration::{
                     name: "new",
-                    type_parameters: [],
+                    type_parameters: type_params,
                     parameters: params,
                     return_type,
                     body: None,

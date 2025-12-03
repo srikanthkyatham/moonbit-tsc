@@ -463,6 +463,98 @@ fn parse_unary_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
 }
 
 ///|
+/// Parse template spans (the interpolated parts of a template literal)
+/// This is used for templates like `head${expr1}middle${expr2}tail`
+fn parse_template_spans(parser : Parser) -> Result[(Array[TemplateSpan], Parser), Parser] {
+  let template_spans : Array[TemplateSpan] = []
+  let mut current_parser = parser
+  while true {
+    // Parse the interpolated expression
+    match parse_expression(current_parser) {
+      Ok((expr, p)) => {
+        current_parser = p
+        // Expect CloseBrace
+        match current_token(current_parser) {
+          CloseBrace(_) => {
+            current_parser = advance_parser(current_parser)
+            // Check for TemplateTail or TemplateMiddle
+            match current_token(current_parser) {
+              TemplateTail(tail_text, span_loc) => {
+                template_spans.push(TemplateSpan::{
+                  expression: expr,
+                  literal: tail_text,
+                  location: span_loc,
+                })
+                current_parser = advance_parser(current_parser)
+                break
+              }
+              TemplateMiddle(middle_text, span_loc) => {
+                template_spans.push(TemplateSpan::{
+                  expression: expr,
+                  literal: middle_text,
+                  location: span_loc,
+                })
+                current_parser = advance_parser(current_parser)
+                // Continue loop to parse next expression
+              }
+              _ => return Err(add_error(current_parser, "Unexpected token", current_token(current_parser).location()))
+            }
+          }
+          _ => return Err(add_error_with_code(current_parser, ExpectedCloseBrace.to_message(), current_token(current_parser).location(), ExpectedCloseBrace))
+        }
+      }
+      Err(p) => return Err(p)
+    }
+  }
+  Ok((template_spans, current_parser))
+}
+
+///|
+/// Create a tagged template expression from a simple template literal (no interpolation)
+fn make_simple_tagged_template(
+  tag : Node,
+  value : String,
+  loc : SourceLocation,
+  type_arguments : Array[Node],
+  start_loc : SourceLocation,
+) -> Node {
+  let template = Node::TemplateExpression(TemplateExpression::{
+    head: value,
+    template_spans: [],
+    location: loc,
+  })
+  Node::TaggedTemplateExpression(TaggedTemplateExpression::{
+    tag,
+    template,
+    type_arguments,
+    location: start_loc,
+  })
+}
+
+///|
+/// Create a tagged template expression from a template with interpolations
+fn make_interpolated_tagged_template(
+  tag : Node,
+  head : String,
+  template_spans : Array[TemplateSpan],
+  loc : SourceLocation,
+  type_arguments : Array[Node],
+  start_loc : SourceLocation,
+) -> Node {
+  let template = Node::TemplateExpression(TemplateExpression::{
+    head,
+    template_spans,
+    location: loc,
+  })
+  Node::TaggedTemplateExpression(TaggedTemplateExpression::{
+    tag,
+    template,
+    type_arguments,
+    location: start_loc,
+  })
+}
+
+///|
 /// Continue parsing postfix operations on an already-parsed expression
 /// This handles method calls, property access, etc. starting from a given expression
 fn continue_postfix_expression(
@@ -678,79 +770,62 @@ fn parse_member_expression_for_new(parser : Parser) -> Result[(Node, Parser), Pa
         }
       }
 
+      // Type arguments for generic tagged templates (e.g., tag<T>`template`)
+      LessThan(_) => {
+        // Try to parse type arguments - if successful and followed by template, it's a generic tagged template
+        let saved_parser = parser
+        match parse_type_argument_list(parser) {
+          Ok((type_args, next_parser)) =>
+            match current_token(next_parser) {
+              // Tagged template with type arguments: tag<T>`template`
+              TemplateLiteral(value, loc) => {
+                let start_loc = get_location(left)
+                parser = advance_parser(next_parser)
+                left = make_simple_tagged_template(left, value, loc, type_args, start_loc)
+              }
+              // Tagged template with interpolation and type arguments: tag<T>`head${expr}...`
+              TemplateHead(head, loc) => {
+                let start_loc = get_location(left)
+                parser = advance_parser(next_parser)
+                match parse_template_spans(parser) {
+                  Ok((template_spans, p)) => {
+                    parser = p
+                    left = make_interpolated_tagged_template(left, head, template_spans, loc, type_args, start_loc)
+                  }
+                  Err(p) => return Err(p)
+                }
+              }
+              _ => {
+                // Not a generic tagged template, backtrack
+                parser = saved_parser
+                should_continue = false
+              }
+            }
+          Err(_) => {
+            parser = saved_parser
+            should_continue = false
+          }
+        }
+      }
+
       // Tagged template literal: tag`template` (simple, no interpolation)
       TemplateLiteral(value, loc) => {
         let start_loc = get_location(left)
         parser = advance_parser(parser)
-        let template = Node::TemplateExpression(TemplateExpression::{
-          head: value,
-          template_spans: [],
-          location: loc,
-        })
-        left = Node::TaggedTemplateExpression(TaggedTemplateExpression::{
-          tag: left,
-          template,
-          type_arguments: [],
-          location: start_loc,
-        })
+        left = make_simple_tagged_template(left, value, loc, [], start_loc)
       }
 
       // Tagged template with interpolation: tag`head${expr}...`
       TemplateHead(head, loc) => {
         let start_loc = get_location(left)
         parser = advance_parser(parser)
-        let template_spans : Array[TemplateSpan] = []
-        let mut current_parser = parser
-        while true {
-          // Parse the interpolated expression
-          match parse_expression(current_parser) {
-            Ok((expr, p)) => {
-              current_parser = p
-              // Expect CloseBrace
-              match current_token(current_parser) {
-                CloseBrace(_) => {
-                  current_parser = advance_parser(current_parser)
-                  // Check for TemplateTail or TemplateMiddle
-                  match current_token(current_parser) {
-                    TemplateTail(tail_text, span_loc) => {
-                      template_spans.push(TemplateSpan::{
-                        expression: expr,
-                        literal: tail_text,
-                        location: span_loc,
-                      })
-                      current_parser = advance_parser(current_parser)
-                      break
-                    }
-                    TemplateMiddle(middle_text, span_loc) => {
-                      template_spans.push(TemplateSpan::{
-                        expression: expr,
-                        literal: middle_text,
-                        location: span_loc,
-                      })
-                      current_parser = advance_parser(current_parser)
-                      // Continue loop to parse next expression
-                    }
-                    _ => return Err(add_error(current_parser, "Unexpected token", current_token(current_parser).location()))
-                  }
-                }
-                _ => return Err(add_error_with_code(current_parser, ExpectedCloseBrace.to_message(), current_token(current_parser).location(), ExpectedCloseBrace))
-              }
-            }
-            Err(p) => return Err(p)
+        match parse_template_spans(parser) {
+          Ok((template_spans, p)) => {
+            parser = p
+            left = make_interpolated_tagged_template(left, head, template_spans, loc, [], start_loc)
           }
+          Err(p) => return Err(p)
         }
-        parser = current_parser
-        let template = Node::TemplateExpression(TemplateExpression::{
-          head,
-          template_spans,
-          location: loc,
-        })
-        left = Node::TaggedTemplateExpression(TaggedTemplateExpression::{
-          tag: left,
-          template,
-          type_arguments: [],
-          location: start_loc,
-        })
       }
 
       // Stop at OpenParen (call arguments will be handled by new expression parser)
@@ -795,89 +870,19 @@ fn parse_postfix_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
               TemplateLiteral(value, loc) => {
                 let start_loc = get_location(left)
                 parser = advance_parser(next_parser)
-                let template = Node::TemplateExpression(TemplateExpression::{
-                  head: value,
-                  template_spans: [],
-                  location: loc,
-                })
-                left = Node::TaggedTemplateExpression(TaggedTemplateExpression::{
-                  tag: left,
-                  template,
-                  type_arguments: type_args,
-                  location: start_loc,
-                })
+                left = make_simple_tagged_template(left, value, loc, type_args, start_loc)
               }
               // Tagged template with interpolation and type arguments: tag<T>`head${expr}...`
               TemplateHead(head, loc) => {
                 let start_loc = get_location(left)
                 parser = advance_parser(next_parser)
-                let template_spans : Array[TemplateSpan] = []
-                let mut current_parser = parser
-                while true {
-                  // Parse the interpolated expression
-                  match parse_expression(current_parser) {
-                    Ok((expr, p)) => {
-                      current_parser = p
-                      // Expect CloseBrace
-                      match current_token(current_parser) {
-                        CloseBrace(_) => {
-                          current_parser = advance_parser(current_parser)
-                          // Check for TemplateTail or TemplateMiddle
-                          match current_token(current_parser) {
-                            TemplateTail(tail_text, span_loc) => {
-                              template_spans.push(TemplateSpan::{
-                                expression: expr,
-                                literal: tail_text,
-                                location: span_loc,
-                              })
-                              current_parser = advance_parser(current_parser)
-                              break
-                            }
-                            TemplateMiddle(middle_text, span_loc) => {
-                              template_spans.push(TemplateSpan::{
-                                expression: expr,
-                                literal: middle_text,
-                                location: span_loc,
-                              })
-                              current_parser = advance_parser(current_parser)
-                              // Continue loop to parse next expression
-                            }
-                            _ =>
-                              return Err(
-                                add_error(
-                                  current_parser,
-                                  "Unexpected token",
-                                  current_token(current_parser).location(),
-                                ),
-                              )
-                          }
-                        }
-                        _ =>
-                          return Err(
-                            add_error_with_code(
-                              current_parser,
-                              ExpectedCloseBrace.to_message(),
-                              current_token(current_parser).location(),
-                              ExpectedCloseBrace,
-                            ),
-                          )
-                      }
-                    }
-                    Err(p) => return Err(p)
+                match parse_template_spans(parser) {
+                  Ok((template_spans, p)) => {
+                    parser = p
+                    left = make_interpolated_tagged_template(left, head, template_spans, loc, type_args, start_loc)
                   }
+                  Err(p) => return Err(p)
                 }
-                parser = current_parser
-                let template = Node::TemplateExpression(TemplateExpression::{
-                  head,
-                  template_spans,
-                  location: loc,
-                })
-                left = Node::TaggedTemplateExpression(TaggedTemplateExpression::{
-                  tag: left,
-                  template,
-                  type_arguments: type_args,
-                  location: start_loc,
-                })
               }
               _ => {
                 // Not a generic call, backtrack - treat < as comparison
@@ -1072,90 +1077,20 @@ fn parse_postfix_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
       TemplateLiteral(value, loc) => {
         let start_loc = get_location(left)
         parser = advance_parser(parser)
-        let template = Node::TemplateExpression(TemplateExpression::{
-          head: value,
-          template_spans: [],
-          location: loc,
-        })
-        left = Node::TaggedTemplateExpression(TaggedTemplateExpression::{
-          tag: left,
-          template,
-          type_arguments: [],
-          location: start_loc,
-        })
+        left = make_simple_tagged_template(left, value, loc, [], start_loc)
       }
 
       // Tagged template with interpolation: tag`head${expr}...`
       TemplateHead(head, loc) => {
         let start_loc = get_location(left)
         parser = advance_parser(parser)
-        let template_spans : Array[TemplateSpan] = []
-        let mut current_parser = parser
-        while true {
-          // Parse the interpolated expression
-          match parse_expression(current_parser) {
-            Ok((expr, p)) => {
-              current_parser = p
-              // Expect CloseBrace
-              match current_token(current_parser) {
-                CloseBrace(_) => {
-                  current_parser = advance_parser(current_parser)
-                  // Check for TemplateTail or TemplateMiddle
-                  match current_token(current_parser) {
-                    TemplateTail(tail_text, span_loc) => {
-                      template_spans.push(TemplateSpan::{
-                        expression: expr,
-                        literal: tail_text,
-                        location: span_loc,
-                      })
-                      current_parser = advance_parser(current_parser)
-                      break
-                    }
-                    TemplateMiddle(middle_text, span_loc) => {
-                      template_spans.push(TemplateSpan::{
-                        expression: expr,
-                        literal: middle_text,
-                        location: span_loc,
-                      })
-                      current_parser = advance_parser(current_parser)
-                      // Continue loop to parse next expression
-                    }
-                    _ =>
-                      return Err(
-                        add_error(
-                          current_parser,
-                          "Unexpected token",
-                          current_token(current_parser).location(),
-                        ),
-                      )
-                  }
-                }
-                _ =>
-                  return Err(
-                    add_error_with_code(
-                      current_parser,
-                      ExpectedCloseBrace.to_message(),
-                      current_token(current_parser).location(),
-                      ExpectedCloseBrace,
-                    ),
-                  )
-              }
-            }
-            Err(p) => return Err(p)
+        match parse_template_spans(parser) {
+          Ok((template_spans, p)) => {
+            parser = p
+            left = make_interpolated_tagged_template(left, head, template_spans, loc, [], start_loc)
           }
+          Err(p) => return Err(p)
         }
-        parser = current_parser
-        let template = Node::TemplateExpression(TemplateExpression::{
-          head,
-          template_spans,
-          location: loc,
-        })
-        left = Node::TaggedTemplateExpression(TaggedTemplateExpression::{
-          tag: left,
-          template,
-          type_arguments: [],
-          location: start_loc,
-        })
       }
 
       _ => should_continue = false
@@ -1283,71 +1218,21 @@ fn parse_primary_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
 
     // Template literal with interpolation
     TemplateHead(head, loc) => {
-      let mut parser = advance_parser(parser)
-      let template_spans : Array[TemplateSpan] = []
-      while true {
-        // Parse the interpolated expression
-        match parse_expression(parser) {
-          Ok((expr, p)) => {
-            parser = p
-            // Expect CloseBrace
-            match current_token(parser) {
-              CloseBrace(_) => {
-                parser = advance_parser(parser)
-                // Check for TemplateTail or TemplateMiddle
-                match current_token(parser) {
-                  TemplateTail(tail_text, span_loc) => {
-                    template_spans.push(TemplateSpan::{
-                      expression: expr,
-                      literal: tail_text,
-                      location: span_loc,
-                    })
-                    parser = advance_parser(parser)
-                    break
-                  }
-                  TemplateMiddle(middle_text, span_loc) => {
-                    template_spans.push(TemplateSpan::{
-                      expression: expr,
-                      literal: middle_text,
-                      location: span_loc,
-                    })
-                    parser = advance_parser(parser)
-                    // Continue loop to parse next expression
-                  }
-                  _ =>
-                    return Err(
-                      add_error(
-                        parser,
-                        "Unexpected token",
-                        current_token(parser).location(),
-                      ),
-                    )
-                }
-              }
-              _ =>
-                return Err(
-                  add_error_with_code(
-                    parser,
-                    ExpectedCloseBrace.to_message(),
-                    current_token(parser).location(),
-                    ExpectedCloseBrace,
-                  ),
-                )
-            }
-          }
-          Err(p) => return Err(p)
-        }
+      let parser = advance_parser(parser)
+      match parse_template_spans(parser) {
+        Ok((template_spans, p)) =>
+          Ok(
+            (
+              Node::TemplateExpression(TemplateExpression::{
+                head,
+                template_spans,
+                location: loc,
+              }),
+              p,
+            ),
+          )
+        Err(p) => Err(p)
       }
-      Ok(
-        (
-          Node::TemplateExpression(TemplateExpression::{
-            head,
-            template_spans,
-            location: loc,
-          }),
-          parser,
-        ),
-      )
     }
 
     // null

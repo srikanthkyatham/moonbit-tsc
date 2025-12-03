@@ -1024,9 +1024,15 @@ fn parse_primary_type_with_readonly(
               _ => break
             }
           }
-          // Handle construct signature: new(): type
+          // Handle construct signature: new(): type or new <T>(): type
           KeywordNew(_) => {
             parser = advance_parser(parser)
+            // Check for optional type parameters: new <T>()
+            let (type_params, parser2) = match current_token(parser) {
+              LessThan(_) => parse_type_parameters(parser)
+              _ => ([], parser)
+            }
+            parser = parser2
             match current_token(parser) {
               OpenParen(_) => {
                 parser = advance_parser(parser)
@@ -1045,7 +1051,7 @@ fn parse_primary_type_with_readonly(
                             parameters: params,
                             return_type: Some(return_type),
                             body: None,
-                            type_parameters: [],
+                            type_parameters: type_params,
                             decorators: [],
                             modifiers: [],
                             is_optional: false,

@@ -4464,3 +4464,323 @@ test "parse file without hashbang" {
     Err(_) => assert_true(false)
   }
 }
+
+// ============================================================================
+// Tagged Template with Type Arguments Tests
+// ============================================================================
+
+///|
+test "parse tagged template with type arguments - simple" {
+  // tag<string>`hello`
+  let source = "const x = tag<string>`hello`;"
+  let tokens = tokens_from_source(source)
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        VariableStatement(vs) =>
+          match vs.declarations[0].initializer {
+            Some(TaggedTemplateExpression(tte)) => {
+              // Check tag
+              match tte.tag {
+                Identifier(id) => assert_eq(id.name, "tag")
+                _ => assert_true(false)
+              }
+              // Check type arguments
+              assert_eq(tte.type_arguments.length(), 1)
+              // Check template
+              match tte.template {
+                TemplateExpression(te) => {
+                  assert_eq(te.head, "hello")
+                  assert_eq(te.template_spans.length(), 0)
+                }
+                _ => assert_true(false)
+              }
+            }
+            _ => assert_true(false)
+          }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse tagged template with multiple type arguments" {
+  // tag<string, number>`hello`
+  let source = "const x = tag<string, number>`hello`;"
+  let tokens = tokens_from_source(source)
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        VariableStatement(vs) =>
+          match vs.declarations[0].initializer {
+            Some(TaggedTemplateExpression(tte)) => {
+              // Check type arguments count
+              assert_eq(tte.type_arguments.length(), 2)
+            }
+            _ => assert_true(false)
+          }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse tagged template with type arguments and interpolation" {
+  // tag<T>`hello ${name}`
+  let source = "const x = tag<T>`hello ${name}`;"
+  let tokens = tokens_from_source(source)
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        VariableStatement(vs) =>
+          match vs.declarations[0].initializer {
+            Some(TaggedTemplateExpression(tte)) => {
+              // Check type arguments
+              assert_eq(tte.type_arguments.length(), 1)
+              // Check template has interpolation
+              match tte.template {
+                TemplateExpression(te) => {
+                  assert_eq(te.head, "hello ")
+                  assert_eq(te.template_spans.length(), 1)
+                }
+                _ => assert_true(false)
+              }
+            }
+            _ => assert_true(false)
+          }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse tagged template with property access tag and type arguments" {
+  // obj.method<T>`template`
+  let source = "const x = obj.method<T>`hello`;"
+  let tokens = tokens_from_source(source)
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        VariableStatement(vs) =>
+          match vs.declarations[0].initializer {
+            Some(TaggedTemplateExpression(tte)) => {
+              // Check tag is property access
+              match tte.tag {
+                PropertyAccessExpression(_) => ()
+                _ => assert_true(false)
+              }
+              // Check type arguments
+              assert_eq(tte.type_arguments.length(), 1)
+            }
+            _ => assert_true(false)
+          }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse new expression with tagged template and type arguments" {
+  // new tag<T>`hello`
+  let source = "const x = new tag<T>`hello`;"
+  let tokens = tokens_from_source(source)
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        VariableStatement(vs) =>
+          match vs.declarations[0].initializer {
+            Some(NewExpression(ne)) =>
+              // The expression should be a tagged template expression
+              match ne.expression {
+                TaggedTemplateExpression(tte) => {
+                  assert_eq(tte.type_arguments.length(), 1)
+                  match tte.template {
+                    TemplateExpression(te) => {
+                      assert_eq(te.head, "hello")
+                      assert_eq(te.template_spans.length(), 0)
+                    }
+                    _ => assert_true(false)
+                  }
+                }
+                _ => assert_true(false)
+              }
+            _ => assert_true(false)
+          }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse template literal with multiple interpolations" {
+  // `a${x}b${y}c`
+  let source = "const x = `a${x}b${y}c`;"
+  let tokens = tokens_from_source(source)
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        VariableStatement(vs) =>
+          match vs.declarations[0].initializer {
+            Some(TemplateExpression(te)) => {
+              assert_eq(te.head, "a")
+              assert_eq(te.template_spans.length(), 2)
+              // First span
+              assert_eq(te.template_spans[0].literal, "b")
+              // Second span
+              assert_eq(te.template_spans[1].literal, "c")
+            }
+            _ => assert_true(false)
+          }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse tagged template with multiple interpolations" {
+  // tag`a${x}b${y}c`
+  let source = "const x = tag`a${x}b${y}c`;"
+  let tokens = tokens_from_source(source)
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        VariableStatement(vs) =>
+          match vs.declarations[0].initializer {
+            Some(TaggedTemplateExpression(tte)) => {
+              match tte.template {
+                TemplateExpression(te) => {
+                  assert_eq(te.head, "a")
+                  assert_eq(te.template_spans.length(), 2)
+                }
+                _ => assert_true(false)
+              }
+            }
+            _ => assert_true(false)
+          }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+// ============================================================================
+// Generic Construct Signature Tests
+// ============================================================================
+
+///|
+test "parse interface with generic construct signature" {
+  // interface Foo { new <T>(): T }
+  let source = "interface Foo { new <T>(): T }"
+  let tokens = tokens_from_source(source)
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        InterfaceDeclaration(iface) => {
+          assert_eq(iface.name, "Foo")
+          assert_eq(iface.members.length(), 1)
+          match iface.members[0] {
+            MethodDeclaration(md) => {
+              // Check type parameters
+              assert_eq(md.type_parameters.length(), 1)
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse interface with generic construct signature multiple type params" {
+  // interface Factory { new <K, V>(key: K, value: V): Map<K, V> }
+  let source = "interface Factory { new <K, V>(key: K, value: V): Map<K, V> }"
+  let tokens = tokens_from_source(source)
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        InterfaceDeclaration(iface) => {
+          assert_eq(iface.name, "Factory")
+          assert_eq(iface.members.length(), 1)
+          match iface.members[0] {
+            MethodDeclaration(md) => {
+              // Check type parameters count
+              assert_eq(md.type_parameters.length(), 2)
+              // Check parameters count
+              assert_eq(md.parameters.length(), 2)
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse type literal with generic construct signature" {
+  // type Ctor = { new <T>(): T }
+  let source = "type Ctor = { new <T>(): T }"
+  let tokens = tokens_from_source(source)
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        TypeAliasDeclaration(ta) => {
+          assert_eq(ta.name, "Ctor")
+          match ta.type_node {
+            TypeLiteral(tl) => {
+              assert_eq(tl.members.length(), 1)
+              match tl.members[0] {
+                MethodDeclaration(md) => {
+                  // Check type parameters
+                  assert_eq(md.type_parameters.length(), 1)
+                }
+                _ => assert_true(false)
+              }
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
