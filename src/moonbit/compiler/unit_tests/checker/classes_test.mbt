@@ -797,3 +797,133 @@ test "unit/classes/ts2376 - error for class with initialized properties" {
     }
   }
 }
+
+// ============================================================================
+// TS17005 - Super in Extends Null Tests
+// ============================================================================
+
+///|
+test "unit/classes/ts17005 - super call in extends null class reports error" {
+  // TS17005: A constructor cannot contain a 'super' call when its class extends 'null'
+  let result = parse_bind_check_class(
+    #|class D extends null {
+    #|  private _t: any;
+    #|  constructor() {
+    #|    this._t;
+    #|    super();
+    #|  }
+    #|}
+  )
+  match result {
+    Ok(_) => assert_true(false) // Should have TS17005 error
+    Err(diagnostics) => {
+      assert_true(diagnostics.length() > 0)
+      let has_ts17005 = diagnostics.iter().any(fn(d) { d.code == 17005 })
+      assert_true(has_ts17005)
+    }
+  }
+}
+
+///|
+test "unit/classes/ts17005 - extends null without super is OK" {
+  // Class extending null should NOT require super() call
+  let result = parse_bind_check_class(
+    #|class D extends null {
+    #|  private _t: any;
+    #|  constructor() {
+    #|    this._t = 10;
+    #|  }
+    #|}
+  )
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(diagnostics) => {
+      println("Errors: \{diagnostics}")
+      assert_true(false)
+    }
+  }
+}
+
+// ============================================================================
+// TS17009 - Arrow Function This Tests
+// ============================================================================
+
+///|
+test "unit/classes/ts17009 - this in arrow function before super" {
+  // this inside arrow function before super() should NOT raise TS17009
+  // (only direct this in constructor should be checked)
+  let result = parse_bind_check_class(
+    #|class Base {
+    #|  constructor(c: any) { }
+    #|}
+    #|class D extends Base {
+    #|  private _t: any;
+    #|  constructor() {
+    #|    let x = () => { this._t };
+    #|    x();
+    #|    super(undefined);
+    #|  }
+    #|}
+  )
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(diagnostics) => {
+      println("Errors: \{diagnostics}")
+      // Should NOT have TS17009 error for arrow function this
+      let has_ts17009 = diagnostics.iter().any(fn(d) { d.code == 17009 })
+      assert_true(not(has_ts17009))
+    }
+  }
+}
+
+///|
+test "unit/classes/ts17009 - direct this before super reports error" {
+  // Direct this access in constructor before super() should raise TS17009
+  let result = parse_bind_check_class(
+    #|class Base {
+    #|  constructor(c: any) { }
+    #|}
+    #|class D extends Base {
+    #|  private _t: any;
+    #|  constructor() {
+    #|    this._t;
+    #|    super(undefined);
+    #|  }
+    #|}
+  )
+  match result {
+    Ok(_) => assert_true(false) // Should have TS17009 error
+    Err(diagnostics) => {
+      assert_true(diagnostics.length() > 0)
+      let has_ts17009 = diagnostics.iter().any(fn(d) { d.code == 17009 })
+      assert_true(has_ts17009)
+    }
+  }
+}
+
+///|
+test "unit/classes/ts17009 - this in object literal before super reports error" {
+  // this in object literal value before super() should raise TS17009
+  let result = parse_bind_check_class(
+    #|class Base {
+    #|  constructor(c: any) { }
+    #|}
+    #|class D extends Base {
+    #|  private _t: any;
+    #|  constructor() {
+    #|    let x = {
+    #|      j: this._t,
+    #|    }
+    #|    super(undefined);
+    #|  }
+    #|}
+  )
+  match result {
+    Ok(_) => assert_true(false) // Should have TS17009 error
+    Err(diagnostics) => {
+      assert_true(diagnostics.length() > 0)
+      let has_ts17009 = diagnostics.iter().any(fn(d) { d.code == 17009 })
+      assert_true(has_ts17009)
+    }
+  }
+}

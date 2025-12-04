@@ -282,6 +282,7 @@ pub struct TypeChecker {
   in_constructor : Bool // Tracks if we're in a constructor (for TS2337 super outside constructor)
   in_class_body : Bool // Tracks if we're in a class body (for TS2335 super outside class)
   in_derived_class : Bool // Tracks if we're in a class that extends another (for TS2335)
+  in_extends_null_class : Bool // Tracks if we're in a class that extends null (for TS17005)
   super_called : Bool // Tracks if super() has been called in constructor (for TS17009)
   current_location : SourceLocation // Current location being checked (for TS2590 and similar)
   external_registry : ExternalTypeRegistry? // Registry of types from other modules for cross-file checking
@@ -349,6 +350,7 @@ pub fn TypeChecker::new_with_options(
     in_constructor: false,
     in_class_body: false,
     in_derived_class: false,
+    in_extends_null_class: false,
     super_called: false,
     current_location: SourceLocation::new(
       file_path,
@@ -4977,11 +4979,19 @@ fn infer_call_expression_type(
   checker : TypeChecker,
   call : CallExpression,
 ) -> (Type, TypeChecker) {
-  // TS2335/TS2337: Check for super() call outside class/constructor
+  // TS2335/TS2337/TS17005: Check for super() call outside class/constructor or in extends null
   let checker = match call.expression {
     SuperExpression(super_expr) =>
-      // TS2335: 'super' can only be referenced in a derived class
-      if not(checker.in_class_body) || not(checker.in_derived_class) {
+      // TS17005: A constructor cannot contain a 'super' call when its class extends 'null'
+      if checker.in_extends_null_class {
+        add_diagnostic_with_code(
+          checker,
+          "A constructor cannot contain a 'super' call when its class extends 'null'.",
+          super_expr.location,
+          TS17005,
+        )
+      } else if not(checker.in_class_body) || not(checker.in_derived_class) {
+        // TS2335: 'super' can only be referenced in a derived class
         add_diagnostic_with_code(
           checker,
           "'super' can only be referenced in a derived class.",
@@ -7737,8 +7747,10 @@ fn infer_this_type(
     checker
   }
   // TS17009: 'super' must be called before accessing 'this' in derived class constructor
+  // Note: Only check when 'this' is directly in the constructor, not inside nested arrow functions
+  // Arrow functions inherit 'this' but don't count as direct constructor body access
   let checker = if checker.in_constructor && checker.in_derived_class &&
-    not(checker.super_called) {
+    not(checker.super_called) && checker.arrow_function_depth == 0 {
     add_diagnostic_with_code(
       checker,
       "'super' must be called before accessing 'this' in the constructor of a derived class.",
@@ -10201,6 +10213,25 @@ fn is_derived_class(class_decl : ClassDeclaration) -> Bool {
 }
 
 ///|
+/// Check if a class extends null (for TS17005)
+fn extends_null(class_decl : ClassDeclaration) -> Bool {
+  for clause in class_decl.heritage_clauses {
+    if clause.kind == Extends {
+      for type_expr in clause.types {
+        match type_expr {
+          TypeReference(type_ref) =>
+            if type_ref.type_name == "null" {
+              return true
+            }
+          _ => ()
+        }
+      }
+    }
+  }
+  false
+}
+
+///|
 /// Check if a constructor body contains a super() call
 fn contains_super_call(node : Node) -> Bool {
   match node {
@@ -10532,13 +10563,16 @@ fn check_class_declaration(
   let prev_in_static_context = checker.in_static_context
   let prev_in_constructor = checker.in_constructor
   let prev_in_derived_class = checker.in_derived_class
+  let prev_in_extends_null_class = checker.in_extends_null_class
   // Check if this is a derived class (has extends clause)
   let is_derived = is_derived_class(class_decl)
+  let is_extends_null = extends_null(class_decl)
   let mut checker = {
     ..checker,
     current_this_type: Some(class_type),
     in_class_body: true,
     in_derived_class: is_derived,
+    in_extends_null_class: is_extends_null,
   }
 
   // Collect uninitialized properties for definite assignment checking
@@ -10587,17 +10621,10 @@ fn check_class_declaration(
             // This ensures var declarations are visible even before their declaration
             let checker = hoist_var_declarations(checker, body)
             // Check for property use before assignment (TS2565)
-            // Skip for classes extending null (they don't have super() requirement)
-            // and when strictPropertyInitialization is not enabled
-            let checker = if is_derived_class(class_decl) {
-              check_property_use_before_assignment(
-                checker,
-                body,
-                uninitialized_props,
-              )
-            } else {
-              checker
-            }
+            // Note: This check is only enabled when strictPropertyInitialization is true
+            // Since we don't have that compiler flag yet, we skip this check for now
+            // TODO: Re-enable when strictPropertyInitialization flag is implemented
+            let checker = checker
             let checker = check_statement(checker, body)
             // Check for super() call in derived class constructor (TS2377)
             let checker = check_super_call_in_constructor(
@@ -10707,6 +10734,7 @@ fn check_class_declaration(
     in_static_context: prev_in_static_context,
     in_constructor: prev_in_constructor,
     in_derived_class: prev_in_derived_class,
+    in_extends_null_class: prev_in_extends_null_class,
   }
 }
 

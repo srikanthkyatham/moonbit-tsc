@@ -650,6 +650,7 @@ fn TypeChecker::create_type_info(self : TypeChecker) -> (TypeInfo, TypeChecker) 
     in_constructor: self.in_constructor,
     in_class_body: self.in_class_body,
     in_derived_class: self.in_derived_class,
+    in_extends_null_class: self.in_extends_null_class,
     super_called: self.super_called,
     current_location: self.current_location,
     external_registry: self.external_registry,

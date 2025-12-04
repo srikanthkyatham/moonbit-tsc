@@ -390,8 +390,9 @@ pub enum DiagnosticCode {
   TS2378 // A 'get' accessor must return a value
 
   // ============================================================================
-  // Super Call Validation Errors (TS17009)
+  // Super Call Validation Errors (TS17005, TS17009)
   // ============================================================================
+  TS17005 // A constructor cannot contain a 'super' call when its class extends 'null'
   TS17009 // 'super' must be called before accessing 'this' in the constructor of a derived class
 
   // ============================================================================
@@ -757,6 +758,7 @@ pub fn DiagnosticCode::to_int(self : DiagnosticCode) -> Int {
     TS2377 => 2377
     TS2378 => 2378
     // Super Call Validation Errors
+    TS17005 => 17005
     TS17009 => 17009
     // Overload & Function Errors (2383-2395)
     TS2379 => 2379
