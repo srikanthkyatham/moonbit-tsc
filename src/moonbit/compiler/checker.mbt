@@ -12066,12 +12066,12 @@ fn check_enum_member(
     Some(init) => {
       // Infer the type of the initializer
       let (init_type, checker) = infer_type(checker, init)
-      // Validate the initializer type
+      // Validate the initializer type - use the initializer's location for error reporting
       validate_enum_initializer(
         checker,
         init_type,
         init,
-        enum_mem.location,
+        get_node_location(init),
         is_const,
       )
     }
@@ -13688,7 +13688,20 @@ fn type_to_string(t : Type) -> String {
       "\{type_to_string(ia.object_type)}[\{type_to_string(ia.index_type)}]"
     Infer(inf) => "infer \{inf.type_parameter_name}"
     Function(_) => "function"
-    Object(_) => "object"
+    Object(obj) => {
+      // Display empty object literals as {} (like TypeScript does)
+      if obj.properties.size() == 0 &&
+         obj.call_signatures.length() == 0 &&
+         obj.construct_signatures.length() == 0 &&
+         obj.index_signatures.length() == 0 {
+        "{}"
+      } else {
+        match obj.class_name {
+          Some(name) => name
+          None => "object"
+        }
+      }
+    }
     TypeReference(type_ref) => type_ref.name
     Error(_) => "error"
   }

@@ -7546,3 +7546,81 @@ test "unit/destructuring/object-binding-with-rename-and-default - object binding
     Err(_) => fail("Object destructuring with rename and default should parse correctly")
   }
 }
+
+// ============================================================================
+// TS18033: Shadowed Infinity/NaN in enum initializers
+// ============================================================================
+
+///|
+test "unit/enum/shadowed-infinity-ts18033 - shadowed Infinity reports TS18033" {
+  let source =
+    #|{
+    #|  let Infinity = {};
+    #|  enum En {
+    #|    X = Infinity
+    #|  }
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => fail("Expected TS18033 error for shadowed Infinity")
+    Err(diagnostics) => {
+      assert_true(has_error(diagnostics, 18033))
+      assert_true(has_message(diagnostics, "not assignable to type 'number'"))
+    }
+  }
+}
+
+///|
+test "unit/enum/shadowed-nan-ts18033 - shadowed NaN reports TS18033" {
+  let source =
+    #|{
+    #|  let NaN = {};
+    #|  enum En {
+    #|    X = NaN
+    #|  }
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => fail("Expected TS18033 error for shadowed NaN")
+    Err(diagnostics) => {
+      assert_true(has_error(diagnostics, 18033))
+      assert_true(has_message(diagnostics, "not assignable to type 'number'"))
+    }
+  }
+}
+
+///|
+test "unit/enum/empty-object-type-display - empty object displays as {}" {
+  let source =
+    #|let x = {};
+    #|enum E {
+    #|  A = x
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => fail("Expected TS18033 error for empty object in enum")
+    Err(diagnostics) => {
+      assert_true(has_error(diagnostics, 18033))
+      // Check that the error message contains '{}' not 'object'
+      assert_true(has_message(diagnostics, "Type '{}'"))
+    }
+  }
+}
+
+///|
+test "unit/enum/valid-infinity-nan - unshadowed Infinity and NaN are valid" {
+  let source =
+    #|enum E {
+    #|  A = Infinity,
+    #|  B = NaN
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => () // Valid - global Infinity and NaN are numbers
+    Err(diagnostics) => {
+      // Should not have TS18033 error (computed enum value type error)
+      // May have TS2477/TS2478 for const enum non-finite/NaN values
+      assert_false(has_error(diagnostics, 18033))
+    }
+  }
+}
