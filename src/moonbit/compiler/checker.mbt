@@ -11757,6 +11757,9 @@ fn check_enum_declaration(
   checker : TypeChecker,
   enum_decl : EnumDeclaration,
 ) -> TypeChecker {
+  // TS2431: Check for reserved type names used as enum names
+  let checker = check_enum_reserved_name(checker, enum_decl)
+
   // Push a local scope for enum members so they can reference each other
   let checker = push_local_scope(checker)
 
@@ -11801,6 +11804,27 @@ fn check_enum_declaration(
 
   // Pop the local scope
   pop_local_scope(checker)
+}
+
+///|
+/// Check TS2431: Enum name cannot be a reserved type name
+fn check_enum_reserved_name(
+  checker : TypeChecker,
+  enum_decl : EnumDeclaration,
+) -> TypeChecker {
+  // List of reserved type names that cannot be used as enum names
+  let reserved_names = ["any", "number", "string", "boolean", "symbol", "never", "unknown", "object", "undefined"]
+  for reserved in reserved_names {
+    if enum_decl.name == reserved {
+      return add_diagnostic_with_code(
+        checker,
+        "Enum name cannot be '\{reserved}'.",
+        enum_decl.location,
+        TS2431,
+      )
+    }
+  }
+  checker
 }
 
 ///|
@@ -12107,11 +12131,14 @@ fn validate_enum_initializer(
       checker
     }
   } else {
+    // TS18033: Type 'X' is not assignable to type 'number' as required for computed enum member values
+    // This is for computed values (non-const) that aren't numbers
+    // Note: String literals are allowed for const string enums, but computed values must be numbers
     add_diagnostic_with_code(
       checker,
-      "Type '\{type_to_string(init_type)}' is not assignable to type 'number' or 'string' for enum member",
+      "Type '\{type_to_string(init_type)}' is not assignable to type 'number' as required for computed enum member values.",
       location,
-      TS2322,
+      TS18033,
     )
   }
 }

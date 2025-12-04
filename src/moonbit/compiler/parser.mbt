@@ -5791,8 +5791,19 @@ fn parse_enum_declaration(
   let parser = advance_parser(parser) // consume 'enum'
 
   // Parse enum name
+  // TypeScript allows reserved type names as enum names (reports TS2431 in checker)
   let (name, parser) = match current_token(parser) {
     Identifier(n, _) => (n, advance_parser(parser))
+    // Allow reserved type names as enum names (will be caught by checker as TS2431)
+    KeywordAny(_) => ("any", advance_parser(parser))
+    KeywordNumber(_) => ("number", advance_parser(parser))
+    KeywordString(_) => ("string", advance_parser(parser))
+    KeywordBoolean(_) => ("boolean", advance_parser(parser))
+    KeywordSymbol(_) => ("symbol", advance_parser(parser))
+    KeywordNever(_) => ("never", advance_parser(parser))
+    KeywordUnknown(_) => ("unknown", advance_parser(parser))
+    KeywordObject(_) => ("object", advance_parser(parser))
+    KeywordUndefined(_) => ("undefined", advance_parser(parser))
     _ =>
       return Err(
         add_error_with_code(

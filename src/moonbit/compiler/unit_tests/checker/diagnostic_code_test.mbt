@@ -7287,3 +7287,137 @@ test "unit/enum/TS1163-TS1308-both-in-enum - both await and yield in async gener
     }
   }
 }
+
+// ============================================================================
+// TS2431: Enum name cannot be reserved type name
+// ============================================================================
+
+///|
+test "unit/enum/TS2431-enum-name-any - enum name cannot be 'any'" {
+  let source =
+    #|enum any { A, B }
+  let result = check_source(source)
+  match result {
+    Ok(tf) => {
+      assert_true(has_error(tf.diagnostics, 2431))
+      assert_true(has_message(tf.diagnostics, "Enum name cannot be"))
+    }
+    Err(diagnostics) => {
+      assert_true(has_error(diagnostics, 2431))
+    }
+  }
+}
+
+///|
+test "unit/enum/TS2431-enum-name-number - enum name cannot be 'number'" {
+  let source =
+    #|enum number { A, B }
+  let result = check_source(source)
+  match result {
+    Ok(tf) => {
+      assert_true(has_error(tf.diagnostics, 2431))
+    }
+    Err(diagnostics) => {
+      assert_true(has_error(diagnostics, 2431))
+    }
+  }
+}
+
+///|
+test "unit/enum/TS2431-enum-name-string - enum name cannot be 'string'" {
+  let source =
+    #|enum string { A, B }
+  let result = check_source(source)
+  match result {
+    Ok(tf) => {
+      assert_true(has_error(tf.diagnostics, 2431))
+    }
+    Err(diagnostics) => {
+      assert_true(has_error(diagnostics, 2431))
+    }
+  }
+}
+
+///|
+test "unit/enum/TS2431-enum-name-boolean - enum name cannot be 'boolean'" {
+  let source =
+    #|enum boolean { A, B }
+  let result = check_source(source)
+  match result {
+    Ok(tf) => {
+      assert_true(has_error(tf.diagnostics, 2431))
+    }
+    Err(diagnostics) => {
+      assert_true(has_error(diagnostics, 2431))
+    }
+  }
+}
+
+// ============================================================================
+// TS18033: Computed enum member values must be numeric
+// ============================================================================
+
+///|
+test "unit/enum/TS18033-boolean-initializer - boolean not valid for enum" {
+  let source =
+    #|enum E { A = true }
+  let result = check_source(source)
+  match result {
+    Ok(tf) => {
+      assert_true(has_error(tf.diagnostics, 18033))
+      assert_true(has_message(tf.diagnostics, "computed enum member values"))
+    }
+    Err(diagnostics) => {
+      assert_true(has_error(diagnostics, 18033))
+    }
+  }
+}
+
+///|
+test "unit/enum/TS18033-object-initializer - object not valid for enum" {
+  let source =
+    #|enum E { A = {} }
+  let result = check_source(source)
+  match result {
+    Ok(tf) => {
+      assert_true(has_error(tf.diagnostics, 18033))
+    }
+    Err(diagnostics) => {
+      assert_true(has_error(diagnostics, 18033))
+    }
+  }
+}
+
+///|
+test "unit/enum/valid-numeric-enum - numeric values are valid" {
+  let source =
+    #|enum E { A = 1, B = 2 }
+  let result = check_source(source)
+  match result {
+    Ok(tf) => {
+      // Should not have TS18033 error
+      assert_false(has_error(tf.diagnostics, 18033))
+    }
+    Err(diagnostics) => {
+      // Should not have TS18033 error
+      assert_false(has_error(diagnostics, 18033))
+    }
+  }
+}
+
+///|
+test "unit/enum/valid-string-enum - string values are valid" {
+  let source =
+    #|enum E { A = "a", B = "b" }
+  let result = check_source(source)
+  match result {
+    Ok(tf) => {
+      // Should not have TS18033 error
+      assert_false(has_error(tf.diagnostics, 18033))
+    }
+    Err(diagnostics) => {
+      // Should not have TS18033 error
+      assert_false(has_error(diagnostics, 18033))
+    }
+  }
+}

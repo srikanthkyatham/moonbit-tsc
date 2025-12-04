@@ -800,6 +800,7 @@ test "unit/checker/error - enum with negative values" {
 
 ///|
 test "unit/checker/error - enum with invalid initializer type" {
+  // TS18033: Type 'boolean' is not assignable to type 'number' as required for computed enum member values
   let result = parse_bind_check_errors("enum Bad { A = true }")
   match result {
     Ok(typed) =>
@@ -807,7 +808,7 @@ test "unit/checker/error - enum with invalid initializer type" {
       assert_eq(typed.file_path, "test.ts")
     Err(diagnostics) => {
       assert_true(diagnostics.length() > 0)
-      assert_true(has_diagnostic_code(diagnostics, 2322))
+      assert_true(has_diagnostic_code(diagnostics, 18033))
     }
   }
 }

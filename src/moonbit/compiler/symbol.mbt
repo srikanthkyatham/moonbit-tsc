@@ -446,14 +446,16 @@ pub enum DiagnosticCode {
   TS2467 // The type of a 'catch' clause variable must be 'any' or 'unknown'
 
   // ============================================================================
-  // Enum Errors (2432, 2474-2478)
+  // Enum Errors (2431-2432, 2452, 2474-2478)
   // ============================================================================
+  TS2431 // Enum name cannot be '{0}'
   TS2432 // In an enum with multiple declarations, only one declaration can omit an initializer for its first enum element
   TS2474 // const enum member initializers can only contain literal values and other computed enum values
   TS2475 // 'const' enums can only be used in property or index access expressions or the right hand side of an import declaration or export assignment or type query
   TS2476 // A const enum member can only be accessed using a string literal
   TS2477 // 'const' enum member initializer was evaluated to a non-finite value
   TS2478 // 'const' enum member initializer was evaluated to disallowed value 'NaN'
+  TS18033 // Type '{0}' is not assignable to type 'number' as required for computed enum member values
 
   // ============================================================================
   // Export & Module Errors (2484-2502)
@@ -806,7 +808,8 @@ pub fn DiagnosticCode::to_int(self : DiagnosticCode) -> Int {
     TS2465 => 2465
     TS2466 => 2466
     TS2467 => 2467
-    // Enum Errors (2432, 2474-2478)
+    // Enum Errors (2431-2432, 2452, 2474-2478, 18033)
+    TS2431 => 2431
     TS2432 => 2432
     TS2474 => 2474
     TS2475 => 2475
@@ -1014,6 +1017,8 @@ pub fn DiagnosticCode::to_int(self : DiagnosticCode) -> Int {
     TS4097 => 4097
     // Unreachable Code (7000-7099)
     TS7027 => 7027
+    // Enum-specific errors (18xxx)
+    TS18033 => 18033
   }
 }
 
@@ -1111,13 +1116,15 @@ pub fn DiagnosticCode::from_int(code : Int) -> DiagnosticCode? {
     2465 => Some(TS2465)
     2466 => Some(TS2466)
     2467 => Some(TS2467)
-    // Enum Errors (2432, 2474-2478)
+    // Enum Errors (2431-2432, 2452, 2474-2478, 18033)
+    2431 => Some(TS2431)
     2432 => Some(TS2432)
     2474 => Some(TS2474)
     2475 => Some(TS2475)
     2476 => Some(TS2476)
     2477 => Some(TS2477)
     2478 => Some(TS2478)
+    18033 => Some(TS18033)
     // Export & Module Errors (2484-2502)
     2484 => Some(TS2484)
     2487 => Some(TS2487)
