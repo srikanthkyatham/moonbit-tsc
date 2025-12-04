@@ -4979,6 +4979,12 @@ fn infer_call_expression_type(
   checker : TypeChecker,
   call : CallExpression,
 ) -> (Type, TypeChecker) {
+  // Check if this is a super() call
+  let is_super_call = match call.expression {
+    SuperExpression(_) => true
+    _ => false
+  }
+
   // TS2335/TS2337/TS17005: Check for super() call outside class/constructor or in extends null
   let checker = match call.expression {
     SuperExpression(super_expr) =>
@@ -5007,20 +5013,31 @@ fn infer_call_expression_type(
           TS2337,
         )
       } else {
-        // Mark super as called for TS17009 tracking
-        { ..checker, super_called: true }
+        // Don't mark super as called yet - arguments are evaluated first!
+        // super_called will be set to true AFTER we check the arguments
+        checker
       }
     _ => checker
   }
   let (func_type, checker) = infer_type(checker, call.expression)
 
   // Infer argument types
+  // IMPORTANT: For super() calls, arguments are evaluated BEFORE super() completes
+  // So 'this' in super(this) should raise TS17009
   let mut checker = checker
   let arg_types : Array[Type] = []
   for i = 0; i < call.arguments.length(); i = i + 1 {
     let (arg_type, c) = infer_type(checker, call.arguments[i])
     arg_types.push(arg_type)
     checker = c
+  }
+
+  // Now mark super as called AFTER arguments have been checked
+  let checker = if is_super_call && checker.in_constructor && checker.in_derived_class &&
+    not(checker.in_extends_null_class) {
+    { ..checker, super_called: true }
+  } else {
+    checker
   }
 
   // Get call signatures from function type

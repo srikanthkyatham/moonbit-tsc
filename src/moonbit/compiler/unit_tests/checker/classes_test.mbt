@@ -927,3 +927,52 @@ test "unit/classes/ts17009 - this in object literal before super reports error" 
     }
   }
 }
+
+///|
+test "unit/classes/ts17009 - this in super() arguments reports error" {
+  // this inside super() arguments should raise TS17009
+  // because arguments are evaluated BEFORE super() completes
+  let result = parse_bind_check_class(
+    #|class Base {
+    #|  constructor(c: any) { }
+    #|}
+    #|class D extends Base {
+    #|  private _t: any;
+    #|  constructor() {
+    #|    super(this);
+    #|  }
+    #|}
+  )
+  match result {
+    Ok(_) => assert_true(false) // Should have TS17009 error
+    Err(diagnostics) => {
+      assert_true(diagnostics.length() > 0)
+      let has_ts17009 = diagnostics.iter().any(fn(d) { d.code == 17009 })
+      assert_true(has_ts17009)
+    }
+  }
+}
+
+///|
+test "unit/classes/ts17009 - this._t in super() arguments reports error" {
+  // this.property inside super() arguments should raise TS17009
+  let result = parse_bind_check_class(
+    #|class Base {
+    #|  constructor(c: any) { }
+    #|}
+    #|class D extends Base {
+    #|  private _t: any;
+    #|  constructor() {
+    #|    super(this._t);
+    #|  }
+    #|}
+  )
+  match result {
+    Ok(_) => assert_true(false) // Should have TS17009 error
+    Err(diagnostics) => {
+      assert_true(diagnostics.length() > 0)
+      let has_ts17009 = diagnostics.iter().any(fn(d) { d.code == 17009 })
+      assert_true(has_ts17009)
+    }
+  }
+}
