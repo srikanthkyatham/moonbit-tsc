@@ -240,6 +240,7 @@ pub struct TypeAliasDeclaration {
 /// Enum declaration
 pub struct EnumDeclaration {
   name : String
+  name_location : SourceLocation // Location of the enum name for error reporting
   members : Array[EnumMember]
   is_const : Bool
   modifiers : Array[Modifier]

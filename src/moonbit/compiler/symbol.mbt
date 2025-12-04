@@ -337,6 +337,7 @@ pub enum DiagnosticCode {
   TS1160 // Unterminated template literal
   TS1163 // A 'yield' expression is only allowed in a generator body
   TS1308 // 'await' expressions are only allowed within async functions and at the top levels of modules
+  TS1357 // An enum member name must be followed by a ',', '=', or '}'
 
   // ============================================================================
   // Name Resolution Errors (2304-2318)
@@ -719,6 +720,7 @@ pub fn DiagnosticCode::to_int(self : DiagnosticCode) -> Int {
     TS1160 => 1160
     TS1163 => 1163
     TS1308 => 1308
+    TS1357 => 1357
     // Name Resolution Errors (2304-2318)
     TS2304 => 2304
     TS2305 => 2305
@@ -1031,6 +1033,7 @@ pub fn DiagnosticCode::from_int(code : Int) -> DiagnosticCode? {
     1160 => Some(TS1160)
     1163 => Some(TS1163)
     1308 => Some(TS1308)
+    1357 => Some(TS1357)
     // Name Resolution Errors (2304-2318)
     2304 => Some(TS2304)
     2305 => Some(TS2305)

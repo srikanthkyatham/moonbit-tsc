@@ -1883,3 +1883,71 @@ test "parser error detection - valid return inside constructor" {
   let errors = parse_and_get_errors(source)
   assert_true(not(has_error_code(errors, 1108)))
 }
+
+// ----------------------------------------------------------------------------
+// TS1357: Enum Member Must Be Followed By Comma, Equals, or Close Brace
+// ----------------------------------------------------------------------------
+
+///|
+test "parser error detection - TS1357 enum member semicolon" {
+  // Enum member followed by semicolon instead of comma
+  let source = "enum Foo { A; B }"
+  let errors = parse_and_get_errors(source)
+  // Should detect TS1357 error
+  assert_true(has_error_code(errors, 1357))
+}
+
+///|
+test "parser error detection - TS1357 enum member colon" {
+  // Enum member with colon like object property
+  let source = "enum Foo { A: 1 }"
+  let errors = parse_and_get_errors(source)
+  // Should detect TS1357 error
+  assert_true(has_error_code(errors, 1357))
+}
+
+///|
+test "parser error detection - TS1357 enum member multiple errors" {
+  // Multiple enum syntax errors
+  let source = "enum Foo { A; B: 2, C }"
+  let errors = parse_and_get_errors(source)
+  // Should have at least 2 errors (semicolon and colon)
+  let count = count_error_code(errors, 1357)
+  assert_true(count >= 2)
+}
+
+///|
+test "parser error detection - valid enum comma separated" {
+  // Valid enum with comma-separated members
+  let source = "enum Foo { A, B, C }"
+  let errors = parse_and_get_errors(source)
+  assert_true(not(has_error_code(errors, 1357)))
+}
+
+///|
+test "parser error detection - valid enum with initializers" {
+  // Valid enum with equals initializers
+  let source = "enum Foo { A = 1, B = 2, C = 3 }"
+  let errors = parse_and_get_errors(source)
+  assert_true(not(has_error_code(errors, 1357)))
+}
+
+///|
+test "parser error detection - TS2452 enum numeric member name detected" {
+  // Enum with numeric member name should be detected
+  let source = "enum Foo { A: 1, 2, B }"
+  let errors = parse_and_get_errors(source)
+  // Should detect numeric enum member name
+  assert_true(has_error_code(errors, 2452))
+}
+
+// Helper function to count occurrences of an error code
+fn count_error_code(errors : Array[@compiler.Diagnostic], code : Int) -> Int {
+  let mut count = 0
+  for err in errors {
+    if err.code == code {
+      count = count + 1
+    }
+  }
+  count
+}

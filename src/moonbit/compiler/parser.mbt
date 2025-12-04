@@ -238,6 +238,10 @@ pub enum ParserErrorCode {
   UnableToResolvePropertyDecorator // TS1241
   DecoratorReturnTypeMustBeAssignable // TS1270
 
+  // Enum errors
+  EnumMemberExpectedCommaOrEquals // TS1357: An enum member name must be followed by a ',', '=', or '}'
+  NumericEnumMemberName // TS2452: An enum member cannot have a numeric name
+
   // Module/Import errors
   ModuleHasNoDefaultExport(String) // TS1192
   ImportAssignmentNotAllowedInESModules // TS1202
@@ -363,6 +367,10 @@ pub fn ParserErrorCode::to_int(self : ParserErrorCode) -> Int {
     UnableToResolveParameterDecorator => 1240 // TS1240: Unable to resolve signature of parameter decorator
     UnableToResolvePropertyDecorator => 1241 // TS1241: Unable to resolve signature of property decorator
     DecoratorReturnTypeMustBeAssignable => 1270 // TS1270: Decorator function return type must be assignable
+
+    // Enum errors
+    EnumMemberExpectedCommaOrEquals => 1357 // TS1357: An enum member name must be followed by a ',', '=', or '}'
+    NumericEnumMemberName => 2452 // TS2452: An enum member cannot have a numeric name
 
     // Module/Import errors
     ModuleHasNoDefaultExport(_) => 1192
@@ -507,6 +515,11 @@ pub fn ParserErrorCode::to_message(self : ParserErrorCode) -> String {
       "Unable to resolve signature of property decorator when called as an expression."
     DecoratorReturnTypeMustBeAssignable =>
       "Decorator function return type is not assignable to type of the decorated target."
+
+    // Enum errors
+    EnumMemberExpectedCommaOrEquals =>
+      "An enum member name must be followed by a ',', '=', or '}'."
+    NumericEnumMemberName => "An enum member cannot have a numeric name."
 
     // Module/Import errors
     ModuleHasNoDefaultExport(module_name) =>
@@ -5792,18 +5805,18 @@ fn parse_enum_declaration(
 
   // Parse enum name
   // TypeScript allows reserved type names as enum names (reports TS2431 in checker)
-  let (name, parser) = match current_token(parser) {
-    Identifier(n, _) => (n, advance_parser(parser))
+  let (name, name_loc, parser) = match current_token(parser) {
+    Identifier(n, loc) => (n, loc, advance_parser(parser))
     // Allow reserved type names as enum names (will be caught by checker as TS2431)
-    KeywordAny(_) => ("any", advance_parser(parser))
-    KeywordNumber(_) => ("number", advance_parser(parser))
-    KeywordString(_) => ("string", advance_parser(parser))
-    KeywordBoolean(_) => ("boolean", advance_parser(parser))
-    KeywordSymbol(_) => ("symbol", advance_parser(parser))
-    KeywordNever(_) => ("never", advance_parser(parser))
-    KeywordUnknown(_) => ("unknown", advance_parser(parser))
-    KeywordObject(_) => ("object", advance_parser(parser))
-    KeywordUndefined(_) => ("undefined", advance_parser(parser))
+    KeywordAny(loc) => ("any", loc, advance_parser(parser))
+    KeywordNumber(loc) => ("number", loc, advance_parser(parser))
+    KeywordString(loc) => ("string", loc, advance_parser(parser))
+    KeywordBoolean(loc) => ("boolean", loc, advance_parser(parser))
+    KeywordSymbol(loc) => ("symbol", loc, advance_parser(parser))
+    KeywordNever(loc) => ("never", loc, advance_parser(parser))
+    KeywordUnknown(loc) => ("unknown", loc, advance_parser(parser))
+    KeywordObject(loc) => ("object", loc, advance_parser(parser))
+    KeywordUndefined(loc) => ("undefined", loc, advance_parser(parser))
     _ =>
       return Err(
         add_error_with_code(
@@ -5832,6 +5845,7 @@ fn parse_enum_declaration(
             (
               Node::EnumDeclaration(EnumDeclaration::{
                 name,
+                name_location: name_loc,
                 members,
                 is_const,
                 modifiers,
@@ -5875,6 +5889,56 @@ fn parse_enum_members(parser : Parser) -> (Array[EnumMember], Parser) {
 }
 
 ///|
+/// Helper to parse an enum member when we already know the name
+fn parse_enum_member_with_name(
+  parser : Parser,
+  name : String,
+  loc : SourceLocation,
+  acc : Array[EnumMember],
+) -> (Array[EnumMember], Parser) {
+  let parser = advance_parser(parser)
+  // Check for initializer or error recovery
+  let (initializer, parser) = match current_token(parser) {
+    Equals(_) => {
+      let parser = advance_parser(parser)
+      match parse_assignment_expression(parser) {
+        Ok((expr, p)) => (Some(expr), p)
+        Err(p) => (None, p)
+      }
+    }
+    Comma(_) | CloseBrace(_) => (None, parser)
+    // Error recovery: unexpected token after member name - report TS1357
+    tok => {
+      let err_loc = tok.location()
+      let parser = add_error_with_code(
+        parser,
+        EnumMemberExpectedCommaOrEquals.to_message(),
+        err_loc,
+        EnumMemberExpectedCommaOrEquals,
+      )
+      // Skip tokens until we find comma, close brace, or another valid member start
+      let parser = skip_until_enum_member_recovery(parser)
+      (None, parser)
+    }
+  }
+  acc.push(EnumMember::{ name, initializer, location: loc })
+  // Check for comma
+  match current_token(parser) {
+    Comma(_) => parse_enum_members_aux(advance_parser(parser), acc)
+    CloseBrace(_) | EOF(_) => (acc, parser)
+    // Error recovery: continue to next member if we can identify one
+    Identifier(_, _) | NumericLiteral(_, _) | StringLiteral(_, _) =>
+      parse_enum_members_aux(parser, acc)
+    // Handle type keywords as potential next members
+    KeywordAny(_) | KeywordNumber(_) | KeywordString(_) | KeywordBoolean(_) |
+    KeywordSymbol(_) | KeywordBigInt(_) | KeywordObject(_) | KeywordNever(_) |
+    KeywordUnknown(_) | KeywordUndefined(_) | KeywordVoid(_) =>
+      parse_enum_members_aux(parser, acc)
+    _ => (acc, parser)
+  }
+}
+
+///|
 fn parse_enum_members_aux(
   parser : Parser,
   acc : Array[EnumMember],
@@ -5883,7 +5947,7 @@ fn parse_enum_members_aux(
     CloseBrace(_) | EOF(_) => (acc, parser)
     Identifier(name, loc) => {
       let parser = advance_parser(parser)
-      // Check for initializer (use parse_assignment_expression to not consume commas)
+      // Check for initializer or error recovery
       let (initializer, parser) = match current_token(parser) {
         Equals(_) => {
           let parser = advance_parser(parser)
@@ -5892,16 +5956,169 @@ fn parse_enum_members_aux(
             Err(p) => (None, p)
           }
         }
+        Comma(_) | CloseBrace(_) => (None, parser)
+        // Error recovery: unexpected token after member name
+        Semicolon(err_loc) => {
+          // TS1357: An enum member name must be followed by a ',', '=', or '}'
+          let parser = add_error_with_code(
+            parser,
+            EnumMemberExpectedCommaOrEquals.to_message(),
+            err_loc,
+            EnumMemberExpectedCommaOrEquals,
+          )
+          // Skip the semicolon and continue
+          (None, advance_parser(parser))
+        }
+        Colon(err_loc) => {
+          // TS1357: An enum member name must be followed by a ',', '=', or '}'
+          let parser = add_error_with_code(
+            parser,
+            EnumMemberExpectedCommaOrEquals.to_message(),
+            err_loc,
+            EnumMemberExpectedCommaOrEquals,
+          )
+          // Skip tokens until we find comma, close brace, or another valid member start
+          let parser = skip_until_enum_member_recovery(advance_parser(parser))
+          (None, parser)
+        }
         _ => (None, parser)
       }
       acc.push(EnumMember::{ name, initializer, location: loc })
       // Check for comma
       match current_token(parser) {
         Comma(_) => parse_enum_members_aux(advance_parser(parser), acc)
+        CloseBrace(_) | EOF(_) => (acc, parser)
+        // Error recovery: continue to next member if we can identify one
+        Identifier(_, _) => parse_enum_members_aux(parser, acc)
+        // Also handle numeric literals in recovery (to report TS2452)
+        NumericLiteral(_, _) => parse_enum_members_aux(parser, acc)
+        // Also handle string literals in recovery
+        StringLiteral(_, _) => parse_enum_members_aux(parser, acc)
+        // Handle type keywords as potential next members
+        KeywordAny(_) | KeywordNumber(_) | KeywordString(_) | KeywordBoolean(_) |
+        KeywordSymbol(_) | KeywordBigInt(_) | KeywordObject(_) | KeywordNever(_) |
+        KeywordUnknown(_) | KeywordUndefined(_) | KeywordVoid(_) =>
+          parse_enum_members_aux(parser, acc)
         _ => (acc, parser)
       }
     }
-    _ => (acc, parser)
+    // Handle numeric literals as enum member names (TS2452)
+    NumericLiteral(_, loc) => {
+      // Add TS2452 error: An enum member cannot have a numeric name
+      let parser = add_error_with_code(
+        parser,
+        "An enum member cannot have a numeric name.",
+        loc,
+        NumericEnumMemberName,
+      )
+      let parser = advance_parser(parser)
+      // Check for comma after the numeric name
+      match current_token(parser) {
+        Comma(_) => parse_enum_members_aux(advance_parser(parser), acc)
+        Semicolon(err_loc) => {
+          // Also report TS1357 for semicolon
+          let parser = add_error_with_code(
+            parser,
+            EnumMemberExpectedCommaOrEquals.to_message(),
+            err_loc,
+            EnumMemberExpectedCommaOrEquals,
+          )
+          parse_enum_members_aux(advance_parser(parser), acc)
+        }
+        CloseBrace(_) | EOF(_) => (acc, parser)
+        _ => parse_enum_members_aux(parser, acc)
+      }
+    }
+    // Handle string literals as enum member names
+    StringLiteral(name, loc) => {
+      let parser = advance_parser(parser)
+      // Check for initializer or error recovery
+      let (initializer, parser) = match current_token(parser) {
+        Equals(_) => {
+          let parser = advance_parser(parser)
+          match parse_assignment_expression(parser) {
+            Ok((expr, p)) => (Some(expr), p)
+            Err(p) => (None, p)
+          }
+        }
+        Comma(_) | CloseBrace(_) => (None, parser)
+        // Error recovery: unexpected token after member name - report TS1357
+        tok => {
+          let err_loc = tok.location()
+          let parser = add_error_with_code(
+            parser,
+            EnumMemberExpectedCommaOrEquals.to_message(),
+            err_loc,
+            EnumMemberExpectedCommaOrEquals,
+          )
+          // Skip tokens until we find comma, close brace, or another valid member start
+          let parser = skip_until_enum_member_recovery(parser)
+          (None, parser)
+        }
+      }
+      acc.push(EnumMember::{ name, initializer, location: loc })
+      // Check for comma
+      match current_token(parser) {
+        Comma(_) => parse_enum_members_aux(advance_parser(parser), acc)
+        CloseBrace(_) | EOF(_) => (acc, parser)
+        // Continue recovery for next member
+        Identifier(_, _) | NumericLiteral(_, _) | StringLiteral(_, _) =>
+          parse_enum_members_aux(parser, acc)
+        // Handle type keywords as potential next members
+        KeywordAny(_) | KeywordNumber(_) | KeywordString(_) | KeywordBoolean(_) |
+        KeywordSymbol(_) | KeywordBigInt(_) | KeywordObject(_) | KeywordNever(_) |
+        KeywordUnknown(_) | KeywordUndefined(_) | KeywordVoid(_) =>
+          parse_enum_members_aux(parser, acc)
+        _ => (acc, parser)
+      }
+    }
+    // Handle type keywords as enum member names (they're valid identifiers in this context)
+    KeywordAny(loc) =>
+      parse_enum_member_with_name(parser, "any", loc, acc)
+    KeywordNumber(loc) =>
+      parse_enum_member_with_name(parser, "number", loc, acc)
+    KeywordString(loc) =>
+      parse_enum_member_with_name(parser, "string", loc, acc)
+    KeywordBoolean(loc) =>
+      parse_enum_member_with_name(parser, "boolean", loc, acc)
+    KeywordSymbol(loc) =>
+      parse_enum_member_with_name(parser, "symbol", loc, acc)
+    KeywordBigInt(loc) =>
+      parse_enum_member_with_name(parser, "bigint", loc, acc)
+    KeywordObject(loc) =>
+      parse_enum_member_with_name(parser, "object", loc, acc)
+    KeywordNever(loc) =>
+      parse_enum_member_with_name(parser, "never", loc, acc)
+    KeywordUnknown(loc) =>
+      parse_enum_member_with_name(parser, "unknown", loc, acc)
+    KeywordUndefined(loc) =>
+      parse_enum_member_with_name(parser, "undefined", loc, acc)
+    KeywordVoid(loc) =>
+      parse_enum_member_with_name(parser, "void", loc, acc)
+    // Error recovery for other unexpected tokens
+    _ => {
+      // Skip unexpected token and try to continue
+      let parser = advance_parser(parser)
+      parse_enum_members_aux(parser, acc)
+    }
+  }
+}
+
+///|
+/// Skip tokens until we find a valid enum member recovery point
+fn skip_until_enum_member_recovery(parser : Parser) -> Parser {
+  match current_token(parser) {
+    Comma(_) | CloseBrace(_) | EOF(_) => parser
+    Identifier(_, _) => parser // Found next member name
+    // Stop at type keywords (they can be used as enum member names)
+    KeywordAny(_) | KeywordNumber(_) | KeywordString(_) | KeywordBoolean(_) |
+    KeywordSymbol(_) | KeywordBigInt(_) | KeywordObject(_) | KeywordNever(_) |
+    KeywordUnknown(_) | KeywordUndefined(_) | KeywordVoid(_) => parser
+    // Stop at numeric literals to report TS2452
+    NumericLiteral(_, _) => parser // Let main loop handle it
+    // Stop at string literals to report TS1357
+    StringLiteral(_, _) => parser // Let main loop handle it
+    _ => skip_until_enum_member_recovery(advance_parser(parser))
   }
 }
 
@@ -6948,6 +7165,7 @@ fn add_export_modifier(node : Node) -> Node {
       }
       Node::EnumDeclaration(EnumDeclaration::{
         name: ed.name,
+        name_location: ed.name_location,
         members: ed.members,
         is_const: ed.is_const,
         modifiers: new_modifiers,
@@ -7153,6 +7371,7 @@ fn add_declare_modifier(node : Node) -> Node {
       }
       Node::EnumDeclaration(EnumDeclaration::{
         name: ed.name,
+        name_location: ed.name_location,
         members: ed.members,
         is_const: ed.is_const,
         modifiers: new_modifiers,

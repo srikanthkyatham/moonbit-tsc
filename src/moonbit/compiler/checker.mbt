@@ -11819,7 +11819,7 @@ fn check_enum_reserved_name(
       return add_diagnostic_with_code(
         checker,
         "Enum name cannot be '\{reserved}'.",
-        enum_decl.location,
+        enum_decl.name_location,
         TS2431,
       )
     }
