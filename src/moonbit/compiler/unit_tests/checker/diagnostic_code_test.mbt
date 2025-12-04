@@ -6955,3 +6955,222 @@ test "unit/math/E - Math.E constant is recognized" {
     Err(_) => fail("Math.E should be recognized")
   }
 }
+
+// ============================================================================
+// TS2477: 'const' enum member initializer was evaluated to a non-finite value
+// ============================================================================
+
+///|
+test "unit/enum/const-enum-infinity-division - const enum with 1/0 reports TS2477" {
+  let source =
+    #|const enum E {
+    #|  a = 1 / 0
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => fail("Expected TS2477 error for 1/0 in const enum")
+    Err(diagnostics) => {
+      assert_true(has_error(diagnostics, 2477))
+      assert_true(has_message(diagnostics, "non-finite"))
+    }
+  }
+}
+
+///|
+test "unit/enum/const-enum-infinity-literal - const enum with Infinity literal reports TS2477" {
+  let source =
+    #|const enum E {
+    #|  a = Infinity
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => fail("Expected TS2477 error for Infinity in const enum")
+    Err(diagnostics) => {
+      assert_true(has_error(diagnostics, 2477))
+      assert_true(has_message(diagnostics, "non-finite"))
+    }
+  }
+}
+
+///|
+test "unit/enum/const-enum-negative-infinity - const enum with -Infinity reports TS2477" {
+  let source =
+    #|const enum E {
+    #|  a = -Infinity
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => fail("Expected TS2477 error for -Infinity in const enum")
+    Err(diagnostics) => {
+      assert_true(has_error(diagnostics, 2477))
+      assert_true(has_message(diagnostics, "non-finite"))
+    }
+  }
+}
+
+// ============================================================================
+// TS2478: 'const' enum member initializer was evaluated to disallowed value 'NaN'
+// ============================================================================
+
+///|
+test "unit/enum/const-enum-nan-literal - const enum with NaN literal reports TS2478" {
+  let source =
+    #|const enum E {
+    #|  a = NaN
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => fail("Expected TS2478 error for NaN in const enum")
+    Err(diagnostics) => {
+      assert_true(has_error(diagnostics, 2478))
+      assert_true(has_message(diagnostics, "NaN"))
+    }
+  }
+}
+
+///|
+test "unit/enum/const-enum-nan-division - const enum with 0/0 reports TS2478" {
+  let source =
+    #|const enum E {
+    #|  a = 0 / 0
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => fail("Expected TS2478 error for 0/0 in const enum")
+    Err(diagnostics) => {
+      assert_true(has_error(diagnostics, 2478))
+      assert_true(has_message(diagnostics, "NaN"))
+    }
+  }
+}
+
+///|
+test "unit/enum/regular-enum-infinity-no-error - regular enum with Infinity is allowed" {
+  let source =
+    #|enum E {
+    #|  a = 1 / 0,
+    #|  b = Infinity
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(tf) => assert_true(tf.diagnostics.length() == 0)
+    Err(diagnostics) => {
+      // Should not have TS2477 error for regular enum
+      assert_false(has_error(diagnostics, 2477))
+    }
+  }
+}
+
+///|
+test "unit/enum/const-enum-valid-values - const enum with valid values has no error" {
+  let source =
+    #|const enum E {
+    #|  a = 1,
+    #|  b = 2 + 3,
+    #|  c = -5
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(tf) => assert_true(tf.diagnostics.length() == 0)
+    Err(diagnostics) => {
+      // Should not have TS2477 or TS2478 error
+      assert_false(has_error(diagnostics, 2477))
+      assert_false(has_error(diagnostics, 2478))
+    }
+  }
+}
+
+// ============================================================================
+// TS2432: Only one declaration can omit initializer for first enum element
+// ============================================================================
+
+///|
+test "unit/enum/enum-merging-single-no-init - single enum with no initializer is valid" {
+  let source =
+    #|enum E {
+    #|  A,
+    #|  B
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(tf) => assert_true(tf.diagnostics.length() == 0)
+    Err(_) => fail("Single enum without initializer should be valid")
+  }
+}
+
+///|
+test "unit/enum/enum-merging-two-with-init - merged enums with initializers are valid" {
+  let source =
+    #|enum E {
+    #|  A = 0
+    #|}
+    #|enum E {
+    #|  B = 1
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(tf) => assert_true(tf.diagnostics.length() == 0)
+    Err(_) => fail("Merged enums with initializers should be valid")
+  }
+}
+
+///|
+test "unit/enum/enum-merging-two-without-init - second merged enum without init reports TS2432" {
+  let source =
+    #|enum E {
+    #|  A
+    #|}
+    #|enum E {
+    #|  B
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => fail("Expected TS2432 error for second merged enum without initializer")
+    Err(diagnostics) => {
+      assert_true(has_error(diagnostics, 2432))
+      assert_true(has_message(diagnostics, "only one declaration can omit"))
+    }
+  }
+}
+
+///|
+test "unit/enum/enum-merging-three-only-third-error - third merged enum without init reports TS2432" {
+  let source =
+    #|enum E {
+    #|  A = 0
+    #|}
+    #|enum E {
+    #|  B
+    #|}
+    #|enum E {
+    #|  C
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => fail("Expected TS2432 error for third merged enum")
+    Err(diagnostics) => {
+      // Should have errors on B and C (both missing initializers)
+      let error_count = diagnostics.iter().filter(fn(d) { d.code == 2432 }).count()
+      assert_true(error_count == 2)
+    }
+  }
+}
+
+///|
+test "unit/enum/enum-merging-first-no-init-second-with-init - valid when only first omits" {
+  let source =
+    #|enum E {
+    #|  A
+    #|}
+    #|enum E {
+    #|  B = 1
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(tf) => assert_true(tf.diagnostics.length() == 0)
+    Err(diagnostics) => {
+      // Should not have TS2432 error
+      assert_false(has_error(diagnostics, 2432))
+    }
+  }
+}

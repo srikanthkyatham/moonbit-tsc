@@ -287,6 +287,7 @@ pub struct TypeChecker {
   current_location : SourceLocation // Current location being checked (for TS2590 and similar)
   external_registry : ExternalTypeRegistry? // Registry of types from other modules for cross-file checking
   import_map : Map[String, (String, String)] // Map from local name -> (module_specifier, original_name)
+  namespace_symbols : Map[String, Symbol] // Symbols from current namespace for TS2432 enum merging checks
 } derive(Show)
 
 ///|
@@ -359,6 +360,7 @@ pub fn TypeChecker::new_with_options(
     ),
     external_registry: None,
     import_map: Map::new(),
+    namespace_symbols: Map::new(),
   }
 }
 
@@ -2254,7 +2256,57 @@ fn check_statement(checker : TypeChecker, node : Node) -> TypeChecker {
     SwitchStatement(switch_stmt) => check_switch_statement(checker, switch_stmt)
     BreakStatement(_) => checker
     ContinueStatement(_) => checker
+    ModuleDeclaration(mod_decl) => check_module_declaration(checker, mod_decl)
     _ => checker // Other statements
+  }
+}
+
+///|
+/// Check module/namespace declaration body
+fn check_module_declaration(
+  checker : TypeChecker,
+  mod_decl : ModuleDeclaration,
+) -> TypeChecker {
+  // Look up the namespace symbol to get its exports
+  // This is needed for TS2432 checking of merged enums inside namespaces
+  match lookup_symbol(checker, mod_decl.name) {
+    Some(ns_symbol) =>
+      match ns_symbol.exports {
+        Some(exports) => {
+          // Push the namespace exports as a local scope
+          let checker = push_local_scope(checker)
+          // Add all exports to namespace_symbols so lookup_symbol can find them
+          // Use direct map mutation (Map.set mutates in place)
+          exports.each(fn(name, sym) { checker.namespace_symbols.set(name, sym) })
+          // Check the body with the namespace scope active
+          let checker = match mod_decl.body {
+            Some(BlockStatement(block)) =>
+              check_statements(checker, block.statements)
+            Some(body) => check_statement(checker, body)
+            None => checker
+          }
+          // Clear namespace_symbols after checking (to not leak between namespaces)
+          exports.each(fn(name, _sym) { checker.namespace_symbols.remove(name) })
+          // Pop the namespace scope
+          pop_local_scope(checker)
+        }
+        None =>
+          // No exports, just check the body
+          match mod_decl.body {
+            Some(BlockStatement(block)) =>
+              check_statements(checker, block.statements)
+            Some(body) => check_statement(checker, body)
+            None => checker
+          }
+      }
+    None =>
+      // Namespace symbol not found, just check the body
+      match mod_decl.body {
+        Some(BlockStatement(block)) =>
+          check_statements(checker, block.statements)
+        Some(body) => check_statement(checker, body)
+        None => checker
+      }
   }
 }
 
@@ -11649,6 +11701,10 @@ fn check_enum_declaration(
   // This allows later enum declarations to reference members from earlier ones
   let checker = add_previous_enum_members_to_scope(checker, enum_decl.name)
 
+  // Check TS2432: In an enum with multiple declarations, only one declaration can omit
+  // an initializer for its first enum element
+  let checker = check_enum_merging_first_initializer(checker, enum_decl)
+
   // Collect all enum member names for forward reference checking
   let all_member_names : Map[String, Bool] = Map::new()
   for mem in enum_decl.members {
@@ -11668,6 +11724,72 @@ fn check_enum_declaration(
 
   // Pop the local scope
   pop_local_scope(checker)
+}
+
+///|
+/// Check TS2432: In an enum with multiple declarations, only one declaration can omit
+/// an initializer for its first enum element.
+fn check_enum_merging_first_initializer(
+  checker : TypeChecker,
+  enum_decl : EnumDeclaration,
+) -> TypeChecker {
+  // If this enum declaration has no members or its first member has an initializer, no error
+  if enum_decl.members.length() == 0 {
+    return checker
+  }
+  let first_member = enum_decl.members[0]
+  match first_member.initializer {
+    Some(_) => checker // This declaration has an initializer, no error
+    None => {
+      // This declaration omits the initializer for first element
+      // Check if there are other declarations that also omit it
+      // First check namespace_symbols (for namespace-scoped enums)
+      let enum_symbol_opt : Symbol? = match checker.namespace_symbols.get(
+          enum_decl.name,
+        ) {
+        Some(sym) => Some(sym)
+        None =>
+          // Fall back to global scope
+          match checker.global_scope {
+            Some(scope) => scope.symbols.get(enum_decl.name)
+            None => None
+          }
+      }
+      match enum_symbol_opt {
+        Some(enum_symbol) => {
+          // Count declarations that omit initializer for first element
+          let mut count_without_init = 0
+          for decl in enum_symbol.declarations {
+            match decl {
+              EnumDeclaration(prev_enum) => {
+                if prev_enum.members.length() > 0 {
+                  let prev_first = prev_enum.members[0]
+                  match prev_first.initializer {
+                    None => count_without_init = count_without_init + 1
+                    Some(_) => ()
+                  }
+                }
+              }
+              _ => ()
+            }
+          }
+          // If more than one declaration omits the first initializer, error on this one
+          // (we only report on the current declaration, not the first one)
+          if count_without_init > 1 {
+            add_diagnostic_with_code(
+              checker,
+              "In an enum with multiple declarations, only one declaration can omit an initializer for its first enum element.",
+              first_member.location,
+              TS2432,
+            )
+          } else {
+            checker
+          }
+        }
+        None => checker
+      }
+    }
+  }
 }
 
 ///|
@@ -11878,7 +12000,24 @@ fn validate_enum_initializer(
     // For const enums, we need to ensure the initializer is a compile-time constant
     if is_const {
       if is_const_enum_initializer(init) {
-        checker
+        // Check for non-finite values (TS2477) and NaN (TS2478)
+        match evaluate_const_enum_value(init) {
+          Some(ConstEnumValue::InfinityValue) =>
+            add_diagnostic_with_code(
+              checker,
+              "'const' enum member initializer was evaluated to a non-finite value.",
+              location,
+              TS2477,
+            )
+          Some(ConstEnumValue::NaNValue) =>
+            add_diagnostic_with_code(
+              checker,
+              "'const' enum member initializer was evaluated to disallowed value 'NaN'.",
+              location,
+              TS2478,
+            )
+          _ => checker
+        }
       } else {
         add_diagnostic_with_code(
           checker,
@@ -11897,6 +12036,88 @@ fn validate_enum_initializer(
       location,
       TS2322,
     )
+  }
+}
+
+///|
+/// Result of evaluating a const enum initializer
+enum ConstEnumValue {
+  FiniteValue(Double)
+  InfinityValue
+  NaNValue
+}
+
+///|
+/// Evaluate a const enum initializer to detect Infinity/NaN
+fn evaluate_const_enum_value(expr : Node) -> Option[ConstEnumValue] {
+  match expr {
+    NumericLiteral(lit) => {
+      // Parse the string value to a double
+      let v = @strconv.parse_double(lit.value) catch { _ => 0.0 }
+      Some(ConstEnumValue::FiniteValue(v))
+    }
+    Identifier(id) => {
+      // Check for special identifiers like NaN and Infinity
+      if id.name == "NaN" {
+        Some(ConstEnumValue::NaNValue)
+      } else if id.name == "Infinity" {
+        Some(ConstEnumValue::InfinityValue)
+      } else {
+        // Other identifiers (enum members) - assume finite
+        None
+      }
+    }
+    UnaryExpression(un) => {
+      match un.operator {
+        UnaryOperator::Minus => {
+          match evaluate_const_enum_value(un.operand) {
+            Some(ConstEnumValue::FiniteValue(v)) =>
+              Some(ConstEnumValue::FiniteValue(-v))
+            Some(ConstEnumValue::InfinityValue) =>
+              Some(ConstEnumValue::InfinityValue)
+            Some(ConstEnumValue::NaNValue) => Some(ConstEnumValue::NaNValue)
+            None => None
+          }
+        }
+        UnaryOperator::Plus => evaluate_const_enum_value(un.operand)
+        _ => None
+      }
+    }
+    BinaryExpression(bin) => {
+      let left = evaluate_const_enum_value(bin.left)
+      let right = evaluate_const_enum_value(bin.right)
+      match (left, right) {
+        (Some(ConstEnumValue::FiniteValue(l)), Some(ConstEnumValue::FiniteValue(r))) => {
+          match bin.operator {
+            BinaryOperator::Divide => {
+              // Division - check for Infinity or NaN
+              if r == 0.0 {
+                if l == 0.0 {
+                  Some(ConstEnumValue::NaNValue) // 0/0 = NaN
+                } else {
+                  Some(ConstEnumValue::InfinityValue) // n/0 = Infinity
+                }
+              } else {
+                Some(ConstEnumValue::FiniteValue(l / r))
+              }
+            }
+            BinaryOperator::Add => Some(ConstEnumValue::FiniteValue(l + r))
+            BinaryOperator::Subtract => Some(ConstEnumValue::FiniteValue(l - r))
+            BinaryOperator::Multiply => Some(ConstEnumValue::FiniteValue(l * r))
+            _ => None
+          }
+        }
+        (Some(ConstEnumValue::InfinityValue), _) =>
+          Some(ConstEnumValue::InfinityValue)
+        (_, Some(ConstEnumValue::InfinityValue)) =>
+          Some(ConstEnumValue::InfinityValue)
+        (Some(ConstEnumValue::NaNValue), _) => Some(ConstEnumValue::NaNValue)
+        (_, Some(ConstEnumValue::NaNValue)) => Some(ConstEnumValue::NaNValue)
+        _ => None
+      }
+    }
+    ParenthesizedExpression(paren) => evaluate_const_enum_value(paren.expression)
+    _ => None
   }
 }
 
@@ -13384,10 +13605,15 @@ fn lookup_symbol(checker : TypeChecker, name : String) -> Symbol? {
     // Split by dots and resolve step by step
     lookup_qualified_symbol(checker, name)
   } else {
-    // Simple name lookup
-    match checker.global_scope {
-      Some(scope) => scope.symbols.get(name)
-      None => None
+    // First check namespace_symbols (for symbols in current namespace scope)
+    match checker.namespace_symbols.get(name) {
+      Some(sym) => Some(sym)
+      None =>
+        // Fall back to simple name lookup in global scope
+        match checker.global_scope {
+          Some(scope) => scope.symbols.get(name)
+          None => None
+        }
     }
   }
 }

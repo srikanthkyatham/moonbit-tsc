@@ -2386,12 +2386,25 @@ pub fn merge_symbols(a : Symbol, b : Symbol) -> Symbol {
     (None, None) => None
   }
 
-  // Merge exports
+  // Merge exports (with recursive symbol merging for mergeable symbols like enums)
   let exports : SymbolTable? = match (a.exports, b.exports) {
     (Some(a_exports), Some(b_exports)) => {
       let merged : SymbolTable = Map::new()
+      // Copy a_exports to merged
       a_exports.each(fn(name, symbol) { merged.set(name, symbol) })
-      b_exports.each(fn(name, symbol) { merged.set(name, symbol) })
+      // Add b_exports, merging if the symbol exists and can be merged
+      b_exports.each(fn(name, symbol) {
+        match merged.get(name) {
+          Some(existing) =>
+            if can_merge_symbols(existing, symbol) {
+              merged.set(name, merge_symbols(existing, symbol))
+            } else {
+              // Can't merge - overwrite (error already reported elsewhere)
+              merged.set(name, symbol)
+            }
+          None => merged.set(name, symbol)
+        }
+      })
       Some(merged)
     }
     (Some(e), None) => Some(e)

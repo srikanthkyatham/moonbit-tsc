@@ -655,6 +655,7 @@ fn TypeChecker::create_type_info(self : TypeChecker) -> (TypeInfo, TypeChecker) 
     current_location: self.current_location,
     external_registry: self.external_registry,
     import_map: self.import_map,
+    namespace_symbols: self.namespace_symbols,
   }
   (info, new_checker)
 }
