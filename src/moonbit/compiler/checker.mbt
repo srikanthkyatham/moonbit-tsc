@@ -232,6 +232,7 @@ pub struct CheckerIndexAccessType {
   object_type : Type
   index_type : Type
   info : TypeInfo
+  is_keyof : Bool // True if this represents "keyof T" (T is object_type)
 } derive(Show)
 
 ///|
@@ -1331,7 +1332,7 @@ pub fn index_access_type(
   index_type : Type,
 ) -> (Type, TypeChecker) {
   let (info, checker) = create_type_info(checker)
-  (IndexAccess({ object_type, index_type, info }), checker)
+  (IndexAccess({ object_type, index_type, info, is_keyof: false }), checker)
 }
 
 ///|
@@ -2136,6 +2137,7 @@ fn type_v2_to_type(ty : TypeV2) -> Type {
       object_type: type_v2_to_type(idx.object_type),
       index_type: type_v2_to_type(idx.index_type),
       info: info,
+      is_keyof: false,
     })
     TMapped(mapped) => Mapped(CheckerMappedType::{
       type_parameter: CheckerTypeParameter::{
@@ -13392,7 +13394,16 @@ fn get_type_from_type_node(
                   }
                 Type =>
                   // Resolve type alias to its underlying type
-                  resolve_type_alias_type(checker, symbol)
+                  // If there are type arguments, use the version that substitutes them
+                  if type_ref.type_arguments.length() > 0 {
+                    resolve_type_alias_type_with_args(
+                      checker,
+                      symbol,
+                      type_ref.type_arguments,
+                    )
+                  } else {
+                    resolve_type_alias_type(checker, symbol)
+                  }
                 Module => {
                   // TS2709: Cannot use namespace as a type
                   let checker = add_diagnostic_with_code(
@@ -13652,8 +13663,119 @@ fn get_type_from_type_node(
       let (info, checker) = create_type_info(checker)
       (Some(Type::Function({ parameters, return_type, info })), checker)
     }
+    TypeOperator(type_op) =>
+      // Handle type operators: keyof T, typeof x, readonly T, unique symbol
+      match type_op.operator {
+        KeyOf => {
+          // For keyof, we need to get the inner type and extract its keys as a union
+          match get_type_from_type_node(checker, type_op.type_node) {
+            (Some(inner_type), c) => {
+              let keys = extract_keys_from_type(inner_type)
+              if keys.length() > 0 {
+                let (info, c2) = create_type_info(c)
+                (Some(Union({ types: keys, info })), c2)
+              } else {
+                // The inner type exists but has no keys - could be a type parameter
+                // Create an IndexAccess type to represent "keyof T" for later substitution
+                // When the inner type is a TypeReference (type parameter), preserve it
+                match inner_type {
+                  TypeReference(_) => {
+                    // Create a special representation: IndexAccess with "keyof" marker
+                    // We use IndexAccess { object_type: inner_type, index_type: string }
+                    // to represent "keyof inner_type"
+                    let (str_t, c2) = string_type(c)
+                    let (info, c3) = create_type_info(c2)
+                    (
+                      Some(
+                        IndexAccess({
+                          object_type: inner_type,
+                          index_type: str_t,
+                          info,
+                          is_keyof: true,
+                        }),
+                      ),
+                      c3,
+                    )
+                  }
+                  _ => {
+                    // No keys found, return string | number | symbol for general keyof
+                    let (str_t, c2) = string_type(c)
+                    let (num_t, c3) = number_type(c2)
+                    let (sym_t, c4) = symbol_type(c3)
+                    let (info, c5) = create_type_info(c4)
+                    (Some(Union({ types: [str_t, num_t, sym_t], info })), c5)
+                  }
+                }
+              }
+            }
+            (None, c) => {
+              // The inner type wasn't found - check if it's a type parameter reference
+              match type_op.type_node {
+                Node::TypeReference(type_ref) => {
+                  // Create a TypeReference for the unresolved type parameter
+                  let (info, c2) = create_type_info(c)
+                  let inner_type_ref = Type::TypeReference({
+                    name: type_ref.type_name,
+                    type_arguments: [],
+                    info,
+                  })
+                  // Create IndexAccess to represent "keyof T"
+                  let (str_t, c3) = string_type(c2)
+                  let (info2, c4) = create_type_info(c3)
+                  (
+                    Some(
+                      IndexAccess({
+                        object_type: inner_type_ref,
+                        index_type: str_t,
+                        info: info2,
+                        is_keyof: true,
+                      }),
+                    ),
+                    c4,
+                  )
+                }
+                _ => (None, c)
+              }
+            }
+          }
+        }
+        TypeOf => {
+          // typeof x - would need to look up the value and get its type
+          // For now, return any
+          let (t, c) = any_type(checker)
+          (Some(t), c)
+        }
+        Readonly =>
+          // readonly T - return the underlying type (readonly is a modifier on properties)
+          get_type_from_type_node(checker, type_op.type_node)
+        Unique => {
+          // unique symbol
+          let (t, c) = symbol_type(checker)
+          (Some(t), c)
+        }
+      }
     _ => (None, checker)
   }
+}
+
+///|
+/// Extract keys from a type as string literal types
+fn extract_keys_from_type(t : Type) -> Array[Type] {
+  let keys : Array[Type] = []
+  match t {
+    Object(obj) => {
+      for kv in obj.properties {
+        // Create a string literal type for each property name
+        let info : TypeInfo = {
+          id: 0,
+          flags: { is_readonly: false, is_optional: false },
+        }
+        keys.push(StringLiteral(kv.0, info))
+      }
+    }
+    _ => ()
+  }
+  keys
 }
 
 ///|
@@ -14227,6 +14349,268 @@ fn resolve_type_alias_type(
   checker = { ..checker, resolving_symbols: resolving }
 
   (result, checker)
+}
+
+///|
+/// Resolve a type alias with type arguments, performing substitution
+fn resolve_type_alias_type_with_args(
+  checker : TypeChecker,
+  type_alias_symbol : Symbol,
+  type_args : Array[Node],
+) -> (Type?, TypeChecker) {
+  // First resolve the base type alias
+  let (base_type_opt, checker) = resolve_type_alias_type(checker, type_alias_symbol)
+
+  match base_type_opt {
+    Some(base_type) => {
+      // Get type parameter names from the type alias declaration
+      let type_param_names = get_type_param_names_from_symbol(type_alias_symbol)
+
+      // Convert type argument nodes to types
+      let mut checker = checker
+      let resolved_args : Array[Type] = []
+      for type_arg_node in type_args {
+        match get_type_from_type_node(checker, type_arg_node) {
+          (Some(t), c) => {
+            resolved_args.push(t)
+            checker = c
+          }
+          (None, c) => checker = c
+        }
+      }
+
+      // Create substitution map
+      let subst_map : Map[String, Type] = Map::new()
+      for i = 0; i < type_param_names.length() && i < resolved_args.length(); i = i + 1 {
+        subst_map.set(type_param_names[i], resolved_args[i])
+      }
+
+      // Substitute and expand
+      let (result, checker) = substitute_and_expand_type(checker, base_type, subst_map)
+      (Some(result), checker)
+    }
+    None => (None, checker)
+  }
+}
+
+///|
+/// Get type parameter names from a type alias symbol
+fn get_type_param_names_from_symbol(symbol : Symbol) -> Array[String] {
+  let names : Array[String] = []
+  match symbol.value_declaration {
+    Some(TypeAliasDeclaration(type_alias)) =>
+      for param in type_alias.type_parameters {
+        names.push(param.name)
+      }
+    _ => ()
+  }
+  names
+}
+
+///|
+/// Substitute type parameters and expand mapped types
+fn substitute_and_expand_type(
+  checker : TypeChecker,
+  t : Type,
+  subst_map : Map[String, Type],
+) -> (Type, TypeChecker) {
+  match t {
+    // Type reference - might be a type parameter to substitute
+    TypeReference(type_ref) =>
+      match subst_map.get(type_ref.name) {
+        Some(substituted) => (substituted, checker)
+        None => {
+          // Recursively substitute in type arguments
+          let mut checker = checker
+          let new_args : Array[Type] = []
+          for arg in type_ref.type_arguments {
+            let (new_arg, c) = substitute_and_expand_type(checker, arg, subst_map)
+            new_args.push(new_arg)
+            checker = c
+          }
+          let (info, checker) = create_type_info(checker)
+          (TypeReference({ name: type_ref.name, type_arguments: new_args, info }), checker)
+        }
+      }
+    // Mapped type - expand if constraint is keyof of a known type
+    Mapped(mapped) =>
+      expand_mapped_type_with_subst(checker, mapped, subst_map)
+    // Union type - substitute in each member
+    Union(union) => {
+      let mut checker = checker
+      let new_types : Array[Type] = []
+      for member in union.types {
+        let (new_member, c) = substitute_and_expand_type(checker, member, subst_map)
+        new_types.push(new_member)
+        checker = c
+      }
+      let (info, checker) = create_type_info(checker)
+      (Union({ types: new_types, info }), checker)
+    }
+    // Array type - substitute element type
+    Array(arr) => {
+      let (new_elem, checker) = substitute_and_expand_type(
+        checker,
+        arr.element_type,
+        subst_map,
+      )
+      let (info, checker) = create_type_info(checker)
+      (Array({ element_type: new_elem, info }), checker)
+    }
+    // Object type - substitute property types
+    Object(obj) => {
+      let mut checker = checker
+      let new_props : Map[String, PropertySignature] = Map::new()
+      for entry in obj.properties {
+        let (name, prop) = entry
+        let (new_type, c) = substitute_and_expand_type(checker, prop.prop_type, subst_map)
+        new_props.set(name, { ..prop, prop_type: new_type })
+        checker = c
+      }
+      let (info, checker) = create_type_info(checker)
+      (
+        Object({
+          properties: new_props,
+          call_signatures: obj.call_signatures,
+          construct_signatures: obj.construct_signatures,
+          index_signatures: obj.index_signatures,
+          info,
+          class_name: obj.class_name,
+        }),
+        checker,
+      )
+    }
+    // Other types - return as is
+    _ => (t, checker)
+  }
+}
+
+///|
+/// Expand a mapped type after substitution
+fn expand_mapped_type_with_subst(
+  checker : TypeChecker,
+  mapped : CheckerMappedType,
+  subst_map : Map[String, Type],
+) -> (Type, TypeChecker) {
+  // Check if the constraint is "keyof T" where T is in subst_map
+  match mapped.type_parameter.constraint {
+    Some(constraint) =>
+      match get_keyof_target(constraint, subst_map) {
+        Some(target_type) =>
+          // We have keyof T where T is known - expand the mapped type
+          match target_type {
+            Object(obj) => {
+              // Create properties from the target object
+              let result_props : Map[String, PropertySignature] = Map::new()
+              for entry in obj.properties {
+                let (name, prop) = entry
+                // Substitute the template type with the property type
+                // For { [K in keyof T]: T[K] }, the value is the original property type
+                // For { [K in keyof T]?: T[K] }, add optional modifier
+                let is_readonly = match mapped.readonly_modifier {
+                  Add => true
+                  Remove => false
+                  Unchanged => prop.is_readonly
+                }
+                let is_optional = match mapped.optional_modifier {
+                  Add => true
+                  Remove => false
+                  Unchanged => prop.is_optional
+                }
+                // The template_type might reference the mapped key's value
+                // For T[K], we use the property type
+                let prop_type = substitute_template_type(
+                  mapped.template_type,
+                  mapped.type_parameter.name,
+                  prop.prop_type,
+                  subst_map,
+                )
+                result_props.set(name, {
+                  name,
+                  prop_type,
+                  is_optional,
+                  is_readonly,
+                })
+              }
+              let (info, checker) = create_type_info(checker)
+              (
+                Object({
+                  properties: result_props,
+                  call_signatures: [],
+                  construct_signatures: [],
+                  index_signatures: [],
+                  info,
+                  class_name: None,
+                }),
+                checker,
+              )
+            }
+            _ =>
+              // Can't expand - target is not an object
+              (Mapped(mapped), checker)
+          }
+        None =>
+          // Constraint is not a substitutable keyof - return mapped type as is
+          (Mapped(mapped), checker)
+      }
+    None =>
+      // No constraint - return mapped type as is
+      (Mapped(mapped), checker)
+  }
+}
+
+///|
+/// Check if a type is "keyof T" where T is in the substitution map
+fn get_keyof_target(t : Type, subst_map : Map[String, Type]) -> Type? {
+  match t {
+    // IndexAccess with is_keyof flag represents "keyof T"
+    IndexAccess(ia) =>
+      if ia.is_keyof {
+        // This is a "keyof T" representation
+        match ia.object_type {
+          TypeReference(type_ref) => subst_map.get(type_ref.name)
+          _ => None
+        }
+      } else {
+        // Regular index access T[K]
+        match ia.object_type {
+          TypeReference(type_ref) => subst_map.get(type_ref.name)
+          _ => None
+        }
+      }
+    // TypeReference to a type parameter (fallback case)
+    TypeReference(type_ref) =>
+      // Check if this is a keyof constraint that was simplified
+      subst_map.get(type_ref.name)
+    _ => None
+  }
+}
+
+///|
+/// Substitute the template type (e.g., T[K]) with the actual property type
+fn substitute_template_type(
+  template : Type,
+  key_param : String,
+  prop_type : Type,
+  subst_map : Map[String, Type],
+) -> Type {
+  match template {
+    // IndexAccess like T[K] - return the property type
+    IndexAccess(_) => prop_type
+    // TypeReference - check if it's a type parameter to substitute
+    TypeReference(type_ref) =>
+      match subst_map.get(type_ref.name) {
+        Some(t) => t
+        None =>
+          if type_ref.name == key_param {
+            prop_type
+          } else {
+            template
+          }
+      }
+    // Other types - return as is
+    _ => template
+  }
 }
 
 // ============================================================================

@@ -390,6 +390,7 @@ pub fn v2_to_type(checker : TypeChecker, ty : TypeV2) -> (Type, TypeChecker) {
           object_type: obj_ty,
           index_type: idx_ty,
           info,
+          is_keyof: false,
         }),
         checker,
       )

@@ -190,9 +190,8 @@ test "inspect/complex - intersection type with conflicting properties" {
 
 ///|
 test "inspect/complex - mapped type with readonly violation" {
-  // Note: Mapped type resolution is not fully implemented yet
-  // This test verifies basic mapped type syntax is accepted
-  // Full readonly enforcement would require mapped type expansion
+  // Mapped types are now fully expanded to concrete object types
+  // Readonly enforcement works correctly
   let source =
     #|type MyReadonly<T> = { readonly [K in keyof T]: T[K] };
     #|interface Point { x: number; y: number; }
@@ -200,13 +199,12 @@ test "inspect/complex - mapped type with readonly violation" {
     #|frozen.x = 30;
   let result = inspect_diagnostics(source)
   println(result)
-  // Currently errors because mapped types aren't fully expanded
-  // TODO: When mapped types are implemented, this should error with TS2540
+  // Now correctly errors with TS2540 for readonly violation
   inspect(
     result,
     content=
       #|Found 1 diagnostic(s):
-      #|[1] TS2322: Type 'object' is not assignable to type '{ [K in ...]: ... }' (line 3)
+      #|[1] TS2540: Cannot assign to 'x' because it is a readonly property. (line 4)
       #|
     ,
   )
