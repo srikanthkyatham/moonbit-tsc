@@ -4876,12 +4876,12 @@ fn infer_binary_expression_type(
             // bigint + bigint -> bigint
             bigint_type(checker)
           _ => {
-            let checker = check_numeric_operands(
+            let checker = check_numeric_operands_with_locations(
               checker,
               left_type,
               right_type,
-              bin_expr.operator,
-              get_node_location(BinaryExpression(bin_expr)),
+              get_node_location(bin_expr.left),
+              get_node_location(bin_expr.right),
             )
             number_type(checker)
           }
@@ -4893,12 +4893,12 @@ fn infer_binary_expression_type(
       if type_is_bigint(left_type) && type_is_bigint(right_type) {
         bigint_type(checker)
       } else {
-        let checker = check_numeric_operands(
+        let checker = check_numeric_operands_with_locations(
           checker,
           left_type,
           right_type,
-          bin_expr.operator,
-          get_node_location(BinaryExpression(bin_expr)),
+          get_node_location(bin_expr.left),
+          get_node_location(bin_expr.right),
         )
         number_type(checker)
       }
@@ -4913,12 +4913,12 @@ fn infer_binary_expression_type(
       if type_is_bigint(left_type) && type_is_bigint(right_type) {
         bigint_type(checker)
       } else {
-        let checker = check_numeric_operands(
+        let checker = check_numeric_operands_with_locations(
           checker,
           left_type,
           right_type,
-          bin_expr.operator,
-          get_node_location(BinaryExpression(bin_expr)),
+          get_node_location(bin_expr.left),
+          get_node_location(bin_expr.right),
         )
         number_type(checker)
       }
@@ -9588,32 +9588,84 @@ fn binary_operator_to_string(op : BinaryOperator) -> String {
 }
 
 ///|
-/// Check numeric operands
-/// Emits TS2365: Operator 'X' cannot be applied to types 'Y' and 'Z'
+/// Check numeric operands for arithmetic operations
+/// Emits TS2362 for left-hand side and TS2363 for right-hand side
+/// Uses separate locations for left and right operand errors
 fn check_numeric_operands(
   checker : TypeChecker,
   left : Type,
   right : Type,
-  operator : BinaryOperator,
+  _operator : BinaryOperator,
   location : SourceLocation,
 ) -> TypeChecker {
   let left_is_numeric = is_numeric_type(left)
   let right_is_numeric = is_numeric_type(right)
 
-  // If both operands are non-numeric or one is non-numeric, emit TS2365
-  if not(left_is_numeric) || not(right_is_numeric) {
-    let op_str = binary_operator_to_string(operator)
-    let left_str = type_to_string(left)
-    let right_str = type_to_string(right)
+  // TS2362: The left-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type
+  let checker = if not(left_is_numeric) {
     add_diagnostic_with_code(
       checker,
-      "Operator '\{op_str}' cannot be applied to types '\{left_str}' and '\{right_str}'",
+      "The left-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.",
       location,
-      TS2365,
+      TS2362,
     )
   } else {
     checker
   }
+
+  // TS2363: The right-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type
+  let checker = if not(right_is_numeric) {
+    add_diagnostic_with_code(
+      checker,
+      "The right-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.",
+      location,
+      TS2363,
+    )
+  } else {
+    checker
+  }
+
+  checker
+}
+
+///|
+/// Check numeric operands for arithmetic operations with separate operand locations
+/// Emits TS2362 for left-hand side and TS2363 for right-hand side
+fn check_numeric_operands_with_locations(
+  checker : TypeChecker,
+  left : Type,
+  right : Type,
+  left_location : SourceLocation,
+  right_location : SourceLocation,
+) -> TypeChecker {
+  let left_is_numeric = is_numeric_type(left)
+  let right_is_numeric = is_numeric_type(right)
+
+  // TS2362: The left-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type
+  let checker = if not(left_is_numeric) {
+    add_diagnostic_with_code(
+      checker,
+      "The left-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.",
+      left_location,
+      TS2362,
+    )
+  } else {
+    checker
+  }
+
+  // TS2363: The right-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type
+  let checker = if not(right_is_numeric) {
+    add_diagnostic_with_code(
+      checker,
+      "The right-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.",
+      right_location,
+      TS2363,
+    )
+  } else {
+    checker
+  }
+
+  checker
 }
 
 ///|

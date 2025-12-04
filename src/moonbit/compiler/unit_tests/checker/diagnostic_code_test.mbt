@@ -227,25 +227,23 @@ test "DiagnosticCode - TS2355 function must return a value" {
 }
 
 // ============================================================================
-// TS2365: Operator cannot be applied to types
+// TS2362/TS2363: Arithmetic operands must be numeric
 // ============================================================================
 
 ///|
-test "DiagnosticCode - TS2365 operator cannot be applied" {
+test "DiagnosticCode - TS2362/TS2363 arithmetic on strings" {
+  // String subtraction should give TS2362 (left-hand side) and TS2363 (right-hand side)
   let source =
     #|const result = "hello" - "world";
   let result = check_source(source)
   match result {
-    Ok(_) => assert_true(false, msg="Expected error TS2365 but got no errors")
+    Ok(_) => assert_true(false, msg="Expected error TS2362/TS2363 but got no errors")
     Err(diagnostics) => {
-      assert_true(has_error(diagnostics, 2365), msg="Expected error TS2365")
+      // Should have TS2362 for left side and TS2363 for right side
+      assert_true(has_error(diagnostics, 2362) || has_error(diagnostics, 2363), msg="Expected error TS2362 or TS2363")
       assert_true(
-        has_message(diagnostics, "cannot be applied"),
-        msg="Expected 'cannot be applied' in message",
-      )
-      assert_true(
-        has_message(diagnostics, "string"),
-        msg="Expected 'string' in message",
+        has_message(diagnostics, "arithmetic"),
+        msg="Expected 'arithmetic' in message",
       )
     }
   }

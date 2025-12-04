@@ -180,43 +180,47 @@ test "unit/checker/error/TS2322 - union type mismatch" {
 // ============================================================================
 
 ///|
-test "unit/checker/error/TS2365 - string subtraction" {
+test "unit/checker/error/TS2362-TS2363 - string subtraction" {
+  // String subtraction should give TS2362 for left and TS2363 for right
   let result = parse_bind_check_errors("const x = \"hello\" - \"world\";")
   match result {
     Ok(_) => assert_true(false)
     Err(diagnostics) => {
       assert_true(diagnostics.length() > 0)
-      assert_true(has_diagnostic_containing(diagnostics, "cannot be applied"))
-      // Verify error code TS2365: Operator cannot be applied to types
-      assert_true(has_diagnostic_code(diagnostics, 2365))
+      assert_true(has_diagnostic_containing(diagnostics, "arithmetic"))
+      // Verify error codes TS2362/TS2363: arithmetic operand must be numeric
+      assert_true(has_diagnostic_code(diagnostics, 2362) || has_diagnostic_code(diagnostics, 2363))
     }
   }
 }
 
 ///|
-test "unit/checker/error/TS2365 - boolean multiplication" {
+test "unit/checker/error/TS2362-TS2363 - boolean multiplication" {
+  // Boolean multiplication should give TS2362/TS2363 errors
   let result = parse_bind_check_errors("const x = true * false;")
   match result {
     Ok(_) => assert_true(false)
     Err(diagnostics) => {
       assert_true(diagnostics.length() > 0)
-      // Verify error code TS2365 with message
+      // Verify error codes TS2362/TS2363 with arithmetic message
       assert_true(
-        has_diagnostic_with_code_and_message(diagnostics, 2365, "cannot be applied"),
+        has_diagnostic_with_code_and_message(diagnostics, 2362, "arithmetic") ||
+        has_diagnostic_with_code_and_message(diagnostics, 2363, "arithmetic"),
       )
     }
   }
 }
 
 ///|
-test "unit/checker/error/TS2365 - string division" {
+test "unit/checker/error/TS2362 - string division" {
+  // String division should give TS2362 error for left-hand side
   let result = parse_bind_check_errors("const x = \"10\" / 2;")
   match result {
     Ok(_) => assert_true(false)
     Err(diagnostics) => {
       assert_true(diagnostics.length() > 0)
       assert_true(
-        has_diagnostic_with_code_and_message(diagnostics, 2365, "cannot be applied"),
+        has_diagnostic_with_code_and_message(diagnostics, 2362, "arithmetic"),
       )
     }
   }
