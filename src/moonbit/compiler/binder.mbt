@@ -2332,6 +2332,9 @@ pub fn can_merge_symbols(a : Symbol, b : Symbol) -> Bool {
     // Namespace + Namespace = merged namespace
     (Module, Module) => true
 
+    // Enum + Enum = merged enum (for declaration merging)
+    (Enum, Enum) => true
+
     // Class + Interface = class implements interface
     (Class, Interface) | (Interface, Class) => true
 

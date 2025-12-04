@@ -7147,9 +7147,10 @@ test "unit/enum/enum-merging-three-only-third-error - third merged enum without 
   match result {
     Ok(_) => fail("Expected TS2432 error for third merged enum")
     Err(diagnostics) => {
-      // Should have errors on B and C (both missing initializers)
+      // B is first to omit initializer (no error), C is second to omit (gets error)
+      // TypeScript only reports on subsequent declarations that omit, not the first one
       let error_count = diagnostics.iter().filter(fn(d) { d.code == 2432 }).count()
-      assert_true(error_count == 2)
+      assert_true(error_count == 1)
     }
   }
 }
@@ -7169,6 +7170,89 @@ test "unit/enum/enum-merging-first-no-init-second-with-init - valid when only fi
     Err(diagnostics) => {
       // Should not have TS2432 error
       assert_false(has_error(diagnostics, 2432))
+    }
+  }
+}
+
+///|
+test "unit/enum/namespace-enum-merging-valid - namespace enums with initializers are valid" {
+  let source =
+    #|namespace M {
+    #|  export enum E { A = 0 }
+    #|}
+    #|namespace M {
+    #|  export enum E { B = 1 }
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(tf) => assert_true(tf.diagnostics.length() == 0)
+    Err(_) => fail("Namespace enums with initializers should be valid")
+  }
+}
+
+///|
+test "unit/enum/namespace-enum-merging-ts2432 - namespace enum merging reports TS2432" {
+  let source =
+    #|namespace M {
+    #|  export enum E { A }
+    #|}
+    #|namespace M {
+    #|  export enum E { B }
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => fail("Expected TS2432 error for namespace merged enum")
+    Err(diagnostics) => {
+      assert_true(has_error(diagnostics, 2432))
+      assert_true(has_message(diagnostics, "only one declaration can omit"))
+    }
+  }
+}
+
+///|
+test "unit/enum/namespace-enum-merging-three-decls - three namespace enum decls with two errors" {
+  let source =
+    #|namespace M1 {
+    #|  export enum E1 { A = 0 }
+    #|}
+    #|namespace M1 {
+    #|  export enum E1 { B }
+    #|}
+    #|namespace M1 {
+    #|  export enum E1 { C }
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => fail("Expected TS2432 errors for namespace merged enums")
+    Err(diagnostics) => {
+      // Should have 2 errors - on B and C (both missing initializers after first has init)
+      let error_count = diagnostics.iter().filter(fn(d) { d.code == 2432 }).count()
+      // Actually only C should have error since B is first to omit, C is second
+      assert_true(error_count == 1)
+    }
+  }
+}
+
+///|
+test "unit/enum/namespace-enum-merging-two-omit - namespace enum with two omitting initializers" {
+  let source =
+    #|namespace M2 {
+    #|  export enum E1 { A }
+    #|}
+    #|namespace M2 {
+    #|  export enum E1 { B = 0 }
+    #|}
+    #|namespace M2 {
+    #|  export enum E1 { C }
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => fail("Expected TS2432 error for namespace merged enum")
+    Err(diagnostics) => {
+      // A omits, B has init, C omits -> C should get error
+      assert_true(has_error(diagnostics, 2432))
+      let error_count = diagnostics.iter().filter(fn(d) { d.code == 2432 }).count()
+      assert_true(error_count == 1)
     }
   }
 }

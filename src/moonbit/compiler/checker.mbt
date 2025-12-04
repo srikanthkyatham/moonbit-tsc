@@ -11844,39 +11844,33 @@ fn check_enum_merging_first_initializer(
     None => {
       // This declaration omits the initializer for first element
       // Check if there are other declarations that also omit it
-      // First check namespace_symbols (for namespace-scoped enums)
-      let enum_symbol_opt : Symbol? = match checker.namespace_symbols.get(
-          enum_decl.name,
-        ) {
-        Some(sym) => Some(sym)
-        None =>
-          // Fall back to global scope
-          match checker.global_scope {
-            Some(scope) => scope.symbols.get(enum_decl.name)
-            None => None
-          }
-      }
-      match enum_symbol_opt {
+      // Use lookup_symbol which checks namespace_symbols first, then global scope
+      match lookup_symbol(checker, enum_decl.name) {
         Some(enum_symbol) => {
-          // Count declarations that omit initializer for first element
-          let mut count_without_init = 0
+          // Check if any EARLIER declaration (before this one in source order) already omits the first initializer
+          // TypeScript reports TS2432 only on declarations that come after another declaration
+          // that already omitted an initializer
+          let mut earlier_omits_initializer = false
           for decl in enum_symbol.declarations {
             match decl {
-              EnumDeclaration(prev_enum) => {
-                if prev_enum.members.length() > 0 {
-                  let prev_first = prev_enum.members[0]
-                  match prev_first.initializer {
-                    None => count_without_init = count_without_init + 1
+              EnumDeclaration(prev_enum) =>
+                // Only consider declarations that come BEFORE the current one
+                // (their start offset is less than ours)
+                if prev_enum.location.start.offset < enum_decl.location.start.offset &&
+                   prev_enum.members.length() > 0 {
+                  match prev_enum.members[0].initializer {
+                    None => {
+                      earlier_omits_initializer = true
+                      break
+                    }
                     Some(_) => ()
                   }
                 }
-              }
               _ => ()
             }
           }
-          // If more than one declaration omits the first initializer, error on this one
-          // (we only report on the current declaration, not the first one)
-          if count_without_init > 1 {
+          // If an earlier declaration also omits the first initializer, error on this one
+          if earlier_omits_initializer {
             add_diagnostic_with_code(
               checker,
               "In an enum with multiple declarations, only one declaration can omit an initializer for its first enum element.",
