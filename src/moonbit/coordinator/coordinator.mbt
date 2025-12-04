@@ -253,19 +253,25 @@ fn compile_single(
 
   let start_time = @async.now()
 
-  // Use compile_source_with_external_types if external types are provided
-  let result = match options.external_types_json {
-    Some(external_types_json) =>
-      // Parse the JSON string into ExternalTypeRegistry
-      match @compiler.ExternalTypeRegistry::from_json(external_types_json) {
-        Some(registry) =>
-          @compiler.compile_source_with_external_types(source, file_path, compile_options, registry)
-        None =>
-          // If parsing fails, fall back to regular compilation
-          @compiler.compile_source(source, file_path, compile_options)
-      }
-    None =>
-      @compiler.compile_source(source, file_path, compile_options)
+  // Check if this is a multi-file test (contains @filename: directives)
+  let result = if @compiler.is_multi_file_test(source) {
+    // Use multi-file compilation for tests with @filename: directives
+    @compiler.compile_multi_file_test(source, file_path, compile_options)
+  } else {
+    // Use compile_source_with_external_types if external types are provided
+    match options.external_types_json {
+      Some(external_types_json) =>
+        // Parse the JSON string into ExternalTypeRegistry
+        match @compiler.ExternalTypeRegistry::from_json(external_types_json) {
+          Some(registry) =>
+            @compiler.compile_source_with_external_types(source, file_path, compile_options, registry)
+          None =>
+            // If parsing fails, fall back to regular compilation
+            @compiler.compile_source(source, file_path, compile_options)
+        }
+      None =>
+        @compiler.compile_source(source, file_path, compile_options)
+    }
   }
 
   let end_time = @async.now()

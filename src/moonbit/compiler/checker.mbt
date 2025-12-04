@@ -5031,6 +5031,7 @@ fn infer_call_expression_type(
       | NumberLiteral(_, _)
       | StringLiteral(_, _)
       | BooleanLiteral(_, _)
+      | TemplateLiteral(_)
       | Never(_)
       | Symbol(_) => {
         // Primitive types are not callable
@@ -7471,6 +7472,7 @@ fn infer_new_expression_type(
       | NumberLiteral(_, _)
       | StringLiteral(_, _)
       | BooleanLiteral(_, _)
+      | TemplateLiteral(_)
       | Never(_)
       | Symbol(_) =>
         add_diagnostic_with_code(
@@ -9385,7 +9387,7 @@ fn check_instanceof_operands(
     Number(_) | Boolean(_) | String(_) | Void(_) | Undefined(_) | NumberLiteral(
       _,
       _,
-    ) | StringLiteral(_, _) | BooleanLiteral(_, _) =>
+    ) | StringLiteral(_, _) | BooleanLiteral(_, _) | TemplateLiteral(_) =>
       add_diagnostic_with_code(
         checker,
         "The left-hand side of an 'instanceof' expression must be of type 'any', an object type or a type parameter, but here has type '\{type_to_string(left_type)}'",
@@ -9401,7 +9403,7 @@ fn check_instanceof_operands(
     Number(_) | Boolean(_) | String(_) | Void(_) | Undefined(_) | Null(_) | NumberLiteral(
       _,
       _,
-    ) | StringLiteral(_, _) | BooleanLiteral(_, _) =>
+    ) | StringLiteral(_, _) | BooleanLiteral(_, _) | TemplateLiteral(_) =>
       add_diagnostic_with_code(
         checker,
         "The right-hand side of an 'instanceof' expression must be of type 'any' or of a type assignable to the 'Function' interface type, but here has type '\{type_to_string(right_type)}'",

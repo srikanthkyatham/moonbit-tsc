@@ -537,3 +537,327 @@ pub fn extract_reference_paths(
   }
   paths
 }
+
+///|
+/// Represents a virtual file extracted from a multi-file test
+pub(all) struct VirtualFile {
+  filename : String
+  content : String
+} derive(Show)
+
+///|
+/// Represents test options extracted from directives
+pub(all) struct TestOptions {
+  module_kind : String? // "commonjs", "esnext", etc.
+  target : String? // "es5", "es2015", etc.
+  strict : Bool
+  no_emit : Bool
+  lib : Array[String] // Library files to include
+} derive(Show)
+
+///|
+/// Result of splitting a multi-file test
+pub(all) struct MultiFileTest {
+  files : Array[VirtualFile]
+  options : TestOptions
+} derive(Show)
+
+///|
+/// Default test options
+pub fn TestOptions::default() -> TestOptions {
+  {
+    module_kind: None,
+    target: None,
+    strict: false,
+    no_emit: false,
+    lib: [],
+  }
+}
+
+///|
+/// Trim leading whitespace from string
+fn ffi_trim_start(s : String) -> String {
+  let chars = s.to_array()
+  let len = chars.length()
+  if len == 0 {
+    return ""
+  }
+  let mut start = 0
+  while start < len &&
+        (chars[start] == ' ' || chars[start] == '\t' || chars[start] == '\r' ||
+        chars[start] == '\n') {
+    start = start + 1
+  }
+  if start == 0 {
+    return s
+  }
+  let result = StringBuilder::new()
+  for i = start; i < len; i = i + 1 {
+    result.write_char(chars[i])
+  }
+  result.to_string()
+}
+
+///|
+/// Trim trailing whitespace from string
+fn ffi_trim_end(s : String) -> String {
+  let chars = s.to_array()
+  let len = chars.length()
+  if len == 0 {
+    return ""
+  }
+  let mut end = len
+  while end > 0 &&
+        (chars[end - 1] == ' ' || chars[end - 1] == '\t' ||
+        chars[end - 1] == '\r' || chars[end - 1] == '\n') {
+    end = end - 1
+  }
+  if end == len {
+    return s
+  }
+  let result = StringBuilder::new()
+  for i = 0; i < end; i = i + 1 {
+    result.write_char(chars[i])
+  }
+  result.to_string()
+}
+
+///|
+/// Trim whitespace from both ends
+fn ffi_trim(s : String) -> String {
+  ffi_trim_end(ffi_trim_start(s))
+}
+
+///|
+/// Get substring from start index to end of string
+fn ffi_substring_from(s : String, start : Int) -> String {
+  let chars = s.to_array()
+  let len = chars.length()
+  if start >= len {
+    return ""
+  }
+  let result = StringBuilder::new()
+  for i = start; i < len; i = i + 1 {
+    result.write_char(chars[i])
+  }
+  result.to_string()
+}
+
+///|
+/// Split a multi-file test content into separate virtual files
+/// Handles @filename: directives and extracts test options from @xxx: directives
+pub fn split_multi_file_test(
+  source : String,
+  base_path : String,
+) -> MultiFileTest {
+  let files : Array[VirtualFile] = []
+  let mut options = TestOptions::default()
+  let lines = split_lines(source)
+  let mut current_filename : String? = None
+  let mut current_content = StringBuilder::new()
+
+  for line in lines {
+    let trimmed = ffi_trim_start(line)
+    if trimmed.has_prefix("// @") {
+      // This is a directive line
+      let directive = ffi_substring_from(trimmed, 4)
+      if directive.has_prefix("filename:") {
+        // Save current file if any
+        match current_filename {
+          Some(fname) => {
+            let content_str = current_content.to_string()
+            files.push({ filename: fname, content: content_str })
+            current_content = StringBuilder::new()
+          }
+          None => ()
+        }
+        // Start new file
+        let filename = ffi_trim(ffi_substring_from(directive, 9))
+        current_filename = Some(filename)
+      } else if directive.has_prefix("module:") {
+        let module_kind = ffi_trim(ffi_substring_from(directive, 7))
+        options = { ..options, module_kind: Some(module_kind) }
+      } else if directive.has_prefix("target:") {
+        let target = ffi_trim(ffi_substring_from(directive, 7))
+        options = { ..options, target: Some(target) }
+      } else if directive.has_prefix("strict:") {
+        let strict_val = ffi_trim(ffi_substring_from(directive, 7))
+        options = { ..options, strict: strict_val == "true" }
+      } else if directive.has_prefix("noEmit:") {
+        let no_emit_val = ffi_trim(ffi_substring_from(directive, 7))
+        options = { ..options, no_emit: no_emit_val == "true" }
+      } else if directive.has_prefix("lib:") {
+        let lib_val = ffi_trim(ffi_substring_from(directive, 4))
+        let libs = ffi_split_by_comma(lib_val)
+        options = { ..options, lib: libs }
+      }
+      // Skip other directives (don't add to content)
+    } else {
+      // Regular content line - add to current file
+      current_content.write_string(line)
+      current_content.write_char('\n')
+    }
+  }
+
+  // Save the last file
+  match current_filename {
+    Some(fname) => {
+      let content_str = current_content.to_string()
+      files.push({ filename: fname, content: content_str })
+    }
+    None => {
+      // No @filename: directive found, treat entire content as single file
+      let content_str = current_content.to_string()
+      if content_str.length() > 0 {
+        files.push({ filename: base_path, content: content_str })
+      }
+    }
+  }
+
+  { files, options }
+}
+
+///|
+/// Split source string by newlines
+fn split_lines(source : String) -> Array[String] {
+  let lines : Array[String] = []
+  let current = StringBuilder::new()
+  for c in source {
+    if c == '\n' {
+      lines.push(current.to_string())
+      current.reset()
+    } else if c != '\r' {
+      current.write_char(c)
+    }
+  }
+  // Don't forget the last line
+  let last = current.to_string()
+  if last.length() > 0 {
+    lines.push(last)
+  }
+  lines
+}
+
+///|
+/// Split a string by comma (for multi-file test parsing)
+fn ffi_split_by_comma(s : String) -> Array[String] {
+  let parts : Array[String] = []
+  let current = StringBuilder::new()
+  for c in s {
+    if c == ',' {
+      let part = ffi_trim(current.to_string())
+      if part.length() > 0 {
+        parts.push(part)
+      }
+      current.reset()
+    } else {
+      current.write_char(c)
+    }
+  }
+  let last = ffi_trim(current.to_string())
+  if last.length() > 0 {
+    parts.push(last)
+  }
+  parts
+}
+
+///|
+/// Check if content contains multi-file test directives
+pub fn is_multi_file_test(source : String) -> Bool {
+  source.contains("// @filename:")
+}
+
+///|
+/// Compile a multi-file test
+/// Returns diagnostics for all files combined
+pub fn compile_multi_file_test(
+  source : String,
+  base_path : String,
+  options : CompileOptions,
+) -> CompileResult {
+  // Check if this is actually a multi-file test
+  if not(is_multi_file_test(source)) {
+    // Single file test - compile directly
+    return compile_source(source, base_path, options)
+  }
+
+  // Split into virtual files
+  let multi_test = split_multi_file_test(source, base_path)
+
+  // Apply test options
+  let effective_options = apply_test_options(options, multi_test.options)
+
+  // If no files were extracted, just compile the original
+  if multi_test.files.length() == 0 {
+    return compile_source(source, base_path, effective_options)
+  }
+
+  // Build external type registry from all files first
+  // This allows cross-file type checking
+  let registry = ExternalTypeRegistry::new()
+  let all_diagnostics : Array[Diagnostic] = []
+
+  // First pass: parse and extract types from all files
+  for file in multi_test.files {
+    match extract_module_types_from_source(file.content, file.filename) {
+      Some(module_types) => registry.register_module(file.filename, module_types)
+      None => ()
+    }
+  }
+
+  // Second pass: compile each file with the registry
+  for file in multi_test.files {
+    let result = compile_source_with_external_types(
+      file.content,
+      file.filename,
+      effective_options,
+      registry,
+    )
+    for diag in result.diagnostics {
+      all_diagnostics.push(diag)
+    }
+  }
+
+  // Return combined result
+  {
+    success: true,
+    javascript: "",
+    source_map: None,
+    declaration: None,
+    diagnostics: all_diagnostics,
+    module_types_json: None,
+  }
+}
+
+///|
+/// Apply test options to compile options
+fn apply_test_options(
+  base_options : CompileOptions,
+  test_options : TestOptions,
+) -> CompileOptions {
+  let mut opts = base_options
+  match test_options.module_kind {
+    Some(mk) => {
+      let module_kind = match mk.to_lower() {
+        "commonjs" | "commonjs" => CommonJS
+        _ => ESModule
+      }
+      opts = { ..opts, module_kind }
+    }
+    None => ()
+  }
+  match test_options.target {
+    Some(t) => {
+      let target = parse_target(t)
+      opts = { ..opts, target }
+    }
+    None => ()
+  }
+  if test_options.strict {
+    opts = { ..opts, strict: true }
+  }
+  if test_options.no_emit {
+    opts = { ..opts, no_emit: true }
+  }
+  opts
+}
