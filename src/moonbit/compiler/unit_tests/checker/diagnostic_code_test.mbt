@@ -575,12 +575,12 @@ test "DiagnosticCode - TS2462 rest element cannot have initializer" {
 }
 
 // ============================================================================
-// TS2465: await only in async function
+// TS1308: await only in async function (was TS2465)
 // ============================================================================
 
 ///|
-test "DiagnosticCode - TS2465 await only in async function" {
-  // TS2465: 'await' expressions are only allowed within async functions
+test "DiagnosticCode - TS1308 await only in async function" {
+  // TS1308: 'await' expressions are only allowed within async functions
   let source =
     #|function syncFunction() {
     #|  await Promise.resolve();
@@ -588,11 +588,11 @@ test "DiagnosticCode - TS2465 await only in async function" {
   let result = check_source(source)
   match result {
     Ok(_) => {
-      println("ERROR: Expected TS2465 error for await in non-async function")
+      println("ERROR: Expected TS1308 error for await in non-async function")
       assert_true(false)
     }
     Err(diagnostics) => {
-      assert_true(has_error(diagnostics, 2465))
+      assert_true(has_error(diagnostics, 1308))
       assert_true(has_message(diagnostics, "await"))
     }
   }
@@ -607,13 +607,13 @@ test "DiagnosticCode - valid await in async function" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2465)))
+    Err(diagnostics) => assert_true(not(has_error(diagnostics, 1308)))
   }
 }
 
 ///|
-test "DiagnosticCode - TS2465 await in arrow function" {
-  // TS2465: 'await' expressions are only allowed within async functions
+test "DiagnosticCode - TS1308 await in arrow function" {
+  // TS1308: 'await' expressions are only allowed within async functions
   let source =
     #|const fn = () => {
     #|  await Promise.resolve();
@@ -622,12 +622,12 @@ test "DiagnosticCode - TS2465 await in arrow function" {
   match result {
     Ok(_) => {
       println(
-        "ERROR: Expected TS2465 error for await in non-async arrow function",
+        "ERROR: Expected TS1308 error for await in non-async arrow function",
       )
       assert_true(false)
     }
     Err(diagnostics) => {
-      assert_true(has_error(diagnostics, 2465))
+      assert_true(has_error(diagnostics, 1308))
       assert_true(has_message(diagnostics, "await"))
     }
   }
@@ -642,7 +642,7 @@ test "DiagnosticCode - valid await in async arrow function" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2465)))
+    Err(diagnostics) => assert_true(not(has_error(diagnostics, 1308)))
   }
 }
 
@@ -7171,6 +7171,121 @@ test "unit/enum/enum-merging-first-no-init-second-with-init - valid when only fi
     Err(diagnostics) => {
       // Should not have TS2432 error
       assert_false(has_error(diagnostics, 2432))
+    }
+  }
+}
+
+// ============================================================================
+// TS1308: 'await' expressions are only allowed within async functions
+// ============================================================================
+
+///|
+test "unit/enum/TS1308-await-in-enum-initializer - await not allowed in enum" {
+  let source =
+    #|async function* test(x: Promise<number>) {
+    #|  enum E {
+    #|    foo = await x
+    #|  }
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(tf) => {
+      // Should have TS1308 error
+      assert_true(has_error(tf.diagnostics, 1308))
+      assert_true(has_message(tf.diagnostics, "await"))
+    }
+    Err(diagnostics) => {
+      assert_true(has_error(diagnostics, 1308))
+      assert_true(has_message(diagnostics, "await"))
+    }
+  }
+}
+
+///|
+test "unit/enum/TS1308-await-in-normal-async-is-ok - await allowed in async function body" {
+  let source =
+    #|async function test(x: Promise<number>) {
+    #|  const result = await x;
+    #|  return result;
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(tf) => {
+      // Should NOT have TS1308 error
+      assert_false(has_error(tf.diagnostics, 1308))
+    }
+    Err(diagnostics) => {
+      // Parse/bind errors are ok, but should not have TS1308
+      assert_false(has_error(diagnostics, 1308))
+    }
+  }
+}
+
+// ============================================================================
+// TS1163: A 'yield' expression is only allowed in a generator body
+// ============================================================================
+
+///|
+test "unit/enum/TS1163-yield-in-enum-initializer - yield not allowed in enum" {
+  let source =
+    #|function* test() {
+    #|  enum E {
+    #|    foo = yield 1
+    #|  }
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(tf) => {
+      // Should have TS1163 error
+      assert_true(has_error(tf.diagnostics, 1163))
+      assert_true(has_message(tf.diagnostics, "yield"))
+    }
+    Err(diagnostics) => {
+      assert_true(has_error(diagnostics, 1163))
+      assert_true(has_message(diagnostics, "yield"))
+    }
+  }
+}
+
+///|
+test "unit/enum/TS1163-yield-in-generator-is-ok - yield allowed in generator body" {
+  let source =
+    #|function* test() {
+    #|  yield 1;
+    #|  yield 2;
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(tf) => {
+      // Should NOT have TS1163 error
+      assert_false(has_error(tf.diagnostics, 1163))
+    }
+    Err(diagnostics) => {
+      // Parse/bind errors are ok, but should not have TS1163
+      assert_false(has_error(diagnostics, 1163))
+    }
+  }
+}
+
+///|
+test "unit/enum/TS1163-TS1308-both-in-enum - both await and yield in async generator enum" {
+  let source =
+    #|async function* test(x: Promise<number>) {
+    #|  enum E {
+    #|    foo = await x,
+    #|    bar = yield 1
+    #|  }
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(tf) => {
+      // Should have both TS1308 and TS1163 errors
+      assert_true(has_error(tf.diagnostics, 1308))
+      assert_true(has_error(tf.diagnostics, 1163))
+    }
+    Err(diagnostics) => {
+      assert_true(has_error(diagnostics, 1308))
+      assert_true(has_error(diagnostics, 1163))
     }
   }
 }

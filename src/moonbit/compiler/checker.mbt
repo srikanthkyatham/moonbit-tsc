@@ -8053,13 +8053,13 @@ fn infer_await_expression_type(
   checker : TypeChecker,
   ae : AwaitExpression,
 ) -> (Type, TypeChecker) {
-  // TS2465: 'await' expressions are only allowed within async functions
+  // TS1308: 'await' expressions are only allowed within async functions and at top level of modules
   let checker = if not(is_in_async_function(checker)) {
     add_diagnostic_with_code(
       checker,
       "'await' expressions are only allowed within async functions and at the top levels of modules.",
       ae.location,
-      TS2465,
+      TS1308,
     )
   } else {
     checker
@@ -8085,6 +8085,17 @@ fn infer_yield_expression_type(
   checker : TypeChecker,
   ye : YieldExpression,
 ) -> (Type, TypeChecker) {
+  // TS1163: A 'yield' expression is only allowed in a generator body
+  let checker = if not(is_in_generator_function(checker)) {
+    add_diagnostic_with_code(
+      checker,
+      "A 'yield' expression is only allowed in a generator body.",
+      ye.location,
+      TS1163,
+    )
+  } else {
+    checker
+  }
   // Get the type of the yielded expression if present
   match ye.expression {
     Some(expr) => {
@@ -11705,6 +11716,13 @@ fn check_enum_declaration(
   // an initializer for its first enum element
   let checker = check_enum_merging_first_initializer(checker, enum_decl)
 
+  // Save and reset async/generator context for enum body
+  // Enum initializers are evaluated in a static context, not the function's dynamic context
+  // This ensures await/yield in enum initializers will trigger TS1308/TS1163 errors
+  let saved_async_depth = checker.async_function_depth
+  let saved_generator_depth = checker.generator_function_depth
+  let checker = { ..checker, async_function_depth: 0, generator_function_depth: 0 }
+
   // Collect all enum member names for forward reference checking
   let all_member_names : Map[String, Bool] = Map::new()
   for mem in enum_decl.members {
@@ -11721,6 +11739,13 @@ fn check_enum_declaration(
     all_member_names,
     enum_decl.name,
   )
+
+  // Restore async/generator context
+  let checker = {
+    ..checker,
+    async_function_depth: saved_async_depth,
+    generator_function_depth: saved_generator_depth,
+  }
 
   // Pop the local scope
   pop_local_scope(checker)

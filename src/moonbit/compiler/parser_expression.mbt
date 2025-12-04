@@ -329,7 +329,10 @@ fn parse_unary_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
           )
         }
         _ =>
-          match parse_expression(parser) {
+          // Use parse_assignment_expression instead of parse_expression
+          // to avoid consuming commas that belong to the enclosing context
+          // (e.g., enum member lists, function arguments)
+          match parse_assignment_expression(parser) {
             Ok((expr, parser)) => {
               let parser = decrement_depth(parser)
               return Ok(
