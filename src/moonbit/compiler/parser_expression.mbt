@@ -1114,7 +1114,24 @@ fn parse_argument_list(parser : Parser) -> (Array[Node], Parser) {
   }
   let mut should_continue = true
   while should_continue {
-    match parse_assignment_expression(parser) {
+    // Check for spread operator in argument
+    let arg_result = match current_token(parser) {
+      DotDotDot(loc) => {
+        parser = advance_parser(parser) // consume ...
+        match parse_assignment_expression(parser) {
+          Ok((expr, p)) => {
+            let spread_expr = Node::SpreadExpression(SpreadExpression::{
+              expression: expr,
+              location: loc,
+            })
+            Ok((spread_expr, p))
+          }
+          Err(p) => Err(p)
+        }
+      }
+      _ => parse_assignment_expression(parser)
+    }
+    match arg_result {
       Ok((arg, next_parser)) => {
         arguments.push(arg)
         parser = next_parser
