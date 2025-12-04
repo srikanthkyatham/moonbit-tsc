@@ -869,10 +869,14 @@ fn bind_enum_declaration(
   // Push container for enum body
   let binder = push_container(binder, ContainerKind::EnumDeclaration)
 
+  // Push scope for enum members (so member names don't conflict with other enums)
+  let binder = push_scope(binder)
+
   // Bind enum members
   let binder = bind_enum_members(binder, enum_decl.members)
 
-  // Pop container
+  // Pop scope and container
+  let binder = pop_scope(binder)
   pop_container(binder)
 }
 
@@ -1925,6 +1929,9 @@ fn declare_symbol(binder : Binder, name : String, symbol : Symbol) -> Binder {
       // Allow namespace merging
       let is_namespace_merge = existing_symbol.kind == SymbolKind::Module &&
         symbol.kind == SymbolKind::Module
+      // Allow enum merging (multiple enum declarations with same name)
+      let is_enum_merge = existing_symbol.kind == SymbolKind::Enum &&
+        symbol.kind == SymbolKind::Enum
       // Allow interface + namespace merging
       let is_interface_namespace_merge = (
           existing_symbol.kind == SymbolKind::Interface &&
@@ -1945,12 +1952,14 @@ fn declare_symbol(binder : Binder, name : String, symbol : Symbol) -> Binder {
         is_getter_setter_pair ||
         is_interface_merge ||
         is_namespace_merge ||
+        is_enum_merge ||
         is_interface_namespace_merge ||
         is_var_merge {
         // Overload, getter/setter pair, or mergeable declaration - allow it
-        // For interface/namespace merging or function overloads, merge the symbols
+        // For interface/namespace/enum merging or function overloads, merge the symbols
         if is_interface_merge ||
           is_namespace_merge ||
+          is_enum_merge ||
           is_interface_namespace_merge {
           // TS2687: Check that all declarations have identical modifiers
           let has_modifier_mismatch = existing_symbol.flags.is_export !=

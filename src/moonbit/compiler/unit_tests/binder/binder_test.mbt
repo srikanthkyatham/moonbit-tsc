@@ -636,10 +636,11 @@ test "enum container creates correct scope for members" {
     Ok(bound_file) => {
       // Enum should be in global scope
       assert_true(bound_file.global_scope.symbols.contains("Status"))
-      // Enum members should also be bound (in global scope for TypeScript)
-      assert_true(bound_file.global_scope.symbols.contains("Active"))
-      assert_true(bound_file.global_scope.symbols.contains("Inactive"))
-      assert_true(bound_file.global_scope.symbols.contains("Pending"))
+      // Enum members should NOT be in global scope - they are scoped to the enum
+      // They are accessed as Status.Active, not just Active
+      assert_false(bound_file.global_scope.symbols.contains("Active"))
+      assert_false(bound_file.global_scope.symbols.contains("Inactive"))
+      assert_false(bound_file.global_scope.symbols.contains("Pending"))
     }
     Err(_) => assert_true(false)
   }

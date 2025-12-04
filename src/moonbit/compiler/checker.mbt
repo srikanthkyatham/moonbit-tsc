@@ -11463,6 +11463,9 @@ fn check_enum_declaration(
   checker : TypeChecker,
   enum_decl : EnumDeclaration,
 ) -> TypeChecker {
+  // Push a local scope for enum members so they can reference each other
+  let checker = push_local_scope(checker)
+
   // Collect all enum member names for forward reference checking
   let all_member_names : Map[String, Bool] = Map::new()
   for mem in enum_decl.members {
@@ -11470,14 +11473,18 @@ fn check_enum_declaration(
   }
   // Track seen members as we process them
   let seen_members : Map[String, Bool] = Map::new()
-  check_enum_members_with_forward_check(
+  let checker = check_enum_members_with_forward_check(
     checker,
     enum_decl.members,
     enum_decl.is_const,
     0,
     seen_members,
     all_member_names,
+    enum_decl.name,
   )
+
+  // Pop the local scope
+  pop_local_scope(checker)
 }
 
 ///|
@@ -11490,6 +11497,7 @@ fn check_enum_members_with_forward_check(
   index : Int,
   seen_members : Map[String, Bool],
   all_member_names : Map[String, Bool],
+  enum_name : String,
 ) -> TypeChecker {
   if index >= members.length() {
     checker
@@ -11509,6 +11517,12 @@ fn check_enum_members_with_forward_check(
     }
     // Mark this member as seen
     seen_members.set(e_member.name, true)
+
+    // Add this member to the local scope so it can be referenced by subsequent members
+    // The type is number (enum members are numeric in TypeScript)
+    let member_type = Type::Number(default_type_info())
+    let checker = add_local_variable(checker, e_member.name, member_type)
+
     // Check the member itself
     let checker = check_enum_member(checker, e_member, is_const)
     check_enum_members_with_forward_check(
@@ -11518,6 +11532,7 @@ fn check_enum_members_with_forward_check(
       index + 1,
       seen_members,
       all_member_names,
+      enum_name,
     )
   }
 }
