@@ -1545,11 +1545,55 @@ fn parse_array_binding_pattern(
         elements.push(None)
         parser = advance_parser(parser)
       }
+      DotDotDot(spread_loc) => {
+        // Rest element: [...rest] or [...rest: Type]
+        parser = advance_parser(parser) // consume '...'
+        match current_token(parser) {
+          Identifier(name, loc) => {
+            let rest_name = Node::Identifier(Identifier::{ name, location: loc })
+            parser = advance_parser(parser)
+            // Wrap in SpreadExpression to mark as rest element
+            let spread_node = Node::SpreadExpression(SpreadExpression::{
+              expression: rest_name,
+              location: spread_loc,
+            })
+            elements.push(Some(spread_node))
+            // Optional comma (though rest should be last element)
+            match current_token(parser) {
+              Comma(_) => parser = advance_parser(parser)
+              _ => ()
+            }
+          }
+          _ => break // Invalid rest syntax
+        }
+      }
       Identifier(name, loc) => {
-        elements.push(
-          Some(Node::Identifier(Identifier::{ name, location: loc })),
-        )
+        let id_node = Node::Identifier(Identifier::{ name, location: loc })
         parser = advance_parser(parser)
+
+        // Check for default value initializer (a = expr)
+        let element_node = match current_token(parser) {
+          Equals(_) => {
+            parser = advance_parser(parser) // consume '='
+            match parse_assignment_expression(parser) {
+              Ok((init_expr, p)) => {
+                parser = p
+                Node::BindingElement(BindingElement::{
+                  property_name: name,
+                  name: id_node,
+                  initializer: Some(init_expr),
+                  location: loc,
+                })
+              }
+              Err(p) => {
+                parser = p
+                id_node // Fallback if parse fails
+              }
+            }
+          }
+          _ => id_node
+        }
+        elements.push(Some(element_node))
 
         // Optional comma
         match current_token(parser) {

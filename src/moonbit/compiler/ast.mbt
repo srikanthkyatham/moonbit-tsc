@@ -71,6 +71,7 @@ pub enum Node {
   // Binding Patterns
   ArrayBindingPattern(ArrayBindingPattern)
   ObjectBindingPattern(ObjectBindingPattern)
+  BindingElement(BindingElement) // Element with optional default value
 
   // Primary Expressions
   Identifier(Identifier)
@@ -1594,6 +1595,7 @@ pub fn get_location(node : Node) -> SourceLocation {
     ImportExpression(ie) => ie.location
     ArrayBindingPattern(a) => a.location
     ObjectBindingPattern(o) => o.location
+    BindingElement(b) => b.location
     Identifier(i) => i.location
     NumericLiteral(n) => n.location
     BigIntLiteral(b) => b.location

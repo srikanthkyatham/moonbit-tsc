@@ -4784,3 +4784,368 @@ test "parse type literal with generic construct signature" {
     Err(_) => assert_true(false)
   }
 }
+
+// ============================================================================
+// Array Destructuring with Rest Elements Tests
+// ============================================================================
+
+///|
+test "parse array destructuring with rest element" {
+  let tokens = tokens_from_source("var p = ([...a]) => { };")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        VariableStatement(vs) => {
+          assert_eq(vs.declarations.length(), 1)
+          match vs.declarations[0].initializer {
+            Some(ArrowFunction(arrow)) => {
+              assert_eq(arrow.parameters.length(), 1)
+              match arrow.parameters[0] {
+                Parameter(param) =>
+                  match param.name {
+                    ArrayBindingPattern(abp) => {
+                      assert_eq(abp.elements.length(), 1)
+                      match abp.elements[0] {
+                        Some(SpreadExpression(_)) => ()
+                        _ => assert_true(false)
+                      }
+                    }
+                    _ => assert_true(false)
+                  }
+                _ => assert_true(false)
+              }
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse array destructuring with element and rest" {
+  let tokens = tokens_from_source("var p = ([a, ...rest]) => { };")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        VariableStatement(vs) => {
+          match vs.declarations[0].initializer {
+            Some(ArrowFunction(arrow)) => {
+              match arrow.parameters[0] {
+                Parameter(param) =>
+                  match param.name {
+                    ArrayBindingPattern(abp) => {
+                      assert_eq(abp.elements.length(), 2)
+                      // First element is identifier
+                      match abp.elements[0] {
+                        Some(Identifier(id)) => assert_eq(id.name, "a")
+                        _ => assert_true(false)
+                      }
+                      // Second element is rest
+                      match abp.elements[1] {
+                        Some(SpreadExpression(spread)) =>
+                          match spread.expression {
+                            Identifier(id) => assert_eq(id.name, "rest")
+                            _ => assert_true(false)
+                          }
+                        _ => assert_true(false)
+                      }
+                    }
+                    _ => assert_true(false)
+                  }
+                _ => assert_true(false)
+              }
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse array destructuring with hole and rest" {
+  let tokens = tokens_from_source("var p = ([, ...a]) => { };")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      match source_file.statements[0] {
+        VariableStatement(vs) => {
+          match vs.declarations[0].initializer {
+            Some(ArrowFunction(arrow)) => {
+              match arrow.parameters[0] {
+                Parameter(param) =>
+                  match param.name {
+                    ArrayBindingPattern(abp) => {
+                      assert_eq(abp.elements.length(), 2)
+                      // First element is hole (None)
+                      match abp.elements[0] {
+                        None => ()
+                        _ => assert_true(false)
+                      }
+                      // Second element is rest
+                      match abp.elements[1] {
+                        Some(SpreadExpression(_)) => ()
+                        _ => assert_true(false)
+                      }
+                    }
+                    _ => assert_true(false)
+                  }
+                _ => assert_true(false)
+              }
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+// ============================================================================
+// Array Destructuring with Default Values Tests
+// ============================================================================
+
+///|
+test "parse array destructuring with default value" {
+  let tokens = tokens_from_source("var p = ([a = 1]) => { };")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      match source_file.statements[0] {
+        VariableStatement(vs) => {
+          match vs.declarations[0].initializer {
+            Some(ArrowFunction(arrow)) => {
+              match arrow.parameters[0] {
+                Parameter(param) =>
+                  match param.name {
+                    ArrayBindingPattern(abp) => {
+                      assert_eq(abp.elements.length(), 1)
+                      match abp.elements[0] {
+                        Some(BindingElement(be)) => {
+                          // Check the binding name
+                          match be.name {
+                            Identifier(id) => assert_eq(id.name, "a")
+                            _ => assert_true(false)
+                          }
+                          // Check the initializer
+                          match be.initializer {
+                            Some(NumericLiteral(nl)) =>
+                              assert_eq(nl.value, "1")
+                            _ => assert_true(false)
+                          }
+                        }
+                        _ => assert_true(false)
+                      }
+                    }
+                    _ => assert_true(false)
+                  }
+                _ => assert_true(false)
+              }
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse array destructuring with multiple defaults" {
+  let tokens = tokens_from_source("var p = ([a = 1, b = 2]) => { };")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      match source_file.statements[0] {
+        VariableStatement(vs) => {
+          match vs.declarations[0].initializer {
+            Some(ArrowFunction(arrow)) => {
+              match arrow.parameters[0] {
+                Parameter(param) =>
+                  match param.name {
+                    ArrayBindingPattern(abp) => {
+                      assert_eq(abp.elements.length(), 2)
+                      // First element with default
+                      match abp.elements[0] {
+                        Some(BindingElement(be1)) => {
+                          match be1.name {
+                            Identifier(id) => assert_eq(id.name, "a")
+                            _ => assert_true(false)
+                          }
+                          match be1.initializer {
+                            Some(NumericLiteral(nl)) =>
+                              assert_eq(nl.value, "1")
+                            _ => assert_true(false)
+                          }
+                        }
+                        _ => assert_true(false)
+                      }
+                      // Second element with default
+                      match abp.elements[1] {
+                        Some(BindingElement(be2)) => {
+                          match be2.name {
+                            Identifier(id) => assert_eq(id.name, "b")
+                            _ => assert_true(false)
+                          }
+                          match be2.initializer {
+                            Some(NumericLiteral(nl)) =>
+                              assert_eq(nl.value, "2")
+                            _ => assert_true(false)
+                          }
+                        }
+                        _ => assert_true(false)
+                      }
+                    }
+                    _ => assert_true(false)
+                  }
+                _ => assert_true(false)
+              }
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse array destructuring mixed elements and defaults" {
+  let tokens = tokens_from_source("var p = ([a, b = 2, c]) => { };")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      match source_file.statements[0] {
+        VariableStatement(vs) => {
+          match vs.declarations[0].initializer {
+            Some(ArrowFunction(arrow)) => {
+              match arrow.parameters[0] {
+                Parameter(param) =>
+                  match param.name {
+                    ArrayBindingPattern(abp) => {
+                      assert_eq(abp.elements.length(), 3)
+                      // First element - plain identifier
+                      match abp.elements[0] {
+                        Some(Identifier(id)) => assert_eq(id.name, "a")
+                        _ => assert_true(false)
+                      }
+                      // Second element - with default
+                      match abp.elements[1] {
+                        Some(BindingElement(be)) => {
+                          match be.name {
+                            Identifier(id) => assert_eq(id.name, "b")
+                            _ => assert_true(false)
+                          }
+                          assert_true(be.initializer.is_empty() == false)
+                        }
+                        _ => assert_true(false)
+                      }
+                      // Third element - plain identifier
+                      match abp.elements[2] {
+                        Some(Identifier(id)) => assert_eq(id.name, "c")
+                        _ => assert_true(false)
+                      }
+                    }
+                    _ => assert_true(false)
+                  }
+                _ => assert_true(false)
+              }
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse let array destructuring with rest" {
+  let tokens = tokens_from_source("let [x, ...remaining] = [1, 2, 3];")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      match source_file.statements[0] {
+        VariableStatement(vs) => {
+          assert_eq(vs.declarations.length(), 1)
+          match vs.declarations[0].name {
+            ArrayBindingPattern(abp) => {
+              assert_eq(abp.elements.length(), 2)
+              // First element - identifier
+              match abp.elements[0] {
+                Some(Identifier(id)) => assert_eq(id.name, "x")
+                _ => assert_true(false)
+              }
+              // Second element - rest
+              match abp.elements[1] {
+                Some(SpreadExpression(spread)) =>
+                  match spread.expression {
+                    Identifier(id) => assert_eq(id.name, "remaining")
+                    _ => assert_true(false)
+                  }
+                _ => assert_true(false)
+              }
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse let array destructuring with default" {
+  let tokens = tokens_from_source("let [x = 10] = [];")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      match source_file.statements[0] {
+        VariableStatement(vs) => {
+          match vs.declarations[0].name {
+            ArrayBindingPattern(abp) => {
+              assert_eq(abp.elements.length(), 1)
+              match abp.elements[0] {
+                Some(BindingElement(be)) => {
+                  match be.name {
+                    Identifier(id) => assert_eq(id.name, "x")
+                    _ => assert_true(false)
+                  }
+                  match be.initializer {
+                    Some(NumericLiteral(nl)) => assert_eq(nl.value, "10")
+                    _ => assert_true(false)
+                  }
+                }
+                _ => assert_true(false)
+              }
+            }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}

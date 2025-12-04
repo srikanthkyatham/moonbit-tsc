@@ -339,6 +339,7 @@ pub fn transform(node : Node, ctx : TransformerContext) -> Node {
     // Binding Patterns
     ArrayBindingPattern(abp) => transform_array_binding_pattern(abp, ctx)
     ObjectBindingPattern(obp) => transform_object_binding_pattern(obp, ctx)
+    BindingElement(be) => transform_binding_element(be, ctx)
 
     // Primary Expressions - keep as-is
     Identifier(id) => Identifier(id)
@@ -2157,6 +2158,21 @@ fn transform_object_binding_pattern(
   ObjectBindingPattern({
     properties: transformed_properties,
     location: obp.location,
+  })
+}
+
+///|
+/// Transform binding element (with optional default value)
+fn transform_binding_element(be : BindingElement, ctx : TransformerContext) -> Node {
+  let transformed_initializer = match be.initializer {
+    Some(init) => Some(transform(init, ctx))
+    None => None
+  }
+  BindingElement({
+    property_name: be.property_name,
+    name: transform(be.name, ctx),
+    initializer: transformed_initializer,
+    location: be.location,
   })
 }
 

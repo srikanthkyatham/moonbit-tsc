@@ -234,6 +234,7 @@ pub fn emit(node : Node, ctx : EmitterContext) -> String {
     // Binding Patterns
     ArrayBindingPattern(abp) => emit_array_binding_pattern(abp, ctx)
     ObjectBindingPattern(obp) => emit_object_binding_pattern(obp, ctx)
+    BindingElement(be) => emit_binding_element(be, ctx)
 
     // Primary Expressions
     Identifier(id) => {
@@ -2622,6 +2623,16 @@ fn emit_object_binding_pattern(
   }
   result = result + " }"
   result
+}
+
+///|
+/// Emit binding element with optional default value (for array/object destructuring)
+fn emit_binding_element(be : BindingElement, ctx : EmitterContext) -> String {
+  let name_str = emit(be.name, ctx)
+  match be.initializer {
+    Some(init) => name_str + " = " + emit(init, ctx)
+    None => name_str
+  }
 }
 
 ///|
