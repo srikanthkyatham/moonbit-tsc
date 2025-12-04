@@ -5225,7 +5225,8 @@ test "DiagnosticCode - TS2496 arguments in arrow function" {
     #|const fn = () => {
     #|  console.log(arguments); // arguments not available in arrow
     #|};
-  let result = check_source(source)
+  // TS2496 only applies to ES5 and older targets
+  let result = check_source_with_target(source, @compiler.ES5)
   match result {
     Ok(_) => assert_true(false) // Should detect arguments in arrow function
     Err(diagnostics) =>

@@ -150,8 +150,12 @@ pub fn compile_source(
             return CompileResult::failure(verbatim_module_diagnostics)
           }
 
-          // Phase 4: Type check
-          let check_result = check_source_file(bound_source)
+          // Phase 4: Type check with the target from options
+          let check_result = check_source_file_with_options(
+            bound_source,
+            options.no_unchecked_indexed_access,
+            options.target,
+          )
 
           // Collect type errors but continue compilation
           // TypeScript behavior: emit JavaScript even with type errors

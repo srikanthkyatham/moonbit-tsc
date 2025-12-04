@@ -642,6 +642,18 @@ fn lookup_local_variable(checker : TypeChecker, name : String) -> Type? {
 }
 
 ///|
+/// Check if a variable exists in the innermost local scope only
+/// (not searching up the scope chain)
+fn is_in_innermost_scope(checker : TypeChecker, name : String) -> Bool {
+  let scopes = checker.local_scopes
+  if scopes.length() == 0 {
+    return false
+  }
+  // Only check the innermost scope
+  scopes[scopes.length() - 1].variables.contains(name)
+}
+
+///|
 /// Add a function parameter to the current local scope
 fn add_parameter_to_scope(checker : TypeChecker, param : Node) -> TypeChecker {
   match param {
@@ -3038,8 +3050,13 @@ fn infer_identifier_type(
   checker : TypeChecker,
   id : Identifier,
 ) -> (Type, TypeChecker) {
-  // TS2496: Check for 'arguments' in arrow function
-  if id.name == "arguments" && is_in_arrow_function(checker) {
+  // TS2496: Check for 'arguments' in arrow function (only for ES3/ES5 targets)
+  // But only if 'arguments' is a parameter of the current arrow function itself
+  // (i.e., in the innermost local scope), not from an outer scope
+  if id.name == "arguments" &&
+    is_in_arrow_function(checker) &&
+    checker.target.older_than(ES2015) &&
+    not(is_in_innermost_scope(checker, id.name)) {
     let checker = add_diagnostic_with_code(
       checker,
       "The 'arguments' object cannot be referenced in an arrow function in ES3 and ES5. Consider using a standard function expression.",
@@ -8853,7 +8870,8 @@ fn infer_arrow_function_type(
         BlockStatement(block) => {
           // Check block body statements for errors
           let checker = check_block_statement(checker, block)
-          void_type(checker) // Block returns void unless explicitly returning
+          // Infer return type from return statements in the block
+          infer_return_type_from_block(checker, block)
         }
         _ => infer_type(checker, arrow.body)
       }
@@ -8874,6 +8892,91 @@ fn infer_arrow_function_type(
 
   let (info, checker) = create_type_info(checker)
   (Function({ parameters, return_type, info }), checker)
+}
+
+///|
+/// Infer return type from a block statement by collecting return statement types
+fn infer_return_type_from_block(
+  checker : TypeChecker,
+  block : BlockStatement,
+) -> (Type, TypeChecker) {
+  let return_types : Array[Type] = []
+
+  // Collect return types from the block
+  for stmt in block.statements {
+    collect_return_types_from_statement(checker, stmt, return_types)
+  }
+
+  // If no return statements found, return void
+  if return_types.length() == 0 {
+    return void_type(checker)
+  }
+
+  // If single return type, return it directly
+  if return_types.length() == 1 {
+    return (return_types[0], checker)
+  }
+
+  // Multiple return types - create union
+  let (info, checker) = create_type_info(checker)
+  (Union({ types: return_types, info }), checker)
+}
+
+///|
+/// Collect return types from a statement (recursive helper)
+fn collect_return_types_from_statement(
+  checker : TypeChecker,
+  stmt : Node,
+  return_types : Array[Type],
+) -> Unit {
+  match stmt {
+    ReturnStatement(ret) =>
+      match ret.expression {
+        Some(expr) => {
+          let (ret_type, _) = infer_type(checker, expr)
+          return_types.push(ret_type)
+        }
+        None => {
+          // Return without expression returns undefined
+          let (undef, _) = undefined_type(checker)
+          return_types.push(undef)
+        }
+      }
+    IfStatement(if_stmt) => {
+      // Check both branches for return statements
+      collect_return_types_from_statement(checker, if_stmt.then_statement, return_types)
+      match if_stmt.else_statement {
+        Some(else_stmt) =>
+          collect_return_types_from_statement(checker, else_stmt, return_types)
+        None => ()
+      }
+    }
+    BlockStatement(inner_block) =>
+      for inner_stmt in inner_block.statements {
+        collect_return_types_from_statement(checker, inner_stmt, return_types)
+      }
+    SwitchStatement(switch_stmt) =>
+      // CaseClause has expression (optional for default) and statements
+      for case_clause in switch_stmt.cases {
+        for case_stmt in case_clause.statements {
+          collect_return_types_from_statement(checker, case_stmt, return_types)
+        }
+      }
+    TryStatement(try_stmt) => {
+      collect_return_types_from_statement(checker, try_stmt.try_block, return_types)
+      match try_stmt.catch_clause {
+        Some(catch_clause) =>
+          collect_return_types_from_statement(checker, catch_clause.block, return_types)
+        None => ()
+      }
+      match try_stmt.finally_block {
+        Some(finally_block) =>
+          collect_return_types_from_statement(checker, finally_block, return_types)
+        None => ()
+      }
+    }
+    _ => () // Other statements don't contain return statements at top level
+  }
 }
 
 ///|
