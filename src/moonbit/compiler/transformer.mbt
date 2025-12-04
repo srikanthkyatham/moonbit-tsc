@@ -2143,9 +2143,14 @@ fn transform_object_binding_pattern(
 ) -> Node {
   let transformed_properties : Array[BindingElement] = []
   for prop in obp.properties {
+    let transformed_initializer = match prop.initializer {
+      Some(init) => Some(transform(init, ctx))
+      None => None
+    }
     transformed_properties.push({
       property_name: prop.property_name,
       name: transform(prop.name, ctx),
+      initializer: transformed_initializer,
       location: prop.location,
     })
   }

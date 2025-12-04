@@ -1661,9 +1661,24 @@ fn parse_object_binding_pattern(
             )
         }
         parser = p2
+
+        // Check for default value initializer: { x = 5 } or { x: y = 5 }
+        let (initializer, parser2) = match current_token(parser) {
+          Equals(_) => {
+            let p = advance_parser(parser)
+            match parse_assignment_expression(p) {
+              Ok((expr, p2)) => (Some(expr), p2)
+              Err(p2) => return Err(p2)
+            }
+          }
+          _ => (None, parser)
+        }
+        parser = parser2
+
         properties.push(BindingElement::{
           property_name: prop_name,
           name,
+          initializer,
           location: prop_loc,
         })
 
@@ -1686,6 +1701,7 @@ fn parse_object_binding_pattern(
                 name: rest_name,
                 location: id_loc,
               }),
+              initializer: None, // Rest elements can't have initializers
               location: rest_loc,
             })
             // Rest must be last element, but we allow parsing to continue

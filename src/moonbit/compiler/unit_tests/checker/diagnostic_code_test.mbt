@@ -7505,3 +7505,44 @@ test "unit/enum/valid-string-enum - string values are valid" {
     }
   }
 }
+
+// ============================================================================
+// Object Destructuring with Default Values
+// ============================================================================
+
+///|
+test "unit/destructuring/object-binding-with-default - parses object destructuring with default value" {
+  let source =
+    #|const { value = "123" } = { value: "test" };
+    #|const result = value;
+  let result = check_source(source)
+  match result {
+    Ok(_) => () // Should parse and type check successfully
+    Err(_) => fail("Object destructuring with default value should parse correctly")
+  }
+}
+
+///|
+test "unit/destructuring/object-binding-with-default-and-type - object destructuring from typed object" {
+  let source =
+    #|type Thing = { value?: string | number };
+    #|declare const thing: Thing;
+    #|const { value = "123" } = thing;
+  let result = check_source(source)
+  match result {
+    Ok(_) => () // Should parse and type check successfully
+    Err(_) => fail("Object destructuring with optional property should parse correctly")
+  }
+}
+
+///|
+test "unit/destructuring/object-binding-with-rename-and-default - object binding with rename and default" {
+  let source =
+    #|const { x: y = 10 } = { x: 5 };
+    #|const result = y;
+  let result = check_source(source)
+  match result {
+    Ok(_) => () // Should parse and type check successfully
+    Err(_) => fail("Object destructuring with rename and default should parse correctly")
+  }
+}

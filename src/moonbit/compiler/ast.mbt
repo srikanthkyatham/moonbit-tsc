@@ -790,6 +790,7 @@ pub struct ObjectBindingPattern {
 pub struct BindingElement {
   property_name : String // The property name from the source object
   name : Node // The binding name (Identifier or nested pattern)
+  initializer : Node? // Default value initializer (e.g., { x = 5 })
   location : SourceLocation
 } derive(Show)
 
