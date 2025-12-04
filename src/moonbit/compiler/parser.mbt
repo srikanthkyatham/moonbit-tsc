@@ -2860,6 +2860,50 @@ fn parse_class_member_with_decorators(
               )
               parse_class_members_aux(parser, acc)
             }
+            // Static generic method: static foo<T>(x: T) { }
+            LessThan(_) => {
+              let (type_parameters, parser) = parse_type_parameters(parser)
+              // After type parameters, expect (
+              let parser = match current_token(parser) {
+                OpenParen(_) => advance_parser(parser)
+                _ => parser
+              }
+              let (parameters, parser) = parse_parameter_list(parser)
+              let (return_type, parser) = match current_token(parser) {
+                Colon(_) => {
+                  let parser = advance_parser(parser)
+                  match parse_type(parser) {
+                    Ok((ty, p)) => (Some(ty), p)
+                    Err(p) => (None, p)
+                  }
+                }
+                _ => (None, parser)
+              }
+              let (body, parser) = match current_token(parser) {
+                OpenBrace(_) =>
+                  match parse_function_body(parser) {
+                    Ok((b, p)) => (Some(b), p)
+                    Err(p) => (None, p)
+                  }
+                _ => (None, parser)
+              }
+              acc.push(
+                Node::MethodDeclaration(MethodDeclaration::{
+                  name,
+                  type_parameters,
+                  parameters,
+                  return_type,
+                  body,
+                  decorators,
+                  modifiers: [Modifier::Static],
+                  is_async: false,
+                  is_generator: false,
+                  is_optional: false,
+                  location: loc,
+                }),
+              )
+              parse_class_members_aux(parser, acc)
+            }
             // Static property
             _ => {
               let (type_annotation, parser) = match current_token(parser) {
@@ -3337,6 +3381,51 @@ fn parse_class_member_with_decorators(
           parse_class_members_aux(parser, acc)
         }
 
+        // Generic method: foo<T>(x: T) { }
+        LessThan(_) => {
+          let (type_parameters, parser) = parse_type_parameters(parser)
+          // After type parameters, expect (
+          let parser = match current_token(parser) {
+            OpenParen(_) => advance_parser(parser)
+            _ => parser
+          }
+          let (parameters, parser) = parse_parameter_list(parser)
+          let (return_type, parser) = match current_token(parser) {
+            Colon(_) => {
+              let parser = advance_parser(parser)
+              match parse_type(parser) {
+                Ok((ty, p)) => (Some(ty), p)
+                Err(p) => (None, p)
+              }
+            }
+            _ => (None, parser)
+          }
+          let (body, parser) = match current_token(parser) {
+            OpenBrace(_) =>
+              match parse_function_body(parser) {
+                Ok((b, p)) => (Some(b), p)
+                Err(p) => (None, p)
+              }
+            _ => (None, parser)
+          }
+          acc.push(
+            Node::MethodDeclaration(MethodDeclaration::{
+              name,
+              type_parameters,
+              parameters,
+              return_type,
+              body,
+              decorators,
+              modifiers: [],
+              is_async: false,
+              is_generator: false,
+              is_optional: false,
+              location: loc,
+            }),
+          )
+          parse_class_members_aux(parser, acc)
+        }
+
         // Property with initializer or type annotation
         _ => {
           // Parse optional type annotation
@@ -3577,7 +3666,59 @@ fn parse_class_member_with_modifiers(
     Identifier(name, loc) => {
       let parser = advance_parser(parser)
       match current_token(parser) {
-        // Method
+        // Generic method: foo<T>(x: T) { }
+        LessThan(_) => {
+          let (type_parameters, parser) = parse_type_parameters(parser)
+          // After type parameters, expect (
+          let parser = match current_token(parser) {
+            OpenParen(_) => advance_parser(parser)
+            _ => parser
+          }
+          let (parameters, parser) = parse_parameter_list(parser)
+          let (return_type, parser) = match current_token(parser) {
+            Colon(_) => {
+              let parser = advance_parser(parser)
+              match parse_type(parser) {
+                Ok((ty, p)) => (Some(ty), p)
+                Err(p) => (None, p)
+              }
+            }
+            _ => (None, parser)
+          }
+          let (body, parser) = match current_token(parser) {
+            OpenBrace(_) =>
+              match parse_function_body(parser) {
+                Ok((b, p)) => (Some(b), p)
+                Err(p) => (None, p)
+              }
+            _ => (None, parser)
+          }
+          // Check if Async modifier is present
+          let mut is_async = false
+          for modifier in modifiers {
+            if modifier == Modifier::Async {
+              is_async = true
+              break
+            }
+          }
+          acc.push(
+            Node::MethodDeclaration(MethodDeclaration::{
+              name,
+              type_parameters,
+              parameters,
+              return_type,
+              body,
+              decorators,
+              modifiers,
+              is_async,
+              is_generator: false,
+              is_optional: false,
+              location: loc,
+            }),
+          )
+          parse_class_members_aux(parser, acc)
+        }
+        // Method without type parameters
         OpenParen(_) => {
           let parser = advance_parser(parser)
           let (parameters, parser) = parse_parameter_list(parser)
