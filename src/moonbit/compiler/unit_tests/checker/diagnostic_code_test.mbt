@@ -6810,3 +6810,148 @@ test "DiagnosticCode - var in loop hoisting" {
     }
   }
 }
+
+// ============================================================================
+// Enum Tests - Member Scoping and Merging
+// ============================================================================
+
+///|
+test "unit/enums/scope - enum members are scoped to their enum" {
+  // Multiple enums with same member names should not conflict
+  let source =
+    #|enum E1 { A, B, C }
+    #|enum E2 { A, B, C }
+    #|let x = E1.A;
+    #|let y = E2.A;
+  let result = check_source(source)
+  match result {
+    Ok(tf) => assert_true(tf.diagnostics.length() == 0)
+    Err(_) => fail("Multiple enums with same member names should not error")
+  }
+}
+
+///|
+test "unit/enums/self-reference - enum member can reference previous member" {
+  // Enum member can reference previous member in initializer
+  let source =
+    #|enum E {
+    #|  A = 1,
+    #|  B = A + 1,
+    #|  C = B * 2
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(tf) => assert_true(tf.diagnostics.length() == 0)
+    Err(_) => fail("Enum member should be able to reference previous members")
+  }
+}
+
+///|
+test "unit/enums/merging - merged enums can reference previous declarations" {
+  // When enums are merged, later declarations can reference members from earlier ones
+  let source =
+    #|enum Animals { Cat = 1 }
+    #|enum Animals { Dog = 2 }
+    #|enum Animals { CatDog = Cat | Dog }
+  let result = check_source(source)
+  match result {
+    Ok(tf) => assert_true(tf.diagnostics.length() == 0)
+    Err(_) => fail("Merged enums should be able to reference members from earlier declarations")
+  }
+}
+
+///|
+test "unit/enums/template-literal - template literals are valid enum initializers" {
+  // Template literals should be valid enum initializers
+  let source =
+    #|enum T {
+    #|  a = `hello`,
+    #|  b = `world`
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(tf) => assert_true(tf.diagnostics.length() == 0)
+    Err(_) => fail("Template literals should be valid enum initializers")
+  }
+}
+
+// ============================================================================
+// Math Object Tests
+// ============================================================================
+
+///|
+test "unit/math/sin - Math.sin is recognized" {
+  let source =
+    #|const x = Math.sin(1);
+  let result = check_source(source)
+  match result {
+    Ok(tf) => assert_true(tf.diagnostics.length() == 0)
+    Err(_) => fail("Math.sin should be recognized")
+  }
+}
+
+///|
+test "unit/math/cos - Math.cos is recognized" {
+  let source =
+    #|const x = Math.cos(1);
+  let result = check_source(source)
+  match result {
+    Ok(tf) => assert_true(tf.diagnostics.length() == 0)
+    Err(_) => fail("Math.cos should be recognized")
+  }
+}
+
+///|
+test "unit/math/tan - Math.tan is recognized" {
+  let source =
+    #|const x = Math.tan(1);
+  let result = check_source(source)
+  match result {
+    Ok(tf) => assert_true(tf.diagnostics.length() == 0)
+    Err(_) => fail("Math.tan should be recognized")
+  }
+}
+
+///|
+test "unit/math/max - Math.max is recognized" {
+  let source =
+    #|const x = Math.max(1, 2, 3);
+  let result = check_source(source)
+  match result {
+    Ok(tf) => assert_true(tf.diagnostics.length() == 0)
+    Err(_) => fail("Math.max should be recognized")
+  }
+}
+
+///|
+test "unit/math/min - Math.min is recognized" {
+  let source =
+    #|const x = Math.min(1, 2, 3);
+  let result = check_source(source)
+  match result {
+    Ok(tf) => assert_true(tf.diagnostics.length() == 0)
+    Err(_) => fail("Math.min should be recognized")
+  }
+}
+
+///|
+test "unit/math/pow - Math.pow is recognized" {
+  let source =
+    #|const x = Math.pow(2, 10);
+  let result = check_source(source)
+  match result {
+    Ok(tf) => assert_true(tf.diagnostics.length() == 0)
+    Err(_) => fail("Math.pow should be recognized")
+  }
+}
+
+///|
+test "unit/math/E - Math.E constant is recognized" {
+  let source =
+    #|const e = Math.E;
+  let result = check_source(source)
+  match result {
+    Ok(tf) => assert_true(tf.diagnostics.length() == 0)
+    Err(_) => fail("Math.E should be recognized")
+  }
+}

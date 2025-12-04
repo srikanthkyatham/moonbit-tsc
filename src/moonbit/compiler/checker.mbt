@@ -3426,6 +3426,185 @@ fn get_math_type(checker : TypeChecker) -> (Type, TypeChecker) {
   }
   math_methods.set("PI", pi_prop)
 
+  // Math.sin
+  let sin_method = PropertySignature::{
+    name: "sin",
+    prop_type: Type::Function(CheckerFunctionType::{
+      parameters: [CheckerParameter::{
+        name: "x",
+        param_type: Type::Number(info),
+        is_optional: false,
+        is_rest: false,
+      }],
+      return_type: Type::Number(info),
+      info,
+    }),
+    is_optional: false,
+    is_readonly: false,
+  }
+  math_methods.set("sin", sin_method)
+
+  // Math.cos
+  let cos_method = PropertySignature::{
+    name: "cos",
+    prop_type: Type::Function(CheckerFunctionType::{
+      parameters: [CheckerParameter::{
+        name: "x",
+        param_type: Type::Number(info),
+        is_optional: false,
+        is_rest: false,
+      }],
+      return_type: Type::Number(info),
+      info,
+    }),
+    is_optional: false,
+    is_readonly: false,
+  }
+  math_methods.set("cos", cos_method)
+
+  // Math.tan
+  let tan_method = PropertySignature::{
+    name: "tan",
+    prop_type: Type::Function(CheckerFunctionType::{
+      parameters: [CheckerParameter::{
+        name: "x",
+        param_type: Type::Number(info),
+        is_optional: false,
+        is_rest: false,
+      }],
+      return_type: Type::Number(info),
+      info,
+    }),
+    is_optional: false,
+    is_readonly: false,
+  }
+  math_methods.set("tan", tan_method)
+
+  // Math.max (rest parameter)
+  let max_method = PropertySignature::{
+    name: "max",
+    prop_type: Type::Function(CheckerFunctionType::{
+      parameters: [CheckerParameter::{
+        name: "values",
+        param_type: Type::Number(info),
+        is_optional: false,
+        is_rest: true,
+      }],
+      return_type: Type::Number(info),
+      info,
+    }),
+    is_optional: false,
+    is_readonly: false,
+  }
+  math_methods.set("max", max_method)
+
+  // Math.min (rest parameter)
+  let min_method = PropertySignature::{
+    name: "min",
+    prop_type: Type::Function(CheckerFunctionType::{
+      parameters: [CheckerParameter::{
+        name: "values",
+        param_type: Type::Number(info),
+        is_optional: false,
+        is_rest: true,
+      }],
+      return_type: Type::Number(info),
+      info,
+    }),
+    is_optional: false,
+    is_readonly: false,
+  }
+  math_methods.set("min", min_method)
+
+  // Math.pow
+  let pow_method = PropertySignature::{
+    name: "pow",
+    prop_type: Type::Function(CheckerFunctionType::{
+      parameters: [
+        CheckerParameter::{
+          name: "base",
+          param_type: Type::Number(info),
+          is_optional: false,
+          is_rest: false,
+        },
+        CheckerParameter::{
+          name: "exponent",
+          param_type: Type::Number(info),
+          is_optional: false,
+          is_rest: false,
+        },
+      ],
+      return_type: Type::Number(info),
+      info,
+    }),
+    is_optional: false,
+    is_readonly: false,
+  }
+  math_methods.set("pow", pow_method)
+
+  // Math.round
+  let round_method = PropertySignature::{
+    name: "round",
+    prop_type: Type::Function(CheckerFunctionType::{
+      parameters: [CheckerParameter::{
+        name: "x",
+        param_type: Type::Number(info),
+        is_optional: false,
+        is_rest: false,
+      }],
+      return_type: Type::Number(info),
+      info,
+    }),
+    is_optional: false,
+    is_readonly: false,
+  }
+  math_methods.set("round", round_method)
+
+  // Math.log
+  let log_method = PropertySignature::{
+    name: "log",
+    prop_type: Type::Function(CheckerFunctionType::{
+      parameters: [CheckerParameter::{
+        name: "x",
+        param_type: Type::Number(info),
+        is_optional: false,
+        is_rest: false,
+      }],
+      return_type: Type::Number(info),
+      info,
+    }),
+    is_optional: false,
+    is_readonly: false,
+  }
+  math_methods.set("log", log_method)
+
+  // Math.exp
+  let exp_method = PropertySignature::{
+    name: "exp",
+    prop_type: Type::Function(CheckerFunctionType::{
+      parameters: [CheckerParameter::{
+        name: "x",
+        param_type: Type::Number(info),
+        is_optional: false,
+        is_rest: false,
+      }],
+      return_type: Type::Number(info),
+      info,
+    }),
+    is_optional: false,
+    is_readonly: false,
+  }
+  math_methods.set("exp", exp_method)
+
+  // Math.E
+  let e_prop = PropertySignature::{
+    name: "E",
+    prop_type: Type::Number(info),
+    is_optional: false,
+    is_readonly: true,
+  }
+  math_methods.set("E", e_prop)
+
   let math_type = Type::Object(ObjectType::{
     properties: math_methods,
     call_signatures: [],
@@ -11466,6 +11645,10 @@ fn check_enum_declaration(
   // Push a local scope for enum members so they can reference each other
   let checker = push_local_scope(checker)
 
+  // For enum merging: add members from previous declarations to the local scope
+  // This allows later enum declarations to reference members from earlier ones
+  let checker = add_previous_enum_members_to_scope(checker, enum_decl.name)
+
   // Collect all enum member names for forward reference checking
   let all_member_names : Map[String, Bool] = Map::new()
   for mem in enum_decl.members {
@@ -11485,6 +11668,34 @@ fn check_enum_declaration(
 
   // Pop the local scope
   pop_local_scope(checker)
+}
+
+///|
+/// Add members from previous enum declarations to the local scope (for enum merging)
+fn add_previous_enum_members_to_scope(
+  checker : TypeChecker,
+  enum_name : String,
+) -> TypeChecker {
+  match lookup_symbol(checker, enum_name) {
+    Some(enum_symbol) => {
+      // Iterate through all declarations of this enum
+      let mut checker = checker
+      for decl in enum_symbol.declarations {
+        match decl {
+          EnumDeclaration(prev_enum) => {
+            // Add each member from previous declarations
+            for mem in prev_enum.members {
+              let member_type = Type::Number(default_type_info())
+              checker = add_local_variable(checker, mem.name, member_type)
+            }
+          }
+          _ => ()
+        }
+      }
+      checker
+    }
+    None => checker
+  }
 }
 
 ///|
@@ -11691,13 +11902,14 @@ fn validate_enum_initializer(
 
 ///|
 /// Check if a type is valid for an enum initializer
-/// Valid types are: number, string, or literal types
+/// Valid types are: number, string, or literal types (including template literals)
 fn is_valid_enum_initializer_type(t : Type) -> Bool {
   match t {
     Number(_) => true
     String(_) => true
     NumberLiteral(_) => true
     StringLiteral(_) => true
+    TemplateLiteral(_) => true // Template literals like `1` are valid string enum initializers
     Any(_) => true // Allow any for flexibility
     _ => false
   }
@@ -11710,6 +11922,7 @@ fn is_const_enum_initializer(expr : Node) -> Bool {
   match expr {
     NumericLiteral(_) => true
     StringLiteral(_) => true
+    TemplateExpression(_) => true // Template literals like `1` or `${x}` are valid
     UnaryExpression(un) =>
       // Allow unary minus on numeric literals (e.g., -1)
       match un.operator {
