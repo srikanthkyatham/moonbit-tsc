@@ -7624,3 +7624,99 @@ test "unit/enum/valid-infinity-nan - unshadowed Infinity and NaN are valid" {
     }
   }
 }
+
+// ============================================================================
+// Type Alias Resolution Tests
+// ============================================================================
+
+///|
+test "unit/type-alias/destructured-binding-with-default - TS18033 for non-number type" {
+  // This test verifies that type aliases are properly resolved for destructured bindings
+  // with default values, ensuring the variable gets the correct type
+  let source =
+    #|type Thing = {
+    #|  value?: string | number;
+    #|};
+    #|declare const thing: Thing;
+    #|const { value = "123" } = thing;
+    #|enum E {
+    #|  test = value
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => fail("Expected TS18033 error for non-number enum initializer")
+    Err(diagnostics) => {
+      // Should get TS18033 because 'value' has type 'string | number', not 'number'
+      assert_true(has_error(diagnostics, 18033))
+    }
+  }
+}
+
+///|
+test "unit/type-alias/object-type-resolution - type alias resolves to object properties" {
+  // Verify type alias properties are correctly resolved
+  let source =
+    #|type Person = {
+    #|  personName: string;
+    #|  age: number;
+    #|};
+    #|declare const person: Person;
+    #|const { personName, age } = person;
+    #|let x: number = personName;
+  let result = check_source(source)
+  match result {
+    Ok(_) => fail("Expected TS2322 error for type mismatch")
+    Err(diagnostics) => {
+      assert_true(has_error(diagnostics, 2322))
+    }
+  }
+}
+
+///|
+test "unit/type-alias/valid-destructured-binding - no error when types match" {
+  // Valid case - destructured binding with matching types
+  let source =
+    #|type Config = {
+    #|  timeout: number;
+    #|};
+    #|declare const config: Config;
+    #|const { timeout } = config;
+    #|let x: number = timeout;
+  let result = check_source(source)
+  match result {
+    Ok(_) => () // Should succeed
+    Err(_) => fail("Should not have errors for valid destructuring")
+  }
+}
+
+// ============================================================================
+// Literal Type in Union Tests
+// ============================================================================
+
+///|
+test "unit/literal-type/string-literal-union-in-type-alias" {
+  // Type alias with string literal union - type alias is resolved correctly
+  let source =
+    #|type Direction = "up" | "down" | "left" | "right";
+    #|declare const d: Direction;
+    #|let x: string = d;
+  let result = check_source(source)
+  match result {
+    Ok(_) => () // Should succeed
+    Err(_) => fail("String literal should be assignable to string")
+  }
+}
+
+///|
+test "unit/literal-type/number-literal-in-type-annotation" {
+  // Number literal type annotation
+  let source =
+    #|type Port = 80 | 443 | 8080;
+    #|declare const port: Port;
+    #|let x: number = port;
+  let result = check_source(source)
+  match result {
+    Ok(_) => () // Should succeed
+    Err(_) => fail("Number literal should be assignable to number")
+  }
+}

@@ -729,26 +729,52 @@ fn add_array_binding_elements_to_scope(
 fn add_object_binding_elements_to_scope(
   checker : TypeChecker,
   obj_pat : ObjectBindingPattern,
-  _obj_type : Type,
+  obj_type : Type,
   is_const : Bool,
 ) -> TypeChecker {
   let mut checker = checker
   for prop in obj_pat.properties {
-    // property_name is empty string if shorthand, otherwise the aliased name
-    let name : String = if prop.property_name == "" {
-      match prop.name {
-        Identifier(id) => id.name
-        _ => ""
-      }
-    } else {
-      prop.property_name
+    // property_name is the source property name (from the object being destructured)
+    // For shorthand { x }, property_name == "x" and name is Identifier("x")
+    // For rename { x: y }, property_name == "x" and name is Identifier("y")
+    let source_prop_name : String = prop.property_name
+
+    // Get the binding name (what we're declaring)
+    let binding_name : String = match prop.name {
+      Identifier(id) => id.name
+      _ => "" // Nested patterns would need recursive handling
     }
-    if name != "" {
-      let (prop_type, c) = any_type(checker)
+
+    if binding_name != "" {
+      // Look up the property type from the object type
+      let (prop_type, c) = match obj_type {
+        Object(obj) =>
+          match obj.properties.get(source_prop_name) {
+            Some(prop_sig) => {
+              // If the property is optional and we have a default initializer,
+              // the type is the property type with undefined removed
+              // For now, just use the property type
+              (prop_sig.prop_type, checker)
+            }
+            None => any_type(checker) // Property not found, use any
+          }
+        // For type references (like `Thing`), we need to look up the type alias
+        // and get its underlying object type's properties
+        TypeReference(type_ref) =>
+          match checker.type_cache.get(type_ref.name) {
+            Some(Object(obj)) =>
+              match obj.properties.get(source_prop_name) {
+                Some(prop_sig) => (prop_sig.prop_type, checker)
+                None => any_type(checker)
+              }
+            _ => any_type(checker)
+          }
+        _ => any_type(checker) // For other types, use any
+      }
       checker = if is_const {
-        add_local_const_variable(c, name, prop_type)
+        add_local_const_variable(c, binding_name, prop_type)
       } else {
-        add_local_variable(c, name, prop_type)
+        add_local_variable(c, binding_name, prop_type)
       }
     }
   }
@@ -2740,9 +2766,10 @@ fn check_variable_declaration(
   }
 
   // Get the initializer type (if any)
+  // For const declarations with literal type annotations, infer literal types from expressions
   let (init_type, checker) = match decl.initializer {
     Some(init) => {
-      let (t, c) = infer_type(checker, init)
+      let (t, c) = infer_type_with_context(checker, init, declared_type, is_const)
       (Some(t), c)
     }
     None => (None, checker)
@@ -2834,6 +2861,111 @@ fn check_expression_statement(
 ) -> TypeChecker {
   let (_, checker) = infer_type(checker, expr_stmt.expression)
   checker
+}
+
+///|
+/// Infer the type of an expression with contextual type information
+/// For const declarations with literal type annotations, this infers literal types
+fn infer_type_with_context(
+  checker : TypeChecker,
+  expr : Node,
+  contextual_type : Type?,
+  is_const : Bool,
+) -> (Type, TypeChecker) {
+  // For const declarations, check if we should infer a literal type
+  if is_const {
+    match (expr, contextual_type) {
+      // String literal with string literal type annotation
+      (StringLiteral(lit), Some(StringLiteral(expected_val, _))) =>
+        if lit.value == expected_val {
+          // Infer the literal type
+          string_literal_type(checker, lit.value)
+        } else {
+          // Different value - infer base type, will cause type error
+          string_type(checker)
+        }
+      // String literal with union type annotation containing string literals
+      (StringLiteral(lit), Some(Union(union))) =>
+        if union_contains_string_literal(union, lit.value) {
+          string_literal_type(checker, lit.value)
+        } else {
+          string_type(checker)
+        }
+      // Number literal with number literal type annotation
+      (NumericLiteral(lit), Some(NumberLiteral(expected_val, _))) => {
+        let num_val = @strconv.parse_double(lit.value) catch { _ => 0.0 }
+        if num_val == expected_val {
+          number_literal_type(checker, num_val)
+        } else {
+          number_type(checker)
+        }
+      }
+      // Number literal with union type annotation containing number literals
+      (NumericLiteral(lit), Some(Union(union))) => {
+        let num_val = @strconv.parse_double(lit.value) catch { _ => 0.0 }
+        if union_contains_number_literal(union, num_val) {
+          number_literal_type(checker, num_val)
+        } else {
+          number_type(checker)
+        }
+      }
+      // Boolean literal with boolean literal type annotation
+      (BooleanLiteral(lit), Some(BooleanLiteral(expected_val, _))) =>
+        if lit.value == expected_val {
+          boolean_literal_type(checker, lit.value)
+        } else {
+          boolean_type(checker)
+        }
+      // Boolean literal with union type annotation containing boolean literals
+      (BooleanLiteral(lit), Some(Union(union))) =>
+        if union_contains_boolean_literal(union, lit.value) {
+          boolean_literal_type(checker, lit.value)
+        } else {
+          boolean_type(checker)
+        }
+      // For other cases, fall back to regular inference
+      _ => infer_type(checker, expr)
+    }
+  } else {
+    // Not a const declaration, use regular inference
+    infer_type(checker, expr)
+  }
+}
+
+///|
+/// Check if a union type contains a specific string literal
+fn union_contains_string_literal(union : CheckerUnionType, value : String) -> Bool {
+  for t in union.types {
+    match t {
+      StringLiteral(v, _) => if v == value { return true }
+      _ => ()
+    }
+  }
+  false
+}
+
+///|
+/// Check if a union type contains a specific number literal
+fn union_contains_number_literal(union : CheckerUnionType, value : Double) -> Bool {
+  for t in union.types {
+    match t {
+      NumberLiteral(v, _) => if v == value { return true }
+      _ => ()
+    }
+  }
+  false
+}
+
+///|
+/// Check if a union type contains a specific boolean literal
+fn union_contains_boolean_literal(union : CheckerUnionType, value : Bool) -> Bool {
+  for t in union.types {
+    match t {
+      BooleanLiteral(v, _) => if v == value { return true }
+      _ => ()
+    }
+  }
+  false
 }
 
 ///|
@@ -6490,14 +6622,13 @@ fn check_return_type_consistency(
               Some(expr) => {
                 let (return_type, c) = infer_type(checker, expr)
                 checker = c
-                if not(is_assignable(return_type, declared_return)) {
-                  checker = add_diagnostic_with_code(
-                    checker,
-                    "Type is not assignable to the declared return type.",
-                    get_node_location(expr),
-                    DiagnosticCode::TS2322,
-                  )
-                }
+                // Use check_assignment_compatibility for better union handling
+                checker = check_assignment_compatibility(
+                  checker,
+                  return_type,
+                  declared_return,
+                  get_node_location(expr),
+                )
               }
               None =>
                 // void return - check if compatible
@@ -9304,6 +9435,34 @@ fn check_union_assignability_detailed(
   location : SourceLocation,
   _path : String,
 ) -> TypeChecker {
+  // If source is also a union, check if all source members are assignable to target union
+  match source {
+    Union(source_union) => {
+      // For each source union member, check if it's assignable to the target union
+      for source_member in source_union.types {
+        // Check if this source member is assignable to any target union member
+        let mut member_assignable = false
+        for target_member in union.types {
+          if is_assignable(source_member, target_member) {
+            member_assignable = true
+            break
+          }
+        }
+        if not(member_assignable) {
+          return add_diagnostic_with_code(
+            checker,
+            "Type '\{type_to_string(source)}' is not assignable to type '\{type_to_string(Union(union))}'",
+            location,
+            TS2322,
+          )
+        }
+      }
+      // All source members are assignable to target union
+      return checker
+    }
+    _ => ()
+  }
+
   // Check if source is assignable to any member of the union
   for union_type in union.types {
     if is_assignable(source, union_type) {
@@ -13231,6 +13390,9 @@ fn get_type_from_type_node(
                     (Some(t), c) => (Some(t), c)
                     (None, c) => (None, c)
                   }
+                Type =>
+                  // Resolve type alias to its underlying type
+                  resolve_type_alias_type(checker, symbol)
                 Module => {
                   // TS2709: Cannot use namespace as a type
                   let checker = add_diagnostic_with_code(
@@ -13430,6 +13592,25 @@ fn get_type_from_type_node(
         checker,
       )
     }
+    LiteralType(lit_type) =>
+      // Handle literal types: "up" | "down", 1 | 2, true | false
+      match lit_type.literal {
+        StringLiteral(s) => {
+          let (info, c) = create_type_info(checker)
+          (Some(StringLiteral(s.value, info)), c)
+        }
+        NumericLiteral(n) => {
+          let (info, c) = create_type_info(checker)
+          // Parse the string value to a number
+          let num_value = @strconv.parse_double(n.value) catch { _ => 0.0 }
+          (Some(NumberLiteral(num_value, info)), c)
+        }
+        BooleanLiteral(b) => {
+          let (info, c) = create_type_info(checker)
+          (Some(BooleanLiteral(b.value, info)), c)
+        }
+        _ => (None, checker)
+      }
     FunctionType(func_type) => {
       // Handle function type annotations: (x: number) => string
       let mut checker = checker
@@ -13974,6 +14155,75 @@ fn resolve_interface_type(
   // Unmark symbol as being resolved
   let resolving = checker.resolving_symbols
   resolving.remove(interface_symbol.id)
+  checker = { ..checker, resolving_symbols: resolving }
+
+  (result, checker)
+}
+
+///|
+/// Resolve a type alias symbol to its underlying type
+fn resolve_type_alias_type(
+  checker : TypeChecker,
+  type_alias_symbol : Symbol,
+) -> (Type?, TypeChecker) {
+  // Check for circular reference
+  if checker.resolving_symbols.get(type_alias_symbol.id) is Some(_) {
+    // Circular reference - return a TypeReference
+    let (info, checker) = create_type_info(checker)
+    return (
+      Some(
+        Type::TypeReference({
+          name: type_alias_symbol.name,
+          type_arguments: [],
+          info,
+        }),
+      ),
+      checker,
+    )
+  }
+
+  // Mark symbol as being resolved
+  let resolving = checker.resolving_symbols
+  resolving.set(type_alias_symbol.id, true)
+  let mut checker = { ..checker, resolving_symbols: resolving }
+
+  // Get the type alias declaration from the symbol
+  let result = match type_alias_symbol.value_declaration {
+    Some(TypeAliasDeclaration(type_alias)) =>
+      // Get the underlying type from the type_node
+      match get_type_from_type_node(checker, type_alias.type_node) {
+        (Some(t), c) => {
+          checker = c
+          Some(t)
+        }
+        (None, c) => {
+          checker = c
+          None
+        }
+      }
+    _ =>
+      // Try declarations array if value_declaration is not a TypeAliasDeclaration
+      match type_alias_symbol.declarations.iter().find_first(
+        fn(decl) { decl is TypeAliasDeclaration(_) },
+      ) {
+        Some(TypeAliasDeclaration(type_alias)) =>
+          match get_type_from_type_node(checker, type_alias.type_node) {
+            (Some(t), c) => {
+              checker = c
+              Some(t)
+            }
+            (None, c) => {
+              checker = c
+              None
+            }
+          }
+        _ => None
+      }
+  }
+
+  // Unmark symbol as being resolved
+  let resolving = checker.resolving_symbols
+  resolving.remove(type_alias_symbol.id)
   checker = { ..checker, resolving_symbols: resolving }
 
   (result, checker)
