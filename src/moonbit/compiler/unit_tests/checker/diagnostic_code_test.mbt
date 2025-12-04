@@ -4691,10 +4691,13 @@ test "DiagnosticCode - valid Array.from usage" {
 
 ///|
 test "DiagnosticCode - TS2565: property used before being assigned" {
+  // Currently only checked in derived classes (without strictPropertyInitialization flag)
   let source =
-    #|class Example {
+    #|class Base { }
+    #|class Example extends Base {
     #|  prop: string;
     #|  constructor() {
+    #|    super();
     #|    console.log(this.prop); // using before assignment
     #|    this.prop = "value";
     #|  }
@@ -6286,9 +6289,11 @@ test "DiagnosticCode - TS2736 unary minus on bigint is fine" {
 
 ///|
 test "DiagnosticCode - TS2376 super not first statement" {
+  // TS2376 is only raised when class has initialized properties or parameter properties
   let source =
     #|class Base { }
     #|class Derived extends Base {
+    #|  x = 10; // initialized property requires super() first
     #|  constructor() {
     #|    console.log("before super");
     #|    super();

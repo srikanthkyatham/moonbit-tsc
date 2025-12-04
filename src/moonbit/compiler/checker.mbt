@@ -4574,11 +4574,14 @@ fn infer_method_type(
 
   // Check method body for errors (including await expressions)
   let checker = match method_decl.body {
-    Some(body) =>
+    Some(body) => {
+      // Hoist var declarations to the method scope before checking body
+      let checker = hoist_var_declarations(checker, body)
       match body {
         BlockStatement(block) => check_block_statement(checker, block)
         _ => checker
       }
+    }
     None => checker
   }
 
@@ -8125,6 +8128,10 @@ fn infer_function_expression_type(
     checker = add_local_variable(checker, param.name, param.param_type)
   }
 
+  // Hoist var declarations to the function scope before checking body
+  // This ensures var declarations are visible even before their declaration
+  let checker = hoist_var_declarations(checker, fe.body)
+
   // Check function body for errors (including await expressions)
   let checker = match fe.body {
     BlockStatement(block) => check_block_statement(checker, block)
@@ -10171,9 +10178,22 @@ fn check_block_statement(
 
 ///|
 /// Check if a class is a derived class (has extends clause)
+/// Note: A class that extends null is NOT considered a derived class for
+/// the purposes of super() call requirements, because null has no constructor
 fn is_derived_class(class_decl : ClassDeclaration) -> Bool {
   for clause in class_decl.heritage_clauses {
     if clause.kind == Extends {
+      // Check if it's extending null
+      for type_expr in clause.types {
+        match type_expr {
+          TypeReference(type_ref) =>
+            if type_ref.type_name == "null" {
+              // extends null - not a derived class for super() purposes
+              return false
+            }
+          _ => ()
+        }
+      }
       return true
     }
   }
@@ -10223,13 +10243,83 @@ fn contains_super_call(node : Node) -> Bool {
         Some(expr) => contains_super_call(expr)
         None => false
       }
+    // Variable statements (let/const/var declarations)
+    VariableStatement(vs) => {
+      for decl in vs.declarations {
+        match decl.initializer {
+          Some(init) =>
+            if contains_super_call(init) {
+              return true
+            }
+          None => ()
+        }
+      }
+      false
+    }
+    // Object literal expressions
+    ObjectLiteralExpression(ole) => {
+      for prop in ole.properties {
+        match prop {
+          PropertyAssignment(_, value, _) =>
+            if contains_super_call(value) {
+              return true
+            }
+          ShorthandProperty(_, _) => ()
+          SpreadAssignment(expr, _) =>
+            if contains_super_call(expr) {
+              return true
+            }
+          MethodDeclaration(_, func, _) =>
+            if contains_super_call(func.body) {
+              return true
+            }
+          GetAccessor(_, func, _) =>
+            if contains_super_call(func.body) {
+              return true
+            }
+          SetAccessor(_, func, _) =>
+            if contains_super_call(func.body) {
+              return true
+            }
+          ComputedPropertyAssignment(_, value, _) =>
+            if contains_super_call(value) {
+              return true
+            }
+        }
+      }
+      false
+    }
+    // Array literal expressions
+    ArrayLiteralExpression(ale) => {
+      for elem in ale.elements {
+        match elem {
+          Some(e) =>
+            if contains_super_call(e) {
+              return true
+            }
+          None => ()
+        }
+      }
+      false
+    }
+    // Parenthesized expressions
+    ParenthesizedExpression(pe) => contains_super_call(pe.expression)
+    // Binary expressions
+    BinaryExpression(be) =>
+      contains_super_call(be.left) || contains_super_call(be.right)
+    // Conditional expressions (ternary)
+    ConditionalExpression(ce) =>
+      contains_super_call(ce.condition) ||
+      contains_super_call(ce.when_true) ||
+      contains_super_call(ce.when_false)
     _ => false
   }
 }
 
 ///|
 /// Check for super() call requirement in derived class constructor (TS2377)
-/// Also checks that super() is the first statement (TS2376)
+/// Also checks that super() is the first statement (TS2376) when class has
+/// initialized properties, parameter properties, or private identifiers
 fn check_super_call_in_constructor(
   checker : TypeChecker,
   class_decl : ClassDeclaration,
@@ -10253,7 +10343,55 @@ fn check_super_call_in_constructor(
   }
 
   // Check if super() is the first statement (TS2376)
-  check_super_is_first_statement(checker, body)
+  // Only required when class has initialized properties, parameter properties,
+  // or private identifiers (e.g., #privateField)
+  if class_has_initialized_or_parameter_properties(class_decl) {
+    check_super_is_first_statement(checker, body)
+  } else {
+    checker
+  }
+}
+
+///|
+/// Check if class has initialized properties, parameter properties,
+/// or private identifiers that require super() to be the first statement
+fn class_has_initialized_or_parameter_properties(
+  class_decl : ClassDeclaration,
+) -> Bool {
+  for member in class_decl.members {
+    match member {
+      PropertyDeclaration(prop) => {
+        // Check if property has an initializer
+        match prop.initializer {
+          Some(_) => return true
+          None => ()
+        }
+        // Check for private identifier (starts with #)
+        if prop.name.has_prefix("#") {
+          return true
+        }
+      }
+      MethodDeclaration(method) =>
+        // Check for parameter properties in constructor
+        if method.name == "constructor" {
+          for param in method.parameters {
+            match param {
+              Parameter(p) =>
+                // Parameter properties have accessibility modifiers (public, private, protected, readonly)
+                for modifier in p.modifiers {
+                  match modifier {
+                    Public | Private | Protected | Readonly => return true
+                    _ => ()
+                  }
+                }
+              _ => ()
+            }
+          }
+        }
+      _ => ()
+    }
+  }
+  false
 }
 
 ///|
@@ -10445,12 +10583,21 @@ fn check_class_declaration(
             for param in ctor.parameters {
               checker = add_parameter_to_scope(checker, param)
             }
+            // Hoist var declarations to the constructor scope before checking body
+            // This ensures var declarations are visible even before their declaration
+            let checker = hoist_var_declarations(checker, body)
             // Check for property use before assignment (TS2565)
-            let checker = check_property_use_before_assignment(
-              checker,
-              body,
-              uninitialized_props,
-            )
+            // Skip for classes extending null (they don't have super() requirement)
+            // and when strictPropertyInitialization is not enabled
+            let checker = if is_derived_class(class_decl) {
+              check_property_use_before_assignment(
+                checker,
+                body,
+                uninitialized_props,
+              )
+            } else {
+              checker
+            }
             let checker = check_statement(checker, body)
             // Check for super() call in derived class constructor (TS2377)
             let checker = check_super_call_in_constructor(
@@ -10487,6 +10634,8 @@ fn check_class_declaration(
             for param in method_dec.parameters {
               checker = add_parameter_to_scope(checker, param)
             }
+            // Hoist var declarations to the method scope before checking body
+            let checker = hoist_var_declarations(checker, body)
             let checker = check_statement(checker, body)
             // Exit async function context if needed
             let checker = if method_dec.is_async {

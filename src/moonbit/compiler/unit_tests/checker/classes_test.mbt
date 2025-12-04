@@ -510,3 +510,290 @@ test "unit/classes/circular - static property referencing static" {
     Err(_) => assert_true(false)
   }
 }
+
+// ============================================================================
+// Extends Null Tests
+// ============================================================================
+
+///|
+test "unit/classes/extends-null - class extends null" {
+  // Class extending null should not require super() call
+  let result = parse_bind_check_class(
+    #|class NullProto extends null {
+    #|  constructor() {
+    #|    return {};
+    #|  }
+    #|}
+  )
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(diagnostics) => {
+      println("Errors: \{diagnostics}")
+      assert_true(false)
+    }
+  }
+}
+
+///|
+test "unit/classes/extends-null - class extends null with properties" {
+  // Class extending null with properties should work without super()
+  let result = parse_bind_check_class(
+    #|class Dict extends null {
+    #|  key: string;
+    #|  value: number;
+    #|}
+  )
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(diagnostics) => {
+      println("Errors: \{diagnostics}")
+      assert_true(false)
+    }
+  }
+}
+
+///|
+test "unit/classes/extends-null - extends null should not have TS2565 error" {
+  // Accessing this in constructor of extends null class should not require super() first
+  let result = parse_bind_check_class(
+    #|class NullProto extends null {
+    #|  private _t: number;
+    #|  constructor() {
+    #|    this._t = 10;
+    #|  }
+    #|}
+  )
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(diagnostics) => {
+      println("Errors: \{diagnostics}")
+      // Should not have TS2377 (super required) or TS2565 (property used before assigned)
+      let has_ts2377 = diagnostics.iter().any(fn(d) { d.code == 2377 })
+      let has_ts2565 = diagnostics.iter().any(fn(d) { d.code == 2565 })
+      assert_true(not(has_ts2377) && not(has_ts2565))
+    }
+  }
+}
+
+// ============================================================================
+// Super Call Detection Tests
+// ============================================================================
+
+///|
+test "unit/classes/super-call - super call in object literal property value" {
+  // super() call inside object literal property value should be detected
+  let result = parse_bind_check_class(
+    #|class Base {
+    #|  constructor(c: any) { }
+    #|}
+    #|class D extends Base {
+    #|  private _t: number;
+    #|  constructor() {
+    #|    let x = {
+    #|      k: super(undefined),
+    #|      j: this._t,
+    #|    }
+    #|  }
+    #|}
+  )
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(diagnostics) => {
+      println("Errors: \{diagnostics}")
+      assert_true(false)
+    }
+  }
+}
+
+///|
+test "unit/classes/super-call - super call in nested expression" {
+  // super() in nested expression should be detected
+  let result = parse_bind_check_class(
+    #|class Base {
+    #|  constructor(x: number) { }
+    #|}
+    #|class D extends Base {
+    #|  constructor() {
+    #|    const result = (super(42), 100);
+    #|  }
+    #|}
+  )
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(diagnostics) => {
+      println("Errors: \{diagnostics}")
+      assert_true(false)
+    }
+  }
+}
+
+///|
+test "unit/classes/super-call - super call in array literal" {
+  // super() in array literal should be detected
+  let result = parse_bind_check_class(
+    #|class Base {
+    #|  constructor(x: number) { }
+    #|}
+    #|class D extends Base {
+    #|  constructor() {
+    #|    const arr = [super(1), this];
+    #|  }
+    #|}
+  )
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(diagnostics) => {
+      println("Errors: \{diagnostics}")
+      assert_true(false)
+    }
+  }
+}
+
+///|
+test "unit/classes/super-call - super call in conditional expression" {
+  // super() in conditional expression should be detected
+  let result = parse_bind_check_class(
+    #|class Base {
+    #|  constructor(x: number) { }
+    #|}
+    #|class D extends Base {
+    #|  constructor(cond: boolean) {
+    #|    const x = cond ? super(1) : super(2);
+    #|  }
+    #|}
+  )
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(diagnostics) => {
+      println("Errors: \{diagnostics}")
+      assert_true(false)
+    }
+  }
+}
+
+///|
+test "unit/classes/super-call - valid super before this access" {
+  // Super must be called before accessing this - valid case
+  let result = parse_bind_check_class(
+    #|class Base {
+    #|  constructor() { }
+    #|}
+    #|class D extends Base {
+    #|  private _t: number;
+    #|  constructor() {
+    #|    super();
+    #|    this._t = 10;
+    #|  }
+    #|}
+  )
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(diagnostics) => {
+      println("Errors: \{diagnostics}")
+      assert_true(false)
+    }
+  }
+}
+
+// ============================================================================
+// Var Hoisting Tests
+// ============================================================================
+
+///|
+test "unit/classes/var-hoisting - var declaration hoisted in constructor" {
+  // var declarations should be hoisted to the function scope
+  let result = parse_bind_check_class(
+    #|declare var Factory: any;
+    #|class Base {
+    #|  constructor(c: any) { }
+    #|}
+    #|class D extends Base {
+    #|  private _t: any;
+    #|  constructor() {
+    #|    super(i);
+    #|    var s = {
+    #|      t: this._t
+    #|    }
+    #|    var i = Factory.create(s);
+    #|  }
+    #|}
+  )
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(diagnostics) => {
+      println("Errors: \{diagnostics}")
+      assert_true(false)
+    }
+  }
+}
+
+///|
+test "unit/classes/var-hoisting - var declaration hoisted in method" {
+  // var declarations should be hoisted in methods too
+  let result = parse_bind_check_class(
+    #|class Foo {
+    #|  method() {
+    #|    console.log(x);
+    #|    var x = 10;
+    #|  }
+    #|}
+  )
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(diagnostics) => {
+      println("Errors: \{diagnostics}")
+      assert_true(false)
+    }
+  }
+}
+
+///|
+test "unit/classes/ts2376 - no error for class without initialized properties" {
+  // TS2376 should NOT be raised for classes without initialized properties
+  let result = parse_bind_check_class(
+    #|class Base {
+    #|  constructor(c: any) { }
+    #|}
+    #|class D extends Base {
+    #|  private _t: any;
+    #|  constructor() {
+    #|    let x = {
+    #|      k: super(undefined),
+    #|      j: this._t,
+    #|    }
+    #|  }
+    #|}
+  )
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(diagnostics) => {
+      println("Errors: \{diagnostics}")
+      assert_true(false)
+    }
+  }
+}
+
+///|
+test "unit/classes/ts2376 - error for class with initialized properties" {
+  // TS2376 SHOULD be raised for classes with initialized properties where super is not first
+  let result = parse_bind_check_class(
+    #|class Base {
+    #|  constructor(c: any) { }
+    #|}
+    #|class D extends Base {
+    #|  private _t: number = 0;
+    #|  constructor() {
+    #|    let x = 1;
+    #|    super(undefined);
+    #|  }
+    #|}
+  )
+  match result {
+    Ok(_) => assert_true(false) // Should have TS2376 error
+    Err(diagnostics) => {
+      assert_true(diagnostics.length() > 0)
+      let has_ts2376 = diagnostics.iter().any(fn(d) { d.code == 2376 })
+      assert_true(has_ts2376)
+    }
+  }
+}
