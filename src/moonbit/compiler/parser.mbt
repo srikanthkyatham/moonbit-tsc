@@ -270,6 +270,7 @@ pub enum ParserErrorCode {
   UsingDeclarationsRequireAwait // TS1463
   UsingDeclarationNotInParameter // TS1484
   ESMImportExportNotValid // TS1486
+  LineTerminatorBeforeArrow // TS1200: Line terminator not permitted before arrow
   // Note: TS2xxx (type checker) and TS4xxx (build/emit) errors are in
   // DiagnosticCode enum in symbol.mbt, not in ParserErrorCode
 } derive(Show, Eq)
@@ -400,6 +401,7 @@ pub fn ParserErrorCode::to_int(self : ParserErrorCode) -> Int {
     UsingDeclarationsRequireAwait => 1463
     UsingDeclarationNotInParameter => 1484
     ESMImportExportNotValid => 1486
+    LineTerminatorBeforeArrow => 1200
   }
 }
 
@@ -576,6 +578,8 @@ pub fn ParserErrorCode::to_message(self : ParserErrorCode) -> String {
       "A 'using' declaration may not be declared in a parameter."
     ESMImportExportNotValid =>
       "This file has an import or export that cannot be used outside of ECMAScript modules."
+    LineTerminatorBeforeArrow =>
+      "Line terminator not permitted before arrow."
   }
 }
 

@@ -3,6 +3,20 @@
 // NOTE: Core expression logic moved to parser_v2_expression.mbt
 
 ///|
+/// Check if there's a line terminator before the current token
+/// by comparing line numbers of previous token's end and current token's start
+fn has_line_terminator_before_current(parser : Parser) -> Bool {
+  if parser.position == 0 {
+    return false
+  }
+  let prev_token = parser.tokens[parser.position - 1]
+  let curr_token = parser.tokens[parser.position]
+  let prev_end_line = prev_token.location().end.line
+  let curr_start_line = curr_token.location().start.line
+  curr_start_line > prev_end_line
+}
+
+///|
 /// Parse an identifier or keyword as a property name for member access expressions.
 /// This is necessary because in JavaScript/TypeScript, keywords can be used as property names.
 /// For example: `field.type`, `field.string`, `obj.class` are all valid.
@@ -137,8 +151,24 @@ fn try_parse_arrow_function(parser : Parser) -> Result[(Node, Parser), Parser] {
   }
 
   // Expect arrow =>
+  // Check for line terminator before arrow (TS1200)
+  let arrow_loc = current_token(parser).location()
   let parser = match current_token(parser) {
-    Arrow(_) => advance_parser(parser)
+    Arrow(_) => {
+      // Check for line terminator before arrow
+      if has_line_terminator_before_current(parser) {
+        let parser = add_error_with_code(
+          parser,
+          LineTerminatorBeforeArrow.to_message(),
+          arrow_loc,
+          LineTerminatorBeforeArrow,
+        )
+        // Still parse the arrow function, but with the error recorded
+        advance_parser(parser)
+      } else {
+        advance_parser(parser)
+      }
+    }
     _ => return Err(original_parser)
   }
 
@@ -170,8 +200,24 @@ fn try_parse_single_param_arrow_function(
   }
 
   // Expect arrow =>
+  // Check for line terminator before arrow (TS1200)
+  let arrow_loc = current_token(parser).location()
   let parser = match current_token(parser) {
-    Arrow(_) => advance_parser(parser)
+    Arrow(_) => {
+      // Check for line terminator before arrow
+      if has_line_terminator_before_current(parser) {
+        let parser = add_error_with_code(
+          parser,
+          LineTerminatorBeforeArrow.to_message(),
+          arrow_loc,
+          LineTerminatorBeforeArrow,
+        )
+        // Still parse the arrow function, but with the error recorded
+        advance_parser(parser)
+      } else {
+        advance_parser(parser)
+      }
+    }
     _ => return Err(original_parser)
   }
 

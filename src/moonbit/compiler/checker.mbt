@@ -276,6 +276,8 @@ pub struct TypeChecker {
   arrow_function_depth : Int // Tracks nesting depth in arrow functions (> 0 means inside arrow)
   async_function_depth : Int // Tracks nesting depth in async functions (> 0 means inside async)
   generator_function_depth : Int // Tracks nesting depth in generator functions (> 0 means inside generator)
+  regular_function_depth : Int // Tracks nesting depth in regular functions (> 0 means inside regular function)
+  innermost_function_is_arrow : Bool // True if the innermost containing function is an arrow function
   generator_has_return_type : Bool // Tracks if current generator has a return type annotation
   block_scoped_decls : Map[String, Int] // Variable name -> declaration line (for TS2448 TDZ check)
   uninitialized_vars : Map[String, Int] // Variable name -> declaration line (for TS2454 definite assignment)
@@ -345,6 +347,8 @@ pub fn TypeChecker::new_with_options(
     arrow_function_depth: 0,
     async_function_depth: 0,
     generator_function_depth: 0,
+    regular_function_depth: 0,
+    innermost_function_is_arrow: false,
     generator_has_return_type: false,
     block_scoped_decls: Map::new(),
     uninitialized_vars: Map::new(),
@@ -395,13 +399,22 @@ fn pop_local_scope(checker : TypeChecker) -> TypeChecker {
 ///|
 /// Enter arrow function context (increment depth)
 fn enter_arrow_function(checker : TypeChecker) -> TypeChecker {
-  { ..checker, arrow_function_depth: checker.arrow_function_depth + 1 }
+  {
+    ..checker,
+    arrow_function_depth: checker.arrow_function_depth + 1,
+    innermost_function_is_arrow: true,
+  }
 }
 
 ///|
 /// Exit arrow function context (decrement depth)
 fn exit_arrow_function(checker : TypeChecker) -> TypeChecker {
-  { ..checker, arrow_function_depth: checker.arrow_function_depth - 1 }
+  {
+    ..checker,
+    arrow_function_depth: checker.arrow_function_depth - 1,
+    // Restore: innermost is arrow only if we're still inside an arrow
+    innermost_function_is_arrow: checker.arrow_function_depth > 1,
+  }
 }
 
 ///|
@@ -455,6 +468,34 @@ fn exit_generator_function(checker : TypeChecker) -> TypeChecker {
 /// Check if currently inside a generator function
 fn is_in_generator_function(checker : TypeChecker) -> Bool {
   checker.generator_function_depth > 0
+}
+
+///|
+/// Enter regular function context (increment depth)
+fn enter_regular_function(checker : TypeChecker) -> TypeChecker {
+  {
+    ..checker,
+    regular_function_depth: checker.regular_function_depth + 1,
+    innermost_function_is_arrow: false,
+  }
+}
+
+///|
+/// Exit regular function context (decrement depth)
+fn exit_regular_function(checker : TypeChecker) -> TypeChecker {
+  {
+    ..checker,
+    regular_function_depth: checker.regular_function_depth - 1,
+    // Restore: innermost is arrow if we're still inside an arrow but no more regular functions between
+    innermost_function_is_arrow: checker.regular_function_depth == 1 &&
+      checker.arrow_function_depth > 0,
+  }
+}
+
+///|
+/// Check if currently inside a regular function (not arrow function)
+fn is_in_regular_function(checker : TypeChecker) -> Bool {
+  checker.regular_function_depth > 0
 }
 
 ///|
@@ -3050,20 +3091,37 @@ fn infer_identifier_type(
   checker : TypeChecker,
   id : Identifier,
 ) -> (Type, TypeChecker) {
-  // TS2496: Check for 'arguments' in arrow function (only for ES3/ES5 targets)
-  // But only if 'arguments' is a parameter of the current arrow function itself
-  // (i.e., in the innermost local scope), not from an outer scope
-  if id.name == "arguments" &&
-    is_in_arrow_function(checker) &&
-    checker.target.older_than(ES2015) &&
-    not(is_in_innermost_scope(checker, id.name)) {
-    let checker = add_diagnostic_with_code(
-      checker,
-      "The 'arguments' object cannot be referenced in an arrow function in ES3 and ES5. Consider using a standard function expression.",
-      id.location,
-      TS2496,
-    )
-    return any_type(checker)
+  // Handle 'arguments' identifier specially
+  if id.name == "arguments" {
+    // Check if 'arguments' is a parameter in the current scope (shadows built-in)
+    if is_in_innermost_scope(checker, id.name) {
+      // arguments is a parameter name, let normal lookup handle it
+      ()
+    } else if checker.innermost_function_is_arrow {
+      // The innermost function is an arrow - arrow functions don't have 'arguments'
+      // In ES3/ES5, this is always an error
+      // In ES2015+, arrow functions inherit arguments from enclosing non-arrow function
+      if checker.target.older_than(ES2015) {
+        let checker = add_diagnostic_with_code(
+          checker,
+          "The 'arguments' object cannot be referenced in an arrow function in ES3 and ES5. Consider using a standard function expression.",
+          id.location,
+          TS2496,
+        )
+        return any_type(checker)
+      } else {
+        // ES2015+: Arrow functions can access enclosing function's arguments
+        // Only if we're inside a regular function (somewhere in the outer scope)
+        if is_in_regular_function(checker) {
+          return get_arguments_type(checker)
+        }
+        // Otherwise it's an error - no enclosing function
+      }
+    } else if is_in_regular_function(checker) {
+      // Innermost function is a regular function - arguments is available
+      return get_arguments_type(checker)
+    }
+    // At top level or in arrow without enclosing function - let it fall through to error
   }
 
   // TS2448: Check for block-scoped variable used before declaration (TDZ)
@@ -3380,6 +3438,68 @@ fn get_builtin_global_type(
   } else {
     None
   }
+}
+
+///|
+/// Get the type for the 'arguments' object (IArguments interface)
+/// arguments is an array-like object available in regular functions
+fn get_arguments_type(checker : TypeChecker) -> (Type, TypeChecker) {
+  let (id, checker) = next_type_id(checker)
+  let default_flags = TypeFlags::default()
+  let any_info = TypeInfo::{ id: 0, flags: default_flags }
+
+  // IArguments has:
+  // - length: number
+  // - [index: number]: any (numeric indexing)
+  // - callee: Function (deprecated but exists)
+  let properties : Map[String, PropertySignature] = Map::new()
+
+  // length property
+  let (num_id, checker) = next_type_id(checker)
+  properties.set(
+    "length",
+    PropertySignature::{
+      name: "length",
+      prop_type: Type::Number(TypeInfo::{ id: num_id, flags: default_flags }),
+      is_optional: false,
+      is_readonly: false,
+    },
+  )
+
+  // callee property (Function type)
+  let (func_id, checker) = next_type_id(checker)
+  properties.set(
+    "callee",
+    PropertySignature::{
+      name: "callee",
+      prop_type: Type::Function(CheckerFunctionType::{
+        parameters: [],
+        return_type: Type::Any(any_info),
+        info: TypeInfo::{ id: func_id, flags: default_flags },
+      }),
+      is_optional: false,
+      is_readonly: false,
+    },
+  )
+
+  // Create the arguments type with numeric index signature
+  let arguments_type = Type::Object(ObjectType::{
+    properties,
+    call_signatures: [],
+    construct_signatures: [],
+    index_signatures: [
+      IndexSignature::{
+        parameter_name: "index",
+        parameter_type: Type::Number(TypeInfo::{ id: 0, flags: default_flags }),
+        return_type: Type::Any(any_info),
+        is_readonly: false,
+      },
+    ],
+    info: TypeInfo::{ id, flags: default_flags },
+    class_name: None,
+  })
+
+  (arguments_type, checker)
 }
 
 ///|
@@ -8549,6 +8669,9 @@ fn infer_function_expression_type(
     checker = add_local_variable(checker, param.name, param.param_type)
   }
 
+  // Track regular function context (for 'arguments' object availability)
+  let checker = enter_regular_function(checker)
+
   // Hoist var declarations to the function scope before checking body
   // This ensures var declarations are visible even before their declaration
   let checker = hoist_var_declarations(checker, fe.body)
@@ -8558,6 +8681,9 @@ fn infer_function_expression_type(
     BlockStatement(block) => check_block_statement(checker, block)
     _ => checker
   }
+
+  // Exit regular function context
+  let checker = exit_regular_function(checker)
 
   // Exit async function context if needed
   let checker = if fe.is_async {
@@ -10305,6 +10431,9 @@ fn check_function_declaration(
     checker
   }
 
+  // Track regular function context (for 'arguments' object availability)
+  let checker = enter_regular_function(checker)
+
   // Hoist var declarations to the function scope before checking body
   // This ensures self-references like `var x = yield \`${ x }\`` work correctly
   let checker = match func.body {
@@ -10331,6 +10460,9 @@ fn check_function_declaration(
   } else {
     checker
   }
+
+  // Exit regular function context
+  let checker = exit_regular_function(checker)
 
   // Check return type consistency if a return type is declared
   // This must happen AFTER body is checked so variables are in scope

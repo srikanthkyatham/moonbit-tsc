@@ -5297,6 +5297,78 @@ test "DiagnosticCode - TS2496 no error in ES2015+ target" {
   }
 }
 
+///|
+test "DiagnosticCode - arguments available in regular function" {
+  // arguments should be available in regular functions without error
+  let source =
+    #|function bar() {
+    #|  var arg = arguments[0];
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(true) // arguments is valid in regular functions
+    Err(diagnostics) => {
+      // Should not have TS2304 (cannot find name 'arguments')
+      assert_true(not(has_error(diagnostics, 2304)))
+      // Should not have TS2496 either
+      assert_true(not(has_error(diagnostics, 2496)))
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - arguments in regular function inside arrow" {
+  // Regular function inside arrow should have its own arguments
+  let source =
+    #|() => {
+    #|  function foo() {
+    #|    var arg = arguments[0];
+    #|  }
+    #|};
+  let result = check_source_with_target(source, @compiler.ES5)
+  match result {
+    Ok(_) => assert_true(true) // arguments is valid in the inner regular function
+    Err(diagnostics) => {
+      // Should not have errors for the arguments reference
+      assert_true(not(has_error(diagnostics, 2304)))
+      assert_true(not(has_error(diagnostics, 2496)))
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - arguments in function expression" {
+  // Function expression should have access to arguments
+  let source =
+    #|var b = function() {
+    #|  var arg = arguments[0];
+    #|};
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(true) // arguments is valid in function expression
+    Err(diagnostics) => {
+      assert_true(not(has_error(diagnostics, 2304)))
+      assert_true(not(has_error(diagnostics, 2496)))
+    }
+  }
+}
+
+///|
+test "DiagnosticCode - TS2496 in arrow inside function expression" {
+  // Arrow function inside function expression should still error at ES5
+  let source =
+    #|var b = function() {
+    #|  var inner = () => {
+    #|    var arg = arguments[0];
+    #|  };
+    #|};
+  let result = check_source_with_target(source, @compiler.ES5)
+  match result {
+    Ok(_) => assert_true(false) // Should have TS2496 error
+    Err(diagnostics) => assert_true(has_error(diagnostics, 2496))
+  }
+}
+
 // ============================================================================
 // TS2497: Module can only be referenced with ES imports
 // ============================================================================
@@ -7768,5 +7840,94 @@ test "unit/literal-type/number-literal-in-type-annotation" {
   match result {
     Ok(_) => () // Should succeed
     Err(_) => fail("Number literal should be assignable to number")
+  }
+}
+
+// ============================================================================
+// TS1200: Line terminator not permitted before arrow
+// ============================================================================
+
+///|
+test "DiagnosticCode - TS1200 line terminator before arrow (parenthesized)" {
+  // Line terminator before arrow in parenthesized arrow function
+  let source =
+    #|var f = ()
+    #|    => { }
+  let result = check_source(source)
+  match result {
+    Ok(_) => fail("Expected TS1200 error for line terminator before arrow")
+    Err(diagnostics) =>
+      assert_true(
+        has_error(diagnostics, 1200),
+        msg="Should report TS1200 for line terminator before arrow",
+      )
+  }
+}
+
+///|
+test "DiagnosticCode - TS1200 line terminator before arrow (single param)" {
+  // Line terminator before arrow in single parameter arrow function
+  let source =
+    #|var f = x
+    #|    => x + 1
+  let result = check_source(source)
+  match result {
+    Ok(_) => fail("Expected TS1200 error for line terminator before arrow")
+    Err(diagnostics) =>
+      assert_true(
+        has_error(diagnostics, 1200),
+        msg="Should report TS1200 for single param arrow with line terminator",
+      )
+  }
+}
+
+///|
+test "DiagnosticCode - TS1200 line terminator with return type" {
+  // Line terminator before arrow with return type annotation
+  let source =
+    #|var f = (a: number): number
+    #|    => a;
+  let result = check_source(source)
+  match result {
+    Ok(_) => fail("Expected TS1200 error for line terminator before arrow")
+    Err(diagnostics) =>
+      assert_true(
+        has_error(diagnostics, 1200),
+        msg="Should report TS1200 when return type precedes line break",
+      )
+  }
+}
+
+///|
+test "DiagnosticCode - TS1200 valid arrow same line" {
+  // Arrow on same line should be valid (no error)
+  let source =
+    #|var f = () => { }
+    #|var g = (x: number) => x + 1
+  let result = check_source(source)
+  match result {
+    Ok(_) => () // Should succeed with no errors
+    Err(diagnostics) =>
+      assert_true(
+        not(has_error(diagnostics, 1200)),
+        msg="Should NOT report TS1200 when arrow is on same line",
+      )
+  }
+}
+
+///|
+test "DiagnosticCode - TS1200 valid paren on new line" {
+  // Closing paren on new line, arrow on same line as paren should be valid
+  let source =
+    #|var f = (a: number
+    #|    ) => a;
+  let result = check_source(source)
+  match result {
+    Ok(_) => () // Should succeed with no errors
+    Err(diagnostics) =>
+      assert_true(
+        not(has_error(diagnostics, 1200)),
+        msg="Should NOT report TS1200 when closing paren is on new line but arrow follows",
+      )
   }
 }
