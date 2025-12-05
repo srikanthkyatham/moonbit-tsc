@@ -2983,12 +2983,17 @@ fn check_variable_declaration(
   }
 
   // Check for array destructuring on non-array type (TS2460)
-  let checker = match (decl.name, init_type) {
-    (ArrayBindingPattern(_), Some(init_t)) =>
-      if not(is_array_like_type(init_t)) {
+  // Use declared type if present (e.g., `: any`), otherwise use init_type
+  let type_for_array_check = match declared_type {
+    Some(t) => Some(t)
+    None => init_type
+  }
+  let checker = match (decl.name, type_for_array_check) {
+    (ArrayBindingPattern(_), Some(check_t)) =>
+      if not(is_array_like_type(check_t)) {
         add_diagnostic_with_code(
           checker,
-          "Type '\{type_to_string(init_t)}' is not an array type.",
+          "Type '\{type_to_string(check_t)}' is not an array type.",
           decl.location,
           TS2460,
         )
@@ -3113,8 +3118,13 @@ fn infer_type_with_context(
       _ => infer_type(checker, expr)
     }
   } else {
-    // Not a const declaration, use regular inference
-    infer_type(checker, expr)
+    // Not a const declaration, but still check for tuple type annotation
+    match (expr, contextual_type) {
+      // Array literal with tuple type annotation - infer as tuple (for var/let too)
+      (ArrayLiteralExpression(arr), Some(Tuple(tuple_type))) =>
+        infer_tuple_from_array_literal(checker, arr, tuple_type)
+      _ => infer_type(checker, expr)
+    }
   }
 }
 
