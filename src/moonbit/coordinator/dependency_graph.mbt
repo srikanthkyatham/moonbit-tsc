@@ -342,6 +342,96 @@ pub fn has_cycle(dag : DependencyDag) -> Bool {
   topological_sort(dag) is None
 }
 
+///|
+/// Compute topological levels for parallel type checking.
+/// Returns a list of levels, where each level contains files that can be
+/// checked in parallel (all their dependencies are in earlier levels).
+/// Level 0 = leaf nodes (no dependencies), Level 1 = depend only on level 0, etc.
+pub fn topological_levels(dag : DependencyDag, files : Array[String]) -> Array[Array[String]] {
+  // Build a set of files we're interested in
+  let file_set : Map[String, Bool] = {}
+  for file in files {
+    file_set[file] = true
+  }
+
+  // Build filtered dependency map (only deps within our file set)
+  let deps_map : Map[String, Array[String]] = {}
+  for file in files {
+    match dag.nodes.get(file) {
+      Some(node) => {
+        let filtered_deps : Array[String] = []
+        for dep in node.edges_out {
+          if file_set.contains(dep) {
+            filtered_deps.push(dep)
+          }
+        }
+        deps_map[file] = filtered_deps
+      }
+      None => deps_map[file] = []
+    }
+  }
+
+  // Compute levels iteratively
+  let levels : Array[Array[String]] = []
+  let processed : Map[String, Bool] = {}
+
+  while processed.length() < files.length() {
+    // Find files with no remaining unprocessed dependencies (roots at this level)
+    let current_level : Array[String] = []
+
+    for file in files {
+      if not(processed.contains(file)) {
+        let deps = deps_map.get(file).unwrap_or([])
+        let all_deps_processed = deps.iter().all(fn(dep) { processed.contains(dep) })
+        if all_deps_processed {
+          current_level.push(file)
+        }
+      }
+    }
+
+    // If no files can be added to current level, we have a cycle
+    // Add remaining files as a single level to avoid infinite loop
+    if current_level.length() == 0 {
+      let remaining : Array[String] = []
+      for file in files {
+        if not(processed.contains(file)) {
+          remaining.push(file)
+        }
+      }
+      if remaining.length() > 0 {
+        levels.push(remaining)
+      }
+      break
+    }
+
+    // Mark current level files as processed
+    for file in current_level {
+      processed[file] = true
+    }
+
+    levels.push(current_level)
+  }
+
+  levels
+}
+
+///|
+/// Get files at a specific level (0-indexed)
+pub fn get_level(dag : DependencyDag, files : Array[String], level_index : Int) -> Array[String] {
+  let levels = topological_levels(dag, files)
+  if level_index >= 0 && level_index < levels.length() {
+    levels[level_index]
+  } else {
+    []
+  }
+}
+
+///|
+/// Get the number of levels in the dependency graph
+pub fn level_count(dag : DependencyDag, files : Array[String]) -> Int {
+  topological_levels(dag, files).length()
+}
+
 // Helper functions
 
 ///|

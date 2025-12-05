@@ -263,6 +263,152 @@ test "independent nodes - parallel compilation possible" {
   }
 }
 
+///|
+test "topological levels - simple chain" {
+  // a -> b -> c (c imports b, b imports a)
+  // Level 0: a (no deps)
+  // Level 1: b (depends on a)
+  // Level 2: c (depends on b)
+  let dag = DependencyDag::new()
+  add_node(dag, "/src/a.ts", [], 1000L)
+  add_node(dag, "/src/b.ts", ["/src/a.ts"], 1000L)
+  add_node(dag, "/src/c.ts", ["/src/b.ts"], 1000L)
+
+  let files = ["/src/a.ts", "/src/b.ts", "/src/c.ts"]
+  let levels = topological_levels(dag, files)
+
+  assert_eq(levels.length(), 3)
+  assert_eq(levels[0].length(), 1)
+  assert_eq(levels[0][0], "/src/a.ts")
+  assert_eq(levels[1].length(), 1)
+  assert_eq(levels[1][0], "/src/b.ts")
+  assert_eq(levels[2].length(), 1)
+  assert_eq(levels[2][0], "/src/c.ts")
+}
+
+///|
+test "topological levels - diamond dependency" {
+  //     a
+  //    / \
+  //   b   c
+  //    \ /
+  //     d
+  // Level 0: d (no deps)
+  // Level 1: b, c (both depend only on d)
+  // Level 2: a (depends on b and c)
+  let dag = DependencyDag::new()
+  add_node(dag, "/src/d.ts", [], 1000L)
+  add_node(dag, "/src/b.ts", ["/src/d.ts"], 1000L)
+  add_node(dag, "/src/c.ts", ["/src/d.ts"], 1000L)
+  add_node(dag, "/src/a.ts", ["/src/b.ts", "/src/c.ts"], 1000L)
+
+  let files = ["/src/a.ts", "/src/b.ts", "/src/c.ts", "/src/d.ts"]
+  let levels = topological_levels(dag, files)
+
+  assert_eq(levels.length(), 3)
+
+  // Level 0: d
+  assert_eq(levels[0].length(), 1)
+  assert_eq(levels[0][0], "/src/d.ts")
+
+  // Level 1: b and c (can be compiled in parallel)
+  assert_eq(levels[1].length(), 2)
+  assert_true(contains_path(levels[1], "/src/b.ts"))
+  assert_true(contains_path(levels[1], "/src/c.ts"))
+
+  // Level 2: a
+  assert_eq(levels[2].length(), 1)
+  assert_eq(levels[2][0], "/src/a.ts")
+}
+
+///|
+test "topological levels - independent files" {
+  // a, b, c with no dependencies
+  // All should be in level 0 (can all be compiled in parallel)
+  let dag = DependencyDag::new()
+  add_node(dag, "/src/a.ts", [], 1000L)
+  add_node(dag, "/src/b.ts", [], 1000L)
+  add_node(dag, "/src/c.ts", [], 1000L)
+
+  let files = ["/src/a.ts", "/src/b.ts", "/src/c.ts"]
+  let levels = topological_levels(dag, files)
+
+  assert_eq(levels.length(), 1)
+  assert_eq(levels[0].length(), 3)
+  assert_true(contains_path(levels[0], "/src/a.ts"))
+  assert_true(contains_path(levels[0], "/src/b.ts"))
+  assert_true(contains_path(levels[0], "/src/c.ts"))
+}
+
+///|
+test "topological levels - partial file list" {
+  // Full graph: a -> b -> c -> d
+  // But we only want levels for [b, c, d]
+  let dag = DependencyDag::new()
+  add_node(dag, "/src/d.ts", [], 1000L)
+  add_node(dag, "/src/c.ts", ["/src/d.ts"], 1000L)
+  add_node(dag, "/src/b.ts", ["/src/c.ts"], 1000L)
+  add_node(dag, "/src/a.ts", ["/src/b.ts"], 1000L)
+
+  // Only interested in b, c, d
+  let files = ["/src/b.ts", "/src/c.ts", "/src/d.ts"]
+  let levels = topological_levels(dag, files)
+
+  assert_eq(levels.length(), 3)
+  assert_eq(levels[0][0], "/src/d.ts")
+  assert_eq(levels[1][0], "/src/c.ts")
+  assert_eq(levels[2][0], "/src/b.ts")
+}
+
+///|
+test "topological levels - with cycle" {
+  // a -> b -> c -> a (cycle)
+  // Should handle gracefully by putting remaining in one level
+  let dag = DependencyDag::new()
+  add_node(dag, "/src/a.ts", ["/src/c.ts"], 1000L)
+  add_node(dag, "/src/b.ts", ["/src/a.ts"], 1000L)
+  add_node(dag, "/src/c.ts", ["/src/b.ts"], 1000L)
+
+  let files = ["/src/a.ts", "/src/b.ts", "/src/c.ts"]
+  let levels = topological_levels(dag, files)
+
+  // With a cycle, all files end up in a single level
+  assert_eq(levels.length(), 1)
+  assert_eq(levels[0].length(), 3)
+}
+
+///|
+test "level count" {
+  let dag = DependencyDag::new()
+  add_node(dag, "/src/a.ts", [], 1000L)
+  add_node(dag, "/src/b.ts", ["/src/a.ts"], 1000L)
+  add_node(dag, "/src/c.ts", ["/src/b.ts"], 1000L)
+
+  let files = ["/src/a.ts", "/src/b.ts", "/src/c.ts"]
+  assert_eq(level_count(dag, files), 3)
+}
+
+///|
+test "get level - specific level" {
+  let dag = DependencyDag::new()
+  add_node(dag, "/src/a.ts", [], 1000L)
+  add_node(dag, "/src/b.ts", ["/src/a.ts"], 1000L)
+
+  let files = ["/src/a.ts", "/src/b.ts"]
+
+  let level0 = get_level(dag, files, 0)
+  assert_eq(level0.length(), 1)
+  assert_eq(level0[0], "/src/a.ts")
+
+  let level1 = get_level(dag, files, 1)
+  assert_eq(level1.length(), 1)
+  assert_eq(level1[0], "/src/b.ts")
+
+  // Out of bounds returns empty
+  let level2 = get_level(dag, files, 2)
+  assert_eq(level2.length(), 0)
+}
+
 // Helper functions for tests
 
 ///|
