@@ -103,7 +103,11 @@ pub fn TypeCache::new() -> TypeCache {
 
 ///|
 /// Store exported types for a module (thread-safe)
-pub async fn TypeCache::put(self : TypeCache, file_path : String, module_types_json : String) -> Unit {
+pub async fn TypeCache::put(
+  self : TypeCache,
+  file_path : String,
+  module_types_json : String,
+) -> Unit {
   self.lock.acquire()
   self.entries[file_path] = module_types_json
   self.lock.release()
@@ -130,7 +134,10 @@ pub async fn TypeCache::has(self : TypeCache, file_path : String) -> Bool {
 ///|
 /// Get types for multiple modules at once (thread-safe)
 /// Returns a map of file_path -> module_types_json for found entries
-pub async fn TypeCache::get_many(self : TypeCache, file_paths : Array[String]) -> Map[String, String] {
+pub async fn TypeCache::get_many(
+  self : TypeCache,
+  file_paths : Array[String],
+) -> Map[String, String] {
   self.lock.acquire()
   let result : Map[String, String] = {}
   for path in file_paths {
@@ -161,28 +168,23 @@ pub async fn TypeCache::build_external_types_json(
   // Build JSON from cached entries
   let sb = StringBuilder::new()
   sb.write_string("{\"modules\":{")
-
   let mut first = true
   for path, types_json in self.entries {
     // Skip excluded files
     if exclude_set.contains(path) {
       continue
     }
-
     if not(first) {
       sb.write_string(",")
     }
     first = false
-
     sb.write_string("\"")
     sb.write_string(escape_json_string_for_cache(path))
     sb.write_string("\":")
     sb.write_string(types_json)
   }
-
   sb.write_string("}}")
   self.lock.release()
-
   let result = sb.to_string()
   // Return None if no modules were added
   if first {
@@ -211,7 +213,10 @@ pub async fn TypeCache::length(self : TypeCache) -> Int {
 
 ///|
 /// Invalidate a specific cache entry (thread-safe)
-pub async fn TypeCache::invalidate(self : TypeCache, file_path : String) -> Unit {
+pub async fn TypeCache::invalidate(
+  self : TypeCache,
+  file_path : String,
+) -> Unit {
   self.lock.acquire()
   self.entries.remove(file_path)
   self.lock.release()
@@ -264,12 +269,7 @@ pub(all) struct CompilationCache {
 ///|
 /// Create a new empty cache with lock
 pub fn CompilationCache::new() -> CompilationCache {
-  {
-    entries: {},
-    hits: 0,
-    misses: 0,
-    lock: @semaphore.Semaphore::new(1), // Binary semaphore acts as mutex
-  }
+  { entries: {}, hits: 0, misses: 0, lock: @semaphore.Semaphore::new(1) } // Binary semaphore acts as mutex
 }
 
 ///|
@@ -280,7 +280,7 @@ pub fn hash_source(source : String) -> Int64 {
   let mut hash : Int64 = 5381L
   for c in chars {
     // hash * 33 + c
-    hash = ((hash << 5) + hash) + c.to_int().to_int64()
+    hash = (hash << 5) + hash + c.to_int().to_int64()
   }
   hash
 }
@@ -313,12 +313,7 @@ pub async fn get_cached(
 ) -> CacheEntry? {
   cache.lock.acquire()
   let result = get_cached_internal(
-    cache,
-    file_path,
-    source,
-    target,
-    source_map,
-    declaration,
+    cache, file_path, source, target, source_map, declaration,
   )
   cache.lock.release()
   result
@@ -367,16 +362,8 @@ pub async fn put_cached(
 ) -> Unit {
   cache.lock.acquire()
   put_cached_internal(
-    cache,
-    file_path,
-    source,
-    target,
-    source_map_enabled,
-    declaration_enabled,
-    javascript,
-    source_map,
-    declaration,
-    module_types_json,
+    cache, file_path, source, target, source_map_enabled, declaration_enabled, javascript,
+    source_map, declaration, module_types_json,
   )
   cache.lock.release()
 }
@@ -488,7 +475,9 @@ pub async fn CacheManager::check_tsconfig_and_invalidate(
   config_path : String,
   config_content : String,
 ) -> Bool {
-  let changed = self.tsconfig_tracker.check_and_update(config_path, config_content)
+  let changed = self.tsconfig_tracker.check_and_update(
+    config_path, config_content,
+  )
   if changed {
     // Invalidate all caches
     self.type_cache.clear()
@@ -506,13 +495,17 @@ pub fn CacheManager::get_type_cache(self : CacheManager) -> TypeCache {
 
 ///|
 /// Get the compilation cache for storing/retrieving compiled outputs
-pub fn CacheManager::get_compilation_cache(self : CacheManager) -> CompilationCache {
+pub fn CacheManager::get_compilation_cache(
+  self : CacheManager,
+) -> CompilationCache {
   self.compilation_cache
 }
 
 ///|
 /// Get the tsconfig tracker
-pub fn CacheManager::get_tsconfig_tracker(self : CacheManager) -> TsConfigTracker {
+pub fn CacheManager::get_tsconfig_tracker(
+  self : CacheManager,
+) -> TsConfigTracker {
   self.tsconfig_tracker
 }
 
@@ -533,7 +526,9 @@ pub async fn CacheManager::clear_all(self : CacheManager) -> Unit {
 ///|
 /// Get combined statistics from all caches
 /// Returns (type_cache_entries, compilation_cache_entries, compilation_hits, compilation_misses, invalidations)
-pub async fn CacheManager::get_stats(self : CacheManager) -> (Int, Int, Int, Int, Int) {
+pub async fn CacheManager::get_stats(
+  self : CacheManager,
+) -> (Int, Int, Int, Int, Int) {
   let type_entries = self.type_cache.length()
   let (comp_entries, hits, misses) = get_stats(self.compilation_cache)
   (type_entries, comp_entries, hits, misses, self.invalidation_count)

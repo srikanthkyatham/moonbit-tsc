@@ -14,7 +14,6 @@ pub fn parse_baseline_file(content : String) -> BaselineSections {
   let lines = content.split("\n")
   let mut current_filename = ""
   let mut current_lines : Array[String] = []
-
   for line in lines {
     let line_str = line.to_string()
     match parse_section_header(line_str) {
@@ -27,12 +26,11 @@ pub fn parse_baseline_file(content : String) -> BaselineSections {
         }
         current_filename = filename
       }
-      None => {
+      None =>
         // Add line to current section
         if current_filename.length() > 0 {
           current_lines.push(line_str)
         }
-      }
     }
   }
 
@@ -41,8 +39,7 @@ pub fn parse_baseline_file(content : String) -> BaselineSections {
     let section_content = current_lines.iter().collect().join("\n")
     sections.set(current_filename, section_content)
   }
-
-  { sections }
+  { sections, }
 }
 
 ///|
@@ -56,26 +53,23 @@ fn parse_section_header(line : String) -> String? {
   // Find "] ////"
   let start = 6 // length of "//// ["
   match find_substring(trimmed, "] ////") {
-    Some(end_pos) => {
+    Some(end_pos) =>
       if end_pos > start {
-        Some(trimmed.substring(start=start, end=end_pos))
+        Some(trimmed.substring(start~, end=end_pos))
       } else {
         None
       }
-    }
-    None => {
+    None =>
       // Try to find just "]" for older format
       match find_char_bp(trimmed, ']') {
-        Some(end_pos) => {
+        Some(end_pos) =>
           if end_pos > start {
-            Some(trimmed.substring(start=start, end=end_pos))
+            Some(trimmed.substring(start~, end=end_pos))
           } else {
             None
           }
-        }
         None => None
       }
-    }
   }
 }
 
@@ -118,7 +112,7 @@ fn find_char_bp(s : String, c : Char) -> Int? {
 pub fn generate_baseline_filename(
   test_name : String,
   variant : TestVariant,
-  extension : String
+  extension : String,
 ) -> String {
   let param_string = variant.to_param_string()
   if param_string.length() > 0 {
@@ -129,16 +123,20 @@ pub fn generate_baseline_filename(
 }
 
 // Tests
+
+///|
 test "parse section header" {
   let result = parse_section_header("//// [test.ts] ////")
   assert_eq(result, Some("test.ts"))
 }
 
+///|
 test "parse section header with js extension" {
   let result = parse_section_header("//// [test.js] ////")
   assert_eq(result, Some("test.js"))
 }
 
+///|
 test "parse baseline file" {
   let content =
     #|//// [source.ts] ////
@@ -150,14 +148,20 @@ test "parse baseline file" {
   assert_true(sections.sections.get("output.js").is_some())
 }
 
+///|
 test "generate baseline filename without params" {
   let variant = TestVariant::default()
   let filename = generate_baseline_filename("mytest", variant, ".js")
   assert_eq(filename, "mytest.js")
 }
 
+///|
 test "generate baseline filename with params" {
-  let variant = TestVariant::{ target: "es5", module_kind: "commonjs", declaration_map: None }
+  let variant = TestVariant::{
+    target: "es5",
+    module_kind: "commonjs",
+    declaration_map: None,
+  }
   let filename = generate_baseline_filename("mytest", variant, ".js")
   assert_eq(filename, "mytest(target=es5,module=commonjs).js")
 }

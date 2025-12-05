@@ -30,11 +30,11 @@ pub fn CoordinatorOptions::default() -> CoordinatorOptions {
     declaration: false,
     always_strict: false,
     es_module_interop: false,
-    worker_count: 4, // Default to 4 workers
+    worker_count: 4,
     verbose: false,
     external_types_json: None,
     no_emit: false,
-  }
+  } // Default to 4 workers
 }
 
 ///|
@@ -99,9 +99,10 @@ pub async fn compile_parallel(
 
   // Compute topological levels (dependencies first)
   let levels = topological_levels(dag, file_paths)
-
   if options.verbose {
-    println("Compiling in " + levels.length().to_string() + " dependency levels")
+    println(
+      "Compiling in " + levels.length().to_string() + " dependency levels",
+    )
   }
 
   // Build a map from file_path to (path, source) for quick lookup
@@ -120,9 +121,14 @@ pub async fn compile_parallel(
   // Compile level by level (all files in a level can be compiled in parallel)
   for level_idx = 0; level_idx < levels.length(); level_idx = level_idx + 1 {
     let level_files = levels[level_idx]
-
     if options.verbose {
-      println("  Level " + level_idx.to_string() + ": " + level_files.length().to_string() + " file(s)")
+      println(
+        "  Level " +
+        level_idx.to_string() +
+        ": " +
+        level_files.length().to_string() +
+        " file(s)",
+      )
     }
 
     // Build external types JSON from cached types (excluding files in current level)
@@ -130,14 +136,16 @@ pub async fn compile_parallel(
     let external_types_json = type_cache.build_external_types_json(level_files)
 
     // Merge with any provided external types
-    let level_options = match (external_types_json, options.external_types_json) {
+    let level_options = match
+      (external_types_json, options.external_types_json) {
       (Some(cached), Some(provided)) => {
         // Merge cached types with provided types
         let merged = merge_external_types_json(cached, provided)
         { ..options, external_types_json: Some(merged) }
       }
       (Some(cached), None) => { ..options, external_types_json: Some(cached) }
-      (None, Some(provided)) => { ..options, external_types_json: Some(provided) }
+      (None, Some(provided)) =>
+        { ..options, external_types_json: Some(provided) }
       (None, None) => options
     }
 
@@ -146,7 +154,6 @@ pub async fn compile_parallel(
       for file_path in level_files {
         let path = file_path
         let opts = level_options
-
         let _ = group.spawn(async fn() {
           // Acquire semaphore to limit concurrency
           sem.acquire()
@@ -170,22 +177,20 @@ pub async fn compile_parallel(
           // Release semaphore
           sem.release()
         })
+
       }
     })
-
     if options.verbose {
       let cached_count = type_cache.length()
       println("    Cached types: " + cached_count.to_string() + " module(s)")
     }
   }
-
   let end_time = @async.now()
 
   // Convert to final array preserving original order and calculate summary
   let final_results : Array[@protocol.CompileResponse] = []
   let mut successful = 0
   let mut failed = 0
-
   for file in files {
     let (path, _) = file
     match results_map.get(path) {
@@ -200,7 +205,6 @@ pub async fn compile_parallel(
       None => ()
     }
   }
-
   {
     results: final_results,
     total_files: files.length(),
@@ -246,14 +250,20 @@ pub async fn compile_parallel_unordered(
 
   // Build combined external types JSON that includes global namespaces
   let combined_options = if global_namespaces.length() > 0 {
-    let combined_json = build_external_types_with_globals(options.external_types_json, global_namespaces)
+    let combined_json = build_external_types_with_globals(
+      options.external_types_json,
+      global_namespaces,
+    )
     { ..options, external_types_json: Some(combined_json) }
   } else {
     options
   }
 
   // Pre-allocate results array
-  let results : Array[@protocol.CompileResponse?] = Array::make(files.length(), None)
+  let results : Array[@protocol.CompileResponse?] = Array::make(
+    files.length(),
+    None,
+  )
 
   // Use semaphore to limit concurrency to worker_count
   let sem = @semaphore.Semaphore::new(combined_options.worker_count)
@@ -264,7 +274,6 @@ pub async fn compile_parallel_unordered(
       let idx = i
       let (file_path, source) = files[i]
       let opts = combined_options
-
       let _ = group.spawn(async fn() {
         // Acquire semaphore to limit concurrency
         sem.acquire()
@@ -276,16 +285,15 @@ pub async fn compile_parallel_unordered(
         // Release semaphore
         sem.release()
       })
+
     }
   })
-
   let end_time = @async.now()
 
   // Convert to final array and calculate summary
   let final_results : Array[@protocol.CompileResponse] = []
   let mut successful = 0
   let mut failed = 0
-
   for result in results {
     match result {
       Some(response) => {
@@ -299,7 +307,6 @@ pub async fn compile_parallel_unordered(
       None => ()
     }
   }
-
   {
     results: final_results,
     total_files: files.length(),
@@ -316,7 +323,6 @@ fn extract_global_namespaces_from_dts_files(
   files : Array[(String, String)],
 ) -> Array[(String, String)] {
   let result : Array[(String, String)] = []
-
   for file in files {
     let (file_path, source) = file
     // Only process .d.ts files
@@ -332,7 +338,6 @@ fn extract_global_namespaces_from_dts_files(
       }
     }
   }
-
   result
 }
 
@@ -344,7 +349,6 @@ fn build_external_types_with_globals(
 ) -> String {
   let sb = StringBuilder::new()
   sb.write_string("{\"modules\":{")
-
   let mut first = true
 
   // Add entries from global namespace files
@@ -363,13 +367,11 @@ fn build_external_types_with_globals(
   // If there's existing external types JSON, we'd need to merge it
   // For now, we just use the global namespaces
   match existing_json {
-    Some(_) => {
+    Some(_) =>
       // TODO: Merge existing external types
       ()
-    }
     None => ()
   }
-
   sb.write_string("}}")
   sb.to_string()
 }
@@ -422,7 +424,6 @@ fn compile_single(
     no_fallthrough_cases_in_switch: false,
     strict_property_initialization: false,
   }
-
   let start_time = @async.now()
 
   // Check if this is a multi-file test (contains @filename: directives)
@@ -436,17 +437,20 @@ fn compile_single(
         // Parse the JSON string into ExternalTypeRegistry
         match @compiler.ExternalTypeRegistry::from_json(external_types_json) {
           Some(registry) =>
-            @compiler.compile_source_with_external_types(source, file_path, compile_options, registry)
+            @compiler.compile_source_with_external_types(
+              source, file_path, compile_options, registry,
+            )
           None =>
             // If parsing fails, fall back to regular compilation
             @compiler.compile_source(source, file_path, compile_options)
         }
-      None =>
-        @compiler.compile_source(source, file_path, compile_options)
+      None => @compiler.compile_source(source, file_path, compile_options)
     }
   }
-
   let end_time = @async.now()
-
-  @protocol.CompileResponse::from_result(file_path, result, end_time - start_time)
+  @protocol.CompileResponse::from_result(
+    file_path,
+    result,
+    end_time - start_time,
+  )
 }

@@ -46,18 +46,15 @@ fn base64_encode(input : String) -> String {
   let bytes = input.to_bytes()
   let len = bytes.length()
   let result = StringBuilder::new()
-
   let mut i = 0
   while i < len {
     let b0 = bytes[i].to_int()
     let b1 = if i + 1 < len { bytes[i + 1].to_int() } else { 0 }
     let b2 = if i + 2 < len { bytes[i + 2].to_int() } else { 0 }
-
     let c0 = b0 >> 2
     let c1 = ((b0 & 0x03) << 4) | (b1 >> 4)
     let c2 = ((b1 & 0x0F) << 2) | (b2 >> 6)
     let c3 = b2 & 0x3F
-
     result.write_char(alphabet[c0].unsafe_to_char())
     result.write_char(alphabet[c1].unsafe_to_char())
     if i + 1 < len {
@@ -70,10 +67,8 @@ fn base64_encode(input : String) -> String {
     } else {
       result.write_char('=')
     }
-
     i = i + 3
   }
-
   result.to_string()
 }
 
@@ -109,12 +104,10 @@ pub async fn write_output(
   if options.no_emit {
     return
   }
-
   let out_dir = match options.out_dir {
     Some(dir) => dir
     None => get_directory(response.file_path)
   }
-
   let base_name = get_base_name(response.file_path)
 
   // Ensure output directory exists
@@ -123,7 +116,7 @@ pub async fn write_output(
   // Build JavaScript content with source map handling
   let source_map_mode = get_effective_source_map(options)
   let js_content = match source_map_mode {
-    SourceMapMode::Inline => {
+    SourceMapMode::Inline =>
       match response.source_map {
         Some(sm) => {
           let encoded = base64_encode(sm)
@@ -133,13 +126,8 @@ pub async fn write_output(
         }
         None => response.javascript
       }
-    }
-    SourceMapMode::External => {
-      response.javascript +
-      "\n//# sourceMappingURL=" +
-      base_name +
-      ".js.map"
-    }
+    SourceMapMode::External =>
+      response.javascript + "\n//# sourceMappingURL=" + base_name + ".js.map"
     SourceMapMode::None => response.javascript
   }
 
@@ -205,11 +193,9 @@ fn parse_diagnostic_string(diag : String) -> DiagnosticInfo? {
       break
     }
   }
-
   if dash_idx == -1 {
     return None
   }
-
   let file_part = @utils.substr(diag, end=dash_idx)
   let rest = @utils.substr(diag, start=dash_idx + 3)
 
@@ -227,26 +213,18 @@ fn parse_diagnostic_string(diag : String) -> DiagnosticInfo? {
       }
     }
   }
-
   if second_last_colon == -1 || last_colon == -1 {
     return None
   }
-
   let file = @utils.substr(file_part, end=second_last_colon)
-  let line_str = @utils.substr(file_part, start=second_last_colon + 1, end=last_colon)
+  let line_str = @utils.substr(
+    file_part,
+    start=second_last_colon + 1,
+    end=last_colon,
+  )
   let col_str = @utils.substr(file_part, start=last_colon + 1)
-
-  let line = try {
-    @strconv.parse_int(line_str)
-  } catch {
-    _ => return None
-  }
-
-  let column = try {
-    @strconv.parse_int(col_str)
-  } catch {
-    _ => return None
-  }
+  let line = @strconv.parse_int(line_str) catch { _ => return None }
+  let column = @strconv.parse_int(col_str) catch { _ => return None }
 
   // Parse category TScode: message
   // Find space after category
@@ -257,11 +235,9 @@ fn parse_diagnostic_string(diag : String) -> DiagnosticInfo? {
       break
     }
   }
-
   if space_idx == -1 {
     return None
   }
-
   let category = @utils.substr(rest, end=space_idx)
   let code_and_msg = @utils.substr(rest, start=space_idx + 1)
 
@@ -273,25 +249,20 @@ fn parse_diagnostic_string(diag : String) -> DiagnosticInfo? {
       break
     }
   }
-
   if colon_idx == -1 {
     return None
   }
-
   let code = @utils.substr(code_and_msg, end=colon_idx)
   let message = @utils.substr(code_and_msg, start=colon_idx + 2) // Skip ": "
 
   // Parse code number from TSnnnn
   let code_number = if code.length() > 2 && code.has_prefix("TS") {
-    try {
-      @strconv.parse_int(@utils.substr(code, start=2))
-    } catch {
+    @strconv.parse_int(@utils.substr(code, start=2)) catch {
       _ => 0
     }
   } else {
     0
   }
-
   Some(DiagnosticInfo::{
     file,
     line,
@@ -340,10 +311,8 @@ pub fn build_json_output(
   let mut total_errors = 0
   let mut total_warnings = 0
   let files : Array[FileResult] = []
-
   for result in summary.results {
     let diags : Array[DiagnosticInfo] = []
-
     for diag_str in result.diagnostics {
       match parse_diagnostic_string(diag_str) {
         Some(diag) => {
@@ -357,7 +326,6 @@ pub fn build_json_output(
         None => ()
       }
     }
-
     files.push(FileResult::{
       file_path: result.file_path,
       success: result.success,
@@ -366,7 +334,6 @@ pub fn build_json_output(
       module_types_json: result.module_types_json,
     })
   }
-
   JsonOutput::{
     success: summary.failed == 0 && total_errors == 0,
     stats: SummaryStats::{

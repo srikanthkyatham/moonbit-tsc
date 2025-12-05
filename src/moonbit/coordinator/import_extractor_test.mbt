@@ -107,21 +107,17 @@ test "build dependency graph - chain" {
   let a_imports = get_direct_imports(dag, "/src/a.ts")
   assert_eq(a_imports.length(), 1)
   assert_eq(a_imports[0], "/src/b.ts")
-
   let b_imports = get_direct_imports(dag, "/src/b.ts")
   assert_eq(b_imports.length(), 1)
   assert_eq(b_imports[0], "/src/c.ts")
-
   let c_imports = get_direct_imports(dag, "/src/c.ts")
   assert_eq(c_imports.length(), 0)
 
   // Check importers (reverse edges)
   let a_importers = get_direct_importers(dag, "/src/a.ts")
   assert_eq(a_importers.length(), 0)
-
   let b_importers = get_direct_importers(dag, "/src/b.ts")
   assert_eq(b_importers.length(), 1)
-
   let c_importers = get_direct_importers(dag, "/src/c.ts")
   assert_eq(c_importers.length(), 1)
 
@@ -140,6 +136,8 @@ test "build dependency graph - chain" {
 }
 
 // Helper for tests
+
+///|
 fn find_in_array(arr : Array[String], value : String) -> Int {
   for i = 0; i < arr.length(); i = i + 1 {
     if arr[i] == value {

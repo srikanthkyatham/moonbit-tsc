@@ -24,19 +24,16 @@ pub fn RunnerConfig::default() -> RunnerConfig {
 ///|
 /// Discover transpile tests in the test directory
 pub async fn discover_transpile_tests(
-  test_dir : String
+  test_dir : String,
 ) -> Array[String] raise Error {
   let files : Array[String] = []
-  @fs.walk(
-    test_dir,
-    async fn(_dir, entries) {
-      for entry in entries {
-        if entry.has_suffix(".ts") && not(entry.has_suffix(".d.ts")) {
-          files.push(entry)
-        }
+  @fs.walk(test_dir, async fn(_dir, entries) {
+    for entry in entries {
+      if entry.has_suffix(".ts") && not(entry.has_suffix(".d.ts")) {
+        files.push(entry)
       }
-    },
-  )
+    }
+  })
   files
 }
 
@@ -44,7 +41,7 @@ pub async fn discover_transpile_tests(
 /// Load a test case from a file
 pub async fn load_test_case(
   test_dir : String,
-  filename : String
+  filename : String,
 ) -> TestCase raise Error {
   let path = test_dir + "/" + filename
   let data = @fs.read_file(path)
@@ -59,7 +56,6 @@ pub async fn load_test_case(
 
   // Generate variants
   let variants = generate_variants(directives)
-
   { name: test_name, root_path: path, source_files, directives, variants }
 }
 
@@ -79,7 +75,7 @@ pub async fn load_baseline(
   baseline_dir : String,
   test_name : String,
   variant : TestVariant,
-  extension : String
+  extension : String,
 ) -> String? raise Error {
   let filename = generate_baseline_filename(test_name, variant, extension)
   let path = baseline_dir + "/" + filename
@@ -101,23 +97,19 @@ pub async fn load_baseline(
 ///|
 /// Run all transpile tests
 pub async fn run_transpile_tests(
-  config : RunnerConfig
+  config : RunnerConfig,
 ) -> TestSummary raise Error {
   // Discover test files
   let test_files = discover_transpile_tests(config.test_dir)
-
   if config.verbose {
     println("Discovered " + test_files.length().to_string() + " test files")
   }
 
   // Load and execute each test
   let results : Array[TestResult] = []
-
   for filename in test_files {
     // Load test case
-    let test_case = try {
-      load_test_case(config.test_dir, filename)
-    } catch {
+    let test_case = load_test_case(config.test_dir, filename) catch {
       err => {
         results.push(TestResult::error(filename, err.to_string()))
         continue
@@ -129,14 +121,11 @@ pub async fn run_transpile_tests(
 
     // Execute test with baseline loader
     let _baseline_dir = config.baseline_dir
-    let result = execute_test(
-      test_case,
-      fn(_name, _variant, _ext) {
-        // Note: This is a sync wrapper - we'll need to handle this differently
-        // For now, we'll load baselines before test execution
-        None
-      },
-    )
+    let result = execute_test(test_case, fn(_name, _variant, _ext) {
+      // Note: This is a sync wrapper - we'll need to handle this differently
+      // For now, we'll load baselines before test execution
+      None
+    })
 
     // Print result
     if config.verbose {
@@ -155,13 +144,7 @@ pub async fn run_transpile_tests(
   // Calculate summary
   let passed = results.iter().filter(fn(r) { r.passed }).count()
   let failed = results.length() - passed
-  let summary = {
-    total: results.length(),
-    passed,
-    failed,
-    skipped: 0,
-    results,
-  }
+  let summary = { total: results.length(), passed, failed, skipped: 0, results }
 
   // Print summary
   println(format_test_summary(summary))
@@ -176,7 +159,6 @@ pub async fn run_e2e_tests(config : RunnerConfig) -> TestSummary raise Error {
   println("Test directory: " + config.test_dir)
   println("Baseline directory: " + config.baseline_dir)
   println("")
-
   let summary = run_transpile_tests(config)
 
   // Print final status

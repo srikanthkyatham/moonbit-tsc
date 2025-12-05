@@ -7,26 +7,24 @@
 pub fn parse_multi_file_test(
   content : String,
   directives : TestDirectives,
-  default_filename : String
+  default_filename : String,
 ) -> Array[SourceUnit] {
   let source_files : Array[SourceUnit] = []
   let lines = content.split("\n")
   let mut current_filename : String? = None
   let mut current_lines : Array[String] = []
-
   for line in lines {
     let line_str = line.to_string()
     let trimmed = line.trim(chars=" \t").to_string()
     if is_filename_directive(trimmed) {
       // Save current file if exists
       match current_filename {
-        Some(filename) => {
+        Some(filename) =>
           if current_lines.length() > 0 {
             let file_content = current_lines.iter().collect().join("\n")
             source_files.push({ filename, content: file_content })
             current_lines = []
           }
-        }
         None => ()
       }
       // Start new file
@@ -41,12 +39,11 @@ pub fn parse_multi_file_test(
 
   // Save last file
   match current_filename {
-    Some(filename) => {
+    Some(filename) =>
       if current_lines.length() > 0 {
         let file_content = current_lines.iter().collect().join("\n")
         source_files.push({ filename, content: file_content })
       }
-    }
     None => ()
   }
 
@@ -56,7 +53,6 @@ pub fn parse_multi_file_test(
     let stripped = strip_directive_lines(content)
     source_files.push({ filename: default_filename, content: stripped })
   }
-
   source_files
 }
 
@@ -82,7 +78,7 @@ fn parse_filename_value(line : String) -> String {
     Some(pos) => {
       let start = pos + 1
       if start < line.length() {
-        line.substring(start=start).trim(chars=" \t").to_string()
+        line.substring(start~).trim(chars=" \t").to_string()
       } else {
         ""
       }
@@ -108,6 +104,8 @@ fn strip_directive_lines(content : String) -> String {
 }
 
 // Tests
+
+///|
 test "parse single file test" {
   let content = "export const x = 1;\nexport const y = 2;"
   let directives = TestDirectives::default()
@@ -117,6 +115,7 @@ test "parse single file test" {
   assert_true(files[0].content.contains("export const x = 1;"))
 }
 
+///|
 test "parse multi-file test" {
   let content =
     #|// @filename: a.ts
@@ -131,6 +130,7 @@ test "parse multi-file test" {
   assert_eq(files[1].filename, "b.ts")
 }
 
+///|
 test "strip directive lines" {
   let content =
     #|// @declaration: true

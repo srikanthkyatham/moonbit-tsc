@@ -20,7 +20,6 @@ test "compile 2dArrays.ts" {
     #|        return this.ships.every(function (val) { return val.isSunk; });
     #|    }
     #|}
-
   let options = @compiler.CompileOptions::{
     target: @compiler.ES5,
     module_kind: @compiler.CommonJS,
@@ -45,7 +44,6 @@ test "compile 2dArrays.ts" {
     no_fallthrough_cases_in_switch: false,
     strict_property_initialization: false,
   }
-
   let result = @compiler.compile_source(source, "2dArrays.ts", options)
 
   // Verify no errors
@@ -77,7 +75,6 @@ test "compile accessorsEmit.ts" {
     #|        return null;
     #|    }
     #|}
-
   let options = @compiler.CompileOptions::{
     target: @compiler.ES5,
     module_kind: @compiler.CommonJS,
@@ -102,7 +99,6 @@ test "compile accessorsEmit.ts" {
     no_fallthrough_cases_in_switch: false,
     strict_property_initialization: false,
   }
-
   let result = @compiler.compile_source(source, "accessorsEmit.ts", options)
 
   // Verify no errors
@@ -126,7 +122,6 @@ test "compile acceptableAlias1.ts" {
     #|}
     #|
     #|import r = M.X;
-
   let options = @compiler.CompileOptions::{
     target: @compiler.ES5,
     module_kind: @compiler.CommonJS,
@@ -151,7 +146,6 @@ test "compile acceptableAlias1.ts" {
     no_fallthrough_cases_in_switch: false,
     strict_property_initialization: false,
   }
-
   let result = @compiler.compile_source(source, "acceptableAlias1.ts", options)
 
   // Verify no errors

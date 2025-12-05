@@ -382,9 +382,7 @@ async test "type_cache - new cache is empty" {
 async test "type_cache - put and get" {
   let cache = TypeCache::new()
   let types_json = "{\"exports\":{\"x\":\"number\"}}"
-
   cache.put("/a.ts", types_json)
-
   let result = cache.get("/a.ts")
   assert_eq(result, Some(types_json))
 }
@@ -400,7 +398,6 @@ async test "type_cache - get returns None for missing" {
 async test "type_cache - has checks existence" {
   let cache = TypeCache::new()
   cache.put("/a.ts", "{}")
-
   assert_true(cache.has("/a.ts"))
   assert_true(not(cache.has("/b.ts")))
 }
@@ -411,9 +408,7 @@ async test "type_cache - get_many returns subset" {
   cache.put("/a.ts", "{\"a\":1}")
   cache.put("/b.ts", "{\"b\":2}")
   cache.put("/c.ts", "{\"c\":3}")
-
   let result = cache.get_many(["/a.ts", "/c.ts", "/missing.ts"])
-
   assert_eq(result.length(), 2)
   assert_eq(result.get("/a.ts"), Some("{\"a\":1}"))
   assert_eq(result.get("/c.ts"), Some("{\"c\":3}"))
@@ -425,10 +420,8 @@ async test "type_cache - build_external_types_json" {
   let cache = TypeCache::new()
   cache.put("/a.ts", "{\"exports\":{\"x\":\"number\"}}")
   cache.put("/b.ts", "{\"exports\":{\"y\":\"string\"}}")
-
   let result = cache.build_external_types_json([])
   assert_true(result is Some(_))
-
   match result {
     Some(json) => {
       // Should contain both modules
@@ -449,7 +442,6 @@ async test "type_cache - build_external_types_json excludes specified files" {
 
   // Exclude /b.ts
   let result = cache.build_external_types_json(["/b.ts"])
-
   match result {
     Some(json) => {
       assert_true(json.contains("/a.ts"))
@@ -472,7 +464,6 @@ async test "type_cache - build_external_types_json returns None when all exclude
   let cache = TypeCache::new()
   cache.put("/a.ts", "{}")
   cache.put("/b.ts", "{}")
-
   let result = cache.build_external_types_json(["/a.ts", "/b.ts"])
   assert_true(result is None)
 }
@@ -482,11 +473,8 @@ async test "type_cache - clear removes all entries" {
   let cache = TypeCache::new()
   cache.put("/a.ts", "{}")
   cache.put("/b.ts", "{}")
-
   assert_eq(cache.length(), 2)
-
   cache.clear()
-
   assert_eq(cache.length(), 0)
 }
 
@@ -495,9 +483,7 @@ async test "type_cache - invalidate removes specific entry" {
   let cache = TypeCache::new()
   cache.put("/a.ts", "{}")
   cache.put("/b.ts", "{}")
-
   cache.invalidate("/a.ts")
-
   assert_true(not(cache.has("/a.ts")))
   assert_true(cache.has("/b.ts"))
 }
@@ -507,7 +493,6 @@ async test "type_cache - overwrite existing entry" {
   let cache = TypeCache::new()
   cache.put("/a.ts", "{\"v\":1}")
   cache.put("/a.ts", "{\"v\":2}")
-
   let result = cache.get("/a.ts")
   assert_eq(result, Some("{\"v\":2}"))
   assert_eq(cache.length(), 1)
@@ -659,7 +644,9 @@ async test "cache_manager - check_tsconfig_and_invalidate on first call" {
   let config = "{\"compilerOptions\":{\"target\":\"es2015\"}}"
 
   // First call should not invalidate (initialization)
-  let invalidated = manager.check_tsconfig_and_invalidate("/tsconfig.json", config)
+  let invalidated = manager.check_tsconfig_and_invalidate(
+    "/tsconfig.json", config,
+  )
   assert_eq(invalidated, false)
   assert_eq(manager.get_invalidation_count(), 0)
 }
@@ -694,7 +681,9 @@ async test "cache_manager - check_tsconfig_and_invalidate clears caches on chang
   assert_eq(comp_entries1, 1)
 
   // Change tsconfig - should invalidate
-  let invalidated = manager.check_tsconfig_and_invalidate("/tsconfig.json", config2)
+  let invalidated = manager.check_tsconfig_and_invalidate(
+    "/tsconfig.json", config2,
+  )
   assert_eq(invalidated, true)
   assert_eq(manager.get_invalidation_count(), 1)
 
@@ -716,7 +705,9 @@ async test "cache_manager - no invalidation when config unchanged" {
   manager.get_type_cache().put("/a.ts", "{}")
 
   // Same config - should not invalidate
-  let invalidated = manager.check_tsconfig_and_invalidate("/tsconfig.json", config)
+  let invalidated = manager.check_tsconfig_and_invalidate(
+    "/tsconfig.json", config,
+  )
   assert_eq(invalidated, false)
 
   // Data should still be there
@@ -779,11 +770,15 @@ async test "cache_manager - path change triggers invalidation" {
   let config = "{\"target\":\"es2015\"}"
 
   // Initialize with first path
-  let _ = manager.check_tsconfig_and_invalidate("/project1/tsconfig.json", config)
+  let _ = manager.check_tsconfig_and_invalidate(
+    "/project1/tsconfig.json", config,
+  )
   manager.get_type_cache().put("/a.ts", "{}")
 
   // Different path (switching projects) should invalidate
-  let invalidated = manager.check_tsconfig_and_invalidate("/project2/tsconfig.json", config)
+  let invalidated = manager.check_tsconfig_and_invalidate(
+    "/project2/tsconfig.json", config,
+  )
   assert_eq(invalidated, true)
 
   // Cache should be cleared

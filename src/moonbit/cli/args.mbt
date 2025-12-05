@@ -72,7 +72,6 @@ pub fn parse_args(args : Array[String]) -> Result[Command, String] {
   if args.length() < 2 {
     return Ok(Command::Help)
   }
-
   let files : Array[String] = []
   let mut target : String? = None
   let mut out_dir : String? = None
@@ -92,12 +91,9 @@ pub fn parse_args(args : Array[String]) -> Result[Command, String] {
   let mut no_implicit_any = false
   let mut strict_null_checks = false
   let mut strict_function_types = false
-
   let mut i = 1 // Skip program name
-
   while i < args.length() {
     let arg = args[i]
-
     if arg == "--version" || arg == "-v" {
       return Ok(Command::Version)
     } else if arg == "--help" || arg == "-h" {
@@ -228,10 +224,8 @@ pub fn parse_args(args : Array[String]) -> Result[Command, String] {
     } else {
       files.push(arg)
     }
-
     i = i + 1
   }
-
   let options : CLIOptions = {
     target,
     out_dir,
@@ -254,7 +248,7 @@ pub fn parse_args(args : Array[String]) -> Result[Command, String] {
   // If --project was specified, use project mode
   match project {
     Some(path) => Ok(Command::CompileProject(path, options))
-    None => {
+    None =>
       if files.length() == 0 {
         // No files and no project - show help
         Ok(Command::Help)
@@ -264,7 +258,6 @@ pub fn parse_args(args : Array[String]) -> Result[Command, String] {
       } else {
         Ok(Command::Compile(files, options))
       }
-    }
   }
 }
 

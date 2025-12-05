@@ -38,7 +38,10 @@ pub fn extract_imports(source : String, file_path : String) -> ImportResult {
 
 ///|
 /// Extract both imports and triple-slash reference paths from TypeScript source code
-pub fn extract_imports_and_references(source : String, file_path : String) -> ImportAndReferenceResult {
+pub fn extract_imports_and_references(
+  source : String,
+  file_path : String,
+) -> ImportAndReferenceResult {
   match @compiler.parse_and_bind(source, file_path) {
     Ok(bound_source) => {
       // Extract imports from AST statements
@@ -59,7 +62,6 @@ pub fn extract_imports_and_references(source : String, file_path : String) -> Im
           _ => () // Ignore other directive types (types, lib, etc.)
         }
       }
-
       { path: file_path, imports, references, errors: [] }
     }
     Err(diagnostics) => {
@@ -74,9 +76,10 @@ pub fn extract_imports_and_references(source : String, file_path : String) -> Im
 
 ///|
 /// Extract import module specifiers from a parsed SourceFile
-fn extract_imports_from_ast(source_file : @compiler.SourceFile) -> Array[String] {
+fn extract_imports_from_ast(
+  source_file : @compiler.SourceFile,
+) -> Array[String] {
   let imports : Array[String] = []
-
   for statement in source_file.statements {
     match statement {
       @compiler.ImportDeclaration(import_decl) =>
@@ -84,7 +87,6 @@ fn extract_imports_from_ast(source_file : @compiler.SourceFile) -> Array[String]
       _ => ()
     }
   }
-
   imports
 }
 
@@ -226,7 +228,6 @@ pub fn build_dependency_graph(
         None => ()
       }
     }
-
     file_data.push((path, resolved_deps, content_hash))
 
     // Add node with no imports first (all edges_in empty)
@@ -239,7 +240,6 @@ pub fn build_dependency_graph(
     // Re-add the node with its dependencies (imports + references), which will update edges properly
     add_node(dag, path, deps, content_hash)
   }
-
   dag
 }
 
@@ -251,14 +251,12 @@ pub fn collect_reference_paths(
 ) -> Array[String] {
   let references : Array[String] = []
   let seen : Map[String, Bool] = Map::new()
-
   for file in files {
     let (path, source) = file
     let result = extract_imports_and_references(source, path)
-
     for ref_path in result.references {
       match resolve_reference_path(ref_path, path) {
-        Some(resolved) => {
+        Some(resolved) =>
           // Only add if not already seen
           match seen.get(resolved) {
             Some(_) => ()
@@ -267,12 +265,10 @@ pub fn collect_reference_paths(
               references.push(resolved)
             }
           }
-        }
         None => ()
       }
     }
   }
-
   references
 }
 
@@ -286,7 +282,6 @@ pub fn filter_new_references(
   for file in existing_files {
     existing_set.set(file, true)
   }
-
   let new_refs : Array[String] = []
   for ref in references {
     match existing_set.get(ref) {
@@ -294,6 +289,5 @@ pub fn filter_new_references(
       None => new_refs.push(ref)
     }
   }
-
   new_refs
 }

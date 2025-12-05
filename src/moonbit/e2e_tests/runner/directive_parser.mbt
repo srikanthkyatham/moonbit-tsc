@@ -69,7 +69,10 @@ fn parse_directive_line(line : String) -> (String, String)? {
   match find_char(after_at, ':') {
     Some(colon_pos) => {
       let name = after_at.substring(end=colon_pos).trim(chars=" \t").to_string()
-      let value = after_at.substring(start=colon_pos + 1).trim(chars=" \t").to_string()
+      let value = after_at
+        .substring(start=colon_pos + 1)
+        .trim(chars=" \t")
+        .to_string()
       Some((name, value))
     }
     None => None
@@ -148,9 +151,7 @@ pub fn generate_variants(directives : TestDirectives) -> Array[TestVariant] {
   for target in targets {
     for module_kind in modules {
       for decl_map in decl_maps {
-        variants.push(
-          { target, module_kind, declaration_map: decl_map },
-        )
+        variants.push({ target, module_kind, declaration_map: decl_map })
       }
     }
   }
@@ -158,12 +159,15 @@ pub fn generate_variants(directives : TestDirectives) -> Array[TestVariant] {
 }
 
 // Tests
+
+///|
 test "parse simple directive" {
   let content = "// @declaration: true\nexport const x = 1;"
   let directives = parse_directives(content)
   assert_true(directives.declaration)
 }
 
+///|
 test "parse target with multiple values" {
   let content = "// @target: es2015,esnext\nexport const x = 1;"
   let directives = parse_directives(content)
@@ -172,6 +176,7 @@ test "parse target with multiple values" {
   assert_eq(directives.target[1], "esnext")
 }
 
+///|
 test "parse multiple directives" {
   let content =
     #|// @declaration: true
@@ -186,6 +191,7 @@ test "parse multiple directives" {
   assert_eq(directives.module_kind[0], "commonjs")
 }
 
+///|
 test "parse declarationMap with boolean array" {
   let content = "// @declarationMap: true,false\nexport const x = 1;"
   let directives = parse_directives(content)
@@ -194,6 +200,7 @@ test "parse declarationMap with boolean array" {
   assert_false(directives.declaration_map[1])
 }
 
+///|
 test "generate variants" {
   let directives = TestDirectives::{
     ..TestDirectives::default(),

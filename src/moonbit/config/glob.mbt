@@ -15,12 +15,7 @@ pub fn glob_match(pattern : String, path : String) -> Bool {
 
 ///|
 /// Internal implementation of glob matching
-fn glob_match_impl(
-  pattern : String,
-  pi : Int,
-  path : String,
-  si : Int,
-) -> Bool {
+fn glob_match_impl(pattern : String, pi : Int, path : String, si : Int) -> Bool {
   let plen = pattern.length()
   let slen = path.length()
 
@@ -99,7 +94,6 @@ fn glob_match_impl(
   if pc == sc || (pc == '/' && sc == '\\') || (pc == '\\' && sc == '/') {
     return glob_match_impl(pattern, pi + 1, path, si + 1)
   }
-
   false
 }
 
@@ -116,10 +110,8 @@ fn match_bracket(pattern : String, pi : Int, c : Int) -> (Bool, Int) {
     negate = true
     i = i + 1
   }
-
   let mut matched = false
   let mut first = true
-
   while i < plen && (pattern[i] != ']' || first) {
     first = false
     let char_code = pattern[i]
@@ -143,7 +135,6 @@ fn match_bracket(pattern : String, pi : Int, c : Int) -> (Bool, Int) {
   if i < plen && pattern[i] == ']' {
     i = i + 1
   }
-
   if negate {
     (not(matched), i)
   } else {
@@ -198,7 +189,6 @@ pub fn normalize_path(path : String) -> String {
 pub fn get_relative_path(base_dir : String, full_path : String) -> String {
   let norm_base = normalize_path(base_dir)
   let norm_path = normalize_path(full_path)
-
   if norm_path.has_prefix(norm_base) {
     let start_idx = norm_base.length()
     if start_idx >= norm_path.length() {

@@ -20,8 +20,14 @@ pub(all) struct DiffLine {
 ///|
 /// Generate a simple line-by-line diff
 pub fn diff_lines(expected : String, actual : String) -> Array[DiffLine] {
-  let exp_lines : Array[String] = expected.split("\n").map(fn(s) { s.to_string() }).collect()
-  let act_lines : Array[String] = actual.split("\n").map(fn(s) { s.to_string() }).collect()
+  let exp_lines : Array[String] = expected
+    .split("\n")
+    .map(fn(s) { s.to_string() })
+    .collect()
+  let act_lines : Array[String] = actual
+    .split("\n")
+    .map(fn(s) { s.to_string() })
+    .collect()
   let result : Array[DiffLine] = []
   let max_lines = if exp_lines.length() > act_lines.length() {
     exp_lines.length()
@@ -29,17 +35,24 @@ pub fn diff_lines(expected : String, actual : String) -> Array[DiffLine] {
     act_lines.length()
   }
   for i = 0; i < max_lines; i = i + 1 {
-    let exp_line = if i < exp_lines.length() { Some(exp_lines[i]) } else { None }
-    let act_line = if i < act_lines.length() { Some(act_lines[i]) } else { None }
+    let exp_line = if i < exp_lines.length() {
+      Some(exp_lines[i])
+    } else {
+      None
+    }
+    let act_line = if i < act_lines.length() {
+      Some(act_lines[i])
+    } else {
+      None
+    }
     match (exp_line, act_line) {
-      (Some(e), Some(a)) => {
+      (Some(e), Some(a)) =>
         if e == a {
           result.push({ line_type: Same, line_number: i + 1, content: e })
         } else {
           result.push({ line_type: Removed, line_number: i + 1, content: e })
           result.push({ line_type: Added, line_number: i + 1, content: a })
         }
-      }
       (Some(e), None) =>
         result.push({ line_type: Removed, line_number: i + 1, content: e })
       (None, Some(a)) =>
@@ -64,7 +77,7 @@ pub fn format_baseline_diff(diff : BaselineDiff) -> String {
   for i = 0; i < lines.length(); i = i + 1 {
     let line = lines[i]
     match line.line_type {
-      Same => {
+      Same =>
         // Show context lines near differences
         if i > 0 && i < lines.length() - 1 {
           let prev_is_diff = lines[i - 1].line_type != Same
@@ -81,7 +94,6 @@ pub fn format_baseline_diff(diff : BaselineDiff) -> String {
             last_shown = i
           }
         }
-      }
       Removed => {
         if i - last_shown > 1 && last_shown >= 0 {
           sb.write_string("...\n")
@@ -193,6 +205,8 @@ pub fn format_test_summary(summary : TestSummary) -> String {
 }
 
 // Tests
+
+///|
 test "diff identical lines" {
   let lines = diff_lines("a\nb\nc", "a\nb\nc")
   assert_eq(lines.length(), 3)
@@ -201,6 +215,7 @@ test "diff identical lines" {
   assert_eq(lines[2].line_type, Same)
 }
 
+///|
 test "diff with changes" {
   let lines = diff_lines("a\nb\nc", "a\nB\nc")
   // a is same, b/B differ, c is same
@@ -218,6 +233,7 @@ test "diff with changes" {
   assert_true(found_added)
 }
 
+///|
 test "format test result passed" {
   let result = TestResult::passed("mytest")
   let formatted = format_test_result(result)
@@ -225,12 +241,11 @@ test "format test result passed" {
   assert_true(formatted.contains("mytest"))
 }
 
+///|
 test "format test result failed" {
-  let result = TestResult::failed(
-    "mytest",
-    None,
-    [{ baseline_type: "js", expected: "a", actual: "b" }],
-  )
+  let result = TestResult::failed("mytest", None, [
+    { baseline_type: "js", expected: "a", actual: "b" },
+  ])
   let formatted = format_test_result(result)
   assert_true(formatted.contains("[FAIL]"))
   assert_true(formatted.contains("mytest"))

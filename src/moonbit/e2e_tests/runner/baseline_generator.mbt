@@ -17,7 +17,7 @@ pub(all) struct FileCompileResult {
 /// Format: //// [source.ts] ////\n<source>\n//// [output.js] ////\n<js>
 pub fn generate_js_baseline(
   source_files : Array[SourceUnit],
-  results : Array[FileCompileResult]
+  results : Array[FileCompileResult],
 ) -> String {
   let sb = StringBuilder::new()
 
@@ -50,21 +50,20 @@ pub fn generate_js_baseline(
 /// Generate declaration (.d.ts) baseline from compilation results
 pub fn generate_dts_baseline(
   source_files : Array[SourceUnit],
-  results : Array[FileCompileResult]
+  results : Array[FileCompileResult],
 ) -> String? {
   // Check if any results have declarations
-  let has_declarations = results.iter().any(
-    fn(r) {
+  let has_declarations = results
+    .iter()
+    .any(fn(r) {
       match r.declaration {
         Some(_) => true
         None => false
       }
-    },
-  )
+    })
   if not(has_declarations) {
     return None
   }
-
   let sb = StringBuilder::new()
 
   // First, output all source files
@@ -100,9 +99,7 @@ pub fn generate_dts_baseline(
 ///|
 /// Generate errors baseline from diagnostics
 /// Format: file.ts(line,col): error TSxxxx: message
-pub fn generate_errors_baseline(
-  results : Array[FileCompileResult]
-) -> String? {
+pub fn generate_errors_baseline(results : Array[FileCompileResult]) -> String? {
   // Collect all diagnostics
   let all_diagnostics : Array[@compiler.Diagnostic] = []
   for result in results {
@@ -113,7 +110,6 @@ pub fn generate_errors_baseline(
   if all_diagnostics.length() == 0 {
     return None
   }
-
   let sb = StringBuilder::new()
 
   // Output each diagnostic
@@ -161,7 +157,7 @@ fn to_dts_filename(filename : String) -> String {
 /// Generate all baselines from compilation results
 pub fn generate_all_baselines(
   source_files : Array[SourceUnit],
-  results : Array[FileCompileResult]
+  results : Array[FileCompileResult],
 ) -> Baselines {
   let js = generate_js_baseline(source_files, results)
   let dts = generate_dts_baseline(source_files, results)
@@ -175,21 +171,25 @@ pub fn generate_all_baselines(
     symbols: None, // TODO: Implement when binder exposes this info
     errors,
     dts,
-    js_map: None, // TODO: Collect source maps if enabled
-  }
+    js_map: None,
+  } // TODO: Collect source maps if enabled
 }
 
 // Tests
+
+///|
 test "to_js_filename" {
   assert_eq(to_js_filename("test.ts"), "test.js")
   assert_eq(to_js_filename("test.tsx"), "test.js")
 }
 
+///|
 test "to_dts_filename" {
   assert_eq(to_dts_filename("test.ts"), "test.d.ts")
   assert_eq(to_dts_filename("test.tsx"), "test.d.ts")
 }
 
+///|
 test "generate js baseline" {
   let sources : Array[SourceUnit] = [
     { filename: "test.ts", content: "export const x = 1;" },

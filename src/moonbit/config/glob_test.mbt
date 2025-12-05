@@ -151,8 +151,14 @@ test "normalize_path - converts backslashes" {
 
 ///|
 test "get_relative_path - extracts relative portion" {
-  assert_eq(get_relative_path("/project", "/project/src/index.ts"), "src/index.ts")
-  assert_eq(get_relative_path("/project/", "/project/src/index.ts"), "src/index.ts")
+  assert_eq(
+    get_relative_path("/project", "/project/src/index.ts"),
+    "src/index.ts",
+  )
+  assert_eq(
+    get_relative_path("/project/", "/project/src/index.ts"),
+    "src/index.ts",
+  )
   assert_eq(get_relative_path(".", "./src/index.ts"), "src/index.ts")
 }
 

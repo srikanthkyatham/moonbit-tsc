@@ -764,7 +764,6 @@ fn build_coordinator_options_from_tsconfig(
       None => false
     }
   }
-
   @coordinator.CoordinatorOptions::{
     target,
     module_kind,

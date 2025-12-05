@@ -55,7 +55,9 @@ test "resolve_module_path - with baseUrl only" {
     ..CompilerOptions::default(),
     base_url: Some("."),
   }
-  let result = resolve_module_path("utils/helper", "/project/src/index.ts", options)
+  let result = resolve_module_path(
+    "utils/helper", "/project/src/index.ts", options,
+  )
   assert_true(result is Some(_))
 }
 
@@ -75,7 +77,9 @@ test "resolve_module_path - skips absolute imports" {
     ..CompilerOptions::default(),
     base_url: Some("."),
   }
-  let result = resolve_module_path("/absolute", "/project/src/index.ts", options)
+  let result = resolve_module_path(
+    "/absolute", "/project/src/index.ts", options,
+  )
   assert_true(result is None)
 }
 
@@ -88,7 +92,9 @@ test "resolve_module_path - with paths mapping" {
     base_url: Some("/project"),
     paths: Some(paths),
   }
-  let result = resolve_module_path("@/utils/helper", "/project/src/index.ts", options)
+  let result = resolve_module_path(
+    "@/utils/helper", "/project/src/index.ts", options,
+  )
   guard result is Some(resolved) else {
     assert_true(false)
     return
@@ -108,11 +114,15 @@ test "resolve_module_path - multiple path patterns" {
   }
 
   // First pattern
-  let result1 = resolve_module_path("@/components/Button", "/project/src/index.ts", options)
+  let result1 = resolve_module_path(
+    "@/components/Button", "/project/src/index.ts", options,
+  )
   assert_true(result1 is Some(_))
 
   // Second pattern
-  let result2 = resolve_module_path("@utils/format", "/project/src/index.ts", options)
+  let result2 = resolve_module_path(
+    "@utils/format", "/project/src/index.ts", options,
+  )
   assert_true(result2 is Some(_))
 }
 
@@ -197,10 +207,7 @@ test "resolve_from_node_modules - skips relative paths" {
   }
 
   let result = resolve_from_node_modules(
-    "./local",
-    "/project/src/index.ts",
-    file_exists,
-    read_file,
+    "./local", "/project/src/index.ts", file_exists, read_file,
   )
   assert_true(result is None)
 }
@@ -216,10 +223,7 @@ test "resolve_from_node_modules - skips absolute paths" {
   }
 
   let result = resolve_from_node_modules(
-    "/absolute/path",
-    "/project/src/index.ts",
-    file_exists,
-    read_file,
+    "/absolute/path", "/project/src/index.ts", file_exists, read_file,
   )
   assert_true(result is None)
 }
@@ -235,10 +239,7 @@ test "resolve_from_node_modules - finds package with index.ts" {
   }
 
   let result = resolve_from_node_modules(
-    "my-package",
-    "/project/src/index.ts",
-    file_exists,
-    read_file,
+    "my-package", "/project/src/index.ts", file_exists, read_file,
   )
   guard result is Some(resolved) else {
     assert_true(false)
@@ -262,10 +263,7 @@ test "resolve_from_node_modules - finds package with types field" {
   }
 
   let result = resolve_from_node_modules(
-    "typed-package",
-    "/project/src/index.ts",
-    file_exists,
-    read_file,
+    "typed-package", "/project/src/index.ts", file_exists, read_file,
   )
   guard result is Some(resolved) else {
     assert_true(false)
@@ -285,10 +283,7 @@ test "resolve_from_node_modules - finds package with subpath" {
   }
 
   let result = resolve_from_node_modules(
-    "lodash/map",
-    "/project/src/index.ts",
-    file_exists,
-    read_file,
+    "lodash/map", "/project/src/index.ts", file_exists, read_file,
   )
   guard result is Some(resolved) else {
     assert_true(false)
@@ -308,10 +303,7 @@ test "resolve_from_node_modules - finds scoped package" {
   }
 
   let result = resolve_from_node_modules(
-    "@types/node",
-    "/project/src/index.ts",
-    file_exists,
-    read_file,
+    "@types/node", "/project/src/index.ts", file_exists, read_file,
   )
   guard result is Some(resolved) else {
     assert_true(false)
@@ -332,10 +324,7 @@ test "resolve_from_node_modules - climbs directory tree" {
   }
 
   let result = resolve_from_node_modules(
-    "shared-lib",
-    "/project/packages/app/src/index.ts",
-    file_exists,
-    read_file,
+    "shared-lib", "/project/packages/app/src/index.ts", file_exists, read_file,
   )
   guard result is Some(resolved) else {
     assert_true(false)
@@ -355,10 +344,7 @@ test "resolve_from_node_modules - returns None when not found" {
   }
 
   let result = resolve_from_node_modules(
-    "non-existent-package",
-    "/project/src/index.ts",
-    file_exists,
-    read_file,
+    "non-existent-package", "/project/src/index.ts", file_exists, read_file,
   )
   assert_true(result is None)
 }
@@ -367,7 +353,6 @@ test "resolve_from_node_modules - returns None when not found" {
 test "resolve_module_full - node_modules resolution without baseUrl" {
   // Without baseUrl, bare specifiers go to node_modules
   let options = CompilerOptions::default()
-
   fn file_exists(path : String) -> Bool {
     path == "/project/node_modules/external-lib/index.ts"
   }
@@ -378,11 +363,7 @@ test "resolve_module_full - node_modules resolution without baseUrl" {
 
   // Should resolve bare specifier via node_modules
   let result = resolve_module_full(
-    "external-lib",
-    "/project/src/index.ts",
-    options,
-    file_exists,
-    read_file,
+    "external-lib", "/project/src/index.ts", options, file_exists, read_file,
   )
   guard result is Some(resolved) else {
     assert_true(false)
@@ -400,7 +381,6 @@ test "resolve_module_full - paths take priority over node_modules" {
     base_url: Some("/project"),
     paths: Some(paths),
   }
-
   fn file_exists(_path : String) -> Bool {
     true // Both local and node_modules would match
   }
@@ -410,11 +390,7 @@ test "resolve_module_full - paths take priority over node_modules" {
   }
 
   let result = resolve_module_full(
-    "my-lib",
-    "/project/src/index.ts",
-    options,
-    file_exists,
-    read_file,
+    "my-lib", "/project/src/index.ts", options, file_exists, read_file,
   )
   guard result is Some(resolved) else {
     assert_true(false)
@@ -431,7 +407,6 @@ test "resolve_module_full - paths take priority over node_modules" {
 ///|
 test "resolve_package_exports - simple string export" {
   let package_json = "{\"name\": \"my-pkg\", \"exports\": \"./dist/index.js\"}"
-
   fn file_exists(path : String) -> Bool {
     path == "/pkg/dist/index.d.ts"
   }
@@ -447,12 +422,13 @@ test "resolve_package_exports - simple string export" {
 ///|
 test "resolve_package_exports - subpath exports" {
   let package_json = "{\"name\": \"my-pkg\", \"exports\": {\".\":\"./dist/index.js\", \"./utils\": \"./dist/utils.js\"}}"
-
   fn file_exists(path : String) -> Bool {
     path == "/pkg/dist/utils.d.ts"
   }
 
-  let result = resolve_package_exports(package_json, "./utils", file_exists, "/pkg")
+  let result = resolve_package_exports(
+    package_json, "./utils", file_exists, "/pkg",
+  )
   guard result is Some(resolved) else {
     assert_true(false)
     return
@@ -463,7 +439,6 @@ test "resolve_package_exports - subpath exports" {
 ///|
 test "resolve_package_exports - conditional exports with types" {
   let package_json = "{\"name\": \"my-pkg\", \"exports\": {\".\": {\"types\": \"./types/index.d.ts\", \"import\": \"./dist/index.mjs\"}}}"
-
   fn file_exists(path : String) -> Bool {
     path == "/pkg/types/index.d.ts" || path == "/pkg/dist/index.mjs"
   }
@@ -480,7 +455,6 @@ test "resolve_package_exports - conditional exports with types" {
 ///|
 test "resolve_package_exports - conditional exports fallback to import" {
   let package_json = "{\"name\": \"my-pkg\", \"exports\": {\".\": {\"types\": \"./types/index.d.ts\", \"import\": \"./dist/index.mjs\"}}}"
-
   fn file_exists(path : String) -> Bool {
     // types file doesn't exist, only import .d.mts exists
     path == "/pkg/dist/index.d.mts"
@@ -498,12 +472,13 @@ test "resolve_package_exports - conditional exports fallback to import" {
 ///|
 test "resolve_package_exports - wildcard pattern" {
   let package_json = "{\"name\": \"my-pkg\", \"exports\": {\"./*\": \"./dist/*.js\"}}"
-
   fn file_exists(path : String) -> Bool {
     path == "/pkg/dist/utils.d.ts"
   }
 
-  let result = resolve_package_exports(package_json, "./utils", file_exists, "/pkg")
+  let result = resolve_package_exports(
+    package_json, "./utils", file_exists, "/pkg",
+  )
   guard result is Some(resolved) else {
     assert_true(false)
     return
@@ -514,12 +489,13 @@ test "resolve_package_exports - wildcard pattern" {
 ///|
 test "resolve_package_exports - wildcard with conditional" {
   let package_json = "{\"name\": \"my-pkg\", \"exports\": {\"./*\": {\"types\": \"./types/*.d.ts\", \"import\": \"./dist/*.mjs\"}}}"
-
   fn file_exists(path : String) -> Bool {
     path == "/pkg/types/helpers.d.ts"
   }
 
-  let result = resolve_package_exports(package_json, "./helpers", file_exists, "/pkg")
+  let result = resolve_package_exports(
+    package_json, "./helpers", file_exists, "/pkg",
+  )
   guard result is Some(resolved) else {
     assert_true(false)
     return
@@ -530,12 +506,13 @@ test "resolve_package_exports - wildcard with conditional" {
 ///|
 test "resolve_package_exports - null export (private)" {
   let package_json = "{\"name\": \"my-pkg\", \"exports\": {\".\": \"./index.js\", \"./internal\": null}}"
-
   fn file_exists(path : String) -> Bool {
     path == "/pkg/internal/secret.js"
   }
 
-  let result = resolve_package_exports(package_json, "./internal", file_exists, "/pkg")
+  let result = resolve_package_exports(
+    package_json, "./internal", file_exists, "/pkg",
+  )
   // Should return None because ./internal is explicitly null (private)
   assert_true(result is None)
 }
@@ -543,7 +520,6 @@ test "resolve_package_exports - null export (private)" {
 ///|
 test "resolve_package_exports - no exports field returns None" {
   let package_json = "{\"name\": \"my-pkg\", \"main\": \"./index.js\"}"
-
   fn file_exists(_path : String) -> Bool {
     true
   }
@@ -556,13 +532,14 @@ test "resolve_package_exports - no exports field returns None" {
 ///|
 test "resolve_package_exports - subpath without ./ prefix" {
   let package_json = "{\"name\": \"my-pkg\", \"exports\": {\".\": \"./index.js\", \"./utils\": \"./dist/utils.js\"}}"
-
   fn file_exists(path : String) -> Bool {
     path == "/pkg/dist/utils.d.ts"
   }
 
   // Test with subpath that doesn't have "./" prefix
-  let result = resolve_package_exports(package_json, "/utils", file_exists, "/pkg")
+  let result = resolve_package_exports(
+    package_json, "/utils", file_exists, "/pkg",
+  )
   guard result is Some(resolved) else {
     assert_true(false)
     return
@@ -578,17 +555,16 @@ test "resolve_from_node_modules - uses exports field" {
 
   fn read_file(path : String) -> String? {
     if path == "/project/node_modules/modern-pkg/package.json" {
-      Some("{\"name\": \"modern-pkg\", \"exports\": {\".\": {\"types\": \"./dist/index.d.ts\", \"import\": \"./dist/index.mjs\"}}}")
+      Some(
+        "{\"name\": \"modern-pkg\", \"exports\": {\".\": {\"types\": \"./dist/index.d.ts\", \"import\": \"./dist/index.mjs\"}}}",
+      )
     } else {
       None
     }
   }
 
   let result = resolve_from_node_modules(
-    "modern-pkg",
-    "/project/src/index.ts",
-    file_exists,
-    read_file,
+    "modern-pkg", "/project/src/index.ts", file_exists, read_file,
   )
   guard result is Some(resolved) else {
     assert_true(false)
@@ -605,17 +581,16 @@ test "resolve_from_node_modules - exports subpath" {
 
   fn read_file(path : String) -> String? {
     if path == "/project/node_modules/modern-pkg/package.json" {
-      Some("{\"name\": \"modern-pkg\", \"exports\": {\".\": \"./index.js\", \"./utils\": \"./dist/utils.js\"}}")
+      Some(
+        "{\"name\": \"modern-pkg\", \"exports\": {\".\": \"./index.js\", \"./utils\": \"./dist/utils.js\"}}",
+      )
     } else {
       None
     }
   }
 
   let result = resolve_from_node_modules(
-    "modern-pkg/utils",
-    "/project/src/index.ts",
-    file_exists,
-    read_file,
+    "modern-pkg/utils", "/project/src/index.ts", file_exists, read_file,
   )
   guard result is Some(resolved) else {
     assert_true(false)
@@ -635,17 +610,16 @@ test "resolve_from_node_modules - exports takes priority over direct file" {
   fn read_file(path : String) -> String? {
     if path == "/project/node_modules/dual-pkg/package.json" {
       // exports maps ./utils to lib/index.d.ts, not utils.ts
-      Some("{\"name\": \"dual-pkg\", \"exports\": {\"./utils\": \"./lib/index.js\"}}")
+      Some(
+        "{\"name\": \"dual-pkg\", \"exports\": {\"./utils\": \"./lib/index.js\"}}",
+      )
     } else {
       None
     }
   }
 
   let result = resolve_from_node_modules(
-    "dual-pkg/utils",
-    "/project/src/index.ts",
-    file_exists,
-    read_file,
+    "dual-pkg/utils", "/project/src/index.ts", file_exists, read_file,
   )
   guard result is Some(resolved) else {
     assert_true(false)
@@ -658,7 +632,6 @@ test "resolve_from_node_modules - exports takes priority over direct file" {
 ///|
 test "parse_exports_field - handles nested conditionals" {
   let package_json = "{\"exports\": {\".\": {\"types\": \"./types.d.ts\", \"import\": {\"types\": \"./esm/types.d.ts\", \"default\": \"./esm/index.mjs\"}}}}"
-
   fn file_exists(path : String) -> Bool {
     path == "/pkg/types.d.ts"
   }
@@ -693,17 +666,16 @@ test "resolve_package_imports - simple import" {
 
   fn read_file(path : String) -> String? {
     if path == "/project/package.json" {
-      Some("{\"name\": \"my-project\", \"imports\": {\"#internal\": \"./src/internal/index.ts\"}}")
+      Some(
+        "{\"name\": \"my-project\", \"imports\": {\"#internal\": \"./src/internal/index.ts\"}}",
+      )
     } else {
       None
     }
   }
 
   let result = resolve_package_imports(
-    "#internal",
-    "/project/src/app/main.ts",
-    file_exists,
-    read_file,
+    "#internal", "/project/src/app/main.ts", file_exists, read_file,
   )
   guard result is Some(resolved) else {
     assert_true(false)
@@ -720,17 +692,16 @@ test "resolve_package_imports - wildcard pattern" {
 
   fn read_file(path : String) -> String? {
     if path == "/project/package.json" {
-      Some("{\"name\": \"my-project\", \"imports\": {\"#utils/*\": \"./src/utils/*.ts\"}}")
+      Some(
+        "{\"name\": \"my-project\", \"imports\": {\"#utils/*\": \"./src/utils/*.ts\"}}",
+      )
     } else {
       None
     }
   }
 
   let result = resolve_package_imports(
-    "#utils/format",
-    "/project/src/app/main.ts",
-    file_exists,
-    read_file,
+    "#utils/format", "/project/src/app/main.ts", file_exists, read_file,
   )
   guard result is Some(resolved) else {
     assert_true(false)
@@ -747,17 +718,16 @@ test "resolve_package_imports - conditional import" {
 
   fn read_file(path : String) -> String? {
     if path == "/project/package.json" {
-      Some("{\"name\": \"my-project\", \"imports\": {\"#internal\": {\"types\": \"./src/internal/types.d.ts\", \"default\": \"./src/internal/index.js\"}}}")
+      Some(
+        "{\"name\": \"my-project\", \"imports\": {\"#internal\": {\"types\": \"./src/internal/types.d.ts\", \"default\": \"./src/internal/index.js\"}}}",
+      )
     } else {
       None
     }
   }
 
   let result = resolve_package_imports(
-    "#internal",
-    "/project/src/app/main.ts",
-    file_exists,
-    read_file,
+    "#internal", "/project/src/app/main.ts", file_exists, read_file,
   )
   guard result is Some(resolved) else {
     assert_true(false)
@@ -775,17 +745,16 @@ test "resolve_package_imports - nested package.json" {
 
   fn read_file(path : String) -> String? {
     if path == "/project/package.json" {
-      Some("{\"name\": \"my-project\", \"imports\": {\"#lib/*\": \"./src/lib/*.ts\"}}")
+      Some(
+        "{\"name\": \"my-project\", \"imports\": {\"#lib/*\": \"./src/lib/*.ts\"}}",
+      )
     } else {
       None
     }
   }
 
   let result = resolve_package_imports(
-    "#lib/helpers",
-    "/project/packages/app/src/index.ts",
-    file_exists,
-    read_file,
+    "#lib/helpers", "/project/packages/app/src/index.ts", file_exists, read_file,
   )
   guard result is Some(resolved) else {
     assert_true(false)
@@ -809,10 +778,7 @@ test "resolve_package_imports - no imports field returns None" {
   }
 
   let result = resolve_package_imports(
-    "#internal",
-    "/project/src/main.ts",
-    file_exists,
-    read_file,
+    "#internal", "/project/src/main.ts", file_exists, read_file,
   )
   assert_true(result is None)
 }
@@ -828,10 +794,7 @@ test "resolve_package_imports - no package.json returns None" {
   }
 
   let result = resolve_package_imports(
-    "#internal",
-    "/project/src/main.ts",
-    file_exists,
-    read_file,
+    "#internal", "/project/src/main.ts", file_exists, read_file,
   )
   assert_true(result is None)
 }
@@ -839,7 +802,6 @@ test "resolve_package_imports - no package.json returns None" {
 ///|
 test "resolve_module_full - imports take priority" {
   let options = CompilerOptions::default()
-
   fn file_exists(path : String) -> Bool {
     path == "/project/src/internal/index.ts" ||
     path == "/project/node_modules/internal/index.ts"
@@ -847,18 +809,16 @@ test "resolve_module_full - imports take priority" {
 
   fn read_file(path : String) -> String? {
     if path == "/project/package.json" {
-      Some("{\"name\": \"my-project\", \"imports\": {\"#internal\": \"./src/internal/index.ts\"}}")
+      Some(
+        "{\"name\": \"my-project\", \"imports\": {\"#internal\": \"./src/internal/index.ts\"}}",
+      )
     } else {
       None
     }
   }
 
   let result = resolve_module_full(
-    "#internal",
-    "/project/src/app/main.ts",
-    options,
-    file_exists,
-    read_file,
+    "#internal", "/project/src/app/main.ts", options, file_exists, read_file,
   )
   guard result is Some(resolved) else {
     assert_true(false)
@@ -876,17 +836,16 @@ test "resolve_package_imports - deep wildcard" {
 
   fn read_file(path : String) -> String? {
     if path == "/project/package.json" {
-      Some("{\"name\": \"my-project\", \"imports\": {\"#components/*\": \"./src/components/*.tsx\"}}")
+      Some(
+        "{\"name\": \"my-project\", \"imports\": {\"#components/*\": \"./src/components/*.tsx\"}}",
+      )
     } else {
       None
     }
   }
 
   let result = resolve_package_imports(
-    "#components/ui/Button",
-    "/project/src/app/main.ts",
-    file_exists,
-    read_file,
+    "#components/ui/Button", "/project/src/app/main.ts", file_exists, read_file,
   )
   guard result is Some(resolved) else {
     assert_true(false)

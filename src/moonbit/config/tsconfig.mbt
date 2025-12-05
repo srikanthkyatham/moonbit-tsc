@@ -36,7 +36,7 @@ pub fn TSConfig::default() -> TSConfig {
 
 ///|
 /// Parse tsconfig.json from file path
-pub async fn parse_tsconfig_file(path : String) -> TSConfig raise {
+pub async fn parse_tsconfig_file(path : String) -> TSConfig {
   let data = @fs.read_file(path)
   let content = data.text()
   parse_tsconfig_text(content, path)
@@ -68,7 +68,6 @@ fn strip_json_comments(text : String) -> String {
   let quote = '"'.to_int()
   let newline = '\n'.to_int()
   let star = '*'.to_int()
-
   while i < len {
     let c = text[i]
 
@@ -131,53 +130,42 @@ fn strip_json_comments(text : String) -> String {
     result.write_char(c.unsafe_to_char())
     i = i + 1
   }
-
   result.to_string()
 }
 
 ///|
 /// Parse TSConfig from JSON value
 fn parse_tsconfig_json(json : Json) -> TSConfig raise {
-  guard json is Object(obj) else {
-    fail("TSConfig must be an object")
-  }
-
+  guard json is Object(obj) else { fail("TSConfig must be an object") }
   let compiler_options : CompilerOptions? = match obj.get("compilerOptions") {
     Some(opts) => Some(parse_compiler_options(opts))
     _ => None
   }
-
   let files = match obj.get("files") {
     Some(Array(arr)) => Some(parse_string_array(arr))
     _ => None
   }
-
   let include_patterns = match obj.get("include") {
     Some(Array(arr)) => Some(parse_string_array(arr))
     _ => None
   }
-
   let exclude_patterns = match obj.get("exclude") {
     Some(Array(arr)) => Some(parse_string_array(arr))
     _ => None
   }
-
   let extends = match obj.get("extends") {
     Some(String(s)) => Some(s)
     _ => None
   }
-
   let references = match obj.get("references") {
     Some(Array(arr)) => Some(parse_project_references(arr))
     _ => None
   }
-
   let compile_on_save = match obj.get("compileOnSave") {
     Some(True) => Some(true)
     Some(False) => Some(false)
     _ => None
   }
-
   {
     compiler_options,
     files,
@@ -192,9 +180,7 @@ fn parse_tsconfig_json(json : Json) -> TSConfig raise {
 ///|
 /// Parse compilerOptions object
 fn parse_compiler_options(json : Json) -> CompilerOptions {
-  guard json is Object(obj) else {
-    return CompilerOptions::default()
-  }
+  guard json is Object(obj) else { return CompilerOptions::default() }
 
   // Parse target
   let target = match obj.get("target") {
@@ -248,16 +234,22 @@ fn parse_compiler_options(json : Json) -> CompilerOptions {
   let strict_null_checks = get_bool(obj, "strictNullChecks")
   let strict_function_types = get_bool(obj, "strictFunctionTypes")
   let strict_bind_call_apply = get_bool(obj, "strictBindCallApply")
-  let strict_property_initialization = get_bool(obj, "strictPropertyInitialization")
+  let strict_property_initialization = get_bool(
+    obj, "strictPropertyInitialization",
+  )
   let no_implicit_this = get_bool(obj, "noImplicitThis")
-  let use_unknown_in_catch_variables = get_bool(obj, "useUnknownInCatchVariables")
+  let use_unknown_in_catch_variables = get_bool(
+    obj, "useUnknownInCatchVariables",
+  )
   let always_strict = get_bool(obj, "alwaysStrict")
 
   // Additional type checking
   let no_unused_locals = get_bool(obj, "noUnusedLocals")
   let no_unused_parameters = get_bool(obj, "noUnusedParameters")
   let no_implicit_returns = get_bool(obj, "noImplicitReturns")
-  let no_fallthrough_cases_in_switch = get_bool(obj, "noFallthroughCasesInSwitch")
+  let no_fallthrough_cases_in_switch = get_bool(
+    obj, "noFallthroughCasesInSwitch",
+  )
   let no_unchecked_indexed_access = get_bool(obj, "noUncheckedIndexedAccess")
   let no_implicit_override = get_bool(obj, "noImplicitOverride")
 
@@ -281,7 +273,9 @@ fn parse_compiler_options(json : Json) -> CompilerOptions {
 
   // Interop options
   let es_module_interop = get_bool(obj, "esModuleInterop")
-  let allow_synthetic_default_imports = get_bool(obj, "allowSyntheticDefaultImports")
+  let allow_synthetic_default_imports = get_bool(
+    obj, "allowSyntheticDefaultImports",
+  )
   let isolated_modules = get_bool(obj, "isolatedModules")
   let verbatim_module_syntax = get_bool(obj, "verbatimModuleSyntax")
 
@@ -301,7 +295,6 @@ fn parse_compiler_options(json : Json) -> CompilerOptions {
   let incremental = get_bool(obj, "incremental")
   let composite = get_bool(obj, "composite")
   let ts_build_info_file = get_string(obj, "tsBuildInfoFile")
-
   {
     target,
     module_kind,
@@ -460,7 +453,9 @@ pub fn get_default_include() -> Array[String] {
 ///|
 /// Get default exclude patterns
 pub fn get_default_exclude(out_dir : String?) -> Array[String] {
-  let result : Array[String] = ["node_modules", "bower_components", "jspm_packages"]
+  let result : Array[String] = [
+    "node_modules", "bower_components", "jspm_packages",
+  ]
   match out_dir {
     Some(dir) => {
       result.push(dir)
@@ -534,9 +529,7 @@ async fn load_tsconfig_recursive(
   let config = parse_tsconfig_file(path)
 
   // If no extends, return as-is
-  guard config.extends is Some(extends_path) else {
-    return config
-  }
+  guard config.extends is Some(extends_path) else { return config }
 
   // Resolve the extends path relative to current config directory
   let config_dir = get_config_directory(path)
@@ -553,7 +546,8 @@ async fn load_tsconfig_recursive(
 /// Merge two TSConfig objects (override takes precedence)
 pub fn merge_tsconfigs(base : TSConfig, override_ : TSConfig) -> TSConfig {
   // Merge compiler options
-  let merged_options = match (base.compiler_options, override_.compiler_options) {
+  let merged_options = match
+    (base.compiler_options, override_.compiler_options) {
     (Some(base_opts), Some(override_opts)) =>
       Some(merge_compiler_options(base_opts, override_opts))
     (None, Some(opts)) => Some(opts)
@@ -590,7 +584,6 @@ pub fn merge_tsconfigs(base : TSConfig, override_ : TSConfig) -> TSConfig {
     Some(_) => override_.compile_on_save
     None => base.compile_on_save
   }
-
   {
     compiler_options: merged_options,
     files,
@@ -614,7 +607,10 @@ fn resolve_extends_path(extends_path : String, config_dir : String) -> String {
   } else {
     // Package reference (e.g., "@tsconfig/node18")
     // For now, try to resolve from node_modules
-    let node_modules_path = join_paths(config_dir, "node_modules/" + extends_path)
+    let node_modules_path = join_paths(
+      config_dir,
+      "node_modules/" + extends_path,
+    )
     // Check if it's a package with tsconfig.json
     if not(extends_path.has_suffix(".json")) {
       join_paths(node_modules_path, "tsconfig.json")
@@ -656,16 +652,13 @@ fn join_paths(base : String, relative : String) -> String {
   if relative == "." {
     return base_clean
   }
-
   if relative.has_prefix("./") {
     return base_clean + "/" + @utils.substr(relative, start=2)
   }
-
   if relative.has_prefix("../") {
     // Go up one directory
     let parent_dir = get_config_directory(base_clean)
     return join_paths(parent_dir, @utils.substr(relative, start=3))
   }
-
   base_clean + "/" + relative
 }

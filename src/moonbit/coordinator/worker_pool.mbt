@@ -46,9 +46,7 @@ pub async fn spawn_worker(executable : String) -> WorkerHandle raise Error {
     stdin=stdin_for_process,
     stdout=stdout_for_process,
   )
-
   let reader = @io.BufferedReader::new(stdout_read)
-
   { pid, stdin: stdin_write, stdout: stdout_read, reader }
 }
 
@@ -59,12 +57,10 @@ pub async fn spawn_workers(
   count : Int,
 ) -> Array[WorkerHandle] raise Error {
   let workers : Array[WorkerHandle] = []
-
   for i = 0; i < count; i = i + 1 {
     let worker = spawn_worker(executable)
     workers.push(worker)
   }
-
   workers
 }
 
@@ -79,7 +75,6 @@ pub async fn create_worker_pool(
   // Create bounded queues for work distribution and result collection
   let work_queue = @aqueue.Queue::new(kind=@aqueue.Blocking(worker_count * 2))
   let result_queue = @aqueue.Queue::new(kind=@aqueue.Unbounded)
-
   { workers, work_queue, result_queue }
 }
 
@@ -95,24 +90,20 @@ pub async fn send_request(
 
   // Read response
   let response_line = worker.reader.read_line()
-
   match response_line {
     None =>
       @protocol.CompileResponse::error(
         request.file_path,
         "Worker closed unexpectedly",
       )
-    Some(json_str) => {
-      try {
-        @protocol.parse_response(json_str)
-      } catch {
+    Some(json_str) =>
+      @protocol.parse_response(json_str) catch {
         err =>
           @protocol.CompileResponse::error(
             request.file_path,
             "Failed to parse worker response: \{err}",
           )
       }
-    }
   }
 }
 
@@ -148,14 +139,12 @@ pub async fn run_with_pool(
     None,
   )
   let total_count = files.length()
-
   @async.with_task_group(fn(group) {
     // Start worker loops in background
     for worker in pool.workers {
-      group.spawn_bg(
-        allow_failure=true,
-        fn() { worker_loop(worker, pool.work_queue, pool.result_queue) },
-      )
+      group.spawn_bg(allow_failure=true, fn() {
+        worker_loop(worker, pool.work_queue, pool.result_queue)
+      })
     }
 
     // Enqueue all work items
@@ -196,7 +185,6 @@ pub async fn run_with_pool(
       None => ()
     }
   }
-
   final_results
 }
 

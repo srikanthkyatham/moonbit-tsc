@@ -22,7 +22,6 @@ test "add node with imports" {
   add_node(dag, "/src/b.ts", [], 1000L)
   // Then add the file that imports it
   add_node(dag, "/src/a.ts", ["/src/b.ts"], 1000L)
-
   assert_eq(dag.nodes.length(), 2)
 
   // Check edges_out (a imports b)
@@ -43,7 +42,6 @@ test "topological sort - simple chain" {
   add_node(dag, "/src/c.ts", [], 1000L)
   add_node(dag, "/src/b.ts", ["/src/c.ts"], 1000L)
   add_node(dag, "/src/a.ts", ["/src/b.ts"], 1000L)
-
   match topological_sort(dag) {
     Some(order) => {
       assert_eq(order.length(), 3)
@@ -70,7 +68,6 @@ test "topological sort - diamond dependency" {
   add_node(dag, "/src/b.ts", ["/src/d.ts"], 1000L)
   add_node(dag, "/src/c.ts", ["/src/d.ts"], 1000L)
   add_node(dag, "/src/a.ts", ["/src/b.ts", "/src/c.ts"], 1000L)
-
   match topological_sort(dag) {
     Some(order) => {
       assert_eq(order.length(), 4)
@@ -95,7 +92,6 @@ test "cycle detection" {
   add_node(dag, "/src/a.ts", ["/src/c.ts"], 1000L)
   add_node(dag, "/src/b.ts", ["/src/a.ts"], 1000L)
   add_node(dag, "/src/c.ts", ["/src/b.ts"], 1000L)
-
   assert_true(has_cycle(dag))
   assert_true(topological_sort(dag) is None)
 }
@@ -108,7 +104,6 @@ test "get downstream dependents" {
   add_node(dag, "/src/a.ts", [], 1000L)
   add_node(dag, "/src/b.ts", ["/src/a.ts"], 1000L)
   add_node(dag, "/src/c.ts", ["/src/b.ts"], 1000L)
-
   let dependents = get_downstream_dependents(dag, "/src/a.ts")
   assert_eq(dependents.length(), 2)
   assert_true(contains_path(dependents, "/src/b.ts"))
@@ -122,7 +117,6 @@ test "get upstream dependencies" {
   add_node(dag, "/src/a.ts", [], 1000L)
   add_node(dag, "/src/b.ts", ["/src/a.ts"], 1000L)
   add_node(dag, "/src/c.ts", ["/src/b.ts"], 1000L)
-
   let deps = get_upstream_dependencies(dag, "/src/c.ts")
   assert_eq(deps.length(), 2)
   assert_true(contains_path(deps, "/src/a.ts"))
@@ -187,7 +181,6 @@ test "remove node" {
   let dag = DependencyDag::new()
   add_node(dag, "/src/a.ts", [], 1000L)
   add_node(dag, "/src/b.ts", ["/src/a.ts"], 1000L)
-
   remove_node(dag, "/src/a.ts")
   assert_eq(dag.nodes.length(), 1)
   assert_true(not(dag.nodes.contains("/src/a.ts")))
@@ -228,7 +221,6 @@ test "get all files" {
   add_node(dag, "/src/a.ts", [], 1000L)
   add_node(dag, "/src/b.ts", [], 1000L)
   add_node(dag, "/src/c.ts", [], 1000L)
-
   let files = get_all_files(dag)
   assert_eq(files.length(), 3)
   assert_true(contains_path(files, "/src/a.ts"))
@@ -256,7 +248,6 @@ test "independent nodes - parallel compilation possible" {
   add_node(dag, "/src/a.ts", [], 1000L)
   add_node(dag, "/src/b.ts", [], 1000L)
   add_node(dag, "/src/c.ts", [], 1000L)
-
   match topological_sort(dag) {
     Some(order) => assert_eq(order.length(), 3)
     None => assert_true(false)
@@ -273,10 +264,8 @@ test "topological levels - simple chain" {
   add_node(dag, "/src/a.ts", [], 1000L)
   add_node(dag, "/src/b.ts", ["/src/a.ts"], 1000L)
   add_node(dag, "/src/c.ts", ["/src/b.ts"], 1000L)
-
   let files = ["/src/a.ts", "/src/b.ts", "/src/c.ts"]
   let levels = topological_levels(dag, files)
-
   assert_eq(levels.length(), 3)
   assert_eq(levels[0].length(), 1)
   assert_eq(levels[0][0], "/src/a.ts")
@@ -301,10 +290,8 @@ test "topological levels - diamond dependency" {
   add_node(dag, "/src/b.ts", ["/src/d.ts"], 1000L)
   add_node(dag, "/src/c.ts", ["/src/d.ts"], 1000L)
   add_node(dag, "/src/a.ts", ["/src/b.ts", "/src/c.ts"], 1000L)
-
   let files = ["/src/a.ts", "/src/b.ts", "/src/c.ts", "/src/d.ts"]
   let levels = topological_levels(dag, files)
-
   assert_eq(levels.length(), 3)
 
   // Level 0: d
@@ -329,10 +316,8 @@ test "topological levels - independent files" {
   add_node(dag, "/src/a.ts", [], 1000L)
   add_node(dag, "/src/b.ts", [], 1000L)
   add_node(dag, "/src/c.ts", [], 1000L)
-
   let files = ["/src/a.ts", "/src/b.ts", "/src/c.ts"]
   let levels = topological_levels(dag, files)
-
   assert_eq(levels.length(), 1)
   assert_eq(levels[0].length(), 3)
   assert_true(contains_path(levels[0], "/src/a.ts"))
@@ -353,7 +338,6 @@ test "topological levels - partial file list" {
   // Only interested in b, c, d
   let files = ["/src/b.ts", "/src/c.ts", "/src/d.ts"]
   let levels = topological_levels(dag, files)
-
   assert_eq(levels.length(), 3)
   assert_eq(levels[0][0], "/src/d.ts")
   assert_eq(levels[1][0], "/src/c.ts")
@@ -368,7 +352,6 @@ test "topological levels - with cycle" {
   add_node(dag, "/src/a.ts", ["/src/c.ts"], 1000L)
   add_node(dag, "/src/b.ts", ["/src/a.ts"], 1000L)
   add_node(dag, "/src/c.ts", ["/src/b.ts"], 1000L)
-
   let files = ["/src/a.ts", "/src/b.ts", "/src/c.ts"]
   let levels = topological_levels(dag, files)
 
@@ -383,7 +366,6 @@ test "level count" {
   add_node(dag, "/src/a.ts", [], 1000L)
   add_node(dag, "/src/b.ts", ["/src/a.ts"], 1000L)
   add_node(dag, "/src/c.ts", ["/src/b.ts"], 1000L)
-
   let files = ["/src/a.ts", "/src/b.ts", "/src/c.ts"]
   assert_eq(level_count(dag, files), 3)
 }
@@ -393,13 +375,10 @@ test "get level - specific level" {
   let dag = DependencyDag::new()
   add_node(dag, "/src/a.ts", [], 1000L)
   add_node(dag, "/src/b.ts", ["/src/a.ts"], 1000L)
-
   let files = ["/src/a.ts", "/src/b.ts"]
-
   let level0 = get_level(dag, files, 0)
   assert_eq(level0.length(), 1)
   assert_eq(level0[0], "/src/a.ts")
-
   let level1 = get_level(dag, files, 1)
   assert_eq(level1.length(), 1)
   assert_eq(level1[0], "/src/b.ts")

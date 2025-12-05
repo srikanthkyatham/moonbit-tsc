@@ -34,7 +34,7 @@ pub fn add_node(
 ) -> Unit {
   // Remove old edges if node exists
   match dag.nodes.get(path) {
-    Some(old_node) => {
+    Some(old_node) =>
       // Remove this node from edges_in of all its imports
       for imported_path in old_node.edges_out {
         match dag.nodes.get(imported_path) {
@@ -46,7 +46,6 @@ pub fn add_node(
           None => ()
         }
       }
-    }
     None => ()
   }
 
@@ -68,13 +67,12 @@ pub fn add_node(
   // Add reverse edges (this file is imported by...)
   for imported_path in imports {
     match dag.nodes.get(imported_path) {
-      Some(imported_node) => {
+      Some(imported_node) =>
         if not(array_contains(imported_node.edges_in, path)) {
           imported_node.edges_in.push(path)
           // Put modified node back in map
           dag.nodes[imported_path] = imported_node
         }
-      }
       None => ()
     }
   }
@@ -91,12 +89,10 @@ pub fn get_downstream_dependents(
   let visited : Map[String, Bool] = {}
   let queue : Array[String] = [path]
   visited[path] = true
-
   while queue.length() > 0 {
     let current = queue.remove(0)
-
     match dag.nodes.get(current) {
-      Some(node) => {
+      Some(node) =>
         for dependent in node.edges_in {
           if not(visited.contains(dependent)) {
             visited[dependent] = true
@@ -104,11 +100,9 @@ pub fn get_downstream_dependents(
             queue.push(dependent)
           }
         }
-      }
       None => ()
     }
   }
-
   dependents
 }
 
@@ -123,12 +117,10 @@ pub fn get_upstream_dependencies(
   let visited : Map[String, Bool] = {}
   let queue : Array[String] = [path]
   visited[path] = true
-
   while queue.length() > 0 {
     let current = queue.remove(0)
-
     match dag.nodes.get(current) {
-      Some(node) => {
+      Some(node) =>
         for dep in node.edges_out {
           if not(visited.contains(dep)) {
             visited[dep] = true
@@ -136,11 +128,9 @@ pub fn get_upstream_dependencies(
             queue.push(dep)
           }
         }
-      }
       None => ()
     }
   }
-
   dependencies
 }
 
@@ -161,16 +151,14 @@ pub fn topological_sort(dag : DependencyDag) -> Array[String]? {
       queue.push(path)
     }
   }
-
   let sorted : Array[String] = []
-
   while queue.length() > 0 {
     let current = queue.remove(0)
     sorted.push(current)
 
     // Decrease in-degree of all dependents
     match dag.nodes.get(current) {
-      Some(node) => {
+      Some(node) =>
         for dependent in node.edges_in {
           match in_degree.get(dependent) {
             Some(deg) => {
@@ -183,7 +171,6 @@ pub fn topological_sort(dag : DependencyDag) -> Array[String]? {
             None => ()
           }
         }
-      }
       None => ()
     }
   }
@@ -192,7 +179,6 @@ pub fn topological_sort(dag : DependencyDag) -> Array[String]? {
   if sorted.length() != dag.nodes.length() {
     return None // Cycle detected
   }
-
   Some(sorted)
 }
 
@@ -225,21 +211,18 @@ pub fn get_recompilation_order(
   // Filter to only files that need recompilation, preserving order
   let result : Array[String] = []
   match topo_order {
-    Some(order) => {
+    Some(order) =>
       for path in order {
         if needs_recompile.contains(path) {
           result.push(path)
         }
       }
-    }
-    None => {
+    None =>
       // Cycle detected, just return changed files + dependents
       for path, _ in needs_recompile {
         result.push(path)
       }
-    }
   }
-
   result
 }
 
@@ -301,7 +284,6 @@ pub fn remove_node(dag : DependencyDag, path : String) -> Unit {
           None => ()
         }
       }
-
       dag.nodes.remove(path)
     }
     None => ()
@@ -329,7 +311,10 @@ pub fn get_direct_imports(dag : DependencyDag, path : String) -> Array[String] {
 
 ///|
 /// Get files that directly import this file
-pub fn get_direct_importers(dag : DependencyDag, path : String) -> Array[String] {
+pub fn get_direct_importers(
+  dag : DependencyDag,
+  path : String,
+) -> Array[String] {
   match dag.nodes.get(path) {
     Some(node) => node.edges_in.copy()
     None => []
@@ -347,7 +332,10 @@ pub fn has_cycle(dag : DependencyDag) -> Bool {
 /// Returns a list of levels, where each level contains files that can be
 /// checked in parallel (all their dependencies are in earlier levels).
 /// Level 0 = leaf nodes (no dependencies), Level 1 = depend only on level 0, etc.
-pub fn topological_levels(dag : DependencyDag, files : Array[String]) -> Array[Array[String]] {
+pub fn topological_levels(
+  dag : DependencyDag,
+  files : Array[String],
+) -> Array[Array[String]] {
   // Build a set of files we're interested in
   let file_set : Map[String, Bool] = {}
   for file in files {
@@ -374,15 +362,15 @@ pub fn topological_levels(dag : DependencyDag, files : Array[String]) -> Array[A
   // Compute levels iteratively
   let levels : Array[Array[String]] = []
   let processed : Map[String, Bool] = {}
-
   while processed.length() < files.length() {
     // Find files with no remaining unprocessed dependencies (roots at this level)
     let current_level : Array[String] = []
-
     for file in files {
       if not(processed.contains(file)) {
         let deps = deps_map.get(file).unwrap_or([])
-        let all_deps_processed = deps.iter().all(fn(dep) { processed.contains(dep) })
+        let all_deps_processed = deps
+          .iter()
+          .all(fn(dep) { processed.contains(dep) })
         if all_deps_processed {
           current_level.push(file)
         }
@@ -408,16 +396,18 @@ pub fn topological_levels(dag : DependencyDag, files : Array[String]) -> Array[A
     for file in current_level {
       processed[file] = true
     }
-
     levels.push(current_level)
   }
-
   levels
 }
 
 ///|
 /// Get files at a specific level (0-indexed)
-pub fn get_level(dag : DependencyDag, files : Array[String], level_index : Int) -> Array[String] {
+pub fn get_level(
+  dag : DependencyDag,
+  files : Array[String],
+  level_index : Int,
+) -> Array[String] {
   let levels = topological_levels(dag, files)
   if level_index >= 0 && level_index < levels.length() {
     levels[level_index]
@@ -445,6 +435,7 @@ fn array_remove(arr : Array[String], value : String) -> Unit {
         j = j + 1
       }
       let _ = arr.pop()
+
     } else {
       i = i + 1
     }

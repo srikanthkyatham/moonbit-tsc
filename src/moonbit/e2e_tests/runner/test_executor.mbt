@@ -5,7 +5,7 @@
 /// Build CompileOptions from test directives and variant
 pub fn build_compile_options(
   directives : TestDirectives,
-  variant : TestVariant
+  variant : TestVariant,
 ) -> @compiler.CompileOptions {
   // Parse target
   let target = @compiler.parse_target(variant.target)
@@ -20,7 +20,6 @@ pub fn build_compile_options(
   // Determine declaration settings
   let declaration = directives.declaration
   let source_map = directives.source_map || directives.inline_source_map
-
   @compiler.CompileOptions::{
     target,
     module_kind,
@@ -51,9 +50,13 @@ pub fn build_compile_options(
 /// Compile a single source file
 pub fn compile_file(
   source : SourceUnit,
-  options : @compiler.CompileOptions
+  options : @compiler.CompileOptions,
 ) -> FileCompileResult {
-  let result = @compiler.compile_source(source.content, source.filename, options)
+  let result = @compiler.compile_source(
+    source.content,
+    source.filename,
+    options,
+  )
   {
     filename: source.filename,
     source: source.content,
@@ -68,7 +71,7 @@ pub fn compile_file(
 /// Compile all source files in a test case
 pub fn compile_test_case(
   test_case : TestCase,
-  variant : TestVariant
+  variant : TestVariant,
 ) -> Array[FileCompileResult] {
   let options = build_compile_options(test_case.directives, variant)
   let results : Array[FileCompileResult] = []
@@ -83,17 +86,16 @@ pub fn compile_test_case(
 /// Compare two baselines and return diffs
 pub fn compare_baselines(
   actual : Baselines,
-  expected : Baselines
+  expected : Baselines,
 ) -> Array[BaselineDiff] {
   let diffs : Array[BaselineDiff] = []
 
   // Compare JavaScript output
   match (actual.js, expected.js) {
-    (Some(act), Some(exp)) => {
+    (Some(act), Some(exp)) =>
       if normalize_baseline(act) != normalize_baseline(exp) {
         diffs.push({ baseline_type: "js", expected: exp, actual: act })
       }
-    }
     (None, Some(exp)) =>
       diffs.push({ baseline_type: "js", expected: exp, actual: "" })
     (Some(act), None) =>
@@ -103,11 +105,10 @@ pub fn compare_baselines(
 
   // Compare declaration output
   match (actual.dts, expected.dts) {
-    (Some(act), Some(exp)) => {
+    (Some(act), Some(exp)) =>
       if normalize_baseline(act) != normalize_baseline(exp) {
         diffs.push({ baseline_type: "dts", expected: exp, actual: act })
       }
-    }
     (None, Some(exp)) =>
       diffs.push({ baseline_type: "dts", expected: exp, actual: "" })
     (Some(act), None) =>
@@ -117,11 +118,10 @@ pub fn compare_baselines(
 
   // Compare error output
   match (actual.errors, expected.errors) {
-    (Some(act), Some(exp)) => {
+    (Some(act), Some(exp)) =>
       if normalize_baseline(act) != normalize_baseline(exp) {
         diffs.push({ baseline_type: "errors", expected: exp, actual: act })
       }
-    }
     (None, Some(exp)) =>
       diffs.push({ baseline_type: "errors", expected: exp, actual: "" })
     (Some(act), None) =>
@@ -156,7 +156,7 @@ fn normalize_baseline(content : String) -> String {
 /// Execute a single test case for all variants
 pub fn execute_test(
   test_case : TestCase,
-  load_baseline : (String, TestVariant, String) -> String?
+  load_baseline : (String, TestVariant, String) -> String?,
 ) -> TestResult {
   // If no variants, use default
   let variants = if test_case.variants.length() > 0 {
@@ -196,6 +196,8 @@ pub fn execute_test(
 }
 
 // Tests
+
+///|
 test "build compile options" {
   let directives = TestDirectives::{
     ..TestDirectives::default(),
@@ -213,6 +215,7 @@ test "build compile options" {
   assert_eq(options.module_kind, @compiler.CommonJS)
 }
 
+///|
 test "normalize baseline" {
   let content = "line1  \nline2\t\nline3\n\n"
   let normalized = normalize_baseline(content)

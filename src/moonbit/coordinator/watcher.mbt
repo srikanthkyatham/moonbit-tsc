@@ -32,12 +32,10 @@ async fn read_and_hash(path : String) -> Int64 raise Error {
 /// Initialize watch state with current file content hashes
 pub async fn init_watch_state(paths : Array[String]) -> WatchState raise Error {
   let files : Map[String, FileState] = {}
-
   for path in paths {
     let content_hash = read_and_hash(path)
     files[path] = { path, content_hash }
   }
-
   { files, }
 }
 
@@ -45,7 +43,6 @@ pub async fn init_watch_state(paths : Array[String]) -> WatchState raise Error {
 /// Check for changed files and return list of changed paths
 pub async fn check_for_changes(state : WatchState) -> Array[String] raise Error {
   let changed : Array[String] = []
-
   for path, file_state in state.files {
     let new_hash = read_and_hash(path)
 
@@ -54,7 +51,6 @@ pub async fn check_for_changes(state : WatchState) -> Array[String] raise Error 
       changed.push(path)
     }
   }
-
   changed
 }
 
@@ -116,12 +112,16 @@ pub async fn sleep_ms(ms : Int) -> Unit {
 fn format_time() -> String {
   let now = @async.now()
   let secs = now / 1000L
-  let hours = (secs / 3600L) % 24L
-  let mins = (secs / 60L) % 60L
+  let hours = secs / 3600L % 24L
+  let mins = secs / 60L % 60L
   let s = secs % 60L
-  hours.to_string() + ":" +
-    (if mins < 10L { "0" } else { "" }) + mins.to_string() + ":" +
-    (if s < 10L { "0" } else { "" }) + s.to_string()
+  hours.to_string() +
+  ":" +
+  (if mins < 10L { "0" } else { "" }) +
+  mins.to_string() +
+  ":" +
+  (if s < 10L { "0" } else { "" }) +
+  s.to_string()
 }
 
 ///|

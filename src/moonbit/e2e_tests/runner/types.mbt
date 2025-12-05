@@ -112,7 +112,14 @@ pub(all) struct Baselines {
 ///|
 /// Empty baselines
 pub fn Baselines::empty() -> Baselines {
-  { js: None, types: None, symbols: None, errors: None, dts: None, js_map: None }
+  {
+    js: None,
+    types: None,
+    symbols: None,
+    errors: None,
+    dts: None,
+    js_map: None,
+  }
 }
 
 ///|
@@ -143,15 +150,9 @@ pub fn TestResult::passed(name : String) -> TestResult {
 /// Create a passed test result with variant
 pub fn TestResult::passed_with_variant(
   name : String,
-  variant : TestVariant
+  variant : TestVariant,
 ) -> TestResult {
-  {
-    name,
-    variant: Some(variant),
-    passed: true,
-    diffs: [],
-    error_message: None,
-  }
+  { name, variant: Some(variant), passed: true, diffs: [], error_message: None }
 }
 
 ///|
@@ -159,7 +160,7 @@ pub fn TestResult::passed_with_variant(
 pub fn TestResult::failed(
   name : String,
   variant : TestVariant?,
-  diffs : Array[BaselineDiff]
+  diffs : Array[BaselineDiff],
 ) -> TestResult {
   { name, variant, passed: false, diffs, error_message: None }
 }

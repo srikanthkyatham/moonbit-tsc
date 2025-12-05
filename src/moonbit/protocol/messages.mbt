@@ -23,16 +23,16 @@ pub(all) struct CompileRequest {
 pub fn CompileRequest::new(
   file_path : String,
   source : String,
-  target~ : String = "es2015",
-  module_kind~ : String = "esmodule",
-  source_map~ : Bool = false,
-  inline_source_map~ : Bool = false,
-  inline_sources~ : Bool = false,
-  declaration~ : Bool = false,
-  always_strict~ : Bool = false,
-  es_module_interop~ : Bool = false,
-  external_types_json~ : String? = None,
-  no_emit~ : Bool = false,
+  target? : String = "es2015",
+  module_kind? : String = "esmodule",
+  source_map? : Bool = false,
+  inline_source_map? : Bool = false,
+  inline_sources? : Bool = false,
+  declaration? : Bool = false,
+  always_strict? : Bool = false,
+  es_module_interop? : Bool = false,
+  external_types_json? : String? = None,
+  no_emit? : Bool = false,
 ) -> CompileRequest {
   {
     file_path,
@@ -70,7 +70,9 @@ pub fn CompileResponse::from_result(
   result : @compiler.CompileResult,
   compile_time_ms : Int64,
 ) -> CompileResponse {
-  let diagnostics = result.diagnostics.map(@compiler.format_diagnostic_for_output)
+  let diagnostics = result.diagnostics.map(
+    @compiler.format_diagnostic_for_output,
+  )
   {
     file_path,
     success: result.success,

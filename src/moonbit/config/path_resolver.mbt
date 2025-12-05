@@ -48,23 +48,19 @@ fn resolve_with_paths(
   // Try each path pattern
   for pattern, targets in paths {
     match try_match_path_pattern(pattern, module_specifier) {
-      Some(matched_part) => {
+      Some(matched_part) =>
         // Try each target path
         for target in targets {
           let resolved = resolve_path_target(
-            target,
-            matched_part,
-            resolved_base,
+            target, matched_part, resolved_base,
           )
           // In a real implementation, we'd check if file exists
           // For now, just return the first match
           return Some(resolved)
         }
-      }
       None => continue
     }
   }
-
   None
 }
 
@@ -104,22 +100,17 @@ fn resolve_with_base_url(
 ///|
 /// Try to match a path pattern like "@/*" or "utils/*"
 /// Returns the matched wildcard portion if successful
-fn try_match_path_pattern(
-  pattern : String,
-  specifier : String,
-) -> String? {
+fn try_match_path_pattern(pattern : String, specifier : String) -> String? {
   // Find the wildcard position in pattern
   let wildcard_idx = find_char(pattern, '*')
-
   match wildcard_idx {
-    None => {
+    None =>
       // Exact match (no wildcard)
       if pattern == specifier {
         Some("")
       } else {
         None
       }
-    }
     Some(idx) => {
       // Pattern has wildcard
       let prefix = @utils.substr(pattern, start=0, end=idx)
@@ -205,13 +196,11 @@ fn join_path(base : String, relative : String) -> String {
   if relative.has_prefix("/") {
     return relative
   }
-
   let base_clean = if base.has_suffix("/") || base.has_suffix("\\") {
     @utils.substr(base, start=0, end=base.length() - 1)
   } else {
     base
   }
-
   if relative.has_prefix("./") {
     base_clean + "/" + @utils.substr(relative, start=2)
   } else if relative.has_prefix("../") {
@@ -297,18 +286,16 @@ pub fn parse_package_name(specifier : String) -> ParsedPackageName {
     // Find first slash after scope
     let first_slash = find_char_from(specifier, '/', 1)
     match first_slash {
-      None => {
+      None =>
         // Just @scope with no package name - invalid, treat as package
         { package_name: specifier, subpath: "" }
-      }
       Some(scope_end) => {
         // Find second slash (after package name)
         let second_slash = find_char_from(specifier, '/', scope_end + 1)
         match second_slash {
-          None => {
+          None =>
             // @scope/name with no subpath
             { package_name: specifier, subpath: "" }
-          }
           Some(pkg_end) => {
             // @scope/name/subpath
             let package_name = @utils.substr(specifier, start=0, end=pkg_end)
@@ -322,10 +309,9 @@ pub fn parse_package_name(specifier : String) -> ParsedPackageName {
     // Non-scoped package
     let slash_idx = find_char(specifier, '/')
     match slash_idx {
-      None => {
+      None =>
         // Just package name
         { package_name: specifier, subpath: "" }
-      }
       Some(idx) => {
         // package/subpath
         let package_name = @utils.substr(specifier, start=0, end=idx)
@@ -375,12 +361,8 @@ pub fn resolve_from_node_modules(
     let package_path = join_path(node_modules_path, parsed.package_name)
 
     // Try to resolve from this node_modules directory
-    match try_resolve_package(
-      package_path,
-      parsed.subpath,
-      file_exists,
-      read_file,
-    ) {
+    match
+      try_resolve_package(package_path, parsed.subpath, file_exists, read_file) {
       Some(resolved) => return Some(resolved)
       None => ()
     }
@@ -409,11 +391,11 @@ fn try_resolve_package(
 ) -> String? {
   // First, try to use package.json exports field (highest priority for modern packages)
   let package_json_path = join_path(package_path, "package.json")
-
   match read_file(package_json_path) {
     Some(content) => {
       // Try exports field first (modern Node.js resolution)
-      match resolve_package_exports(content, subpath, file_exists, package_path) {
+      match
+        resolve_package_exports(content, subpath, file_exists, package_path) {
         Some(resolved) => return Some(resolved)
         None => ()
       }
@@ -458,7 +440,6 @@ fn try_resolve_package(
       return Some(ext_path)
     }
   }
-
   None
 }
 
@@ -498,8 +479,11 @@ fn get_package_entry_point(
       let full_path = join_path(package_path, main_path)
       // For main, also try .d.ts alongside .js
       if full_path.has_suffix(".js") {
-        let dts_path = @utils.substr(full_path, start=0, end=full_path.length() -
-            3) +
+        let dts_path = @utils.substr(
+            full_path,
+            start=0,
+            end=full_path.length() - 3,
+          ) +
           ".d.ts"
         if file_exists(dts_path) {
           return Some(dts_path)
@@ -509,9 +493,10 @@ fn get_package_entry_point(
         return Some(full_path)
       }
       // Try with TypeScript extensions
-      for ext_path in try_resolve_extensions(
-        @utils.substr(full_path, start=0, end=full_path.length() - 3),
-      ) {
+      for
+        ext_path in try_resolve_extensions(
+          @utils.substr(full_path, start=0, end=full_path.length() - 3),
+        ) {
         if file_exists(ext_path) {
           return Some(ext_path)
         }
@@ -519,7 +504,6 @@ fn get_package_entry_point(
     }
     None => ()
   }
-
   None
 }
 
@@ -530,26 +514,22 @@ fn extract_json_string_field(json : String, field_name : String) -> String? {
   // Build search pattern: "fieldName"
   let pattern = "\"" + field_name + "\""
   let pattern_start = find_substring(json, pattern)
-
   match pattern_start {
     None => None
     Some(start_idx) => {
       // Find the colon after the field name
       let after_field = start_idx + pattern.length()
       let colon_idx = find_char_from(json, ':', after_field)
-
       match colon_idx {
         None => None
         Some(colon) => {
           // Find the opening quote of the value
           let quote_start = find_char_from(json, '"', colon + 1)
-
           match quote_start {
             None => None
             Some(value_start) => {
               // Find the closing quote
               let quote_end = find_char_from(json, '"', value_start + 1)
-
               match quote_end {
                 None => None
                 Some(value_end) =>
@@ -574,7 +554,6 @@ fn find_substring(haystack : String, needle : String) -> Int? {
   if needle.length() > haystack.length() {
     return None
   }
-
   for i = 0; i <= haystack.length() - needle.length(); i = i + 1 {
     let mut matched = true
     for j = 0; j < needle.length(); j = j + 1 {
@@ -625,12 +604,11 @@ pub fn resolve_package_exports(
 ) -> String? {
   // Parse the exports field
   let exports = parse_exports_field(package_json_content)
-
   match exports {
     None => None
-    Some(exports_field) => {
+    Some(exports_field) =>
       match exports_field {
-        ExportsField::Single(path) => {
+        ExportsField::Single(path) =>
           // Single export - only matches "." (main entry)
           if subpath == "" || subpath == "." {
             resolve_export_target_to_path(
@@ -641,7 +619,6 @@ pub fn resolve_package_exports(
           } else {
             None
           }
-        }
         ExportsField::Subpaths(subpaths) => {
           // Normalize subpath for matching
           // parse_package_name returns "/utils" but exports uses "./utils"
@@ -650,13 +627,18 @@ pub fn resolve_package_exports(
           } else {
             subpath
           }
-          let match_key = if normalized_subpath == "" { "." } else { normalized_subpath }
+          let match_key = if normalized_subpath == "" {
+            "."
+          } else {
+            normalized_subpath
+          }
 
           // Try exact match first
           match subpaths.get(match_key) {
-            Some(target) => {
-              return resolve_export_target_to_path(target, file_exists, package_path)
-            }
+            Some(target) =>
+              return resolve_export_target_to_path(
+                target, file_exists, package_path,
+              )
             None => ()
           }
 
@@ -664,9 +646,10 @@ pub fn resolve_package_exports(
           if not(match_key.has_prefix("./")) && match_key != "." {
             let prefixed_key = "./" + match_key
             match subpaths.get(prefixed_key) {
-              Some(target) => {
-                return resolve_export_target_to_path(target, file_exists, package_path)
-              }
+              Some(target) =>
+                return resolve_export_target_to_path(
+                  target, file_exists, package_path,
+                )
               None => ()
             }
           }
@@ -676,8 +659,13 @@ pub fn resolve_package_exports(
             match try_match_export_pattern(pattern, match_key) {
               Some(matched_part) => {
                 // Replace * in target with matched part
-                let resolved_target = substitute_export_pattern(target, matched_part)
-                match resolve_export_target_to_path(resolved_target, file_exists, package_path) {
+                let resolved_target = substitute_export_pattern(
+                  target, matched_part,
+                )
+                match
+                  resolve_export_target_to_path(
+                    resolved_target, file_exists, package_path,
+                  ) {
                   Some(path) => return Some(path)
                   None => continue
                 }
@@ -685,11 +673,9 @@ pub fn resolve_package_exports(
               None => continue
             }
           }
-
           None
         }
       }
-    }
   }
 }
 
@@ -699,20 +685,17 @@ fn parse_exports_field(json : String) -> ExportsField? {
   // Find "exports" field
   let exports_pattern = "\"exports\""
   let exports_start = find_substring(json, exports_pattern)
-
   match exports_start {
     None => None
     Some(start_idx) => {
       // Find the colon after "exports"
       let after_exports = start_idx + exports_pattern.length()
       let colon_idx = find_char_from(json, ':', after_exports)
-
       match colon_idx {
         None => None
         Some(colon) => {
           // Skip whitespace after colon
           let value_start = skip_whitespace(json, colon + 1)
-
           if value_start >= json.length() {
             return None
           }
@@ -724,7 +707,7 @@ fn parse_exports_field(json : String) -> ExportsField? {
             match quote_end {
               None => None
               Some(end) => {
-                let path = @utils.substr(json, start=value_start + 1, end=end)
+                let path = @utils.substr(json, start=value_start + 1, end~)
                 Some(ExportsField::Single(path))
               }
             }
@@ -745,11 +728,13 @@ fn parse_exports_field(json : String) -> ExportsField? {
 
 ///|
 /// Parse an exports object (handles nested objects for conditional exports)
-fn parse_exports_object(json : String, start : Int) -> Map[String, ExportTarget]? {
+fn parse_exports_object(
+  json : String,
+  start : Int,
+) -> Map[String, ExportTarget]? {
   let result : Map[String, ExportTarget] = {}
   let mut pos = start + 1 // Skip opening brace
   let mut depth = 1
-
   while pos < json.length() && depth > 0 {
     // Skip whitespace
     pos = skip_whitespace(json, pos)
@@ -775,7 +760,6 @@ fn parse_exports_object(json : String, start : Int) -> Map[String, ExportTarget]
       pos = pos + 1
       continue
     }
-
     let key_start = pos + 1
     let key_end = find_char_from(json, '"', key_start)
     match key_end {
@@ -796,7 +780,6 @@ fn parse_exports_object(json : String, start : Int) -> Map[String, ExportTarget]
         if pos >= json.length() {
           break
         }
-
         if json[pos] == '"'.to_int() {
           // String value
           let value_start = pos + 1
@@ -834,7 +817,6 @@ fn parse_exports_object(json : String, start : Int) -> Map[String, ExportTarget]
       }
     }
   }
-
   if result.length() > 0 {
     Some(result)
   } else {
@@ -848,29 +830,24 @@ fn find_object_end(json : String, start : Int) -> Int {
   let mut depth = 0
   let mut pos = start
   let mut in_string = false
-
   while pos < json.length() {
     let ch = json[pos]
-
     if in_string {
       if ch == '"'.to_int() && (pos == 0 || json[pos - 1] != '\\'.to_int()) {
         in_string = false
       }
-    } else {
-      if ch == '"'.to_int() {
-        in_string = true
-      } else if ch == '{'.to_int() {
-        depth = depth + 1
-      } else if ch == '}'.to_int() {
-        depth = depth - 1
-        if depth == 0 {
-          return pos + 1
-        }
+    } else if ch == '"'.to_int() {
+      in_string = true
+    } else if ch == '{'.to_int() {
+      depth = depth + 1
+    } else if ch == '}'.to_int() {
+      depth = depth - 1
+      if depth == 0 {
+        return pos + 1
       }
     }
     pos = pos + 1
   }
-
   json.length()
 }
 
@@ -881,9 +858,9 @@ fn skip_whitespace(s : String, start : Int) -> Int {
   while pos < s.length() {
     let ch = s[pos]
     if ch == ' '.to_int() ||
-       ch == '\t'.to_int() ||
-       ch == '\n'.to_int() ||
-       ch == '\r'.to_int() {
+      ch == '\t'.to_int() ||
+      ch == '\n'.to_int() ||
+      ch == '\r'.to_int() {
       pos = pos + 1
     } else {
       break
@@ -946,16 +923,17 @@ fn resolve_export_target_to_path(
     }
     ExportTarget::Conditional(conditions) => {
       // TypeScript condition priority: types > import > require > default
-      let priority_conditions = ["types", "import", "require", "node", "default"]
-
+      let priority_conditions = [
+        "types", "import", "require", "node", "default",
+      ]
       for condition in priority_conditions {
         match conditions.get(condition) {
-          Some(target) => {
-            match resolve_export_target_to_path(target, file_exists, package_path) {
+          Some(target) =>
+            match
+              resolve_export_target_to_path(target, file_exists, package_path) {
               Some(path) => return Some(path)
               None => continue
             }
-          }
           None => continue
         }
       }
@@ -973,13 +951,11 @@ fn resolve_export_target_to_path(
         if skip {
           continue
         }
-
         match resolve_export_target_to_path(target, file_exists, package_path) {
           Some(path) => return Some(path)
           None => continue
         }
       }
-
       None
     }
   }
@@ -990,7 +966,6 @@ fn resolve_export_target_to_path(
 fn try_match_export_pattern(pattern : String, subpath : String) -> String? {
   // Find wildcard position
   let wildcard_idx = find_char(pattern, '*')
-
   match wildcard_idx {
     None => None // No pattern matching needed (exact match handled elsewhere)
     Some(idx) => {
@@ -1009,7 +984,6 @@ fn try_match_export_pattern(pattern : String, subpath : String) -> String? {
       } else {
         "./" + subpath
       }
-
       if match_subpath.has_prefix(prefix) {
         let after_prefix = @utils.substr(match_subpath, start=prefix.length())
         if suffix.length() == 0 {
@@ -1029,12 +1003,14 @@ fn try_match_export_pattern(pattern : String, subpath : String) -> String? {
 
 ///|
 /// Substitute * in an export target with the matched part
-fn substitute_export_pattern(target : ExportTarget, matched_part : String) -> ExportTarget {
+fn substitute_export_pattern(
+  target : ExportTarget,
+  matched_part : String,
+) -> ExportTarget {
   match target {
     ExportTarget::Null => ExportTarget::Null
-    ExportTarget::Path(path) => {
+    ExportTarget::Path(path) =>
       ExportTarget::Path(replace_wildcard(path, matched_part))
-    }
     ExportTarget::Conditional(conditions) => {
       let new_conditions : Map[String, ExportTarget] = {}
       for key, value in conditions {
@@ -1057,7 +1033,10 @@ pub fn resolve_module_full(
 ) -> String? {
   // 0. Try package.json imports field for # specifiers (highest priority)
   if is_imports_specifier(module_specifier) {
-    match resolve_package_imports(module_specifier, from_file, file_exists, read_file) {
+    match
+      resolve_package_imports(
+        module_specifier, from_file, file_exists, read_file,
+      ) {
       Some(resolved) => return Some(resolved)
       None => ()
     }
@@ -1077,12 +1056,10 @@ pub fn resolve_module_full(
 
   // 3. For bare specifiers, try node_modules resolution
   if is_bare_specifier(module_specifier) {
-    match resolve_from_node_modules(
-      module_specifier,
-      from_file,
-      file_exists,
-      read_file,
-    ) {
+    match
+      resolve_from_node_modules(
+        module_specifier, from_file, file_exists, read_file,
+      ) {
       Some(resolved) => return Some(resolved)
       None => ()
     }
@@ -1118,7 +1095,6 @@ fn find_package_json_for_file(
       Some(content) => return Some((current_dir, content))
       None => ()
     }
-
     let parent = get_parent_directory(current_dir)
     if parent == current_dir {
       break
@@ -1144,15 +1120,11 @@ pub fn resolve_package_imports(
   // Find the package.json for the importing file
   match find_package_json_for_file(from_file, read_file) {
     None => None
-    Some((package_dir, package_json_content)) => {
+    Some((package_dir, package_json_content)) =>
       // Parse and resolve the imports field
       resolve_imports_field(
-        package_json_content,
-        specifier,
-        file_exists,
-        package_dir,
+        package_json_content, specifier, file_exists, package_dir,
       )
-    }
   }
 }
 
@@ -1166,15 +1138,13 @@ fn resolve_imports_field(
 ) -> String? {
   // Parse the imports field
   let imports = parse_imports_field(package_json_content)
-
   match imports {
     None => None
     Some(imports_map) => {
       // Try exact match first
       match imports_map.get(specifier) {
-        Some(target) => {
+        Some(target) =>
           return resolve_export_target_to_path(target, file_exists, package_dir)
-        }
         None => ()
       }
 
@@ -1182,8 +1152,13 @@ fn resolve_imports_field(
       for pattern, target in imports_map {
         match try_match_imports_pattern(pattern, specifier) {
           Some(matched_part) => {
-            let resolved_target = substitute_export_pattern(target, matched_part)
-            match resolve_export_target_to_path(resolved_target, file_exists, package_dir) {
+            let resolved_target = substitute_export_pattern(
+              target, matched_part,
+            )
+            match
+              resolve_export_target_to_path(
+                resolved_target, file_exists, package_dir,
+              ) {
               Some(path) => return Some(path)
               None => continue
             }
@@ -1191,7 +1166,6 @@ fn resolve_imports_field(
           None => continue
         }
       }
-
       None
     }
   }
@@ -1203,20 +1177,17 @@ fn parse_imports_field(json : String) -> Map[String, ExportTarget]? {
   // Find "imports" field
   let imports_pattern = "\"imports\""
   let imports_start = find_substring(json, imports_pattern)
-
   match imports_start {
     None => None
     Some(start_idx) => {
       // Find the colon after "imports"
       let after_imports = start_idx + imports_pattern.length()
       let colon_idx = find_char_from(json, ':', after_imports)
-
       match colon_idx {
         None => None
         Some(colon) => {
           // Skip whitespace after colon
           let value_start = skip_whitespace(json, colon + 1)
-
           if value_start >= json.length() {
             return None
           }
@@ -1243,7 +1214,6 @@ fn try_match_imports_pattern(pattern : String, specifier : String) -> String? {
 
   // Find wildcard position
   let wildcard_idx = find_char(pattern, '*')
-
   match wildcard_idx {
     None => None // No pattern matching needed (exact match handled elsewhere)
     Some(idx) => {
@@ -1253,7 +1223,6 @@ fn try_match_imports_pattern(pattern : String, specifier : String) -> String? {
       } else {
         ""
       }
-
       if specifier.has_prefix(prefix) {
         let after_prefix = @utils.substr(specifier, start=prefix.length())
         if suffix.length() == 0 {

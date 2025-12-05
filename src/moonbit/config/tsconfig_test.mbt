@@ -101,13 +101,11 @@ test "get_effective_target - returns set value" {
 test "is_source_map_enabled - checks both options" {
   let opts1 = CompilerOptions::default()
   assert_eq(is_source_map_enabled(opts1), false)
-
   let opts2 : CompilerOptions = {
     ..CompilerOptions::default(),
     source_map: Some(true),
   }
   assert_eq(is_source_map_enabled(opts2), true)
-
   let opts3 : CompilerOptions = {
     ..CompilerOptions::default(),
     inline_source_map: Some(true),
@@ -368,10 +366,7 @@ test "has_files_list - returns false when empty" {
 
 ///|
 test "has_files_list - returns true when has files" {
-  let config : TSConfig = {
-    ..TSConfig::default(),
-    files: Some(["index.ts"]),
-  }
+  let config : TSConfig = { ..TSConfig::default(), files: Some(["index.ts"]) }
   assert_eq(has_files_list(config), true)
 }
 
@@ -408,10 +403,7 @@ test "merge_tsconfigs - merges compiler options" {
 
 ///|
 test "merge_tsconfigs - files override replaces base" {
-  let base : TSConfig = {
-    ..TSConfig::default(),
-    files: Some(["base.ts"]),
-  }
+  let base : TSConfig = { ..TSConfig::default(), files: Some(["base.ts"]) }
   let override_ : TSConfig = {
     ..TSConfig::default(),
     files: Some(["override.ts"]),
@@ -449,10 +441,7 @@ test "merge_tsconfigs - preserves base when override not set" {
 
 ///|
 test "merge_tsconfigs - clears extends after merge" {
-  let base : TSConfig = {
-    ..TSConfig::default(),
-    extends: Some("./other.json"),
-  }
+  let base : TSConfig = { ..TSConfig::default(), extends: Some("./other.json") }
   let override_ : TSConfig = {
     ..TSConfig::default(),
     extends: Some("./base.json"),

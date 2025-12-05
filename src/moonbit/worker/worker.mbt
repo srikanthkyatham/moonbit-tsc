@@ -25,12 +25,12 @@ pub async fn run_worker() -> Unit raise Error {
 /// Process a single compile request
 fn process_request(json_str : String) -> @protocol.CompileResponse {
   // Parse the request
-  let request = try {
-    @protocol.parse_request(json_str)
-  } catch {
-    err => {
-      return @protocol.CompileResponse::error("", "Failed to parse request: \{err}")
-    }
+  let request = @protocol.parse_request(json_str) catch {
+    err =>
+      return @protocol.CompileResponse::error(
+        "",
+        "Failed to parse request: \{err}",
+      )
   }
 
   // Build compile options
@@ -69,32 +69,31 @@ fn process_request(json_str : String) -> @protocol.CompileResponse {
 
   // Compile the source - use external types if provided
   let result = match request.external_types_json {
-    Some(json_str) => {
+    Some(json_str) =>
       // Parse external types JSON and use with cross-file type checking
       match @compiler.ExternalTypeRegistry::from_json(json_str) {
-        Some(registry) => {
+        Some(registry) =>
           @compiler.compile_source_with_external_types(
             request.source,
             request.file_path,
             options,
             registry,
           )
-        }
-        None => {
+        None =>
           // Failed to parse external types, fall back to regular compilation
           @compiler.compile_source(request.source, request.file_path, options)
-        }
       }
-    }
-    None => {
+    None =>
       // No external types, use regular compilation
       @compiler.compile_source(request.source, request.file_path, options)
-    }
   }
-
   let end_time = @async.now()
   let compile_time_ms = end_time - start_time
 
   // Return response
-  @protocol.CompileResponse::from_result(request.file_path, result, compile_time_ms)
+  @protocol.CompileResponse::from_result(
+    request.file_path,
+    result,
+    compile_time_ms,
+  )
 }
