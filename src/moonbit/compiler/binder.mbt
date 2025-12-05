@@ -765,7 +765,8 @@ fn bind_class_members_aux(
           Some(body) => {
             let binder = push_scope(binder)
             let binder = push_container(binder, ContainerKind::Function)
-            let binder = bind_parameters(binder, meth.parameters)
+            // Class methods are in strict mode, check for reserved identifiers
+            let binder = bind_parameters_with_strict(binder, meth.parameters, true)
             let binder = bind_statement(binder, body)
             let binder = pop_container(binder)
             pop_scope(binder)
@@ -785,7 +786,8 @@ fn bind_class_members_aux(
           Some(body) => {
             let binder = push_scope(binder)
             let binder = push_container(binder, ContainerKind::Function)
-            let binder = bind_parameters(binder, ctor.parameters)
+            // Constructors are in strict mode, check for reserved identifiers
+            let binder = bind_parameters_with_strict(binder, ctor.parameters, true)
             let binder = bind_statement(binder, body)
             let binder = pop_container(binder)
             pop_scope(binder)
@@ -824,8 +826,12 @@ fn bind_class_members_aux(
           Some(body) => {
             let binder = push_scope(binder)
             let binder = push_container(binder, ContainerKind::Function)
-            // Bind setter parameter
-            let binder = bind_parameters(binder, [setter.parameter])
+            // Setters are in strict mode, check for reserved identifiers
+            let binder = bind_parameters_with_strict(
+              binder,
+              [setter.parameter],
+              true,
+            )
             let binder = bind_statement(binder, body)
             let binder = pop_container(binder)
             pop_scope(binder)
@@ -1341,7 +1347,18 @@ fn bind_catch_variable(binder : Binder, var_decl : Node) -> Binder {
 ///|
 /// Bind parameters
 fn bind_parameters(binder : Binder, parameters : Array[Node]) -> Binder {
-  bind_parameters_aux(binder, parameters, 0)
+  bind_parameters_with_strict(binder, parameters, false)
+}
+
+///|
+/// Bind parameters with strict mode flag
+/// Used by class methods to enforce strict mode checks
+fn bind_parameters_with_strict(
+  binder : Binder,
+  parameters : Array[Node],
+  is_strict : Bool,
+) -> Binder {
+  bind_parameters_aux(binder, parameters, 0, is_strict)
 }
 
 ///|
@@ -1349,6 +1366,7 @@ fn bind_parameters_aux(
   binder : Binder,
   parameters : Array[Node],
   index : Int,
+  is_strict : Bool,
 ) -> Binder {
   if index >= parameters.length() {
     binder
@@ -1357,9 +1375,24 @@ fn bind_parameters_aux(
     let binder = match param {
       Parameter(p) => {
         // Extract name from identifier node
-        let param_name = match p.name {
-          Identifier(id) => id.name
+        let (param_name, param_location) = match p.name {
+          Identifier(id) => (id.name, id.location)
           _ => return binder // Binding pattern not supported
+        }
+        // Check for strict mode reserved identifiers (TS1210)
+        // Class bodies are automatically in strict mode
+        let binder = if is_strict &&
+          (param_name == "arguments" || param_name == "eval") {
+          let diagnostic = Diagnostic::error(
+            "Invalid use of '\{param_name}'. Class definitions are automatically in strict mode.",
+            param_location,
+            1210,
+          )
+          let new_diagnostics = binder.diagnostics
+          new_diagnostics.push(diagnostic)
+          { ..binder, diagnostics: new_diagnostics }
+        } else {
+          binder
         }
         let symbol = Symbol::new(
           param_name,
@@ -1370,7 +1403,7 @@ fn bind_parameters_aux(
       }
       _ => binder
     }
-    bind_parameters_aux(binder, parameters, index + 1)
+    bind_parameters_aux(binder, parameters, index + 1, is_strict)
   }
 }
 

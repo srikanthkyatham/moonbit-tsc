@@ -271,6 +271,7 @@ pub enum ParserErrorCode {
   UsingDeclarationNotInParameter // TS1484
   ESMImportExportNotValid // TS1486
   LineTerminatorBeforeArrow // TS1200: Line terminator not permitted before arrow
+  InvalidUseOfInStrictMode(String) // TS1210: Invalid use of '{0}'. Class definitions are automatically in strict mode.
   // Note: TS2xxx (type checker) and TS4xxx (build/emit) errors are in
   // DiagnosticCode enum in symbol.mbt, not in ParserErrorCode
 } derive(Show, Eq)
@@ -402,6 +403,7 @@ pub fn ParserErrorCode::to_int(self : ParserErrorCode) -> Int {
     UsingDeclarationNotInParameter => 1484
     ESMImportExportNotValid => 1486
     LineTerminatorBeforeArrow => 1200
+    InvalidUseOfInStrictMode(_) => 1210
   }
 }
 
@@ -580,6 +582,8 @@ pub fn ParserErrorCode::to_message(self : ParserErrorCode) -> String {
       "This file has an import or export that cannot be used outside of ECMAScript modules."
     LineTerminatorBeforeArrow =>
       "Line terminator not permitted before arrow."
+    InvalidUseOfInStrictMode(name) =>
+      "Invalid use of '\{name}'. Class definitions are automatically in strict mode."
   }
 }
 
@@ -683,6 +687,8 @@ pub fn get_parser_error_int_with_arg(name : String, arg : String?) -> Int {
     "UsingDeclarationsRequireAwait" => UsingDeclarationsRequireAwait.to_int()
     "UsingDeclarationNotInParameter" => UsingDeclarationNotInParameter.to_int()
     "ESMImportExportNotValid" => ESMImportExportNotValid.to_int()
+    "InvalidUseOfInStrictMode" =>
+      InvalidUseOfInStrictMode(arg.unwrap_or("")).to_int()
     // Note: TS2xxx and TS4xxx codes are in DiagnosticCode in symbol.mbt
     _ => -1
   }
@@ -788,6 +794,8 @@ pub fn get_parser_error_message_with_arg(name : String, arg : String?) -> String
     "UsingDeclarationNotInParameter" =>
       UsingDeclarationNotInParameter.to_message()
     "ESMImportExportNotValid" => ESMImportExportNotValid.to_message()
+    "InvalidUseOfInStrictMode" =>
+      InvalidUseOfInStrictMode(arg.unwrap_or("")).to_message()
     // Note: TS2xxx and TS4xxx codes are in DiagnosticCode in symbol.mbt
     _ => "Unknown error"
   }

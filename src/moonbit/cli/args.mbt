@@ -37,6 +37,10 @@ pub(all) struct CLIOptions {
   json_output : Bool // Output results as JSON for tooling integration
   external_types_json : String? // JSON string containing external types for cross-file checking
   no_emit : Bool // Only run type checking, don't emit JavaScript
+  strict : Bool // Enable all strict type-checking options
+  no_implicit_any : Bool // Raise error on expressions with an implied 'any' type
+  strict_null_checks : Bool // Enable strict null checks
+  strict_function_types : Bool // Enable strict checking of function types
 } derive(Show)
 
 ///|
@@ -55,6 +59,10 @@ pub fn CLIOptions::default() -> CLIOptions {
     json_output: false,
     external_types_json: None,
     no_emit: false,
+    strict: false,
+    no_implicit_any: false,
+    strict_null_checks: false,
+    strict_function_types: false,
   }
 }
 
@@ -80,6 +88,10 @@ pub fn parse_args(args : Array[String]) -> Result[Command, String] {
   let mut external_types_json : String? = None
   let mut json_mode = false
   let mut no_emit = false
+  let mut strict = false
+  let mut no_implicit_any = false
+  let mut strict_null_checks = false
+  let mut strict_function_types = false
 
   let mut i = 1 // Skip program name
 
@@ -117,6 +129,10 @@ pub fn parse_args(args : Array[String]) -> Result[Command, String] {
         json_output: false,
         external_types_json: None,
         no_emit: false,
+        strict: false,
+        no_implicit_any: false,
+        strict_null_checks: false,
+        strict_function_types: false,
       }
       return Ok(Command::BuildReferences(build_path, options))
     } else if arg == "--list-imports" {
@@ -195,6 +211,18 @@ pub fn parse_args(args : Array[String]) -> Result[Command, String] {
       external_types_json = Some(args[i])
     } else if arg == "--noEmit" {
       no_emit = true
+    } else if arg == "--strict" {
+      strict = true
+      // --strict enables all strict type-checking options
+      no_implicit_any = true
+      strict_null_checks = true
+      strict_function_types = true
+    } else if arg == "--noImplicitAny" {
+      no_implicit_any = true
+    } else if arg == "--strictNullChecks" {
+      strict_null_checks = true
+    } else if arg == "--strictFunctionTypes" {
+      strict_function_types = true
     } else if arg.has_prefix("-") {
       return Err("Unknown option: " + arg)
     } else {
@@ -217,6 +245,10 @@ pub fn parse_args(args : Array[String]) -> Result[Command, String] {
     json_output,
     external_types_json,
     no_emit,
+    strict,
+    no_implicit_any,
+    strict_null_checks,
+    strict_function_types,
   }
 
   // If --project was specified, use project mode

@@ -7931,3 +7931,102 @@ test "DiagnosticCode - TS1200 valid paren on new line" {
       )
   }
 }
+
+// TS1210: Invalid use of reserved identifier in strict mode
+// Class bodies are automatically in strict mode
+
+///|
+test "DiagnosticCode - TS1210 arguments parameter in class method" {
+  // Class methods are in strict mode, cannot use 'arguments' as parameter name
+  let source =
+    #|class C {
+    #|    f(arguments) {
+    #|        return arguments;
+    #|    }
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => fail("Expected TS1210 error for 'arguments' parameter in class method")
+    Err(diagnostics) =>
+      assert_true(
+        has_error(diagnostics, 1210),
+        msg="Should report TS1210 for 'arguments' as parameter name in class method",
+      )
+  }
+}
+
+///|
+test "DiagnosticCode - TS1210 eval parameter in class method" {
+  // Class methods are in strict mode, cannot use 'eval' as parameter name
+  let source =
+    #|class C {
+    #|    f(eval) {
+    #|        return eval;
+    #|    }
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => fail("Expected TS1210 error for 'eval' parameter in class method")
+    Err(diagnostics) =>
+      assert_true(
+        has_error(diagnostics, 1210),
+        msg="Should report TS1210 for 'eval' as parameter name in class method",
+      )
+  }
+}
+
+///|
+test "DiagnosticCode - TS1210 arguments parameter in constructor" {
+  // Constructors are in strict mode
+  let source =
+    #|class C {
+    #|    constructor(arguments) {
+    #|    }
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => fail("Expected TS1210 error for 'arguments' parameter in constructor")
+    Err(diagnostics) =>
+      assert_true(
+        has_error(diagnostics, 1210),
+        msg="Should report TS1210 for 'arguments' as parameter name in constructor",
+      )
+  }
+}
+
+///|
+test "DiagnosticCode - TS1210 eval parameter in setter" {
+  // Setters are in strict mode
+  let source =
+    #|class C {
+    #|    set value(eval) {
+    #|    }
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => fail("Expected TS1210 error for 'eval' parameter in setter")
+    Err(diagnostics) =>
+      assert_true(
+        has_error(diagnostics, 1210),
+        msg="Should report TS1210 for 'eval' as parameter name in setter",
+      )
+  }
+}
+
+///|
+test "DiagnosticCode - TS1210 not triggered outside class" {
+  // Regular functions are not in strict mode by default
+  let source =
+    #|function f(arguments) {
+    #|    return arguments;
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => () // Should succeed - not in strict mode
+    Err(diagnostics) =>
+      assert_true(
+        not(has_error(diagnostics, 1210)),
+        msg="Should NOT report TS1210 for 'arguments' outside class (non-strict mode)",
+      )
+  }
+}
