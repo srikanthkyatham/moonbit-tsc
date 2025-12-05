@@ -1954,3 +1954,105 @@ fn count_error_code(errors : Array[@compiler.Diagnostic], code : Int) -> Int {
   }
   count
 }
+
+// ============================================================================
+// TS1359: Reserved keyword as binding target in destructuring
+// ============================================================================
+
+///|
+test "parser error detection - TS1359 reserved keyword while as binding target" {
+  // { while: while } - second while is a binding target, should error
+  let source = "var { a: while } = { a: 1 };"
+  let errors = parse_and_get_errors(source)
+  assert_true(has_error_code(errors, 1359))
+  assert_true(has_error_message(errors, "reserved word"))
+}
+
+///|
+test "parser error detection - TS1359 reserved keyword for as binding target" {
+  // { x: for } - for is a reserved keyword used as binding target
+  let source = "var { x: for } = { x: 1 };"
+  let errors = parse_and_get_errors(source)
+  assert_true(has_error_code(errors, 1359))
+  assert_true(has_error_message(errors, "reserved word"))
+}
+
+///|
+test "parser error detection - no TS1359 for contextual keyword" {
+  // { x: number } - number is a contextual keyword, should be allowed
+  let source = "var { x: number } = { x: 1 };"
+  let errors = parse_and_get_errors(source)
+  // Should NOT have TS1359
+  assert_true(not(has_error_code(errors, 1359)))
+}
+
+///|
+test "parser error detection - reserved keyword as property name allowed" {
+  // { while: x } - while as property name is allowed
+  let source = "var { while: x } = { while: 1 };"
+  let errors = parse_and_get_errors(source)
+  // Should NOT have errors (while is allowed as property name)
+  assert_true(not(has_error_code(errors, 1359)))
+}
+
+///|
+test "parser error detection - reserved keyword in object literal allowed" {
+  // Object literal: { while: 1 } - reserved keyword allowed as property name
+  let source = "var x = { while: 1, for: 2, if: 3 };"
+  let errors = parse_and_get_errors(source)
+  // Should NOT have errors
+  assert_true(errors.length() == 0)
+}
+
+// ============================================================================
+// TS1005: String literal property shorthand requires colon
+// ============================================================================
+
+///|
+test "parser error detection - TS1005 string literal shorthand requires colon" {
+  // { "while" } - string literal property requires colon
+  let source = "var { \"while\" } = { while: 1 };"
+  let errors = parse_and_get_errors(source)
+  assert_true(has_error_code(errors, 1005))
+  assert_true(has_error_message(errors, "':' expected"))
+}
+
+///|
+test "parser error detection - string literal with colon allowed" {
+  // { "while": x } - string literal with colon is valid
+  let source = "var { \"while\": x } = { while: 1 };"
+  let errors = parse_and_get_errors(source)
+  // Should NOT have TS1005 for colon
+  assert_true(not(has_error_code(errors, 1005)))
+}
+
+// ============================================================================
+// TS1186: Rest element cannot have initializer (in array binding patterns)
+// ============================================================================
+
+///|
+test "parser error detection - TS1186 rest element with initializer" {
+  // [...x = a] - rest element cannot have initializer
+  let source = "var a = [1, 2]; var [...x = a] = a;"
+  let errors = parse_and_get_errors(source)
+  assert_true(has_error_code(errors, 1186))
+  assert_true(has_error_message(errors, "rest element cannot have an initializer"))
+}
+
+///|
+test "parser error detection - no TS1186 for rest without initializer" {
+  // [...x] - rest without initializer is valid
+  let source = "var a = [1, 2]; var [...x] = a;"
+  let errors = parse_and_get_errors(source)
+  // Should NOT have TS1186
+  assert_true(not(has_error_code(errors, 1186)))
+}
+
+///|
+test "parser error detection - no TS1186 for spread in array literal" {
+  // [...a] in array literal (not binding) is valid
+  let source = "var a = [1, 2]; var b = [...a];"
+  let errors = parse_and_get_errors(source)
+  // Should NOT have TS1186
+  assert_true(not(has_error_code(errors, 1186)))
+}

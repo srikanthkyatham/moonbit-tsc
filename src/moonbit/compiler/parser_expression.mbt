@@ -1837,10 +1837,11 @@ fn parse_object_property(
       )
     }
     _ =>
-      // Parse property name as identifier
-      match parse_identifier(parser) {
-        Ok((id, next_parser)) => {
-          let parser = next_parser
+      // Parse property name as identifier or reserved keyword
+      // Reserved keywords are allowed as property names in object literals: { while: 1 }
+      match try_get_property_name_with_reserved(current_token(parser)) {
+        Some((prop_name, prop_loc, is_reserved)) => {
+          let parser = advance_parser(parser)
 
           // Check for method, shorthand, or full property
           match current_token(parser) {
@@ -1866,7 +1867,7 @@ fn parse_object_property(
                   Ok(
                     (
                       ObjectProperty::MethodDeclaration(
-                        id.name,
+                        prop_name,
                         func_expr,
                         start_loc,
                       ),
@@ -1884,7 +1885,7 @@ fn parse_object_property(
                   Ok(
                     (
                       ObjectProperty::PropertyAssignment(
-                        id.name,
+                        prop_name,
                         value,
                         start_loc,
                       ),
@@ -1895,13 +1896,35 @@ fn parse_object_property(
               }
             }
             _ =>
-              // Shorthand property
-              Ok(
-                (ObjectProperty::ShorthandProperty(id.name, start_loc), parser),
-              )
+              // Shorthand property - but reserved keywords require a colon
+              if is_reserved {
+                Err(
+                  add_error_with_code(
+                    parser,
+                    ExpectedColon.to_message(),
+                    prop_loc,
+                    ExpectedColon,
+                  ),
+                )
+              } else {
+                Ok(
+                  (
+                    ObjectProperty::ShorthandProperty(prop_name, start_loc),
+                    parser,
+                  ),
+                )
+              }
           }
         }
-        Err(parser) => Err(parser)
+        None =>
+          Err(
+            add_error_with_code(
+              parser,
+              "Property name expected",
+              current_token(parser).location(),
+              IdentifierExpected,
+            ),
+          )
       }
   }
 }

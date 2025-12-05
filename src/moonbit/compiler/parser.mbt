@@ -1589,6 +1589,28 @@ fn parse_array_binding_pattern(
           _ => break // Invalid rest syntax
         }
         parser = p
+
+        // TS1186: A rest element cannot have an initializer
+        // Check for and report any initializer
+        parser = match current_token(parser) {
+          Equals(eq_loc) => {
+            // Report error but continue parsing for error recovery
+            let parser = add_error_checked(
+              parser,
+              "A rest element cannot have an initializer.",
+              eq_loc,
+              1186,
+            )
+            let parser = advance_parser(parser) // consume '='
+            // Parse and discard the initializer expression for error recovery
+            match parse_assignment_expression(parser) {
+              Ok((_, p)) => p
+              Err(p) => p
+            }
+          }
+          _ => parser
+        }
+
         // Wrap in SpreadExpression to mark as rest element
         let spread_node = Node::SpreadExpression(SpreadExpression::{
           expression: rest_target,
@@ -1596,40 +1618,6 @@ fn parse_array_binding_pattern(
         })
         elements.push(Some(spread_node))
         // Optional comma (though rest should be last element)
-        match current_token(parser) {
-          Comma(_) => parser = advance_parser(parser)
-          _ => ()
-        }
-      }
-      Identifier(name, loc) => {
-        let id_node = Node::Identifier(Identifier::{ name, location: loc })
-        parser = advance_parser(parser)
-
-        // Check for default value initializer (a = expr)
-        let element_node = match current_token(parser) {
-          Equals(_) => {
-            parser = advance_parser(parser) // consume '='
-            match parse_assignment_expression(parser) {
-              Ok((init_expr, p)) => {
-                parser = p
-                Node::BindingElement(BindingElement::{
-                  property_name: name,
-                  name: id_node,
-                  initializer: Some(init_expr),
-                  location: loc,
-                })
-              }
-              Err(p) => {
-                parser = p
-                id_node // Fallback if parse fails
-              }
-            }
-          }
-          _ => id_node
-        }
-        elements.push(Some(element_node))
-
-        // Optional comma
         match current_token(parser) {
           Comma(_) => parser = advance_parser(parser)
           _ => ()
@@ -1705,7 +1693,45 @@ fn parse_array_binding_pattern(
           }
           Err(p) => return Err(p)
         }
-      _ => break
+      // Handle identifiers and contextual keywords (number, string, any, etc.)
+      _ =>
+        match try_get_identifier_name(current_token(parser)) {
+          Some((name, loc)) => {
+            let id_node = Node::Identifier(Identifier::{ name, location: loc })
+            parser = advance_parser(parser)
+
+            // Check for default value initializer (a = expr)
+            let element_node = match current_token(parser) {
+              Equals(_) => {
+                parser = advance_parser(parser) // consume '='
+                match parse_assignment_expression(parser) {
+                  Ok((init_expr, p)) => {
+                    parser = p
+                    Node::BindingElement(BindingElement::{
+                      property_name: name,
+                      name: id_node,
+                      initializer: Some(init_expr),
+                      location: loc,
+                    })
+                  }
+                  Err(p) => {
+                    parser = p
+                    id_node // Fallback if parse fails
+                  }
+                }
+              }
+              _ => id_node
+            }
+            elements.push(Some(element_node))
+
+            // Optional comma
+            match current_token(parser) {
+              Comma(_) => parser = advance_parser(parser)
+              _ => ()
+            }
+          }
+          None => break
+        }
     }
   }
   Ok(
@@ -1787,16 +1813,31 @@ fn parse_object_binding_pattern(
             parser = advance_parser(parser)
 
             // Parse the binding name (identifier, contextual keyword, or nested pattern)
+            // Also detect reserved keywords as binding targets - these should error with TS1359
             let (name, p2) = match
-              try_get_identifier_name(current_token(parser)) {
-              Some((bind_name, bind_loc)) =>
-                (
-                  Node::Identifier(Identifier::{
-                    name: bind_name,
-                    location: bind_loc,
-                  }),
-                  advance_parser(parser),
-                )
+              try_get_binding_target_with_reserved(current_token(parser)) {
+              Some((bind_name, bind_loc, is_reserved_binding)) =>
+                if is_reserved_binding {
+                  // TS1359: Reserved word cannot be used as binding target
+                  let error_msg = "Identifier expected. '\{bind_name}' is a reserved word that cannot be used here."
+                  let p3 = add_error_checked(parser, error_msg, bind_loc, 1359)
+                  // Still advance past the reserved keyword to continue parsing
+                  (
+                    Node::Identifier(Identifier::{
+                      name: bind_name,
+                      location: bind_loc,
+                    }),
+                    advance_parser(p3),
+                  )
+                } else {
+                  (
+                    Node::Identifier(Identifier::{
+                      name: bind_name,
+                      location: bind_loc,
+                    }),
+                    advance_parser(parser),
+                  )
+                }
               None =>
                 match current_token(parser) {
                   OpenBracket(_) =>
@@ -1850,22 +1891,37 @@ fn parse_object_binding_pattern(
         let prop_name = str_val
         parser = advance_parser(parser)
 
-        // Must have colon after string property name
+        // Must have colon after string property name (no shorthand for string literals)
         match current_token(parser) {
           Colon(_) => {
             parser = advance_parser(parser)
 
             // Parse the binding name (identifier, contextual keyword, or nested pattern)
+            // Also detect reserved keywords as binding targets - these should error with TS1359
             let (name, p2) = match
-              try_get_identifier_name(current_token(parser)) {
-              Some((bind_name, bind_loc)) =>
-                (
-                  Node::Identifier(Identifier::{
-                    name: bind_name,
-                    location: bind_loc,
-                  }),
-                  advance_parser(parser),
-                )
+              try_get_binding_target_with_reserved(current_token(parser)) {
+              Some((bind_name, bind_loc, is_reserved_binding)) =>
+                if is_reserved_binding {
+                  // TS1359: Reserved word cannot be used as binding target
+                  let error_msg = "Identifier expected. '\{bind_name}' is a reserved word that cannot be used here."
+                  let p3 = add_error_checked(parser, error_msg, bind_loc, 1359)
+                  // Still advance past the reserved keyword to continue parsing
+                  (
+                    Node::Identifier(Identifier::{
+                      name: bind_name,
+                      location: bind_loc,
+                    }),
+                    advance_parser(p3),
+                  )
+                } else {
+                  (
+                    Node::Identifier(Identifier::{
+                      name: bind_name,
+                      location: bind_loc,
+                    }),
+                    advance_parser(parser),
+                  )
+                }
               None =>
                 match current_token(parser) {
                   OpenBracket(_) =>
@@ -1911,7 +1967,15 @@ fn parse_object_binding_pattern(
               _ => ()
             }
           }
-          _ => return Err(add_error(parser, "':' expected", str_loc))
+          _ =>
+            return Err(
+              add_error_with_code(
+                parser,
+                "':' expected.",
+                current_token(parser).location(),
+                ParserErrorCode::ExpectedColon,
+              ),
+            )
         }
       }
       // Handle computed property: { [expr]: x }
@@ -1938,16 +2002,31 @@ fn parse_object_binding_pattern(
             parser = advance_parser(parser)
 
             // Parse the binding name (identifier, contextual keyword, or nested pattern)
+            // Also detect reserved keywords as binding targets - these should error with TS1359
             let (name, p2) = match
-              try_get_identifier_name(current_token(parser)) {
-              Some((bind_name, bind_loc)) =>
-                (
-                  Node::Identifier(Identifier::{
-                    name: bind_name,
-                    location: bind_loc,
-                  }),
-                  advance_parser(parser),
-                )
+              try_get_binding_target_with_reserved(current_token(parser)) {
+              Some((bind_name, bind_loc, is_reserved_binding)) =>
+                if is_reserved_binding {
+                  // TS1359: Reserved word cannot be used as binding target
+                  let error_msg = "Identifier expected. '\{bind_name}' is a reserved word that cannot be used here."
+                  let p3 = add_error_checked(parser, error_msg, bind_loc, 1359)
+                  // Still advance past the reserved keyword to continue parsing
+                  (
+                    Node::Identifier(Identifier::{
+                      name: bind_name,
+                      location: bind_loc,
+                    }),
+                    advance_parser(p3),
+                  )
+                } else {
+                  (
+                    Node::Identifier(Identifier::{
+                      name: bind_name,
+                      location: bind_loc,
+                    }),
+                    advance_parser(parser),
+                  )
+                }
               None =>
                 match current_token(parser) {
                   OpenBracket(_) =>
@@ -1999,9 +2078,10 @@ fn parse_object_binding_pattern(
         }
       }
       // Handle identifier or contextual keyword property: { x } or { x: y } or { as } etc.
+      // Also handle reserved keywords as property names (require colon)
       _ =>
-        match try_get_identifier_name(current_token(parser)) {
-          Some((prop_name, prop_loc)) => {
+        match try_get_property_name_with_reserved(current_token(parser)) {
+          Some((prop_name, prop_loc, is_reserved)) => {
             parser = advance_parser(parser)
 
             // Check for colon (renaming: { x: a })
@@ -2010,15 +2090,30 @@ fn parse_object_binding_pattern(
                 let p2 = advance_parser(parser)
 
                 // Parse the binding name (identifier, contextual keyword, or nested pattern)
-                match try_get_identifier_name(current_token(p2)) {
-                  Some((bind_name, bind_loc)) =>
-                    (
-                      Node::Identifier(Identifier::{
-                        name: bind_name,
-                        location: bind_loc,
-                      }),
-                      advance_parser(p2),
-                    )
+                // Also detect reserved keywords as binding targets - these should error with TS1359
+                match try_get_binding_target_with_reserved(current_token(p2)) {
+                  Some((bind_name, bind_loc, is_reserved_binding)) =>
+                    if is_reserved_binding {
+                      // TS1359: Reserved word cannot be used as binding target
+                      let error_msg = "Identifier expected. '\{bind_name}' is a reserved word that cannot be used here."
+                      let p3 = add_error_checked(p2, error_msg, bind_loc, 1359)
+                      // Still advance past the reserved keyword to continue parsing
+                      (
+                        Node::Identifier(Identifier::{
+                          name: bind_name,
+                          location: bind_loc,
+                        }),
+                        advance_parser(p3),
+                      )
+                    } else {
+                      (
+                        Node::Identifier(Identifier::{
+                          name: bind_name,
+                          location: bind_loc,
+                        }),
+                        advance_parser(p2),
+                      )
+                    }
                   None =>
                     match current_token(p2) {
                       OpenBracket(_) =>
@@ -2040,13 +2135,25 @@ fn parse_object_binding_pattern(
               }
               _ =>
                 // Shorthand: { x } means { x: x }
-                (
-                  Node::Identifier(Identifier::{
-                    name: prop_name,
-                    location: prop_loc,
-                  }),
-                  parser,
-                )
+                // But reserved keywords REQUIRE a colon - TS1005
+                if is_reserved {
+                  return Err(
+                    add_error_with_code(
+                      parser,
+                      "':' expected.",
+                      prop_loc,
+                      ParserErrorCode::ExpectedColon,
+                    ),
+                  )
+                } else {
+                  (
+                    Node::Identifier(Identifier::{
+                      name: prop_name,
+                      location: prop_loc,
+                    }),
+                    parser,
+                  )
+                }
             }
             parser = p2
 
@@ -9259,6 +9366,91 @@ fn try_get_identifier_name(token : Token) -> (String, SourceLocation)? {
     KeywordUnknown(loc) => Some(("unknown", loc))
     KeywordUndefined(loc) => Some(("undefined", loc))
     _ => None
+  }
+}
+
+///|
+/// Try to get property name from token including reserved keywords
+/// Used in object binding patterns where reserved keywords can be property names
+/// but require a colon (no shorthand allowed)
+/// Returns (name, location, is_reserved_keyword)
+///|
+/// Try to get reserved keyword as a name (for error messages)
+/// Returns (name, location) if the token is a reserved keyword
+fn try_get_reserved_keyword(
+  token : Token,
+) -> (String, SourceLocation)? {
+  match token {
+    KeywordWhile(loc) => Some(("while", loc))
+    KeywordFor(loc) => Some(("for", loc))
+    KeywordIf(loc) => Some(("if", loc))
+    KeywordElse(loc) => Some(("else", loc))
+    KeywordDo(loc) => Some(("do", loc))
+    KeywordSwitch(loc) => Some(("switch", loc))
+    KeywordCase(loc) => Some(("case", loc))
+    KeywordDefault(loc) => Some(("default", loc))
+    KeywordBreak(loc) => Some(("break", loc))
+    KeywordContinue(loc) => Some(("continue", loc))
+    KeywordReturn(loc) => Some(("return", loc))
+    KeywordThrow(loc) => Some(("throw", loc))
+    KeywordTry(loc) => Some(("try", loc))
+    KeywordCatch(loc) => Some(("catch", loc))
+    KeywordFinally(loc) => Some(("finally", loc))
+    KeywordNew(loc) => Some(("new", loc))
+    KeywordDelete(loc) => Some(("delete", loc))
+    KeywordTypeOf(loc) => Some(("typeof", loc))
+    KeywordVoid(loc) => Some(("void", loc))
+    KeywordIn(loc) => Some(("in", loc))
+    KeywordInstanceOf(loc) => Some(("instanceof", loc))
+    KeywordThis(loc) => Some(("this", loc))
+    KeywordSuper(loc) => Some(("super", loc))
+    KeywordClass(loc) => Some(("class", loc))
+    KeywordExtends(loc) => Some(("extends", loc))
+    KeywordFunction(loc) => Some(("function", loc))
+    KeywordVar(loc) => Some(("var", loc))
+    KeywordLet(loc) => Some(("let", loc))
+    KeywordConst(loc) => Some(("const", loc))
+    KeywordImport(loc) => Some(("import", loc))
+    KeywordExport(loc) => Some(("export", loc))
+    KeywordDebugger(loc) => Some(("debugger", loc))
+    KeywordYield(loc) => Some(("yield", loc))
+    KeywordNull(loc) => Some(("null", loc))
+    KeywordEnum(loc) => Some(("enum", loc))
+    KeywordInterface(loc) => Some(("interface", loc))
+    _ => None
+  }
+}
+
+fn try_get_property_name_with_reserved(
+  token : Token,
+) -> (String, SourceLocation, Bool)? {
+  // First try normal identifiers and contextual keywords
+  match try_get_identifier_name(token) {
+    Some((name, loc)) => Some((name, loc, false))
+    None =>
+      // Handle reserved keywords as property names (require colon after)
+      match try_get_reserved_keyword(token) {
+        Some((name, loc)) => Some((name, loc, true))
+        None => None
+      }
+  }
+}
+
+///|
+/// Try to get binding target name (identifier, contextual keyword, or reserved keyword with error)
+/// Returns (name, location, is_reserved) - if is_reserved is true, should report TS1359
+fn try_get_binding_target_with_reserved(
+  token : Token,
+) -> (String, SourceLocation, Bool)? {
+  // First try normal identifiers and contextual keywords
+  match try_get_identifier_name(token) {
+    Some((name, loc)) => Some((name, loc, false))
+    None =>
+      // Handle reserved keywords - these should report TS1359
+      match try_get_reserved_keyword(token) {
+        Some((name, loc)) => Some((name, loc, true))
+        None => None
+      }
   }
 }
 
