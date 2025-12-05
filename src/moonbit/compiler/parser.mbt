@@ -1712,6 +1712,7 @@ fn parse_array_binding_pattern(
 
 ///|
 /// Parse object binding pattern: { x, y } or { x: a, y: b }
+/// Supports identifiers, contextual keywords (like 'as'), numeric, string, and computed properties
 fn parse_object_binding_pattern(
   parser : Parser,
 ) -> Result[(Node, Parser), Parser] {
@@ -1725,77 +1726,46 @@ fn parse_object_binding_pattern(
         parser = advance_parser(parser)
         break
       }
-      Identifier(prop_name, prop_loc) => {
-        parser = advance_parser(parser)
-
-        // Check for colon (renaming: { x: a })
-        let (name, p2) = match current_token(parser) {
-          Colon(_) => {
-            let p2 = advance_parser(parser)
-
-            // Parse the binding name (can be identifier or nested pattern)
-            match current_token(p2) {
-              Identifier(bind_name, bind_loc) =>
-                (
-                  Node::Identifier(Identifier::{
-                    name: bind_name,
-                    location: bind_loc,
-                  }),
-                  advance_parser(p2),
+      // Handle rest element: { ...rest }
+      DotDotDot(rest_loc) => {
+        parser = advance_parser(parser) // consume '...'
+        // Parse the rest target (must be identifier or contextual keyword)
+        match try_get_identifier_name(current_token(parser)) {
+          Some((rest_name, id_loc)) => {
+            parser = advance_parser(parser)
+            properties.push(BindingElement::{
+              property_name: "...",
+              name: Node::Identifier(Identifier::{
+                name: rest_name,
+                location: id_loc,
+              }),
+              initializer: None,
+              location: rest_loc,
+            })
+          }
+          None =>
+            match current_token(parser) {
+              OpenBrace(_) | OpenBracket(_) =>
+                // TS2566: A rest element cannot contain a binding pattern
+                return Err(
+                  add_error_checked(
+                    parser,
+                    "A rest element cannot contain a binding pattern.",
+                    rest_loc,
+                    2566,
+                  ),
                 )
-              OpenBracket(_) =>
-                match parse_array_binding_pattern(p2) {
-                  Ok((pattern, p)) => (pattern, p)
-                  Err(p) => return Err(p)
-                }
-              OpenBrace(_) =>
-                match parse_object_binding_pattern(p2) {
-                  Ok((pattern, p)) => (pattern, p)
-                  Err(p) => return Err(p)
-                }
               _ =>
                 return Err(
                   add_error(
-                    p2,
-                    "Identifier expected",
-                    prop_loc,
+                    parser,
+                    "Identifier expected after rest element",
+                    rest_loc,
                   ),
                 )
             }
-          }
-          _ =>
-            // Shorthand: { x } means { x: x }
-            (
-              Node::Identifier(Identifier::{
-                name: prop_name,
-                location: prop_loc,
-              }),
-              parser,
-            )
         }
-        parser = p2
-
-        // Check for default value initializer: { x = 5 } or { x: y = 5 }
-        let (initializer, parser2) = match current_token(parser) {
-          Equals(_) => {
-            let p = advance_parser(parser)
-            match parse_assignment_expression(p) {
-              Ok((expr, p2)) => (Some(expr), p2)
-              Err(p2) => return Err(p2)
-            }
-          }
-          _ => (None, parser)
-        }
-        parser = parser2
-
-        properties.push(BindingElement::{
-          property_name: prop_name,
-          name,
-          initializer,
-          location: prop_loc,
-        })
-
-        // Optional comma
+        // Optional comma (though rest should be last)
         match current_token(parser) {
           Comma(_) => parser = advance_parser(parser)
           _ => ()
@@ -1811,9 +1781,9 @@ fn parse_object_binding_pattern(
           Colon(_) => {
             parser = advance_parser(parser)
 
-            // Parse the binding name
-            let (name, p2) = match current_token(parser) {
-              Identifier(bind_name, bind_loc) =>
+            // Parse the binding name (identifier, contextual keyword, or nested pattern)
+            let (name, p2) = match try_get_identifier_name(current_token(parser)) {
+              Some((bind_name, bind_loc)) =>
                 (
                   Node::Identifier(Identifier::{
                     name: bind_name,
@@ -1821,20 +1791,23 @@ fn parse_object_binding_pattern(
                   }),
                   advance_parser(parser),
                 )
-              OpenBracket(_) =>
-                match parse_array_binding_pattern(parser) {
-                  Ok((pattern, p)) => (pattern, p)
-                  Err(p) => return Err(p)
+              None =>
+                match current_token(parser) {
+                  OpenBracket(_) =>
+                    match parse_array_binding_pattern(parser) {
+                      Ok((pattern, p)) => (pattern, p)
+                      Err(p) => return Err(p)
+                    }
+                  OpenBrace(_) =>
+                    match parse_object_binding_pattern(parser) {
+                      Ok((pattern, p)) => (pattern, p)
+                      Err(p) => return Err(p)
+                    }
+                  _ =>
+                    return Err(
+                      add_error(parser, "Identifier expected", num_loc),
+                    )
                 }
-              OpenBrace(_) =>
-                match parse_object_binding_pattern(parser) {
-                  Ok((pattern, p)) => (pattern, p)
-                  Err(p) => return Err(p)
-                }
-              _ =>
-                return Err(
-                  add_error(parser, "Identifier expected", num_loc),
-                )
             }
             parser = p2
 
@@ -1880,9 +1853,9 @@ fn parse_object_binding_pattern(
           Colon(_) => {
             parser = advance_parser(parser)
 
-            // Parse the binding name
-            let (name, p2) = match current_token(parser) {
-              Identifier(bind_name, bind_loc) =>
+            // Parse the binding name (identifier, contextual keyword, or nested pattern)
+            let (name, p2) = match try_get_identifier_name(current_token(parser)) {
+              Some((bind_name, bind_loc)) =>
                 (
                   Node::Identifier(Identifier::{
                     name: bind_name,
@@ -1890,20 +1863,23 @@ fn parse_object_binding_pattern(
                   }),
                   advance_parser(parser),
                 )
-              OpenBracket(_) =>
-                match parse_array_binding_pattern(parser) {
-                  Ok((pattern, p)) => (pattern, p)
-                  Err(p) => return Err(p)
+              None =>
+                match current_token(parser) {
+                  OpenBracket(_) =>
+                    match parse_array_binding_pattern(parser) {
+                      Ok((pattern, p)) => (pattern, p)
+                      Err(p) => return Err(p)
+                    }
+                  OpenBrace(_) =>
+                    match parse_object_binding_pattern(parser) {
+                      Ok((pattern, p)) => (pattern, p)
+                      Err(p) => return Err(p)
+                    }
+                  _ =>
+                    return Err(
+                      add_error(parser, "Identifier expected", str_loc),
+                    )
                 }
-              OpenBrace(_) =>
-                match parse_object_binding_pattern(parser) {
-                  Ok((pattern, p)) => (pattern, p)
-                  Err(p) => return Err(p)
-                }
-              _ =>
-                return Err(
-                  add_error(parser, "Identifier expected", str_loc),
-                )
             }
             parser = p2
 
@@ -1948,6 +1924,7 @@ fn parse_object_binding_pattern(
           Ok((expr, p)) => (expr, p)
           Err(p) => return Err(p)
         }
+        let _ = prop_expr // Used for computed property value
         parser = p
 
         // Expect closing bracket
@@ -1964,9 +1941,9 @@ fn parse_object_binding_pattern(
           Colon(_) => {
             parser = advance_parser(parser)
 
-            // Parse the binding name
-            let (name, p2) = match current_token(parser) {
-              Identifier(bind_name, bind_loc) =>
+            // Parse the binding name (identifier, contextual keyword, or nested pattern)
+            let (name, p2) = match try_get_identifier_name(current_token(parser)) {
+              Some((bind_name, bind_loc)) =>
                 (
                   Node::Identifier(Identifier::{
                     name: bind_name,
@@ -1974,20 +1951,23 @@ fn parse_object_binding_pattern(
                   }),
                   advance_parser(parser),
                 )
-              OpenBracket(_) =>
-                match parse_array_binding_pattern(parser) {
-                  Ok((pattern, p)) => (pattern, p)
-                  Err(p) => return Err(p)
+              None =>
+                match current_token(parser) {
+                  OpenBracket(_) =>
+                    match parse_array_binding_pattern(parser) {
+                      Ok((pattern, p)) => (pattern, p)
+                      Err(p) => return Err(p)
+                    }
+                  OpenBrace(_) =>
+                    match parse_object_binding_pattern(parser) {
+                      Ok((pattern, p)) => (pattern, p)
+                      Err(p) => return Err(p)
+                    }
+                  _ =>
+                    return Err(
+                      add_error(parser, "Identifier expected", bracket_loc),
+                    )
                 }
-              OpenBrace(_) =>
-                match parse_object_binding_pattern(parser) {
-                  Ok((pattern, p)) => (pattern, p)
-                  Err(p) => return Err(p)
-                }
-              _ =>
-                return Err(
-                  add_error(parser, "Identifier expected", bracket_loc),
-                )
             }
             parser = p2
 
@@ -2005,7 +1985,6 @@ fn parse_object_binding_pattern(
             parser = parser2
 
             // For computed properties, we use a special marker
-            // The property_name will be "[computed]" and we store the expr in name
             properties.push(BindingElement::{
               property_name: "[computed]",
               name,
@@ -2025,51 +2004,90 @@ fn parse_object_binding_pattern(
             )
         }
       }
-      // Handle rest element: { ...rest } or { ...{ a, b } } (error case)
-      DotDotDot(rest_loc) => {
-        parser = advance_parser(parser) // consume '...'
-        match current_token(parser) {
-          Identifier(rest_name, id_loc) => {
-            // Valid rest element: { ...rest }
+      // Handle identifier or contextual keyword property: { x } or { x: y } or { as } etc.
+      _ =>
+        match try_get_identifier_name(current_token(parser)) {
+          Some((prop_name, prop_loc)) => {
             parser = advance_parser(parser)
+
+            // Check for colon (renaming: { x: a })
+            let (name, p2) = match current_token(parser) {
+              Colon(_) => {
+                let p2 = advance_parser(parser)
+
+                // Parse the binding name (identifier, contextual keyword, or nested pattern)
+                match try_get_identifier_name(current_token(p2)) {
+                  Some((bind_name, bind_loc)) =>
+                    (
+                      Node::Identifier(Identifier::{
+                        name: bind_name,
+                        location: bind_loc,
+                      }),
+                      advance_parser(p2),
+                    )
+                  None =>
+                    match current_token(p2) {
+                      OpenBracket(_) =>
+                        match parse_array_binding_pattern(p2) {
+                          Ok((pattern, p)) => (pattern, p)
+                          Err(p) => return Err(p)
+                        }
+                      OpenBrace(_) =>
+                        match parse_object_binding_pattern(p2) {
+                          Ok((pattern, p)) => (pattern, p)
+                          Err(p) => return Err(p)
+                        }
+                      _ =>
+                        return Err(
+                          add_error(
+                            p2,
+                            "Identifier expected",
+                            prop_loc,
+                          ),
+                        )
+                    }
+                }
+              }
+              _ =>
+                // Shorthand: { x } means { x: x }
+                (
+                  Node::Identifier(Identifier::{
+                    name: prop_name,
+                    location: prop_loc,
+                  }),
+                  parser,
+                )
+            }
+            parser = p2
+
+            // Check for default value initializer: { x = 5 } or { x: y = 5 }
+            let (initializer, parser2) = match current_token(parser) {
+              Equals(_) => {
+                let p = advance_parser(parser)
+                match parse_assignment_expression(p) {
+                  Ok((expr, p2)) => (Some(expr), p2)
+                  Err(p2) => return Err(p2)
+                }
+              }
+              _ => (None, parser)
+            }
+            parser = parser2
+
             properties.push(BindingElement::{
-              property_name: "...",
-              name: Node::Identifier(Identifier::{
-                name: rest_name,
-                location: id_loc,
-              }),
-              initializer: None, // Rest elements can't have initializers
-              location: rest_loc,
+              property_name: prop_name,
+              name,
+              initializer,
+              location: prop_loc,
             })
-            // Rest must be last element, but we allow parsing to continue
+
+            // Optional comma
+            match current_token(parser) {
+              Comma(_) => parser = advance_parser(parser)
+              _ => ()
+            }
           }
-          OpenBrace(_) | OpenBracket(_) => {
-            // TS2566: A rest element cannot contain a binding pattern
-            return Err(
-              add_error_checked(
-                parser,
-                "A rest element cannot contain a binding pattern.",
-                rest_loc,
-                2566,
-              ),
-            )
-          }
-          _ =>
-            return Err(
-              add_error(
-                parser,
-                "Identifier expected after rest element",
-                rest_loc,
-              ),
-            )
+          None => break // Not a valid property, exit loop
         }
-        // Optional comma (though rest should be last)
-        match current_token(parser) {
-          Comma(_) => parser = advance_parser(parser)
-          _ => ()
-        }
-      }
-      _ => break
     }
   }
   Ok(
@@ -2761,15 +2779,13 @@ fn parse_expression_statement(
 /// Parse type (enhanced with union support)
 
 ///|
-/// Parse identifier
+/// Parse identifier (includes contextual keywords that can be used as identifiers)
 fn parse_identifier(parser : Parser) -> Result[(Identifier, Parser), Parser] {
-  match current_token(parser) {
-    Identifier(name, loc) =>
+  // Try to get identifier from regular identifiers and contextual keywords
+  match try_get_identifier_name(current_token(parser)) {
+    Some((name, loc)) =>
       Ok((Identifier::{ name, location: loc }, advance_parser(parser)))
-    // Handle "module" keyword used as identifier (CommonJS)
-    KeywordModule(loc) =>
-      Ok((Identifier::{ name: "module", location: loc }, advance_parser(parser)))
-    _ => {
+    None => {
       let loc = current_token(parser).location()
       Err(
         add_error_with_code(
@@ -8935,6 +8951,47 @@ fn peek_token(parser : Parser) -> Token {
     }
   } else {
     EOF(SourceLocation::new("", Position::new(0, 0, 0), Position::new(0, 0, 0)))
+  }
+}
+
+///|
+/// Try to extract an identifier name from a token
+/// Returns Some((name, location)) for identifiers and contextual keywords
+/// that can be used as identifiers in binding patterns
+fn try_get_identifier_name(token : Token) -> (String, SourceLocation)? {
+  match token {
+    Identifier(name, loc) => Some((name, loc))
+    // Contextual keywords that can be used as identifiers in binding patterns
+    KeywordAs(loc) => Some(("as", loc))
+    KeywordFrom(loc) => Some(("from", loc))
+    KeywordOf(loc) => Some(("of", loc))
+    KeywordType(loc) => Some(("type", loc))
+    KeywordDeclare(loc) => Some(("declare", loc))
+    KeywordAsync(loc) => Some(("async", loc))
+    KeywordAwait(loc) => Some(("await", loc))
+    KeywordReadonly(loc) => Some(("readonly", loc))
+    KeywordAbstract(loc) => Some(("abstract", loc))
+    KeywordStatic(loc) => Some(("static", loc))
+    KeywordPublic(loc) => Some(("public", loc))
+    KeywordPrivate(loc) => Some(("private", loc))
+    KeywordProtected(loc) => Some(("protected", loc))
+    KeywordNamespace(loc) => Some(("namespace", loc))
+    KeywordModule(loc) => Some(("module", loc))
+    KeywordImplements(loc) => Some(("implements", loc))
+    KeywordSatisfies(loc) => Some(("satisfies", loc))
+    KeywordUsing(loc) => Some(("using", loc))
+    KeywordAccessor(loc) => Some(("accessor", loc))
+    KeywordAny(loc) => Some(("any", loc))
+    KeywordBoolean(loc) => Some(("boolean", loc))
+    KeywordNumber(loc) => Some(("number", loc))
+    KeywordString(loc) => Some(("string", loc))
+    KeywordSymbol(loc) => Some(("symbol", loc))
+    KeywordBigInt(loc) => Some(("bigint", loc))
+    KeywordObject(loc) => Some(("object", loc))
+    KeywordNever(loc) => Some(("never", loc))
+    KeywordUnknown(loc) => Some(("unknown", loc))
+    KeywordUndefined(loc) => Some(("undefined", loc))
+    _ => None
   }
 }
 

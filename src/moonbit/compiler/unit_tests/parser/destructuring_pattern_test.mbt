@@ -736,3 +736,97 @@ test "unit/parser/destructuring/parse-only - mixed all features" {
     Err(_) => assert_true(false, msg="Parse failed")
   }
 }
+
+// ============================================================================
+// Contextual Keywords as Identifiers Tests
+// ============================================================================
+
+///|
+test "unit/parser/destructuring/parse-only - contextual keyword 'as' in binding" {
+  let source = "var { as } = { as: 1 };"
+  match destructuring_parse_only(source) {
+    Ok(_) => assert_true(true)
+    Err(_) => assert_true(false, msg="Parse failed")
+  }
+}
+
+///|
+test "unit/parser/destructuring/parse-only - contextual keyword 'as' with renaming" {
+  let source = "var { as: as } = { as: 1 };"
+  match destructuring_parse_only(source) {
+    Ok(_) => assert_true(true)
+    Err(_) => assert_true(false, msg="Parse failed")
+  }
+}
+
+///|
+test "unit/parser/destructuring/parse-only - contextual keyword 'from' in binding" {
+  let source = "var { from } = { from: 'value' };"
+  match destructuring_parse_only(source) {
+    Ok(_) => assert_true(true)
+    Err(_) => assert_true(false, msg="Parse failed")
+  }
+}
+
+///|
+test "unit/parser/destructuring/parse-only - contextual keyword 'of' in binding" {
+  let source = "var { of } = { of: true };"
+  match destructuring_parse_only(source) {
+    Ok(_) => assert_true(true)
+    Err(_) => assert_true(false, msg="Parse failed")
+  }
+}
+
+///|
+test "unit/parser/destructuring/parse-only - contextual keyword 'type' in binding" {
+  let source = "var { type } = { type: 'string' };"
+  match destructuring_parse_only(source) {
+    Ok(_) => assert_true(true)
+    Err(_) => assert_true(false, msg="Parse failed")
+  }
+}
+
+///|
+test "unit/parser/destructuring/parse-only - contextual keyword 'async' in binding" {
+  let source = "var { async } = { async: true };"
+  match destructuring_parse_only(source) {
+    Ok(_) => assert_true(true)
+    Err(_) => assert_true(false, msg="Parse failed")
+  }
+}
+
+///|
+test "unit/parser/destructuring/parse-only - contextual keyword 'declare' in binding" {
+  let source = "var { declare } = { declare: 'value' };"
+  match destructuring_parse_only(source) {
+    Ok(_) => assert_true(true)
+    Err(_) => assert_true(false, msg="Parse failed")
+  }
+}
+
+///|
+test "unit/parser/destructuring/parse-only - multiple contextual keywords" {
+  let source = "var { as, from, of, type } = obj;"
+  match destructuring_parse_only(source) {
+    Ok(_) => assert_true(true)
+    Err(_) => assert_true(false, msg="Parse failed")
+  }
+}
+
+///|
+test "unit/parser/destructuring/parse-only - contextual keyword with default" {
+  let source = "var { as = 'default' } = obj;"
+  match destructuring_parse_only(source) {
+    Ok(_) => assert_true(true)
+    Err(_) => assert_true(false, msg="Parse failed")
+  }
+}
+
+///|
+test "unit/parser/destructuring/parse-only - contextual keyword with nested pattern" {
+  let source = "var { as: [a, b] } = obj;"
+  match destructuring_parse_only(source) {
+    Ok(_) => assert_true(true)
+    Err(_) => assert_true(false, msg="Parse failed")
+  }
+}
