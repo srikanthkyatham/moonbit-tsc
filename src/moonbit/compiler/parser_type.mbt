@@ -1238,7 +1238,7 @@ fn parse_primary_type_with_readonly(
                   }
                   _ => false
                 }
-                // Expect :
+                // Expect : or shorthand property
                 match current_token(parser) {
                   Colon(_) => {
                     parser = advance_parser(parser)
@@ -1262,6 +1262,31 @@ fn parse_primary_type_with_readonly(
                         }
                       }
                       Err(p) => return Err(p)
+                    }
+                  }
+                  // Shorthand property: { a } means { a: a }
+                  CloseBrace(_) | Semicolon(_) | Comma(_) => {
+                    // Create type literal property with type reference to the same name
+                    members.push(
+                      Node::TypeLiteralProperty(TypeLiteralProperty::{
+                        name,
+                        type_node: Some(
+                          Node::TypeReference(TypeReference::{
+                            type_name: name,
+                            type_arguments: [],
+                            location: member_loc,
+                          }),
+                        ),
+                        is_optional,
+                        is_readonly: false,
+                        location: member_loc,
+                      }),
+                    )
+                    // Optional comma or semicolon
+                    match current_token(parser) {
+                      Semicolon(_) | Comma(_) =>
+                        parser = advance_parser(parser)
+                      _ => ()
                     }
                   }
                   _ => break
@@ -1327,8 +1352,66 @@ fn parse_primary_type_with_readonly(
       }
     }
     OpenParen(_) => {
-      // Function type: (param: type, ...) => returnType
-      let parser = advance_parser(parser) // consume '('
+      // Could be:
+      // 1. Parenthesized type: (number | string)
+      // 2. Function type: (param: type, ...) => returnType
+      //
+      // We need to look ahead to determine which case this is.
+      // If we see a type followed by ')' and no '=>', it's a parenthesized type.
+      // If we see '=>' after ')', it's a function type.
+      let saved_parser = parser
+      let inner_parser = advance_parser(parser) // consume '('
+
+      // Quick check: if it starts with ')', '...', or 'this', it's a function type
+      match current_token(inner_parser) {
+        CloseParen(_) => {
+          // Empty parameter list - definitely a function type
+          ()
+        }
+        DotDotDot(_) => {
+          // Rest parameter - definitely a function type
+          ()
+        }
+        KeywordThis(_) => {
+          // 'this' parameter - definitely a function type
+          ()
+        }
+        _ => {
+          // Try to parse as parenthesized type first
+          match parse_type(inner_parser) {
+            Ok((inner_type, p)) =>
+              match current_token(p) {
+                CloseParen(_) => {
+                  let after_paren = advance_parser(p)
+                  // Check if this is followed by '=>' (function type) or something else (parenthesized type)
+                  match current_token(after_paren) {
+                    Arrow(_) => {
+                      // This is actually a function type with a single parameter
+                      // Fall through to function type parsing
+                      ()
+                    }
+                    _ =>
+                      // This is a parenthesized type - return the inner type wrapped in ParenthesizedType
+                      return Ok(
+                        (
+                          Node::ParenthesizedType(ParenthesizedType::{
+                            type_node: inner_type,
+                            location: loc,
+                          }),
+                          after_paren,
+                        ),
+                      )
+                  }
+                }
+                _ => () // Not a simple parenthesized type, try as function type
+              }
+            Err(_) => () // Not a simple type, try as function type
+          }
+        }
+      }
+
+      // Parse as function type: (param: type, ...) => returnType
+      let parser = advance_parser(saved_parser) // consume '('
       let (parameters, parser) = parse_parameter_list(parser)
 
       // Expect =>

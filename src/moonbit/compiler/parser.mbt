@@ -6141,6 +6141,34 @@ fn parse_interface_declaration(
                     )
                 }
               }
+              // Shorthand property signature: { a } means { a: a }
+              // The property type is a type reference with the same name
+              CloseBrace(_) | Semicolon(_) | Comma(_) => {
+                // Create property declaration with type reference to the same name
+                members.push(
+                  Node::PropertyDeclaration(PropertyDeclaration::{
+                    name: prop_name,
+                    type_annotation: Some(
+                      Node::TypeReference(TypeReference::{
+                        type_name: prop_name,
+                        type_arguments: [],
+                        location: prop_loc,
+                      }),
+                    ),
+                    initializer: None,
+                    is_optional,
+                    decorators: [],
+                    modifiers: [],
+                    location: prop_loc,
+                  }),
+                )
+
+                // Optional semicolon or comma
+                match current_token(parser) {
+                  Semicolon(_) | Comma(_) => parser = advance_parser(parser)
+                  _ => ()
+                }
+              }
               _ =>
                 return Err(
                   add_error_with_code(

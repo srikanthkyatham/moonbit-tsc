@@ -449,7 +449,8 @@ pub fn transform(node : Node, ctx : TransformerContext) -> Node {
     | InferType(_)
     | TemplateLiteralType(_)
     | TypeLiteral(_)
-    | TypeLiteralProperty(_) =>
+    | TypeLiteralProperty(_)
+    | ParenthesizedType(_) =>
       // These should only appear in type positions and will be stripped
       // If they somehow appear in expression position, it's an error
       abort("Type node in expression position during transformation")

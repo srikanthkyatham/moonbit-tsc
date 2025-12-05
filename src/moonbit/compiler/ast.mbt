@@ -106,6 +106,7 @@ pub enum Node {
   TemplateLiteralType(TemplateLiteralType)
   TypeLiteral(TypeLiteral) // Object type literal: { prop: type; [key: string]: type }
   TypeLiteralProperty(TypeLiteralProperty) // Property in type literal: name: type
+  ParenthesizedType(ParenthesizedType) // Parenthesized type: (type)
 
   // Other
   Parameter(Parameter)
@@ -1057,6 +1058,13 @@ pub struct TypeLiteralProperty {
 } derive(Show)
 
 ///|
+/// Parenthesized type: (type)
+pub struct ParenthesizedType {
+  type_node : Node
+  location : SourceLocation
+} derive(Show)
+
+///|
 /// Parameter
 pub struct Parameter {
   name : Node
@@ -1626,6 +1634,7 @@ pub fn get_location(node : Node) -> SourceLocation {
     TemplateLiteralType(t) => t.location
     TypeLiteral(tl) => tl.location
     TypeLiteralProperty(tlp) => tlp.location
+    ParenthesizedType(pt) => pt.location
     Parameter(p) => p.location
     PropertyDeclaration(p) => p.location
     IndexSignatureDeclaration(i) => i.location

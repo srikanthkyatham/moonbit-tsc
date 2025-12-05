@@ -5127,3 +5127,316 @@ test "parse let array destructuring with default" {
     Err(_) => assert_true(false)
   }
 }
+
+// ============================================================================
+// Parenthesized Type Tests
+// ============================================================================
+
+///|
+test "parse parenthesized type - simple" {
+  let tokens = tokens_from_source("let x: (number);")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        VariableStatement(_) => ()
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse parenthesized type - union with array" {
+  let tokens = tokens_from_source("let x: (number | string)[];")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        VariableStatement(_) => ()
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse parenthesized type - in function parameter" {
+  let tokens = tokens_from_source("function foo(x: (number|string)[]) { }")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        FunctionDeclaration(_) => ()
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse function type - empty params" {
+  let tokens = tokens_from_source("type F = () => void;")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        TypeAliasDeclaration(_) => ()
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse function type - with params" {
+  let tokens = tokens_from_source("type F = (x: number) => string;")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        TypeAliasDeclaration(_) => ()
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse function type - single type param" {
+  let tokens = tokens_from_source("type F = (number) => string;")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        TypeAliasDeclaration(_) => ()
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+// ============================================================================
+// Shorthand Interface Property Tests
+// ============================================================================
+
+///|
+test "parse interface with shorthand property" {
+  let tokens = tokens_from_source("interface a { a }")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        InterfaceDeclaration(iface) => {
+          assert_eq(iface.name, "a")
+          assert_eq(iface.members.length(), 1)
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse interface with multiple shorthand properties" {
+  let tokens = tokens_from_source("interface I { a; b; c }")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        InterfaceDeclaration(iface) => {
+          assert_eq(iface.name, "I")
+          assert_eq(iface.members.length(), 3)
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse interface with mixed shorthand and typed properties" {
+  let tokens = tokens_from_source("interface I { a; b: number; c }")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        InterfaceDeclaration(iface) => {
+          assert_eq(iface.name, "I")
+          assert_eq(iface.members.length(), 3)
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+// ============================================================================
+// Shorthand Type Literal Property Tests
+// ============================================================================
+
+///|
+test "parse type literal with shorthand property" {
+  let tokens = tokens_from_source("type T = { a };")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        TypeAliasDeclaration(_) => ()
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse type literal with shorthand in parentheses" {
+  let tokens = tokens_from_source("type T = ({ a });")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        TypeAliasDeclaration(_) => ()
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse type literal with function property empty params" {
+  let tokens = tokens_from_source("type T = { foo: () => void; };")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        TypeAliasDeclaration(_) => ()
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse type literal with multiple function properties" {
+  let tokens = tokens_from_source("type T = { foo: () => void; bar: (x: number) => string; };")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        TypeAliasDeclaration(_) => ()
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+// ============================================================================
+// Function Type with Rest/This Parameter Tests
+// ============================================================================
+
+///|
+test "parse function type with rest parameter" {
+  let tokens = tokens_from_source("type F = (...args: number[]) => void;")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        TypeAliasDeclaration(_) => ()
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse function type with this parameter" {
+  let tokens = tokens_from_source("type F = (this: { name: string }, x: number) => void;")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        TypeAliasDeclaration(_) => ()
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse object type with optional method with rest param" {
+  let tokens = tokens_from_source("const obj: { foo?: (...args: number[]) => void } = {};")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        VariableStatement(_) => ()
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse ReturnType-style conditional type" {
+  let tokens = tokens_from_source("type ReturnType<T> = T extends (...args: any[]) => infer R ? R : never;")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        TypeAliasDeclaration(_) => ()
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse Parameters-style conditional type" {
+  let tokens = tokens_from_source("type Parameters<T> = T extends (...args: infer P) => any ? P : never;")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        TypeAliasDeclaration(_) => ()
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
