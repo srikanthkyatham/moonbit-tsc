@@ -8935,15 +8935,32 @@ fn infer_object_literal_type(
         })
         checker = c
       }
-      ShorthandProperty(name, _) => {
+      ShorthandProperty(name, loc) => {
         // Shorthand property - get type from identifier in scope
-        let (prop_type, c) = match lookup_symbol(checker, name) {
-          Some(symbol) =>
-            match checker.symbol_types.get(symbol.id) {
-              Some(t) => (t, checker)
-              None => any_type(checker)
+        // First check local scopes (for function parameters and local variables)
+        // then fall back to global scope lookup
+        let (prop_type, c) = match lookup_local_variable(checker, name) {
+          Some(local_type) => (local_type, checker)
+          None =>
+            match lookup_symbol(checker, name) {
+              Some(symbol) =>
+                match checker.symbol_types.get(symbol.id) {
+                  Some(t) => (t, checker)
+                  None => any_type(checker)
+                }
+              None => {
+                // TS18004: No value exists in scope for the shorthand property
+                let checker = add_diagnostic_with_code(
+                  checker,
+                  "No value exists in scope for the shorthand property '" +
+                  name +
+                  "'. Either declare one or provide an initializer.",
+                  loc,
+                  TS18004,
+                )
+                any_type(checker)
+              }
             }
-          None => any_type(checker)
         }
         properties.set(name, {
           name,

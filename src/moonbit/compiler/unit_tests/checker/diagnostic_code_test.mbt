@@ -7560,6 +7560,104 @@ test "unit/enum/TS2431-enum-name-boolean - enum name cannot be 'boolean'" {
 }
 
 // ============================================================================
+// TS18004: No value exists in scope for the shorthand property
+// ============================================================================
+
+///|
+test "unit/shorthand-property/TS18004-undefined-variable - error for undefined shorthand property" {
+  // Using an undefined variable as shorthand property should trigger TS18004
+  let source =
+    #|var x = {
+    #|    undefinedVariable
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => fail!("Expected TS18004 error for undefined shorthand property")
+    Err(diagnostics) => {
+      assert_true!(has_error(diagnostics, 18004))
+      assert_true!(has_message(diagnostics, "No value exists in scope for the shorthand property"))
+    }
+  }
+}
+
+///|
+test "unit/shorthand-property/TS18004-multiple-undefined - multiple undefined shorthand properties" {
+  // Multiple undefined shorthand properties should each trigger TS18004
+  let source =
+    #|var obj = {
+    #|    a,
+    #|    b,
+    #|    c
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => fail!("Expected TS18004 errors for undefined shorthand properties")
+    Err(diagnostics) => {
+      assert_true!(has_error(diagnostics, 18004))
+      // Should have 3 errors, one for each undefined property
+      let error_count = diagnostics.iter().filter(fn(d) { d.code == 18004 }).count()
+      assert_true!(error_count == 3)
+    }
+  }
+}
+
+///|
+test "unit/shorthand-property/no-TS18004-when-defined - no error for defined shorthand property" {
+  // Using a defined variable as shorthand property should not trigger TS18004
+  let source =
+    #|var x = 1;
+    #|var obj = {
+    #|    x
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => () // Success - no error expected
+    Err(diagnostics) => {
+      // Should not have TS18004
+      assert_false!(has_error(diagnostics, 18004))
+    }
+  }
+}
+
+///|
+test "unit/shorthand-property/no-TS18004-self-reference - no error for self-referencing variable" {
+  // Variable referencing itself in object literal (like the conformance test)
+  let source =
+    #|var x = {
+    #|    x
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => () // Success - 'x' is defined (self-reference is allowed)
+    Err(diagnostics) => {
+      // Should not have TS18004 for 'x' since 'x' is being declared
+      assert_false!(has_error(diagnostics, 18004))
+    }
+  }
+}
+
+///|
+test "unit/shorthand-property/TS18004-mixed - mix of defined and undefined properties" {
+  // Mix of defined and undefined shorthand properties
+  let source =
+    #|var a = 1;
+    #|var obj = {
+    #|    a,
+    #|    undefinedVar
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => fail!("Expected TS18004 error for undefined shorthand property")
+    Err(diagnostics) => {
+      assert_true!(has_error(diagnostics, 18004))
+      // Should only have 1 error for 'undefinedVar'
+      let error_count = diagnostics.iter().filter(fn(d) { d.code == 18004 }).count()
+      assert_true!(error_count == 1)
+    }
+  }
+}
+
+// ============================================================================
 // TS18033: Computed enum member values must be numeric
 // ============================================================================
 

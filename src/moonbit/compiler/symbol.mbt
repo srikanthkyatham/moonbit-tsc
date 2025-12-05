@@ -456,6 +456,7 @@ pub enum DiagnosticCode {
   TS2476 // A const enum member can only be accessed using a string literal
   TS2477 // 'const' enum member initializer was evaluated to a non-finite value
   TS2478 // 'const' enum member initializer was evaluated to disallowed value 'NaN'
+  TS18004 // No value exists in scope for the shorthand property '{0}'. Either declare one or provide an initializer
   TS18033 // Type '{0}' is not assignable to type 'number' as required for computed enum member values
 
   // ============================================================================
@@ -1019,7 +1020,8 @@ pub fn DiagnosticCode::to_int(self : DiagnosticCode) -> Int {
     TS4097 => 4097
     // Unreachable Code (7000-7099)
     TS7027 => 7027
-    // Enum-specific errors (18xxx)
+    // Shorthand property and enum errors (18xxx)
+    TS18004 => 18004
     TS18033 => 18033
   }
 }
@@ -1127,6 +1129,8 @@ pub fn DiagnosticCode::from_int(code : Int) -> DiagnosticCode? {
     2476 => Some(TS2476)
     2477 => Some(TS2477)
     2478 => Some(TS2478)
+    // Shorthand property and enum errors (18xxx)
+    18004 => Some(TS18004)
     18033 => Some(TS18033)
     // Export & Module Errors (2484-2502)
     2484 => Some(TS2484)
