@@ -1351,6 +1351,59 @@ fn parse_primary_type_with_readonly(
           )
       }
     }
+    KeywordNew(_) => {
+      // Constructor type: new () => Type or new <T>() => Type
+      let parser = advance_parser(parser)
+      // Check for optional type parameters: new <T>()
+      let (type_params, parser) = match current_token(parser) {
+        LessThan(_) => parse_type_parameters(parser)
+        _ => ([], parser)
+      }
+      // Expect '(' for constructor parameters
+      match current_token(parser) {
+        OpenParen(_) => {
+          let parser = advance_parser(parser) // consume '('
+          let (parameters, parser) = parse_parameter_list(parser)
+          // Expect =>
+          match current_token(parser) {
+            Arrow(_) => {
+              let parser = advance_parser(parser)
+              match parse_type(parser) {
+                Ok((return_type, parser)) =>
+                  Ok(
+                    (
+                      Node::ConstructorType(ConstructorType::{
+                        type_parameters: type_params,
+                        parameters,
+                        return_type,
+                        location: loc,
+                      }),
+                      parser,
+                    ),
+                  )
+                Err(p) => Err(p)
+              }
+            }
+            _ =>
+              Err(
+                add_error(
+                  parser,
+                  "Expected '=>' in constructor type",
+                  current_token(parser).location(),
+                ),
+              )
+          }
+        }
+        _ =>
+          Err(
+            add_error(
+              parser,
+              "Expected '(' after 'new' in constructor type",
+              current_token(parser).location(),
+            ),
+          )
+      }
+    }
     OpenParen(_) => {
       // Could be:
       // 1. Parenthesized type: (number | string)
@@ -1602,6 +1655,8 @@ fn parse_union_or_intersection_type(
             parser = advance_parser(parser) // consume |
             match parse_primary_type(parser) {
               Ok((type_node, p)) => {
+                // Parse array type suffix (e.g., string[])
+                let (type_node, p) = parse_array_type_suffix(p, type_node)
                 types.push(type_node)
                 parser = p
               }
@@ -1633,6 +1688,8 @@ fn parse_union_or_intersection_type(
             parser = advance_parser(parser) // consume &
             match parse_primary_type(parser) {
               Ok((type_node, p)) => {
+                // Parse array type suffix (e.g., string[])
+                let (type_node, p) = parse_array_type_suffix(p, type_node)
                 types.push(type_node)
                 parser = p
               }

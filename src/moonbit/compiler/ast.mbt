@@ -90,6 +90,7 @@ pub enum Node {
   UnionType(UnionType)
   IntersectionType(IntersectionType)
   FunctionType(FunctionType)
+  ConstructorType(ConstructorType)
   ArrayType(ArrayType)
   TupleType(TupleType)
   LiteralType(LiteralType)
@@ -892,6 +893,15 @@ pub struct FunctionType {
 } derive(Show)
 
 ///|
+/// Constructor type: new (params) => ReturnType
+pub struct ConstructorType {
+  type_parameters : Array[TypeParameter]
+  parameters : Array[Node]
+  return_type : Node
+  location : SourceLocation
+} derive(Show)
+
+///|
 pub struct ArrayType {
   element_type : Node
   is_readonly : Bool
@@ -1618,6 +1628,7 @@ pub fn get_location(node : Node) -> SourceLocation {
     UnionType(u) => u.location
     IntersectionType(i) => i.location
     FunctionType(f) => f.location
+    ConstructorType(ct) => ct.location
     ArrayType(a) => a.location
     TupleType(t) => t.location
     LiteralType(l) => l.location

@@ -261,6 +261,7 @@ pub fn emit(node : Node, ctx : EmitterContext) -> String {
     UnionType(_) => ""
     IntersectionType(_) => ""
     FunctionType(_) => ""
+    ConstructorType(_) => "" // Type-only, no JS emission
     ArrayType(_) => ""
     TupleType(_) => ""
     LiteralType(_) => ""
@@ -806,6 +807,8 @@ fn type_to_runtime(type_node : Node?) -> String {
         TupleType(_) => "Array"
         // Function types
         FunctionType(_) => "Function"
+        // Constructor types
+        ConstructorType(_) => "Function"
         // Union and intersection types serialize as Object
         UnionType(_) => "Object"
         IntersectionType(_) => "Object"

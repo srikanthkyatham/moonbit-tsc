@@ -434,6 +434,7 @@ pub fn transform(node : Node, ctx : TransformerContext) -> Node {
     | UnionType(_)
     | IntersectionType(_)
     | FunctionType(_)
+    | ConstructorType(_)
     | ArrayType(_)
     | TupleType(_)
     | LiteralType(_)

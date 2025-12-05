@@ -5440,3 +5440,201 @@ test "parse Parameters-style conditional type" {
     Err(_) => assert_true(false)
   }
 }
+
+///|
+test "parse union type with array at end in function parameter" {
+  // Test for: function f(obj: number | string[]) {}
+  let tokens = tokens_from_source("function f(obj: number | string[]) {}")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        FunctionDeclaration(fd) => {
+          assert_eq(fd.parameters.length(), 1)
+          match fd.parameters[0] {
+            Parameter(p) =>
+              match p.type_annotation {
+                Some(UnionType(ut)) => {
+                  assert_eq(ut.types.length(), 2)
+                  // Second element should be ArrayType
+                  match ut.types[1] {
+                    ArrayType(_) => ()
+                    _ => assert_true(false)
+                  }
+                }
+                _ => assert_true(false)
+              }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse union type with null array" {
+  // Test for: function f(obj: [number, string] | null[]) {}
+  let tokens = tokens_from_source("function f(obj: [number, string] | null[]) {}")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        FunctionDeclaration(fd) => {
+          assert_eq(fd.parameters.length(), 1)
+          match fd.parameters[0] {
+            Parameter(p) =>
+              match p.type_annotation {
+                Some(UnionType(ut)) => {
+                  assert_eq(ut.types.length(), 2)
+                  // First element should be TupleType
+                  match ut.types[0] {
+                    TupleType(_) => ()
+                    _ => assert_true(false)
+                  }
+                  // Second element should be ArrayType
+                  match ut.types[1] {
+                    ArrayType(_) => ()
+                    _ => assert_true(false)
+                  }
+                }
+                _ => assert_true(false)
+              }
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse intersection type with array at end" {
+  // Test for: type T = { a: number } & string[];
+  let tokens = tokens_from_source("type T = { a: number } & string[];")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        TypeAliasDeclaration(ta) =>
+          match ta.type_node {
+            IntersectionType(it) => {
+              assert_eq(it.types.length(), 2)
+              // Second element should be ArrayType
+              match it.types[1] {
+                ArrayType(_) => ()
+                _ => assert_true(false)
+              }
+            }
+            _ => assert_true(false)
+          }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse constructor type signature" {
+  // Test for: type C1 = new () => void;
+  let tokens = tokens_from_source("type C1 = new () => void;")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        TypeAliasDeclaration(ta) =>
+          match ta.type_node {
+            ConstructorType(ct) => {
+              assert_eq(ct.parameters.length(), 0)
+              match ct.return_type {
+                KeywordType(kt) => assert_eq(kt.kind.to_string(), "Void")
+                _ => assert_true(false)
+              }
+            }
+            _ => assert_true(false)
+          }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse constructor type with parameters" {
+  // Test for: type C2 = new (x: number, y: string) => object;
+  let tokens = tokens_from_source("type C2 = new (x: number, y: string) => object;")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        TypeAliasDeclaration(ta) =>
+          match ta.type_node {
+            ConstructorType(ct) => {
+              assert_eq(ct.parameters.length(), 2)
+            }
+            _ => assert_true(false)
+          }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse generic constructor type" {
+  // Test for: type C3 = new <T>(value: T) => T;
+  let tokens = tokens_from_source("type C3 = new <T>(value: T) => T;")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        TypeAliasDeclaration(ta) =>
+          match ta.type_node {
+            ConstructorType(ct) => {
+              assert_eq(ct.type_parameters.length(), 1)
+              assert_eq(ct.parameters.length(), 1)
+            }
+            _ => assert_true(false)
+          }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse constructor type with destructuring parameter" {
+  // Test for: type C1 = new ([{ a: [b, c] }]) => void;
+  let tokens = tokens_from_source("type C1 = new ([{ a: [b, c] }]) => void;")
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        TypeAliasDeclaration(ta) =>
+          match ta.type_node {
+            ConstructorType(ct) => {
+              assert_eq(ct.parameters.length(), 1)
+            }
+            _ => assert_true(false)
+          }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
