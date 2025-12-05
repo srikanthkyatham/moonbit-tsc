@@ -1558,25 +1558,38 @@ fn parse_array_binding_pattern(
         parser = advance_parser(parser)
       }
       DotDotDot(spread_loc) => {
-        // Rest element: [...rest] or [...rest: Type]
+        // Rest element: [...rest] or [...[a, b]] or [...{x, y}]
         parser = advance_parser(parser) // consume '...'
-        match current_token(parser) {
+        let (rest_target, p) = match current_token(parser) {
           Identifier(name, loc) => {
             let rest_name = Node::Identifier(Identifier::{ name, location: loc })
-            parser = advance_parser(parser)
-            // Wrap in SpreadExpression to mark as rest element
-            let spread_node = Node::SpreadExpression(SpreadExpression::{
-              expression: rest_name,
-              location: spread_loc,
-            })
-            elements.push(Some(spread_node))
-            // Optional comma (though rest should be last element)
-            match current_token(parser) {
-              Comma(_) => parser = advance_parser(parser)
-              _ => ()
-            }
+            (rest_name, advance_parser(parser))
           }
+          OpenBracket(_) =>
+            // Nested array pattern: [...[a, b]]
+            match parse_array_binding_pattern(parser) {
+              Ok((pattern, p)) => (pattern, p)
+              Err(p) => return Err(p)
+            }
+          OpenBrace(_) =>
+            // Nested object pattern: [...{x, y}]
+            match parse_object_binding_pattern(parser) {
+              Ok((pattern, p)) => (pattern, p)
+              Err(p) => return Err(p)
+            }
           _ => break // Invalid rest syntax
+        }
+        parser = p
+        // Wrap in SpreadExpression to mark as rest element
+        let spread_node = Node::SpreadExpression(SpreadExpression::{
+          expression: rest_target,
+          location: spread_loc,
+        })
+        elements.push(Some(spread_node))
+        // Optional comma (though rest should be last element)
+        match current_token(parser) {
+          Comma(_) => parser = advance_parser(parser)
+          _ => ()
         }
       }
       Identifier(name, loc) => {
@@ -1613,12 +1626,34 @@ fn parse_array_binding_pattern(
           _ => ()
         }
       }
-      OpenBracket(_) =>
-        // Nested array pattern
+      OpenBracket(arr_loc) =>
+        // Nested array pattern with optional default: [x] = [0]
         match parse_array_binding_pattern(parser) {
           Ok((pattern, p)) => {
-            elements.push(Some(pattern))
             parser = p
+            // Check for default value initializer
+            let element_node = match current_token(parser) {
+              Equals(_) => {
+                parser = advance_parser(parser) // consume '='
+                match parse_assignment_expression(parser) {
+                  Ok((init_expr, p2)) => {
+                    parser = p2
+                    Node::BindingElement(BindingElement::{
+                      property_name: "",
+                      name: pattern,
+                      initializer: Some(init_expr),
+                      location: arr_loc,
+                    })
+                  }
+                  Err(p2) => {
+                    parser = p2
+                    pattern // Fallback if parse fails
+                  }
+                }
+              }
+              _ => pattern
+            }
+            elements.push(Some(element_node))
             match current_token(parser) {
               Comma(_) => parser = advance_parser(parser)
               _ => ()
@@ -1626,12 +1661,34 @@ fn parse_array_binding_pattern(
           }
           Err(p) => return Err(p)
         }
-      OpenBrace(_) =>
-        // Nested object pattern
+      OpenBrace(obj_loc) =>
+        // Nested object pattern with optional default: { x } = { x: 0 }
         match parse_object_binding_pattern(parser) {
           Ok((pattern, p)) => {
-            elements.push(Some(pattern))
             parser = p
+            // Check for default value initializer
+            let element_node = match current_token(parser) {
+              Equals(_) => {
+                parser = advance_parser(parser) // consume '='
+                match parse_assignment_expression(parser) {
+                  Ok((init_expr, p2)) => {
+                    parser = p2
+                    Node::BindingElement(BindingElement::{
+                      property_name: "",
+                      name: pattern,
+                      initializer: Some(init_expr),
+                      location: obj_loc,
+                    })
+                  }
+                  Err(p2) => {
+                    parser = p2
+                    pattern // Fallback if parse fails
+                  }
+                }
+              }
+              _ => pattern
+            }
+            elements.push(Some(element_node))
             match current_token(parser) {
               Comma(_) => parser = advance_parser(parser)
               _ => ()
@@ -1742,6 +1799,230 @@ fn parse_object_binding_pattern(
         match current_token(parser) {
           Comma(_) => parser = advance_parser(parser)
           _ => ()
+        }
+      }
+      // Handle numeric property: { 1: x }
+      NumericLiteral(num_val, num_loc) => {
+        let prop_name = num_val.to_string()
+        parser = advance_parser(parser)
+
+        // Must have colon after numeric property name
+        match current_token(parser) {
+          Colon(_) => {
+            parser = advance_parser(parser)
+
+            // Parse the binding name
+            let (name, p2) = match current_token(parser) {
+              Identifier(bind_name, bind_loc) =>
+                (
+                  Node::Identifier(Identifier::{
+                    name: bind_name,
+                    location: bind_loc,
+                  }),
+                  advance_parser(parser),
+                )
+              OpenBracket(_) =>
+                match parse_array_binding_pattern(parser) {
+                  Ok((pattern, p)) => (pattern, p)
+                  Err(p) => return Err(p)
+                }
+              OpenBrace(_) =>
+                match parse_object_binding_pattern(parser) {
+                  Ok((pattern, p)) => (pattern, p)
+                  Err(p) => return Err(p)
+                }
+              _ =>
+                return Err(
+                  add_error(parser, "Identifier expected", num_loc),
+                )
+            }
+            parser = p2
+
+            // Check for default value initializer
+            let (initializer, parser2) = match current_token(parser) {
+              Equals(_) => {
+                let p = advance_parser(parser)
+                match parse_assignment_expression(p) {
+                  Ok((expr, p2)) => (Some(expr), p2)
+                  Err(p2) => return Err(p2)
+                }
+              }
+              _ => (None, parser)
+            }
+            parser = parser2
+
+            properties.push(BindingElement::{
+              property_name: prop_name,
+              name,
+              initializer,
+              location: num_loc,
+            })
+
+            // Optional comma
+            match current_token(parser) {
+              Comma(_) => parser = advance_parser(parser)
+              _ => ()
+            }
+          }
+          _ =>
+            return Err(
+              add_error(parser, "':' expected", num_loc),
+            )
+        }
+      }
+      // Handle string literal property: { "prop": x }
+      StringLiteral(str_val, str_loc) => {
+        let prop_name = str_val
+        parser = advance_parser(parser)
+
+        // Must have colon after string property name
+        match current_token(parser) {
+          Colon(_) => {
+            parser = advance_parser(parser)
+
+            // Parse the binding name
+            let (name, p2) = match current_token(parser) {
+              Identifier(bind_name, bind_loc) =>
+                (
+                  Node::Identifier(Identifier::{
+                    name: bind_name,
+                    location: bind_loc,
+                  }),
+                  advance_parser(parser),
+                )
+              OpenBracket(_) =>
+                match parse_array_binding_pattern(parser) {
+                  Ok((pattern, p)) => (pattern, p)
+                  Err(p) => return Err(p)
+                }
+              OpenBrace(_) =>
+                match parse_object_binding_pattern(parser) {
+                  Ok((pattern, p)) => (pattern, p)
+                  Err(p) => return Err(p)
+                }
+              _ =>
+                return Err(
+                  add_error(parser, "Identifier expected", str_loc),
+                )
+            }
+            parser = p2
+
+            // Check for default value initializer
+            let (initializer, parser2) = match current_token(parser) {
+              Equals(_) => {
+                let p = advance_parser(parser)
+                match parse_assignment_expression(p) {
+                  Ok((expr, p2)) => (Some(expr), p2)
+                  Err(p2) => return Err(p2)
+                }
+              }
+              _ => (None, parser)
+            }
+            parser = parser2
+
+            properties.push(BindingElement::{
+              property_name: prop_name,
+              name,
+              initializer,
+              location: str_loc,
+            })
+
+            // Optional comma
+            match current_token(parser) {
+              Comma(_) => parser = advance_parser(parser)
+              _ => ()
+            }
+          }
+          _ =>
+            return Err(
+              add_error(parser, "':' expected", str_loc),
+            )
+        }
+      }
+      // Handle computed property: { [expr]: x }
+      OpenBracket(bracket_loc) => {
+        parser = advance_parser(parser) // consume '['
+
+        // Parse the computed property name expression
+        let (prop_expr, p) = match parse_assignment_expression(parser) {
+          Ok((expr, p)) => (expr, p)
+          Err(p) => return Err(p)
+        }
+        parser = p
+
+        // Expect closing bracket
+        match current_token(parser) {
+          CloseBracket(_) => parser = advance_parser(parser)
+          _ =>
+            return Err(
+              add_error(parser, "']' expected", bracket_loc),
+            )
+        }
+
+        // Must have colon after computed property
+        match current_token(parser) {
+          Colon(_) => {
+            parser = advance_parser(parser)
+
+            // Parse the binding name
+            let (name, p2) = match current_token(parser) {
+              Identifier(bind_name, bind_loc) =>
+                (
+                  Node::Identifier(Identifier::{
+                    name: bind_name,
+                    location: bind_loc,
+                  }),
+                  advance_parser(parser),
+                )
+              OpenBracket(_) =>
+                match parse_array_binding_pattern(parser) {
+                  Ok((pattern, p)) => (pattern, p)
+                  Err(p) => return Err(p)
+                }
+              OpenBrace(_) =>
+                match parse_object_binding_pattern(parser) {
+                  Ok((pattern, p)) => (pattern, p)
+                  Err(p) => return Err(p)
+                }
+              _ =>
+                return Err(
+                  add_error(parser, "Identifier expected", bracket_loc),
+                )
+            }
+            parser = p2
+
+            // Check for default value initializer
+            let (initializer, parser2) = match current_token(parser) {
+              Equals(_) => {
+                let p = advance_parser(parser)
+                match parse_assignment_expression(p) {
+                  Ok((expr, p2)) => (Some(expr), p2)
+                  Err(p2) => return Err(p2)
+                }
+              }
+              _ => (None, parser)
+            }
+            parser = parser2
+
+            // For computed properties, we use a special marker
+            // The property_name will be "[computed]" and we store the expr in name
+            properties.push(BindingElement::{
+              property_name: "[computed]",
+              name,
+              initializer,
+              location: bracket_loc,
+            })
+
+            // Optional comma
+            match current_token(parser) {
+              Comma(_) => parser = advance_parser(parser)
+              _ => ()
+            }
+          }
+          _ =>
+            return Err(
+              add_error(parser, "':' expected", bracket_loc),
+            )
         }
       }
       // Handle rest element: { ...rest } or { ...{ a, b } } (error case)

@@ -75,7 +75,7 @@ pub fn UniqueSymbolV2::new(name : String, id : Int) -> UniqueSymbolV2 {
 pub fn UniqueSymbolV2::with_description(
   name : String,
   description : String,
-  id : Int
+  id : Int,
 ) -> UniqueSymbolV2 {
   { name, description: Some(description), id }
 }
@@ -299,7 +299,10 @@ pub fn create_type_param(name : String, constraint : TypeV2?) -> TypeV2 {
 
 ///|
 /// Create a generic instance type
-pub fn create_generic_instance(name : String, type_args : Array[TypeV2]) -> TypeV2 {
+pub fn create_generic_instance(
+  name : String,
+  type_args : Array[TypeV2],
+) -> TypeV2 {
   TGenericInstance(name, type_args)
 }
 
@@ -364,7 +367,14 @@ pub struct FunctionTypeV2 {
 ///|
 /// Default function type (any => any)
 pub fn FunctionTypeV2::any() -> FunctionTypeV2 {
-  { type_params: [], params: [], rest_param: None, return_type: TAny, type_predicate: None, this_type: None }
+  {
+    type_params: [],
+    params: [],
+    rest_param: None,
+    return_type: TAny,
+    type_predicate: None,
+    this_type: None,
+  }
 }
 
 ///|
@@ -436,7 +446,13 @@ pub struct TypeParamV2 {
 ///|
 /// Create a simple type parameter (no constraint)
 pub fn TypeParamV2::simple(name : String) -> TypeParamV2 {
-  { name, constraint: None, default_type: None, is_const: false, variance: None }
+  {
+    name,
+    constraint: None,
+    default_type: None,
+    is_const: false,
+    variance: None,
+  }
 }
 
 ///|
@@ -582,8 +598,8 @@ pub struct IndexAccessTypeV2 {
 ///|
 /// Template literal type (`${string}-${number}`)
 pub struct TemplateLiteralTypeV2 {
-  pub texts : Array[String] // Static text parts
-  pub types : Array[TypeV2] // Interpolated types
+  texts : Array[String] // Static text parts
+  types : Array[TypeV2] // Interpolated types
 } derive(Show, Eq)
 
 ///|
