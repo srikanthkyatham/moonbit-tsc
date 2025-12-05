@@ -7638,7 +7638,20 @@ fn infer_property_access_type(
             Any(_) | Unknown(_) => checker // Don't error for any/unknown
             Object(_) | TypeReference(_) =>
               if is_this_expr {
-                checker // Don't error for property access on 'this' - allows implicit property assignment
+                // Check if this is 'this' in global scope accessing a restricted property
+                // TypeScript emits TS2339 for 'this.name' in global scope because 'name'
+                // is declared globally but not accessible via globalThis
+                if is_global_this_type(object_type) &&
+                  is_restricted_global_this_property(prop.name) {
+                  add_diagnostic_with_code(
+                    checker,
+                    "Property '\{prop.name}' does not exist on type '\{type_to_string(object_type)}'.",
+                    get_node_location(prop.expression),
+                    TS2339,
+                  )
+                } else {
+                  checker // Don't error for other property access on 'this' - allows implicit property assignment
+                }
               } else if is_static_member {
                 // TS2576: Property 'X' is a static member of type 'Y'
                 add_diagnostic_with_code(
@@ -8345,8 +8358,65 @@ fn infer_this_type(
   }
   match checker.current_this_type {
     Some(this_type) => (this_type, checker)
-    None => any_type(checker)
+    None => {
+      // When current_this_type is None, we're at global scope or in a function
+      // - Arrow functions: 'this' is lexically bound, so it's 'typeof globalThis' in global scope
+      // - Regular functions: 'this' is dynamically bound, so it's 'any' (no error for property access)
+      //
+      // The condition: arrow_function_depth > 0 && regular_function_depth == 0
+      // means we're inside an arrow function that's directly at global scope,
+      // not inside a regular function that would provide dynamic 'this'
+      if checker.arrow_function_depth > 0 && checker.regular_function_depth == 0 {
+        // Arrow function at global scope - 'this' is typeof globalThis
+        get_global_this_type(checker)
+      } else {
+        // Regular function or global scope outside arrow function - 'this' is any
+        any_type(checker)
+      }
+    }
   }
+}
+
+///|
+/// Get the type of globalThis for global scope 'this' references
+/// This is a special object type that represents the global object
+fn get_global_this_type(checker : TypeChecker) -> (Type, TypeChecker) {
+  let (info, checker) = create_type_info(checker)
+  // Create an object type representing globalThis with no known properties
+  // This will cause TS2339 for known restricted properties like 'name'
+  // Use class_name to mark this as a special globalThis type
+  let global_this_type = Type::Object({
+    properties: {},
+    call_signatures: [],
+    construct_signatures: [],
+    index_signatures: [],
+    info,
+    class_name: Some("typeof globalThis"),
+  })
+  (global_this_type, checker)
+}
+
+///|
+/// Check if a type is the special 'typeof globalThis' type
+fn is_global_this_type(t : Type) -> Bool {
+  match t {
+    Object(obj) =>
+      match obj.class_name {
+        Some(n) => n == "typeof globalThis"
+        None => false
+      }
+    _ => false
+  }
+}
+
+///|
+/// Check if a property name is restricted on globalThis
+/// These are properties that exist as global declarations but are not
+/// accessible via 'this' in global scope (e.g., 'name' from lib.dom.d.ts)
+fn is_restricted_global_this_property(prop_name : String) -> Bool {
+  // 'name' is declared as 'declare const name: void;' in lib.dom.d.ts
+  // It exists as a global but cannot be accessed via globalThis
+  prop_name == "name"
 }
 
 ///|
@@ -14292,16 +14362,19 @@ fn type_to_string(t : Type) -> String {
     Infer(inf) => "infer \{inf.type_parameter_name}"
     Function(_) => "function"
     Object(obj) => {
-      // Display empty object literals as {} (like TypeScript does)
-      if obj.properties.size() == 0 &&
-         obj.call_signatures.length() == 0 &&
-         obj.construct_signatures.length() == 0 &&
-         obj.index_signatures.length() == 0 {
-        "{}"
-      } else {
-        match obj.class_name {
-          Some(name) => name
-          None => "object"
+      // First check for named types (class instances, typeof globalThis, etc.)
+      match obj.class_name {
+        Some(name) => name
+        None => {
+          // Display empty object literals as {} (like TypeScript does)
+          if obj.properties.size() == 0 &&
+             obj.call_signatures.length() == 0 &&
+             obj.construct_signatures.length() == 0 &&
+             obj.index_signatures.length() == 0 {
+            "{}"
+          } else {
+            "object"
+          }
         }
       }
     }

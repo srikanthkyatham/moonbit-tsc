@@ -366,3 +366,149 @@ test "hash_source - long content" {
   let hash2 = hash_source(source)
   assert_eq(hash1, hash2)
 }
+
+// ============================================================================
+// TypeCache Tests
+// ============================================================================
+
+///|
+async test "type_cache - new cache is empty" {
+  let cache = TypeCache::new()
+  let len = cache.length()
+  assert_eq(len, 0)
+}
+
+///|
+async test "type_cache - put and get" {
+  let cache = TypeCache::new()
+  let types_json = "{\"exports\":{\"x\":\"number\"}}"
+
+  cache.put("/a.ts", types_json)
+
+  let result = cache.get("/a.ts")
+  assert_eq(result, Some(types_json))
+}
+
+///|
+async test "type_cache - get returns None for missing" {
+  let cache = TypeCache::new()
+  let result = cache.get("/missing.ts")
+  assert_true(result is None)
+}
+
+///|
+async test "type_cache - has checks existence" {
+  let cache = TypeCache::new()
+  cache.put("/a.ts", "{}")
+
+  assert_true(cache.has("/a.ts"))
+  assert_true(not(cache.has("/b.ts")))
+}
+
+///|
+async test "type_cache - get_many returns subset" {
+  let cache = TypeCache::new()
+  cache.put("/a.ts", "{\"a\":1}")
+  cache.put("/b.ts", "{\"b\":2}")
+  cache.put("/c.ts", "{\"c\":3}")
+
+  let result = cache.get_many(["/a.ts", "/c.ts", "/missing.ts"])
+
+  assert_eq(result.length(), 2)
+  assert_eq(result.get("/a.ts"), Some("{\"a\":1}"))
+  assert_eq(result.get("/c.ts"), Some("{\"c\":3}"))
+  assert_true(result.get("/missing.ts") is None)
+}
+
+///|
+async test "type_cache - build_external_types_json" {
+  let cache = TypeCache::new()
+  cache.put("/a.ts", "{\"exports\":{\"x\":\"number\"}}")
+  cache.put("/b.ts", "{\"exports\":{\"y\":\"string\"}}")
+
+  let result = cache.build_external_types_json([])
+  assert_true(result is Some(_))
+
+  match result {
+    Some(json) => {
+      // Should contain both modules
+      assert_true(json.contains("/a.ts"))
+      assert_true(json.contains("/b.ts"))
+      assert_true(json.contains("modules"))
+    }
+    None => assert_true(false)
+  }
+}
+
+///|
+async test "type_cache - build_external_types_json excludes specified files" {
+  let cache = TypeCache::new()
+  cache.put("/a.ts", "{\"exports\":{\"x\":\"number\"}}")
+  cache.put("/b.ts", "{\"exports\":{\"y\":\"string\"}}")
+  cache.put("/c.ts", "{\"exports\":{\"z\":\"boolean\"}}")
+
+  // Exclude /b.ts
+  let result = cache.build_external_types_json(["/b.ts"])
+
+  match result {
+    Some(json) => {
+      assert_true(json.contains("/a.ts"))
+      assert_true(not(json.contains("/b.ts")))
+      assert_true(json.contains("/c.ts"))
+    }
+    None => assert_true(false)
+  }
+}
+
+///|
+async test "type_cache - build_external_types_json returns None when empty" {
+  let cache = TypeCache::new()
+  let result = cache.build_external_types_json([])
+  assert_true(result is None)
+}
+
+///|
+async test "type_cache - build_external_types_json returns None when all excluded" {
+  let cache = TypeCache::new()
+  cache.put("/a.ts", "{}")
+  cache.put("/b.ts", "{}")
+
+  let result = cache.build_external_types_json(["/a.ts", "/b.ts"])
+  assert_true(result is None)
+}
+
+///|
+async test "type_cache - clear removes all entries" {
+  let cache = TypeCache::new()
+  cache.put("/a.ts", "{}")
+  cache.put("/b.ts", "{}")
+
+  assert_eq(cache.length(), 2)
+
+  cache.clear()
+
+  assert_eq(cache.length(), 0)
+}
+
+///|
+async test "type_cache - invalidate removes specific entry" {
+  let cache = TypeCache::new()
+  cache.put("/a.ts", "{}")
+  cache.put("/b.ts", "{}")
+
+  cache.invalidate("/a.ts")
+
+  assert_true(not(cache.has("/a.ts")))
+  assert_true(cache.has("/b.ts"))
+}
+
+///|
+async test "type_cache - overwrite existing entry" {
+  let cache = TypeCache::new()
+  cache.put("/a.ts", "{\"v\":1}")
+  cache.put("/a.ts", "{\"v\":2}")
+
+  let result = cache.get("/a.ts")
+  assert_eq(result, Some("{\"v\":2}"))
+  assert_eq(cache.length(), 1)
+}

@@ -8030,3 +8030,113 @@ test "DiagnosticCode - TS1210 not triggered outside class" {
       )
   }
 }
+
+// ============================================================================
+// TS2339: Property does not exist on typeof globalThis
+// ============================================================================
+
+///|
+test "DiagnosticCode - TS2339 this.name in global scope arrow function" {
+  // In global scope, 'this' is typed as 'typeof globalThis'
+  // The 'name' property is a restricted property that doesn't exist on globalThis
+  let source =
+    #|var f = (x: string) => {
+    #|    this.name = x;
+    #|};
+  let result = check_source(source)
+  match result {
+    Ok(_) => fail("Expected TS2339 error for 'this.name' in global scope")
+    Err(diagnostics) =>
+      assert_true(
+        has_error(diagnostics, 2339),
+        msg="Should report TS2339 for 'this.name' in global scope",
+      )
+  }
+}
+
+///|
+test "DiagnosticCode - TS2339 not triggered for this.name in regular function" {
+  // 'this' in a regular function is dynamically bound, not lexically bound
+  // So TypeScript allows any property access on 'this' (implicit any)
+  let source =
+    #|function f(x: string) {
+    #|    this.name = x;
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => () // Should succeed - regular functions have dynamic 'this'
+    Err(diagnostics) =>
+      // Should NOT have TS2339 for 'name' in regular function
+      assert_true(
+        not(has_message(diagnostics, "Property 'name' does not exist")),
+        msg="Should NOT report TS2339 for 'this.name' in regular function",
+      )
+  }
+}
+
+///|
+test "DiagnosticCode - TS2339 not triggered for this.age in global scope" {
+  // 'age' is not a restricted property, so it's allowed on globalThis
+  let source =
+    #|var f = () => {
+    #|    this.age = 10;
+    #|};
+  let result = check_source(source)
+  match result {
+    Ok(_) => () // Should succeed - 'age' is not a restricted property
+    Err(diagnostics) =>
+      // Should NOT have TS2339 for 'age'
+      assert_true(
+        not(has_message(diagnostics, "Property 'age' does not exist")),
+        msg="Should NOT report TS2339 for 'this.age' in global scope",
+      )
+  }
+}
+
+///|
+test "DiagnosticCode - TS2339 not triggered for this.name in class method" {
+  // Inside a class method, 'this' refers to the class instance, not globalThis
+  let source =
+    #|class C {
+    #|    name: string = "";
+    #|    setName(x: string) {
+    #|        this.name = x;
+    #|    }
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => () // Should succeed - 'this.name' in class refers to the property
+    Err(diagnostics) =>
+      // Should NOT have TS2339 for 'name' in class context
+      assert_true(
+        not(has_message(diagnostics, "Property 'name' does not exist")),
+        msg="Should NOT report TS2339 for 'this.name' in class method",
+      )
+  }
+}
+
+///|
+test "DiagnosticCode - TS2339 this.name in nested arrow function in global scope" {
+  // Arrow functions in global scope capture the global 'this'
+  let source =
+    #|var f1 = () => {
+    #|    this.age = 10;  // OK
+    #|};
+    #|var f2 = (x: string) => {
+    #|    this.name = x;  // ERROR
+    #|};
+  let result = check_source(source)
+  match result {
+    Ok(_) => fail("Expected TS2339 error for 'this.name' in arrow function")
+    Err(diagnostics) => {
+      assert_true(
+        has_error(diagnostics, 2339),
+        msg="Should report TS2339 for 'this.name'",
+      )
+      assert_true(
+        has_message(diagnostics, "Property 'name' does not exist"),
+        msg="Error should mention 'name' property",
+      )
+    }
+  }
+}
