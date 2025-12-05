@@ -1699,3 +1699,99 @@ test "unit/checker/destructuring - function expression with destructuring" {
     Err(_) => assert_true(false)
   }
 }
+
+///|
+test "unit/checker/globals - Map constructor" {
+  // Test that Map is recognized as a global constructor
+  let result = parse_bind_check_errors("const m = new Map();")
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/checker/globals - Map with entries" {
+  // Test that Map can be instantiated with entries
+  let result = parse_bind_check_errors(
+    "const m = new Map([[\"a\", 1], [\"b\", 2]]);",
+  )
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/checker/globals - Set constructor" {
+  // Test that Set is recognized as a global constructor
+  let result = parse_bind_check_errors("const s = new Set();")
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/checker/globals - Set with values" {
+  // Test that Set can be instantiated with values
+  let result = parse_bind_check_errors("const s = new Set([1, 2, 3]);")
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/checker/globals - WeakMap constructor" {
+  // Test that WeakMap is recognized as a global constructor
+  let result = parse_bind_check_errors("const wm = new WeakMap();")
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/checker/globals - WeakSet constructor" {
+  // Test that WeakSet is recognized as a global constructor
+  let result = parse_bind_check_errors("const ws = new WeakSet();")
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/checker/globals - Map reference" {
+  // Test that Map can be referenced as a value
+  let result = parse_bind_check_errors("const MapRef = Map;")
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/checker/destructuring - assignment pattern marks variables initialized" {
+  // Test that destructuring assignment doesn't falsely report TS2454
+  let result = parse_bind_check_errors(
+    "let x: number; let y: any; ({ x, ...y } = ({} as any));",
+  )
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/checker/destructuring - array assignment pattern marks variables initialized" {
+  // Test that array destructuring assignment doesn't falsely report TS2454
+  let result = parse_bind_check_errors(
+    "let a: number; let b: number; [a, b] = [1, 2];",
+  )
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false)
+  }
+}

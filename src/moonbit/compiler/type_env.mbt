@@ -929,6 +929,64 @@ pub fn TypeEnv::with_builtins() -> TypeEnv {
   let env = env.with_variable("NaN", TNumber)
   let env = env.with_variable("Infinity", TNumber)
 
+  // Add Map constructor - Map<K, V> with constructor that takes iterable entries
+  let map_entry_type = TTuple([
+    TupleElementV2::required(TTypeParam("K", None)),
+    TupleElementV2::required(TTypeParam("V", None)),
+  ])
+  let map_constructor_type = TFunction({
+    type_params: [TypeParamV2::simple("K"), TypeParamV2::simple("V")],
+    params: [],
+    rest_param: Some(ParamInfoV2::rest("entries", TArray(map_entry_type))),
+    return_type: TGenericInstance(
+      "Map",
+      [TTypeParam("K", None), TTypeParam("V", None)],
+    ),
+    type_predicate: None,
+    this_type: None,
+  })
+  let env = env.with_variable("Map", map_constructor_type)
+
+  // Add Set constructor - Set<T> with constructor that takes iterable values
+  let set_constructor_type = TFunction({
+    type_params: [TypeParamV2::simple("T")],
+    params: [],
+    rest_param: Some(ParamInfoV2::rest("values", TArray(TTypeParam("T", None)))),
+    return_type: TGenericInstance("Set", [TTypeParam("T", None)]),
+    type_predicate: None,
+    this_type: None,
+  })
+  let env = env.with_variable("Set", set_constructor_type)
+
+  // Add WeakMap constructor
+  let env = env.with_variable(
+    "WeakMap",
+    TFunction({
+      type_params: [TypeParamV2::simple("K"), TypeParamV2::simple("V")],
+      params: [],
+      rest_param: None,
+      return_type: TGenericInstance(
+        "WeakMap",
+        [TTypeParam("K", None), TTypeParam("V", None)],
+      ),
+      type_predicate: None,
+      this_type: None,
+    }),
+  )
+
+  // Add WeakSet constructor
+  let env = env.with_variable(
+    "WeakSet",
+    TFunction({
+      type_params: [TypeParamV2::simple("T")],
+      params: [],
+      rest_param: None,
+      return_type: TGenericInstance("WeakSet", [TTypeParam("T", None)]),
+      type_predicate: None,
+      this_type: None,
+    }),
+  )
+
   // Add console object type
   let console_fields : Map[String, FieldInfoV2] = Map::new()
   console_fields.set(

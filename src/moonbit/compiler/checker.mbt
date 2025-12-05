@@ -3486,6 +3486,14 @@ fn get_builtin_global_type(
     // undefined is a global constant
     let (id, checker) = next_type_id(checker)
     Some((Type::Undefined(TypeInfo::{ id, flags: TypeFlags::default() }), checker))
+  } else if name == "Map" {
+    Some(get_map_constructor_type(checker))
+  } else if name == "Set" {
+    Some(get_set_constructor_type(checker))
+  } else if name == "WeakMap" {
+    Some(get_weakmap_constructor_type(checker))
+  } else if name == "WeakSet" {
+    Some(get_weakset_constructor_type(checker))
   } else {
     None
   }
@@ -4587,6 +4595,209 @@ fn get_boolean_constructor_type(checker : TypeChecker) -> (Type, TypeChecker) {
 }
 
 ///|
+/// Get the type for the Map global constructor
+fn get_map_constructor_type(checker : TypeChecker) -> (Type, TypeChecker) {
+  let (id, checker) = next_type_id(checker)
+  let map_methods : Map[String, PropertySignature] = Map::new()
+  let default_flags = TypeFlags::default()
+  let info = TypeInfo::{ id: 0, flags: default_flags }
+
+  // Map.groupBy - static method
+  let group_by_method = PropertySignature::{
+    name: "groupBy",
+    prop_type: Type::Function(CheckerFunctionType::{
+      parameters: [
+        CheckerParameter::{
+          name: "items",
+          param_type: Type::Any(info),
+          is_optional: false,
+          is_rest: false,
+        },
+        CheckerParameter::{
+          name: "keySelector",
+          param_type: Type::Any(info),
+          is_optional: false,
+          is_rest: false,
+        },
+      ],
+      return_type: Type::Any(info),
+      info,
+    }),
+    is_optional: false,
+    is_readonly: false,
+  }
+  map_methods.set("groupBy", group_by_method)
+
+  // Map instance type (returned by new Map())
+  let (instance_id, checker) = next_type_id(checker)
+  let map_instance_type = Type::Object(ObjectType::{
+    properties: Map::new(),
+    call_signatures: [],
+    construct_signatures: [],
+    index_signatures: [],
+    info: TypeInfo::{ id: instance_id, flags: default_flags },
+    class_name: Some("Map"),
+  })
+
+  // Construct signature: new Map(entries?) => Map
+  let construct_sig = CheckerSignature::{
+    parameters: [
+      CheckerParameter::{
+        name: "entries",
+        param_type: Type::Any(info),
+        is_optional: true,
+        is_rest: false,
+      },
+    ],
+    return_type: map_instance_type,
+    type_parameters: [],
+  }
+
+  let map_type = Type::Object(ObjectType::{
+    properties: map_methods,
+    call_signatures: [],
+    construct_signatures: [construct_sig],
+    index_signatures: [],
+    info: TypeInfo::{ id, flags: default_flags },
+    class_name: None,
+  })
+
+  (map_type, checker)
+}
+
+///|
+/// Get the type for the Set global constructor
+fn get_set_constructor_type(checker : TypeChecker) -> (Type, TypeChecker) {
+  let (id, checker) = next_type_id(checker)
+  let default_flags = TypeFlags::default()
+  let info = TypeInfo::{ id: 0, flags: default_flags }
+
+  // Set instance type (returned by new Set())
+  let (instance_id, checker) = next_type_id(checker)
+  let set_instance_type = Type::Object(ObjectType::{
+    properties: Map::new(),
+    call_signatures: [],
+    construct_signatures: [],
+    index_signatures: [],
+    info: TypeInfo::{ id: instance_id, flags: default_flags },
+    class_name: Some("Set"),
+  })
+
+  // Construct signature: new Set(values?) => Set
+  let construct_sig = CheckerSignature::{
+    parameters: [
+      CheckerParameter::{
+        name: "values",
+        param_type: Type::Any(info),
+        is_optional: true,
+        is_rest: false,
+      },
+    ],
+    return_type: set_instance_type,
+    type_parameters: [],
+  }
+
+  let set_type = Type::Object(ObjectType::{
+    properties: Map::new(),
+    call_signatures: [],
+    construct_signatures: [construct_sig],
+    index_signatures: [],
+    info: TypeInfo::{ id, flags: default_flags },
+    class_name: None,
+  })
+
+  (set_type, checker)
+}
+
+///|
+/// Get the type for the WeakMap global constructor
+fn get_weakmap_constructor_type(checker : TypeChecker) -> (Type, TypeChecker) {
+  let (id, checker) = next_type_id(checker)
+  let default_flags = TypeFlags::default()
+  let info = TypeInfo::{ id: 0, flags: default_flags }
+
+  // WeakMap instance type (returned by new WeakMap())
+  let (instance_id, checker) = next_type_id(checker)
+  let weakmap_instance_type = Type::Object(ObjectType::{
+    properties: Map::new(),
+    call_signatures: [],
+    construct_signatures: [],
+    index_signatures: [],
+    info: TypeInfo::{ id: instance_id, flags: default_flags },
+    class_name: Some("WeakMap"),
+  })
+
+  // Construct signature: new WeakMap(entries?) => WeakMap
+  let construct_sig = CheckerSignature::{
+    parameters: [
+      CheckerParameter::{
+        name: "entries",
+        param_type: Type::Any(info),
+        is_optional: true,
+        is_rest: false,
+      },
+    ],
+    return_type: weakmap_instance_type,
+    type_parameters: [],
+  }
+
+  let weakmap_type = Type::Object(ObjectType::{
+    properties: Map::new(),
+    call_signatures: [],
+    construct_signatures: [construct_sig],
+    index_signatures: [],
+    info: TypeInfo::{ id, flags: default_flags },
+    class_name: None,
+  })
+
+  (weakmap_type, checker)
+}
+
+///|
+/// Get the type for the WeakSet global constructor
+fn get_weakset_constructor_type(checker : TypeChecker) -> (Type, TypeChecker) {
+  let (id, checker) = next_type_id(checker)
+  let default_flags = TypeFlags::default()
+  let info = TypeInfo::{ id: 0, flags: default_flags }
+
+  // WeakSet instance type (returned by new WeakSet())
+  let (instance_id, checker) = next_type_id(checker)
+  let weakset_instance_type = Type::Object(ObjectType::{
+    properties: Map::new(),
+    call_signatures: [],
+    construct_signatures: [],
+    index_signatures: [],
+    info: TypeInfo::{ id: instance_id, flags: default_flags },
+    class_name: Some("WeakSet"),
+  })
+
+  // Construct signature: new WeakSet(values?) => WeakSet
+  let construct_sig = CheckerSignature::{
+    parameters: [
+      CheckerParameter::{
+        name: "values",
+        param_type: Type::Any(info),
+        is_optional: true,
+        is_rest: false,
+      },
+    ],
+    return_type: weakset_instance_type,
+    type_parameters: [],
+  }
+
+  let weakset_type = Type::Object(ObjectType::{
+    properties: Map::new(),
+    call_signatures: [],
+    construct_signatures: [construct_sig],
+    index_signatures: [],
+    info: TypeInfo::{ id, flags: default_flags },
+    class_name: None,
+  })
+
+  (weakset_type, checker)
+}
+
+///|
 /// Get the type for the require function (Node.js CommonJS require)
 fn get_require_type(checker : TypeChecker) -> (Type, TypeChecker) {
   let (id, checker) = next_type_id(checker)
@@ -5228,6 +5439,22 @@ fn infer_binary_expression_type(
   checker : TypeChecker,
   bin_expr : BinaryExpression,
 ) -> (Type, TypeChecker) {
+  // For assignment expressions with destructuring patterns on the left,
+  // mark all variables in the pattern as initialized BEFORE inferring their types.
+  // This prevents false TS2454 errors for variables being assigned to.
+  let checker = match bin_expr.operator {
+    Assign
+    | AddAssign
+    | SubtractAssign
+    | MultiplyAssign
+    | DivideAssign
+    | RemainderAssign
+    | BitwiseAndAssign
+    | BitwiseOrAssign
+    | BitwiseXorAssign =>
+      mark_assignment_pattern_variables_initialized(checker, bin_expr.left)
+    _ => checker
+  }
   let (left_type, checker) = infer_type(checker, bin_expr.left)
   let (right_type, checker) = infer_type(checker, bin_expr.right)
 
@@ -5443,6 +5670,19 @@ fn infer_binary_expression_type(
               _ => ()
             }
           }
+          // Mark all variables in the destructuring pattern as initialized (for TS2454)
+          let checker = mark_assignment_pattern_variables_initialized(
+            checker,
+            ObjectLiteralExpression(obj),
+          )
+          (checker, left_type)
+        }
+        ArrayLiteralExpression(arr) => {
+          // Mark all variables in the destructuring pattern as initialized (for TS2454)
+          let checker = mark_assignment_pattern_variables_initialized(
+            checker,
+            ArrayLiteralExpression(arr),
+          )
           (checker, left_type)
         }
         PropertyAccessExpression(prop) => {
@@ -6536,6 +6776,94 @@ fn remove_narrowed_type(
   let new_narrowed_types = checker.narrowed_types
   new_narrowed_types.remove(variable_name)
   { ..checker, narrowed_types: new_narrowed_types }
+}
+
+///|
+/// Mark all variables in a destructuring assignment pattern as initialized
+/// This handles object patterns like { x, y, ...rest } and array patterns like [a, b, ...rest]
+fn mark_assignment_pattern_variables_initialized(
+  checker : TypeChecker,
+  pattern : Node,
+) -> TypeChecker {
+  match pattern {
+    Identifier(id) => {
+      let _ = checker.uninitialized_vars.remove(id.name)
+      checker
+    }
+    ObjectLiteralExpression(obj) => {
+      let mut checker = checker
+      for prop in obj.properties {
+        match prop {
+          PropertyAssignment(_, value, _) =>
+            // { x: y } - y is the target
+            checker = mark_assignment_pattern_variables_initialized(
+              checker,
+              value,
+            )
+          ShorthandProperty(name, _) => {
+            // { x } - x is both source and target
+            let _ = checker.uninitialized_vars.remove(name)
+          }
+          SpreadAssignment(spread_expr, _) =>
+            // { ...rest } - rest is the target
+            checker = mark_assignment_pattern_variables_initialized(
+              checker,
+              spread_expr,
+            )
+          _ => ()
+        }
+      }
+      checker
+    }
+    ArrayLiteralExpression(arr) => {
+      let mut checker = checker
+      for elem in arr.elements {
+        match elem {
+          Some(node) =>
+            match node {
+              SpreadExpression(spread) =>
+                // [...rest]
+                checker = mark_assignment_pattern_variables_initialized(
+                  checker,
+                  spread.expression,
+                )
+              _ =>
+                // Regular element or nested pattern
+                checker = mark_assignment_pattern_variables_initialized(
+                  checker,
+                  node,
+                )
+            }
+          None => () // Elision
+        }
+      }
+      checker
+    }
+    // Also handle binding patterns in case they appear in assignment context
+    ArrayBindingPattern(arr) => {
+      let mut checker = checker
+      for elem in arr.elements {
+        match elem {
+          Some(node) =>
+            checker = mark_assignment_pattern_variables_initialized(checker, node)
+          None => ()
+        }
+      }
+      checker
+    }
+    ObjectBindingPattern(obj) => {
+      let mut checker = checker
+      for elem in obj.properties {
+        checker = mark_assignment_pattern_variables_initialized(checker, elem.name)
+      }
+      checker
+    }
+    BindingElement(elem) =>
+      mark_assignment_pattern_variables_initialized(checker, elem.name)
+    SpreadExpression(spread) =>
+      mark_assignment_pattern_variables_initialized(checker, spread.expression)
+    _ => checker
+  }
 }
 
 ///|
