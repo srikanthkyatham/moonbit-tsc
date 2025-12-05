@@ -2110,3 +2110,87 @@ test "unit/checker/no TS1186 - rest parameter in function" {
       assert_true(not(has_diagnostic_code(diagnostics, 1186)))
   }
 }
+
+// ============================================================================
+// TS2493 Tests - Tuple type 'X' of length 'N' has no element at index 'M'
+// ============================================================================
+
+///|
+/// Test: TS2493 - Destructuring from tuple exceeds length
+test "unit/checker/TS2493 - destructuring tuple index out of bounds" {
+  // Destructuring a tuple with more bindings than elements
+  let result = parse_bind_check_errors(
+    "const [x, y, z]: [number, string] = [1, \"hello\"];",
+  )
+  match result {
+    Ok(_) => assert_true(false) // Should have an error
+    Err(diagnostics) => {
+      assert_true(has_diagnostic_code(diagnostics, 2493))
+    }
+  }
+}
+
+///|
+/// Test: TS2493 - Destructuring from tuple at exact length is valid
+test "unit/checker/no TS2493 - destructuring tuple at exact length" {
+  // Destructuring a tuple with exactly the right number of bindings
+  let result = parse_bind_check_errors(
+    "const [x, y]: [number, string] = [1, \"hello\"];",
+  )
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false) // Should not have an error
+  }
+}
+
+///|
+/// Test: TS2493 - Destructuring from tuple with fewer bindings is valid
+test "unit/checker/no TS2493 - destructuring tuple with fewer bindings" {
+  // Destructuring a tuple with fewer bindings than elements is valid
+  let result = parse_bind_check_errors(
+    "const [x]: [number, string] = [1, \"hello\"];",
+  )
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false) // Should not have an error
+  }
+}
+
+///|
+/// Test: No TS2493 - Tuple with rest element allows more bindings
+test "unit/checker/no TS2493 - tuple with rest element" {
+  // Tuple with rest element allows any number of elements after the rest position
+  let result = parse_bind_check_errors(
+    "const tuple: [string, ...number[]] = [\"hello\", 1, 2, 3];",
+  )
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false) // Should not have an error
+  }
+}
+
+///|
+/// Test: No TS2493 - Tuple with optional element
+test "unit/checker/no TS2493 - tuple with optional element" {
+  // Tuple with optional element
+  let result = parse_bind_check_errors("const tuple: [number, string?] = [1];")
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false) // Should not have an error
+  }
+}
+
+///|
+/// Test: TS2493 - Multiple index out of bounds
+test "unit/checker/TS2493 - multiple indices out of bounds" {
+  // Destructuring a tuple with multiple bindings exceeding length
+  let result = parse_bind_check_errors(
+    "const [a, b, c, d]: [number] = [1];",
+  )
+  match result {
+    Ok(_) => assert_true(false) // Should have errors
+    Err(diagnostics) => {
+      assert_true(has_diagnostic_code(diagnostics, 2493))
+    }
+  }
+}

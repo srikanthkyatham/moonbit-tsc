@@ -819,10 +819,54 @@ fn is_array_like_type(t : Type) -> Bool {
 fn add_array_binding_elements_to_scope(
   checker : TypeChecker,
   arr_pat : ArrayBindingPattern,
-  _arr_type : Type,
+  arr_type : Type,
   is_const : Bool,
 ) -> TypeChecker {
   let mut checker = checker
+
+  // TS2493: Check if destructuring from a tuple exceeds tuple length
+  // Only check for tuple types where we know the exact length
+  match arr_type {
+    Tuple(tuple_type) => {
+      let tuple_len = tuple_type.element_types.length()
+      // Count non-rest elements in the binding pattern
+      for i, elem in arr_pat.elements {
+        match elem {
+          Some(element) => {
+            // Check if this is a rest element (SpreadExpression in array patterns)
+            let is_rest = match element {
+              SpreadExpression(_) => true
+              _ => false
+            }
+            // If not a rest element and index exceeds tuple length, report error
+            if not(is_rest) && i >= tuple_len {
+              let tuple_str = type_to_string(arr_type)
+              checker = add_diagnostic_with_code(
+                checker,
+                "Tuple type '\{tuple_str}' of length '\{tuple_len}' has no element at index '\{i}'.",
+                arr_pat.location,
+                TS2493,
+              )
+            }
+          }
+          None => {
+            // Hole in pattern - still check if index is valid
+            if i >= tuple_len {
+              let tuple_str = type_to_string(arr_type)
+              checker = add_diagnostic_with_code(
+                checker,
+                "Tuple type '\{tuple_str}' of length '\{tuple_len}' has no element at index '\{i}'.",
+                arr_pat.location,
+                TS2493,
+              )
+            }
+          }
+        }
+      }
+    }
+    _ => ()
+  }
+
   for elem in arr_pat.elements {
     match elem {
       Some(element) =>
@@ -3062,6 +3106,9 @@ fn infer_type_with_context(
         } else {
           boolean_type(checker)
         }
+      // Array literal with tuple type annotation - infer as tuple
+      (ArrayLiteralExpression(arr), Some(Tuple(tuple_type))) =>
+        infer_tuple_from_array_literal(checker, arr, tuple_type)
       // For other cases, fall back to regular inference
       _ => infer_type(checker, expr)
     }
@@ -3114,6 +3161,52 @@ fn union_contains_boolean_literal(
     }
   }
   false
+}
+
+///|
+/// Infer a tuple type from an array literal with contextual tuple type
+fn infer_tuple_from_array_literal(
+  checker : TypeChecker,
+  arr : ArrayLiteralExpression,
+  tuple_type : CheckerTupleType,
+) -> (Type, TypeChecker) {
+  let mut checker = checker
+  let element_types : Array[TupleElement] = []
+
+  // Check if tuple has a rest element
+  let mut rest_element_idx : Int? = None
+  for i = 0; i < tuple_type.element_types.length(); i = i + 1 {
+    if tuple_type.element_types[i].is_rest {
+      rest_element_idx = Some(i)
+      break
+    }
+  }
+
+  // Infer types for all array literal elements
+  for i = 0; i < arr.elements.length(); i = i + 1 {
+    let elem_type = match arr.elements[i] {
+      Some(elem_node) => {
+        let (t, c) = infer_type(checker, elem_node)
+        checker = c
+        t
+      }
+      None => {
+        // Hole in array - use undefined
+        let (t, c) = undefined_type(checker)
+        checker = c
+        t
+      }
+    }
+    element_types.push(TupleElement::{
+      element_type: elem_type,
+      is_optional: false,
+      is_rest: false,
+      label: None,
+    })
+  }
+
+  let (info, checker) = create_type_info(checker)
+  (Tuple(CheckerTupleType::{ element_types, info }), checker)
 }
 
 ///|
@@ -10029,10 +10122,13 @@ fn is_tuple_assignable(
   source : CheckerTupleType,
   target : CheckerTupleType,
 ) -> Bool {
-  // Count required elements in target
+  // Count required elements in target (excluding rest)
   let mut target_required = 0
+  let mut target_rest_idx : Int? = None
   for i = 0; i < target.element_types.length(); i = i + 1 {
-    if !target.element_types[i].is_optional && !target.element_types[i].is_rest {
+    if target.element_types[i].is_rest {
+      target_rest_idx = Some(i)
+    } else if not(target.element_types[i].is_optional) {
       target_required = target_required + 1
     }
   }
@@ -10044,14 +10140,33 @@ fn is_tuple_assignable(
 
   // Check element-wise assignability
   for i = 0; i < target.element_types.length(); i = i + 1 {
+    let target_elem = target.element_types[i]
+
+    if target_elem.is_rest {
+      // For rest element, all remaining source elements must be assignable
+      // to the rest element's array element type
+      let rest_elem_type = match target_elem.element_type {
+        Array(arr) => arr.element_type
+        _ => target_elem.element_type // Fallback if not array
+      }
+      // Check all remaining source elements
+      for j = i; j < source.element_types.length(); j = j + 1 {
+        if not(is_assignable(source.element_types[j].element_type, rest_elem_type)) {
+          return false
+        }
+      }
+      // Rest element handled all remaining, we're done
+      return true
+    }
+
     if i < source.element_types.length() {
-      if !is_assignable(
+      if not(is_assignable(
           source.element_types[i].element_type,
-          target.element_types[i].element_type,
-        ) {
+          target_elem.element_type,
+        )) {
         return false
       }
-    } else if !target.element_types[i].is_optional {
+    } else if not(target_elem.is_optional) {
       return false
     }
   }
@@ -10582,7 +10697,7 @@ fn check_tuple_assignability_detailed(
 ) -> TypeChecker {
   let mut checker = checker
 
-  // Count required elements in target
+  // Count required elements in target (excluding rest)
   let mut target_required = 0
   for elem in target.element_types {
     if not(elem.is_optional) && not(elem.is_rest) {
@@ -10603,12 +10718,35 @@ fn check_tuple_assignability_detailed(
 
   // Check element-wise assignability
   for i = 0; i < target.element_types.length(); i = i + 1 {
+    let target_elem = target.element_types[i]
+
+    if target_elem.is_rest {
+      // For rest element, check all remaining source elements against the rest element's inner type
+      let rest_elem_type = match target_elem.element_type {
+        Array(arr) => arr.element_type
+        _ => target_elem.element_type // Fallback if not array
+      }
+      // Check all remaining source elements
+      for j = i; j < source.element_types.length(); j = j + 1 {
+        let elem_path = if path == "" { "[\{j}]" } else { "\{path}[\{j}]" }
+        checker = check_assignment_detailed(
+          checker,
+          source.element_types[j].element_type,
+          rest_elem_type,
+          location,
+          elem_path,
+        )
+      }
+      // Rest element handled all remaining, we're done
+      break
+    }
+
     if i < source.element_types.length() {
       let elem_path = if path == "" { "[\{i}]" } else { "\{path}[\{i}]" }
       checker = check_assignment_detailed(
         checker,
         source.element_types[i].element_type,
-        target.element_types[i].element_type,
+        target_elem.element_type,
         location,
         elem_path,
       )
@@ -14743,6 +14881,69 @@ fn get_type_from_type_node(
           (Some(t), c)
         }
       }
+    TupleType(tuple_type) => {
+      // Handle tuple types: [number, string]
+      let mut checker = checker
+      let element_types : Array[TupleElement] = []
+      for elem_node in tuple_type.element_types {
+        // Handle different tuple element representations
+        // Could be a bare type node, or a NamedTupleMember for labeled tuples
+        let (elem_type, is_optional, is_rest, label) = match elem_node {
+          NamedTupleMember(named) => {
+            let (t, c) = match get_type_from_type_node(checker, named.element_type) {
+              (Some(t), c) => (t, c)
+              (None, c) => any_type(c)
+            }
+            checker = c
+            (t, named.is_optional, false, Some(named.name))
+          }
+          SpreadExpression(spread) => {
+            // Rest element in tuple: ...T
+            let (t, c) = match get_type_from_type_node(checker, spread.expression) {
+              (Some(t), c) => (t, c)
+              (None, c) => any_type(c)
+            }
+            checker = c
+            (t, false, true, None)
+          }
+          RestType(rest) => {
+            // Rest type: ...T[]
+            let (t, c) = match get_type_from_type_node(checker, rest.element_type) {
+              (Some(t), c) => (t, c)
+              (None, c) => any_type(c)
+            }
+            checker = c
+            (t, false, true, None)
+          }
+          OptionalType(opt) => {
+            // Optional element: T?
+            let (t, c) = match get_type_from_type_node(checker, opt.element_type) {
+              (Some(t), c) => (t, c)
+              (None, c) => any_type(c)
+            }
+            checker = c
+            (t, true, false, None)
+          }
+          _ => {
+            // Regular type element
+            let (t, c) = match get_type_from_type_node(checker, elem_node) {
+              (Some(t), c) => (t, c)
+              (None, c) => any_type(c)
+            }
+            checker = c
+            (t, false, false, None)
+          }
+        }
+        element_types.push(TupleElement::{
+          element_type: elem_type,
+          is_optional,
+          is_rest,
+          label,
+        })
+      }
+      let (info, checker) = create_type_info(checker)
+      (Some(Tuple(CheckerTupleType::{ element_types, info })), checker)
+    }
     _ => (None, checker)
   }
 }
