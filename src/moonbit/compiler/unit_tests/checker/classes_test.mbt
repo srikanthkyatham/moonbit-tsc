@@ -25,9 +25,7 @@ fn parse_bind_check_class(source : String) -> @compiler.CheckResult {
 
 ///|
 test "unit/classes/basic - simple class declaration" {
-  let result = parse_bind_check_class(
-    "class Point { x: number; y: number; }",
-  )
+  let result = parse_bind_check_class("class Point { x: number; y: number; }")
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(_) => assert_true(false)
@@ -58,9 +56,7 @@ test "unit/classes/basic - class with methods" {
 
 ///|
 test "unit/classes/basic - class instantiation" {
-  let result = parse_bind_check_class(
-    "class Foo {} const f = new Foo();",
-  )
+  let result = parse_bind_check_class("class Foo {} const f = new Foo();")
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(_) => assert_true(false)
@@ -117,9 +113,7 @@ test "unit/classes/accessibility - private method" {
 
 ///|
 test "unit/classes/accessibility - readonly property" {
-  let result = parse_bind_check_class(
-    "class Foo { readonly id: number = 1; }",
-  )
+  let result = parse_bind_check_class("class Foo { readonly id: number = 1; }")
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(_) => assert_true(false)
@@ -487,9 +481,7 @@ test "unit/classes/circular - static inheritance" {
 ///|
 test "unit/classes/circular - forward ref in class properties reports TS2729" {
   // Forward reference to uninitialized property should report TS2729
-  let result = parse_bind_check_class(
-    "class Test { _b = this._a; _a = 3; }",
-  )
+  let result = parse_bind_check_class("class Test { _b = this._a; _a = 3; }")
   match result {
     Ok(_) => assert_true(false) // Should have TS2729 error
     Err(diagnostics) => {
@@ -519,11 +511,13 @@ test "unit/classes/circular - static property referencing static" {
 test "unit/classes/extends-null - class extends null" {
   // Class extending null should not require super() call
   let result = parse_bind_check_class(
-    #|class NullProto extends null {
-    #|  constructor() {
-    #|    return {};
-    #|  }
-    #|}
+    (
+      #|class NullProto extends null {
+      #|  constructor() {
+      #|    return {};
+      #|  }
+      #|}
+    ),
   )
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
@@ -538,10 +532,12 @@ test "unit/classes/extends-null - class extends null" {
 test "unit/classes/extends-null - class extends null with properties" {
   // Class extending null with properties should work without super()
   let result = parse_bind_check_class(
-    #|class Dict extends null {
-    #|  key: string;
-    #|  value: number;
-    #|}
+    (
+      #|class Dict extends null {
+      #|  key: string;
+      #|  value: number;
+      #|}
+    ),
   )
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
@@ -556,12 +552,14 @@ test "unit/classes/extends-null - class extends null with properties" {
 test "unit/classes/extends-null - extends null should not have TS2565 error" {
   // Accessing this in constructor of extends null class should not require super() first
   let result = parse_bind_check_class(
-    #|class NullProto extends null {
-    #|  private _t: number;
-    #|  constructor() {
-    #|    this._t = 10;
-    #|  }
-    #|}
+    (
+      #|class NullProto extends null {
+      #|  private _t: number;
+      #|  constructor() {
+      #|    this._t = 10;
+      #|  }
+      #|}
+    ),
   )
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
@@ -583,18 +581,20 @@ test "unit/classes/extends-null - extends null should not have TS2565 error" {
 test "unit/classes/super-call - super call in object literal property value" {
   // super() call inside object literal property value should be detected
   let result = parse_bind_check_class(
-    #|class Base {
-    #|  constructor(c: any) { }
-    #|}
-    #|class D extends Base {
-    #|  private _t: number;
-    #|  constructor() {
-    #|    let x = {
-    #|      k: super(undefined),
-    #|      j: this._t,
-    #|    }
-    #|  }
-    #|}
+    (
+      #|class Base {
+      #|  constructor(c: any) { }
+      #|}
+      #|class D extends Base {
+      #|  private _t: number;
+      #|  constructor() {
+      #|    let x = {
+      #|      k: super(undefined),
+      #|      j: this._t,
+      #|    }
+      #|  }
+      #|}
+    ),
   )
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
@@ -609,14 +609,16 @@ test "unit/classes/super-call - super call in object literal property value" {
 test "unit/classes/super-call - super call in nested expression" {
   // super() in nested expression should be detected
   let result = parse_bind_check_class(
-    #|class Base {
-    #|  constructor(x: number) { }
-    #|}
-    #|class D extends Base {
-    #|  constructor() {
-    #|    const result = (super(42), 100);
-    #|  }
-    #|}
+    (
+      #|class Base {
+      #|  constructor(x: number) { }
+      #|}
+      #|class D extends Base {
+      #|  constructor() {
+      #|    const result = (super(42), 100);
+      #|  }
+      #|}
+    ),
   )
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
@@ -631,14 +633,16 @@ test "unit/classes/super-call - super call in nested expression" {
 test "unit/classes/super-call - super call in array literal" {
   // super() in array literal should be detected
   let result = parse_bind_check_class(
-    #|class Base {
-    #|  constructor(x: number) { }
-    #|}
-    #|class D extends Base {
-    #|  constructor() {
-    #|    const arr = [super(1), this];
-    #|  }
-    #|}
+    (
+      #|class Base {
+      #|  constructor(x: number) { }
+      #|}
+      #|class D extends Base {
+      #|  constructor() {
+      #|    const arr = [super(1), this];
+      #|  }
+      #|}
+    ),
   )
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
@@ -653,14 +657,16 @@ test "unit/classes/super-call - super call in array literal" {
 test "unit/classes/super-call - super call in conditional expression" {
   // super() in conditional expression should be detected
   let result = parse_bind_check_class(
-    #|class Base {
-    #|  constructor(x: number) { }
-    #|}
-    #|class D extends Base {
-    #|  constructor(cond: boolean) {
-    #|    const x = cond ? super(1) : super(2);
-    #|  }
-    #|}
+    (
+      #|class Base {
+      #|  constructor(x: number) { }
+      #|}
+      #|class D extends Base {
+      #|  constructor(cond: boolean) {
+      #|    const x = cond ? super(1) : super(2);
+      #|  }
+      #|}
+    ),
   )
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
@@ -675,16 +681,18 @@ test "unit/classes/super-call - super call in conditional expression" {
 test "unit/classes/super-call - valid super before this access" {
   // Super must be called before accessing this - valid case
   let result = parse_bind_check_class(
-    #|class Base {
-    #|  constructor() { }
-    #|}
-    #|class D extends Base {
-    #|  private _t: number;
-    #|  constructor() {
-    #|    super();
-    #|    this._t = 10;
-    #|  }
-    #|}
+    (
+      #|class Base {
+      #|  constructor() { }
+      #|}
+      #|class D extends Base {
+      #|  private _t: number;
+      #|  constructor() {
+      #|    super();
+      #|    this._t = 10;
+      #|  }
+      #|}
+    ),
   )
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
@@ -703,20 +711,22 @@ test "unit/classes/super-call - valid super before this access" {
 test "unit/classes/var-hoisting - var declaration hoisted in constructor" {
   // var declarations should be hoisted to the function scope
   let result = parse_bind_check_class(
-    #|declare var Factory: any;
-    #|class Base {
-    #|  constructor(c: any) { }
-    #|}
-    #|class D extends Base {
-    #|  private _t: any;
-    #|  constructor() {
-    #|    super(i);
-    #|    var s = {
-    #|      t: this._t
-    #|    }
-    #|    var i = Factory.create(s);
-    #|  }
-    #|}
+    (
+      #|declare var Factory: any;
+      #|class Base {
+      #|  constructor(c: any) { }
+      #|}
+      #|class D extends Base {
+      #|  private _t: any;
+      #|  constructor() {
+      #|    super(i);
+      #|    var s = {
+      #|      t: this._t
+      #|    }
+      #|    var i = Factory.create(s);
+      #|  }
+      #|}
+    ),
   )
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
@@ -731,12 +741,14 @@ test "unit/classes/var-hoisting - var declaration hoisted in constructor" {
 test "unit/classes/var-hoisting - var declaration hoisted in method" {
   // var declarations should be hoisted in methods too
   let result = parse_bind_check_class(
-    #|class Foo {
-    #|  method() {
-    #|    console.log(x);
-    #|    var x = 10;
-    #|  }
-    #|}
+    (
+      #|class Foo {
+      #|  method() {
+      #|    console.log(x);
+      #|    var x = 10;
+      #|  }
+      #|}
+    ),
   )
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
@@ -751,18 +763,20 @@ test "unit/classes/var-hoisting - var declaration hoisted in method" {
 test "unit/classes/ts2376 - no error for class without initialized properties" {
   // TS2376 should NOT be raised for classes without initialized properties
   let result = parse_bind_check_class(
-    #|class Base {
-    #|  constructor(c: any) { }
-    #|}
-    #|class D extends Base {
-    #|  private _t: any;
-    #|  constructor() {
-    #|    let x = {
-    #|      k: super(undefined),
-    #|      j: this._t,
-    #|    }
-    #|  }
-    #|}
+    (
+      #|class Base {
+      #|  constructor(c: any) { }
+      #|}
+      #|class D extends Base {
+      #|  private _t: any;
+      #|  constructor() {
+      #|    let x = {
+      #|      k: super(undefined),
+      #|      j: this._t,
+      #|    }
+      #|  }
+      #|}
+    ),
   )
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
@@ -777,16 +791,18 @@ test "unit/classes/ts2376 - no error for class without initialized properties" {
 test "unit/classes/ts2376 - error for class with initialized properties" {
   // TS2376 SHOULD be raised for classes with initialized properties where super is not first
   let result = parse_bind_check_class(
-    #|class Base {
-    #|  constructor(c: any) { }
-    #|}
-    #|class D extends Base {
-    #|  private _t: number = 0;
-    #|  constructor() {
-    #|    let x = 1;
-    #|    super(undefined);
-    #|  }
-    #|}
+    (
+      #|class Base {
+      #|  constructor(c: any) { }
+      #|}
+      #|class D extends Base {
+      #|  private _t: number = 0;
+      #|  constructor() {
+      #|    let x = 1;
+      #|    super(undefined);
+      #|  }
+      #|}
+    ),
   )
   match result {
     Ok(_) => assert_true(false) // Should have TS2376 error
@@ -806,13 +822,15 @@ test "unit/classes/ts2376 - error for class with initialized properties" {
 test "unit/classes/ts17005 - super call in extends null class reports error" {
   // TS17005: A constructor cannot contain a 'super' call when its class extends 'null'
   let result = parse_bind_check_class(
-    #|class D extends null {
-    #|  private _t: any;
-    #|  constructor() {
-    #|    this._t;
-    #|    super();
-    #|  }
-    #|}
+    (
+      #|class D extends null {
+      #|  private _t: any;
+      #|  constructor() {
+      #|    this._t;
+      #|    super();
+      #|  }
+      #|}
+    ),
   )
   match result {
     Ok(_) => assert_true(false) // Should have TS17005 error
@@ -828,12 +846,14 @@ test "unit/classes/ts17005 - super call in extends null class reports error" {
 test "unit/classes/ts17005 - extends null without super is OK" {
   // Class extending null should NOT require super() call
   let result = parse_bind_check_class(
-    #|class D extends null {
-    #|  private _t: any;
-    #|  constructor() {
-    #|    this._t = 10;
-    #|  }
-    #|}
+    (
+      #|class D extends null {
+      #|  private _t: any;
+      #|  constructor() {
+      #|    this._t = 10;
+      #|  }
+      #|}
+    ),
   )
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
@@ -853,17 +873,19 @@ test "unit/classes/ts17009 - this in arrow function before super" {
   // this inside arrow function before super() should NOT raise TS17009
   // (only direct this in constructor should be checked)
   let result = parse_bind_check_class(
-    #|class Base {
-    #|  constructor(c: any) { }
-    #|}
-    #|class D extends Base {
-    #|  private _t: any;
-    #|  constructor() {
-    #|    let x = () => { this._t };
-    #|    x();
-    #|    super(undefined);
-    #|  }
-    #|}
+    (
+      #|class Base {
+      #|  constructor(c: any) { }
+      #|}
+      #|class D extends Base {
+      #|  private _t: any;
+      #|  constructor() {
+      #|    let x = () => { this._t };
+      #|    x();
+      #|    super(undefined);
+      #|  }
+      #|}
+    ),
   )
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
@@ -880,16 +902,18 @@ test "unit/classes/ts17009 - this in arrow function before super" {
 test "unit/classes/ts17009 - direct this before super reports error" {
   // Direct this access in constructor before super() should raise TS17009
   let result = parse_bind_check_class(
-    #|class Base {
-    #|  constructor(c: any) { }
-    #|}
-    #|class D extends Base {
-    #|  private _t: any;
-    #|  constructor() {
-    #|    this._t;
-    #|    super(undefined);
-    #|  }
-    #|}
+    (
+      #|class Base {
+      #|  constructor(c: any) { }
+      #|}
+      #|class D extends Base {
+      #|  private _t: any;
+      #|  constructor() {
+      #|    this._t;
+      #|    super(undefined);
+      #|  }
+      #|}
+    ),
   )
   match result {
     Ok(_) => assert_true(false) // Should have TS17009 error
@@ -905,18 +929,20 @@ test "unit/classes/ts17009 - direct this before super reports error" {
 test "unit/classes/ts17009 - this in object literal before super reports error" {
   // this in object literal value before super() should raise TS17009
   let result = parse_bind_check_class(
-    #|class Base {
-    #|  constructor(c: any) { }
-    #|}
-    #|class D extends Base {
-    #|  private _t: any;
-    #|  constructor() {
-    #|    let x = {
-    #|      j: this._t,
-    #|    }
-    #|    super(undefined);
-    #|  }
-    #|}
+    (
+      #|class Base {
+      #|  constructor(c: any) { }
+      #|}
+      #|class D extends Base {
+      #|  private _t: any;
+      #|  constructor() {
+      #|    let x = {
+      #|      j: this._t,
+      #|    }
+      #|    super(undefined);
+      #|  }
+      #|}
+    ),
   )
   match result {
     Ok(_) => assert_true(false) // Should have TS17009 error
@@ -933,15 +959,17 @@ test "unit/classes/ts17009 - this in super() arguments reports error" {
   // this inside super() arguments should raise TS17009
   // because arguments are evaluated BEFORE super() completes
   let result = parse_bind_check_class(
-    #|class Base {
-    #|  constructor(c: any) { }
-    #|}
-    #|class D extends Base {
-    #|  private _t: any;
-    #|  constructor() {
-    #|    super(this);
-    #|  }
-    #|}
+    (
+      #|class Base {
+      #|  constructor(c: any) { }
+      #|}
+      #|class D extends Base {
+      #|  private _t: any;
+      #|  constructor() {
+      #|    super(this);
+      #|  }
+      #|}
+    ),
   )
   match result {
     Ok(_) => assert_true(false) // Should have TS17009 error
@@ -957,15 +985,17 @@ test "unit/classes/ts17009 - this in super() arguments reports error" {
 test "unit/classes/ts17009 - this._t in super() arguments reports error" {
   // this.property inside super() arguments should raise TS17009
   let result = parse_bind_check_class(
-    #|class Base {
-    #|  constructor(c: any) { }
-    #|}
-    #|class D extends Base {
-    #|  private _t: any;
-    #|  constructor() {
-    #|    super(this._t);
-    #|  }
-    #|}
+    (
+      #|class Base {
+      #|  constructor(c: any) { }
+      #|}
+      #|class D extends Base {
+      #|  private _t: any;
+      #|  constructor() {
+      #|    super(this._t);
+      #|  }
+      #|}
+    ),
   )
   match result {
     Ok(_) => assert_true(false) // Should have TS17009 error

@@ -507,7 +507,9 @@ pub fn create_module_not_found_diagnostic_with_location(
   Diagnostic::{
     category: DiagnosticCategory::Error,
     code: 2307, // TS2307: Cannot find module
-    message: "Cannot find module '" + module_specifier + "' or its corresponding type declarations.",
+    message: "Cannot find module '" +
+    module_specifier +
+    "' or its corresponding type declarations.",
     location,
   }
 }
@@ -536,7 +538,11 @@ pub fn create_export_not_found_diagnostic_with_location(
   Diagnostic::{
     category: DiagnosticCategory::Error,
     code: 2305, // TS2305: Module has no exported member
-    message: "Module '" + module_path + "' has no exported member '" + export_name + "'.",
+    message: "Module '" +
+    module_path +
+    "' has no exported member '" +
+    export_name +
+    "'.",
     location,
   }
 }

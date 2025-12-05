@@ -121,25 +121,52 @@ pub fn Target::supports_bigint(self : Target) -> Bool {
 ///|
 /// Create a new transformer context
 pub fn TransformerContext::new(target : Target) -> TransformerContext {
-  { target, in_decorated_class: false, const_enums: Map::new(), jsx_transform: Preserve, temp_counter: Ref::new(0) }
+  {
+    target,
+    in_decorated_class: false,
+    const_enums: Map::new(),
+    jsx_transform: Preserve,
+    temp_counter: Ref::new(0),
+  }
 }
 
 ///|
 /// Create a new transformer context with JSX options
-pub fn TransformerContext::with_jsx(target : Target, jsx_transform : JsxTransform) -> TransformerContext {
-  { target, in_decorated_class: false, const_enums: Map::new(), jsx_transform, temp_counter: Ref::new(0) }
+pub fn TransformerContext::with_jsx(
+  target : Target,
+  jsx_transform : JsxTransform,
+) -> TransformerContext {
+  {
+    target,
+    in_decorated_class: false,
+    const_enums: Map::new(),
+    jsx_transform,
+    temp_counter: Ref::new(0),
+  }
 }
 
 ///|
 /// Create default transformer context (ES2015 target)
 pub fn TransformerContext::default() -> TransformerContext {
-  { target: ES2015, in_decorated_class: false, const_enums: Map::new(), jsx_transform: Preserve, temp_counter: Ref::new(0) }
+  {
+    target: ES2015,
+    in_decorated_class: false,
+    const_enums: Map::new(),
+    jsx_transform: Preserve,
+    temp_counter: Ref::new(0),
+  }
 }
 
 ///|
 /// Create transformer context for ES5 target
 pub fn TransformerContext::es5() -> TransformerContext {
-  { target: ES5, in_decorated_class: false, const_enums: Map::new(), jsx_transform: Preserve, temp_counter: Ref::new(0) }
+  {
+    target: ES5,
+    in_decorated_class: false,
+    const_enums: Map::new(),
+    jsx_transform: Preserve,
+    temp_counter: Ref::new(0),
+  }
 }
 
 ///|
@@ -148,49 +175,97 @@ fn TransformerContext::with_decorated_class(
   self : TransformerContext,
   decorated : Bool,
 ) -> TransformerContext {
-  { target: self.target, in_decorated_class: decorated, const_enums: self.const_enums, jsx_transform: self.jsx_transform, temp_counter: self.temp_counter }
+  {
+    target: self.target,
+    in_decorated_class: decorated,
+    const_enums: self.const_enums,
+    jsx_transform: self.jsx_transform,
+    temp_counter: self.temp_counter,
+  }
 }
 
 ///|
 /// Create transformer context for ES2015 target
 pub fn TransformerContext::es2015() -> TransformerContext {
-  { target: ES2015, in_decorated_class: false, const_enums: Map::new(), jsx_transform: Preserve, temp_counter: Ref::new(0) }
+  {
+    target: ES2015,
+    in_decorated_class: false,
+    const_enums: Map::new(),
+    jsx_transform: Preserve,
+    temp_counter: Ref::new(0),
+  }
 }
 
 ///|
 /// Create transformer context for ES2016 target
 pub fn TransformerContext::es2016() -> TransformerContext {
-  { target: ES2016, in_decorated_class: false, const_enums: Map::new(), jsx_transform: Preserve, temp_counter: Ref::new(0) }
+  {
+    target: ES2016,
+    in_decorated_class: false,
+    const_enums: Map::new(),
+    jsx_transform: Preserve,
+    temp_counter: Ref::new(0),
+  }
 }
 
 ///|
 /// Create transformer context for ES2017 target
 pub fn TransformerContext::es2017() -> TransformerContext {
-  { target: ES2017, in_decorated_class: false, const_enums: Map::new(), jsx_transform: Preserve, temp_counter: Ref::new(0) }
+  {
+    target: ES2017,
+    in_decorated_class: false,
+    const_enums: Map::new(),
+    jsx_transform: Preserve,
+    temp_counter: Ref::new(0),
+  }
 }
 
 ///|
 /// Create transformer context for ES2018 target
 pub fn TransformerContext::es2018() -> TransformerContext {
-  { target: ES2018, in_decorated_class: false, const_enums: Map::new(), jsx_transform: Preserve, temp_counter: Ref::new(0) }
+  {
+    target: ES2018,
+    in_decorated_class: false,
+    const_enums: Map::new(),
+    jsx_transform: Preserve,
+    temp_counter: Ref::new(0),
+  }
 }
 
 ///|
 /// Create transformer context for ES2019 target
 pub fn TransformerContext::es2019() -> TransformerContext {
-  { target: ES2019, in_decorated_class: false, const_enums: Map::new(), jsx_transform: Preserve, temp_counter: Ref::new(0) }
+  {
+    target: ES2019,
+    in_decorated_class: false,
+    const_enums: Map::new(),
+    jsx_transform: Preserve,
+    temp_counter: Ref::new(0),
+  }
 }
 
 ///|
 /// Create transformer context for ES2020 target
 pub fn TransformerContext::es2020() -> TransformerContext {
-  { target: ES2020, in_decorated_class: false, const_enums: Map::new(), jsx_transform: Preserve, temp_counter: Ref::new(0) }
+  {
+    target: ES2020,
+    in_decorated_class: false,
+    const_enums: Map::new(),
+    jsx_transform: Preserve,
+    temp_counter: Ref::new(0),
+  }
 }
 
 ///|
 /// Create transformer context for ESNext target
 pub fn TransformerContext::esnext() -> TransformerContext {
-  { target: ESNext, in_decorated_class: false, const_enums: Map::new(), jsx_transform: Preserve, temp_counter: Ref::new(0) }
+  {
+    target: ESNext,
+    in_decorated_class: false,
+    const_enums: Map::new(),
+    jsx_transform: Preserve,
+    temp_counter: Ref::new(0),
+  }
 }
 
 ///|
@@ -323,7 +398,8 @@ pub fn transform(node : Node, ctx : TransformerContext) -> Node {
       transform_object_literal_expression(ole, ctx)
     ParenthesizedExpression(pe) => transform_parenthesized_expression(pe, ctx)
     TemplateExpression(te) => transform_template_expression(te, ctx)
-    TaggedTemplateExpression(tte) => transform_tagged_template_expression(tte, ctx)
+    TaggedTemplateExpression(tte) =>
+      transform_tagged_template_expression(tte, ctx)
 
     // Type assertions - remove them, keep only the expression
     AsExpression(ae) => transform(ae.expression, ctx)
@@ -535,14 +611,13 @@ fn transform_class_declaration(
 
   // First pass: find constructor and extract parameter properties
   let param_properties : Array[(String, Array[Modifier], SourceLocation)] = []
-
   for cmember in cd.members {
     match cmember {
-      ConstructorDeclaration(ctor) => {
+      ConstructorDeclaration(ctor) =>
         // Extract parameter properties (parameters with access modifiers)
         for param in ctor.parameters {
           match param {
-            Parameter(p) => {
+            Parameter(p) =>
               if has_access_modifier(p.modifiers) {
                 match p.name {
                   Identifier(id) =>
@@ -550,11 +625,9 @@ fn transform_class_declaration(
                   _ => ()
                 }
               }
-            }
             _ => ()
           }
         }
-      }
       _ => ()
     }
   }
@@ -594,7 +667,6 @@ fn transform_class_declaration(
       }
     }
   }
-
   ClassDeclaration({
     name: match cd.name {
       Some(n) => Some(transform(n, ctx))
@@ -622,14 +694,13 @@ fn transform_class_expression(
 
   // First pass: find constructor and extract parameter properties
   let param_properties : Array[(String, Array[Modifier], SourceLocation)] = []
-
   for cmember in cd.members {
     match cmember {
-      ConstructorDeclaration(ctor) => {
+      ConstructorDeclaration(ctor) =>
         // Extract parameter properties (parameters with access modifiers)
         for param in ctor.parameters {
           match param {
-            Parameter(p) => {
+            Parameter(p) =>
               if has_access_modifier(p.modifiers) {
                 match p.name {
                   Identifier(id) =>
@@ -637,11 +708,9 @@ fn transform_class_expression(
                   _ => ()
                 }
               }
-            }
             _ => ()
           }
         }
-      }
       _ => ()
     }
   }
@@ -681,7 +750,6 @@ fn transform_class_expression(
       }
     }
   }
-
   ClassExpression({
     name: match cd.name {
       Some(n) => Some(transform(n, ctx))
@@ -724,7 +792,7 @@ fn transform_constructor_with_param_properties(
     let assignment = Node::ExpressionStatement(ExpressionStatement::{
       expression: Node::BinaryExpression(BinaryExpression::{
         left: Node::PropertyAccessExpression(PropertyAccessExpression::{
-          expression: Node::ThisExpression(ThisExpression::{ location }),
+          expression: Node::ThisExpression(ThisExpression::{ location, }),
           name,
           location,
         }),
@@ -769,7 +837,11 @@ fn transform_constructor_with_param_properties(
         transformed_params.push(
           Node::Parameter(Parameter::{
             name: transform(p.name, ctx),
-            type_annotation: if preserve_types { p.type_annotation } else { None },
+            type_annotation: if preserve_types {
+              p.type_annotation
+            } else {
+              None
+            },
             initializer: match p.initializer {
               Some(init) => Some(transform(init, ctx))
               None => None
@@ -822,7 +894,6 @@ fn transform_constructor_with_param_properties(
         None
       }
   }
-
   ConstructorDeclaration({
     parameters: transformed_params,
     body: transformed_body,
@@ -914,10 +985,8 @@ fn transform_enum_declaration(
             auto_value = num_val + 1
             has_numeric_member = true
           }
-          StringLiteral(_) => {
-            is_string_enum = true
-            // String literals don't affect auto-increment
-          }
+          StringLiteral(_) => is_string_enum = true
+          // String literals don't affect auto-increment
           // Handle computed values (constant expressions)
           BinaryExpression(be) => {
             let computed = evaluate_constant_expression(init)
@@ -934,7 +1003,7 @@ fn transform_enum_declaration(
             }
           }
           // Handle references to other enum members
-          PropertyAccessExpression(pae) => {
+          PropertyAccessExpression(pae) =>
             // Try to resolve the reference
             match pae.expression {
               Identifier(id) =>
@@ -945,7 +1014,6 @@ fn transform_enum_declaration(
                 }
               _ => ()
             }
-          }
           _ => ()
         }
         transform(init, ctx)
@@ -974,7 +1042,6 @@ fn transform_enum_declaration(
       PropertyAssignment(a_member.name, value_node, a_member.location),
     )
   }
-
   let object_literal = ObjectLiteralExpression({
     properties,
     location: ed.location,
@@ -1034,21 +1101,11 @@ fn evaluate_constant_expression(node : Node) -> Int? {
             Add => Some(l + r)
             Subtract => Some(l - r)
             Multiply => Some(l * r)
-            Divide =>
-              if r != 0 {
-                Some(l / r)
-              } else {
-                None
-              }
-            Remainder =>
-              if r != 0 {
-                Some(l % r)
-              } else {
-                None
-              }
-            BitwiseAnd => Some(l.land(r))
-            BitwiseOr => Some(l.lor(r))
-            BitwiseXor => Some(l.lxor(r))
+            Divide => if r != 0 { Some(l / r) } else { None }
+            Remainder => if r != 0 { Some(l % r) } else { None }
+            BitwiseAnd => Some(l & r)
+            BitwiseOr => Some(l | r)
+            BitwiseXor => Some(l ^ r)
             LeftShift => Some(l << r)
             RightShift => Some(l >> r)
             UnsignedRightShift => {
@@ -1120,7 +1177,11 @@ fn transform_parameter(p : Parameter, ctx : TransformerContext) -> Node {
   let preserve_type = p.decorators.length() > 0
   Parameter({
     name: transform(p.name, ctx),
-    type_annotation: if preserve_type { p.type_annotation } else { None },
+    type_annotation: if preserve_type {
+      p.type_annotation
+    } else {
+      None
+    },
     initializer: match p.initializer {
       Some(init) => Some(transform(init, ctx))
       None => None
@@ -1255,7 +1316,10 @@ fn transform_for_of_statement(
   let transformed_expr = transform(fos.expression, ctx)
 
   // Create identifier nodes for our temp variables
-  let index_id = Node::Identifier(Identifier::{ name: index_name, location: loc })
+  let index_id = Node::Identifier(Identifier::{
+    name: index_name,
+    location: loc,
+  })
   let arr_id = Node::Identifier(Identifier::{ name: arr_name, location: loc })
   let var_id = Node::Identifier(Identifier::{ name: var_name, location: loc })
 
@@ -1264,7 +1328,9 @@ fn transform_for_of_statement(
     VariableDeclaration::{
       name: index_id,
       type_annotation: None,
-      initializer: Some(Node::NumericLiteral(NumericLiteral::{ value: "0", location: loc })),
+      initializer: Some(
+        Node::NumericLiteral(NumericLiteral::{ value: "0", location: loc }),
+      ),
       location: loc,
     },
     VariableDeclaration::{
@@ -1308,11 +1374,13 @@ fn transform_for_of_statement(
       VariableDeclaration::{
         name: var_id,
         type_annotation: None,
-        initializer: Some(Node::ElementAccessExpression(ElementAccessExpression::{
-          expression: arr_id,
-          argument_expression: index_id,
-          location: loc,
-        })),
+        initializer: Some(
+          Node::ElementAccessExpression(ElementAccessExpression::{
+            expression: arr_id,
+            argument_expression: index_id,
+            location: loc,
+          }),
+        ),
         location: loc,
       },
     ],
@@ -1337,23 +1405,24 @@ fn transform_for_of_statement(
         location: bs.location,
       })
     }
-    _ => {
+    _ =>
       // Wrap in block if not already a block
       Node::BlockStatement(BlockStatement::{
         statements: [item_decl, transformed_body],
         location: loc,
       })
-    }
   }
+  ForStatement(
 
-  // Create the for loop
-  ForStatement(ForStatement::{
-    initializer: Some(initializer),
-    condition: Some(condition),
-    incrementor: Some(incrementor),
-    statement: new_body,
-    location: loc,
-  })
+    // Create the for loop
+    ForStatement::{
+      initializer: Some(initializer),
+      condition: Some(condition),
+      incrementor: Some(incrementor),
+      statement: new_body,
+      location: loc,
+    },
+  )
 }
 
 ///|
@@ -1731,7 +1800,6 @@ fn transform_array_literal_expression(
   if ctx.target == ES5 && has_spread_element(ale.elements) {
     return transform_array_with_spread_es5(ale, ctx)
   }
-
   let transformed_elements : Array[Node?] = []
   for element in ale.elements {
     match element {
@@ -1772,7 +1840,6 @@ fn transform_array_with_spread_es5(
   // - A spread element (becomes a direct argument to concat)
   let segments : Array[Node] = []
   let current_group : Array[Node?] = []
-
   for element in ale.elements {
     match element {
       Some(SpreadExpression(se)) => {
@@ -1789,13 +1856,10 @@ fn transform_array_with_spread_es5(
         // Add spread expression's inner expression directly
         segments.push(transform(se.expression, ctx))
       }
-      Some(e) => {
-        current_group.push(Some(transform(e, ctx)))
-      }
-      None => {
+      Some(e) => current_group.push(Some(transform(e, ctx)))
+      None =>
         // Hole in array
         current_group.push(None)
-      }
     }
   }
 
@@ -1829,10 +1893,9 @@ fn transform_array_with_spread_es5(
       }
       (segments[0], rest)
     }
-    _ => {
+    _ =>
       // First segment is spread result, use empty array as base
       (ArrayLiteralExpression({ elements: [], location: loc }), segments)
-    }
   }
 
   // Create: base.concat(arg1, arg2, ...)
@@ -1841,7 +1904,6 @@ fn transform_array_with_spread_es5(
     name: "concat",
     location: loc,
   })
-
   CallExpression({
     expression: concat_access,
     type_arguments: [],
@@ -2114,10 +2176,7 @@ fn transform_import_expression(
   ctx : TransformerContext,
 ) -> Node {
   // Transform the source expression (in case it contains expressions that need transformation)
-  ImportExpression({
-    source: transform(ie.source, ctx),
-    location: ie.location,
-  })
+  ImportExpression({ source: transform(ie.source, ctx), location: ie.location })
 }
 
 ///|
@@ -2163,7 +2222,10 @@ fn transform_object_binding_pattern(
 
 ///|
 /// Transform binding element (with optional default value)
-fn transform_binding_element(be : BindingElement, ctx : TransformerContext) -> Node {
+fn transform_binding_element(
+  be : BindingElement,
+  ctx : TransformerContext,
+) -> Node {
   let transformed_initializer = match be.initializer {
     Some(init) => Some(transform(init, ctx))
     None => None
@@ -2186,7 +2248,11 @@ fn transform_property_declaration(
   let preserve_type = pd.decorators.length() > 0
   PropertyDeclaration({
     name: pd.name,
-    type_annotation: if preserve_type { pd.type_annotation } else { None },
+    type_annotation: if preserve_type {
+      pd.type_annotation
+    } else {
+      None
+    },
     initializer: match pd.initializer {
       Some(init) => Some(transform(init, ctx))
       None => None
@@ -2214,7 +2280,11 @@ fn transform_method_declaration(
     } else {
       transform_parameters(md.parameters, ctx)
     },
-    return_type: if preserve_types { md.return_type } else { None },
+    return_type: if preserve_types {
+      md.return_type
+    } else {
+      None
+    },
     body: match md.body {
       Some(b) => Some(transform(b, ctx))
       None => None
@@ -2274,7 +2344,11 @@ fn transform_get_accessor(ga : GetAccessor, ctx : TransformerContext) -> Node {
   let preserve_type = ga.decorators.length() > 0
   GetAccessor({
     name: ga.name,
-    return_type: if preserve_type { ga.return_type } else { None },
+    return_type: if preserve_type {
+      ga.return_type
+    } else {
+      None
+    },
     body: match ga.body {
       Some(b) => Some(transform(b, ctx))
       None => None
@@ -2404,10 +2478,13 @@ fn transform_jsx_element(jsx : JsxElement, ctx : TransformerContext) -> Node {
 
 ///|
 /// Transform JSX self-closing element: <tag ... />
-fn transform_jsx_self_closing(jsx : JsxSelfClosingElement, ctx : TransformerContext) -> Node {
+fn transform_jsx_self_closing(
+  jsx : JsxSelfClosingElement,
+  ctx : TransformerContext,
+) -> Node {
   match ctx.jsx_transform {
     Preserve => JsxSelfClosingElement(jsx)
-    Classic(factory, _) => {
+    Classic(factory, _) =>
       transform_jsx_to_classic(
         jsx.tag_name,
         jsx.attributes,
@@ -2416,8 +2493,7 @@ fn transform_jsx_self_closing(jsx : JsxSelfClosingElement, ctx : TransformerCont
         factory,
         ctx,
       )
-    }
-    Automatic(import_source) => {
+    Automatic(import_source) =>
       transform_jsx_to_automatic(
         jsx.tag_name,
         jsx.attributes,
@@ -2427,8 +2503,7 @@ fn transform_jsx_self_closing(jsx : JsxSelfClosingElement, ctx : TransformerCont
         false,
         ctx,
       )
-    }
-    AutomaticDev(import_source) => {
+    AutomaticDev(import_source) =>
       transform_jsx_to_automatic(
         jsx.tag_name,
         jsx.attributes,
@@ -2438,7 +2513,6 @@ fn transform_jsx_self_closing(jsx : JsxSelfClosingElement, ctx : TransformerCont
         true,
         ctx,
       )
-    }
   }
 }
 
@@ -2447,15 +2521,14 @@ fn transform_jsx_self_closing(jsx : JsxSelfClosingElement, ctx : TransformerCont
 fn transform_jsx_fragment(jsx : JsxFragment, ctx : TransformerContext) -> Node {
   match ctx.jsx_transform {
     Preserve => JsxFragment(jsx)
-    Classic(_, fragment_factory) => {
+    Classic(_, fragment_factory) =>
       transform_jsx_fragment_to_classic(
         jsx.children,
         jsx.location,
         fragment_factory,
         ctx,
       )
-    }
-    Automatic(import_source) => {
+    Automatic(import_source) =>
       transform_jsx_fragment_to_automatic(
         jsx.children,
         jsx.location,
@@ -2463,8 +2536,7 @@ fn transform_jsx_fragment(jsx : JsxFragment, ctx : TransformerContext) -> Node {
         false,
         ctx,
       )
-    }
-    AutomaticDev(import_source) => {
+    AutomaticDev(import_source) =>
       transform_jsx_fragment_to_automatic(
         jsx.children,
         jsx.location,
@@ -2472,13 +2544,15 @@ fn transform_jsx_fragment(jsx : JsxFragment, ctx : TransformerContext) -> Node {
         true,
         ctx,
       )
-    }
   }
 }
 
 ///|
 /// Transform JSX expression container: {expression}
-fn transform_jsx_expression(jsx : JsxExpression, ctx : TransformerContext) -> Node {
+fn transform_jsx_expression(
+  jsx : JsxExpression,
+  ctx : TransformerContext,
+) -> Node {
   match jsx.expression {
     Some(expr) => transform(expr, ctx)
     None => Node::Identifier({ name: "undefined", location: jsx.location })
@@ -2512,7 +2586,6 @@ fn transform_jsx_to_classic(
   for child in children_args {
     arguments.push(child)
   }
-
   Node::CallExpression({
     expression: factory_expr,
     type_arguments: [],
@@ -2537,20 +2610,24 @@ fn transform_jsx_fragment_to_classic(
     // React.createElement -> PropertyAccess
     let mut expr = Node::Identifier({ name: factory_parts[0], location })
     for i = 1; i < factory_parts.length(); i = i + 1 {
-      expr = Node::PropertyAccessExpression({ expression: expr, name: factory_parts[i], location })
+      expr = Node::PropertyAccessExpression({
+        expression: expr,
+        name: factory_parts[i],
+        location,
+      })
     }
     expr
   }
 
   // React.createElement(React.Fragment, null, ...children)
-  let create_element = create_factory_expression("React.createElement", location)
+  let create_element = create_factory_expression(
+    "React.createElement", location,
+  )
   let children_args = jsx_children_to_args(children, ctx)
-
   let arguments : Array[Node] = [factory_expr, Node::NullLiteral({ location, })]
   for child in children_args {
     arguments.push(child)
   }
-
   Node::CallExpression({
     expression: create_element,
     type_arguments: [],
@@ -2574,18 +2651,13 @@ fn transform_jsx_to_automatic(
   // _jsx for single or no children, _jsxs for multiple children
   let transformed_children = jsx_children_to_args(children, ctx)
   let jsx_fn = if transformed_children.length() > 1 { "_jsxs" } else { "_jsx" }
-
   let jsx_expr = Node::Identifier({ name: jsx_fn, location })
   let type_arg = jsx_tag_name_to_node(tag_name, location)
 
   // For automatic mode, children go in props.children
   let props = jsx_attributes_to_props_with_children(
-    attributes,
-    transformed_children,
-    location,
-    ctx,
+    attributes, transformed_children, location, ctx,
   )
-
   Node::CallExpression({
     expression: jsx_expr,
     type_arguments: [],
@@ -2605,7 +2677,6 @@ fn transform_jsx_fragment_to_automatic(
 ) -> Node {
   let transformed_children = jsx_children_to_args(children, ctx)
   let jsx_fn = if transformed_children.length() > 1 { "_jsxs" } else { "_jsx" }
-
   let jsx_expr = Node::Identifier({ name: jsx_fn, location })
   let fragment_expr = Node::Identifier({ name: "_Fragment", location })
 
@@ -2614,7 +2685,9 @@ fn transform_jsx_fragment_to_automatic(
     Node::ObjectLiteralExpression({ properties: [], location })
   } else if transformed_children.length() == 1 {
     Node::ObjectLiteralExpression({
-      properties: [PropertyAssignment("children", transformed_children[0], location)],
+      properties: [
+        PropertyAssignment("children", transformed_children[0], location),
+      ],
       location,
     })
   } else {
@@ -2632,7 +2705,6 @@ fn transform_jsx_fragment_to_automatic(
       location,
     })
   }
-
   Node::CallExpression({
     expression: jsx_expr,
     type_arguments: [],
@@ -2643,7 +2715,10 @@ fn transform_jsx_fragment_to_automatic(
 
 ///|
 /// Create a factory expression from a dotted string like "React.createElement"
-fn create_factory_expression(factory : String, location : SourceLocation) -> Node {
+fn create_factory_expression(
+  factory : String,
+  location : SourceLocation,
+) -> Node {
   let parts = split_string(factory, '.')
   if parts.length() == 1 {
     Node::Identifier({ name: factory, location })
@@ -2662,24 +2737,24 @@ fn create_factory_expression(factory : String, location : SourceLocation) -> Nod
 
 ///|
 /// Convert JSX tag name to AST node
-fn jsx_tag_name_to_node(tag_name : JsxTagName, location : SourceLocation) -> Node {
+fn jsx_tag_name_to_node(
+  tag_name : JsxTagName,
+  location : SourceLocation,
+) -> Node {
   match tag_name {
-    Identifier(name, _) => {
+    Identifier(name, _) =>
       // Lowercase = intrinsic element (string), uppercase = component (identifier)
       if name.length() > 0 && is_lowercase(name[0]) {
         Node::StringLiteral({ value: name, location })
       } else {
         Node::Identifier({ name, location })
       }
-    }
-    NamespacedName(ns, name, _) => {
+    NamespacedName(ns, name, _) =>
       // xml:href -> "xml:href"
       Node::StringLiteral({ value: ns + ":" + name, location })
-    }
-    PropertyAccess(expr, name, _) => {
+    PropertyAccess(expr, name, _) =>
       // Module.Component -> Module.Component (keep as identifier chain)
       Node::PropertyAccessExpression({ expression: expr, name, location })
-    }
   }
 }
 
@@ -2699,17 +2774,16 @@ fn jsx_attributes_to_props(
   if attributes.length() == 0 {
     return Node::NullLiteral({ location, })
   }
-
   let properties : Array[ObjectProperty] = []
   let mut has_spread = false
-
   for attr in attributes {
     match attr {
       Attribute(attr_node) => {
         let name = jsx_attr_name_to_string(attr_node.name)
         let value = match attr_node.initializer {
           Some(init) => jsx_attr_value_to_node(init, ctx)
-          None => Node::BooleanLiteral({ value: true, location: attr_node.location })
+          None =>
+            Node::BooleanLiteral({ value: true, location: attr_node.location })
         }
         properties.push(PropertyAssignment(name, value, attr_node.location))
       }
@@ -2738,20 +2812,19 @@ fn jsx_attributes_to_props_with_children(
   ctx : TransformerContext,
 ) -> Node {
   let properties : Array[ObjectProperty] = []
-
   for attr in attributes {
     match attr {
       Attribute(attr_node) => {
         let name = jsx_attr_name_to_string(attr_node.name)
         let value = match attr_node.initializer {
           Some(init) => jsx_attr_value_to_node(init, ctx)
-          None => Node::BooleanLiteral({ value: true, location: attr_node.location })
+          None =>
+            Node::BooleanLiteral({ value: true, location: attr_node.location })
         }
         properties.push(PropertyAssignment(name, value, attr_node.location))
       }
-      SpreadAttribute(expr, loc) => {
+      SpreadAttribute(expr, loc) =>
         properties.push(SpreadAssignment(transform(expr, ctx), loc))
-      }
     }
   }
 
@@ -2770,7 +2843,6 @@ fn jsx_attributes_to_props_with_children(
       ),
     )
   }
-
   Node::ObjectLiteralExpression({ properties, location })
 }
 
@@ -2785,7 +2857,10 @@ fn jsx_attr_name_to_string(name : JsxAttributeName) -> String {
 
 ///|
 /// Convert JSX attribute value to AST node
-fn jsx_attr_value_to_node(value : JsxAttributeValue, ctx : TransformerContext) -> Node {
+fn jsx_attr_value_to_node(
+  value : JsxAttributeValue,
+  ctx : TransformerContext,
+) -> Node {
   match value {
     StringLiteral(s, loc) => Node::StringLiteral({ value: s, location: loc })
     Expression(expr, _) => transform(expr, ctx)
@@ -2795,9 +2870,11 @@ fn jsx_attr_value_to_node(value : JsxAttributeValue, ctx : TransformerContext) -
 
 ///|
 /// Convert JSX children to array of argument nodes
-fn jsx_children_to_args(children : Array[JsxChild], ctx : TransformerContext) -> Array[Node] {
+fn jsx_children_to_args(
+  children : Array[JsxChild],
+  ctx : TransformerContext,
+) -> Array[Node] {
   let result : Array[Node] = []
-
   for child in children {
     match child {
       JsxChild::Text(text, loc) => {
@@ -2807,21 +2884,15 @@ fn jsx_children_to_args(children : Array[JsxChild], ctx : TransformerContext) ->
           result.push(Node::StringLiteral({ value: trimmed, location: loc }))
         }
       }
-      JsxChild::Expression(jsx_expr) => {
+      JsxChild::Expression(jsx_expr) =>
         match jsx_expr.expression {
           Some(expr) => result.push(transform(expr, ctx))
           None => () // Skip empty expressions
         }
-      }
-      JsxChild::Element(elem, _) => {
-        result.push(transform(elem, ctx))
-      }
-      JsxChild::Fragment(frag, _) => {
-        result.push(transform(frag, ctx))
-      }
+      JsxChild::Element(elem, _) => result.push(transform(elem, ctx))
+      JsxChild::Fragment(frag, _) => result.push(transform(frag, ctx))
     }
   }
-
   result
 }
 
@@ -2831,10 +2902,12 @@ fn trim_jsx_text(text : String) -> String {
   let result = StringBuilder::new()
   let mut last_was_space = true
   let mut has_content = false
-
   for i = 0; i < text.length(); i = i + 1 {
     let ch = text[i]
-    if ch == ' '.to_int() || ch == '\t'.to_int() || ch == '\n'.to_int() || ch == '\r'.to_int() {
+    if ch == ' '.to_int() ||
+      ch == '\t'.to_int() ||
+      ch == '\n'.to_int() ||
+      ch == '\r'.to_int() {
       if not(last_was_space) && has_content {
         result.write_char(' ')
         last_was_space = true
@@ -2861,7 +2934,6 @@ fn split_string(s : String, delim : Char) -> Array[String] {
   let result : Array[String] = []
   let current = StringBuilder::new()
   let delim_code = delim.to_int()
-
   for i = 0; i < s.length(); i = i + 1 {
     if s[i] == delim_code {
       result.push(current.to_string())
@@ -2876,6 +2948,5 @@ fn split_string(s : String, delim : Char) -> Array[String] {
   if last.length() > 0 || result.length() > 0 {
     result.push(last)
   }
-
   result
 }

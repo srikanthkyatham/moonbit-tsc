@@ -2579,7 +2579,9 @@ test "check regex type annotation" {
 ///|
 test "check comma expression with side effects" {
   // Comma expression where left side has side effects (function call)
-  let result = parse_bind_and_check("function f() { return 1; } const x = (f(), 2);")
+  let result = parse_bind_and_check(
+    "function f() { return 1; } const x = (f(), 2);",
+  )
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(_) => assert_true(false)
@@ -4522,11 +4524,7 @@ test "isolatedModules TS1208 - script file without imports/exports" {
       // Should have TS1208 error - file is not a module
       assert_eq(diagnostics.length(), 1)
       assert_eq(diagnostics[0].code, 1208)
-      assert_true(
-        diagnostics[0].message.contains(
-          "isolatedModules",
-        ),
-      )
+      assert_true(diagnostics[0].message.contains("isolatedModules"))
       println("isolatedModules TS1208 script file test passed")
     }
   }
@@ -4544,9 +4542,7 @@ test "isolatedModules TS1209 - const enum not allowed" {
       // Should have TS1209 error - const enums not allowed
       assert_eq(diagnostics.length(), 1)
       assert_eq(diagnostics[0].code, 1209)
-      assert_true(
-        diagnostics[0].message.contains("const enums"),
-      )
+      assert_true(diagnostics[0].message.contains("const enums"))
       println("isolatedModules TS1209 const enum test passed")
     }
   }
@@ -4637,9 +4633,7 @@ test "exactOptionalPropertyTypes TS2412 - undefined assigned to optional propert
       // Should have TS2412 error - undefined not allowed for optional property
       assert_eq(diagnostics.length(), 1)
       assert_eq(diagnostics[0].code, 2412)
-      assert_true(
-        diagnostics[0].message.contains("exactOptionalPropertyTypes"),
-      )
+      assert_true(diagnostics[0].message.contains("exactOptionalPropertyTypes"))
       println("exactOptionalPropertyTypes TS2412 test passed")
     }
   }
@@ -4727,9 +4721,7 @@ test "noUncheckedIndexedAccess - array access compiles with option enabled" {
     #|const x = arr[0];
   let result = parse_bind_and_check_with_no_unchecked_indexed_access(source)
   match result {
-    Ok(_) => {
-      println("noUncheckedIndexedAccess array access test passed")
-    }
+    Ok(_) => println("noUncheckedIndexedAccess array access test passed")
     Err(diagnostics) => {
       println("noUncheckedIndexedAccess test failed with errors:")
       for i = 0; i < diagnostics.length(); i = i + 1 {
@@ -4747,9 +4739,7 @@ test "noUncheckedIndexedAccess - array access compiles without option" {
     #|const x = arr[0];
   let result = parse_bind_and_check(source)
   match result {
-    Ok(_) => {
-      println("noUncheckedIndexedAccess disabled test passed")
-    }
+    Ok(_) => println("noUncheckedIndexedAccess disabled test passed")
     Err(diagnostics) => {
       println("noUncheckedIndexedAccess disabled test failed with errors:")
       for i = 0; i < diagnostics.length(); i = i + 1 {
@@ -4768,9 +4758,8 @@ test "noUncheckedIndexedAccess - object index signature access compiles" {
     #|const x = obj["key"];
   let result = parse_bind_and_check_with_no_unchecked_indexed_access(source)
   match result {
-    Ok(_) => {
+    Ok(_) =>
       println("noUncheckedIndexedAccess object index signature test passed")
-    }
     Err(diagnostics) => {
       println("noUncheckedIndexedAccess object test failed with errors:")
       for i = 0; i < diagnostics.length(); i = i + 1 {
@@ -4789,11 +4778,11 @@ test "noUncheckedIndexedAccess - known property access should work" {
     #|const name = p["name"];
   let result = parse_bind_and_check_with_no_unchecked_indexed_access(source)
   match result {
-    Ok(_) => {
-      println("noUncheckedIndexedAccess known property test passed")
-    }
+    Ok(_) => println("noUncheckedIndexedAccess known property test passed")
     Err(diagnostics) => {
-      println("noUncheckedIndexedAccess known property test failed with errors:")
+      println(
+        "noUncheckedIndexedAccess known property test failed with errors:",
+      )
       for i = 0; i < diagnostics.length(); i = i + 1 {
         println("  \{diagnostics[i].message}")
       }
@@ -5129,8 +5118,7 @@ test "ResolvedModuleExports - from_bound_file with exports" {
       match @compiler.bind_source_file(source_file) {
         Ok(bound_file) => {
           let module_exports = @compiler.ResolvedModuleExports::from_bound_file(
-            bound_file,
-            "module.ts",
+            bound_file, "module.ts",
           )
           assert_true(module_exports.is_module)
           assert_eq(module_exports.has_default_export, false)
@@ -5153,8 +5141,7 @@ test "ResolvedModuleExports - from_bound_file with default export" {
       match @compiler.bind_source_file(source_file) {
         Ok(bound_file) => {
           let module_exports = @compiler.ResolvedModuleExports::from_bound_file(
-            bound_file,
-            "module.ts",
+            bound_file, "module.ts",
           )
           assert_true(module_exports.is_module)
           assert_eq(module_exports.has_default_export, true)
@@ -5175,8 +5162,7 @@ test "ResolvedModuleExports - from_bound_file non-module script" {
       match @compiler.bind_source_file(source_file) {
         Ok(bound_file) => {
           let module_exports = @compiler.ResolvedModuleExports::from_bound_file(
-            bound_file,
-            "script.ts",
+            bound_file, "script.ts",
           )
           assert_eq(module_exports.is_module, false)
           assert_eq(module_exports.has_default_export, false)
@@ -5197,8 +5183,7 @@ test "ResolvedModuleExports - from_bound_file with export declaration" {
       match @compiler.bind_source_file(source_file) {
         Ok(bound_file) => {
           let module_exports = @compiler.ResolvedModuleExports::from_bound_file(
-            bound_file,
-            "module.ts",
+            bound_file, "module.ts",
           )
           assert_true(module_exports.is_module)
           assert_true(module_exports.exports.contains("foo"))
@@ -5219,8 +5204,7 @@ test "ResolvedModuleExports - from_bound_file with type exports" {
       match @compiler.bind_source_file(source_file) {
         Ok(bound_file) => {
           let module_exports = @compiler.ResolvedModuleExports::from_bound_file(
-            bound_file,
-            "module.ts",
+            bound_file, "module.ts",
           )
           assert_true(module_exports.is_module)
           assert_true(module_exports.exports.contains("Foo"))
@@ -5242,8 +5226,7 @@ test "ResolvedModuleExports - from_bound_file with class export" {
       match @compiler.bind_source_file(source_file) {
         Ok(bound_file) => {
           let module_exports = @compiler.ResolvedModuleExports::from_bound_file(
-            bound_file,
-            "module.ts",
+            bound_file, "module.ts",
           )
           assert_true(module_exports.is_module)
           assert_true(module_exports.exports.contains("MyClass"))
@@ -5264,8 +5247,7 @@ test "ResolvedModuleExports - from_bound_file with enum export" {
       match @compiler.bind_source_file(source_file) {
         Ok(bound_file) => {
           let module_exports = @compiler.ResolvedModuleExports::from_bound_file(
-            bound_file,
-            "module.ts",
+            bound_file, "module.ts",
           )
           assert_true(module_exports.is_module)
           assert_true(module_exports.exports.contains("Color"))
@@ -5283,7 +5265,9 @@ test "create_module_not_found_diagnostic_with_location - generates TS2307" {
     @compiler.Position::new(0, 0, 0),
     @compiler.Position::new(0, 30, 30),
   )
-  let diag = @compiler.create_module_not_found_diagnostic_with_location("./missing", loc)
+  let diag = @compiler.create_module_not_found_diagnostic_with_location(
+    "./missing", loc,
+  )
   assert_eq(diag.code, 2307)
   assert_true(diag.message.contains("Cannot find module"))
   assert_true(diag.message.contains("./missing"))
@@ -5309,7 +5293,9 @@ test "create_export_not_found_diagnostic_with_location - generates TS2305" {
     @compiler.Position::new(0, 0, 0),
     @compiler.Position::new(0, 30, 30),
   )
-  let diag = @compiler.create_export_not_found_diagnostic_with_location("foo", "./module", loc)
+  let diag = @compiler.create_export_not_found_diagnostic_with_location(
+    "foo", "./module", loc,
+  )
   assert_eq(diag.code, 2305)
   assert_true(diag.message.contains("no exported member"))
   assert_true(diag.message.contains("foo"))
@@ -5323,7 +5309,9 @@ test "create_no_default_export_diagnostic_with_location - generates TS1192" {
     @compiler.Position::new(0, 0, 0),
     @compiler.Position::new(0, 30, 30),
   )
-  let diag = @compiler.create_no_default_export_diagnostic_with_location("./module", loc)
+  let diag = @compiler.create_no_default_export_diagnostic_with_location(
+    "./module", loc,
+  )
   assert_eq(diag.code, 1192)
   assert_true(diag.message.contains("no default export"))
   assert_true(diag.message.contains("./module"))
@@ -5343,7 +5331,9 @@ test "ExternalTypeRegistry - basic creation and lookup" {
       match @compiler.bind_source_file(source_file) {
         Ok(bound_file) => {
           let registry = @compiler.ExternalTypeRegistry::new()
-          let module_types = @compiler.extract_module_types(bound_file, "./utils.ts")
+          let module_types = @compiler.extract_module_types(
+            bound_file, "./utils.ts",
+          )
           registry.register_module("./utils.ts", module_types)
 
           // Lookup should work
@@ -5377,9 +5367,10 @@ test "ExternalTypeRegistry - type-only exports" {
       match @compiler.bind_source_file(source_file) {
         Ok(bound_file) => {
           let registry = @compiler.ExternalTypeRegistry::new()
-          let module_types = @compiler.extract_module_types(bound_file, "./types.ts")
+          let module_types = @compiler.extract_module_types(
+            bound_file, "./types.ts",
+          )
           registry.register_module("./types.ts", module_types)
-
           match registry.lookup_export("./types.ts", "UserId") {
             Some(found_info) => {
               assert_eq(found_info.original_name, "UserId")
@@ -5441,9 +5432,10 @@ test "TypeEnv - with_import_binding" {
       match @compiler.bind_source_file(source_file) {
         Ok(bound_file) => {
           let registry = @compiler.ExternalTypeRegistry::new()
-          let module_types = @compiler.extract_module_types(bound_file, "./utils.ts")
+          let module_types = @compiler.extract_module_types(
+            bound_file, "./utils.ts",
+          )
           registry.register_module("./utils.ts", module_types)
-
           let env = @compiler.TypeEnv::with_external_registry(registry)
 
           // Add import binding
@@ -5452,10 +5444,9 @@ test "TypeEnv - with_import_binding" {
 
           // The lookup_imported should find the type
           match env.lookup_imported("add") {
-            Some(_ty) => {
+            Some(_ty) =>
               // Successfully resolved the imported type
               assert_true(true)
-            }
             None => assert_true(false)
           }
         }
@@ -5473,7 +5464,9 @@ test "extract_module_types - extracts exported function" {
     Ok(source_file) =>
       match @compiler.bind_source_file(source_file) {
         Ok(bound_file) => {
-          let module_types = @compiler.extract_module_types(bound_file, "utils.ts")
+          let module_types = @compiler.extract_module_types(
+            bound_file, "utils.ts",
+          )
           match module_types.get_export("add") {
             Some(info) => {
               assert_eq(info.original_name, "add")
@@ -5496,7 +5489,9 @@ test "extract_module_types - extracts exported variable" {
     Ok(source_file) =>
       match @compiler.bind_source_file(source_file) {
         Ok(bound_file) => {
-          let module_types = @compiler.extract_module_types(bound_file, "constants.ts")
+          let module_types = @compiler.extract_module_types(
+            bound_file, "constants.ts",
+          )
           match module_types.get_export("PI") {
             Some(info) => {
               assert_eq(info.original_name, "PI")
@@ -5519,7 +5514,9 @@ test "extract_module_types - extracts exported interface" {
     Ok(source_file) =>
       match @compiler.bind_source_file(source_file) {
         Ok(bound_file) => {
-          let module_types = @compiler.extract_module_types(bound_file, "types.ts")
+          let module_types = @compiler.extract_module_types(
+            bound_file, "types.ts",
+          )
           match module_types.get_export("User") {
             Some(info) => {
               assert_eq(info.original_name, "User")
@@ -5547,7 +5544,9 @@ test "extract_module_types - extracts exported type alias" {
     Ok(source_file) =>
       match @compiler.bind_source_file(source_file) {
         Ok(bound_file) => {
-          let module_types = @compiler.extract_module_types(bound_file, "types.ts")
+          let module_types = @compiler.extract_module_types(
+            bound_file, "types.ts",
+          )
           match module_types.get_export("UserId") {
             Some(info) => {
               assert_eq(info.original_name, "UserId")
@@ -5575,7 +5574,9 @@ test "extract_module_types - extracts exported class" {
     Ok(source_file) =>
       match @compiler.bind_source_file(source_file) {
         Ok(bound_file) => {
-          let module_types = @compiler.extract_module_types(bound_file, "calc.ts")
+          let module_types = @compiler.extract_module_types(
+            bound_file, "calc.ts",
+          )
           match module_types.get_export("Calculator") {
             Some(info) => {
               assert_eq(info.original_name, "Calculator")
@@ -5661,15 +5662,13 @@ test "TS2345 tagged template incompatible argument types" {
           match @compiler.check_source_file(bound_file) {
             Ok(typed) => {
               // Should have TS2345
-              let has_2345 = typed.diagnostics.iter().any(
-                fn(d) { d.code == 2345 },
-              )
+              let has_2345 = typed.diagnostics
+                .iter()
+                .any(fn(d) { d.code == 2345 })
               assert_true(has_2345)
             }
             Err(diagnostics) => {
-              let has_2345 = diagnostics.iter().any(
-                fn(d) { d.code == 2345 },
-              )
+              let has_2345 = diagnostics.iter().any(fn(d) { d.code == 2345 })
               assert_true(has_2345)
             }
           }
@@ -5692,15 +5691,13 @@ test "tagged template with valid argument types should pass" {
           match @compiler.check_source_file(bound_file) {
             Ok(typed) => {
               // Should have no TS2345 errors
-              let has_2345 = typed.diagnostics.iter().any(
-                fn(d) { d.code == 2345 },
-              )
+              let has_2345 = typed.diagnostics
+                .iter()
+                .any(fn(d) { d.code == 2345 })
               assert_true(not(has_2345))
             }
             Err(diagnostics) => {
-              let has_2345 = diagnostics.iter().any(
-                fn(d) { d.code == 2345 },
-              )
+              let has_2345 = diagnostics.iter().any(fn(d) { d.code == 2345 })
               assert_true(not(has_2345))
             }
           }
@@ -5723,15 +5720,13 @@ test "delete on property access is valid" {
           match @compiler.check_source_file(bound_file) {
             Ok(typed) => {
               // Should have no TS2703 errors
-              let has_2703 = typed.diagnostics.iter().any(
-                fn(d) { d.code == 2703 },
-              )
+              let has_2703 = typed.diagnostics
+                .iter()
+                .any(fn(d) { d.code == 2703 })
               assert_true(not(has_2703))
             }
             Err(diagnostics) => {
-              let has_2703 = diagnostics.iter().any(
-                fn(d) { d.code == 2703 },
-              )
+              let has_2703 = diagnostics.iter().any(fn(d) { d.code == 2703 })
               assert_true(not(has_2703))
             }
           }
@@ -5754,15 +5749,13 @@ test "callable tag function is valid" {
           match @compiler.check_source_file(bound_file) {
             Ok(typed) => {
               // Should have no TS2349 errors
-              let has_2349 = typed.diagnostics.iter().any(
-                fn(d) { d.code == 2349 },
-              )
+              let has_2349 = typed.diagnostics
+                .iter()
+                .any(fn(d) { d.code == 2349 })
               assert_true(not(has_2349))
             }
             Err(diagnostics) => {
-              let has_2349 = diagnostics.iter().any(
-                fn(d) { d.code == 2349 },
-              )
+              let has_2349 = diagnostics.iter().any(fn(d) { d.code == 2349 })
               assert_true(not(has_2349))
             }
           }
@@ -5785,9 +5778,9 @@ test "TS2367 template literal equality with no overlap" {
           match @compiler.check_source_file(bound_file) {
             Ok(typed) => {
               // Should have TS2367
-              let has_2367 = typed.diagnostics.iter().any(
-                fn(d) { d.code == 2367 },
-              )
+              let has_2367 = typed.diagnostics
+                .iter()
+                .any(fn(d) { d.code == 2367 })
               if not(has_2367) {
                 println("Expected TS2367 error but got none")
                 println("Diagnostics count: \{typed.diagnostics.length()}")
@@ -5798,9 +5791,7 @@ test "TS2367 template literal equality with no overlap" {
               assert_true(has_2367)
             }
             Err(diagnostics) => {
-              let has_2367 = diagnostics.iter().any(
-                fn(d) { d.code == 2367 },
-              )
+              let has_2367 = diagnostics.iter().any(fn(d) { d.code == 2367 })
               assert_true(has_2367)
             }
           }

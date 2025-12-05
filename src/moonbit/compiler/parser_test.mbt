@@ -1818,7 +1818,9 @@ test "verify await token is KeywordAwait" {
   match tokens[0] {
     KeywordAwait(_) => ()
     Identifier(name, _) => {
-      println("ERROR: await was scanned as Identifier('\{name}') instead of KeywordAwait")
+      println(
+        "ERROR: await was scanned as Identifier('\{name}') instead of KeywordAwait",
+      )
       assert_true(false)
     }
     _ => {
@@ -4519,10 +4521,9 @@ test "parse tagged template with multiple type arguments" {
       match source_file.statements[0] {
         VariableStatement(vs) =>
           match vs.declarations[0].initializer {
-            Some(TaggedTemplateExpression(tte)) => {
+            Some(TaggedTemplateExpression(tte)) =>
               // Check type arguments count
               assert_eq(tte.type_arguments.length(), 2)
-            }
             _ => assert_true(false)
           }
         _ => assert_true(false)
@@ -4672,7 +4673,7 @@ test "parse tagged template with multiple interpolations" {
       match source_file.statements[0] {
         VariableStatement(vs) =>
           match vs.declarations[0].initializer {
-            Some(TaggedTemplateExpression(tte)) => {
+            Some(TaggedTemplateExpression(tte)) =>
               match tte.template {
                 TemplateExpression(te) => {
                   assert_eq(te.head, "a")
@@ -4680,7 +4681,6 @@ test "parse tagged template with multiple interpolations" {
                 }
                 _ => assert_true(false)
               }
-            }
             _ => assert_true(false)
           }
         _ => assert_true(false)
@@ -4708,10 +4708,9 @@ test "parse interface with generic construct signature" {
           assert_eq(iface.name, "Foo")
           assert_eq(iface.members.length(), 1)
           match iface.members[0] {
-            MethodDeclaration(md) => {
+            MethodDeclaration(md) =>
               // Check type parameters
               assert_eq(md.type_parameters.length(), 1)
-            }
             _ => assert_true(false)
           }
         }
@@ -4768,10 +4767,9 @@ test "parse type literal with generic construct signature" {
             TypeLiteral(tl) => {
               assert_eq(tl.members.length(), 1)
               match tl.members[0] {
-                MethodDeclaration(md) => {
+                MethodDeclaration(md) =>
                   // Check type parameters
                   assert_eq(md.type_parameters.length(), 1)
-                }
                 _ => assert_true(false)
               }
             }
@@ -4835,9 +4833,9 @@ test "parse array destructuring with element and rest" {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
       match source_file.statements[0] {
-        VariableStatement(vs) => {
+        VariableStatement(vs) =>
           match vs.declarations[0].initializer {
-            Some(ArrowFunction(arrow)) => {
+            Some(ArrowFunction(arrow)) =>
               match arrow.parameters[0] {
                 Parameter(param) =>
                   match param.name {
@@ -4862,10 +4860,8 @@ test "parse array destructuring with element and rest" {
                   }
                 _ => assert_true(false)
               }
-            }
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
     }
@@ -4878,11 +4874,11 @@ test "parse array destructuring with hole and rest" {
   let tokens = tokens_from_source("var p = ([, ...a]) => { };")
   let result = parse_source_file(tokens, "test.ts")
   match result {
-    Ok(source_file) => {
+    Ok(source_file) =>
       match source_file.statements[0] {
-        VariableStatement(vs) => {
+        VariableStatement(vs) =>
           match vs.declarations[0].initializer {
-            Some(ArrowFunction(arrow)) => {
+            Some(ArrowFunction(arrow)) =>
               match arrow.parameters[0] {
                 Parameter(param) =>
                   match param.name {
@@ -4903,13 +4899,10 @@ test "parse array destructuring with hole and rest" {
                   }
                 _ => assert_true(false)
               }
-            }
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
-    }
     Err(_) => assert_true(false)
   }
 }
@@ -4923,11 +4916,11 @@ test "parse array destructuring with default value" {
   let tokens = tokens_from_source("var p = ([a = 1]) => { };")
   let result = parse_source_file(tokens, "test.ts")
   match result {
-    Ok(source_file) => {
+    Ok(source_file) =>
       match source_file.statements[0] {
-        VariableStatement(vs) => {
+        VariableStatement(vs) =>
           match vs.declarations[0].initializer {
-            Some(ArrowFunction(arrow)) => {
+            Some(ArrowFunction(arrow)) =>
               match arrow.parameters[0] {
                 Parameter(param) =>
                   match param.name {
@@ -4942,8 +4935,7 @@ test "parse array destructuring with default value" {
                           }
                           // Check the initializer
                           match be.initializer {
-                            Some(NumericLiteral(nl)) =>
-                              assert_eq(nl.value, "1")
+                            Some(NumericLiteral(nl)) => assert_eq(nl.value, "1")
                             _ => assert_true(false)
                           }
                         }
@@ -4954,13 +4946,10 @@ test "parse array destructuring with default value" {
                   }
                 _ => assert_true(false)
               }
-            }
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
-    }
     Err(_) => assert_true(false)
   }
 }
@@ -4970,11 +4959,11 @@ test "parse array destructuring with multiple defaults" {
   let tokens = tokens_from_source("var p = ([a = 1, b = 2]) => { };")
   let result = parse_source_file(tokens, "test.ts")
   match result {
-    Ok(source_file) => {
+    Ok(source_file) =>
       match source_file.statements[0] {
-        VariableStatement(vs) => {
+        VariableStatement(vs) =>
           match vs.declarations[0].initializer {
-            Some(ArrowFunction(arrow)) => {
+            Some(ArrowFunction(arrow)) =>
               match arrow.parameters[0] {
                 Parameter(param) =>
                   match param.name {
@@ -4988,8 +4977,7 @@ test "parse array destructuring with multiple defaults" {
                             _ => assert_true(false)
                           }
                           match be1.initializer {
-                            Some(NumericLiteral(nl)) =>
-                              assert_eq(nl.value, "1")
+                            Some(NumericLiteral(nl)) => assert_eq(nl.value, "1")
                             _ => assert_true(false)
                           }
                         }
@@ -5003,8 +4991,7 @@ test "parse array destructuring with multiple defaults" {
                             _ => assert_true(false)
                           }
                           match be2.initializer {
-                            Some(NumericLiteral(nl)) =>
-                              assert_eq(nl.value, "2")
+                            Some(NumericLiteral(nl)) => assert_eq(nl.value, "2")
                             _ => assert_true(false)
                           }
                         }
@@ -5015,13 +5002,10 @@ test "parse array destructuring with multiple defaults" {
                   }
                 _ => assert_true(false)
               }
-            }
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
-    }
     Err(_) => assert_true(false)
   }
 }
@@ -5031,11 +5015,11 @@ test "parse array destructuring mixed elements and defaults" {
   let tokens = tokens_from_source("var p = ([a, b = 2, c]) => { };")
   let result = parse_source_file(tokens, "test.ts")
   match result {
-    Ok(source_file) => {
+    Ok(source_file) =>
       match source_file.statements[0] {
-        VariableStatement(vs) => {
+        VariableStatement(vs) =>
           match vs.declarations[0].initializer {
-            Some(ArrowFunction(arrow)) => {
+            Some(ArrowFunction(arrow)) =>
               match arrow.parameters[0] {
                 Parameter(param) =>
                   match param.name {
@@ -5067,13 +5051,10 @@ test "parse array destructuring mixed elements and defaults" {
                   }
                 _ => assert_true(false)
               }
-            }
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
-    }
     Err(_) => assert_true(false)
   }
 }
@@ -5083,7 +5064,7 @@ test "parse let array destructuring with rest" {
   let tokens = tokens_from_source("let [x, ...remaining] = [1, 2, 3];")
   let result = parse_source_file(tokens, "test.ts")
   match result {
-    Ok(source_file) => {
+    Ok(source_file) =>
       match source_file.statements[0] {
         VariableStatement(vs) => {
           assert_eq(vs.declarations.length(), 1)
@@ -5110,7 +5091,6 @@ test "parse let array destructuring with rest" {
         }
         _ => assert_true(false)
       }
-    }
     Err(_) => assert_true(false)
   }
 }
@@ -5120,9 +5100,9 @@ test "parse let array destructuring with default" {
   let tokens = tokens_from_source("let [x = 10] = [];")
   let result = parse_source_file(tokens, "test.ts")
   match result {
-    Ok(source_file) => {
+    Ok(source_file) =>
       match source_file.statements[0] {
-        VariableStatement(vs) => {
+        VariableStatement(vs) =>
           match vs.declarations[0].name {
             ArrayBindingPattern(abp) => {
               assert_eq(abp.elements.length(), 1)
@@ -5142,10 +5122,8 @@ test "parse let array destructuring with default" {
             }
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
-    }
     Err(_) => assert_true(false)
   }
 }

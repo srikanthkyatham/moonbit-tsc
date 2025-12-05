@@ -121,7 +121,7 @@ pub fn compile_source(
   // Phase 2: Parse tokens into AST
   match parse_source_file(tokens, file_path) {
     Err(diagnostics) => CompileResult::failure(diagnostics)
-    Ok(source_file) => {
+    Ok(source_file) =>
       // Phase 3: Bind the AST (symbol resolution)
       match bind_source_file(source_file) {
         Err(diagnostics) => CompileResult::failure(diagnostics)
@@ -182,7 +182,10 @@ pub fn compile_source(
 
           // Phase 5: Transform AST (remove types, downlevel features)
           let transformer_ctx = TransformerContext::new(options.target)
-          let transformed_node = transform(SourceFile(source_file), transformer_ctx)
+          let transformed_node = transform(
+            SourceFile(source_file),
+            transformer_ctx,
+          )
 
           // Extract the transformed source file
           let transformed_sf = match transformed_node {
@@ -234,7 +237,6 @@ pub fn compile_source(
           }
         }
       }
-    }
   }
 }
 
@@ -245,14 +247,11 @@ fn emit_with_source_map_internal(
   file_path : String,
   module_kind : ModuleKind,
   always_strict : Bool,
-  original_source~ : String? = None,
+  original_source? : String? = None,
 ) -> (String, String?) {
   let source_map_builder = SourceMapBuilder::new()
   let ctx = EmitterContext::with_options_and_source_map(
-    module_kind,
-    always_strict,
-    source_map_builder,
-    file_path,
+    module_kind, always_strict, source_map_builder, file_path,
   )
   let javascript = emit(SourceFile(source_file), ctx)
 
@@ -359,7 +358,7 @@ pub fn compile_source_with_external_types(
   // Phase 2: Parse tokens into AST
   match parse_source_file(tokens, file_path) {
     Err(diagnostics) => CompileResult::failure(diagnostics)
-    Ok(source_file) => {
+    Ok(source_file) =>
       // Phase 3: Bind the AST (symbol resolution)
       match bind_source_file(source_file) {
         Err(diagnostics) => CompileResult::failure(diagnostics)
@@ -426,7 +425,10 @@ pub fn compile_source_with_external_types(
 
           // Phase 5: Transform AST (remove types, downlevel features)
           let transformer_ctx = TransformerContext::new(options.target)
-          let transformed_node = transform(SourceFile(source_file), transformer_ctx)
+          let transformed_node = transform(
+            SourceFile(source_file),
+            transformer_ctx,
+          )
 
           // Extract the transformed source file
           let transformed_sf = match transformed_node {
@@ -478,7 +480,6 @@ pub fn compile_source_with_external_types(
           }
         }
       }
-    }
   }
 }
 
@@ -529,14 +530,13 @@ pub fn extract_reference_paths(
 ) -> Array[String] {
   let paths : Array[String] = []
   match parse_and_bind(source, file_path) {
-    Ok(bound) => {
+    Ok(bound) =>
       for directive in bound.triple_slash_directives {
         match directive.kind {
           ReferencePath(path) => paths.push(path)
           _ => () // Ignore other directive types
         }
       }
-    }
     Err(_) => () // Return empty array on parse failure
   }
   paths
@@ -569,13 +569,7 @@ pub(all) struct MultiFileTest {
 ///|
 /// Default test options
 pub fn TestOptions::default() -> TestOptions {
-  {
-    module_kind: None,
-    target: None,
-    strict: false,
-    no_emit: false,
-    lib: [],
-  }
+  { module_kind: None, target: None, strict: false, no_emit: false, lib: [] }
 }
 
 ///|
@@ -588,8 +582,12 @@ fn ffi_trim_start(s : String) -> String {
   }
   let mut start = 0
   while start < len &&
-        (chars[start] == ' ' || chars[start] == '\t' || chars[start] == '\r' ||
-        chars[start] == '\n') {
+        (
+          chars[start] == ' ' ||
+          chars[start] == '\t' ||
+          chars[start] == '\r' ||
+          chars[start] == '\n'
+        ) {
     start = start + 1
   }
   if start == 0 {
@@ -612,8 +610,12 @@ fn ffi_trim_end(s : String) -> String {
   }
   let mut end = len
   while end > 0 &&
-        (chars[end - 1] == ' ' || chars[end - 1] == '\t' ||
-        chars[end - 1] == '\r' || chars[end - 1] == '\n') {
+        (
+          chars[end - 1] == ' ' ||
+          chars[end - 1] == '\t' ||
+          chars[end - 1] == '\r' ||
+          chars[end - 1] == '\n'
+        ) {
     end = end - 1
   }
   if end == len {
@@ -659,7 +661,6 @@ pub fn split_multi_file_test(
   let lines = split_lines(source)
   let mut current_filename : String? = None
   let mut current_content = StringBuilder::new()
-
   for line in lines {
     let trimmed = ffi_trim_start(line)
     if trimmed.has_prefix("// @") {
@@ -717,7 +718,6 @@ pub fn split_multi_file_test(
       }
     }
   }
-
   { files, options }
 }
 
@@ -804,7 +804,8 @@ pub fn compile_multi_file_test(
   // First pass: parse and extract types from all files
   for file in multi_test.files {
     match extract_module_types_from_source(file.content, file.filename) {
-      Some(module_types) => registry.register_module(file.filename, module_types)
+      Some(module_types) =>
+        registry.register_module(file.filename, module_types)
       None => ()
     }
   }
@@ -846,14 +847,14 @@ fn apply_test_options(
         "commonjs" | "commonjs" => CommonJS
         _ => ESModule
       }
-      opts = { ..opts, module_kind }
+      opts = { ..opts, module_kind, }
     }
     None => ()
   }
   match test_options.target {
     Some(t) => {
       let target = parse_target(t)
-      opts = { ..opts, target }
+      opts = { ..opts, target, }
     }
     None => ()
   }

@@ -14,7 +14,9 @@ fn parse_commonjs(source : String) -> Result[SourceFile, Array[Diagnostic]] {
 
 ///|
 /// Helper to parse and bind source
-fn parse_bind_commonjs(source : String) -> Result[BoundSourceFile, Array[Diagnostic]] {
+fn parse_bind_commonjs(
+  source : String,
+) -> Result[BoundSourceFile, Array[Diagnostic]] {
   match parse_commonjs(source) {
     Ok(source_file) => bind_source_file(source_file)
     Err(diagnostics) => Err(diagnostics)
@@ -59,7 +61,7 @@ test "parse module.exports = object literal" {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
       match source_file.statements[0] {
-        ExpressionStatement(es) => {
+        ExpressionStatement(es) =>
           match es.expression {
             BinaryExpression(be) => {
               // Check operator is Assign using pattern match
@@ -80,7 +82,6 @@ test "parse module.exports = object literal" {
             }
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
     }
@@ -114,7 +115,7 @@ test "parse exports.property = value" {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
       match source_file.statements[0] {
-        ExpressionStatement(es) => {
+        ExpressionStatement(es) =>
           match es.expression {
             BinaryExpression(be) => {
               // Check operator is Assign using pattern match
@@ -135,7 +136,6 @@ test "parse exports.property = value" {
             }
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
     }
@@ -145,7 +145,9 @@ test "parse exports.property = value" {
 
 ///|
 test "parse exports.function = function expression" {
-  let result = parse_commonjs("exports.greet = function(name) { return 'Hello ' + name; };")
+  let result = parse_commonjs(
+    "exports.greet = function(name) { return 'Hello ' + name; };",
+  )
   match result {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
@@ -166,9 +168,7 @@ test "parse multiple exports" {
     #|exports.c = true;
   let result = parse_commonjs(source)
   match result {
-    Ok(source_file) => {
-      assert_eq(source_file.statements.length(), 3)
-    }
+    Ok(source_file) => assert_eq(source_file.statements.length(), 3)
     Err(_) => assert_true(false)
   }
 }
@@ -215,9 +215,7 @@ test "parse module as variable name" {
 test "parse require call" {
   let result = parse_commonjs("var x = require('lodash');")
   match result {
-    Ok(source_file) => {
-      assert_eq(source_file.statements.length(), 1)
-    }
+    Ok(source_file) => assert_eq(source_file.statements.length(), 1)
     Err(_) => assert_true(false)
   }
 }
@@ -226,9 +224,7 @@ test "parse require call" {
 test "parse require with property access" {
   let result = parse_commonjs("var pick = require('lodash').pick;")
   match result {
-    Ok(source_file) => {
-      assert_eq(source_file.statements.length(), 1)
-    }
+    Ok(source_file) => assert_eq(source_file.statements.length(), 1)
     Err(_) => assert_true(false)
   }
 }
@@ -241,7 +237,7 @@ test "parse require with property access" {
 test "extract type from exports.number" {
   let module_types = extract_types_commonjs("exports.count = 42;")
   match module_types.named_exports.get("count") {
-    Some(info) => {
+    Some(info) =>
       match info.ty {
         TNumber => ()
         _ => {
@@ -249,7 +245,6 @@ test "extract type from exports.number" {
           assert_true(false)
         }
       }
-    }
     None => {
       println("Export 'count' not found")
       assert_true(false)
@@ -261,7 +256,7 @@ test "extract type from exports.number" {
 test "extract type from exports.string" {
   let module_types = extract_types_commonjs("exports.name = 'hello';")
   match module_types.named_exports.get("name") {
-    Some(info) => {
+    Some(info) =>
       match info.ty {
         TString => ()
         _ => {
@@ -269,7 +264,6 @@ test "extract type from exports.string" {
           assert_true(false)
         }
       }
-    }
     None => {
       println("Export 'name' not found")
       assert_true(false)
@@ -279,9 +273,11 @@ test "extract type from exports.string" {
 
 ///|
 test "extract type from exports.function" {
-  let module_types = extract_types_commonjs("exports.greet = function(name) { return name; };")
+  let module_types = extract_types_commonjs(
+    "exports.greet = function(name) { return name; };",
+  )
   match module_types.named_exports.get("greet") {
-    Some(info) => {
+    Some(info) =>
       match info.ty {
         TFunction(_) => ()
         _ => {
@@ -289,7 +285,6 @@ test "extract type from exports.function" {
           assert_true(false)
         }
       }
-    }
     None => {
       println("Export 'greet' not found")
       assert_true(false)
@@ -307,34 +302,31 @@ test "extract multiple exports" {
 
   // Check a is number
   match module_types.named_exports.get("a") {
-    Some(info) => {
+    Some(info) =>
       match info.ty {
         TNumber => ()
         _ => assert_true(false)
       }
-    }
     None => assert_true(false)
   }
 
   // Check b is string
   match module_types.named_exports.get("b") {
-    Some(info) => {
+    Some(info) =>
       match info.ty {
         TString => ()
         _ => assert_true(false)
       }
-    }
     None => assert_true(false)
   }
 
   // Check c is boolean
   match module_types.named_exports.get("c") {
-    Some(info) => {
+    Some(info) =>
       match info.ty {
         TLiteralBool(true) => ()
         _ => assert_true(false)
       }
-    }
     None => assert_true(false)
   }
 }
@@ -345,11 +337,13 @@ test "extract multiple exports" {
 
 ///|
 test "extract type from module.exports object" {
-  let module_types = extract_types_commonjs("module.exports = { x: 1, y: 'hello' };")
+  let module_types = extract_types_commonjs(
+    "module.exports = { x: 1, y: 'hello' };",
+  )
 
   // Check x is number
   match module_types.named_exports.get("x") {
-    Some(info) => {
+    Some(info) =>
       match info.ty {
         TNumber => ()
         _ => {
@@ -357,7 +351,6 @@ test "extract type from module.exports object" {
           assert_true(false)
         }
       }
-    }
     None => {
       println("Export 'x' not found")
       assert_true(false)
@@ -366,7 +359,7 @@ test "extract type from module.exports object" {
 
   // Check y is string
   match module_types.named_exports.get("y") {
-    Some(info) => {
+    Some(info) =>
       match info.ty {
         TString => ()
         _ => {
@@ -374,7 +367,6 @@ test "extract type from module.exports object" {
           assert_true(false)
         }
       }
-    }
     None => {
       println("Export 'y' not found")
       assert_true(false)
@@ -384,19 +376,18 @@ test "extract type from module.exports object" {
 
 ///|
 test "extract type from module.exports function" {
-  let module_types = extract_types_commonjs("module.exports = function(a, b) { return a + b; };")
+  let module_types = extract_types_commonjs(
+    "module.exports = function(a, b) { return a + b; };",
+  )
   match module_types.named_exports.get("default") {
-    Some(info) => {
+    Some(info) =>
       match info.ty {
-        TFunction(ft) => {
-          assert_eq(ft.params.length(), 2)
-        }
+        TFunction(ft) => assert_eq(ft.params.length(), 2)
         _ => {
           println("Expected TFunction, got \{info.ty}")
           assert_true(false)
         }
       }
-    }
     None => {
       println("Export 'default' not found")
       assert_true(false)
@@ -410,9 +401,11 @@ test "extract type from module.exports function" {
 
 ///|
 test "extract function parameter names" {
-  let module_types = extract_types_commonjs("exports.add = function(x, y) { return x + y; };")
+  let module_types = extract_types_commonjs(
+    "exports.add = function(x, y) { return x + y; };",
+  )
   match module_types.named_exports.get("add") {
-    Some(info) => {
+    Some(info) =>
       match info.ty {
         TFunction(ft) => {
           assert_eq(ft.params.length(), 2)
@@ -421,7 +414,6 @@ test "extract function parameter names" {
         }
         _ => assert_true(false)
       }
-    }
     None => assert_true(false)
   }
 }
@@ -430,7 +422,7 @@ test "extract function parameter names" {
 test "extract arrow function type" {
   let module_types = extract_types_commonjs("exports.double = (n) => n * 2;")
   match module_types.named_exports.get("double") {
-    Some(info) => {
+    Some(info) =>
       match info.ty {
         TFunction(ft) => {
           assert_eq(ft.params.length(), 1)
@@ -441,7 +433,6 @@ test "extract arrow function type" {
           assert_true(false)
         }
       }
-    }
     None => {
       println("Export 'double' not found")
       assert_true(false)
@@ -458,12 +449,12 @@ test "check exports global is recognized" {
   let source = "exports.foo = 42;"
   let tokens = scan_all_v2(source, "test.js")
   match parse_source_file(tokens, "test.js") {
-    Ok(source_file) => {
+    Ok(source_file) =>
       match bind_source_file(source_file) {
-        Ok(bound) => {
+        Ok(bound) =>
           match check_source_file(bound) {
             Ok(_) => ()
-            Err(diagnostics) => {
+            Err(diagnostics) =>
               // Should not have "Cannot find name 'exports'" error
               for diag in diagnostics {
                 if diag.message.contains("Cannot find name 'exports'") {
@@ -471,12 +462,9 @@ test "check exports global is recognized" {
                   assert_true(false)
                 }
               }
-            }
           }
-        }
         Err(_) => assert_true(false)
       }
-    }
     Err(_) => assert_true(false)
   }
 }
@@ -486,12 +474,12 @@ test "check module global is recognized" {
   let source = "module.exports = {};"
   let tokens = scan_all_v2(source, "test.js")
   match parse_source_file(tokens, "test.js") {
-    Ok(source_file) => {
+    Ok(source_file) =>
       match bind_source_file(source_file) {
-        Ok(bound) => {
+        Ok(bound) =>
           match check_source_file(bound) {
             Ok(_) => ()
-            Err(diagnostics) => {
+            Err(diagnostics) =>
               // Should not have "Cannot find name 'module'" error
               for diag in diagnostics {
                 if diag.message.contains("Cannot find name 'module'") {
@@ -499,12 +487,9 @@ test "check module global is recognized" {
                   assert_true(false)
                 }
               }
-            }
           }
-        }
         Err(_) => assert_true(false)
       }
-    }
     Err(_) => assert_true(false)
   }
 }
@@ -514,12 +499,12 @@ test "check require global is recognized" {
   let source = "var x = require('foo');"
   let tokens = scan_all_v2(source, "test.js")
   match parse_source_file(tokens, "test.js") {
-    Ok(source_file) => {
+    Ok(source_file) =>
       match bind_source_file(source_file) {
-        Ok(bound) => {
+        Ok(bound) =>
           match check_source_file(bound) {
             Ok(_) => ()
-            Err(diagnostics) => {
+            Err(diagnostics) =>
               // Should not have "Cannot find name 'require'" error
               for diag in diagnostics {
                 if diag.message.contains("Cannot find name 'require'") {
@@ -527,12 +512,9 @@ test "check require global is recognized" {
                   assert_true(false)
                 }
               }
-            }
           }
-        }
         Err(_) => assert_true(false)
       }
-    }
     Err(_) => assert_true(false)
   }
 }
@@ -543,9 +525,11 @@ test "check require global is recognized" {
 
 ///|
 test "extract nested object types" {
-  let module_types = extract_types_commonjs("module.exports = { person: { name: 'John', age: 30 } };")
+  let module_types = extract_types_commonjs(
+    "module.exports = { person: { name: 'John', age: 30 } };",
+  )
   match module_types.named_exports.get("person") {
-    Some(info) => {
+    Some(info) =>
       match info.ty {
         TObject(_) => ()
         _ => {
@@ -553,7 +537,6 @@ test "extract nested object types" {
           assert_true(false)
         }
       }
-    }
     None => {
       println("Export 'person' not found")
       assert_true(false)
@@ -565,7 +548,7 @@ test "extract nested object types" {
 test "extract array type" {
   let module_types = extract_types_commonjs("exports.items = [1, 2, 3];")
   match module_types.named_exports.get("items") {
-    Some(info) => {
+    Some(info) =>
       match info.ty {
         TArray(_) => ()
         _ => {
@@ -573,7 +556,6 @@ test "extract array type" {
           assert_true(false)
         }
       }
-    }
     None => {
       println("Export 'items' not found")
       assert_true(false)
@@ -599,9 +581,7 @@ test "parse mixed commonjs file" {
     #|module.exports.config = { debug: true };
   let result = parse_commonjs(source)
   match result {
-    Ok(source_file) => {
-      assert_true(source_file.statements.length() >= 3)
-    }
+    Ok(source_file) => assert_true(source_file.statements.length() >= 3)
     Err(diagnostics) => {
       println("Parse failed with \{diagnostics.length()} errors:")
       for diag in diagnostics {
@@ -622,23 +602,21 @@ test "extract types from mixed commonjs file" {
 
   // Check VERSION
   match module_types.named_exports.get("VERSION") {
-    Some(info) => {
+    Some(info) =>
       match info.ty {
         TString => ()
         _ => assert_true(false)
       }
-    }
     None => assert_true(false)
   }
 
   // Check count
   match module_types.named_exports.get("count") {
-    Some(info) => {
+    Some(info) =>
       match info.ty {
         TNumber => ()
         _ => assert_true(false)
       }
-    }
     None => assert_true(false)
   }
 }

@@ -1452,7 +1452,10 @@ test "type_v2_to_ts_string via factories" {
 ///|
 /// Test: TypeV2 to string - literal types
 test "type_v2_to_ts_string literals via factories" {
-  assert_eq(type_v2_to_ts_string(create_literal_string_type("hello")), "\"hello\"")
+  assert_eq(
+    type_v2_to_ts_string(create_literal_string_type("hello")),
+    "\"hello\"",
+  )
   assert_eq(type_v2_to_ts_string(create_literal_number_type(42.0)), "42")
   assert_eq(type_v2_to_ts_string(create_literal_bool_type(true)), "true")
   assert_eq(type_v2_to_ts_string(create_literal_bool_type(false)), "false")
@@ -1480,7 +1483,10 @@ test "type_v2_to_ts_string array via factories" {
 test "type_v2_to_ts_string generic via factories" {
   let generic = create_generic_instance("Promise", [create_string_type()])
   assert_eq(type_v2_to_ts_string(generic), "Promise<string>")
-  let map_type = create_generic_instance("Map", [create_string_type(), create_number_type()])
+  let map_type = create_generic_instance("Map", [
+    create_string_type(),
+    create_number_type(),
+  ])
   assert_eq(type_v2_to_ts_string(map_type), "Map<string, number>")
   println("TypeV2 generic to string passed")
 }
@@ -1494,6 +1500,8 @@ test "type_v2_to_ts_string type_param via factories" {
 }
 
 // Helper function to count occurrences of a substring
+
+///|
 fn count_occurrences(haystack : String, needle : String) -> Int {
   let mut count = 0
   let mut pos = 0
@@ -1512,6 +1520,8 @@ fn count_occurrences(haystack : String, needle : String) -> Int {
 }
 
 // Helper to check if a substring exists at a position
+
+///|
 fn check_substring_at(haystack : String, needle : String, pos : Int) -> Bool {
   let needle_len = needle.length()
   let sub = @utils.substr(haystack, start=pos, end=pos + needle_len)

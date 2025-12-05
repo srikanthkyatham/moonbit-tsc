@@ -227,6 +227,7 @@ pub enum ParserErrorCode {
 
   // Declaration errors
   ConstDeclarationMustBeInitialized // TS1155
+  DestructuringDeclarationMustHaveInitializer // TS1182: A destructuring declaration must have an initializer
 
   // Merge conflict
   MergeConflictMarker // TS1185
@@ -360,6 +361,7 @@ pub fn ParserErrorCode::to_int(self : ParserErrorCode) -> Int {
 
     // Declaration errors
     ConstDeclarationMustBeInitialized => 1155 // TS1155: 'const' declarations must be initialized
+    DestructuringDeclarationMustHaveInitializer => 1182 // TS1182: A destructuring declaration must have an initializer
 
     // Merge conflict
     MergeConflictMarker => 1185 // TS1185: Merge conflict marker encountered
@@ -507,6 +509,8 @@ pub fn ParserErrorCode::to_message(self : ParserErrorCode) -> String {
     // Declaration errors
     ConstDeclarationMustBeInitialized =>
       "'const' declarations must be initialized."
+    DestructuringDeclarationMustHaveInitializer =>
+      "A destructuring declaration must have an initializer."
 
     // Merge conflict
     MergeConflictMarker => "Merge conflict marker encountered."
@@ -570,22 +574,19 @@ pub fn ParserErrorCode::to_message(self : ParserErrorCode) -> String {
       "Decorator function return type '\{type_name}' is not assignable to type of decorated declaration."
     AwaitUsingOnlyInAsyncFunctions =>
       "'await using' statements are only allowed within async functions and at the top levels of modules."
-    ImportPathNotStringLiteral =>
-      "The 'import' path must be a string literal."
+    ImportPathNotStringLiteral => "The 'import' path must be a string literal."
     ModifierOnlyInTypeScriptFiles(modifier) =>
       "The '\{modifier}' modifier can only be used in TypeScript files."
     TypeAnnotationsOnlyInTypeScriptFiles =>
       "Type annotations can only be used in TypeScript files."
-    VariableDeclarationExpected =>
-      "Variable declaration expected."
+    VariableDeclarationExpected => "Variable declaration expected."
     UsingDeclarationsRequireAwait =>
       "'using' declarations may not have a binding pattern, and must have an initializer."
     UsingDeclarationNotInParameter =>
       "A 'using' declaration may not be declared in a parameter."
     ESMImportExportNotValid =>
       "This file has an import or export that cannot be used outside of ECMAScript modules."
-    LineTerminatorBeforeArrow =>
-      "Line terminator not permitted before arrow."
+    LineTerminatorBeforeArrow => "Line terminator not permitted before arrow."
     InvalidUseOfInStrictMode(name) =>
       "Invalid use of '\{name}'. Class definitions are automatically in strict mode."
   }
@@ -668,14 +669,16 @@ pub fn get_parser_error_int_with_arg(name : String, arg : String?) -> Int {
       TypeAssertionNotAllowedInExponentiation.to_int()
     "ImportAliasCannotReferenceTypeExport" =>
       ImportAliasCannotReferenceTypeExport.to_int()
-    "DeleteCannotBeCalledOnIdentifier" => DeleteCannotBeCalledOnIdentifier.to_int()
+    "DeleteCannotBeCalledOnIdentifier" =>
+      DeleteCannotBeCalledOnIdentifier.to_int()
     "ClassMemberCannotHaveConst" => ClassMemberCannotHaveConst.to_int()
     "ConstInitializerMustBeLiteral" => ConstInitializerMustBeLiteral.to_int()
     "AwaitOnlyAllowedAtTopLevel" => AwaitOnlyAllowedAtTopLevel.to_int()
     "EqualsOnlyInDestructuring" => EqualsOnlyInDestructuring.to_int()
     "AwaitNotAllowedInParameterInitializer" =>
       AwaitNotAllowedInParameterInitializer.to_int()
-    "DynamicImportSecondArgOnlyEsnext" => DynamicImportSecondArgOnlyEsnext.to_int()
+    "DynamicImportSecondArgOnlyEsnext" =>
+      DynamicImportSecondArgOnlyEsnext.to_int()
     "TopLevelAwaitRequiresEsnext" => TopLevelAwaitRequiresEsnext.to_int()
     "TopLevelForAwaitNotSupported" => TopLevelForAwaitNotSupported.to_int()
     "DecoratorsNotAfterExport" => DecoratorsNotAfterExport.to_int()
@@ -706,7 +709,10 @@ pub fn get_parser_error_message(name : String) -> String {
 
 ///|
 /// Get the error message for a parser error by name with optional argument
-pub fn get_parser_error_message_with_arg(name : String, arg : String?) -> String {
+pub fn get_parser_error_message_with_arg(
+  name : String,
+  arg : String?,
+) -> String {
   match name {
     "UnterminatedStringLiteral" => UnterminatedStringLiteral.to_message()
     "UnterminatedTemplateLiteral" => UnterminatedTemplateLiteral.to_message()
@@ -714,10 +720,12 @@ pub fn get_parser_error_message_with_arg(name : String, arg : String?) -> String
     "TrailingCommaNotAllowed" => TrailingCommaNotAllowed.to_message()
     "RestParameterMustBeLast" => RestParameterMustBeLast.to_message()
     "RequiredParamAfterOptional" => RequiredParamAfterOptional.to_message()
-    "RestParameterCannotBeOptional" => RestParameterCannotBeOptional.to_message()
+    "RestParameterCannotBeOptional" =>
+      RestParameterCannotBeOptional.to_message()
     "RestParameterCannotHaveInitializer" =>
       RestParameterCannotHaveInitializer.to_message()
-    "StatementsNotAllowedInAmbient" => StatementsNotAllowedInAmbient.to_message()
+    "StatementsNotAllowedInAmbient" =>
+      StatementsNotAllowedInAmbient.to_message()
     "DeclareInAmbientContext" => DeclareInAmbientContext.to_message()
     "InitializerNotAllowedInAmbient" =>
       InitializerNotAllowedInAmbient.to_message()
@@ -746,8 +754,10 @@ pub fn get_parser_error_message_with_arg(name : String, arg : String?) -> String
     "MergeConflictMarker" => MergeConflictMarker.to_message()
     // Decorator errors
     "DecoratorsNotValidHere" => DecoratorsNotValidHere.to_message()
-    "ExperimentalDecoratorsWarning" => ExperimentalDecoratorsWarning.to_message()
-    "UnableToResolveClassDecorator" => UnableToResolveClassDecorator.to_message()
+    "ExperimentalDecoratorsWarning" =>
+      ExperimentalDecoratorsWarning.to_message()
+    "UnableToResolveClassDecorator" =>
+      UnableToResolveClassDecorator.to_message()
     "UnableToResolveParameterDecorator" =>
       UnableToResolveParameterDecorator.to_message()
     "UnableToResolvePropertyDecorator" =>
@@ -774,7 +784,8 @@ pub fn get_parser_error_message_with_arg(name : String, arg : String?) -> String
     "DeleteCannotBeCalledOnIdentifier" =>
       DeleteCannotBeCalledOnIdentifier.to_message()
     "ClassMemberCannotHaveConst" => ClassMemberCannotHaveConst.to_message()
-    "ConstInitializerMustBeLiteral" => ConstInitializerMustBeLiteral.to_message()
+    "ConstInitializerMustBeLiteral" =>
+      ConstInitializerMustBeLiteral.to_message()
     "AwaitOnlyAllowedAtTopLevel" => AwaitOnlyAllowedAtTopLevel.to_message()
     "EqualsOnlyInDestructuring" => EqualsOnlyInDestructuring.to_message()
     "AwaitNotAllowedInParameterInitializer" =>
@@ -794,7 +805,8 @@ pub fn get_parser_error_message_with_arg(name : String, arg : String?) -> String
     "TypeAnnotationsOnlyInTypeScriptFiles" =>
       TypeAnnotationsOnlyInTypeScriptFiles.to_message()
     "VariableDeclarationExpected" => VariableDeclarationExpected.to_message()
-    "UsingDeclarationsRequireAwait" => UsingDeclarationsRequireAwait.to_message()
+    "UsingDeclarationsRequireAwait" =>
+      UsingDeclarationsRequireAwait.to_message()
     "UsingDeclarationNotInParameter" =>
       UsingDeclarationNotInParameter.to_message()
     "ESMImportExportNotValid" => ESMImportExportNotValid.to_message()
@@ -922,25 +934,21 @@ pub fn parse_source_file(
   let mut hashbang : String? = None
   for i = 0; i < tokens.length(); i = i + 1 {
     match tokens[i] {
-      Hashbang(content, _) => hashbang = Some(content)  // Extract hashbang
-      CommentDirective(TripleSlashRef, content, loc) => {
+      Hashbang(content, _) => hashbang = Some(content) // Extract hashbang
+      CommentDirective(TripleSlashRef, content, loc) =>
         directive_tokens.push((content, loc))
-        // Don't add to filtered_tokens - skip directive tokens during parsing
-      }
-      CommentDirective(TsExpectError, _, loc) => {
+      // Don't add to filtered_tokens - skip directive tokens during parsing
+      CommentDirective(TsExpectError, _, loc) =>
         // Track @ts-expect-error directives for TS2578 checking
         ts_expect_error_directives.push(loc)
-      }
-      CommentDirective(_, _, _) => ()  // Skip other comment directives (@ts-ignore, @ts-nocheck, etc.)
-      JSDocComment(_, _) => ()  // Skip JSDoc comments - handled separately
-      ScanError(message, code, loc) => {
+      CommentDirective(_, _, _) => () // Skip other comment directives (@ts-ignore, @ts-nocheck, etc.)
+      JSDocComment(_, _) => () // Skip JSDoc comments - handled separately
+      ScanError(message, code, loc) =>
         // Convert scanner errors to diagnostics
         scanner_errors.push(Diagnostic::error(message, loc, code))
-      }
       token => filtered_tokens.push(token)
     }
   }
-
   let parser = Parser::new(filtered_tokens)
   // Enable JSX mode for .tsx and .jsx files
   let parser = if file_path.has_suffix(".tsx") || file_path.has_suffix(".jsx") {
@@ -1099,7 +1107,8 @@ fn parse_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
           let loc = current_token(parser).location()
           Err(
             add_error_with_code(
-              parser, DecoratorsNotValidHere.to_message(),
+              parser,
+              DecoratorsNotValidHere.to_message(),
               loc,
               DecoratorsNotValidHere,
             ),
@@ -1159,7 +1168,7 @@ fn parse_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
     KeywordNamespace(_) => parse_module_declaration(parser)
 
     // Module declaration OR module.exports (CommonJS)
-    KeywordModule(_) => {
+    KeywordModule(_) =>
       // Check if this is module.exports (CommonJS pattern)
       if parser.position + 1 < parser.tokens.length() {
         match parser.tokens[parser.position + 1] {
@@ -1169,10 +1178,9 @@ fn parse_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
       } else {
         parse_module_declaration(parser)
       }
-    }
 
     // Import declaration or dynamic import expression
-    KeywordImport(_) => {
+    KeywordImport(_) =>
       // Check if this is a dynamic import (import followed by open paren)
       if parser.position + 1 < parser.tokens.length() {
         match parser.tokens[parser.position + 1] {
@@ -1182,7 +1190,6 @@ fn parse_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
       } else {
         parse_import_declaration(parser)
       }
-    }
 
     // Export declaration
     KeywordExport(_) => parse_export_declaration(parser)
@@ -1192,18 +1199,19 @@ fn parse_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
     // - Template literal: declare `hello`
     // - Open paren: declare()
     // - Type arguments: declare<T>
-    KeywordDeclare(_) => {
+    KeywordDeclare(_) =>
       // Look ahead to see if this is an expression statement
       if parser.position + 1 < parser.tokens.length() {
         match parser.tokens[parser.position + 1] {
-          TemplateLiteral(_, _) | TemplateHead(_, _) | OpenParen(_) | LessThan(_) =>
-            parse_expression_statement(parser)
+          TemplateLiteral(_, _)
+          | TemplateHead(_, _)
+          | OpenParen(_)
+          | LessThan(_) => parse_expression_statement(parser)
           _ => parse_declare_declaration(parser)
         }
       } else {
         parse_declare_declaration(parser)
       }
-    }
 
     // Using statement (TS 5.2+): using x = expr;
     KeywordUsing(start_loc) => parse_using_statement(parser, start_loc, false)
@@ -1215,7 +1223,8 @@ fn parse_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
       let saved_parser = parser
       let parser_after_await = advance_parser(parser)
       match current_token(parser_after_await) {
-        KeywordUsing(loc) => parse_using_statement(parser_after_await, loc, true)
+        KeywordUsing(loc) =>
+          parse_using_statement(parser_after_await, loc, true)
         // Not "await using", so this is an await expression statement
         // Use the original parser (with await token) so parse_expression_statement
         // can properly parse the await expression
@@ -1333,7 +1342,6 @@ fn parse_variable_declaration_list(
       Err(err_parser) => return Err(err_parser)
     }
   }
-
   let location = start_token.location()
   Ok((declarations, is_const, is_let, location, parser))
 }
@@ -1399,7 +1407,6 @@ fn parse_using_statement(
   let declarations : Array[VariableDeclaration] = []
   let mut parser = parser
   let mut first = true
-
   while true {
     if not(first) {
       // Check for comma to continue
@@ -1441,7 +1448,6 @@ fn parse_using_statement(
           _ => (None, parser)
         }
         parser = p3
-
         declarations.push(VariableDeclaration::{
           name,
           type_annotation,
@@ -1458,7 +1464,6 @@ fn parse_using_statement(
 
   // Consume semicolon
   let parser = expect_semicolon(parser)
-
   Ok(
     (
       Node::UsingStatement(UsingStatement::{
@@ -1496,12 +1501,7 @@ fn parse_variable_declaration(
       // Regular identifier
       match parse_identifier(parser) {
         Ok((id, p)) => (Node::Identifier(id), p)
-        Err(p) =>
-          return Err(
-            add_error(
-              p, "Identifier expected", start_loc,
-            ),
-          )
+        Err(p) => return Err(add_error(p, "Identifier expected", start_loc))
       }
   }
 
@@ -1528,6 +1528,11 @@ fn parse_variable_declaration(
     }
     _ => (None, parser)
   }
+
+  // Note: TS1182 (A destructuring declaration must have an initializer) is checked
+  // in the checker because:
+  // - Ambient declarations (declare var) don't need initializers
+  // - For-of/for-in loop bindings get values from iteration, not initializers
   Ok(
     (
       VariableDeclaration::{
@@ -1753,18 +1758,14 @@ fn parse_object_binding_pattern(
                 // TS2566: A rest element cannot contain a binding pattern
                 return Err(
                   add_error_checked(
-                    parser,
-                    "A rest element cannot contain a binding pattern.",
-                    rest_loc,
+                    parser, "A rest element cannot contain a binding pattern.", rest_loc,
                     2566,
                   ),
                 )
               _ =>
                 return Err(
                   add_error(
-                    parser,
-                    "Identifier expected after rest element",
-                    rest_loc,
+                    parser, "Identifier expected after rest element", rest_loc,
                   ),
                 )
             }
@@ -1786,7 +1787,8 @@ fn parse_object_binding_pattern(
             parser = advance_parser(parser)
 
             // Parse the binding name (identifier, contextual keyword, or nested pattern)
-            let (name, p2) = match try_get_identifier_name(current_token(parser)) {
+            let (name, p2) = match
+              try_get_identifier_name(current_token(parser)) {
               Some((bind_name, bind_loc)) =>
                 (
                   Node::Identifier(Identifier::{
@@ -1827,7 +1829,6 @@ fn parse_object_binding_pattern(
               _ => (None, parser)
             }
             parser = parser2
-
             properties.push(BindingElement::{
               property_name: prop_name,
               name,
@@ -1841,10 +1842,7 @@ fn parse_object_binding_pattern(
               _ => ()
             }
           }
-          _ =>
-            return Err(
-              add_error(parser, "':' expected", num_loc),
-            )
+          _ => return Err(add_error(parser, "':' expected", num_loc))
         }
       }
       // Handle string literal property: { "prop": x }
@@ -1858,7 +1856,8 @@ fn parse_object_binding_pattern(
             parser = advance_parser(parser)
 
             // Parse the binding name (identifier, contextual keyword, or nested pattern)
-            let (name, p2) = match try_get_identifier_name(current_token(parser)) {
+            let (name, p2) = match
+              try_get_identifier_name(current_token(parser)) {
               Some((bind_name, bind_loc)) =>
                 (
                   Node::Identifier(Identifier::{
@@ -1899,7 +1898,6 @@ fn parse_object_binding_pattern(
               _ => (None, parser)
             }
             parser = parser2
-
             properties.push(BindingElement::{
               property_name: prop_name,
               name,
@@ -1913,10 +1911,7 @@ fn parse_object_binding_pattern(
               _ => ()
             }
           }
-          _ =>
-            return Err(
-              add_error(parser, "':' expected", str_loc),
-            )
+          _ => return Err(add_error(parser, "':' expected", str_loc))
         }
       }
       // Handle computed property: { [expr]: x }
@@ -1934,10 +1929,7 @@ fn parse_object_binding_pattern(
         // Expect closing bracket
         match current_token(parser) {
           CloseBracket(_) => parser = advance_parser(parser)
-          _ =>
-            return Err(
-              add_error(parser, "']' expected", bracket_loc),
-            )
+          _ => return Err(add_error(parser, "']' expected", bracket_loc))
         }
 
         // Must have colon after computed property
@@ -1946,7 +1938,8 @@ fn parse_object_binding_pattern(
             parser = advance_parser(parser)
 
             // Parse the binding name (identifier, contextual keyword, or nested pattern)
-            let (name, p2) = match try_get_identifier_name(current_token(parser)) {
+            let (name, p2) = match
+              try_get_identifier_name(current_token(parser)) {
               Some((bind_name, bind_loc)) =>
                 (
                   Node::Identifier(Identifier::{
@@ -2002,10 +1995,7 @@ fn parse_object_binding_pattern(
               _ => ()
             }
           }
-          _ =>
-            return Err(
-              add_error(parser, "':' expected", bracket_loc),
-            )
+          _ => return Err(add_error(parser, "':' expected", bracket_loc))
         }
       }
       // Handle identifier or contextual keyword property: { x } or { x: y } or { as } etc.
@@ -2043,11 +2033,7 @@ fn parse_object_binding_pattern(
                         }
                       _ =>
                         return Err(
-                          add_error(
-                            p2,
-                            "Identifier expected",
-                            prop_loc,
-                          ),
+                          add_error(p2, "Identifier expected", prop_loc),
                         )
                     }
                 }
@@ -2076,7 +2062,6 @@ fn parse_object_binding_pattern(
               _ => (None, parser)
             }
             parser = parser2
-
             properties.push(BindingElement::{
               property_name: prop_name,
               name,
@@ -2332,19 +2317,15 @@ fn parse_parameter_list_aux(
     Ok((param, next_parser)) => {
       // Validate parameter order
       let next_parser = validate_parameter_order(
-        next_parser,
-        param,
-        seen_optional,
-        seen_rest,
+        next_parser, param, seen_optional, seen_rest,
       )
 
       // Check if this parameter is optional or rest
       let (is_optional, is_rest) = match param {
         Node::Parameter(p) =>
-          (p.is_optional || (p.initializer is Some(_)), p.is_rest)
+          (p.is_optional || p.initializer is Some(_), p.is_rest)
         _ => (false, false)
       }
-
       acc.push(param)
       match current_token(next_parser) {
         Comma(_) =>
@@ -2398,7 +2379,6 @@ fn validate_parameter_order(
           RequiredParamAfterOptional,
         )
       }
-
       parser
     }
     _ => parser
@@ -2570,7 +2550,6 @@ fn parse_parameter(parser : Parser) -> Result[(Node, Parser), Parser] {
   } else {
     parser
   }
-
   Ok(
     (
       Node::Parameter(Parameter::{
@@ -2753,7 +2732,6 @@ fn parse_return_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
   } else {
     parser
   }
-
   let parser = advance_parser(parser) // Skip 'return'
 
   // Check if there's an expression
@@ -2824,11 +2802,17 @@ fn parse_identifier(parser : Parser) -> Result[(Identifier, Parser), Parser] {
 ///|
 /// Parse an entity name starting from a given identifier token
 /// The first_token is the current token that has NOT been consumed yet
-fn parse_entity_name_from(parser : Parser, first_token : Token) -> (Node, Parser) {
+fn parse_entity_name_from(
+  parser : Parser,
+  first_token : Token,
+) -> (Node, Parser) {
   match first_token {
     Identifier(name, loc) => {
       let mut parser = advance_parser(parser) // consume the first identifier
-      let mut result : Node = Node::Identifier(Identifier::{ name, location: loc })
+      let mut result : Node = Node::Identifier(Identifier::{
+        name,
+        location: loc,
+      })
       // Parse any following .identifier chains
       while true {
         match current_token(parser) {
@@ -2859,10 +2843,7 @@ fn parse_entity_name_from(parser : Parser, first_token : Token) -> (Node, Parser
     _ => {
       // Return empty identifier as fallback
       let loc = current_token(parser).location()
-      (
-        Node::Identifier(Identifier::{ name: "", location: loc }),
-        parser,
-      )
+      (Node::Identifier(Identifier::{ name: "", location: loc }), parser)
     }
   }
 }
@@ -2875,7 +2856,10 @@ fn parse_entity_name(parser : Parser) -> (Node, Parser) {
   match current_token(parser) {
     Identifier(name, loc) => {
       let mut parser = advance_parser(parser)
-      let mut result : Node = Node::Identifier(Identifier::{ name, location: loc })
+      let mut result : Node = Node::Identifier(Identifier::{
+        name,
+        location: loc,
+      })
       // Parse any following .identifier chains
       while true {
         match current_token(parser) {
@@ -2906,10 +2890,7 @@ fn parse_entity_name(parser : Parser) -> (Node, Parser) {
     _ => {
       // Return empty identifier as fallback
       let loc = current_token(parser).location()
-      (
-        Node::Identifier(Identifier::{ name: "", location: loc }),
-        parser,
-      )
+      (Node::Identifier(Identifier::{ name: "", location: loc }), parser)
     }
   }
 }
@@ -3093,7 +3074,7 @@ fn parse_heritage_types_aux(
       }
     }
     // Handle parenthesized expression (e.g., class C extends (foo()).B {})
-    OpenParen(_) => {
+    OpenParen(_) =>
       match parse_expression(parser) {
         Ok((expr, parser)) => {
           acc.push(expr)
@@ -3104,14 +3085,11 @@ fn parse_heritage_types_aux(
         }
         Err(p) => (acc, p)
       }
-    }
     Identifier(name, loc) => {
       let parser = advance_parser(parser)
       // Parse property access chain (e.g., cdk.Stack, aws.lambda.Function)
       let (full_name, parser, end_loc) = parse_heritage_type_name(
-        parser,
-        name,
-        loc,
+        parser, name, loc,
       )
       // Parse generic type arguments if present (e.g., Stack<Props>)
       let (type_arguments, parser) = match current_token(parser) {
@@ -3235,20 +3213,16 @@ fn parse_class_member_with_decorators(
       // Check for static block: static { ... }
       match current_token(parser) {
         // Static initialization block
-        OpenBrace(_) => {
+        OpenBrace(_) =>
           match parse_block_statement(parser) {
             Ok((body, parser)) => {
               acc.push(
-                Node::StaticBlock(StaticBlock::{
-                  body,
-                  location: start_loc,
-                }),
+                Node::StaticBlock(StaticBlock::{ body, location: start_loc }),
               )
               parse_class_members_aux(parser, acc)
             }
             Err(p) => parse_class_members_aux(p, acc)
           }
-        }
         // Static getter: static get name() { ... }
         Identifier("get", get_loc) => {
           let parser = advance_parser(parser)
@@ -3272,8 +3246,15 @@ fn parse_class_member_with_decorators(
                       let parser = advance_parser(parser)
                       let (params, parser) = parse_parameter_list(parser)
                       let parser = if params.length() > 0 {
-                        add_error_with_code(parser, GetAccessorCannotHaveParams.to_message(), get_loc, GetAccessorCannotHaveParams)
-                      } else { parser }
+                        add_error_with_code(
+                          parser,
+                          GetAccessorCannotHaveParams.to_message(),
+                          get_loc,
+                          GetAccessorCannotHaveParams,
+                        )
+                      } else {
+                        parser
+                      }
                       let (return_type, parser) = match current_token(parser) {
                         Colon(_) => {
                           let parser = advance_parser(parser)
@@ -3285,13 +3266,23 @@ fn parse_class_member_with_decorators(
                         _ => (None, parser)
                       }
                       let (body, parser) = match current_token(parser) {
-                        OpenBrace(_) => match parse_function_body(parser) {
-                          Ok((b, p)) => (Some(b), p)
-                          Err(p) => (None, p)
-                        }
+                        OpenBrace(_) =>
+                          match parse_function_body(parser) {
+                            Ok((b, p)) => (Some(b), p)
+                            Err(p) => (None, p)
+                          }
                         _ => (None, parser)
                       }
-                      acc.push(Node::GetAccessor(GetAccessor::{ name: computed_name, return_type, body, decorators, modifiers: [Modifier::Static], location: get_loc }))
+                      acc.push(
+                        Node::GetAccessor(GetAccessor::{
+                          name: computed_name,
+                          return_type,
+                          body,
+                          decorators,
+                          modifiers: [Modifier::Static],
+                          location: get_loc,
+                        }),
+                      )
                       parse_class_members_aux(parser, acc)
                     }
                     _ => parse_class_members_aux(parser, acc)
@@ -3308,8 +3299,15 @@ fn parse_class_member_with_decorators(
                   let parser = advance_parser(parser)
                   let (params, parser) = parse_parameter_list(parser)
                   let parser = if params.length() > 0 {
-                    add_error_with_code(parser, GetAccessorCannotHaveParams.to_message(), get_loc, GetAccessorCannotHaveParams)
-                  } else { parser }
+                    add_error_with_code(
+                      parser,
+                      GetAccessorCannotHaveParams.to_message(),
+                      get_loc,
+                      GetAccessorCannotHaveParams,
+                    )
+                  } else {
+                    parser
+                  }
                   let (return_type, parser) = match current_token(parser) {
                     Colon(_) => {
                       let parser = advance_parser(parser)
@@ -3321,13 +3319,23 @@ fn parse_class_member_with_decorators(
                     _ => (None, parser)
                   }
                   let (body, parser) = match current_token(parser) {
-                    OpenBrace(_) => match parse_function_body(parser) {
-                      Ok((b, p)) => (Some(b), p)
-                      Err(p) => (None, p)
-                    }
+                    OpenBrace(_) =>
+                      match parse_function_body(parser) {
+                        Ok((b, p)) => (Some(b), p)
+                        Err(p) => (None, p)
+                      }
                     _ => (None, parser)
                   }
-                  acc.push(Node::GetAccessor(GetAccessor::{ name, return_type, body, decorators, modifiers: [Modifier::Static], location: get_loc }))
+                  acc.push(
+                    Node::GetAccessor(GetAccessor::{
+                      name,
+                      return_type,
+                      body,
+                      decorators,
+                      modifiers: [Modifier::Static],
+                      location: get_loc,
+                    }),
+                  )
                   parse_class_members_aux(parser, acc)
                 }
                 // "get" as property name when not followed by identifier then (
@@ -3353,7 +3361,17 @@ fn parse_class_member_with_decorators(
                     }
                     _ => (None, parser)
                   }
-                  acc.push(Node::PropertyDeclaration(PropertyDeclaration::{ name, type_annotation, initializer, is_optional: false, decorators, modifiers: [Modifier::Static], location: get_loc }))
+                  acc.push(
+                    Node::PropertyDeclaration(PropertyDeclaration::{
+                      name,
+                      type_annotation,
+                      initializer,
+                      is_optional: false,
+                      decorators,
+                      modifiers: [Modifier::Static],
+                      location: get_loc,
+                    }),
+                  )
                   let parser = match current_token(parser) {
                     Semicolon(_) => advance_parser(parser)
                     _ => parser
@@ -3385,7 +3403,17 @@ fn parse_class_member_with_decorators(
                 }
                 _ => (None, parser)
               }
-              acc.push(Node::PropertyDeclaration(PropertyDeclaration::{ name, type_annotation, initializer, is_optional: false, decorators, modifiers: [Modifier::Static], location: get_loc }))
+              acc.push(
+                Node::PropertyDeclaration(PropertyDeclaration::{
+                  name,
+                  type_annotation,
+                  initializer,
+                  is_optional: false,
+                  decorators,
+                  modifiers: [Modifier::Static],
+                  location: get_loc,
+                }),
+              )
               let parser = match current_token(parser) {
                 Semicolon(_) => advance_parser(parser)
                 _ => parser
@@ -3417,12 +3445,25 @@ fn parse_class_member_with_decorators(
                       let parser = advance_parser(parser)
                       let (params, parser) = parse_parameter_list(parser)
                       let parser = if params.length() != 1 {
-                        add_error_with_code(parser, SetAccessorMustHaveOneParam.to_message(), set_loc, SetAccessorMustHaveOneParam)
-                      } else { parser }
-                      let parameter = if params.length() > 0 { params[0] } else {
-                        Node::Identifier(Identifier::{ name: "value", location: set_loc })
+                        add_error_with_code(
+                          parser,
+                          SetAccessorMustHaveOneParam.to_message(),
+                          set_loc,
+                          SetAccessorMustHaveOneParam,
+                        )
+                      } else {
+                        parser
                       }
-                      let (has_return_type, parser) = match current_token(parser) {
+                      let parameter = if params.length() > 0 {
+                        params[0]
+                      } else {
+                        Node::Identifier(Identifier::{
+                          name: "value",
+                          location: set_loc,
+                        })
+                      }
+                      let (has_return_type, parser) = match
+                        current_token(parser) {
                         Colon(_) => {
                           let parser = advance_parser(parser)
                           match parse_type(parser) {
@@ -3433,16 +3474,33 @@ fn parse_class_member_with_decorators(
                         _ => (false, parser)
                       }
                       let parser = if has_return_type {
-                        add_error_with_code(parser, SetAccessorCannotHaveReturnType.to_message(), set_loc, SetAccessorCannotHaveReturnType)
-                      } else { parser }
+                        add_error_with_code(
+                          parser,
+                          SetAccessorCannotHaveReturnType.to_message(),
+                          set_loc,
+                          SetAccessorCannotHaveReturnType,
+                        )
+                      } else {
+                        parser
+                      }
                       let (body, parser) = match current_token(parser) {
-                        OpenBrace(_) => match parse_function_body(parser) {
-                          Ok((b, p)) => (Some(b), p)
-                          Err(p) => (None, p)
-                        }
+                        OpenBrace(_) =>
+                          match parse_function_body(parser) {
+                            Ok((b, p)) => (Some(b), p)
+                            Err(p) => (None, p)
+                          }
                         _ => (None, parser)
                       }
-                      acc.push(Node::SetAccessor(SetAccessor::{ name: computed_name, parameter, body, decorators, modifiers: [Modifier::Static], location: set_loc }))
+                      acc.push(
+                        Node::SetAccessor(SetAccessor::{
+                          name: computed_name,
+                          parameter,
+                          body,
+                          decorators,
+                          modifiers: [Modifier::Static],
+                          location: set_loc,
+                        }),
+                      )
                       parse_class_members_aux(parser, acc)
                     }
                     _ => parse_class_members_aux(parser, acc)
@@ -3459,10 +3517,22 @@ fn parse_class_member_with_decorators(
                   let parser = advance_parser(parser)
                   let (params, parser) = parse_parameter_list(parser)
                   let parser = if params.length() != 1 {
-                    add_error_with_code(parser, SetAccessorMustHaveOneParam.to_message(), set_loc, SetAccessorMustHaveOneParam)
-                  } else { parser }
-                  let parameter = if params.length() > 0 { params[0] } else {
-                    Node::Identifier(Identifier::{ name: "value", location: set_loc })
+                    add_error_with_code(
+                      parser,
+                      SetAccessorMustHaveOneParam.to_message(),
+                      set_loc,
+                      SetAccessorMustHaveOneParam,
+                    )
+                  } else {
+                    parser
+                  }
+                  let parameter = if params.length() > 0 {
+                    params[0]
+                  } else {
+                    Node::Identifier(Identifier::{
+                      name: "value",
+                      location: set_loc,
+                    })
                   }
                   let (has_return_type, parser) = match current_token(parser) {
                     Colon(_) => {
@@ -3475,16 +3545,33 @@ fn parse_class_member_with_decorators(
                     _ => (false, parser)
                   }
                   let parser = if has_return_type {
-                    add_error_with_code(parser, SetAccessorCannotHaveReturnType.to_message(), set_loc, SetAccessorCannotHaveReturnType)
-                  } else { parser }
+                    add_error_with_code(
+                      parser,
+                      SetAccessorCannotHaveReturnType.to_message(),
+                      set_loc,
+                      SetAccessorCannotHaveReturnType,
+                    )
+                  } else {
+                    parser
+                  }
                   let (body, parser) = match current_token(parser) {
-                    OpenBrace(_) => match parse_function_body(parser) {
-                      Ok((b, p)) => (Some(b), p)
-                      Err(p) => (None, p)
-                    }
+                    OpenBrace(_) =>
+                      match parse_function_body(parser) {
+                        Ok((b, p)) => (Some(b), p)
+                        Err(p) => (None, p)
+                      }
                     _ => (None, parser)
                   }
-                  acc.push(Node::SetAccessor(SetAccessor::{ name, parameter, body, decorators, modifiers: [Modifier::Static], location: set_loc }))
+                  acc.push(
+                    Node::SetAccessor(SetAccessor::{
+                      name,
+                      parameter,
+                      body,
+                      decorators,
+                      modifiers: [Modifier::Static],
+                      location: set_loc,
+                    }),
+                  )
                   parse_class_members_aux(parser, acc)
                 }
                 // "set" as property name when not followed by identifier then (
@@ -3510,7 +3597,17 @@ fn parse_class_member_with_decorators(
                     }
                     _ => (None, parser)
                   }
-                  acc.push(Node::PropertyDeclaration(PropertyDeclaration::{ name, type_annotation, initializer, is_optional: false, decorators, modifiers: [Modifier::Static], location: set_loc }))
+                  acc.push(
+                    Node::PropertyDeclaration(PropertyDeclaration::{
+                      name,
+                      type_annotation,
+                      initializer,
+                      is_optional: false,
+                      decorators,
+                      modifiers: [Modifier::Static],
+                      location: set_loc,
+                    }),
+                  )
                   let parser = match current_token(parser) {
                     Semicolon(_) => advance_parser(parser)
                     _ => parser
@@ -3542,7 +3639,17 @@ fn parse_class_member_with_decorators(
                 }
                 _ => (None, parser)
               }
-              acc.push(Node::PropertyDeclaration(PropertyDeclaration::{ name, type_annotation, initializer, is_optional: false, decorators, modifiers: [Modifier::Static], location: set_loc }))
+              acc.push(
+                Node::PropertyDeclaration(PropertyDeclaration::{
+                  name,
+                  type_annotation,
+                  initializer,
+                  is_optional: false,
+                  decorators,
+                  modifiers: [Modifier::Static],
+                  location: set_loc,
+                }),
+              )
               let parser = match current_token(parser) {
                 Semicolon(_) => advance_parser(parser)
                 _ => parser
@@ -3984,7 +4091,10 @@ fn parse_class_member_with_decorators(
                   let parameter = if params.length() > 0 {
                     params[0]
                   } else {
-                    Node::Identifier(Identifier::{ name: "value", location: start_loc })
+                    Node::Identifier(Identifier::{
+                      name: "value",
+                      location: start_loc,
+                    })
                   }
                   let (has_return_type, parser) = match current_token(parser) {
                     Colon(_) => {
@@ -4160,43 +4270,57 @@ fn parse_class_member_with_decorators(
     // Private modifier
     KeywordPrivate(_) => {
       let parser = advance_parser(parser)
-      parse_class_member_with_modifiers(parser, acc, decorators, [Modifier::Private])
+      parse_class_member_with_modifiers(parser, acc, decorators, [
+        Modifier::Private,
+      ])
     }
 
     // Protected modifier
     KeywordProtected(_) => {
       let parser = advance_parser(parser)
-      parse_class_member_with_modifiers(parser, acc, decorators, [Modifier::Protected])
+      parse_class_member_with_modifiers(parser, acc, decorators, [
+        Modifier::Protected,
+      ])
     }
 
     // Public modifier
     KeywordPublic(_) => {
       let parser = advance_parser(parser)
-      parse_class_member_with_modifiers(parser, acc, decorators, [Modifier::Public])
+      parse_class_member_with_modifiers(parser, acc, decorators, [
+        Modifier::Public,
+      ])
     }
 
     // Static modifier
     KeywordStatic(_) => {
       let parser = advance_parser(parser)
-      parse_class_member_with_modifiers(parser, acc, decorators, [Modifier::Static])
+      parse_class_member_with_modifiers(parser, acc, decorators, [
+        Modifier::Static,
+      ])
     }
 
     // Readonly modifier
     KeywordReadonly(_) => {
       let parser = advance_parser(parser)
-      parse_class_member_with_modifiers(parser, acc, decorators, [Modifier::Readonly])
+      parse_class_member_with_modifiers(parser, acc, decorators, [
+        Modifier::Readonly,
+      ])
     }
 
     // Abstract modifier
     KeywordAbstract(_) => {
       let parser = advance_parser(parser)
-      parse_class_member_with_modifiers(parser, acc, decorators, [Modifier::Abstract])
+      parse_class_member_with_modifiers(parser, acc, decorators, [
+        Modifier::Abstract,
+      ])
     }
 
     // Async modifier
     KeywordAsync(_) => {
       let parser = advance_parser(parser)
-      parse_class_member_with_modifiers(parser, acc, decorators, [Modifier::Async])
+      parse_class_member_with_modifiers(parser, acc, decorators, [
+        Modifier::Async,
+      ])
     }
 
     // TS1248: A class member cannot have the 'const' keyword
@@ -4927,8 +5051,15 @@ fn parse_class_member_with_modifiers(
                   let parser = advance_parser(parser)
                   let (params, parser) = parse_parameter_list(parser)
                   let parser = if params.length() > 0 {
-                    add_error_with_code(parser, GetAccessorCannotHaveParams.to_message(), start_loc, GetAccessorCannotHaveParams)
-                  } else { parser }
+                    add_error_with_code(
+                      parser,
+                      GetAccessorCannotHaveParams.to_message(),
+                      start_loc,
+                      GetAccessorCannotHaveParams,
+                    )
+                  } else {
+                    parser
+                  }
                   let (return_type, parser) = match current_token(parser) {
                     Colon(_) => {
                       let parser = advance_parser(parser)
@@ -4940,13 +5071,23 @@ fn parse_class_member_with_modifiers(
                     _ => (None, parser)
                   }
                   let (body, parser) = match current_token(parser) {
-                    OpenBrace(_) => match parse_function_body(parser) {
-                      Ok((b, p)) => (Some(b), p)
-                      Err(p) => (None, p)
-                    }
+                    OpenBrace(_) =>
+                      match parse_function_body(parser) {
+                        Ok((b, p)) => (Some(b), p)
+                        Err(p) => (None, p)
+                      }
                     _ => (None, parser)
                   }
-                  acc.push(Node::GetAccessor(GetAccessor::{ name: computed_name, return_type, body, decorators, modifiers, location: start_loc }))
+                  acc.push(
+                    Node::GetAccessor(GetAccessor::{
+                      name: computed_name,
+                      return_type,
+                      body,
+                      decorators,
+                      modifiers,
+                      location: start_loc,
+                    }),
+                  )
                   parse_class_members_aux(parser, acc)
                 }
                 _ => parse_class_members_aux(parser, acc)
@@ -4963,8 +5104,15 @@ fn parse_class_member_with_modifiers(
               let parser = advance_parser(parser)
               let (params, parser) = parse_parameter_list(parser)
               let parser = if params.length() > 0 {
-                add_error_with_code(parser, GetAccessorCannotHaveParams.to_message(), start_loc, GetAccessorCannotHaveParams)
-              } else { parser }
+                add_error_with_code(
+                  parser,
+                  GetAccessorCannotHaveParams.to_message(),
+                  start_loc,
+                  GetAccessorCannotHaveParams,
+                )
+              } else {
+                parser
+              }
               let (return_type, parser) = match current_token(parser) {
                 Colon(_) => {
                   let parser = advance_parser(parser)
@@ -4976,13 +5124,23 @@ fn parse_class_member_with_modifiers(
                 _ => (None, parser)
               }
               let (body, parser) = match current_token(parser) {
-                OpenBrace(_) => match parse_function_body(parser) {
-                  Ok((b, p)) => (Some(b), p)
-                  Err(p) => (None, p)
-                }
+                OpenBrace(_) =>
+                  match parse_function_body(parser) {
+                    Ok((b, p)) => (Some(b), p)
+                    Err(p) => (None, p)
+                  }
                 _ => (None, parser)
               }
-              acc.push(Node::GetAccessor(GetAccessor::{ name, return_type, body, decorators, modifiers, location: start_loc }))
+              acc.push(
+                Node::GetAccessor(GetAccessor::{
+                  name,
+                  return_type,
+                  body,
+                  decorators,
+                  modifiers,
+                  location: start_loc,
+                }),
+              )
               parse_class_members_aux(parser, acc)
             }
             _ => parse_class_members_aux(parser, acc)
@@ -5014,10 +5172,22 @@ fn parse_class_member_with_modifiers(
                   let parser = advance_parser(parser)
                   let (params, parser) = parse_parameter_list(parser)
                   let parser = if params.length() != 1 {
-                    add_error_with_code(parser, SetAccessorMustHaveOneParam.to_message(), start_loc, SetAccessorMustHaveOneParam)
-                  } else { parser }
-                  let parameter = if params.length() > 0 { params[0] } else {
-                    Node::Identifier(Identifier::{ name: "value", location: start_loc })
+                    add_error_with_code(
+                      parser,
+                      SetAccessorMustHaveOneParam.to_message(),
+                      start_loc,
+                      SetAccessorMustHaveOneParam,
+                    )
+                  } else {
+                    parser
+                  }
+                  let parameter = if params.length() > 0 {
+                    params[0]
+                  } else {
+                    Node::Identifier(Identifier::{
+                      name: "value",
+                      location: start_loc,
+                    })
                   }
                   let (has_return_type, parser) = match current_token(parser) {
                     Colon(_) => {
@@ -5085,7 +5255,10 @@ fn parse_class_member_with_modifiers(
               let parameter = if params.length() > 0 {
                 params[0]
               } else {
-                Node::Identifier(Identifier::{ name: "value", location: start_loc })
+                Node::Identifier(Identifier::{
+                  name: "value",
+                  location: start_loc,
+                })
               }
               let (has_return_type, parser) = match current_token(parser) {
                 Colon(_) => {
@@ -5163,20 +5336,35 @@ fn parse_class_member_with_modifiers(
                 _ => (None, parser)
               }
               let (body, parser) = match current_token(parser) {
-                OpenBrace(_) => match parse_function_body(parser) {
-                  Ok((b, p)) => (Some(b), p)
-                  Err(p) => (None, p)
-                }
+                OpenBrace(_) =>
+                  match parse_function_body(parser) {
+                    Ok((b, p)) => (Some(b), p)
+                    Err(p) => (None, p)
+                  }
                 _ => (None, parser)
               }
               let mut is_async = false
               for modifier in modifiers {
-                if modifier == Modifier::Async { is_async = true; break }
+                if modifier == Modifier::Async {
+                  is_async = true
+                  break
+                }
               }
-              acc.push(Node::MethodDeclaration(MethodDeclaration::{
-                name: computed_name, type_parameters: [], parameters, return_type, body,
-                decorators, modifiers, is_async, is_generator: false, is_optional: false, location: start_loc
-              }))
+              acc.push(
+                Node::MethodDeclaration(MethodDeclaration::{
+                  name: computed_name,
+                  type_parameters: [],
+                  parameters,
+                  return_type,
+                  body,
+                  decorators,
+                  modifiers,
+                  is_async,
+                  is_generator: false,
+                  is_optional: false,
+                  location: start_loc,
+                }),
+              )
               parse_class_members_aux(parser, acc)
             }
             // Computed property with modifiers
@@ -5205,9 +5393,17 @@ fn parse_class_member_with_modifiers(
                 Semicolon(_) => advance_parser(parser)
                 _ => parser
               }
-              acc.push(Node::PropertyDeclaration(PropertyDeclaration::{
-                name: computed_name, type_annotation, initializer, is_optional: false, decorators, modifiers, location: start_loc
-              }))
+              acc.push(
+                Node::PropertyDeclaration(PropertyDeclaration::{
+                  name: computed_name,
+                  type_annotation,
+                  initializer,
+                  is_optional: false,
+                  decorators,
+                  modifiers,
+                  location: start_loc,
+                }),
+              )
               parse_class_members_aux(parser, acc)
             }
           }
@@ -5937,7 +6133,9 @@ fn parse_interface_declaration(
                   _ =>
                     return Err(
                       add_error_with_code(
-                        parser, ExpectedOpenParen.to_message(), current_token(parser).location(),
+                        parser,
+                        ExpectedOpenParen.to_message(),
+                        current_token(parser).location(),
                         ExpectedOpenParen,
                       ),
                     )
@@ -5946,7 +6144,9 @@ fn parse_interface_declaration(
               _ =>
                 return Err(
                   add_error_with_code(
-                    parser, ExpectedColon.to_message(), prop_loc,
+                    parser,
+                    ExpectedColon.to_message(),
+                    prop_loc,
                     ExpectedColon,
                   ),
                 )
@@ -6006,7 +6206,9 @@ fn parse_interface_declaration(
               _ =>
                 return Err(
                   add_error_with_code(
-                    parser, ExpectedOpenParen.to_message(), current_token(parser).location(),
+                    parser,
+                    ExpectedOpenParen.to_message(),
+                    current_token(parser).location(),
                     ExpectedOpenParen,
                   ),
                 )
@@ -6022,17 +6224,14 @@ fn parse_interface_declaration(
                 // Check if followed by ?: or :
                 let lookahead = peek_token(parser)
                 match lookahead {
-                  Question(_) | Colon(_) => {
+                  Question(_) | Colon(_) =>
                     // TS2702: A rest element cannot have a property name
                     return Err(
                       add_error_checked(
-                        parser,
-                        "A rest element cannot have a property name.",
-                        spread_loc,
+                        parser, "A rest element cannot have a property name.", spread_loc,
                         2702,
                       ),
                     )
-                  }
                   _ => {
                     // It's a spread type with type reference: ...SomeType
                     // Create a property with spread marker
@@ -6062,7 +6261,7 @@ fn parse_interface_declaration(
                   }
                 }
               }
-              _ => {
+              _ =>
                 // It's just a spread type without identifier, parse the type
                 match parse_type(parser) {
                   Ok((spread_type, p)) => {
@@ -6086,7 +6285,6 @@ fn parse_interface_declaration(
                   }
                   Err(p) => return Err(p)
                 }
-              }
             }
           }
           _ => break
@@ -6321,10 +6519,17 @@ fn parse_enum_member_with_name(
     Identifier(_, _) | NumericLiteral(_, _) | StringLiteral(_, _) =>
       parse_enum_members_aux(parser, acc)
     // Handle type keywords as potential next members
-    KeywordAny(_) | KeywordNumber(_) | KeywordString(_) | KeywordBoolean(_) |
-    KeywordSymbol(_) | KeywordBigInt(_) | KeywordObject(_) | KeywordNever(_) |
-    KeywordUnknown(_) | KeywordUndefined(_) | KeywordVoid(_) =>
-      parse_enum_members_aux(parser, acc)
+    KeywordAny(_)
+    | KeywordNumber(_)
+    | KeywordString(_)
+    | KeywordBoolean(_)
+    | KeywordSymbol(_)
+    | KeywordBigInt(_)
+    | KeywordObject(_)
+    | KeywordNever(_)
+    | KeywordUnknown(_)
+    | KeywordUndefined(_)
+    | KeywordVoid(_) => parse_enum_members_aux(parser, acc)
     _ => (acc, parser)
   }
 }
@@ -6386,10 +6591,17 @@ fn parse_enum_members_aux(
         // Also handle string literals in recovery
         StringLiteral(_, _) => parse_enum_members_aux(parser, acc)
         // Handle type keywords as potential next members
-        KeywordAny(_) | KeywordNumber(_) | KeywordString(_) | KeywordBoolean(_) |
-        KeywordSymbol(_) | KeywordBigInt(_) | KeywordObject(_) | KeywordNever(_) |
-        KeywordUnknown(_) | KeywordUndefined(_) | KeywordVoid(_) =>
-          parse_enum_members_aux(parser, acc)
+        KeywordAny(_)
+        | KeywordNumber(_)
+        | KeywordString(_)
+        | KeywordBoolean(_)
+        | KeywordSymbol(_)
+        | KeywordBigInt(_)
+        | KeywordObject(_)
+        | KeywordNever(_)
+        | KeywordUnknown(_)
+        | KeywordUndefined(_)
+        | KeywordVoid(_) => parse_enum_members_aux(parser, acc)
         _ => (acc, parser)
       }
     }
@@ -6456,16 +6668,22 @@ fn parse_enum_members_aux(
         Identifier(_, _) | NumericLiteral(_, _) | StringLiteral(_, _) =>
           parse_enum_members_aux(parser, acc)
         // Handle type keywords as potential next members
-        KeywordAny(_) | KeywordNumber(_) | KeywordString(_) | KeywordBoolean(_) |
-        KeywordSymbol(_) | KeywordBigInt(_) | KeywordObject(_) | KeywordNever(_) |
-        KeywordUnknown(_) | KeywordUndefined(_) | KeywordVoid(_) =>
-          parse_enum_members_aux(parser, acc)
+        KeywordAny(_)
+        | KeywordNumber(_)
+        | KeywordString(_)
+        | KeywordBoolean(_)
+        | KeywordSymbol(_)
+        | KeywordBigInt(_)
+        | KeywordObject(_)
+        | KeywordNever(_)
+        | KeywordUnknown(_)
+        | KeywordUndefined(_)
+        | KeywordVoid(_) => parse_enum_members_aux(parser, acc)
         _ => (acc, parser)
       }
     }
     // Handle type keywords as enum member names (they're valid identifiers in this context)
-    KeywordAny(loc) =>
-      parse_enum_member_with_name(parser, "any", loc, acc)
+    KeywordAny(loc) => parse_enum_member_with_name(parser, "any", loc, acc)
     KeywordNumber(loc) =>
       parse_enum_member_with_name(parser, "number", loc, acc)
     KeywordString(loc) =>
@@ -6478,14 +6696,12 @@ fn parse_enum_members_aux(
       parse_enum_member_with_name(parser, "bigint", loc, acc)
     KeywordObject(loc) =>
       parse_enum_member_with_name(parser, "object", loc, acc)
-    KeywordNever(loc) =>
-      parse_enum_member_with_name(parser, "never", loc, acc)
+    KeywordNever(loc) => parse_enum_member_with_name(parser, "never", loc, acc)
     KeywordUnknown(loc) =>
       parse_enum_member_with_name(parser, "unknown", loc, acc)
     KeywordUndefined(loc) =>
       parse_enum_member_with_name(parser, "undefined", loc, acc)
-    KeywordVoid(loc) =>
-      parse_enum_member_with_name(parser, "void", loc, acc)
+    KeywordVoid(loc) => parse_enum_member_with_name(parser, "void", loc, acc)
     // Error recovery for other unexpected tokens
     _ => {
       // Skip unexpected token and try to continue
@@ -6502,9 +6718,17 @@ fn skip_until_enum_member_recovery(parser : Parser) -> Parser {
     Comma(_) | CloseBrace(_) | EOF(_) => parser
     Identifier(_, _) => parser // Found next member name
     // Stop at type keywords (they can be used as enum member names)
-    KeywordAny(_) | KeywordNumber(_) | KeywordString(_) | KeywordBoolean(_) |
-    KeywordSymbol(_) | KeywordBigInt(_) | KeywordObject(_) | KeywordNever(_) |
-    KeywordUnknown(_) | KeywordUndefined(_) | KeywordVoid(_) => parser
+    KeywordAny(_)
+    | KeywordNumber(_)
+    | KeywordString(_)
+    | KeywordBoolean(_)
+    | KeywordSymbol(_)
+    | KeywordBigInt(_)
+    | KeywordObject(_)
+    | KeywordNever(_)
+    | KeywordUnknown(_)
+    | KeywordUndefined(_)
+    | KeywordVoid(_) => parser
     // Stop at numeric literals to report TS2452
     NumericLiteral(_, _) => parser // Let main loop handle it
     // Stop at string literals to report TS1357
@@ -6635,7 +6859,8 @@ fn parse_import_declaration(parser : Parser) -> Result[(Node, Parser), Parser] {
       // If the next token is an identifier, '{', or '*', it's a type-only import
       let next = peek_token(parser)
       match next {
-        Identifier(_, _) | OpenBrace(_) | Star(_) => (true, advance_parser(parser))
+        Identifier(_, _) | OpenBrace(_) | Star(_) =>
+          (true, advance_parser(parser))
         _ => (false, parser) // Not a type-only import, 'type' might be a binding name
       }
     }
@@ -6698,8 +6923,7 @@ fn parse_import_declaration(parser : Parser) -> Result[(Node, Parser), Parser] {
                             let parser = advance_parser(parser) // consume ')'
                             (
                               ModuleReference::ExternalModuleReference(
-                                module_path,
-                                str_loc,
+                                module_path, str_loc,
                               ),
                               parser,
                             )
@@ -6842,11 +7066,7 @@ fn parse_import_declaration(parser : Parser) -> Result[(Node, Parser), Parser] {
     KeywordFrom(_) => advance_parser(parser)
     _ =>
       return Err(
-        add_error(
-          parser,
-          "Unexpected token",
-          current_token(parser).location(),
-        ),
+        add_error(parser, "Unexpected token", current_token(parser).location()),
       )
   }
 
@@ -7018,14 +7238,14 @@ fn parse_export_declaration_with_decorators(
   decorators : Array[Node],
 ) -> Result[(Node, Parser), Parser] {
   let parser = advance_parser(parser) // consume 'export'
-
   match current_token(parser) {
     // @decorator export default class ...
     KeywordDefault(_) => {
       let parser = advance_parser(parser)
       match current_token(parser) {
         KeywordClass(_) =>
-          match parse_class_declaration_with_decorators(parser, false, decorators) {
+          match
+            parse_class_declaration_with_decorators(parser, false, decorators) {
             Ok((decl, parser)) => {
               let decl_with_modifiers = add_export_default_modifiers(decl)
               Ok((decl_with_modifiers, parser))
@@ -7034,7 +7254,8 @@ fn parse_export_declaration_with_decorators(
           }
         KeywordAbstract(_) => {
           let parser = advance_parser(parser)
-          match parse_class_declaration_with_decorators(parser, true, decorators) {
+          match
+            parse_class_declaration_with_decorators(parser, true, decorators) {
             Ok((decl, parser)) => {
               let decl_with_modifiers = add_export_default_modifiers(decl)
               Ok((decl_with_modifiers, parser))
@@ -7114,7 +7335,6 @@ fn parse_export_declaration(parser : Parser) -> Result[(Node, Parser), Parser] {
     }
     _ => ([], parser)
   }
-
   match current_token(parser) {
     // export default expression/declaration
     KeywordDefault(_) => {
@@ -7427,9 +7647,10 @@ fn parse_export_declaration(parser : Parser) -> Result[(Node, Parser), Parser] {
       if decorators_after_export.length() > 0 {
         match current_token(parser) {
           KeywordClass(_) =>
-            match parse_class_declaration_with_decorators(
-              parser, false, decorators_after_export,
-            ) {
+            match
+              parse_class_declaration_with_decorators(
+                parser, false, decorators_after_export,
+              ) {
               Ok((decl, parser)) => {
                 let decl_with_export = add_export_modifier(decl)
                 Ok((decl_with_export, parser))
@@ -7438,9 +7659,10 @@ fn parse_export_declaration(parser : Parser) -> Result[(Node, Parser), Parser] {
             }
           KeywordAbstract(_) => {
             let parser = advance_parser(parser)
-            match parse_class_declaration_with_decorators(
-              parser, true, decorators_after_export,
-            ) {
+            match
+              parse_class_declaration_with_decorators(
+                parser, true, decorators_after_export,
+              ) {
               Ok((decl, parser)) => {
                 let decl_with_export = add_export_modifier(decl)
                 Ok((decl_with_export, parser))
@@ -7651,21 +7873,30 @@ fn parse_declare_declaration(parser : Parser) -> Result[(Node, Parser), Parser] 
       match parse_block_statement(parser) {
         Ok((body, parser)) => {
           let end_loc = get_location(body)
-          let location = SourceLocation::new(start_loc.file_path, start_loc.start, end_loc.end)
+          let location = SourceLocation::new(
+            start_loc.file_path,
+            start_loc.start,
+            end_loc.end,
+          )
           // Create ModuleDeclaration with is_global_augmentation=true
-          Ok((Node::ModuleDeclaration(ModuleDeclaration::{
-            name: "global",
-            body: Some(body),
-            is_ambient: false,
-            is_global_augmentation: true,
-            modifiers: [],
-            location,
-          }), parser))
+          Ok(
+            (
+              Node::ModuleDeclaration(ModuleDeclaration::{
+                name: "global",
+                body: Some(body),
+                is_ambient: false,
+                is_global_augmentation: true,
+                modifiers: [],
+                location,
+              }),
+              parser,
+            ),
+          )
         }
         Err(p) => Err(p)
       }
     }
-    _ => {
+    _ =>
       match parse_statement(parser) {
         Ok((stmt, parser)) => {
           // Add Declare modifier to the declaration
@@ -7674,7 +7905,6 @@ fn parse_declare_declaration(parser : Parser) -> Result[(Node, Parser), Parser] 
         }
         Err(p) => Err(p)
       }
-    }
   }
 }
 
@@ -8361,11 +8591,7 @@ fn parse_do_while_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
     KeywordWhile(_) => advance_parser(parser)
     _ =>
       return Err(
-        add_error(
-          parser,
-          "Unexpected token",
-          current_token(parser).location(),
-        ),
+        add_error(parser, "Unexpected token", current_token(parser).location()),
       )
   }
 
@@ -8587,7 +8813,8 @@ fn parse_try_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
               }
           }
           // Optional type annotation: catch (e: unknown)
-          let (param, type_annotation, parser) = match (param, current_token(parser)) {
+          let (param, type_annotation, parser) = match
+            (param, current_token(parser)) {
             (Some(p), Colon(_)) => {
               let parser = advance_parser(parser)
               // Parse the type annotation
@@ -8667,11 +8894,7 @@ fn parse_try_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
   // Must have either catch or finally
   if catch_clause is None && finally_block is None {
     return Err(
-      add_error(
-        parser,
-        "Unexpected token",
-        current_token(parser).location(),
-      ),
+      add_error(parser, "Unexpected token", current_token(parser).location()),
     )
   }
   let end_loc = match finally_block {
@@ -8741,7 +8964,6 @@ fn parse_type_param_constraint_and_default(
     }
     _ => None
   }
-
   (constraint, default_type, parser)
 }
 
@@ -8772,15 +8994,13 @@ fn parse_type_parameters(parser : Parser) -> (Array[TypeParameter], Parser) {
               parser,
             )
             parser = p
-            type_params.push(
-              TypeParameter::{
-                name,
-                constraint,
-                default: default_type,
-                is_const: true,
-                location: loc,
-              },
-            )
+            type_params.push(TypeParameter::{
+              name,
+              constraint,
+              default: default_type,
+              is_const: true,
+              location: loc,
+            })
             match current_token(parser) {
               Comma(_) => {
                 parser = advance_parser(parser)
@@ -8796,20 +9016,17 @@ fn parse_type_parameters(parser : Parser) -> (Array[TypeParameter], Parser) {
       Identifier(name, loc) => {
         // Parse type parameter name
         parser = advance_parser(parser)
-
         let (constraint, default_type, p) = parse_type_param_constraint_and_default(
           parser,
         )
         parser = p
-        type_params.push(
-          TypeParameter::{
-            name,
-            constraint,
-            default: default_type,
-            is_const: false,
-            location: loc,
-          },
-        )
+        type_params.push(TypeParameter::{
+          name,
+          constraint,
+          default: default_type,
+          is_const: false,
+          location: loc,
+        })
 
         // Check for comma
         match current_token(parser) {
@@ -9036,9 +9253,7 @@ fn check_depth(parser : Parser) -> Result[Parser, Parser] {
     let loc = current_token(parser).location()
     Err(
       add_error(
-        parser,
-        "Expression too deeply nested (stack overflow prevention)",
-        loc,
+        parser, "Expression too deeply nested (stack overflow prevention)", loc,
       ),
     )
   } else {

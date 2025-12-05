@@ -11,6 +11,7 @@
 // Discriminated Union Narrowing Tests
 // ============================================================================
 
+///|
 test "narrowing/discriminated-union - basic switch on kind property" {
   let source =
     #|type Result = { kind: "success"; data: string } | { kind: "error"; message: string };
@@ -22,14 +23,14 @@ test "narrowing/discriminated-union - basic switch on kind property" {
     #|}
   let tokens = @compiler.scan_all_v2(source, "test.ts")
   match @compiler.parse_source_file(tokens, "test.ts") {
-    Ok(sf) => {
+    Ok(sf) =>
       // Parse succeeded - the narrowing infrastructure should handle this
       assert_true(sf.statements.length() > 0)
-    }
     Err(e) => fail("Parse failed: " + e.to_string())
   }
 }
 
+///|
 test "narrowing/discriminated-union - else branch narrows to other type" {
   let source =
     #|type Shape = { kind: "circle"; radius: number } | { kind: "square"; side: number };
@@ -47,6 +48,7 @@ test "narrowing/discriminated-union - else branch narrows to other type" {
   }
 }
 
+///|
 test "narrowing/discriminated-union - switch statement exhaustiveness" {
   let source =
     #|type Action = { type: "increment" } | { type: "decrement" } | { type: "reset"; value: number };
@@ -64,6 +66,7 @@ test "narrowing/discriminated-union - switch statement exhaustiveness" {
   }
 }
 
+///|
 test "narrowing/discriminated-union - boolean discriminant" {
   let source =
     #|type State = { loading: true } | { loading: false; data: string };
@@ -80,6 +83,7 @@ test "narrowing/discriminated-union - boolean discriminant" {
   }
 }
 
+///|
 test "narrowing/discriminated-union - not-equals narrowing" {
   let source =
     #|type Result = { status: "ok"; value: number } | { status: "error"; error: string };
@@ -100,6 +104,7 @@ test "narrowing/discriminated-union - not-equals narrowing" {
 // Property Existence Narrowing ("prop" in obj)
 // ============================================================================
 
+///|
 test "narrowing/in-operator - basic property check" {
   let source =
     #|type A = { a: string };
@@ -117,6 +122,7 @@ test "narrowing/in-operator - basic property check" {
   }
 }
 
+///|
 test "narrowing/in-operator - with optional properties" {
   let source =
     #|type Config = { debug?: boolean; verbose?: boolean };
@@ -133,6 +139,7 @@ test "narrowing/in-operator - with optional properties" {
   }
 }
 
+///|
 test "narrowing/in-operator - combined with typeof" {
   let source =
     #|function process(obj: { name?: string } | string): string {
@@ -155,6 +162,7 @@ test "narrowing/in-operator - combined with typeof" {
 // Array.isArray() Narrowing Tests
 // ============================================================================
 
+///|
 test "narrowing/isArray - basic array check" {
   let source =
     #|function process(value: string | Array<string>): string {
@@ -170,6 +178,7 @@ test "narrowing/isArray - basic array check" {
   }
 }
 
+///|
 test "narrowing/isArray - with unknown type" {
   let source =
     #|function process(value: unknown): number {
@@ -189,6 +198,7 @@ test "narrowing/isArray - with unknown type" {
 // User-Defined Type Guards (x is Type)
 // ============================================================================
 
+///|
 test "narrowing/type-guard - basic user-defined guard" {
   let source =
     #|interface Fish { swim(): void }
@@ -210,6 +220,7 @@ test "narrowing/type-guard - basic user-defined guard" {
   }
 }
 
+///|
 test "narrowing/type-guard - method type guard" {
   // Note: "this is Type" in return position is a type predicate
   // Using simpler form for now until parser fully supports "this is" predicates
@@ -234,6 +245,7 @@ test "narrowing/type-guard - method type guard" {
   }
 }
 
+///|
 test "narrowing/type-guard - type predicate with generic" {
   let source =
     #|function isNotNull<T>(value: T | null): value is T {
@@ -256,6 +268,7 @@ test "narrowing/type-guard - type predicate with generic" {
 // Assertion Functions (asserts x is Type)
 // ============================================================================
 
+///|
 test "narrowing/assertion - basic assertion function" {
   let source =
     #|function assertIsString(value: unknown): asserts value is string {
@@ -274,6 +287,7 @@ test "narrowing/assertion - basic assertion function" {
   }
 }
 
+///|
 test "narrowing/assertion - asserts without type" {
   let source =
     #|function assertDefined<T>(value: T | undefined): asserts value {
@@ -296,6 +310,7 @@ test "narrowing/assertion - asserts without type" {
 // Control Flow with Narrowing
 // ============================================================================
 
+///|
 test "narrowing/control-flow - early return narrows remainder" {
   let source =
     #|function process(value: string | null): string {
@@ -312,6 +327,7 @@ test "narrowing/control-flow - early return narrows remainder" {
   }
 }
 
+///|
 test "narrowing/control-flow - throw narrows remainder" {
   let source =
     #|function process(value: string | null): string {
@@ -327,6 +343,7 @@ test "narrowing/control-flow - throw narrows remainder" {
   }
 }
 
+///|
 test "narrowing/control-flow - logical and preserves narrowing" {
   let source =
     #|function process(value: string | null): number {
@@ -342,6 +359,7 @@ test "narrowing/control-flow - logical and preserves narrowing" {
   }
 }
 
+///|
 test "narrowing/control-flow - logical or with type guards" {
   let source =
     #|function process(value: string | number | null): string {
@@ -357,6 +375,7 @@ test "narrowing/control-flow - logical or with type guards" {
   }
 }
 
+///|
 test "narrowing/control-flow - negated condition" {
   let source =
     #|function process(value: string | number): string {
@@ -376,6 +395,7 @@ test "narrowing/control-flow - negated condition" {
 // Combined Narrowing Tests
 // ============================================================================
 
+///|
 test "narrowing/combined - multiple conditions" {
   let source =
     #|type Response = { status: "ok"; data: string[] } | { status: "error"; code: number };
@@ -395,6 +415,7 @@ test "narrowing/combined - multiple conditions" {
   }
 }
 
+///|
 test "narrowing/combined - typeof and property access" {
   let source =
     #|function process(value: { name?: string } | string): string {
@@ -417,6 +438,7 @@ test "narrowing/combined - typeof and property access" {
 // Narrowing Infrastructure Unit Tests (using factory functions)
 // ============================================================================
 
+///|
 test "narrowing/infrastructure - typeof narrowed type for string" {
   let ty = @compiler.typeof_narrowed_type("string")
   match ty {
@@ -425,6 +447,7 @@ test "narrowing/infrastructure - typeof narrowed type for string" {
   }
 }
 
+///|
 test "narrowing/infrastructure - typeof narrowed type for number" {
   let ty_num = @compiler.typeof_narrowed_type("number")
   match ty_num {
@@ -433,6 +456,7 @@ test "narrowing/infrastructure - typeof narrowed type for number" {
   }
 }
 
+///|
 test "narrowing/infrastructure - typeof narrowed type for boolean" {
   let ty_bool = @compiler.typeof_narrowed_type("boolean")
   match ty_bool {
@@ -441,6 +465,7 @@ test "narrowing/infrastructure - typeof narrowed type for boolean" {
   }
 }
 
+///|
 test "narrowing/infrastructure - typeof narrowed type for undefined" {
   let ty = @compiler.typeof_narrowed_type("undefined")
   match ty {
@@ -449,6 +474,7 @@ test "narrowing/infrastructure - typeof narrowed type for undefined" {
   }
 }
 
+///|
 test "narrowing/infrastructure - typeof narrowed type for symbol" {
   let ty = @compiler.typeof_narrowed_type("symbol")
   match ty {
@@ -457,6 +483,7 @@ test "narrowing/infrastructure - typeof narrowed type for symbol" {
   }
 }
 
+///|
 test "narrowing/infrastructure - typeof narrowed type for bigint" {
   let ty = @compiler.typeof_narrowed_type("bigint")
   match ty {
@@ -465,6 +492,7 @@ test "narrowing/infrastructure - typeof narrowed type for bigint" {
   }
 }
 
+///|
 test "narrowing/infrastructure - typeof narrowed type for function" {
   let ty = @compiler.typeof_narrowed_type("function")
   match ty {
@@ -473,6 +501,7 @@ test "narrowing/infrastructure - typeof narrowed type for function" {
   }
 }
 
+///|
 test "narrowing/infrastructure - typeof narrowed type for object" {
   let ty = @compiler.typeof_narrowed_type("object")
   match ty {
@@ -481,6 +510,7 @@ test "narrowing/infrastructure - typeof narrowed type for object" {
   }
 }
 
+///|
 test "narrowing/infrastructure - typeof narrowed type for invalid" {
   let ty = @compiler.typeof_narrowed_type("invalid")
   match ty {
@@ -493,6 +523,7 @@ test "narrowing/infrastructure - typeof narrowed type for invalid" {
 // Control Flow in Nested Closures
 // ============================================================================
 
+///|
 test "narrowing/closure - arrow function inherits typeof narrowing" {
   let source =
     #|function example(x: string | number) {
@@ -512,6 +543,7 @@ test "narrowing/closure - arrow function inherits typeof narrowing" {
   }
 }
 
+///|
 test "narrowing/closure - function expression inherits narrowing" {
   let source =
     #|function outer(value: string | null) {
@@ -531,6 +563,7 @@ test "narrowing/closure - function expression inherits narrowing" {
   }
 }
 
+///|
 test "narrowing/closure - nested arrow functions inherit narrowing" {
   let source =
     #|function outer(x: string | number | null) {
@@ -555,6 +588,7 @@ test "narrowing/closure - nested arrow functions inherit narrowing" {
   }
 }
 
+///|
 test "narrowing/closure - array method callback with narrowing" {
   let source =
     #|function process(items: Array<string | null>) {
@@ -569,6 +603,7 @@ test "narrowing/closure - array method callback with narrowing" {
   }
 }
 
+///|
 test "narrowing/closure - closure captures discriminated union narrowing" {
   let source =
     #|type Result = { ok: true; value: number } | { ok: false; error: string };
@@ -586,6 +621,7 @@ test "narrowing/closure - closure captures discriminated union narrowing" {
   }
 }
 
+///|
 test "narrowing/closure - callback in promise chain" {
   let source =
     #|function fetchData(url: string | null) {
@@ -603,6 +639,7 @@ test "narrowing/closure - callback in promise chain" {
   }
 }
 
+///|
 test "narrowing/closure - event handler with narrowed variable" {
   let source =
     #|function setupHandler(element: HTMLElement | null) {
@@ -620,6 +657,7 @@ test "narrowing/closure - event handler with narrowed variable" {
   }
 }
 
+///|
 test "narrowing/closure - closure with instanceof check" {
   let source =
     #|class Dog { bark() {} }

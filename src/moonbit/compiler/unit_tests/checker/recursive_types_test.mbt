@@ -23,6 +23,7 @@ fn parse_bind_check_recursive(source : String) -> @compiler.CheckResult {
 // Recursive Type Parsing Tests
 // ============================================================================
 
+///|
 test "unit/recursive/parse - simple recursive type" {
   let source =
     #|type TreeNode<T> = {
@@ -36,6 +37,7 @@ test "unit/recursive/parse - simple recursive type" {
   }
 }
 
+///|
 test "unit/recursive/parse - linked list type" {
   let source =
     #|type LinkedList<T> = {
@@ -49,6 +51,7 @@ test "unit/recursive/parse - linked list type" {
   }
 }
 
+///|
 test "unit/recursive/parse - json value recursive type" {
   // Simplified recursive JSON type
   let source =
@@ -60,6 +63,7 @@ test "unit/recursive/parse - json value recursive type" {
   }
 }
 
+///|
 test "unit/recursive/parse - mutual recursion A-B" {
   let source =
     #|type A = { b: B };
@@ -71,6 +75,7 @@ test "unit/recursive/parse - mutual recursion A-B" {
   }
 }
 
+///|
 test "unit/recursive/parse - deep nesting" {
   let source =
     #|type Deep<T> = {
@@ -86,6 +91,7 @@ test "unit/recursive/parse - deep nesting" {
   }
 }
 
+///|
 test "unit/recursive/parse - recursive conditional type" {
   let source =
     #|type Flatten<T> = T extends Array<infer U> ? Flatten<U> : T;
@@ -96,6 +102,7 @@ test "unit/recursive/parse - recursive conditional type" {
   }
 }
 
+///|
 test "unit/recursive/parse - self-referencing generic" {
   let source =
     #|type Recursive<T> = T | Recursive<T[]>;
@@ -106,6 +113,7 @@ test "unit/recursive/parse - self-referencing generic" {
   }
 }
 
+///|
 test "unit/recursive/parse - three-way mutual recursion" {
   let source =
     #|type A = { next: B };
@@ -122,6 +130,7 @@ test "unit/recursive/parse - three-way mutual recursion" {
 // Wrapped Recursive Generic Type Tests
 // ============================================================================
 
+///|
 test "unit/recursive/wrapped - Promise chain" {
   let source =
     #|type PromiseChain<T> = Promise<T | PromiseChain<T>>;
@@ -132,6 +141,7 @@ test "unit/recursive/wrapped - Promise chain" {
   }
 }
 
+///|
 test "unit/recursive/wrapped - nested array" {
   let source =
     #|type NestedArray<T> = T | NestedArray<T>[];
@@ -142,6 +152,7 @@ test "unit/recursive/wrapped - nested array" {
   }
 }
 
+///|
 test "unit/recursive/wrapped - nested option" {
   let source =
     #|type Option<T> = T | null | Option<T>;
@@ -156,6 +167,7 @@ test "unit/recursive/wrapped - nested option" {
 // Mapped Type Recursive Inference Tests
 // ============================================================================
 
+///|
 test "unit/recursive/mapped - recursive mapped type" {
   let source =
     #|type DeepReadonly<T> = {
@@ -168,6 +180,7 @@ test "unit/recursive/mapped - recursive mapped type" {
   }
 }
 
+///|
 test "unit/recursive/mapped - deep partial" {
   let source =
     #|type DeepPartial<T> = {
@@ -180,6 +193,7 @@ test "unit/recursive/mapped - deep partial" {
   }
 }
 
+///|
 test "unit/recursive/mapped - deep required" {
   let source =
     #|type DeepRequired<T> = {
@@ -192,6 +206,7 @@ test "unit/recursive/mapped - deep required" {
   }
 }
 
+///|
 test "unit/recursive/mapped - deep mutable" {
   let source =
     #|type DeepMutable<T> = {
@@ -208,6 +223,7 @@ test "unit/recursive/mapped - deep mutable" {
 // Reversed Recursive Type Instantiation Tests
 // ============================================================================
 
+///|
 test "unit/recursive/reversed - reversed type params" {
   let source =
     #|type Reverse<A, B> = { a: A; b: Reverse<B, A> | null };
@@ -218,6 +234,7 @@ test "unit/recursive/reversed - reversed type params" {
   }
 }
 
+///|
 test "unit/recursive/reversed - swapped type application" {
   let source =
     #|type Swap<T, U> = {
@@ -236,6 +253,7 @@ test "unit/recursive/reversed - swapped type application" {
 // Infinitely Expanding Base Types Tests
 // ============================================================================
 
+///|
 test "unit/recursive/expanding - extends with self" {
   let source =
     #|interface Node<T> {
@@ -249,6 +267,7 @@ test "unit/recursive/expanding - extends with self" {
   }
 }
 
+///|
 test "unit/recursive/expanding - class with recursive property" {
   let source =
     #|class BinaryTree<T> {
@@ -263,6 +282,7 @@ test "unit/recursive/expanding - class with recursive property" {
   }
 }
 
+///|
 test "unit/recursive/expanding - recursive method return type" {
   let source =
     #|interface Builder<T> {
@@ -280,6 +300,7 @@ test "unit/recursive/expanding - recursive method return type" {
 // Recursive Identical Assignment Tests
 // ============================================================================
 
+///|
 test "unit/recursive/assignment - identical recursive types" {
   let source =
     #|type List<T> = { head: T; tail: List<T> | null };
@@ -293,6 +314,7 @@ test "unit/recursive/assignment - identical recursive types" {
   }
 }
 
+///|
 test "unit/recursive/assignment - recursive with function" {
   let source =
     #|type Tree<T> = { value: T; children: Tree<T>[] };
@@ -310,6 +332,7 @@ test "unit/recursive/assignment - recursive with function" {
 // Recursive Type Comparison Tests
 // ============================================================================
 
+///|
 test "unit/recursive/compare - same recursive types" {
   let source =
     #|type Tree<T> = { value: T; children: Tree<T>[] };
@@ -323,6 +346,7 @@ test "unit/recursive/compare - same recursive types" {
   }
 }
 
+///|
 test "unit/recursive/compare - nested recursive comparison" {
   let source =
     #|type Nested<T> = { value: T; inner: Nested<T> | null };
@@ -340,6 +364,7 @@ test "unit/recursive/compare - nested recursive comparison" {
 // Recursive Type Parameter Reference Tests
 // ============================================================================
 
+///|
 test "unit/recursive/param - self-referencing constraint" {
   // Type with generic parameter in method
   let source =
@@ -353,6 +378,7 @@ test "unit/recursive/param - self-referencing constraint" {
   }
 }
 
+///|
 test "unit/recursive/param - recursive bound" {
   let source =
     #|interface Builder<T extends Builder<T>> {
@@ -365,6 +391,7 @@ test "unit/recursive/param - recursive bound" {
   }
 }
 
+///|
 test "unit/recursive/param - F-bounded polymorphism" {
   let source =
     #|interface Copyable<T extends Copyable<T>> {
@@ -381,6 +408,7 @@ test "unit/recursive/param - F-bounded polymorphism" {
 // Conditional Type Recursion Tests
 // ============================================================================
 
+///|
 test "unit/recursive/conditional - Flatten utility" {
   let source =
     #|type Flatten<T> = T extends Array<infer U> ? Flatten<U> : T;
@@ -391,6 +419,7 @@ test "unit/recursive/conditional - Flatten utility" {
   }
 }
 
+///|
 test "unit/recursive/conditional - Awaited-style recursive" {
   let source =
     #|type Awaited<T> = T extends PromiseLike<infer U> ? Awaited<U> : T;
@@ -401,6 +430,7 @@ test "unit/recursive/conditional - Awaited-style recursive" {
   }
 }
 
+///|
 test "unit/recursive/conditional - UnwrapArray" {
   // Simpler array unwrapping
   let source =
@@ -416,6 +446,7 @@ test "unit/recursive/conditional - UnwrapArray" {
 // Complex Recursive Structures Tests
 // ============================================================================
 
+///|
 test "unit/recursive/complex - expression tree" {
   // Simpler expression tree without discriminated union
   let source =
@@ -432,6 +463,7 @@ test "unit/recursive/complex - expression tree" {
   }
 }
 
+///|
 test "unit/recursive/complex - AST-like structure" {
   let source =
     #|type Node = {
@@ -446,6 +478,7 @@ test "unit/recursive/complex - AST-like structure" {
   }
 }
 
+///|
 test "unit/recursive/complex - state machine" {
   let source =
     #|type State<T> = {
@@ -463,6 +496,7 @@ test "unit/recursive/complex - state machine" {
 // Edge Cases Tests
 // ============================================================================
 
+///|
 test "unit/recursive/edge - deeply nested generics" {
   let source =
     #|type Nest<T> = { value: T; nested: Nest<Nest<T>> | null };
@@ -473,6 +507,7 @@ test "unit/recursive/edge - deeply nested generics" {
   }
 }
 
+///|
 test "unit/recursive/edge - recursive in tuple" {
   let source =
     #|type RecursiveTuple<T> = [T, RecursiveTuple<T>] | [T];
@@ -483,6 +518,7 @@ test "unit/recursive/edge - recursive in tuple" {
   }
 }
 
+///|
 test "unit/recursive/edge - recursive with index signature" {
   let source =
     #|type DeepObject<T> = {
@@ -495,6 +531,7 @@ test "unit/recursive/edge - recursive with index signature" {
   }
 }
 
+///|
 test "unit/recursive/edge - self-referential intersection" {
   let source =
     #|type HasParent<T> = T & { parent: HasParent<T> | null };
@@ -509,6 +546,7 @@ test "unit/recursive/edge - self-referential intersection" {
 // Interface Recursive Type Tests (Cycle Detection)
 // ============================================================================
 
+///|
 test "unit/recursive/interface - self-referential interface" {
   // Interface with self-referential property
   let source =
@@ -523,6 +561,7 @@ test "unit/recursive/interface - self-referential interface" {
   }
 }
 
+///|
 test "unit/recursive/interface - infinitely expanding base types" {
   // Based on infinitelyExpandingBaseTypes2.ts
   let source =
@@ -541,6 +580,7 @@ test "unit/recursive/interface - infinitely expanding base types" {
   }
 }
 
+///|
 test "unit/recursive/interface - mutually recursive interfaces" {
   // Based on mutrec.ts
   let source =
@@ -563,6 +603,7 @@ test "unit/recursive/interface - mutually recursive interfaces" {
   }
 }
 
+///|
 test "unit/recursive/interface - nested infinitely expanding types" {
   // Based on nestedInfinitelyExpandedRecursiveTypes.ts
   let source =
@@ -577,6 +618,7 @@ test "unit/recursive/interface - nested infinitely expanding types" {
   }
 }
 
+///|
 test "unit/recursive/interface - recursive type comparison" {
   // Based on recursiveTypeComparison.ts
   let source =
@@ -596,6 +638,7 @@ test "unit/recursive/interface - recursive type comparison" {
   }
 }
 
+///|
 test "unit/recursive/interface - wrapped recursive generic" {
   // Based on wrappedRecursiveGenericType.ts
   let source =

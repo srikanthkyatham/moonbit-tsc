@@ -336,6 +336,8 @@ pub enum DiagnosticCode {
   TS1155 // 'const' declarations must be initialized
   TS1160 // Unterminated template literal
   TS1163 // A 'yield' expression is only allowed in a generator body
+  TS1182 // A destructuring declaration must have an initializer
+  TS1186 // A rest element cannot have an initializer
   TS1187 // A parameter property may not be declared using a binding pattern
   TS1308 // 'await' expressions are only allowed within async functions and at the top levels of modules
   TS1357 // An enum member name must be followed by a ',', '=', or '}'
@@ -440,8 +442,9 @@ pub enum DiagnosticCode {
   // ============================================================================
   // Destructuring & Iteration Errors (2461-2467)
   // ============================================================================
-  TS2461 // A rest element must be last in a destructuring pattern
+  TS2461 // Type '{0}' is not an array type (for parameter binding patterns)
   TS2462 // A rest element cannot have an initializer
+  TS2463 // A binding pattern parameter cannot be optional in an implementation signature
   TS2464 // A computed property name must be of type 'string', 'number', 'symbol', or 'any'
   TS2465 // 'await' expression is only allowed within an async function
   TS2466 // 'yield' expression is only allowed within a generator body
@@ -721,6 +724,8 @@ pub fn DiagnosticCode::to_int(self : DiagnosticCode) -> Int {
     TS1155 => 1155
     TS1160 => 1160
     TS1163 => 1163
+    TS1182 => 1182
+    TS1186 => 1186
     TS1187 => 1187
     TS1308 => 1308
     TS1357 => 1357
@@ -809,6 +814,7 @@ pub fn DiagnosticCode::to_int(self : DiagnosticCode) -> Int {
     // Destructuring & Iteration Errors (2461-2467)
     TS2461 => 2461
     TS2462 => 2462
+    TS2463 => 2463
     TS2464 => 2464
     TS2465 => 2465
     TS2466 => 2466
@@ -1036,6 +1042,8 @@ pub fn DiagnosticCode::from_int(code : Int) -> DiagnosticCode? {
     1155 => Some(TS1155)
     1160 => Some(TS1160)
     1163 => Some(TS1163)
+    1182 => Some(TS1182)
+    1186 => Some(TS1186)
     1187 => Some(TS1187)
     1308 => Some(TS1308)
     1357 => Some(TS1357)
@@ -1120,6 +1128,7 @@ pub fn DiagnosticCode::from_int(code : Int) -> DiagnosticCode? {
     // Destructuring & Iteration Errors (2461-2467)
     2461 => Some(TS2461)
     2462 => Some(TS2462)
+    2463 => Some(TS2463)
     2464 => Some(TS2464)
     2465 => Some(TS2465)
     2466 => Some(TS2466)
@@ -1941,7 +1950,6 @@ pub fn AmbientModuleRegistry::lookup(
       return Some(info)
     }
   }
-
   None
 }
 
@@ -2021,33 +2029,34 @@ pub fn parse_triple_slash_directive(
     // Extract attribute
     match extract_attribute(trimmed, "path") {
       Some(path) =>
-        return Some(
-          TripleSlashDirective::{ kind: ReferencePath(path), location },
-        )
+        return Some(TripleSlashDirective::{
+          kind: ReferencePath(path),
+          location,
+        })
       None => ()
     }
     match extract_attribute(trimmed, "types") {
       Some(types) =>
-        return Some(
-          TripleSlashDirective::{ kind: ReferenceTypes(types), location },
-        )
+        return Some(TripleSlashDirective::{
+          kind: ReferenceTypes(types),
+          location,
+        })
       None => ()
     }
     // Check no-default-lib BEFORE lib (lib is a substring of no-default-lib)
     match extract_attribute(trimmed, "no-default-lib") {
       Some(no_default) => {
         let value = no_default == "true"
-        return Some(
-          TripleSlashDirective::{ kind: NoDefaultLib(value), location },
-        )
+        return Some(TripleSlashDirective::{
+          kind: NoDefaultLib(value),
+          location,
+        })
       }
       None => ()
     }
     match extract_attribute(trimmed, "lib") {
       Some(lib) =>
-        return Some(
-          TripleSlashDirective::{ kind: ReferenceLib(lib), location },
-        )
+        return Some(TripleSlashDirective::{ kind: ReferenceLib(lib), location })
       None => ()
     }
   }
@@ -2065,13 +2074,13 @@ pub fn parse_triple_slash_directive(
   if trimmed.has_prefix("<amd-dependency") {
     match extract_attribute(trimmed, "path") {
       Some(path) =>
-        return Some(
-          TripleSlashDirective::{ kind: AmdDependency(path), location },
-        )
+        return Some(TripleSlashDirective::{
+          kind: AmdDependency(path),
+          location,
+        })
       None => ()
     }
   }
-
   None
 }
 
@@ -2139,7 +2148,6 @@ fn extract_attribute(tag : String, attr_name : String) -> String? {
       }
     }
   }
-
   if start_idx >= 0 {
     // Find closing double quote
     let value = StringBuilder::new()
@@ -2171,7 +2179,6 @@ fn extract_attribute(tag : String, attr_name : String) -> String? {
       }
     }
   }
-
   if start_idx >= 0 {
     // Find closing single quote
     let value = StringBuilder::new()
@@ -2182,7 +2189,6 @@ fn extract_attribute(tag : String, attr_name : String) -> String? {
       value.write_char(tag_chars[i])
     }
   }
-
   None
 }
 
@@ -2198,7 +2204,6 @@ fn match_ambient_pattern(pattern : String, specifier : String) -> Bool {
       break
     }
   }
-
   if star_idx == -1 {
     // No wildcard, exact match
     return pattern == specifier

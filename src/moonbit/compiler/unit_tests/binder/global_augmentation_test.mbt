@@ -27,10 +27,9 @@ test "global augmentation basic" {
     #|}
   let result = parse_and_bind_for_global_augmentation(source)
   match result {
-    Ok(bound) => {
+    Ok(bound) =>
       // Should have one global augmentation
       assert_eq(bound.global_augmentations.length(), 1)
-    }
     Err(_) => assert_true(false)
   }
 }
@@ -45,9 +44,7 @@ test "global augmentation with import" {
     #|}
   let result = parse_and_bind_for_global_augmentation(source)
   match result {
-    Ok(bound) => {
-      assert_eq(bound.global_augmentations.length(), 1)
-    }
+    Ok(bound) => assert_eq(bound.global_augmentations.length(), 1)
     Err(_) => assert_true(false)
   }
 }
@@ -65,9 +62,7 @@ test "multiple global augmentations" {
     #|}
   let result = parse_and_bind_for_global_augmentation(source)
   match result {
-    Ok(bound) => {
-      assert_eq(bound.global_augmentations.length(), 2)
-    }
+    Ok(bound) => assert_eq(bound.global_augmentations.length(), 2)
     Err(_) => assert_true(false)
   }
 }

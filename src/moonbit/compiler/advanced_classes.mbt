@@ -84,9 +84,8 @@ pub fn validate_constructor_body(
 
   // Walk the body to find super() calls and this accesses
   let (found_super, found_this_before_super) = analyze_constructor_body_for_super(
-    body,
-    false, // super_called so far
-    false, // in any nested function that would hide 'this'
+    body, false, // super_called so far
+     false, // in any nested function that would hide 'this'
   )
 
   // Check for errors in derived class constructor
@@ -100,8 +99,7 @@ pub fn validate_constructor_body(
         reason: ThisBeforeSuperCall,
         children: [],
         suggestions: [
-          "Call 'super()' before accessing 'this' in the constructor.",
-          "Move the super() call to the beginning of the constructor.",
+          "Call 'super()' before accessing 'this' in the constructor.", "Move the super() call to the beginning of the constructor.",
         ],
       })
     }
@@ -116,13 +114,11 @@ pub fn validate_constructor_body(
         reason: SuperCallRequired(class_name),
         children: [],
         suggestions: [
-          "Add a 'super()' call in the constructor.",
-          "Derived classes must call super() in their constructor.",
+          "Add a 'super()' call in the constructor.", "Derived classes must call super() in their constructor.",
         ],
       })
     }
   }
-
   { errors, super_call_found: found_super }
 }
 
@@ -144,9 +140,7 @@ fn analyze_constructor_body_for_super(
           let mut this_before = false
           for arg in ce.arguments {
             let (_, found_this) = analyze_constructor_body_for_super(
-              arg,
-              super_called,
-              in_nested_function,
+              arg, super_called, in_nested_function,
             )
             if found_this && not(super_called) {
               this_before = true
@@ -178,9 +172,7 @@ fn analyze_constructor_body_for_super(
       let mut this_before_super = false
       for stmt in bs.statements {
         let (found_super, found_this) = analyze_constructor_body_for_super(
-          stmt,
-          current_super_called,
-          in_nested_function,
+          stmt, current_super_called, in_nested_function,
         )
         if found_super {
           current_super_called = true
@@ -194,7 +186,11 @@ fn analyze_constructor_body_for_super(
 
     // Expression statement
     ExpressionStatement(es) =>
-      analyze_constructor_body_for_super(es.expression, super_called, in_nested_function)
+      analyze_constructor_body_for_super(
+        es.expression,
+        super_called,
+        in_nested_function,
+      )
 
     // If statement
     IfStatement(is_stmt) => {
@@ -226,7 +222,6 @@ fn analyze_constructor_body_for_super(
     ArrowFunction(_) =>
       // Arrow functions capture outer 'this', so we still need to check
       (false, false)
-
     FunctionExpression(_) =>
       // Regular function has its own 'this', so we don't need to check
       (false, false)
@@ -259,7 +254,10 @@ fn analyze_constructor_body_for_super(
     // Return statement
     ReturnStatement(rs) =>
       match rs.expression {
-        Some(arg) => analyze_constructor_body_for_super(arg, super_called, in_nested_function)
+        Some(arg) =>
+          analyze_constructor_body_for_super(
+            arg, super_called, in_nested_function,
+          )
         None => (false, false)
       }
 
@@ -280,7 +278,11 @@ fn analyze_constructor_body_for_super(
 
     // Property access expression - check for this.x
     PropertyAccessExpression(pae) =>
-      analyze_constructor_body_for_super(pae.expression, super_called, in_nested_function)
+      analyze_constructor_body_for_super(
+        pae.expression,
+        super_called,
+        in_nested_function,
+      )
 
     // Other nodes - default
     _ => (false, false)
@@ -304,8 +306,7 @@ pub fn validate_super_call(
       reason: SuperCallOutsideConstructor,
       children: [],
       suggestions: [
-        "'super()' can only be called inside a constructor.",
-        "Use 'super.method()' to call a parent method.",
+        "'super()' can only be called inside a constructor.", "Use 'super.method()' to call a parent method.",
       ],
     })
   }
@@ -319,12 +320,10 @@ pub fn validate_super_call(
       reason: SuperPropertyOutsideClass,
       children: [],
       suggestions: [
-        "'super' can only be used in a derived class.",
-        "Add an 'extends' clause to your class.",
+        "'super' can only be used in a derived class.", "Add an 'extends' clause to your class.",
       ],
     })
   }
-
   errors
 }
 
@@ -383,11 +382,7 @@ pub fn resolve_this_type_in_derived(
   derived_type_params : Array[TypeParamV2],
 ) -> TypeV2 {
   // Replace the base class reference with derived class reference
-  substitute_this_type(
-    base_this_type,
-    derived_class_name,
-    derived_type_params,
-  )
+  substitute_this_type(base_this_type, derived_class_name, derived_type_params)
 }
 
 ///|
@@ -403,22 +398,22 @@ fn substitute_this_type(
       if is_this_type_reference(name) {
         create_polymorphic_this_type(class_name, type_params)
       } else {
-        TGenericInstance(name, args.map(fn(a) {
-          substitute_this_type(a, class_name, type_params)
-        }))
+        TGenericInstance(
+          name,
+          args.map(fn(a) { substitute_this_type(a, class_name, type_params) }),
+        )
       }
 
     // Recursively process compound types
     TArray(elem) => TArray(substitute_this_type(elem, class_name, type_params))
-
     TUnion(types) =>
-      TUnion(types.map(fn(t) { substitute_this_type(t, class_name, type_params) }))
-
+      TUnion(
+        types.map(fn(t) { substitute_this_type(t, class_name, type_params) }),
+      )
     TIntersection(types) =>
-      TIntersection(types.map(fn(t) {
-        substitute_this_type(t, class_name, type_params)
-      }))
-
+      TIntersection(
+        types.map(fn(t) { substitute_this_type(t, class_name, type_params) }),
+      )
     TFunction(func) =>
       TFunction(FunctionTypeV2::{
         type_params: func.type_params,
@@ -440,7 +435,11 @@ fn substitute_this_type(
             })
           None => None
         },
-        return_type: substitute_this_type(func.return_type, class_name, type_params),
+        return_type: substitute_this_type(
+          func.return_type,
+          class_name,
+          type_params,
+        ),
         type_predicate: func.type_predicate,
         this_type: func.this_type.map(fn(t) {
           substitute_this_type(t, class_name, type_params)
@@ -488,7 +487,6 @@ pub fn infer_class_expression_type(
   // Build class info using existing function
   let class_result = build_class_info(env, class_decl)
   errors.append(class_result.errors)
-
   let class_info = class_result.class_info
 
   // The instance type is the object type of the class
@@ -515,13 +513,14 @@ pub fn infer_class_expression_type(
 
   // The constructor type is a function that creates instances
   let constructor_type = build_class_expression_constructor_type(class_info)
-
   { constructor_type, instance_type, static_type, errors }
 }
 
 ///|
 /// Build the constructor type for a class expression
-fn build_class_expression_constructor_type(class_info : ClassTypeInfo) -> TypeV2 {
+fn build_class_expression_constructor_type(
+  class_info : ClassTypeInfo,
+) -> TypeV2 {
   // If there are explicit construct signatures, use the first one
   if not(class_info.construct_signatures.is_empty()) {
     let sig = class_info.construct_signatures[0]
@@ -537,7 +536,6 @@ fn build_class_expression_constructor_type(class_info : ClassTypeInfo) -> TypeV2
     })
     TGenericInstance(class_info.name, type_args)
   }
-
   TFunction(FunctionTypeV2::{
     type_params: class_info.type_params,
     params: [],
@@ -567,7 +565,6 @@ pub fn resolve_super_property(
   property_name : String,
 ) -> SuperResolutionResult {
   let errors : Array[TypeMismatchError] = []
-
   match base_class_info {
     None => {
       // No base class
@@ -578,16 +575,15 @@ pub fn resolve_super_property(
         reason: SuperPropertyOutsideClass,
         children: [],
         suggestions: [
-          "'super' can only be used in a derived class.",
-          "Add an 'extends' clause to access parent members.",
+          "'super' can only be used in a derived class.", "Add an 'extends' clause to access parent members.",
         ],
       })
       { resolved_type: TError, errors }
     }
-    Some(base) => {
+    Some(base) =>
       // Look up the property in the base class
       match base.members.get(property_name) {
-        Some(member_info) => {
+        Some(member_info) =>
           // Check accessibility
           match member_info.accessibility {
             Private => {
@@ -608,7 +604,6 @@ pub fn resolve_super_property(
             }
             Protected | Public => { resolved_type: member_info.ty, errors }
           }
-        }
         None =>
           // Try static members
           match base.static_members.get(property_name) {
@@ -621,14 +616,17 @@ pub fn resolve_super_property(
                 reason: SuperPropertyAccess(property_name),
                 children: [],
                 suggestions: [
-                  "Property '" + property_name + "' does not exist on base class '" + base.name + "'.",
+                  "Property '" +
+                  property_name +
+                  "' does not exist on base class '" +
+                  base.name +
+                  "'.",
                 ],
               })
               { resolved_type: TError, errors }
             }
           }
       }
-    }
   }
 }
 
@@ -641,7 +639,6 @@ pub fn resolve_super_method_call(
 ) -> SuperResolutionResult {
   // First resolve the property
   let prop_result = resolve_super_property(base_class_info, method_name)
-
   if not(prop_result.errors.is_empty()) {
     return prop_result
   }
@@ -651,7 +648,9 @@ pub fn resolve_super_method_call(
     TFunction(func) => {
       // Validate argument types (simplified)
       let errors : Array[TypeMismatchError] = []
-      let required_params = func.params.filter(fn(p) { not(p.optional) }).length()
+      let required_params = func.params
+        .filter(fn(p) { not(p.optional) })
+        .length()
       if arg_types.length() < required_params {
         errors.push(TypeMismatchError::{
           path: PRoot,
@@ -672,9 +671,7 @@ pub fn resolve_super_method_call(
         actual: prop_result.resolved_type,
         reason: NotCallable,
         children: [],
-        suggestions: [
-          "'" + method_name + "' is not a method.",
-        ],
+        suggestions: ["'" + method_name + "' is not a method."],
       })
       { resolved_type: TError, errors }
     }
@@ -688,7 +685,6 @@ pub fn resolve_super_constructor_call(
   arg_types : Array[TypeV2],
 ) -> SuperResolutionResult {
   let errors : Array[TypeMismatchError] = []
-
   match base_class_info {
     None => {
       errors.push(TypeMismatchError::{
@@ -703,7 +699,7 @@ pub fn resolve_super_constructor_call(
       })
       { resolved_type: TError, errors }
     }
-    Some(base) => {
+    Some(base) =>
       // Get the constructor signature from base class
       if base.construct_signatures.is_empty() {
         // Default constructor takes no arguments
@@ -715,8 +711,7 @@ pub fn resolve_super_constructor_call(
             reason: ParamCountMismatch(0, arg_types.length()),
             children: [],
             suggestions: [
-              "Base class has no explicit constructor.",
-              "Remove arguments from super() call.",
+              "Base class has no explicit constructor.", "Remove arguments from super() call.",
             ],
           })
         }
@@ -737,7 +732,6 @@ pub fn resolve_super_constructor_call(
         }
         { resolved_type: TVoid, errors }
       }
-    }
   }
 }
 
@@ -753,7 +747,9 @@ pub fn MismatchReason::this_before_super() -> MismatchReason {
 
 ///|
 /// Create SuperCallRequired error reason
-pub fn MismatchReason::super_call_required(class_name : String) -> MismatchReason {
+pub fn MismatchReason::super_call_required(
+  class_name : String,
+) -> MismatchReason {
   SuperCallRequired(class_name)
 }
 

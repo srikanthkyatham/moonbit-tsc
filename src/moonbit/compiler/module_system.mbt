@@ -103,7 +103,6 @@ pub fn detect_module_format(source_file : SourceFile) -> ModuleFormatInfo {
   if not(info.extension_forced) {
     info.format = determine_format(info)
   }
-
   info
 }
 
@@ -115,7 +114,7 @@ pub fn get_imports(source_file : SourceFile) -> Array[ImportDeclaration] {
   for stmt in source_file.statements {
     match stmt {
       ImportDeclaration(import_decl) => imports.push(import_decl)
-      ImportEqualsDeclaration(import_equals) => {
+      ImportEqualsDeclaration(import_equals) =>
         // Convert ImportEqualsDeclaration to ImportDeclaration format
         // import x = require("module") -> extract "module" as module_specifier
         match import_equals.module_reference {
@@ -128,20 +127,18 @@ pub fn get_imports(source_file : SourceFile) -> Array[ImportDeclaration] {
             }
             let import_decl = ImportDeclaration::{
               import_clause: Some(import_clause),
-              module_specifier: module_specifier,
+              module_specifier,
               is_type_only: import_equals.is_type_only,
               location: import_equals.location,
             }
             imports.push(import_decl)
           }
-          EntityName(_) => {
+          EntityName(_) =>
             // import x = M.N - namespace import, not a module import
             // Skip these as they reference other namespaces, not modules
             ()
-          }
         }
-      }
-      VariableStatement(var_stmt) => {
+      VariableStatement(var_stmt) =>
         // Check for CommonJS: const x = require("module")
         for decl in var_stmt.declarations {
           match decl.initializer {
@@ -156,11 +153,9 @@ pub fn get_imports(source_file : SourceFile) -> Array[ImportDeclaration] {
             None => ()
           }
         }
-      }
-      ExpressionStatement(expr_stmt) => {
+      ExpressionStatement(expr_stmt) =>
         // Check for side-effect require: require("module")
         extract_require_import(expr_stmt.expression, "", imports)
-      }
       _ => ()
     }
   }
@@ -175,23 +170,21 @@ fn extract_require_import(
   imports : Array[ImportDeclaration],
 ) -> Unit {
   match expr {
-    CallExpression(call) => {
+    CallExpression(call) =>
       // Check if callee is "require"
       match call.expression {
-        Identifier(id) if id.name == "require" => {
+        Identifier(id) if id.name == "require" =>
           // Extract module specifier from first argument
           if call.arguments.length() > 0 {
             match call.arguments[0] {
               StringLiteral(lit) => {
                 let loc = call.location
                 let import_clause : ImportClause? = if var_name.length() > 0 {
-                  Some(
-                    ImportClause::{
-                      name: Some(var_name),
-                      named_bindings: None,
-                      location: loc,
-                    },
-                  )
+                  Some(ImportClause::{
+                    name: Some(var_name),
+                    named_bindings: None,
+                    location: loc,
+                  })
                 } else {
                   None
                 }
@@ -206,10 +199,8 @@ fn extract_require_import(
               _ => ()
             }
           }
-        }
         _ => ()
       }
-    }
     _ => ()
   }
 }
@@ -221,21 +212,15 @@ fn analyze_statement_for_module_format(
   info : ModuleFormatInfo,
 ) -> Unit {
   match stmt {
-    ImportDeclaration(_) => {
-      info.has_esm_imports = true
-    }
-    ExportDeclaration(_) | ExportAssignment(_) => {
-      info.has_esm_exports = true
-    }
-    ModuleDeclaration(_) => {
+    ImportDeclaration(_) => info.has_esm_imports = true
+    ExportDeclaration(_) | ExportAssignment(_) => info.has_esm_exports = true
+    ModuleDeclaration(_) =>
       // Ambient module - check for declare module
       info.format = Ambient
-    }
-    ExpressionStatement(es) => {
+    ExpressionStatement(es) =>
       // Check for CommonJS patterns
       analyze_expression_for_cjs(es.expression, info)
-    }
-    VariableStatement(vs) => {
+    VariableStatement(vs) =>
       // Check for const x = require('...')
       for decl in vs.declarations {
         match decl.initializer {
@@ -243,37 +228,27 @@ fn analyze_statement_for_module_format(
           None => ()
         }
       }
-    }
     _ => ()
   }
 }
 
 ///|
 /// Analyze an expression for CommonJS patterns
-fn analyze_expression_for_cjs(
-  expr : Node,
-  info : ModuleFormatInfo,
-) -> Unit {
+fn analyze_expression_for_cjs(expr : Node, info : ModuleFormatInfo) -> Unit {
   match expr {
     // require('module')
-    CallExpression(ce) => {
+    CallExpression(ce) =>
       match ce.expression {
-        Identifier(id) if id.name == "require" => {
-          info.has_cjs_require = true
-        }
+        Identifier(id) if id.name == "require" => info.has_cjs_require = true
         _ => ()
       }
-    }
     // module.exports = ... or exports.x = ...
-    BinaryExpression(be) => {
+    BinaryExpression(be) =>
       if is_cjs_export_pattern(be.left) {
         info.has_cjs_exports = true
       }
-    }
     // await at top level
-    AwaitExpression(_) => {
-      info.has_top_level_await = true
-    }
+    AwaitExpression(_) => info.has_top_level_await = true
     _ => ()
   }
 }
@@ -282,12 +257,11 @@ fn analyze_expression_for_cjs(
 /// Check if expression is a CommonJS export pattern
 fn is_cjs_export_pattern(expr : Node) -> Bool {
   match expr {
-    PropertyAccessExpression(pae) => {
+    PropertyAccessExpression(pae) =>
       match pae.expression {
         Identifier(id) => id.name == "module" || id.name == "exports"
         _ => false
       }
-    }
     Identifier(id) => id.name == "exports"
     _ => false
   }
@@ -311,7 +285,6 @@ pub fn get_file_extension(path : String) -> String {
   let chars : Array[Char] = path.to_array()
   let mut last_dot = -1
   let mut last_slash = -1
-
   for i = 0; i < chars.length(); i = i + 1 {
     if chars[i] == '.' {
       last_dot = i
@@ -320,7 +293,6 @@ pub fn get_file_extension(path : String) -> String {
       last_slash = i
     }
   }
-
   if last_dot > last_slash && last_dot >= 0 {
     let result : Array[Char] = []
     for i = last_dot; i < chars.length(); i = i + 1 {
@@ -343,16 +315,18 @@ pub fn convert_esm_import_to_cjs(
 ) -> Array[String] {
   let statements : Array[String] = []
   let module_path = import_decl.module_specifier
-
   match import_decl.import_clause {
     Some(clause) => {
       // Handle default import: import x from 'mod' -> const x = require('mod').default
       match clause.name {
-        Some(default_name) => {
+        Some(default_name) =>
           statements.push(
-            "const " + default_name + " = require('" + module_path + "').default;",
+            "const " +
+            default_name +
+            " = require('" +
+            module_path +
+            "').default;",
           )
-        }
         None => ()
       }
 
@@ -368,23 +342,26 @@ pub fn convert_esm_import_to_cjs(
           }
           if names.length() > 0 {
             statements.push(
-              "const { " + names.join(", ") + " } = require('" + module_path + "');",
+              "const { " +
+              names.join(", ") +
+              " } = require('" +
+              module_path +
+              "');",
             )
           }
         }
-        Some(NamespaceImport(ns_name, _)) => {
+        Some(NamespaceImport(ns_name, _)) =>
           // import * as ns from 'mod' -> const ns = require('mod')
-          statements.push("const " + ns_name + " = require('" + module_path + "');")
-        }
+          statements.push(
+            "const " + ns_name + " = require('" + module_path + "');",
+          )
         None => ()
       }
     }
-    None => {
+    None =>
       // Side-effect import: import 'mod' -> require('mod')
       statements.push("require('" + module_path + "');")
-    }
   }
-
   statements
 }
 
@@ -393,7 +370,7 @@ pub fn convert_esm_import_to_cjs(
 pub fn convert_cjs_require_to_esm(
   var_name : String,
   module_path : String,
-  is_default~ : Bool = false,
+  is_default? : Bool = false,
 ) -> String {
   if is_default {
     "import " + var_name + " from '" + module_path + "';"
@@ -407,7 +384,7 @@ pub fn convert_cjs_require_to_esm(
 pub fn convert_esm_export_to_cjs(
   export_name : String,
   local_name : String,
-  is_default~ : Bool = false,
+  is_default? : Bool = false,
 ) -> String {
   if is_default {
     "module.exports = " + local_name + ";"
@@ -447,7 +424,7 @@ pub fn validate_type_only_semantics(
   // First pass: collect type-only imports
   for stmt in bound_source.statements {
     match stmt {
-      ImportDeclaration(import_decl) => {
+      ImportDeclaration(import_decl) =>
         if import_decl.is_type_only {
           // All imports from this declaration are type-only
           collect_import_names(import_decl, type_only_imports)
@@ -456,19 +433,17 @@ pub fn validate_type_only_semantics(
           match import_decl.import_clause {
             Some(clause) =>
               match clause.named_bindings {
-                Some(NamedImports::NamedImports(specifiers, _)) => {
+                Some(NamedImports::NamedImports(specifiers, _)) =>
                   for spec in specifiers {
                     if spec.is_type_only {
                       type_only_imports.set(spec.name, true)
                     }
                   }
-                }
                 _ => ()
               }
             None => ()
           }
         }
-      }
       _ => ()
     }
   }
@@ -476,14 +451,9 @@ pub fn validate_type_only_semantics(
   // Second pass: validate usage
   for stmt in bound_source.statements {
     validate_statement_type_only_usage(
-      stmt,
-      type_only_imports,
-      type_symbols,
-      file_path,
-      errors,
+      stmt, type_only_imports, type_symbols, file_path, errors,
     )
   }
-
   { errors, warnings }
 }
 
@@ -500,14 +470,12 @@ fn collect_import_names(
         None => ()
       }
       match clause.named_bindings {
-        Some(NamedImports::NamedImports(specifiers, _)) => {
+        Some(NamedImports::NamedImports(specifiers, _)) =>
           for spec in specifiers {
             type_only_imports.set(spec.name, true)
           }
-        }
-        Some(NamespaceImport(ns_name, _)) => {
+        Some(NamespaceImport(ns_name, _)) =>
           type_only_imports.set(ns_name, true)
-        }
         None => ()
       }
     }
@@ -526,37 +494,31 @@ fn validate_statement_type_only_usage(
 ) -> Unit {
   match stmt {
     // Check for type-only imports used as values
-    ExpressionStatement(es) => {
+    ExpressionStatement(es) =>
       check_expression_type_only_usage(
         es.expression,
         type_only_imports,
         file_path,
         errors,
       )
-    }
-    VariableStatement(vs) => {
+    VariableStatement(vs) =>
       for decl in vs.declarations {
         match decl.initializer {
           Some(init) =>
             check_expression_type_only_usage(
-              init,
-              type_only_imports,
-              file_path,
-              errors,
+              init, type_only_imports, file_path, errors,
             )
           None => ()
         }
       }
-    }
     // Check for non-type-only exports of types
-    ExportDeclaration(export_decl) => {
+    ExportDeclaration(export_decl) =>
       if not(export_decl.is_type_only) {
         match export_decl.export_clause {
-          Some(NamespaceExport(_, _)) => {
+          Some(NamespaceExport(_, _)) =>
             // Namespace exports (export * as ns from 'mod') are always OK
             ()
-          }
-          Some(NamedExports::NamedExports(specifiers, _)) => {
+          Some(NamedExports::NamedExports(specifiers, _)) =>
             for spec in specifiers {
               if not(spec.is_type_only) {
                 let local_name = match spec.property_name {
@@ -565,26 +527,22 @@ fn validate_statement_type_only_usage(
                 }
                 // If exporting a type symbol without type-only marker
                 if type_symbols.get(local_name).unwrap_or(false) {
-                  errors.push(
-                    Diagnostic::{
-                      code: 1205,
-                      category: DiagnosticCategory::Error,
-                      message: "Re-exporting a type when the '--isolatedModules' flag is provided requires using 'export type'.",
-                      location: SourceLocation::{
-                        file_path,
-                        start: Position::{ line: 0, column: 0, offset: 0 },
-                        end: Position::{ line: 0, column: 0, offset: 0 },
-                      },
+                  errors.push(Diagnostic::{
+                    code: 1205,
+                    category: DiagnosticCategory::Error,
+                    message: "Re-exporting a type when the '--isolatedModules' flag is provided requires using 'export type'.",
+                    location: SourceLocation::{
+                      file_path,
+                      start: Position::{ line: 0, column: 0, offset: 0 },
+                      end: Position::{ line: 0, column: 0, offset: 0 },
                     },
-                  )
+                  })
                 }
               }
             }
-          }
           None => ()
         }
       }
-    }
     _ => ()
   }
 }
@@ -598,39 +556,65 @@ fn check_expression_type_only_usage(
   errors : Array[Diagnostic],
 ) -> Unit {
   match expr {
-    Identifier(id) => {
+    Identifier(id) =>
       if type_only_imports.get(id.name).unwrap_or(false) {
-        errors.push(
-          Diagnostic::{
-            code: 1361,
-            category: DiagnosticCategory::Error,
-            message: "'" + id.name + "' cannot be used as a value because it was imported using 'import type'.",
-            location: id.location,
-          },
+        errors.push(Diagnostic::{
+          code: 1361,
+          category: DiagnosticCategory::Error,
+          message: "'" +
+          id.name +
+          "' cannot be used as a value because it was imported using 'import type'.",
+          location: id.location,
+        })
+      }
+    CallExpression(ce) => {
+      check_expression_type_only_usage(
+        ce.expression,
+        type_only_imports,
+        file_path,
+        errors,
+      )
+      for arg in ce.arguments {
+        check_expression_type_only_usage(
+          arg, type_only_imports, file_path, errors,
         )
       }
     }
-    CallExpression(ce) => {
-      check_expression_type_only_usage(ce.expression, type_only_imports, file_path, errors)
-      for arg in ce.arguments {
-        check_expression_type_only_usage(arg, type_only_imports, file_path, errors)
-      }
-    }
-    PropertyAccessExpression(pae) => {
-      check_expression_type_only_usage(pae.expression, type_only_imports, file_path, errors)
-    }
+    PropertyAccessExpression(pae) =>
+      check_expression_type_only_usage(
+        pae.expression,
+        type_only_imports,
+        file_path,
+        errors,
+      )
     BinaryExpression(be) => {
-      check_expression_type_only_usage(be.left, type_only_imports, file_path, errors)
-      check_expression_type_only_usage(be.right, type_only_imports, file_path, errors)
+      check_expression_type_only_usage(
+        be.left,
+        type_only_imports,
+        file_path,
+        errors,
+      )
+      check_expression_type_only_usage(
+        be.right,
+        type_only_imports,
+        file_path,
+        errors,
+      )
     }
     NewExpression(ne) => {
-      check_expression_type_only_usage(ne.expression, type_only_imports, file_path, errors)
+      check_expression_type_only_usage(
+        ne.expression,
+        type_only_imports,
+        file_path,
+        errors,
+      )
       match ne.arguments {
-        Some(args) => {
+        Some(args) =>
           for arg in args {
-            check_expression_type_only_usage(arg, type_only_imports, file_path, errors)
+            check_expression_type_only_usage(
+              arg, type_only_imports, file_path, errors,
+            )
           }
-        }
         None => ()
       }
     }
@@ -683,12 +667,10 @@ pub struct ModuleResolutionHost {
 
 ///|
 /// Create module resolution host with file system
-pub fn ModuleResolutionHost::new(fs : FileSystemInterface) -> ModuleResolutionHost {
-  {
-    fs,
-    file_cache: Map::new(),
-    dir_cache: Map::new(),
-  }
+pub fn ModuleResolutionHost::new(
+  fs : FileSystemInterface,
+) -> ModuleResolutionHost {
+  { fs, file_cache: Map::new(), dir_cache: Map::new() }
 }
 
 ///|
@@ -832,47 +814,43 @@ pub fn resolve_and_validate_import(
       // Check module format compatibility
       let source_format = ctx.format_info.get(containing_file)
       let target_format = ctx.format_info.get(resolved_path)
-
       match (source_format, target_format) {
-        (Some(src), Some(tgt)) => {
+        (Some(src), Some(tgt)) =>
           // Check for format incompatibilities
           match (src.format, tgt.format) {
-            (ESM, CJS) => {
+            (ESM, CJS) =>
               // ESM can import CJS (with interop)
               Ok(resolved_path)
-            }
-            (CJS, ESM) => {
+            (CJS, ESM) =>
               // CJS cannot require ESM directly in Node.js
               // This is allowed in bundlers, but we can warn
               Ok(resolved_path)
-            }
             _ => Ok(resolved_path)
           }
-        }
         _ => Ok(resolved_path)
       }
     }
     Err(failure) => {
       let message = match failure {
         ModuleNotFound(spec, _) => "Cannot find module '" + spec + "'."
-        OutsideRootDir(path) => "Relative import '" + path + "' is outside of project root."
+        OutsideRootDir(path) =>
+          "Relative import '" + path + "' is outside of project root."
         InvalidSpecifier(spec) => "Invalid module specifier: " + spec
-        CircularDependency(chain) => "Circular dependency detected: " + chain.join(" -> ")
+        CircularDependency(chain) =>
+          "Circular dependency detected: " + chain.join(" -> ")
         PackageExportsNotFound(pkg, subpath) =>
           "Cannot find subpath '" + subpath + "' in package '" + pkg + "'."
       }
-      Err(
-        Diagnostic::{
-          code: 2307,
-          category: DiagnosticCategory::Error,
-          message,
-          location: SourceLocation::{
-            file_path: containing_file,
-            start: Position::{ line: 0, column: 0, offset: 0 },
-            end: Position::{ line: 0, column: 0, offset: 0 },
-          },
+      Err(Diagnostic::{
+        code: 2307,
+        category: DiagnosticCategory::Error,
+        message,
+        location: SourceLocation::{
+          file_path: containing_file,
+          start: Position::{ line: 0, column: 0, offset: 0 },
+          end: Position::{ line: 0, column: 0, offset: 0 },
         },
-      )
+      })
     }
   }
 }
@@ -932,7 +910,7 @@ pub fn PackageJsonInfo::with_type(type_field : String) -> PackageJsonInfo {
 /// Create package.json info with main and esm entry
 pub fn PackageJsonInfo::with_entries(
   main : String,
-  esm_entry~ : String? = None,
+  esm_entry? : String? = None,
 ) -> PackageJsonInfo {
   {
     name: Some("test"),
@@ -961,17 +939,15 @@ pub fn PackageJsonInfo::get_entry_point(
   format : ModuleFormat,
 ) -> String? {
   match format {
-    ESM => {
+    ESM =>
       // Prefer esm_entry (module field) for ESM
       match self.esm_entry {
         Some(m) => Some(m)
         None => self.main
       }
-    }
-    CJS => {
+    CJS =>
       // Use main field for CJS
       self.main
-    }
     _ => self.main
   }
 }

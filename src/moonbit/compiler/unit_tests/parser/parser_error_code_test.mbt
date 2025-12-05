@@ -30,7 +30,10 @@ test "ParserErrorCode::to_int - rest parameter errors" {
   // TS1016: Required param after optional
   assert_eq(@compiler.get_parser_error_int("RequiredParamAfterOptional"), 1016)
   // TS1048: Rest parameter cannot be optional
-  assert_eq(@compiler.get_parser_error_int("RestParameterCannotBeOptional"), 1048)
+  assert_eq(
+    @compiler.get_parser_error_int("RestParameterCannotBeOptional"),
+    1048,
+  )
   // TS1049: Rest parameter cannot have initializer
   assert_eq(
     @compiler.get_parser_error_int("RestParameterCannotHaveInitializer"),
@@ -41,11 +44,17 @@ test "ParserErrorCode::to_int - rest parameter errors" {
 ///|
 test "ParserErrorCode::to_int - ambient context errors" {
   // TS1036: Statements not allowed in ambient
-  assert_eq(@compiler.get_parser_error_int("StatementsNotAllowedInAmbient"), 1036)
+  assert_eq(
+    @compiler.get_parser_error_int("StatementsNotAllowedInAmbient"),
+    1036,
+  )
   // TS1038: Declare in ambient context
   assert_eq(@compiler.get_parser_error_int("DeclareInAmbientContext"), 1038)
   // TS1039: Initializer not allowed in ambient
-  assert_eq(@compiler.get_parser_error_int("InitializerNotAllowedInAmbient"), 1039)
+  assert_eq(
+    @compiler.get_parser_error_int("InitializerNotAllowedInAmbient"),
+    1039,
+  )
   // TS1066: Ambient enum initializer must be constant
   assert_eq(
     @compiler.get_parser_error_int("AmbientEnumInitializerMustBeConstant"),
@@ -86,7 +95,10 @@ test "ParserErrorCode::to_int - constructor errors" {
 ///|
 test "ParserErrorCode::to_int - accessor errors" {
   // TS1093: Set accessor cannot have return type
-  assert_eq(@compiler.get_parser_error_int("SetAccessorCannotHaveReturnType"), 1093)
+  assert_eq(
+    @compiler.get_parser_error_int("SetAccessorCannotHaveReturnType"),
+    1093,
+  )
   // TS1094: Get accessor cannot have params
   assert_eq(@compiler.get_parser_error_int("GetAccessorCannotHaveParams"), 1094)
   // TS1095: Set accessor must have one param
@@ -100,7 +112,10 @@ test "ParserErrorCode::to_int - statement context errors" {
   // TS1110: Type expected
   assert_eq(@compiler.get_parser_error_int("TypeExpected"), 1110)
   // TS1128: Declaration or statement expected
-  assert_eq(@compiler.get_parser_error_int("DeclarationOrStatementExpected"), 1128)
+  assert_eq(
+    @compiler.get_parser_error_int("DeclarationOrStatementExpected"),
+    1128,
+  )
   // TS1131: Property or signature expected
   assert_eq(@compiler.get_parser_error_int("PropertyOrSignatureExpected"), 1131)
   // TS1141: String literal expected
@@ -249,7 +264,10 @@ test "ParserErrorCode::to_message - statement context errors" {
     @compiler.get_parser_error_message("ReturnOutsideFunction"),
     "A 'return' statement can only be used within a function body.",
   )
-  assert_eq(@compiler.get_parser_error_message("TypeExpected"), "Type expected.")
+  assert_eq(
+    @compiler.get_parser_error_message("TypeExpected"),
+    "Type expected.",
+  )
   assert_eq(
     @compiler.get_parser_error_message("DeclarationOrStatementExpected"),
     "Declaration or statement expected.",
@@ -326,9 +344,15 @@ test "ParserErrorCode::to_int - decorator errors" {
   // TS1206: Decorators not valid here
   assert_eq(@compiler.get_parser_error_int("DecoratorsNotValidHere"), 1206)
   // TS1219: Experimental decorators warning
-  assert_eq(@compiler.get_parser_error_int("ExperimentalDecoratorsWarning"), 1219)
+  assert_eq(
+    @compiler.get_parser_error_int("ExperimentalDecoratorsWarning"),
+    1219,
+  )
   // TS1239: Unable to resolve class decorator
-  assert_eq(@compiler.get_parser_error_int("UnableToResolveClassDecorator"), 1239)
+  assert_eq(
+    @compiler.get_parser_error_int("UnableToResolveClassDecorator"),
+    1239,
+  )
   // TS1240: Unable to resolve parameter decorator
   assert_eq(
     @compiler.get_parser_error_int("UnableToResolveParameterDecorator"),

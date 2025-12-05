@@ -23,7 +23,9 @@ fn parse_bind_check(source : String) -> @compiler.CheckResult {
 
 ///|
 /// Helper to parse only and check for errors
-fn parse_only(source : String) -> Result[@compiler.SourceFile, Array[@compiler.Diagnostic]] {
+fn parse_only(
+  source : String,
+) -> Result[@compiler.SourceFile, Array[@compiler.Diagnostic]] {
   let tokens = @compiler.scan_all_v2(source, "test.ts")
   @compiler.parse_source_file(tokens, "test.ts")
 }

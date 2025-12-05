@@ -9,6 +9,7 @@
 // TS2391: Missing Implementation Tests
 // ============================================================================
 
+///|
 test "overload/TS2391 - missing implementation for non-ambient overloads" {
   let source =
     #|function foo(x: string): string;
@@ -32,6 +33,7 @@ test "overload/TS2391 - missing implementation for non-ambient overloads" {
   }
 }
 
+///|
 test "overload/TS2391 - ambient overloads don't require implementation" {
   let source =
     #|declare function foo(x: string): string;
@@ -53,6 +55,7 @@ test "overload/TS2391 - ambient overloads don't require implementation" {
   }
 }
 
+///|
 test "overload/TS2391 - valid overloads with implementation" {
   let source =
     #|function foo(x: string): string;
@@ -80,6 +83,7 @@ test "overload/TS2391 - valid overloads with implementation" {
 // TS2383: Ambient Mismatch Tests
 // ============================================================================
 
+///|
 test "overload/TS2383 - mixed ambient and non-ambient overloads" {
   let source =
     #|declare function foo(x: string): string;
@@ -95,7 +99,9 @@ test "overload/TS2383 - mixed ambient and non-ambient overloads" {
         Some(overloads) => {
           let result = @compiler.validate_overloads(overloads)
           // Should detect ambient mismatch
-          let has_ambient_error = result.errors.iter().any(fn(e) { e.code == 2383 })
+          let has_ambient_error = result.errors
+            .iter()
+            .any(fn(e) { e.code == 2383 })
           assert_true(has_ambient_error)
         }
         None => fail("Expected to find foo overloads")
@@ -105,6 +111,7 @@ test "overload/TS2383 - mixed ambient and non-ambient overloads" {
   }
 }
 
+///|
 test "overload/TS2383 - all ambient is valid" {
   let source =
     #|declare function foo(x: string): string;
@@ -117,7 +124,9 @@ test "overload/TS2383 - all ambient is valid" {
         Some(overloads) => {
           let result = @compiler.validate_overloads(overloads)
           // All ambient is valid (no TS2383)
-          let has_ambient_error = result.errors.iter().any(fn(e) { e.code == 2383 })
+          let has_ambient_error = result.errors
+            .iter()
+            .any(fn(e) { e.code == 2383 })
           assert_eq(has_ambient_error, false)
         }
         None => fail("Expected to find foo overloads")
@@ -127,6 +136,7 @@ test "overload/TS2383 - all ambient is valid" {
   }
 }
 
+///|
 test "overload/TS2383 - all non-ambient with impl is valid" {
   let source =
     #|function foo(x: string): string;
@@ -142,7 +152,9 @@ test "overload/TS2383 - all non-ambient with impl is valid" {
         Some(overloads) => {
           let result = @compiler.validate_overloads(overloads)
           // All non-ambient is valid (no TS2383)
-          let has_ambient_error = result.errors.iter().any(fn(e) { e.code == 2383 })
+          let has_ambient_error = result.errors
+            .iter()
+            .any(fn(e) { e.code == 2383 })
           assert_eq(has_ambient_error, false)
         }
         None => fail("Expected to find foo overloads")
@@ -156,6 +168,7 @@ test "overload/TS2383 - all non-ambient with impl is valid" {
 // TS2394: Overload Compatibility Tests
 // ============================================================================
 
+///|
 test "overload/TS2394 - implementation requires more params than overload" {
   let source =
     #|function foo(x: string): string;
@@ -170,7 +183,9 @@ test "overload/TS2394 - implementation requires more params than overload" {
         Some(overloads) => {
           let result = @compiler.validate_overloads(overloads)
           // Implementation requires 2 params, but overload only provides 1
-          let has_compat_error = result.errors.iter().any(fn(e) { e.code == 2394 })
+          let has_compat_error = result.errors
+            .iter()
+            .any(fn(e) { e.code == 2394 })
           assert_true(has_compat_error)
         }
         None => fail("Expected to find foo overloads")
@@ -180,6 +195,7 @@ test "overload/TS2394 - implementation requires more params than overload" {
   }
 }
 
+///|
 test "overload/TS2394 - implementation with optional params is valid" {
   let source =
     #|function foo(x: string): string;
@@ -203,6 +219,7 @@ test "overload/TS2394 - implementation with optional params is valid" {
   }
 }
 
+///|
 test "overload/TS2394 - overload has more params than implementation" {
   let source =
     #|function foo(x: string, y: number): string;
@@ -217,7 +234,9 @@ test "overload/TS2394 - overload has more params than implementation" {
         Some(overloads) => {
           let result = @compiler.validate_overloads(overloads)
           // Overload has 2 params, but implementation only has 1
-          let has_compat_error = result.errors.iter().any(fn(e) { e.code == 2394 })
+          let has_compat_error = result.errors
+            .iter()
+            .any(fn(e) { e.code == 2394 })
           assert_true(has_compat_error)
         }
         None => fail("Expected to find foo overloads")
@@ -227,6 +246,7 @@ test "overload/TS2394 - overload has more params than implementation" {
   }
 }
 
+///|
 test "overload/TS2394 - rest parameter in implementation handles more params" {
   let source =
     #|function foo(x: string, y: number): string;
@@ -254,6 +274,7 @@ test "overload/TS2394 - rest parameter in implementation handles more params" {
 // Valid Overload Patterns Tests
 // ============================================================================
 
+///|
 test "overload/valid - simple two-overload function" {
   let source =
     #|function greet(x: string): string;
@@ -277,6 +298,7 @@ test "overload/valid - simple two-overload function" {
   }
 }
 
+///|
 test "overload/valid - multiple overloads with different arities" {
   let source =
     #|function create(): object;
@@ -305,6 +327,7 @@ test "overload/valid - multiple overloads with different arities" {
 // Overload Collection Tests
 // ============================================================================
 
+///|
 test "overload/collection - collects multiple signatures" {
   let source =
     #|function foo(x: string): string;
@@ -328,6 +351,7 @@ test "overload/collection - collects multiple signatures" {
   }
 }
 
+///|
 test "overload/collection - separate functions are separate" {
   let source =
     #|function foo(x: string): string;
@@ -346,6 +370,7 @@ test "overload/collection - separate functions are separate" {
   }
 }
 
+///|
 test "overload/collection - single function no overloads" {
   let source =
     #|function foo(x: string): string {
@@ -368,6 +393,7 @@ test "overload/collection - single function no overloads" {
   }
 }
 
+///|
 test "overload/collection - only signature no implementation" {
   let source =
     #|function foo(x: string): string;
@@ -387,6 +413,7 @@ test "overload/collection - only signature no implementation" {
   }
 }
 
+///|
 test "overload/collection - function overloads properties" {
   let source =
     #|function foo(x: string): string;

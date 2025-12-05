@@ -1065,17 +1065,14 @@ test "unit/checker/narrowing - function scope clears narrowing" {
 test "unit/checker/function-expr - named function expression can reference itself" {
   // Named function expressions should be able to reference their own name
   // This is valid TypeScript: function y() { return y; }
-  let result = parse_bind_check(
-    "var x = function y() { return y; };",
-  )
+  let result = parse_bind_check("var x = function y() { return y; };")
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
-    Err(diagnostics) => {
+    Err(diagnostics) =>
       // Should NOT have "Cannot find name 'y'" error
       for diag in diagnostics {
         assert_false(diag.message.contains("Cannot find name 'y'"))
       }
-    }
   }
 }
 
@@ -1087,12 +1084,11 @@ test "unit/checker/function-expr - embedded in template literal" {
   )
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
-    Err(diagnostics) => {
+    Err(diagnostics) =>
       // Should NOT have "Cannot find name 'y'" error
       for diag in diagnostics {
         assert_false(diag.message.contains("Cannot find name 'y'"))
       }
-    }
   }
 }
 
@@ -1104,21 +1100,18 @@ test "unit/checker/function-expr - recursive factorial" {
   )
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
-    Err(diagnostics) => {
+    Err(diagnostics) =>
       // Should NOT have "Cannot find name 'f'" error
       for diag in diagnostics {
         assert_false(diag.message.contains("Cannot find name 'f'"))
       }
-    }
   }
 }
 
 ///|
 test "unit/checker/function-expr - anonymous function has no self-reference" {
   // Anonymous function expressions don't create a binding
-  let result = parse_bind_check(
-    "var x = function() { return 42; };",
-  )
+  let result = parse_bind_check("var x = function() { return 42; };")
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(_) => assert_true(false)
@@ -1136,7 +1129,9 @@ test "unit/checker/function-expr - name not visible outside" {
     Ok(_) => assert_true(false) // Should have error - y not visible outside
     Err(diagnostics) => {
       // Should have "Cannot find name 'y'" error
-      let has_error = diagnostics.iter().any(fn(d) { d.message.contains("Cannot find name 'y'") })
+      let has_error = diagnostics
+        .iter()
+        .any(fn(d) { d.message.contains("Cannot find name 'y'") })
       assert_true(has_error)
     }
   }
@@ -1149,9 +1144,7 @@ test "unit/checker/function-expr - name not visible outside" {
 ///|
 test "unit/checker/globals - Infinity is recognized as number" {
   // Infinity should be a global constant of type number
-  let result = parse_bind_check(
-    "const x: number = Infinity;",
-  )
+  let result = parse_bind_check("const x: number = Infinity;")
   match result {
     Ok(typed) => assert_eq(typed.diagnostics.length(), 0)
     Err(_) => assert_true(false)
@@ -1173,9 +1166,7 @@ test "unit/checker/globals - Infinity in arithmetic" {
 ///|
 test "unit/checker/globals - NaN is recognized as number" {
   // NaN should be a global constant of type number
-  let result = parse_bind_check(
-    "const x: number = NaN;",
-  )
+  let result = parse_bind_check("const x: number = NaN;")
   match result {
     Ok(typed) => assert_eq(typed.diagnostics.length(), 0)
     Err(_) => assert_true(false)
@@ -1197,9 +1188,7 @@ test "unit/checker/globals - NaN in comparison" {
 ///|
 test "unit/checker/globals - undefined is recognized" {
   // undefined should be a global constant
-  let result = parse_bind_check(
-    "const x: undefined = undefined;",
-  )
+  let result = parse_bind_check("const x: undefined = undefined;")
   match result {
     Ok(typed) => assert_eq(typed.diagnostics.length(), 0)
     Err(_) => assert_true(false)
@@ -1209,9 +1198,7 @@ test "unit/checker/globals - undefined is recognized" {
 ///|
 test "unit/checker/globals - undefined in union type" {
   // undefined can be used in union types
-  let result = parse_bind_check(
-    "const x: string | undefined = undefined;",
-  )
+  let result = parse_bind_check("const x: string | undefined = undefined;")
   match result {
     Ok(typed) => assert_eq(typed.diagnostics.length(), 0)
     Err(_) => assert_true(false)
@@ -1221,9 +1208,7 @@ test "unit/checker/globals - undefined in union type" {
 ///|
 test "unit/checker/globals - negative Infinity" {
   // -Infinity should work as well
-  let result = parse_bind_check(
-    "const x: number = -Infinity;",
-  )
+  let result = parse_bind_check("const x: number = -Infinity;")
   match result {
     Ok(typed) => assert_eq(typed.diagnostics.length(), 0)
     Err(_) => assert_true(false)
@@ -1237,9 +1222,7 @@ test "unit/checker/globals - negative Infinity" {
 ///|
 test "unit/checker/tagged-template - any tag returns any" {
   // When tag has type 'any', result should be 'any'
-  let result = parse_bind_check(
-    "declare var tag: any; const x = tag `hello`;",
-  )
+  let result = parse_bind_check("declare var tag: any; const x = tag `hello`;")
   match result {
     Ok(typed) => assert_eq(typed.diagnostics.length(), 0)
     Err(_) => assert_true(false)

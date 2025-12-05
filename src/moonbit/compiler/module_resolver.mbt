@@ -131,7 +131,9 @@ pub fn ModuleResolver::new(
 
 ///|
 /// Create with default options
-pub fn ModuleResolver::with_defaults(current_directory : String) -> ModuleResolver {
+pub fn ModuleResolver::with_defaults(
+  current_directory : String,
+) -> ModuleResolver {
   ModuleResolver::new(ModuleResolutionOptions::default(), current_directory)
 }
 
@@ -240,7 +242,7 @@ fn string_index_of(s : String, ch : Char) -> Int? {
 
 ///|
 /// String substring helper
-fn string_substring(s : String, start : Int, end~ : Int = -1) -> String {
+fn string_substring(s : String, start : Int, end? : Int = -1) -> String {
   let chars : Array[Char] = s.to_array()
   let actual_end = if end < 0 { chars.length() } else { end }
   let result : Array[Char] = []
@@ -281,7 +283,6 @@ fn join_paths(base : String, relative : String) -> String {
 fn normalize_path(path : String) -> String {
   let parts = path.split("/")
   let result : Array[String] = []
-
   for part in parts {
     let part_str = part.to_string()
     if part_str == "." || part_str.is_empty() {
@@ -289,6 +290,7 @@ fn normalize_path(path : String) -> String {
     } else if part_str == ".." {
       if result.length() > 0 && result[result.length() - 1] != ".." {
         let _ = result.pop()
+
       } else {
         result.push(part_str)
       }
@@ -296,7 +298,6 @@ fn normalize_path(path : String) -> String {
       result.push(part_str)
     }
   }
-
   let normalized = result.join("/")
   if path.has_prefix("/") {
     "/" + normalized
@@ -359,10 +360,11 @@ fn resolve_relative_module(
     let index_path = join_paths(candidate, "index" + extension)
     searched.push(index_path)
     if file_exists(index_path) {
-      return Ok(create_resolved_module(index_path, module_name, false, extension))
+      return Ok(
+        create_resolved_module(index_path, module_name, false, extension),
+      )
     }
   }
-
   Err(ModuleNotFound(module_name, searched))
 }
 
@@ -397,10 +399,11 @@ fn resolve_rooted_module(
     let index_path = join_paths(module_name, "index" + extension)
     searched.push(index_path)
     if file_exists(index_path) {
-      return Ok(create_resolved_module(index_path, module_name, false, extension))
+      return Ok(
+        create_resolved_module(index_path, module_name, false, extension),
+      )
     }
   }
-
   Err(ModuleNotFound(module_name, searched))
 }
 
@@ -433,31 +436,29 @@ fn resolve_non_relative_module(
 
   // 3. Try node_modules resolution
   match resolver.options.strategy {
-    Node | NodeNext => {
-      match try_resolve_from_node_modules(resolver, module_name, containing_file) {
+    Node | NodeNext =>
+      match
+        try_resolve_from_node_modules(resolver, module_name, containing_file) {
         Ok(resolved) => return Ok(resolved)
         Err(ModuleNotFound(_, locs)) => searched.append(locs)
         Err(other) => return Err(other)
       }
-    }
-    Classic => {
+    Classic =>
       // Classic resolution walks up directory tree
       match try_resolve_classic(resolver, module_name, containing_file) {
         Ok(resolved) => return Ok(resolved)
         Err(ModuleNotFound(_, locs)) => searched.append(locs)
         Err(other) => return Err(other)
       }
-    }
-    Bundler => {
+    Bundler =>
       // Bundler mode - similar to Node but more lenient
-      match try_resolve_from_node_modules(resolver, module_name, containing_file) {
+      match
+        try_resolve_from_node_modules(resolver, module_name, containing_file) {
         Ok(resolved) => return Ok(resolved)
         Err(ModuleNotFound(_, locs)) => searched.append(locs)
         Err(other) => return Err(other)
       }
-    }
   }
-
   Err(ModuleNotFound(module_name, searched))
 }
 
@@ -473,14 +474,13 @@ fn try_resolve_with_paths(
   _containing_file : String,
 ) -> Result[ResolvedModule, ResolutionFailure] {
   let searched : Array[String] = []
-
   for pattern_entry in resolver.options.paths {
     let pattern = pattern_entry.0
     let substitutions = pattern_entry.1
 
     // Check if pattern matches
     match match_pattern(pattern, module_name) {
-      Some(matched_star) => {
+      Some(matched_star) =>
         // Try each substitution
         for subst in substitutions {
           let resolved_path = substitute_pattern(subst, matched_star)
@@ -496,11 +496,9 @@ fn try_resolve_with_paths(
             Err(_) => ()
           }
         }
-      }
       None => ()
     }
   }
-
   Err(ModuleNotFound(module_name, searched))
 }
 
@@ -512,9 +510,10 @@ fn match_pattern(pattern : String, module_name : String) -> String? {
     Some(star_idx) => {
       let prefix = string_substring(pattern, 0, end=star_idx)
       let suffix = string_substring(pattern, star_idx + 1)
-
       if module_name.has_prefix(prefix) && module_name.has_suffix(suffix) {
-        let matched_len = module_name.length() - prefix.length() - suffix.length()
+        let matched_len = module_name.length() -
+          prefix.length() -
+          suffix.length()
         if matched_len >= 0 {
           Some(
             string_substring(
@@ -598,13 +597,15 @@ fn try_resolve_from_node_modules(
     match try_resolve_package(resolver, package_path, subpath, module_name) {
       Ok(resolved) => {
         resolved.is_external_library_import = true
-        resolved.package_id = Some(
-          PackageId::{
-            name: package_name,
-            sub_module_name: if subpath.is_empty() { None } else { Some(subpath) },
-            version: None,
+        resolved.package_id = Some(PackageId::{
+          name: package_name,
+          sub_module_name: if subpath.is_empty() {
+            None
+          } else {
+            Some(subpath)
           },
-        )
+          version: None,
+        })
         return Ok(resolved)
       }
       Err(ModuleNotFound(_, locs)) => searched.append(locs)
@@ -618,7 +619,6 @@ fn try_resolve_from_node_modules(
     }
     current_dir = parent
   }
-
   Err(ModuleNotFound(module_name, searched))
 }
 
@@ -666,12 +666,10 @@ fn try_resolve_package(
   original_module : String,
 ) -> Result[ResolvedModule, ResolutionFailure] {
   let searched : Array[String] = []
-
   if subpath.is_empty() {
     // Try package.json main field
     let package_json_path = join_paths(package_path, "package.json")
     searched.push(package_json_path)
-
     match read_package_json_main(package_json_path) {
       Some(main_path) => {
         let full_path = join_paths(package_path, main_path)
@@ -689,7 +687,9 @@ fn try_resolve_package(
       let index_path = join_paths(package_path, "index" + ext)
       searched.push(index_path)
       if file_exists(index_path) {
-        return Ok(create_resolved_module(index_path, original_module, true, ext))
+        return Ok(
+          create_resolved_module(index_path, original_module, true, ext),
+        )
       }
     }
   } else {
@@ -701,7 +701,6 @@ fn try_resolve_package(
       Err(_) => ()
     }
   }
-
   Err(ModuleNotFound(original_module, searched))
 }
 
@@ -735,7 +734,6 @@ fn try_resolve_classic(
 ) -> Result[ResolvedModule, ResolutionFailure] {
   let searched : Array[String] = []
   let mut current_dir = get_directory_path(containing_file)
-
   while true {
     // Try resolving in current directory
     let candidate = join_paths(current_dir, module_name)
@@ -752,7 +750,6 @@ fn try_resolve_classic(
     }
     current_dir = parent
   }
-
   Err(ModuleNotFound(module_name, searched))
 }
 
@@ -795,7 +792,6 @@ fn try_resolve_file(
       return Ok(create_resolved_module(index, path, false, extension))
     }
   }
-
   Err(ModuleNotFound(path, searched))
 }
 
@@ -879,7 +875,6 @@ pub fn create_module_not_found_diagnostic(
   } else {
     searched_display.join("\n  ")
   }
-
   Diagnostic::{
     category: DiagnosticCategory::Error,
     code: 2307, // TS2307: Cannot find module

@@ -30,10 +30,13 @@ test "unit/parser/destructuring - rest with nested array binding [...[a, b]]" {
   let result = destructuring_parse_bind_check(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => {
+    Err(diagnostics) =>
       // Should parse and check successfully
-      assert_true(false, msg="Expected success but got errors: " + diagnostics.length().to_string())
-    }
+      assert_true(
+        false,
+        msg="Expected success but got errors: " +
+          diagnostics.length().to_string(),
+      )
   }
 }
 
@@ -43,9 +46,12 @@ test "unit/parser/destructuring - rest with nested object binding [...{x, y}]" {
   let result = destructuring_parse_bind_check(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => {
-      assert_true(false, msg="Expected success but got errors: " + diagnostics.length().to_string())
-    }
+    Err(diagnostics) =>
+      assert_true(
+        false,
+        msg="Expected success but got errors: " +
+          diagnostics.length().to_string(),
+      )
   }
 }
 
@@ -59,9 +65,12 @@ test "unit/parser/destructuring - numeric property in object binding {1: x}" {
   let result = destructuring_parse_bind_check(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => {
-      assert_true(false, msg="Expected success but got errors: " + diagnostics.length().to_string())
-    }
+    Err(diagnostics) =>
+      assert_true(
+        false,
+        msg="Expected success but got errors: " +
+          diagnostics.length().to_string(),
+      )
   }
 }
 
@@ -71,9 +80,12 @@ test "unit/parser/destructuring - numeric property with nested pattern {0: [a, b
   let result = destructuring_parse_bind_check(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => {
-      assert_true(false, msg="Expected success but got errors: " + diagnostics.length().to_string())
-    }
+    Err(diagnostics) =>
+      assert_true(
+        false,
+        msg="Expected success but got errors: " +
+          diagnostics.length().to_string(),
+      )
   }
 }
 
@@ -87,9 +99,12 @@ test "unit/parser/destructuring - string property in object binding {\"prop\": x
   let result = destructuring_parse_bind_check(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => {
-      assert_true(false, msg="Expected success but got errors: " + diagnostics.length().to_string())
-    }
+    Err(diagnostics) =>
+      assert_true(
+        false,
+        msg="Expected success but got errors: " +
+          diagnostics.length().to_string(),
+      )
   }
 }
 
@@ -103,9 +118,12 @@ test "unit/parser/destructuring - computed property in object binding {[\"prop\"
   let result = destructuring_parse_bind_check(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => {
-      assert_true(false, msg="Expected success but got errors: " + diagnostics.length().to_string())
-    }
+    Err(diagnostics) =>
+      assert_true(
+        false,
+        msg="Expected success but got errors: " +
+          diagnostics.length().to_string(),
+      )
   }
 }
 
@@ -115,9 +133,12 @@ test "unit/parser/destructuring - computed property with number {[1]: x}" {
   let result = destructuring_parse_bind_check(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => {
-      assert_true(false, msg="Expected success but got errors: " + diagnostics.length().to_string())
-    }
+    Err(diagnostics) =>
+      assert_true(
+        false,
+        msg="Expected success but got errors: " +
+          diagnostics.length().to_string(),
+      )
   }
 }
 
@@ -129,9 +150,12 @@ test "unit/parser/destructuring - computed property with function call {[fn()]: 
   let result = destructuring_parse_bind_check(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => {
-      assert_true(false, msg="Expected success but got errors: " + diagnostics.length().to_string())
-    }
+    Err(diagnostics) =>
+      assert_true(
+        false,
+        msg="Expected success but got errors: " +
+          diagnostics.length().to_string(),
+      )
   }
 }
 
@@ -145,9 +169,12 @@ test "unit/parser/destructuring - nested object with default in array [{x} = {x:
   let result = destructuring_parse_bind_check(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => {
-      assert_true(false, msg="Expected success but got errors: " + diagnostics.length().to_string())
-    }
+    Err(diagnostics) =>
+      assert_true(
+        false,
+        msg="Expected success but got errors: " +
+          diagnostics.length().to_string(),
+      )
   }
 }
 
@@ -157,9 +184,12 @@ test "unit/parser/destructuring - nested array with default in array [[a] = [0]]
   let result = destructuring_parse_bind_check(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => {
-      assert_true(false, msg="Expected success but got errors: " + diagnostics.length().to_string())
-    }
+    Err(diagnostics) =>
+      assert_true(
+        false,
+        msg="Expected success but got errors: " +
+          diagnostics.length().to_string(),
+      )
   }
 }
 
@@ -169,9 +199,12 @@ test "unit/parser/destructuring - complex nested pattern with defaults" {
   let result = destructuring_parse_bind_check(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => {
-      assert_true(false, msg="Expected success but got errors: " + diagnostics.length().to_string())
-    }
+    Err(diagnostics) =>
+      assert_true(
+        false,
+        msg="Expected success but got errors: " +
+          diagnostics.length().to_string(),
+      )
   }
 }
 
@@ -191,9 +224,12 @@ test "unit/parser/destructuring - mixed binding patterns" {
   let result = destructuring_parse_bind_check(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => {
-      assert_true(false, msg="Expected success but got errors: " + diagnostics.length().to_string())
-    }
+    Err(diagnostics) =>
+      assert_true(
+        false,
+        msg="Expected success but got errors: " +
+          diagnostics.length().to_string(),
+      )
   }
 }
 
@@ -203,7 +239,9 @@ test "unit/parser/destructuring - mixed binding patterns" {
 
 ///|
 /// Helper function to parse source code only (no binding/checking)
-fn destructuring_parse_only(source : String) -> Result[@compiler.SourceFile, Array[@compiler.Diagnostic]] {
+fn destructuring_parse_only(
+  source : String,
+) -> Result[@compiler.SourceFile, Array[@compiler.Diagnostic]] {
   let tokens = @compiler.scan_all_v2(source, "test.ts")
   @compiler.parse_source_file(tokens, "test.ts")
 }

@@ -830,9 +830,7 @@ test "parse interface extending another interface" {
 
 ///|
 test "parse generic interface with nested generic type" {
-  let tokens = tokens_from_source(
-    "interface Result<T> { data: Promise<T>; }",
-  )
+  let tokens = tokens_from_source("interface Result<T> { data: Promise<T>; }")
   let result = parse_source_file(tokens, "test.ts")
   match result {
     Ok(source_file) => {
@@ -886,9 +884,7 @@ test "parse type alias with keyword property names in object type" {
           assert_eq(decl.name, "FieldInfo")
           // The type should be a TypeLiteral with 3 members
           match decl.type_node {
-            TypeLiteral(tl) => {
-              assert_eq(tl.members.length(), 3)
-            }
+            TypeLiteral(tl) => assert_eq(tl.members.length(), 3)
             _ => assert_true(false)
           }
         }
@@ -926,16 +922,14 @@ test "parse function with inline object type using keyword property names" {
           assert_eq(decl.parameters.length(), 2)
           // First parameter should have an inline object type
           match decl.parameters[0] {
-            Parameter(param) => {
+            Parameter(param) =>
               // The type annotation should be a TypeLiteral
               match param.type_annotation {
-                Some(TypeLiteral(tl)) => {
+                Some(TypeLiteral(tl)) =>
                   // Should have 2 properties: type and string
                   assert_eq(tl.members.length(), 2)
-                }
                 _ => assert_true(false)
               }
-            }
             _ => assert_true(false)
           }
         }
@@ -957,14 +951,11 @@ test "parse type with various keyword property names" {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
       match source_file.statements[0] {
-        TypeAliasDeclaration(decl) => {
+        TypeAliasDeclaration(decl) =>
           match decl.type_node {
-            TypeLiteral(tl) => {
-              assert_eq(tl.members.length(), 4)
-            }
+            TypeLiteral(tl) => assert_eq(tl.members.length(), 4)
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
     }
@@ -981,10 +972,9 @@ test "parse member access with keyword property names" {
   )
   let result = parse_source_file(tokens, "test.ts")
   match result {
-    Ok(source_file) => {
+    Ok(source_file) =>
       // Should have 3 variable statements
       assert_eq(source_file.statements.length(), 3)
-    }
     Err(_) => assert_true(false)
   }
 }

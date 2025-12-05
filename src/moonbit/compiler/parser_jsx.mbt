@@ -4,7 +4,9 @@
 ///|
 /// Extract identifier name from a token that can be used as JSX attribute name.
 /// In JSX, keywords like `type`, `for`, `class` can be used as attribute names.
-fn get_jsx_attribute_name_from_token(token : Token) -> (String, SourceLocation)? {
+fn get_jsx_attribute_name_from_token(
+  token : Token,
+) -> (String, SourceLocation)? {
   match token {
     Identifier(name, loc) => Some((name, loc))
     // Type Keywords that can be JSX attribute names
@@ -119,14 +121,7 @@ fn parse_jsx_element_or_fragment(
     Identifier(_, _) =>
       // Element: <tag>...</tag> or <tag />
       parse_jsx_element(parser, start_loc)
-    _ =>
-      Err(
-        add_error(
-          parser,
-          "Unexpected token",
-          start_loc,
-        ),
-      )
+    _ => Err(add_error(parser, "Unexpected token", start_loc))
   }
 }
 
@@ -193,14 +188,7 @@ fn parse_jsx_element(
         Err(p) => Err(p)
       }
     }
-    _ =>
-      Err(
-        add_error(
-          parser,
-          "Unexpected token",
-          start_loc,
-        ),
-      )
+    _ => Err(add_error(parser, "Unexpected token", start_loc))
   }
 }
 
@@ -601,14 +589,7 @@ fn parse_jsx_closing_element(
   // Expect >
   let parser = match current_token(parser) {
     GreaterThan(_) => advance_parser(parser)
-    _ =>
-      return Err(
-        add_error(
-          parser,
-          "Unexpected token",
-          start_loc,
-        ),
-      )
+    _ => return Err(add_error(parser, "Unexpected token", start_loc))
   }
   let end_loc = current_token(parser).location()
   Ok(
@@ -645,14 +626,7 @@ fn parse_jsx_fragment(
   // Already consumed <, expect >
   let parser = match current_token(parser) {
     GreaterThan(_) => advance_parser(parser)
-    _ =>
-      return Err(
-        add_error(
-          parser,
-          "Unexpected token",
-          start_loc,
-        ),
-      )
+    _ => return Err(add_error(parser, "Unexpected token", start_loc))
   }
   let opening_loc = start_loc
 
@@ -674,14 +648,7 @@ fn parse_jsx_fragment(
   }
   let parser = match current_token(parser) {
     GreaterThan(_) => advance_parser(parser)
-    _ =>
-      return Err(
-        add_error(
-          parser,
-          "Unexpected token",
-          start_loc,
-        ),
-      )
+    _ => return Err(add_error(parser, "Unexpected token", start_loc))
   }
   let closing_loc = current_token(parser).location()
   Ok(

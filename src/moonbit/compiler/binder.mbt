@@ -97,7 +97,10 @@ fn is_module_file(statements : Array[Node]) -> Bool {
 pub fn bind_source_file(source_file : SourceFile) -> BindResult {
   let binder = Binder::new(source_file.file_path)
   // Pre-scan to detect if this is a module file (affects ambient module handling)
-  let binder = { ..binder, is_external_module: is_module_file(source_file.statements) }
+  let binder = {
+    ..binder,
+    is_external_module: is_module_file(source_file.statements),
+  }
 
   // Parse triple-slash directives from raw tokens
   for i = 0; i < source_file.directive_tokens.length(); i = i + 1 {
@@ -107,7 +110,6 @@ pub fn bind_source_file(source_file : SourceFile) -> BindResult {
       None => ()
     }
   }
-
   let binder = bind_statements(binder, source_file.statements)
 
   // Get global scope
@@ -162,7 +164,8 @@ fn hoist_function_declarations(
   } else {
     let stmt = statements[index]
     let binder = match stmt {
-      FunctionDeclaration(func) => bind_function_declaration_name_only(binder, func)
+      FunctionDeclaration(func) =>
+        bind_function_declaration_name_only(binder, func)
       _ => binder
     }
     hoist_function_declarations(binder, statements, index + 1)
@@ -672,7 +675,11 @@ fn bind_function_declaration(
   let binder = match scope.symbols.get(name) {
     Some(_) => binder // Already hoisted
     None => {
-      let symbol = Symbol::new(name, SymbolKind::Function, binder.next_symbol_id)
+      let symbol = Symbol::new(
+        name,
+        SymbolKind::Function,
+        binder.next_symbol_id,
+      )
       let symbol = symbol.add_declaration(Node::FunctionDeclaration(func))
       let is_export = binder_has_export_modifier(func.modifiers)
       let symbol = if is_export {
@@ -718,7 +725,7 @@ fn bind_class_declaration(
   let symbol = symbol.add_declaration(Node::ClassDeclaration(class_decl))
   // Set is_export flag if class has export modifier
   let is_export = binder_has_export_modifier(class_decl.modifiers)
-  let symbol = { ..symbol, flags: { ..symbol.flags, is_export } }
+  let symbol = { ..symbol, flags: { ..symbol.flags, is_export, } }
   let binder = declare_symbol(binder, name, symbol)
 
   // Create new scope and container for class body
@@ -772,7 +779,11 @@ fn bind_class_members_aux(
             let binder = push_scope(binder)
             let binder = push_container(binder, ContainerKind::Function)
             // Class methods are in strict mode, check for reserved identifiers
-            let binder = bind_parameters_with_strict(binder, meth.parameters, true)
+            let binder = bind_parameters_with_strict(
+              binder,
+              meth.parameters,
+              true,
+            )
             let binder = bind_statement(binder, body)
             let binder = pop_container(binder)
             pop_scope(binder)
@@ -793,7 +804,11 @@ fn bind_class_members_aux(
             let binder = push_scope(binder)
             let binder = push_container(binder, ContainerKind::Function)
             // Constructors are in strict mode, check for reserved identifiers
-            let binder = bind_parameters_with_strict(binder, ctor.parameters, true)
+            let binder = bind_parameters_with_strict(
+              binder,
+              ctor.parameters,
+              true,
+            )
             let binder = bind_statement(binder, body)
             let binder = pop_container(binder)
             pop_scope(binder)
@@ -906,7 +921,7 @@ fn bind_interface_declaration(
     ..symbol,
     members: Some(members),
     value_declaration: Some(interface_node),
-    flags: { ..symbol.flags, is_export },
+    flags: { ..symbol.flags, is_export, },
   }
   declare_symbol(binder, interface.name, symbol)
 }
@@ -927,7 +942,7 @@ fn bind_enum_declaration(
   let symbol = if enum_decl.is_const {
     { ..symbol, flags: { ..symbol.flags, is_const: true, is_export } }
   } else {
-    { ..symbol, flags: { ..symbol.flags, is_export } }
+    { ..symbol, flags: { ..symbol.flags, is_export, } }
   }
   let symbol = symbol.add_declaration(Node::EnumDeclaration(enum_decl))
   let binder = declare_symbol(binder, enum_decl.name, symbol)
@@ -991,7 +1006,7 @@ fn bind_type_alias_declaration(
   let symbol = symbol.add_declaration(Node::TypeAliasDeclaration(type_alias))
   // Set is_export flag if type alias has export modifier
   let is_export = binder_has_export_modifier(type_alias.modifiers)
-  let symbol = { ..symbol, flags: { ..symbol.flags, is_export } }
+  let symbol = { ..symbol, flags: { ..symbol.flags, is_export, } }
   let binder = declare_symbol(binder, type_alias.name, symbol)
 
   // Push scope for type parameters
@@ -1120,8 +1135,12 @@ fn bind_module_declaration(
     let is_export = binder_has_export_modifier(mod_decl.modifiers)
     let symbol = {
       ..symbol,
-      flags: { ..symbol.flags, is_export },
-      exports: if exports.length() > 0 { Some(exports) } else { None },
+      flags: { ..symbol.flags, is_export, },
+      exports: if exports.length() > 0 {
+        Some(exports)
+      } else {
+        None
+      },
     }
     declare_symbol(binder, mod_decl.name, symbol)
   }
@@ -1379,7 +1398,7 @@ fn bind_parameters_aux(
   } else {
     let param = parameters[index]
     let binder = match param {
-      Parameter(p) => {
+      Parameter(p) =>
         // Handle binding patterns (destructuring) in parameters
         match p.name {
           Identifier(id) => {
@@ -1412,7 +1431,6 @@ fn bind_parameters_aux(
             bind_binding_pattern(binder, p.name, false, false)
           _ => binder
         }
-      }
       _ => binder
     }
     bind_parameters_aux(binder, parameters, index + 1, is_strict)
@@ -2123,7 +2141,10 @@ fn declare_symbol(binder : Binder, name : String, symbol : Symbol) -> Binder {
             existing_symbol.kind == SymbolKind::ExportValue ||
             existing_symbol.kind == SymbolKind::ExportType
           ) &&
-          (symbol.kind == SymbolKind::ExportValue || symbol.kind == SymbolKind::ExportType)
+          (
+            symbol.kind == SymbolKind::ExportValue ||
+            symbol.kind == SymbolKind::ExportType
+          )
         let (message, code) = if is_export_conflict {
           (
             "Export declaration conflicts with exported declaration of '\{name}'.",

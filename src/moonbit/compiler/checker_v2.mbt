@@ -523,7 +523,6 @@ fn infer_function_v2(env : TypeEnv, func : FunctionExpression) -> CheckResultV2 
   } else {
     inner_return_ty
   }
-
   let func_ty = FunctionTypeV2::{
     type_params: [],
     params,
@@ -600,7 +599,6 @@ fn infer_arrow_v2(env : TypeEnv, arrow : ArrowFunction) -> CheckResultV2 {
   } else {
     inner_return_ty
   }
-
   let func_ty = FunctionTypeV2::{
     type_params: [],
     params,
@@ -656,7 +654,7 @@ fn extract_call_narrowing(call : CallExpression) -> Narrowing {
     PropertyAccessExpression(prop) =>
       if prop.name == "isArray" {
         match prop.expression {
-          Identifier(id) if id.name == "Array" => {
+          Identifier(id) if id.name == "Array" =>
             // This is Array.isArray(...)
             if call.arguments.length() == 1 {
               match call.arguments[0] {
@@ -664,7 +662,6 @@ fn extract_call_narrowing(call : CallExpression) -> Narrowing {
                 _ => ()
               }
             }
-          }
           _ => ()
         }
       }
@@ -700,14 +697,13 @@ fn extract_type_predicate_narrowing(
       let arg = call.arguments[arg_index]
       // Check if the argument is an identifier
       match arg {
-        Identifier(arg_id) => {
+        Identifier(arg_id) =>
           // Create appropriate narrowing based on whether it's an assertion
           if tp.is_asserts {
             NAsserts(arg_id.name, Some(tp.predicate_type))
           } else {
             NTypePredicate(arg_id.name, tp.predicate_type)
           }
-        }
         _ => NNone // Can only narrow identifiers
       }
     }
@@ -722,7 +718,6 @@ fn infer_call_v2(env : TypeEnv, call : CallExpression) -> CheckResultV2 {
 
   // Extract narrowing from special call patterns like Array.isArray()
   let base_narrowing = extract_call_narrowing(call)
-
   match callee_result.ty {
     TFunction(func) => {
       let all_errors : Array[TypeMismatchError] = []
@@ -765,10 +760,17 @@ fn infer_call_v2(env : TypeEnv, call : CallExpression) -> CheckResultV2 {
       } else {
         // Generic function call - use full generic handling
         let generic_result = check_generic_call(
-          env, func, call.type_arguments, call.arguments,
+          env,
+          func,
+          call.type_arguments,
+          call.arguments,
         )
         all_errors.append(generic_result.errors)
-        { ty: generic_result.return_type, narrowing: call_narrowing, errors: all_errors }
+        {
+          ty: generic_result.return_type,
+          narrowing: call_narrowing,
+          errors: all_errors,
+        }
       }
     }
     TObject(obj) =>
@@ -788,10 +790,17 @@ fn infer_call_v2(env : TypeEnv, call : CallExpression) -> CheckResultV2 {
           combine_and(base_narrowing, predicate_narrowing)
         }
         if sig.type_params.is_empty() && call.type_arguments.is_empty() {
-          { ty: sig.return_type, narrowing: call_narrowing, errors: callee_result.errors }
+          {
+            ty: sig.return_type,
+            narrowing: call_narrowing,
+            errors: callee_result.errors,
+          }
         } else {
           let generic_result = check_generic_call(
-            env, sig, call.type_arguments, call.arguments,
+            env,
+            sig,
+            call.type_arguments,
+            call.arguments,
           )
           {
             ty: generic_result.return_type,
@@ -933,7 +942,6 @@ fn infer_binary_v2(env : TypeEnv, bin : BinaryExpression) -> CheckResultV2 {
 
   // Extract narrowing information from comparison
   let narrowing = extract_narrowing_v2(bin)
-
   let result_ty = match bin.operator {
     // Arithmetic operators - handle BigInt
     Add =>
@@ -942,8 +950,10 @@ fn infer_binary_v2(env : TypeEnv, bin : BinaryExpression) -> CheckResultV2 {
         (TString, _) | (_, TString) => TString
         (TLiteralString(_), _) | (_, TLiteralString(_)) => TString
         // BigInt arithmetic
-        (TBigInt, TBigInt) | (TLiteralBigInt(_), TBigInt) |
-        (TBigInt, TLiteralBigInt(_)) | (TLiteralBigInt(_), TLiteralBigInt(_)) => TBigInt
+        (TBigInt, TBigInt)
+        | (TLiteralBigInt(_), TBigInt)
+        | (TBigInt, TLiteralBigInt(_))
+        | (TLiteralBigInt(_), TLiteralBigInt(_)) => TBigInt
         // BigInt/number mixing error
         (left, right) if is_bigint_type(left) && is_number_type(right) => {
           all_errors.push(bigint_number_mixing_error("+", left, right))
@@ -960,8 +970,10 @@ fn infer_binary_v2(env : TypeEnv, bin : BinaryExpression) -> CheckResultV2 {
       let op_name = get_operator_name(bin.operator)
       match (left_result.ty, right_result.ty) {
         // BigInt arithmetic
-        (TBigInt, TBigInt) | (TLiteralBigInt(_), TBigInt) |
-        (TBigInt, TLiteralBigInt(_)) | (TLiteralBigInt(_), TLiteralBigInt(_)) => TBigInt
+        (TBigInt, TBigInt)
+        | (TLiteralBigInt(_), TBigInt)
+        | (TBigInt, TLiteralBigInt(_))
+        | (TLiteralBigInt(_), TLiteralBigInt(_)) => TBigInt
         // BigInt/number mixing error
         (left, right) if is_bigint_type(left) && is_number_type(right) => {
           all_errors.push(bigint_number_mixing_error(op_name, left, right))
@@ -1002,8 +1014,10 @@ fn infer_binary_v2(env : TypeEnv, bin : BinaryExpression) -> CheckResultV2 {
       let op_name = get_operator_name(bin.operator)
       match (left_result.ty, right_result.ty) {
         // BigInt bitwise operations
-        (TBigInt, TBigInt) | (TLiteralBigInt(_), TBigInt) |
-        (TBigInt, TLiteralBigInt(_)) | (TLiteralBigInt(_), TLiteralBigInt(_)) => TBigInt
+        (TBigInt, TBigInt)
+        | (TLiteralBigInt(_), TBigInt)
+        | (TBigInt, TLiteralBigInt(_))
+        | (TLiteralBigInt(_), TLiteralBigInt(_)) => TBigInt
         // BigInt/number mixing error
         (left, right) if is_bigint_type(left) && is_number_type(right) => {
           all_errors.push(bigint_number_mixing_error(op_name, left, right))
@@ -1021,7 +1035,9 @@ fn infer_binary_v2(env : TypeEnv, bin : BinaryExpression) -> CheckResultV2 {
     UnsignedRightShift =>
       match (left_result.ty, right_result.ty) {
         (left, _) if is_bigint_type(left) => {
-          all_errors.push(bigint_number_mixing_error(">>>", left, right_result.ty))
+          all_errors.push(
+            bigint_number_mixing_error(">>>", left, right_result.ty),
+          )
           TError
         }
         _ => TNumber
@@ -1105,7 +1121,6 @@ fn infer_unary_v2(env : TypeEnv, un : UnaryExpression) -> CheckResultV2 {
   let operand_result = infer_expr_v2(env, un.operand)
   let all_errors : Array[TypeMismatchError] = []
   all_errors.append(operand_result.errors)
-
   let result_ty = match un.operator {
     LogicalNot => TBoolean
     BitwiseNot =>

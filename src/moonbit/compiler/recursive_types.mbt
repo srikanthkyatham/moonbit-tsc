@@ -20,10 +20,7 @@ pub struct TypeComparisonId {
 ///|
 /// Create a comparison ID from two types
 pub fn make_comparison_id(source : TypeV2, target : TypeV2) -> TypeComparisonId {
-  {
-    source_id: type_identity_key(source),
-    target_id: type_identity_key(target),
-  }
+  { source_id: type_identity_key(source), target_id: type_identity_key(target) }
 }
 
 ///|
@@ -78,7 +75,11 @@ pub fn type_identity_key(ty : TypeV2) -> String {
     TMapped(m) =>
       "mapped:" + m.type_param.name + ":" + type_identity_key(m.constraint)
     TIndexAccess(ia) =>
-      "idx:" + type_identity_key(ia.object_type) + "[" + type_identity_key(ia.index_type) + "]"
+      "idx:" +
+      type_identity_key(ia.object_type) +
+      "[" +
+      type_identity_key(ia.index_type) +
+      "]"
     TInfer(name) => "infer:" + name
     TTemplateLiteral(_) => "template"
   }
@@ -139,14 +140,12 @@ pub fn RecursiveResolutionContext::child(
   if self.current_depth >= self.max_depth {
     None // Recursion limit exceeded
   } else {
-    Some(
-      {
-        resolving: self.resolving,
-        max_depth: self.max_depth,
-        current_depth: self.current_depth + 1,
-        resolved_cache: self.resolved_cache,
-      },
-    )
+    Some({
+      resolving: self.resolving,
+      max_depth: self.max_depth,
+      current_depth: self.current_depth + 1,
+      resolved_cache: self.resolved_cache,
+    })
   }
 }
 
@@ -169,7 +168,7 @@ pub fn RecursiveResolutionContext::start_resolving(
   let key = type_identity_key(ty)
   let resolving = self.resolving
   resolving.set(key, true)
-  { ..self, resolving }
+  { ..self, resolving, }
 }
 
 ///|
@@ -181,7 +180,7 @@ pub fn RecursiveResolutionContext::finish_resolving(
   let key = type_identity_key(ty)
   let resolving = self.resolving
   ignore(resolving.remove(key))
-  { ..self, resolving }
+  { ..self, resolving, }
 }
 
 ///|
@@ -241,13 +240,11 @@ pub fn RecursiveComparisonContext::child(
   if self.current_depth >= self.max_depth {
     None // Recursion limit exceeded
   } else {
-    Some(
-      {
-        comparing: self.comparing,
-        max_depth: self.max_depth,
-        current_depth: self.current_depth + 1,
-      },
-    )
+    Some({
+      comparing: self.comparing,
+      max_depth: self.max_depth,
+      current_depth: self.current_depth + 1,
+    })
   }
 }
 
@@ -274,7 +271,7 @@ pub fn RecursiveComparisonContext::start_comparing(
   let key = id.source_id + "<:" + id.target_id
   let comparing = self.comparing
   comparing.set(key, true)
-  { ..self, comparing }
+  { ..self, comparing, }
 }
 
 ///|
@@ -288,7 +285,7 @@ pub fn RecursiveComparisonContext::finish_comparing(
   let key = id.source_id + "<:" + id.target_id
   let comparing = self.comparing
   ignore(comparing.remove(key))
-  { ..self, comparing }
+  { ..self, comparing, }
 }
 
 // ============================================================================
@@ -330,7 +327,6 @@ pub fn resolve_type_recursive(
   // Cache and finish
   let ctx = ctx.cache_resolved(ty, resolved)
   let ctx = ctx.finish_resolving(ty)
-
   (resolved, ctx)
 }
 
@@ -345,29 +341,35 @@ fn resolve_type_impl(
     TConditional(c) => {
       // Resolve check, extends, true, and false types
       let (check_resolved, ctx) = resolve_type_recursive(env, c.check_type, ctx)
-      let (extends_resolved, ctx) = resolve_type_recursive(env, c.extends_type, ctx)
+      let (extends_resolved, ctx) = resolve_type_recursive(
+        env,
+        c.extends_type,
+        ctx,
+      )
       let (true_resolved, ctx) = resolve_type_recursive(env, c.true_type, ctx)
       let (false_resolved, ctx) = resolve_type_recursive(env, c.false_type, ctx)
 
       // Evaluate the conditional
-      let result = if is_subtype_recursive(check_resolved, extends_resolved, ctx) {
+      let result = if is_subtype_recursive(
+          check_resolved, extends_resolved, ctx,
+        ) {
         true_resolved
       } else {
         false_resolved
       }
       (result, ctx)
     }
-
     TMapped(m) => {
       // Resolve constraint
-      let (constraint_resolved, ctx) = resolve_type_recursive(env, m.constraint, ctx)
-      // Build a mapped type result (simplified)
-      let mapped_resolved = TMapped(
-        { ..m, constraint: constraint_resolved },
+      let (constraint_resolved, ctx) = resolve_type_recursive(
+        env,
+        m.constraint,
+        ctx,
       )
+      // Build a mapped type result (simplified)
+      let mapped_resolved = TMapped({ ..m, constraint: constraint_resolved })
       (mapped_resolved, ctx)
     }
-
     TIndexAccess(ia) => {
       // Resolve object and index types
       let (obj_resolved, ctx) = resolve_type_recursive(env, ia.object_type, ctx)
@@ -376,7 +378,6 @@ fn resolve_type_impl(
       let result = evaluate_index_access_resolved(obj_resolved, idx_resolved)
       (result, ctx)
     }
-
     TTypeParam(name, _) =>
       // Try to resolve from environment
       match env.lookup_type_param(name) {
@@ -388,13 +389,14 @@ fn resolve_type_impl(
             None => (ty, ctx)
           }
       }
-
     TGenericInstance(name, args) => {
       // Resolve all type arguments
       let resolved_args : Array[TypeV2] = []
       let mut current_ctx = ctx
       for arg in args {
-        let (resolved_arg, new_ctx) = resolve_type_recursive(env, arg, current_ctx)
+        let (resolved_arg, new_ctx) = resolve_type_recursive(
+          env, arg, current_ctx,
+        )
         resolved_args.push(resolved_arg)
         current_ctx = new_ctx
       }
@@ -404,7 +406,6 @@ fn resolve_type_impl(
         None => (TGenericInstance(name, resolved_args), current_ctx)
       }
     }
-
     TUnion(types) => {
       let resolved_types : Array[TypeV2] = []
       let mut current_ctx = ctx
@@ -415,7 +416,6 @@ fn resolve_type_impl(
       }
       (make_union(resolved_types), current_ctx)
     }
-
     TIntersection(types) => {
       let resolved_types : Array[TypeV2] = []
       let mut current_ctx = ctx
@@ -426,45 +426,45 @@ fn resolve_type_impl(
       }
       (make_intersection(resolved_types), current_ctx)
     }
-
     TArray(elem) => {
       let (resolved_elem, ctx) = resolve_type_recursive(env, elem, ctx)
       (TArray(resolved_elem), ctx)
     }
-
     TTuple(elems) => {
       let resolved_elems : Array[TupleElementV2] = []
       let mut current_ctx = ctx
       for e in elems {
-        let (resolved_ty, new_ctx) = resolve_type_recursive(env, e.ty, current_ctx)
-        resolved_elems.push(
-          TupleElementV2::{
-            ty: resolved_ty,
-            optional: e.optional,
-            is_rest: e.is_rest,
-            label: e.label,
-          },
+        let (resolved_ty, new_ctx) = resolve_type_recursive(
+          env,
+          e.ty,
+          current_ctx,
         )
+        resolved_elems.push(TupleElementV2::{
+          ty: resolved_ty,
+          optional: e.optional,
+          is_rest: e.is_rest,
+          label: e.label,
+        })
         current_ctx = new_ctx
       }
       (TTuple(resolved_elems), current_ctx)
     }
-
     TObject(obj) => {
       // Resolve field types
       let resolved_fields : Map[String, FieldInfoV2] = Map::new()
       let mut current_ctx = ctx
       for entry in obj.fields.iter() {
         let (name, field) = entry
-        let (resolved_ty, new_ctx) = resolve_type_recursive(env, field.ty, current_ctx)
-        resolved_fields.set(
-          name,
-          FieldInfoV2::{
-            ty: resolved_ty,
-            optional: field.optional,
-            is_readonly: field.is_readonly,
-          },
+        let (resolved_ty, new_ctx) = resolve_type_recursive(
+          env,
+          field.ty,
+          current_ctx,
         )
+        resolved_fields.set(name, FieldInfoV2::{
+          ty: resolved_ty,
+          optional: field.optional,
+          is_readonly: field.is_readonly,
+        })
         current_ctx = new_ctx
       }
       let resolved_obj = ObjectTypeV2::{
@@ -478,14 +478,22 @@ fn resolve_type_impl(
       }
       (TObject(resolved_obj), current_ctx)
     }
-
     TFunction(func) => {
       // Resolve parameter and return types
       let resolved_params : Array[ParamInfoV2] = []
       let mut current_ctx = ctx
       for p in func.params {
-        let (resolved_ty, new_ctx) = resolve_type_recursive(env, p.ty, current_ctx)
-        resolved_params.push(ParamInfoV2::{ name: p.name, ty: resolved_ty, optional: p.optional, is_rest: p.is_rest })
+        let (resolved_ty, new_ctx) = resolve_type_recursive(
+          env,
+          p.ty,
+          current_ctx,
+        )
+        resolved_params.push(ParamInfoV2::{
+          name: p.name,
+          ty: resolved_ty,
+          optional: p.optional,
+          is_rest: p.is_rest,
+        })
         current_ctx = new_ctx
       }
       let (resolved_return, final_ctx) = resolve_type_recursive(
@@ -503,7 +511,6 @@ fn resolve_type_impl(
       }
       (TFunction(resolved_func), final_ctx)
     }
-
     _ => (ty, ctx)
   }
 }
@@ -631,7 +638,7 @@ fn is_subtype_impl(
       is_function_subtype_recursive(src_func, tgt_func, ctx)
 
     // Generic instances
-    (TGenericInstance(src_name, src_args), TGenericInstance(tgt_name, tgt_args)) => {
+    (TGenericInstance(src_name, src_args), TGenericInstance(tgt_name, tgt_args)) =>
       if src_name != tgt_name || src_args.length() != tgt_args.length() {
         false
       } else {
@@ -644,7 +651,6 @@ fn is_subtype_impl(
         }
         all_match
       }
-    }
 
     // Tuple types
     (TTuple(src_elems), TTuple(tgt_elems)) => {
@@ -656,7 +662,9 @@ fn is_subtype_impl(
           if not(tgt_elems[i].optional) {
             return false
           }
-        } else if not(is_subtype_with_context(src_elems[i].ty, tgt_elems[i].ty, ctx)) {
+        } else if not(
+            is_subtype_with_context(src_elems[i].ty, tgt_elems[i].ty, ctx),
+          ) {
           return false
         }
       }
@@ -678,7 +686,6 @@ fn is_subtype_impl(
     (TLiteralNumber(n1), TLiteralNumber(n2)) => n1 == n2
     (TLiteralBool(b1), TLiteralBool(b2)) => b1 == b2
     (TLiteralBigInt(n1), TLiteralBigInt(n2)) => n1 == n2
-
     _ => false
   }
 }
@@ -694,16 +701,11 @@ fn is_object_subtype_recursive(
   for entry in target.fields.iter() {
     let (name, tgt_field) = entry
     match source.fields.get(name) {
-      Some(src_field) => {
+      Some(src_field) =>
         if not(is_subtype_with_context(src_field.ty, tgt_field.ty, ctx)) {
           return false
         }
-      }
-      None => {
-        if not(tgt_field.optional) {
-          return false
-        }
-      }
+      None => if not(tgt_field.optional) { return false }
     }
   }
   true
@@ -718,8 +720,10 @@ fn is_function_subtype_recursive(
   ctx : RecursiveComparisonContext,
 ) -> Bool {
   // Parameter count compatibility
-  let min_src_params = source.params.iter().filter(fn(p) { not(p.optional) }).count()
-
+  let min_src_params = source.params
+    .iter()
+    .filter(fn(p) { not(p.optional) })
+    .count()
   if min_src_params > target.params.length() {
     return false
   }
@@ -728,7 +732,9 @@ fn is_function_subtype_recursive(
   for i = 0; i < target.params.length(); i = i + 1 {
     if i < source.params.length() {
       // Target param must be subtype of source param (contravariant)
-      if not(is_subtype_with_context(target.params[i].ty, source.params[i].ty, ctx)) {
+      if not(
+          is_subtype_with_context(target.params[i].ty, source.params[i].ty, ctx),
+        ) {
         return false
       }
     }
@@ -773,7 +779,6 @@ fn check_expansion_impl(
   if depth > max_depth {
     return DepthLimitReached
   }
-
   match ty {
     TGenericInstance(name, args) => {
       // Check if this is a self-reference
@@ -791,7 +796,8 @@ fn check_expansion_impl(
       }
       // Check arguments for self-reference
       for arg in args {
-        match check_expansion_impl(type_name, arg, visited, depth + 1, max_depth) {
+        match
+          check_expansion_impl(type_name, arg, visited, depth + 1, max_depth) {
           Infinite(reason) => return Infinite(reason)
           DepthLimitReached => return DepthLimitReached
           Safe => continue
@@ -799,10 +805,10 @@ fn check_expansion_impl(
       }
       Safe
     }
-
     TUnion(types) => {
       for t in types {
-        match check_expansion_impl(type_name, t, visited, depth + 1, max_depth) {
+        match
+          check_expansion_impl(type_name, t, visited, depth + 1, max_depth) {
           Infinite(reason) => return Infinite(reason)
           DepthLimitReached => return DepthLimitReached
           Safe => continue
@@ -810,10 +816,10 @@ fn check_expansion_impl(
       }
       Safe
     }
-
     TIntersection(types) => {
       for t in types {
-        match check_expansion_impl(type_name, t, visited, depth + 1, max_depth) {
+        match
+          check_expansion_impl(type_name, t, visited, depth + 1, max_depth) {
           Infinite(reason) => return Infinite(reason)
           DepthLimitReached => return DepthLimitReached
           Safe => continue
@@ -821,16 +827,21 @@ fn check_expansion_impl(
       }
       Safe
     }
-
     TArray(elem) =>
       // Array wraps the type - this is a safe guard
       check_expansion_impl(type_name, elem, visited, depth + 1, max_depth)
-
     TObject(obj) => {
       // Object wraps types - this is a safe guard
       for entry in obj.fields.iter() {
         let (_, field) = entry
-        match check_expansion_impl(type_name, field.ty, visited, depth + 1, max_depth) {
+        match
+          check_expansion_impl(
+            type_name,
+            field.ty,
+            visited,
+            depth + 1,
+            max_depth,
+          ) {
           Infinite(reason) => return Infinite(reason)
           DepthLimitReached => return DepthLimitReached
           Safe => continue
@@ -838,41 +849,71 @@ fn check_expansion_impl(
       }
       Safe
     }
-
     TFunction(func) => {
       // Function wraps types - this is a safe guard
       for p in func.params {
-        match check_expansion_impl(type_name, p.ty, visited, depth + 1, max_depth) {
+        match
+          check_expansion_impl(type_name, p.ty, visited, depth + 1, max_depth) {
           Infinite(reason) => return Infinite(reason)
           DepthLimitReached => return DepthLimitReached
           Safe => continue
         }
       }
-      check_expansion_impl(type_name, func.return_type, visited, depth + 1, max_depth)
+      check_expansion_impl(
+        type_name,
+        func.return_type,
+        visited,
+        depth + 1,
+        max_depth,
+      )
     }
-
     TConditional(c) => {
       // Check all branches
-      match check_expansion_impl(type_name, c.check_type, visited, depth + 1, max_depth) {
+      match
+        check_expansion_impl(
+          type_name,
+          c.check_type,
+          visited,
+          depth + 1,
+          max_depth,
+        ) {
         Infinite(reason) => return Infinite(reason)
         DepthLimitReached => return DepthLimitReached
         Safe => ()
       }
-      match check_expansion_impl(type_name, c.true_type, visited, depth + 1, max_depth) {
+      match
+        check_expansion_impl(
+          type_name,
+          c.true_type,
+          visited,
+          depth + 1,
+          max_depth,
+        ) {
         Infinite(reason) => return Infinite(reason)
         DepthLimitReached => return DepthLimitReached
         Safe => ()
       }
-      check_expansion_impl(type_name, c.false_type, visited, depth + 1, max_depth)
+      check_expansion_impl(
+        type_name,
+        c.false_type,
+        visited,
+        depth + 1,
+        max_depth,
+      )
     }
-
     TMapped(m) =>
       // Check the template type
-      check_expansion_impl(type_name, m.template_type, visited, depth + 1, max_depth)
-
+      check_expansion_impl(
+        type_name,
+        m.template_type,
+        visited,
+        depth + 1,
+        max_depth,
+      )
     TTuple(elems) => {
       for e in elems {
-        match check_expansion_impl(type_name, e.ty, visited, depth + 1, max_depth) {
+        match
+          check_expansion_impl(type_name, e.ty, visited, depth + 1, max_depth) {
           Infinite(reason) => return Infinite(reason)
           DepthLimitReached => return DepthLimitReached
           Safe => continue
@@ -880,7 +921,6 @@ fn check_expansion_impl(
       }
       Safe
     }
-
     _ => Safe
   }
 }
@@ -902,7 +942,6 @@ pub fn check_mutual_recursion(
   type_aliases : Map[String, TypeV2],
 ) -> Map[String, MutualRecursionInfo] {
   let results : Map[String, MutualRecursionInfo] = Map::new()
-
   for entry in type_aliases.iter() {
     let (name, _) = entry
     let visited : Map[String, Bool] = Map::new()
@@ -910,7 +949,6 @@ pub fn check_mutual_recursion(
     let info = find_type_cycle(name, type_aliases, visited, path)
     results.set(name, info)
   }
-
   results
 }
 
@@ -938,15 +976,11 @@ fn find_type_cycle(
           cycle_path.push(path[j])
         }
         cycle_path.push(start_name)
-        return {
-          is_mutually_recursive: true,
-          cycle_path,
-        }
+        return { is_mutually_recursive: true, cycle_path }
       }
       None => return { is_mutually_recursive: false, cycle_path: [] }
     }
   }
-
   visited.set(start_name, true)
   path.push(start_name)
 
@@ -965,7 +999,6 @@ fn find_type_cycle(
     }
     None => ()
   }
-
   { is_mutually_recursive: false, cycle_path: [] }
 }
 
@@ -988,23 +1021,20 @@ fn collect_refs_impl(ty : TypeV2, refs : Array[String]) -> Unit {
       }
     }
     TTypeParam(name, _) => refs.push(name)
-    TUnion(types) => {
+    TUnion(types) =>
       for t in types {
         collect_refs_impl(t, refs)
       }
-    }
-    TIntersection(types) => {
+    TIntersection(types) =>
       for t in types {
         collect_refs_impl(t, refs)
       }
-    }
     TArray(elem) => collect_refs_impl(elem, refs)
-    TObject(obj) => {
+    TObject(obj) =>
       for entry in obj.fields.iter() {
         let (_, field) = entry
         collect_refs_impl(field.ty, refs)
       }
-    }
     TFunction(func) => {
       for p in func.params {
         collect_refs_impl(p.ty, refs)
@@ -1025,11 +1055,10 @@ fn collect_refs_impl(ty : TypeV2, refs : Array[String]) -> Unit {
       collect_refs_impl(ia.object_type, refs)
       collect_refs_impl(ia.index_type, refs)
     }
-    TTuple(elems) => {
+    TTuple(elems) =>
       for e in elems {
         collect_refs_impl(e.ty, refs)
       }
-    }
     _ => ()
   }
 }

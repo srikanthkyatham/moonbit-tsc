@@ -602,11 +602,10 @@ test "catch clause array destructuring binds variables" {
   // Test that catch clause with array destructuring properly binds variables
   let source = "try { throw [0, 1]; } catch ([a, b]) { console.log(a, b); }"
   match parse_and_bind(source) {
-    Ok(_bound_file) => {
+    Ok(_bound_file) =>
       // Variables should be bound in catch scope (not global)
       // Parsing and binding succeeded
       assert_true(true)
-    }
     Err(_) => assert_true(false)
   }
 }
@@ -626,10 +625,9 @@ test "function parameter array destructuring binds variables" {
   // Test that function parameters with array destructuring bind correctly
   let source = "function foo([a, b]) { return a + b; }"
   match parse_and_bind(source) {
-    Ok(bound_file) => {
+    Ok(bound_file) =>
       // Function should be in global scope
       assert_true(bound_file.global_scope.symbols.contains("foo"))
-    }
     Err(_) => assert_true(false)
   }
 }
@@ -639,10 +637,9 @@ test "function parameter object destructuring binds variables" {
   // Test that function parameters with object destructuring bind correctly
   let source = "function foo({ x, y }) { return x + y; }"
   match parse_and_bind(source) {
-    Ok(bound_file) => {
+    Ok(bound_file) =>
       // Function should be in global scope
       assert_true(bound_file.global_scope.symbols.contains("foo"))
-    }
     Err(_) => assert_true(false)
   }
 }
@@ -652,9 +649,8 @@ test "nested parameter destructuring binds variables" {
   // Test nested destructuring in function parameters
   let source = "function foo({ outer: { inner } }) { return inner; }"
   match parse_and_bind(source) {
-    Ok(bound_file) => {
+    Ok(bound_file) =>
       assert_true(bound_file.global_scope.symbols.contains("foo"))
-    }
     Err(_) => assert_true(false)
   }
 }

@@ -969,10 +969,9 @@ test "transform parameter properties generates properties" {
           assert_eq(ctor.parameters.length(), 2)
           // Body should contain assignments
           match ctor.body {
-            Some(BlockStatement(block)) => {
+            Some(BlockStatement(block)) =>
               // First 2 statements should be assignments
               assert_true(block.statements.length() >= 2)
-            }
             _ => assert_true(false)
           }
         }
@@ -1000,12 +999,14 @@ test "transform readonly parameter property" {
         PropertyDeclaration(pd) => {
           assert_eq(pd.name, "value")
           // Should have readonly modifier
-          let has_readonly = pd.modifiers.iter().any(fn(m) {
-            match m {
-              Readonly => true
-              _ => false
-            }
-          })
+          let has_readonly = pd.modifiers
+            .iter()
+            .any(fn(m) {
+              match m {
+                Readonly => true
+                _ => false
+              }
+            })
           assert_true(has_readonly)
         }
         _ => assert_true(false)
@@ -1025,17 +1026,15 @@ test "transform dynamic import" {
   let stmts = parse_source("const m = import('./module.js');")
   let transformed = transform_stmt(stmts[0])
   match transformed {
-    VariableStatement(vs) => {
+    VariableStatement(vs) =>
       match vs.declarations[0].initializer {
-        Some(ImportExpression(ie)) => {
+        Some(ImportExpression(ie)) =>
           match ie.source {
             StringLiteral(sl) => assert_eq(sl.value, "./module.js")
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
-    }
     _ => assert_true(false)
   }
 }
@@ -1046,22 +1045,19 @@ test "transform dynamic import with await" {
   let stmts = parse_source("const m = await import('./async.js');")
   let transformed = transform_stmt(stmts[0])
   match transformed {
-    VariableStatement(vs) => {
+    VariableStatement(vs) =>
       match vs.declarations[0].initializer {
-        Some(AwaitExpression(ae)) => {
+        Some(AwaitExpression(ae)) =>
           match ae.expression {
-            ImportExpression(ie) => {
+            ImportExpression(ie) =>
               match ie.source {
                 StringLiteral(sl) => assert_eq(sl.value, "./async.js")
                 _ => assert_true(false)
               }
-            }
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
-    }
     _ => assert_true(false)
   }
 }
@@ -1073,7 +1069,10 @@ test "transform dynamic import with await" {
 ///|
 /// Helper to transform with JSX classic mode
 fn transform_jsx_classic(stmt : Node) -> Node {
-  let ctx = TransformerContext::with_jsx(ES2015, Classic("React.createElement", "React.Fragment"))
+  let ctx = TransformerContext::with_jsx(
+    ES2015,
+    Classic("React.createElement", "React.Fragment"),
+  )
   transform(stmt, ctx)
 }
 
@@ -1106,14 +1105,13 @@ test "JSX classic - simple element" {
   let stmts = parse_jsx_source("const x = <div />;")
   let transformed = transform_jsx_classic(stmts[0])
   match transformed {
-    VariableStatement(vs) => {
+    VariableStatement(vs) =>
       match vs.declarations[0].initializer {
         Some(CallExpression(ce)) => {
           // Should be React.createElement
           match ce.expression {
-            PropertyAccessExpression(pae) => {
+            PropertyAccessExpression(pae) =>
               assert_eq(pae.name, "createElement")
-            }
             _ => assert_true(false)
           }
           // First arg should be "div"
@@ -1129,7 +1127,6 @@ test "JSX classic - simple element" {
         }
         _ => assert_true(false)
       }
-    }
     _ => assert_true(false)
   }
 }
@@ -1140,9 +1137,9 @@ test "JSX classic - element with props" {
   let stmts = parse_jsx_source("const x = <div className=\"foo\" />;")
   let transformed = transform_jsx_classic(stmts[0])
   match transformed {
-    VariableStatement(vs) => {
+    VariableStatement(vs) =>
       match vs.declarations[0].initializer {
-        Some(CallExpression(ce)) => {
+        Some(CallExpression(ce)) =>
           // Second arg should be an object
           match ce.arguments[1] {
             ObjectLiteralExpression(ole) => {
@@ -1154,10 +1151,8 @@ test "JSX classic - element with props" {
             }
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
-    }
     _ => assert_true(false)
   }
 }
@@ -1168,7 +1163,7 @@ test "JSX classic - element with children" {
   let stmts = parse_jsx_source("const x = <div>Hello</div>;")
   let transformed = transform_jsx_classic(stmts[0])
   match transformed {
-    VariableStatement(vs) => {
+    VariableStatement(vs) =>
       match vs.declarations[0].initializer {
         Some(CallExpression(ce)) => {
           // Should have 3 arguments: type, props, child
@@ -1181,7 +1176,6 @@ test "JSX classic - element with children" {
         }
         _ => assert_true(false)
       }
-    }
     _ => assert_true(false)
   }
 }
@@ -1192,18 +1186,16 @@ test "JSX classic - component (uppercase)" {
   let stmts = parse_jsx_source("const x = <MyComponent />;")
   let transformed = transform_jsx_classic(stmts[0])
   match transformed {
-    VariableStatement(vs) => {
+    VariableStatement(vs) =>
       match vs.declarations[0].initializer {
-        Some(CallExpression(ce)) => {
+        Some(CallExpression(ce)) =>
           // First arg should be identifier MyComponent (not string)
           match ce.arguments[0] {
             Identifier(id) => assert_eq(id.name, "MyComponent")
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
-    }
     _ => assert_true(false)
   }
 }
@@ -1214,7 +1206,7 @@ test "JSX automatic - simple element" {
   let stmts = parse_jsx_source("const x = <div />;")
   let transformed = transform_jsx_automatic(stmts[0])
   match transformed {
-    VariableStatement(vs) => {
+    VariableStatement(vs) =>
       match vs.declarations[0].initializer {
         Some(CallExpression(ce)) => {
           // Should be _jsx
@@ -1235,7 +1227,6 @@ test "JSX automatic - simple element" {
         }
         _ => assert_true(false)
       }
-    }
     _ => assert_true(false)
   }
 }
@@ -1246,18 +1237,16 @@ test "JSX automatic - with children uses jsxs" {
   let stmts = parse_jsx_source("const x = <div><span /><span /></div>;")
   let transformed = transform_jsx_automatic(stmts[0])
   match transformed {
-    VariableStatement(vs) => {
+    VariableStatement(vs) =>
       match vs.declarations[0].initializer {
-        Some(CallExpression(ce)) => {
+        Some(CallExpression(ce)) =>
           // Should be _jsxs for multiple children
           match ce.expression {
             Identifier(id) => assert_eq(id.name, "_jsxs")
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
-    }
     _ => assert_true(false)
   }
 }
@@ -1268,12 +1257,11 @@ test "JSX preserve mode - keeps JSX" {
   let stmts = parse_jsx_source("const x = <div />;")
   let transformed = transform(stmts[0], ctx)
   match transformed {
-    VariableStatement(vs) => {
+    VariableStatement(vs) =>
       match vs.declarations[0].initializer {
         Some(JsxSelfClosingElement(_)) => assert_true(true)
         _ => assert_true(false)
       }
-    }
     _ => assert_true(false)
   }
 }

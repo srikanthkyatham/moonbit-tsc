@@ -189,7 +189,10 @@ test "unit/checker/error/TS2362-TS2363 - string subtraction" {
       assert_true(diagnostics.length() > 0)
       assert_true(has_diagnostic_containing(diagnostics, "arithmetic"))
       // Verify error codes TS2362/TS2363: arithmetic operand must be numeric
-      assert_true(has_diagnostic_code(diagnostics, 2362) || has_diagnostic_code(diagnostics, 2363))
+      assert_true(
+        has_diagnostic_code(diagnostics, 2362) ||
+        has_diagnostic_code(diagnostics, 2363),
+      )
     }
   }
 }
@@ -1533,9 +1536,7 @@ test "unit/checker/error/TS2322 - assign string to number parameter" {
 
 ///|
 test "unit/checker/error/TS2322 - assign boolean to string parameter" {
-  let result = parse_bind_check_errors(
-    "function test(s: string) { s = true; }",
-  )
+  let result = parse_bind_check_errors("function test(s: string) { s = true; }")
   match result {
     Ok(_) => assert_true(false)
     Err(diagnostics) => {
@@ -1590,9 +1591,7 @@ test "unit/checker/error/TS2322 - parameter type error in template substitution"
 ///|
 test "unit/checker/error - valid parameter assignment" {
   // Test that assigning a valid type to a parameter is accepted
-  let result = parse_bind_check_errors(
-    "function test(x: number) { x = 42; }",
-  )
+  let result = parse_bind_check_errors("function test(x: number) { x = 42; }")
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(_) => assert_true(false) // Should not have errors
@@ -1631,9 +1630,7 @@ test "unit/checker/destructuring - catch clause object destructuring" {
 test "unit/checker/destructuring - function parameter array pattern" {
   // Test function with array destructuring parameter (without type annotation)
   // Variables bind as 'any' when no annotation provided
-  let result = parse_bind_check_errors(
-    "function foo([a, b]) { return a; }",
-  )
+  let result = parse_bind_check_errors("function foo([a, b]) { return a; }")
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(_) => assert_true(false)
@@ -1643,9 +1640,7 @@ test "unit/checker/destructuring - function parameter array pattern" {
 ///|
 test "unit/checker/destructuring - function parameter object pattern" {
   // Test function with object destructuring parameter (without type annotation)
-  let result = parse_bind_check_errors(
-    "function foo({ x, y }) { return x; }",
-  )
+  let result = parse_bind_check_errors("function foo({ x, y }) { return x; }")
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(_) => assert_true(false)
@@ -1655,9 +1650,7 @@ test "unit/checker/destructuring - function parameter object pattern" {
 ///|
 test "unit/checker/destructuring - arrow function array pattern" {
   // Test arrow function with array destructuring parameter
-  let result = parse_bind_check_errors(
-    "const foo = ([a, b]) => a;",
-  )
+  let result = parse_bind_check_errors("const foo = ([a, b]) => a;")
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(_) => assert_true(false)
@@ -1667,9 +1660,7 @@ test "unit/checker/destructuring - arrow function array pattern" {
 ///|
 test "unit/checker/destructuring - arrow function object pattern" {
   // Test arrow function with object destructuring parameter
-  let result = parse_bind_check_errors(
-    "const foo = ({ x, y }) => x;",
-  )
+  let result = parse_bind_check_errors("const foo = ({ x, y }) => x;")
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(_) => assert_true(false)
@@ -1865,15 +1856,16 @@ test "unit/checker/no TS1187 - regular parameter with binding pattern" {
 test "TS2454 not triggered for any-typed uninitialized variables" {
   // Variables declared with type `any` should not trigger TS2454 even if uninitialized
   let result = parse_bind_check_errors(
-    #|let a: any, b: any, c: any = {x: {a: 1, y: 2}}, d: any;
-    #|({x: {a, ...b} = d} = c);
+    (
+      #|let a: any, b: any, c: any = {x: {a: 1, y: 2}}, d: any;
+      #|({x: {a, ...b} = d} = c);
+    ),
   )
   match result {
     Ok(_) => () // Should compile without TS2454
-    Err(diagnostics) => {
+    Err(diagnostics) =>
       // Should not have TS2454 for 'd'
       assert_true(not(has_diagnostic_code(diagnostics, 2454)))
-    }
   }
 }
 
@@ -1881,21 +1873,21 @@ test "TS2454 not triggered for any-typed uninitialized variables" {
 /// Test: Array destructuring should work with class instances that implement iterator
 test "Array destructuring with class instance - no TS2460" {
   let result = parse_bind_check_errors(
-    #|class SymbolIterator {
-    #|    next() {
-    #|        return { value: 1, done: false };
-    #|    }
-    #|    [Symbol.iterator]() {
-    #|        return this;
-    #|    }
-    #|}
-    #|var [a, b] = new SymbolIterator;
+    (
+      #|class SymbolIterator {
+      #|    next() {
+      #|        return { value: 1, done: false };
+      #|    }
+      #|    [Symbol.iterator]() {
+      #|        return this;
+      #|    }
+      #|}
+      #|var [a, b] = new SymbolIterator;
+    ),
   )
   match result {
     Ok(_) => () // Should compile without TS2460
-    Err(diagnostics) => {
-      assert_true(not(has_diagnostic_code(diagnostics, 2460)))
-    }
+    Err(diagnostics) => assert_true(not(has_diagnostic_code(diagnostics, 2460)))
   }
 }
 
@@ -1903,15 +1895,16 @@ test "Array destructuring with class instance - no TS2460" {
 /// Test: Rest element in destructuring pattern should not trigger TS2548
 test "Rest element in destructuring pattern - no TS2548" {
   let result = parse_bind_check_errors(
-    #|var c = {};
-    #|[...c] = ["", 0];
+    (
+      #|var c = {};
+      #|[...c] = ["", 0];
+    ),
   )
   match result {
     Ok(_) => () // Should compile - rest element is a target, not source
-    Err(diagnostics) => {
+    Err(diagnostics) =>
       // Should not have TS2548 for rest in pattern
       assert_true(not(has_diagnostic_code(diagnostics, 2548)))
-    }
   }
 }
 
@@ -1919,14 +1912,201 @@ test "Rest element in destructuring pattern - no TS2548" {
 /// Test: Spread in array construction (not pattern) SHOULD trigger TS2548 for non-iterable
 test "Spread in array construction - TS2548 for object" {
   let result = parse_bind_check_errors(
-    #|const obj = { a: 1, b: 2 };
-    #|const arr = [...obj];
+    (
+      #|const obj = { a: 1, b: 2 };
+      #|const arr = [...obj];
+    ),
   )
   match result {
     Ok(_) => assert_true(false) // Should produce error
-    Err(diagnostics) => {
+    Err(diagnostics) =>
       // Should have TS2548 for spreading non-iterable object
-      assert_true(has_diagnostic_code(diagnostics, 2548) || has_diagnostic_code(diagnostics, 2488))
+      assert_true(
+        has_diagnostic_code(diagnostics, 2548) ||
+        has_diagnostic_code(diagnostics, 2488),
+      )
+  }
+}
+
+// ============================================================================
+// TS2463: Binding pattern parameter cannot be optional
+// ============================================================================
+
+///|
+/// Test: TS2463 - Binding pattern with optional syntax should error
+test "unit/checker/TS2463 - array binding pattern with optional syntax" {
+  // A binding pattern parameter cannot be optional in an implementation signature
+  let result = parse_bind_check_errors("function foo([a, b]?: number[]) {}")
+  match result {
+    Ok(_) => assert_true(false) // Should have errors
+    Err(diagnostics) => {
+      assert_true(has_diagnostic_code(diagnostics, 2463))
+      assert_true(
+        has_diagnostic_containing(
+          diagnostics, "binding pattern parameter cannot be optional",
+        ),
+      )
     }
+  }
+}
+
+///|
+/// Test: TS2463 - Object binding pattern with optional syntax should error
+test "unit/checker/TS2463 - object binding pattern with optional syntax" {
+  let result = parse_bind_check_errors(
+    "function foo({ x, y }?: { x: number, y: number }) {}",
+  )
+  match result {
+    Ok(_) => assert_true(false) // Should have errors
+    Err(diagnostics) => {
+      assert_true(has_diagnostic_code(diagnostics, 2463))
+      assert_true(
+        has_diagnostic_containing(
+          diagnostics, "binding pattern parameter cannot be optional",
+        ),
+      )
+    }
+  }
+}
+
+///|
+/// Test: No TS2463 - Binding pattern with default value is valid
+test "unit/checker/no TS2463 - array binding pattern with default value" {
+  // A binding pattern with a default value should NOT trigger TS2463
+  // This is different from optional syntax - it's valid
+  let result = parse_bind_check_errors("function foo([a, b] = [1, 2]) {}")
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(diagnostics) =>
+      // Should NOT have TS2463 for default value syntax
+      assert_true(not(has_diagnostic_code(diagnostics, 2463)))
+  }
+}
+
+///|
+/// Test: No TS2463 - Object binding pattern with default value is valid
+test "unit/checker/no TS2463 - object binding pattern with default value" {
+  let result = parse_bind_check_errors(
+    "function foo({ x, y } = { x: 1, y: 2 }) {}",
+  )
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(diagnostics) =>
+      // Should NOT have TS2463 for default value syntax
+      assert_true(not(has_diagnostic_code(diagnostics, 2463)))
+  }
+}
+
+///|
+/// Test: No TS2463 - Binding pattern with variable default is valid
+test "unit/checker/no TS2463 - binding pattern with variable default" {
+  let result = parse_bind_check_errors(
+    (
+      #|const defaultVal = { x: 1, y: 2 };
+      #|function foo({ x, y } = defaultVal) {}
+    ),
+  )
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(diagnostics) =>
+      // Should NOT have TS2463 for default value syntax
+      assert_true(not(has_diagnostic_code(diagnostics, 2463)))
+  }
+}
+
+///|
+/// Test: No TS2463 - Arrow function with binding pattern default is valid
+test "unit/checker/no TS2463 - arrow function binding pattern with default" {
+  let result = parse_bind_check_errors("const foo = ({ x } = { x: 1 }) => x;")
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(diagnostics) =>
+      // Should NOT have TS2463 for default value syntax
+      assert_true(not(has_diagnostic_code(diagnostics, 2463)))
+  }
+}
+
+// ============================================================================
+// TS1186: A rest element cannot have an initializer
+// ============================================================================
+
+///|
+/// Test: TS1186 - Rest element with initializer in destructuring assignment
+test "unit/checker/TS1186 - rest element with initializer" {
+  // A rest element cannot have an initializer
+  let result = parse_bind_check_errors(
+    (
+      #|var a: number[] = [1, 2, 3];
+      #|var x: number[];
+      #|[...x = a] = a;
+    ),
+  )
+  match result {
+    Ok(_) => assert_true(false) // Should have errors
+    Err(diagnostics) => {
+      assert_true(has_diagnostic_code(diagnostics, 1186))
+      assert_true(
+        has_diagnostic_containing(
+          diagnostics, "rest element cannot have an initializer",
+        ),
+      )
+    }
+  }
+}
+
+///|
+/// Test: TS1186 - Rest element with initializer in single statement
+test "unit/checker/TS1186 - rest with initializer single statement" {
+  let result = parse_bind_check_errors(
+    "var a: number[]; var x: number[]; [...x = a] = a;",
+  )
+  match result {
+    Ok(_) => assert_true(false) // Should have errors
+    Err(diagnostics) => assert_true(has_diagnostic_code(diagnostics, 1186))
+  }
+}
+
+///|
+/// Test: No TS1186 - Normal spread in array literal is valid
+test "unit/checker/no TS1186 - spread in array literal" {
+  // Spread in array construction is valid
+  let result = parse_bind_check_errors(
+    "const a = [1, 2, 3]; const b = [...a];",
+  )
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(diagnostics) =>
+      // Should NOT have TS1186 for normal spread
+      assert_true(not(has_diagnostic_code(diagnostics, 1186)))
+  }
+}
+
+///|
+/// Test: No TS1186 - Rest element without initializer is valid
+test "unit/checker/no TS1186 - rest element without initializer" {
+  // Rest element without initializer should be valid
+  let result = parse_bind_check_errors(
+    "const a = [1, 2, 3]; let x: number[]; [...x] = a;",
+  )
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(diagnostics) =>
+      // Should NOT have TS1186 for rest without initializer
+      assert_true(not(has_diagnostic_code(diagnostics, 1186)))
+  }
+}
+
+///|
+/// Test: No TS1186 - Rest parameter in function is valid
+test "unit/checker/no TS1186 - rest parameter in function" {
+  // Rest parameter in function signature is valid
+  let result = parse_bind_check_errors(
+    "function sum(...nums: number[]): number { return 0; }",
+  )
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(diagnostics) =>
+      // Should NOT have TS1186 for rest parameter
+      assert_true(not(has_diagnostic_code(diagnostics, 1186)))
   }
 }

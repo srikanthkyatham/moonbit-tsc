@@ -237,10 +237,14 @@ test "DiagnosticCode - TS2362/TS2363 arithmetic on strings" {
     #|const result = "hello" - "world";
   let result = check_source(source)
   match result {
-    Ok(_) => assert_true(false, msg="Expected error TS2362/TS2363 but got no errors")
+    Ok(_) =>
+      assert_true(false, msg="Expected error TS2362/TS2363 but got no errors")
     Err(diagnostics) => {
       // Should have TS2362 for left side and TS2363 for right side
-      assert_true(has_error(diagnostics, 2362) || has_error(diagnostics, 2363), msg="Expected error TS2362 or TS2363")
+      assert_true(
+        has_error(diagnostics, 2362) || has_error(diagnostics, 2363),
+        msg="Expected error TS2362 or TS2363",
+      )
       assert_true(
         has_message(diagnostics, "arithmetic"),
         msg="Expected 'arithmetic' in message",
@@ -6846,10 +6850,9 @@ test "DiagnosticCode - TS1155 declare const does not require initializer" {
     #|declare const x: number;
   let result = check_source(source)
   match result {
-    Ok(tf) => {
+    Ok(tf) =>
       // Should NOT have TS1155 error
       assert_false(has_error(tf.diagnostics, 1155))
-    }
     Err(_) => fail("declare const should parse and check successfully")
   }
 }
@@ -6976,7 +6979,10 @@ test "unit/enums/merging - merged enums can reference previous declarations" {
   let result = check_source(source)
   match result {
     Ok(tf) => assert_true(tf.diagnostics.length() == 0)
-    Err(_) => fail("Merged enums should be able to reference members from earlier declarations")
+    Err(_) =>
+      fail(
+        "Merged enums should be able to reference members from earlier declarations",
+      )
   }
 }
 
@@ -7174,10 +7180,9 @@ test "unit/enum/regular-enum-infinity-no-error - regular enum with Infinity is a
   let result = check_source(source)
   match result {
     Ok(tf) => assert_true(tf.diagnostics.length() == 0)
-    Err(diagnostics) => {
+    Err(diagnostics) =>
       // Should not have TS2477 error for regular enum
       assert_false(has_error(diagnostics, 2477))
-    }
   }
 }
 
@@ -7245,7 +7250,8 @@ test "unit/enum/enum-merging-two-without-init - second merged enum without init 
     #|}
   let result = check_source(source)
   match result {
-    Ok(_) => fail("Expected TS2432 error for second merged enum without initializer")
+    Ok(_) =>
+      fail("Expected TS2432 error for second merged enum without initializer")
     Err(diagnostics) => {
       assert_true(has_error(diagnostics, 2432))
       assert_true(has_message(diagnostics, "only one declaration can omit"))
@@ -7271,7 +7277,10 @@ test "unit/enum/enum-merging-three-only-third-error - third merged enum without 
     Err(diagnostics) => {
       // B is first to omit initializer (no error), C is second to omit (gets error)
       // TypeScript only reports on subsequent declarations that omit, not the first one
-      let error_count = diagnostics.iter().filter(fn(d) { d.code == 2432 }).count()
+      let error_count = diagnostics
+        .iter()
+        .filter(fn(d) { d.code == 2432 })
+        .count()
       assert_true(error_count == 1)
     }
   }
@@ -7289,10 +7298,9 @@ test "unit/enum/enum-merging-first-no-init-second-with-init - valid when only fi
   let result = check_source(source)
   match result {
     Ok(tf) => assert_true(tf.diagnostics.length() == 0)
-    Err(diagnostics) => {
+    Err(diagnostics) =>
       // Should not have TS2432 error
       assert_false(has_error(diagnostics, 2432))
-    }
   }
 }
 
@@ -7348,7 +7356,10 @@ test "unit/enum/namespace-enum-merging-three-decls - three namespace enum decls 
     Ok(_) => fail("Expected TS2432 errors for namespace merged enums")
     Err(diagnostics) => {
       // Should have 2 errors - on B and C (both missing initializers after first has init)
-      let error_count = diagnostics.iter().filter(fn(d) { d.code == 2432 }).count()
+      let error_count = diagnostics
+        .iter()
+        .filter(fn(d) { d.code == 2432 })
+        .count()
       // Actually only C should have error since B is first to omit, C is second
       assert_true(error_count == 1)
     }
@@ -7373,7 +7384,10 @@ test "unit/enum/namespace-enum-merging-two-omit - namespace enum with two omitti
     Err(diagnostics) => {
       // A omits, B has init, C omits -> C should get error
       assert_true(has_error(diagnostics, 2432))
-      let error_count = diagnostics.iter().filter(fn(d) { d.code == 2432 }).count()
+      let error_count = diagnostics
+        .iter()
+        .filter(fn(d) { d.code == 2432 })
+        .count()
       assert_true(error_count == 1)
     }
   }
@@ -7414,14 +7428,12 @@ test "unit/enum/TS1308-await-in-normal-async-is-ok - await allowed in async func
     #|}
   let result = check_source(source)
   match result {
-    Ok(tf) => {
+    Ok(tf) =>
       // Should NOT have TS1308 error
       assert_false(has_error(tf.diagnostics, 1308))
-    }
-    Err(diagnostics) => {
+    Err(diagnostics) =>
       // Parse/bind errors are ok, but should not have TS1308
       assert_false(has_error(diagnostics, 1308))
-    }
   }
 }
 
@@ -7460,14 +7472,12 @@ test "unit/enum/TS1163-yield-in-generator-is-ok - yield allowed in generator bod
     #|}
   let result = check_source(source)
   match result {
-    Ok(tf) => {
+    Ok(tf) =>
       // Should NOT have TS1163 error
       assert_false(has_error(tf.diagnostics, 1163))
-    }
-    Err(diagnostics) => {
+    Err(diagnostics) =>
       // Parse/bind errors are ok, but should not have TS1163
       assert_false(has_error(diagnostics, 1163))
-    }
   }
 }
 
@@ -7508,9 +7518,7 @@ test "unit/enum/TS2431-enum-name-any - enum name cannot be 'any'" {
       assert_true(has_error(tf.diagnostics, 2431))
       assert_true(has_message(tf.diagnostics, "Enum name cannot be"))
     }
-    Err(diagnostics) => {
-      assert_true(has_error(diagnostics, 2431))
-    }
+    Err(diagnostics) => assert_true(has_error(diagnostics, 2431))
   }
 }
 
@@ -7520,12 +7528,8 @@ test "unit/enum/TS2431-enum-name-number - enum name cannot be 'number'" {
     #|enum number { A, B }
   let result = check_source(source)
   match result {
-    Ok(tf) => {
-      assert_true(has_error(tf.diagnostics, 2431))
-    }
-    Err(diagnostics) => {
-      assert_true(has_error(diagnostics, 2431))
-    }
+    Ok(tf) => assert_true(has_error(tf.diagnostics, 2431))
+    Err(diagnostics) => assert_true(has_error(diagnostics, 2431))
   }
 }
 
@@ -7535,12 +7539,8 @@ test "unit/enum/TS2431-enum-name-string - enum name cannot be 'string'" {
     #|enum string { A, B }
   let result = check_source(source)
   match result {
-    Ok(tf) => {
-      assert_true(has_error(tf.diagnostics, 2431))
-    }
-    Err(diagnostics) => {
-      assert_true(has_error(diagnostics, 2431))
-    }
+    Ok(tf) => assert_true(has_error(tf.diagnostics, 2431))
+    Err(diagnostics) => assert_true(has_error(diagnostics, 2431))
   }
 }
 
@@ -7550,12 +7550,8 @@ test "unit/enum/TS2431-enum-name-boolean - enum name cannot be 'boolean'" {
     #|enum boolean { A, B }
   let result = check_source(source)
   match result {
-    Ok(tf) => {
-      assert_true(has_error(tf.diagnostics, 2431))
-    }
-    Err(diagnostics) => {
-      assert_true(has_error(diagnostics, 2431))
-    }
+    Ok(tf) => assert_true(has_error(tf.diagnostics, 2431))
+    Err(diagnostics) => assert_true(has_error(diagnostics, 2431))
   }
 }
 
@@ -7572,10 +7568,14 @@ test "unit/shorthand-property/TS18004-undefined-variable - error for undefined s
     #|}
   let result = check_source(source)
   match result {
-    Ok(_) => fail!("Expected TS18004 error for undefined shorthand property")
+    Ok(_) => fail("Expected TS18004 error for undefined shorthand property")
     Err(diagnostics) => {
-      assert_true!(has_error(diagnostics, 18004))
-      assert_true!(has_message(diagnostics, "No value exists in scope for the shorthand property"))
+      assert_true(has_error(diagnostics, 18004))
+      assert_true(
+        has_message(
+          diagnostics, "No value exists in scope for the shorthand property",
+        ),
+      )
     }
   }
 }
@@ -7591,12 +7591,15 @@ test "unit/shorthand-property/TS18004-multiple-undefined - multiple undefined sh
     #|}
   let result = check_source(source)
   match result {
-    Ok(_) => fail!("Expected TS18004 errors for undefined shorthand properties")
+    Ok(_) => fail("Expected TS18004 errors for undefined shorthand properties")
     Err(diagnostics) => {
-      assert_true!(has_error(diagnostics, 18004))
+      assert_true(has_error(diagnostics, 18004))
       // Should have 3 errors, one for each undefined property
-      let error_count = diagnostics.iter().filter(fn(d) { d.code == 18004 }).count()
-      assert_true!(error_count == 3)
+      let error_count = diagnostics
+        .iter()
+        .filter(fn(d) { d.code == 18004 })
+        .count()
+      assert_true(error_count == 3)
     }
   }
 }
@@ -7612,10 +7615,9 @@ test "unit/shorthand-property/no-TS18004-when-defined - no error for defined sho
   let result = check_source(source)
   match result {
     Ok(_) => () // Success - no error expected
-    Err(diagnostics) => {
+    Err(diagnostics) =>
       // Should not have TS18004
-      assert_false!(has_error(diagnostics, 18004))
-    }
+      assert_false(has_error(diagnostics, 18004))
   }
 }
 
@@ -7629,10 +7631,9 @@ test "unit/shorthand-property/no-TS18004-self-reference - no error for self-refe
   let result = check_source(source)
   match result {
     Ok(_) => () // Success - 'x' is defined (self-reference is allowed)
-    Err(diagnostics) => {
+    Err(diagnostics) =>
       // Should not have TS18004 for 'x' since 'x' is being declared
-      assert_false!(has_error(diagnostics, 18004))
-    }
+      assert_false(has_error(diagnostics, 18004))
   }
 }
 
@@ -7647,12 +7648,15 @@ test "unit/shorthand-property/TS18004-mixed - mix of defined and undefined prope
     #|}
   let result = check_source(source)
   match result {
-    Ok(_) => fail!("Expected TS18004 error for undefined shorthand property")
+    Ok(_) => fail("Expected TS18004 error for undefined shorthand property")
     Err(diagnostics) => {
-      assert_true!(has_error(diagnostics, 18004))
+      assert_true(has_error(diagnostics, 18004))
       // Should only have 1 error for 'undefinedVar'
-      let error_count = diagnostics.iter().filter(fn(d) { d.code == 18004 }).count()
-      assert_true!(error_count == 1)
+      let error_count = diagnostics
+        .iter()
+        .filter(fn(d) { d.code == 18004 })
+        .count()
+      assert_true(error_count == 1)
     }
   }
 }
@@ -7671,9 +7675,7 @@ test "unit/enum/TS18033-boolean-initializer - boolean not valid for enum" {
       assert_true(has_error(tf.diagnostics, 18033))
       assert_true(has_message(tf.diagnostics, "computed enum member values"))
     }
-    Err(diagnostics) => {
-      assert_true(has_error(diagnostics, 18033))
-    }
+    Err(diagnostics) => assert_true(has_error(diagnostics, 18033))
   }
 }
 
@@ -7683,12 +7685,8 @@ test "unit/enum/TS18033-object-initializer - object not valid for enum" {
     #|enum E { A = {} }
   let result = check_source(source)
   match result {
-    Ok(tf) => {
-      assert_true(has_error(tf.diagnostics, 18033))
-    }
-    Err(diagnostics) => {
-      assert_true(has_error(diagnostics, 18033))
-    }
+    Ok(tf) => assert_true(has_error(tf.diagnostics, 18033))
+    Err(diagnostics) => assert_true(has_error(diagnostics, 18033))
   }
 }
 
@@ -7698,14 +7696,12 @@ test "unit/enum/valid-numeric-enum - numeric values are valid" {
     #|enum E { A = 1, B = 2 }
   let result = check_source(source)
   match result {
-    Ok(tf) => {
+    Ok(tf) =>
       // Should not have TS18033 error
       assert_false(has_error(tf.diagnostics, 18033))
-    }
-    Err(diagnostics) => {
+    Err(diagnostics) =>
       // Should not have TS18033 error
       assert_false(has_error(diagnostics, 18033))
-    }
   }
 }
 
@@ -7715,14 +7711,12 @@ test "unit/enum/valid-string-enum - string values are valid" {
     #|enum E { A = "a", B = "b" }
   let result = check_source(source)
   match result {
-    Ok(tf) => {
+    Ok(tf) =>
       // Should not have TS18033 error
       assert_false(has_error(tf.diagnostics, 18033))
-    }
-    Err(diagnostics) => {
+    Err(diagnostics) =>
       // Should not have TS18033 error
       assert_false(has_error(diagnostics, 18033))
-    }
   }
 }
 
@@ -7738,7 +7732,8 @@ test "unit/destructuring/object-binding-with-default - parses object destructuri
   let result = check_source(source)
   match result {
     Ok(_) => () // Should parse and type check successfully
-    Err(_) => fail("Object destructuring with default value should parse correctly")
+    Err(_) =>
+      fail("Object destructuring with default value should parse correctly")
   }
 }
 
@@ -7751,7 +7746,8 @@ test "unit/destructuring/object-binding-with-default-and-type - object destructu
   let result = check_source(source)
   match result {
     Ok(_) => () // Should parse and type check successfully
-    Err(_) => fail("Object destructuring with optional property should parse correctly")
+    Err(_) =>
+      fail("Object destructuring with optional property should parse correctly")
   }
 }
 
@@ -7763,7 +7759,10 @@ test "unit/destructuring/object-binding-with-rename-and-default - object binding
   let result = check_source(source)
   match result {
     Ok(_) => () // Should parse and type check successfully
-    Err(_) => fail("Object destructuring with rename and default should parse correctly")
+    Err(_) =>
+      fail(
+        "Object destructuring with rename and default should parse correctly",
+      )
   }
 }
 
@@ -7837,11 +7836,10 @@ test "unit/enum/valid-infinity-nan - unshadowed Infinity and NaN are valid" {
   let result = check_source(source)
   match result {
     Ok(_) => () // Valid - global Infinity and NaN are numbers
-    Err(diagnostics) => {
+    Err(diagnostics) =>
       // Should not have TS18033 error (computed enum value type error)
       // May have TS2477/TS2478 for const enum non-finite/NaN values
       assert_false(has_error(diagnostics, 18033))
-    }
   }
 }
 
@@ -7865,10 +7863,9 @@ test "unit/type-alias/destructured-binding-with-default - TS18033 for non-number
   let result = check_source(source)
   match result {
     Ok(_) => fail("Expected TS18033 error for non-number enum initializer")
-    Err(diagnostics) => {
+    Err(diagnostics) =>
       // Should get TS18033 because 'value' has type 'string | number', not 'number'
       assert_true(has_error(diagnostics, 18033))
-    }
   }
 }
 
@@ -7886,9 +7883,7 @@ test "unit/type-alias/object-type-resolution - type alias resolves to object pro
   let result = check_source(source)
   match result {
     Ok(_) => fail("Expected TS2322 error for type mismatch")
-    Err(diagnostics) => {
-      assert_true(has_error(diagnostics, 2322))
-    }
+    Err(diagnostics) => assert_true(has_error(diagnostics, 2322))
   }
 }
 
@@ -8044,7 +8039,8 @@ test "DiagnosticCode - TS1210 arguments parameter in class method" {
     #|}
   let result = check_source(source)
   match result {
-    Ok(_) => fail("Expected TS1210 error for 'arguments' parameter in class method")
+    Ok(_) =>
+      fail("Expected TS1210 error for 'arguments' parameter in class method")
     Err(diagnostics) =>
       assert_true(
         has_error(diagnostics, 1210),
@@ -8083,7 +8079,8 @@ test "DiagnosticCode - TS1210 arguments parameter in constructor" {
     #|}
   let result = check_source(source)
   match result {
-    Ok(_) => fail("Expected TS1210 error for 'arguments' parameter in constructor")
+    Ok(_) =>
+      fail("Expected TS1210 error for 'arguments' parameter in constructor")
     Err(diagnostics) =>
       assert_true(
         has_error(diagnostics, 1210),

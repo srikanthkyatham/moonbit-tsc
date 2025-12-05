@@ -74,7 +74,7 @@ fn scan_double_string(
       state.offset += 2
       continue rest
     }
-    [.. "\\u", .. rest] => {
+    [.. "\\u", .. rest] =>
       // Unicode escape: \uXXXX or \u{XXXXX}
       match parse_unicode_escape_v2(rest) {
         Some((str, chars_consumed)) => {
@@ -91,8 +91,7 @@ fn scan_double_string(
           continue rest
         }
       }
-    }
-    [.. "\\x", .. rest] => {
+    [.. "\\x", .. rest] =>
       // Hex escape: \xXX
       match parse_hex_escape_v2(rest) {
         Some((str, chars_consumed)) => {
@@ -109,7 +108,6 @@ fn scan_double_string(
           continue rest
         }
       }
-    }
     ['\n', .. remaining] => remaining // Unterminated at newline
     ['\\', '\n', .. rest] => {
       // Line continuation - skip the newline
@@ -222,7 +220,7 @@ fn scan_single_string(
       state.offset += 2
       continue rest
     }
-    [.. "\\u", .. rest] => {
+    [.. "\\u", .. rest] =>
       // Unicode escape: \uXXXX or \u{XXXXX}
       match parse_unicode_escape_v2(rest) {
         Some((str, chars_consumed)) => {
@@ -239,8 +237,7 @@ fn scan_single_string(
           continue rest
         }
       }
-    }
-    [.. "\\x", .. rest] => {
+    [.. "\\x", .. rest] =>
       // Hex escape: \xXX
       match parse_hex_escape_v2(rest) {
         Some((str, chars_consumed)) => {
@@ -257,7 +254,6 @@ fn scan_single_string(
           continue rest
         }
       }
-    }
     ['\n', .. remaining] => remaining // Unterminated at newline
     ['\\', '\n', .. rest] => {
       // Line continuation - skip the newline
@@ -376,7 +372,7 @@ fn scan_template_literal_v2(
       state.offset += 2
       continue rest
     }
-    [.. "\\u", .. rest] => {
+    [.. "\\u", .. rest] =>
       // Unicode escape: \uXXXX or \u{XXXXX}
       match parse_unicode_escape_v2(rest) {
         Some((str, chars_consumed)) => {
@@ -393,8 +389,7 @@ fn scan_template_literal_v2(
           continue rest
         }
       }
-    }
-    [.. "\\x", .. rest] => {
+    [.. "\\x", .. rest] =>
       // Hex escape: \xXX
       match parse_hex_escape_v2(rest) {
         Some((str, chars_consumed)) => {
@@ -411,7 +406,6 @@ fn scan_template_literal_v2(
           continue rest
         }
       }
-    }
     ['\\', ch, .. rest] => {
       // Unknown escape - keep literal character
       content.write_char(ch)
@@ -515,7 +509,7 @@ fn scan_template_continuation_v2(
       state.offset += 2
       continue rest
     }
-    [.. "\\u", .. rest] => {
+    [.. "\\u", .. rest] =>
       // Unicode escape: \uXXXX or \u{XXXXX}
       match parse_unicode_escape_v2(rest) {
         Some((str, chars_consumed)) => {
@@ -532,8 +526,7 @@ fn scan_template_continuation_v2(
           continue rest
         }
       }
-    }
-    [.. "\\x", .. rest] => {
+    [.. "\\x", .. rest] =>
       // Hex escape: \xXX
       match parse_hex_escape_v2(rest) {
         Some((str, chars_consumed)) => {
@@ -550,7 +543,6 @@ fn scan_template_continuation_v2(
           continue rest
         }
       }
-    }
     ['\\', ch, .. rest] => {
       // Unknown escape - keep literal character
       content.write_char(ch)

@@ -76,7 +76,13 @@ pub fn evaluate_conditional_type_v2(
       // Distribute: (A | B) extends U ? X : Y becomes (A extends U ? X : Y) | (B extends U ? X : Y)
       make_union(
         types.map(fn(t) {
-          evaluate_conditional_single(env, t, extends_type, cond.true_type, cond.false_type)
+          evaluate_conditional_single(
+            env,
+            t,
+            extends_type,
+            cond.true_type,
+            cond.false_type,
+          )
         }),
       )
     TTypeParam(name, _) =>
@@ -139,7 +145,6 @@ fn is_subtype_check(_env : TypeEnv, source : TypeV2, target : TypeV2) -> Bool {
   if source == target {
     return true
   }
-
   match (source, target) {
     // Any extends anything except never
     (TAny, TNever) => false
@@ -183,7 +188,6 @@ fn is_subtype_check(_env : TypeEnv, source : TypeV2, target : TypeV2) -> Bool {
     // Type params with constraints
     (TTypeParam(_, Some(constraint)), target) =>
       is_subtype_check_simple(constraint, target)
-
     _ => false
   }
 }
@@ -243,10 +247,7 @@ fn check_object_extends(source : ObjectTypeV2, target : ObjectTypeV2) -> Bool {
     let name = kv.0
     let tgt_field = kv.1
     match source.fields.get(name) {
-      None =>
-        if not(tgt_field.optional) {
-          return false
-        }
+      None => if not(tgt_field.optional) { return false }
       Some(src_field) =>
         if not(is_subtype_check_simple(src_field.ty, tgt_field.ty)) {
           return false
@@ -325,10 +326,10 @@ fn do_extract_inferred(
     // Recursively check compound types
     TArray(elem_extends) =>
       match check_type {
-        TArray(elem_check) => do_extract_inferred(elem_check, elem_extends, inferred)
+        TArray(elem_check) =>
+          do_extract_inferred(elem_check, elem_extends, inferred)
         _ => ()
       }
-
     TTuple(elems_extends) =>
       match check_type {
         TTuple(elems_check) =>
@@ -339,7 +340,6 @@ fn do_extract_inferred(
           }
         _ => ()
       }
-
     TFunction(func_extends) =>
       match check_type {
         TFunction(func_check) => {
@@ -362,7 +362,6 @@ fn do_extract_inferred(
         }
         _ => ()
       }
-
     TObject(obj_extends) =>
       match check_type {
         TObject(obj_check) =>
@@ -377,7 +376,6 @@ fn do_extract_inferred(
           }
         _ => ()
       }
-
     _ => ()
   }
 }
@@ -392,22 +390,18 @@ fn substitute_inferred(
   if inferred.is_empty() {
     return resolve_type(env, ty)
   }
-
   match ty {
     TInfer(name) =>
       match inferred.get(name) {
         Some(resolved) => resolved
         None => TUnknown // Infer not matched
       }
-
     TTypeParam(name, constraint) =>
       match inferred.get(name) {
         Some(resolved) => resolved
         None => TTypeParam(name, constraint)
       }
-
     TArray(elem) => TArray(substitute_inferred(env, elem, inferred))
-
     TTuple(elems) =>
       TTuple(
         elems.map(fn(e) {
@@ -419,13 +413,12 @@ fn substitute_inferred(
           }
         }),
       )
-
     TUnion(types) =>
       make_union(types.map(fn(t) { substitute_inferred(env, t, inferred) }))
-
     TIntersection(types) =>
-      make_intersection(types.map(fn(t) { substitute_inferred(env, t, inferred) }))
-
+      make_intersection(
+        types.map(fn(t) { substitute_inferred(env, t, inferred) }),
+      )
     TFunction(f) =>
       TFunction(FunctionTypeV2::{
         type_params: f.type_params,
@@ -449,21 +442,18 @@ fn substitute_inferred(
         },
         return_type: substitute_inferred(env, f.return_type, inferred),
         type_predicate: f.type_predicate,
-        this_type: f.this_type.map(fn(t) { substitute_inferred(env, t, inferred) }),
+        this_type: f.this_type.map(fn(t) {
+          substitute_inferred(env, t, inferred)
+        }),
       })
-
     TConditional(c) =>
       // Recursively evaluate the conditional with substituted types
-      evaluate_conditional_type_v2(
-        env,
-        ConditionalTypeV2::{
-          check_type: substitute_inferred(env, c.check_type, inferred),
-          extends_type: substitute_inferred(env, c.extends_type, inferred),
-          true_type: substitute_inferred(env, c.true_type, inferred),
-          false_type: substitute_inferred(env, c.false_type, inferred),
-        },
-      )
-
+      evaluate_conditional_type_v2(env, ConditionalTypeV2::{
+        check_type: substitute_inferred(env, c.check_type, inferred),
+        extends_type: substitute_inferred(env, c.extends_type, inferred),
+        true_type: substitute_inferred(env, c.true_type, inferred),
+        false_type: substitute_inferred(env, c.false_type, inferred),
+      })
     _ => resolve_type(env, ty)
   }
 }
@@ -559,7 +549,6 @@ pub fn evaluate_mapped_type_v2(env : TypeEnv, mapped : MappedTypeV2) -> TypeV2 {
     }
     None => get_keys_from_constraint(constraint)
   }
-
   if keys.is_empty() {
     // Can't evaluate without concrete keys
     return TMapped(mapped)
@@ -567,7 +556,6 @@ pub fn evaluate_mapped_type_v2(env : TypeEnv, mapped : MappedTypeV2) -> TypeV2 {
 
   // Build the result object type
   let fields : Map[String, FieldInfoV2] = Map::new()
-
   for key in keys {
     // Get the key name
     let key_name = match key {
@@ -614,7 +602,6 @@ pub fn evaluate_mapped_type_v2(env : TypeEnv, mapped : MappedTypeV2) -> TypeV2 {
           None => false
         }
     }
-
     let is_readonly = match mapped.readonly_modifier {
       Add => true
       Remove => false
@@ -625,14 +612,12 @@ pub fn evaluate_mapped_type_v2(env : TypeEnv, mapped : MappedTypeV2) -> TypeV2 {
           None => false
         }
     }
-
     fields.set(actual_key, FieldInfoV2::{
       ty: resolved_value,
       optional: is_optional,
       is_readonly,
     })
   }
-
   TObject(ObjectTypeV2::{
     fields,
     symbol_fields: [],
@@ -673,7 +658,6 @@ fn get_keys_from_constraint(constraint : TypeV2) -> Array[TypeV2] {
       }
       keys
     }
-
     _ => []
   }
 }
@@ -687,9 +671,7 @@ fn apply_substitution(ty : TypeV2, subst : Map[String, TypeV2]) -> TypeV2 {
         Some(replacement) => replacement
         None => ty
       }
-
     TArray(elem) => TArray(apply_substitution(elem, subst))
-
     TTuple(elems) =>
       TTuple(
         elems.map(fn(e) {
@@ -701,12 +683,10 @@ fn apply_substitution(ty : TypeV2, subst : Map[String, TypeV2]) -> TypeV2 {
           }
         }),
       )
-
-    TUnion(types) => make_union(types.map(fn(t) { apply_substitution(t, subst) }))
-
+    TUnion(types) =>
+      make_union(types.map(fn(t) { apply_substitution(t, subst) }))
     TIntersection(types) =>
       make_intersection(types.map(fn(t) { apply_substitution(t, subst) }))
-
     TFunction(f) =>
       TFunction(FunctionTypeV2::{
         type_params: f.type_params,
@@ -732,10 +712,8 @@ fn apply_substitution(ty : TypeV2, subst : Map[String, TypeV2]) -> TypeV2 {
         type_predicate: f.type_predicate,
         this_type: f.this_type.map(fn(t) { apply_substitution(t, subst) }),
       })
-
     TGenericInstance(name, args) =>
       TGenericInstance(name, args.map(fn(a) { apply_substitution(a, subst) }))
-
     TConditional(c) =>
       TConditional(ConditionalTypeV2::{
         check_type: apply_substitution(c.check_type, subst),
@@ -743,13 +721,11 @@ fn apply_substitution(ty : TypeV2, subst : Map[String, TypeV2]) -> TypeV2 {
         true_type: apply_substitution(c.true_type, subst),
         false_type: apply_substitution(c.false_type, subst),
       })
-
     TIndexAccess(ia) =>
       TIndexAccess(IndexAccessTypeV2::{
         object_type: apply_substitution(ia.object_type, subst),
         index_type: apply_substitution(ia.index_type, subst),
       })
-
     _ => ty
   }
 }
@@ -767,7 +743,6 @@ pub fn evaluate_index_access_type_v2(
 ) -> TypeV2 {
   let object_type = resolve_type(env, ia.object_type)
   let index_type = resolve_type(env, ia.index_type)
-
   match (object_type, index_type) {
     // Array[number] => element type
     (TArray(elem), TNumber) => elem
@@ -784,8 +759,7 @@ pub fn evaluate_index_access_type_v2(
     }
 
     // Tuple[number] => union of all element types
-    (TTuple(elems), TNumber) =>
-      make_union(elems.map(fn(e) { e.ty }))
+    (TTuple(elems), TNumber) => make_union(elems.map(fn(e) { e.ty }))
 
     // Object[literal key] => property type
     (TObject(obj), TLiteralString(key)) =>
@@ -842,7 +816,7 @@ pub fn evaluate_index_access_type_v2(
     }
 
     // Generic instance - try to resolve
-    (TGenericInstance(name, _args), idx) => {
+    (TGenericInstance(name, _args), idx) =>
       // Check for built-in generics like Array
       if name == "Array" {
         match idx {
@@ -855,7 +829,6 @@ pub fn evaluate_index_access_type_v2(
         // Can't resolve, return index access as-is
         TIndexAccess(ia)
       }
-    }
 
     // Can't evaluate - keep as index access
     _ => TIndexAccess(ia)
@@ -879,7 +852,7 @@ pub fn make_partial(ty : TypeV2) -> TypeV2 {
           is_readonly: kv.1.is_readonly,
         })
       }
-      TObject(ObjectTypeV2::{ ..obj, fields })
+      TObject(ObjectTypeV2::{ ..obj, fields, })
     }
     _ => ty
   }
@@ -898,7 +871,7 @@ pub fn make_required(ty : TypeV2) -> TypeV2 {
           is_readonly: kv.1.is_readonly,
         })
       }
-      TObject(ObjectTypeV2::{ ..obj, fields })
+      TObject(ObjectTypeV2::{ ..obj, fields, })
     }
     _ => ty
   }
@@ -917,7 +890,7 @@ pub fn make_readonly_type(ty : TypeV2) -> TypeV2 {
           is_readonly: true,
         })
       }
-      TObject(ObjectTypeV2::{ ..obj, fields })
+      TObject(ObjectTypeV2::{ ..obj, fields, })
     }
     _ => ty
   }
@@ -935,7 +908,7 @@ pub fn make_pick(ty : TypeV2, keys : Array[String]) -> TypeV2 {
           None => ()
         }
       }
-      TObject(ObjectTypeV2::{ ..obj, fields })
+      TObject(ObjectTypeV2::{ ..obj, fields, })
     }
     _ => ty
   }
@@ -952,7 +925,7 @@ pub fn make_omit(ty : TypeV2, keys : Array[String]) -> TypeV2 {
           fields.set(kv.0, kv.1)
         }
       }
-      TObject(ObjectTypeV2::{ ..obj, fields })
+      TObject(ObjectTypeV2::{ ..obj, fields, })
     }
     _ => ty
   }
@@ -963,15 +936,12 @@ pub fn make_omit(ty : TypeV2, keys : Array[String]) -> TypeV2 {
 pub fn make_extract(ty : TypeV2, filter_ty : TypeV2) -> TypeV2 {
   match ty {
     TUnion(types) => {
-      let filtered = types.filter(fn(t) { is_subtype_check_simple(t, filter_ty) })
+      let filtered = types.filter(fn(t) {
+        is_subtype_check_simple(t, filter_ty)
+      })
       make_union(filtered)
     }
-    _ =>
-      if is_subtype_check_simple(ty, filter_ty) {
-        ty
-      } else {
-        TNever
-      }
+    _ => if is_subtype_check_simple(ty, filter_ty) { ty } else { TNever }
   }
 }
 
@@ -985,12 +955,7 @@ pub fn make_exclude(ty : TypeV2, filter_ty : TypeV2) -> TypeV2 {
       })
       make_union(filtered)
     }
-    _ =>
-      if is_subtype_check_simple(ty, filter_ty) {
-        TNever
-      } else {
-        ty
-      }
+    _ => if is_subtype_check_simple(ty, filter_ty) { TNever } else { ty }
   }
 }
 
@@ -1063,7 +1028,7 @@ pub fn get_awaited_type(ty : TypeV2) -> TypeV2 {
         ty
       }
     TUnion(types) => make_union(types.map(get_awaited_type))
-    TObject(obj) => {
+    TObject(obj) =>
       // Check if it's a thenable (has 'then' method)
       match obj.fields.get("then") {
         Some(then_field) =>
@@ -1088,7 +1053,6 @@ pub fn get_awaited_type(ty : TypeV2) -> TypeV2 {
           }
         None => ty
       }
-    }
     _ => ty
   }
 }
@@ -1117,14 +1081,18 @@ pub fn get_async_return_type(inner_return_type : TypeV2) -> TypeV2 {
 pub fn get_async_iterator_element_type(ty : TypeV2) -> TypeV2 {
   match ty {
     TGenericInstance(name, args) =>
-      if (name == "AsyncIterable" || name == "AsyncIterator" ||
-          name == "AsyncIterableIterator" || name == "AsyncGenerator") &&
-         args.length() > 0 {
+      if (
+          name == "AsyncIterable" ||
+          name == "AsyncIterator" ||
+          name == "AsyncIterableIterator" ||
+          name == "AsyncGenerator"
+        ) &&
+        args.length() > 0 {
         args[0]
       } else {
         ty
       }
-    TObject(obj) => {
+    TObject(obj) =>
       // Check for Symbol.asyncIterator method
       match obj.fields.get("[Symbol.asyncIterator]") {
         Some(field) =>
@@ -1134,7 +1102,6 @@ pub fn get_async_iterator_element_type(ty : TypeV2) -> TypeV2 {
           }
         None => ty
       }
-    }
     _ => ty
   }
 }
@@ -1145,7 +1112,7 @@ fn get_async_iterator_return_element(ty : TypeV2) -> TypeV2 {
   match ty {
     TGenericInstance(name, args) =>
       if (name == "AsyncIterator" || name == "AsyncIterableIterator") &&
-         args.length() > 0 {
+        args.length() > 0 {
         args[0]
       } else {
         ty
@@ -1162,10 +1129,17 @@ pub fn get_iterator_element_type(ty : TypeV2) -> TypeV2 {
   match ty {
     TArray(elem) => elem
     TGenericInstance(name, args) =>
-      if (name == "Array" || name == "Iterable" || name == "Iterator" ||
-          name == "IterableIterator" || name == "Generator" || name == "Set" ||
-          name == "Map" || name == "ReadonlyArray") &&
-         args.length() > 0 {
+      if (
+          name == "Array" ||
+          name == "Iterable" ||
+          name == "Iterator" ||
+          name == "IterableIterator" ||
+          name == "Generator" ||
+          name == "Set" ||
+          name == "Map" ||
+          name == "ReadonlyArray"
+        ) &&
+        args.length() > 0 {
         args[0]
       } else if name == "String" {
         TString
@@ -1173,7 +1147,7 @@ pub fn get_iterator_element_type(ty : TypeV2) -> TypeV2 {
         ty
       }
     TString => TString // Each character is a string
-    TObject(obj) => {
+    TObject(obj) =>
       // Check for Symbol.iterator method
       match obj.fields.get("[Symbol.iterator]") {
         Some(field) =>
@@ -1183,7 +1157,6 @@ pub fn get_iterator_element_type(ty : TypeV2) -> TypeV2 {
           }
         None => ty
       }
-    }
     _ => ty
   }
 }
@@ -1369,7 +1342,10 @@ fn format_number_literal(n : Double) -> String {
 
 ///|
 /// Build a template string from texts and interpolated values
-fn build_template_string(texts : Array[String], values : Array[String]) -> String {
+fn build_template_string(
+  texts : Array[String],
+  values : Array[String],
+) -> String {
   let mut result = ""
   for i in 0..<texts.length() {
     result = result + texts[i]
@@ -1551,7 +1527,6 @@ pub fn match_template_literal_pattern(
     pattern.types,
     infer_names,
   )
-
   match match_result {
     Some(inferred_values) => {
       for i, name in infer_names {
@@ -1603,7 +1578,6 @@ fn try_match_template_pattern(
           return None
         }
       }
-
       inferred_values.push(inferred)
       remaining = tl_string_substring(remaining, text_pos + text.length())
     }
@@ -1630,7 +1604,6 @@ fn try_match_template_pattern(
       return None
     }
   }
-
   Some(inferred_values)
 }
 
@@ -1642,7 +1615,8 @@ fn inferred_value_matches_type(value : String, ty : TypeV2) -> Bool {
     TInfer(_) => true // infer matches any string
     TLiteralString(expected) => value == expected
     TNumber => is_numeric_string(value)
-    TUnion(types) => types.iter().any(fn(t) { inferred_value_matches_type(value, t) })
+    TUnion(types) =>
+      types.iter().any(fn(t) { inferred_value_matches_type(value, t) })
     _ => true // Be permissive for other types
   }
 }
@@ -1661,7 +1635,6 @@ fn is_numeric_string(s : String) -> Bool {
   if s.length() > 0 && s[0] == '-' {
     i = 1
   }
-
   while i < s.length() {
     let c = s[i].unsafe_to_char()
     if c >= '0' && c <= '9' {
@@ -1725,43 +1698,42 @@ pub fn matches_template_literal_pattern(
 
   // Try to match the pattern
   let mut remaining = value
-
   for i in 0..<pattern.texts.length() {
     let text = pattern.texts[i]
-
     if i == 0 {
       // First text must be prefix
       if not(tl_string_starts_with(remaining, text)) {
         return false
       }
       remaining = tl_string_substring(remaining, text.length())
-    } else {
       // Handle empty text segment at the end specially
-      if text.length() == 0 && i == pattern.texts.length() - 1 {
-        // Empty suffix means capture everything remaining
-        if i - 1 < pattern.types.length() {
-          if not(string_matches_interpolation_type(remaining, pattern.types[i - 1])) {
-            return false
-          }
-        }
-        remaining = ""
-      } else {
-        // Find this text segment
-        let pos = tl_string_index_of(remaining, text)
-        if pos < 0 {
+    } else if text.length() == 0 && i == pattern.texts.length() - 1 {
+      // Empty suffix means capture everything remaining
+      if i - 1 < pattern.types.length() {
+        if not(
+            string_matches_interpolation_type(remaining, pattern.types[i - 1]),
+          ) {
           return false
         }
-
-        // Check that the value before matches the expected type
-        if i - 1 < pattern.types.length() {
-          let captured = tl_string_substring_range(remaining, 0, pos)
-          if not(string_matches_interpolation_type(captured, pattern.types[i - 1])) {
-            return false
-          }
-        }
-
-        remaining = tl_string_substring(remaining, pos + text.length())
       }
+      remaining = ""
+    } else {
+      // Find this text segment
+      let pos = tl_string_index_of(remaining, text)
+      if pos < 0 {
+        return false
+      }
+
+      // Check that the value before matches the expected type
+      if i - 1 < pattern.types.length() {
+        let captured = tl_string_substring_range(remaining, 0, pos)
+        if not(
+            string_matches_interpolation_type(captured, pattern.types[i - 1]),
+          ) {
+          return false
+        }
+      }
+      remaining = tl_string_substring(remaining, pos + text.length())
     }
   }
 
@@ -1853,11 +1825,9 @@ fn tl_string_index_of(s : String, substr : String) -> Int {
   if substr.length() > s.length() {
     return -1
   }
-
   let s_chars = s.to_array()
   let sub_chars = substr.to_array()
   let max_start = s_chars.length() - sub_chars.length()
-
   for i in 0..=max_start {
     let mut found = true
     for j in 0..<sub_chars.length() {
@@ -1905,7 +1875,6 @@ pub fn are_template_literals_compatible(
       return false
     }
   }
-
   true
 }
 
@@ -1923,9 +1892,13 @@ fn is_interpolation_type_assignable(source : TypeV2, target : TypeV2) -> Bool {
     (TLiteralString(s1), TLiteralString(s2)) => s1 == s2
     (TLiteralNumber(n1), TLiteralNumber(n2)) => n1 == n2
     (TUnion(src_types), _) =>
-      src_types.iter().all(fn(t) { is_interpolation_type_assignable(t, target) })
+      src_types
+      .iter()
+      .all(fn(t) { is_interpolation_type_assignable(t, target) })
     (_, TUnion(tgt_types)) =>
-      tgt_types.iter().any(fn(t) { is_interpolation_type_assignable(source, t) })
+      tgt_types
+      .iter()
+      .any(fn(t) { is_interpolation_type_assignable(source, t) })
     _ => source == target
   }
 }
@@ -2182,7 +2155,6 @@ pub fn merge_object_types(a : ObjectTypeV2, b : ObjectTypeV2) -> ObjectTypeV2 {
     (Some(sig), None) => Some(sig)
     (None, None) => None
   }
-
   ObjectTypeV2::{
     fields: merged_fields,
     symbol_fields: merged_symbol_fields,
@@ -2220,7 +2192,8 @@ pub fn merge_multiple_object_types(types : Array[ObjectTypeV2]) -> ObjectTypeV2 
 pub fn merge_types(a : TypeV2, b : TypeV2) -> TypeV2 {
   match (a, b) {
     // Merge two object types (interfaces)
-    (TObject(obj_a), TObject(obj_b)) => TObject(merge_object_types(obj_a, obj_b))
+    (TObject(obj_a), TObject(obj_b)) =>
+      TObject(merge_object_types(obj_a, obj_b))
     // For other types, prefer the second (later declaration)
     (_, other) => other
   }

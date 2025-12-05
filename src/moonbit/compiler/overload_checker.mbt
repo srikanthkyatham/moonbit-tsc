@@ -60,7 +60,11 @@ pub fn FunctionOverloads::set_implementation(
   impl_ : FunctionDeclaration,
   location : SourceLocation,
 ) -> FunctionOverloads {
-  { ..self, implementation: Some(impl_), implementation_location: Some(location) }
+  {
+    ..self,
+    implementation: Some(impl_),
+    implementation_location: Some(location),
+  }
 }
 
 // ============================================================================
@@ -70,16 +74,19 @@ pub fn FunctionOverloads::set_implementation(
 ///|
 /// Collect function overloads from a list of statements
 /// Groups consecutive function declarations with the same name
-pub fn collect_overloads(statements : Array[Node]) -> Map[String, FunctionOverloads] {
+pub fn collect_overloads(
+  statements : Array[Node],
+) -> Map[String, FunctionOverloads] {
   let overloads : Map[String, FunctionOverloads] = Map::new()
-
   for stmt in statements {
     match stmt {
       FunctionDeclaration(func) =>
         match func.name {
           Some(Identifier(id)) => {
             let name = id.name
-            let existing = overloads.get(name).unwrap_or(FunctionOverloads::empty(name))
+            let existing = overloads
+              .get(name)
+              .unwrap_or(FunctionOverloads::empty(name))
 
             // Check if this is a signature (no body) or implementation (has body)
             match func.body {
@@ -101,7 +108,6 @@ pub fn collect_overloads(statements : Array[Node]) -> Map[String, FunctionOverlo
       _ => ()
     }
   }
-
   overloads
 }
 
@@ -109,23 +115,19 @@ pub fn collect_overloads(statements : Array[Node]) -> Map[String, FunctionOverlo
 /// Extract overload signature from function declaration
 fn extract_overload_signature(func : FunctionDeclaration) -> OverloadSignature {
   let parameters : Array[OverloadParameter] = []
-
   for param_node in func.parameters {
     match param_node {
-      Parameter(p) => {
+      Parameter(p) =>
         parameters.push({
           name: overload_get_param_name(p.name),
           type_annotation: p.type_annotation,
           is_optional: p.is_optional,
           is_rest: p.is_rest,
         })
-      }
       _ => ()
     }
   }
-
   let is_ambient = overload_has_declare_modifier(func.modifiers)
-
   {
     parameters,
     return_type: func.return_type,
@@ -189,7 +191,9 @@ pub enum OverloadErrorKind {
 
 ///|
 /// Validate function overloads
-pub fn validate_overloads(overloads : FunctionOverloads) -> OverloadValidationResult {
+pub fn validate_overloads(
+  overloads : FunctionOverloads,
+) -> OverloadValidationResult {
   let errors : Array[OverloadError] = []
 
   // If there are no signatures, nothing to validate
@@ -198,7 +202,9 @@ pub fn validate_overloads(overloads : FunctionOverloads) -> OverloadValidationRe
   }
 
   // Check TS2391: Missing implementation (for non-ambient overloads)
-  let has_non_ambient = overloads.signatures.iter().any(fn(s) { not(s.is_ambient) })
+  let has_non_ambient = overloads.signatures
+    .iter()
+    .any(fn(s) { not(s.is_ambient) })
   if has_non_ambient && overloads.implementation is None {
     errors.push({
       kind: MissingImplementation,
@@ -217,26 +223,28 @@ pub fn validate_overloads(overloads : FunctionOverloads) -> OverloadValidationRe
   // Check TS2394: Overload compatibility with implementation
   match overloads.implementation {
     Some(impl_) => {
-      let compat_errors = check_overload_compatibility(overloads.signatures, impl_)
+      let compat_errors = check_overload_compatibility(
+        overloads.signatures,
+        impl_,
+      )
       for err in compat_errors {
         errors.push(err)
       }
     }
     None => ()
   }
-
   { errors, is_valid: errors.is_empty() }
 }
 
 ///|
 /// Check that all overloads are either ambient or non-ambient
-fn check_ambient_consistency(overloads : FunctionOverloads) -> OverloadValidationResult {
+fn check_ambient_consistency(
+  overloads : FunctionOverloads,
+) -> OverloadValidationResult {
   let errors : Array[OverloadError] = []
-
   if overloads.signatures.length() < 2 {
     return { errors, is_valid: true }
   }
-
   let first_is_ambient = overloads.signatures[0].is_ambient
   for i = 1; i < overloads.signatures.length(); i = i + 1 {
     let sig = overloads.signatures[i]
@@ -249,7 +257,6 @@ fn check_ambient_consistency(overloads : FunctionOverloads) -> OverloadValidatio
       })
     }
   }
-
   { errors, is_valid: errors.is_empty() }
 }
 
@@ -268,7 +275,6 @@ fn check_overload_compatibility(
   // Collect all parameter types from overloads for compatibility check
   let overload_param_types = collect_overload_param_types(signatures)
   let impl_param_types = collect_impl_param_types(impl_.parameters)
-
   for i = 0; i < signatures.length(); i = i + 1 {
     let sig = signatures[i]
 
@@ -285,11 +291,11 @@ fn check_overload_compatibility(
       errors.push({
         kind: ParamCountMismatch(i, sig_required),
         message: "Overload signature is not compatible with function implementation. " +
-          "Implementation requires " +
-          impl_required.to_string() +
-          " parameters, but overload only provides " +
-          sig_required.to_string() +
-          ".",
+        "Implementation requires " +
+        impl_required.to_string() +
+        " parameters, but overload only provides " +
+        sig_required.to_string() +
+        ".",
         location: sig.location,
         code: 2394,
       })
@@ -305,11 +311,11 @@ fn check_overload_compatibility(
       errors.push({
         kind: NotCompatibleWithImpl(i),
         message: "Overload signature is not compatible with function implementation. " +
-          "Overload has " +
-          sig_total.to_string() +
-          " parameters, but implementation only has " +
-          impl_total.to_string() +
-          ".",
+        "Overload has " +
+        sig_total.to_string() +
+        " parameters, but implementation only has " +
+        impl_total.to_string() +
+        ".",
         location: sig.location,
         code: 2394,
       })
@@ -326,7 +332,6 @@ fn check_overload_compatibility(
   for err in type_errors {
     errors.push(err)
   }
-
   errors
 }
 
@@ -336,11 +341,10 @@ fn collect_overload_param_types(
   signatures : Array[OverloadSignature],
 ) -> Array[Array[String]] {
   // For each parameter position, collect all types that appear across overloads
-  let max_params = signatures.iter().map(fn(s) { s.parameters.length() }).fold(
-    init=0,
-    fn(a, b) { if a > b { a } else { b } },
-  )
-
+  let max_params = signatures
+    .iter()
+    .map(fn(s) { s.parameters.length() })
+    .fold(init=0, fn(a, b) { if a > b { a } else { b } })
   let result : Array[Array[String]] = []
   for i = 0; i < max_params; i = i + 1 {
     let types_at_pos : Array[String] = []
@@ -354,11 +358,10 @@ fn collect_overload_param_types(
               types_at_pos.push(type_str)
             }
           }
-          None => {
+          None =>
             if not(types_at_pos.contains("any")) {
               types_at_pos.push("any")
             }
-          }
         }
       }
     }
@@ -424,7 +427,6 @@ fn check_impl_param_type_compatibility(
   location : SourceLocation,
 ) -> Array[OverloadError] {
   let errors : Array[OverloadError] = []
-
   for i = 0; i < impl_types.length() && i < overload_types.length(); i = i + 1 {
     let impl_type = impl_types[i]
     let expected_types = overload_types[i]
@@ -442,26 +444,28 @@ fn check_impl_param_type_compatibility(
       errors.push({
         kind: ParamTypeMismatch(0, i),
         message: "This overload signature is not compatible with its implementation signature. " +
-          "Parameter " +
-          (i + 1).to_string() +
-          " has type '" +
-          impl_type +
-          "' but needs to accept '" +
-          expected_union +
-          "'.",
+        "Parameter " +
+        (i + 1).to_string() +
+        " has type '" +
+        impl_type +
+        "' but needs to accept '" +
+        expected_union +
+        "'.",
         location,
         code: 2389,
       })
       break // Only report first type mismatch
     }
   }
-
   errors
 }
 
 ///|
 /// Check if impl_type can cover all expected_types
-fn check_type_covers_all(impl_type : String, expected_types : Array[String]) -> Bool {
+fn check_type_covers_all(
+  impl_type : String,
+  expected_types : Array[String],
+) -> Bool {
   // Parse impl_type if it's a union
   let impl_parts = impl_type.split(" | ").collect()
 
@@ -476,12 +480,10 @@ fn check_type_covers_all(impl_type : String, expected_types : Array[String]) -> 
     let is_covered = impl_parts.contains(expected) ||
       impl_parts.contains("any") ||
       impl_parts.contains("unknown")
-
     if not(is_covered) {
       return false
     }
   }
-
   true
 }
 
@@ -518,10 +520,7 @@ fn count_impl_required_params(params : Array[Node]) -> Int {
 fn overload_has_rest_param(params : Array[Node]) -> Bool {
   for param_node in params {
     match param_node {
-      Parameter(p) =>
-        if p.is_rest {
-          return true
-        }
+      Parameter(p) => if p.is_rest { return true }
       _ => ()
     }
   }
@@ -555,7 +554,6 @@ pub fn select_overload_contextually(
     let sig = signatures[i]
     let (matches, c) = try_contextual_match(sig, arg_types, arg_nodes, checker)
     checker = c
-
     if matches {
       return (
         Some({
@@ -567,7 +565,6 @@ pub fn select_overload_contextually(
       )
     }
   }
-
   (None, checker)
 }
 
@@ -597,19 +594,24 @@ fn try_contextual_match(
       }
       continue
     }
-
     let param = signature.parameters[i]
     let arg_type = arg_types[i]
-    let arg_node = if i < arg_nodes.length() { Some(arg_nodes[i]) } else { None }
+    let arg_node = if i < arg_nodes.length() {
+      Some(arg_nodes[i])
+    } else {
+      None
+    }
 
     // Check if argument matches with contextual typing
-    let compatible = check_arg_with_context(arg_type, arg_node, param.param_type)
-
+    let compatible = check_arg_with_context(
+      arg_type,
+      arg_node,
+      param.param_type,
+    )
     if not(compatible) {
       return (false, checker)
     }
   }
-
   (true, checker)
 }
 
@@ -627,20 +629,17 @@ fn check_arg_with_context(
 
   // For function arguments (callbacks), try contextual typing
   match arg_node {
-    Some(ArrowFunction(_)) | Some(FunctionExpression(_)) => {
+    Some(ArrowFunction(_)) | Some(FunctionExpression(_)) =>
       // The argument is a callback - use contextual parameter typing
       // This allows callback parameters to be inferred from the expected type
       match param_type {
-        Function(_) => {
+        Function(_) =>
           // Try contextual match for callback
           return try_callback_contextual_match(arg_type, param_type)
-        }
         _ => ()
       }
-    }
     _ => ()
   }
-
   false
 }
 
@@ -694,7 +693,10 @@ fn types_structurally_compatible(source : Type, target : Type) -> Bool {
 
 ///|
 /// Try contextual matching for callback functions
-fn try_callback_contextual_match(callback_type : Type, expected_type : Type) -> Bool {
+fn try_callback_contextual_match(
+  callback_type : Type,
+  expected_type : Type,
+) -> Bool {
   match (callback_type, expected_type) {
     (Function(cb_func), Function(exp_func)) => {
       // Check parameter count compatibility
@@ -706,7 +708,11 @@ fn try_callback_contextual_match(callback_type : Type, expected_type : Type) -> 
       // Check return type compatibility (simplified)
       match cb_func.return_type {
         Void(_) => true // void callbacks match any return type
-        _ => types_structurally_compatible(cb_func.return_type, exp_func.return_type)
+        _ =>
+          types_structurally_compatible(
+            cb_func.return_type,
+            exp_func.return_type,
+          )
       }
     }
     _ => false
@@ -738,7 +744,6 @@ pub fn check_statement_overloads(
 ) -> TypeChecker {
   let overloads_map = collect_overloads(statements)
   let checker = checker
-
   overloads_map.each(fn(_name, overloads) {
     let result = validate_overloads(overloads)
 
@@ -748,7 +753,6 @@ pub fn check_statement_overloads(
       checker.diagnostics.push(diag)
     }
   })
-
   checker
 }
 
@@ -768,7 +772,12 @@ pub struct ConstructorOverloads {
 ///|
 /// Create empty constructor overloads
 pub fn ConstructorOverloads::empty(class_name : String) -> ConstructorOverloads {
-  { class_name, signatures: [], implementation: None, implementation_location: None }
+  {
+    class_name,
+    signatures: [],
+    implementation: None,
+    implementation_location: None,
+  }
 }
 
 ///|
@@ -778,7 +787,6 @@ pub fn collect_constructor_overloads(
   members : Array[Node],
 ) -> ConstructorOverloads {
   let mut overloads = ConstructorOverloads::empty(class_name)
-
   for mem in members {
     match mem {
       ConstructorDeclaration(ctor) =>
@@ -788,41 +796,38 @@ pub fn collect_constructor_overloads(
             let sig = extract_constructor_signature(ctor)
             overloads.signatures.push(sig)
           }
-          Some(_) => {
+          Some(_) =>
             // This is the implementation
             overloads = {
               ..overloads,
               implementation: Some(ctor),
               implementation_location: Some(ctor.location),
             }
-          }
         }
       _ => ()
     }
   }
-
   overloads
 }
 
 ///|
 /// Extract overload signature from constructor declaration
-fn extract_constructor_signature(ctor : ConstructorDeclaration) -> OverloadSignature {
+fn extract_constructor_signature(
+  ctor : ConstructorDeclaration,
+) -> OverloadSignature {
   let parameters : Array[OverloadParameter] = []
-
   for param_node in ctor.parameters {
     match param_node {
-      Parameter(p) => {
+      Parameter(p) =>
         parameters.push({
           name: overload_get_param_name(p.name),
           type_annotation: p.type_annotation,
           is_optional: p.is_optional,
           is_rest: p.is_rest,
         })
-      }
       _ => ()
     }
   }
-
   {
     parameters,
     return_type: None, // Constructors don't have explicit return type
@@ -853,7 +858,6 @@ pub fn validate_constructor_overloads(
       code: 2390,
     })
   }
-
   { errors, is_valid: errors.is_empty() }
 }
 
@@ -872,7 +876,6 @@ pub fn check_class_constructor_overloads(
     let diag = Diagnostic::error(err.message, err.location, err.code)
     checker.diagnostics.push(diag)
   }
-
   checker
 }
 
@@ -943,7 +946,6 @@ pub fn collect_method_overloads(
   members : Array[Node],
 ) -> Map[String, MethodOverloads] {
   let overloads : Map[String, MethodOverloads] = Map::new()
-
   for mem in members {
     match mem {
       MethodDeclaration(meth) => {
@@ -951,9 +953,10 @@ pub fn collect_method_overloads(
         if method_has_abstract_modifier(meth.modifiers) {
           continue
         }
-
         let name = meth.name
-        let existing = overloads.get(name).unwrap_or(MethodOverloads::empty(name))
+        let existing = overloads
+          .get(name)
+          .unwrap_or(MethodOverloads::empty(name))
         let is_static = method_has_static_modifier(meth.modifiers)
 
         // Check if this is a signature (no body) or implementation (has body)
@@ -979,7 +982,6 @@ pub fn collect_method_overloads(
       _ => ()
     }
   }
-
   overloads
 }
 
@@ -989,24 +991,20 @@ fn extract_method_overload_signature(
   meth : MethodDeclaration,
 ) -> MethodOverloadSignature {
   let parameters : Array[OverloadParameter] = []
-
   for param_node in meth.parameters {
     match param_node {
-      Parameter(p) => {
+      Parameter(p) =>
         parameters.push({
           name: overload_get_param_name(p.name),
           type_annotation: p.type_annotation,
           is_optional: p.is_optional,
           is_rest: p.is_rest,
         })
-      }
       _ => ()
     }
   }
-
   let is_static = method_has_static_modifier(meth.modifiers)
   let is_ambient = overload_has_declare_modifier(meth.modifiers)
-
   {
     parameters,
     return_type: meth.return_type,
@@ -1056,9 +1054,9 @@ pub fn validate_method_overloads(
       }
     None => {
       // Check TS2391: Missing implementation (for non-ambient overloads)
-      let has_non_ambient = overloads.signatures.iter().any(fn(s) {
-        not(s.is_ambient)
-      })
+      let has_non_ambient = overloads.signatures
+        .iter()
+        .any(fn(s) { not(s.is_ambient) })
       if has_non_ambient {
         errors.push({
           kind: MissingImplementation,
@@ -1069,7 +1067,6 @@ pub fn validate_method_overloads(
       }
     }
   }
-
   { errors, is_valid: errors.is_empty() }
 }
 
@@ -1092,6 +1089,5 @@ pub fn check_class_method_overloads(
       checker.diagnostics.push(diag)
     }
   }
-
   checker
 }

@@ -353,7 +353,6 @@ fn emit_source_file(sf : SourceFile, ctx : EmitterContext) -> String {
   // Emit helper functions if decorators are used
   let uses_decorators = source_file_uses_decorators(sf)
   let uses_param_decorators = source_file_uses_param_decorators(sf)
-
   if uses_decorators {
     result = result + get_decorate_helper() + "\n"
     ctx.emit_newline()
@@ -365,7 +364,6 @@ fn emit_source_file(sf : SourceFile, ctx : EmitterContext) -> String {
     result = result + get_metadata_helper() + "\n"
     ctx.emit_newline()
   }
-
   for i = 0; i < sf.statements.length(); i = i + 1 {
     let stmt_str = emit(sf.statements[i], ctx)
     if stmt_str.length() > 0 {
@@ -430,7 +428,10 @@ fn has_abstract_modifier(modifiers : Array[Modifier]) -> Bool {
 ///|
 /// Get export prefix based on modifiers (export, export default, or empty)
 /// For CommonJS, we don't emit a prefix - we add exports.X = X after the declaration
-fn get_export_prefix(modifiers : Array[Modifier], ctx : EmitterContext) -> String {
+fn get_export_prefix(
+  modifiers : Array[Modifier],
+  ctx : EmitterContext,
+) -> String {
   if has_export_modifier(modifiers) {
     // CommonJS: no prefix, handle exports separately
     if ctx.module_kind == CommonJS {
@@ -465,9 +466,15 @@ fn get_commonjs_var_export_suffix(
   let indent = ctx.get_indent()
   for decl in vs.declarations {
     match decl.name {
-      Identifier(id) => {
-        result = result + "\n" + indent + "exports." + id.name + " = " + id.name + ";"
-      }
+      Identifier(id) =>
+        result = result +
+          "\n" +
+          indent +
+          "exports." +
+          id.name +
+          " = " +
+          id.name +
+          ";"
       _ => () // Binding patterns are more complex, skip for now
     }
   }
@@ -487,12 +494,14 @@ fn get_commonjs_fn_export_suffix(
   if has_default_modifier(fd.modifiers) {
     // export default function foo() {} -> function foo() {} exports.default = foo;
     match fd.name {
-      Some(Identifier(id)) => "\n" + indent + "exports.default = " + id.name + ";"
+      Some(Identifier(id)) =>
+        "\n" + indent + "exports.default = " + id.name + ";"
       _ => "\n" + indent + "module.exports = " + "_default" + ";" // anonymous default
     }
   } else {
     match fd.name {
-      Some(Identifier(id)) => "\n" + indent + "exports." + id.name + " = " + id.name + ";"
+      Some(Identifier(id)) =>
+        "\n" + indent + "exports." + id.name + " = " + id.name + ";"
       _ => ""
     }
   }
@@ -511,12 +520,14 @@ fn get_commonjs_class_export_suffix(
   if has_default_modifier(cd.modifiers) {
     // export default class Foo {} -> class Foo {} exports.default = Foo;
     match cd.name {
-      Some(Identifier(id)) => "\n" + indent + "exports.default = " + id.name + ";"
+      Some(Identifier(id)) =>
+        "\n" + indent + "exports.default = " + id.name + ";"
       _ => "\n" + indent + "module.exports = " + "_default" + ";" // anonymous default
     }
   } else {
     match cd.name {
-      Some(Identifier(id)) => "\n" + indent + "exports." + id.name + " = " + id.name + ";"
+      Some(Identifier(id)) =>
+        "\n" + indent + "exports." + id.name + " = " + id.name + ";"
       _ => ""
     }
   }
@@ -679,7 +690,9 @@ fn emit_parameters(params : Array[Node], ctx : EmitterContext) -> String {
       _ => parts.push(emit(params[i], ctx))
     }
   }
-  parts.iter().fold(init="", fn(acc, part) {
+  parts
+  .iter()
+  .fold(init="", fn(acc, part) {
     if acc == "" {
       part
     } else {
@@ -721,27 +734,27 @@ fn has_decorators(decorators : Array[Node]) -> Bool {
 /// Get the __decorate helper function definition
 fn get_decorate_helper() -> String {
   "var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {\n" +
-    "    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;\n" +
-    "    if (typeof Reflect === \"object\" && typeof Reflect.decorate === \"function\") r = Reflect.decorate(decorators, target, key, desc);\n" +
-    "    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;\n" +
-    "    return c > 3 && r && Object.defineProperty(target, key, r), r;\n" +
-    "};"
+  "    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;\n" +
+  "    if (typeof Reflect === \"object\" && typeof Reflect.decorate === \"function\") r = Reflect.decorate(decorators, target, key, desc);\n" +
+  "    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;\n" +
+  "    return c > 3 && r && Object.defineProperty(target, key, r), r;\n" +
+  "};"
 }
 
 ///|
 /// Get the __param helper function definition
 fn get_param_helper() -> String {
   "var __param = (this && this.__param) || function (paramIndex, decorator) {\n" +
-    "    return function (target, key) { decorator(target, key, paramIndex); }\n" +
-    "};"
+  "    return function (target, key) { decorator(target, key, paramIndex); }\n" +
+  "};"
 }
 
 ///|
 /// Get the __metadata helper function definition
 fn get_metadata_helper() -> String {
   "var __metadata = (this && this.__metadata) || function (k, v) {\n" +
-    "    if (typeof Reflect === \"object\" && typeof Reflect.metadata === \"function\") return Reflect.metadata(k, v);\n" +
-    "};"
+  "    if (typeof Reflect === \"object\" && typeof Reflect.metadata === \"function\") return Reflect.metadata(k, v);\n" +
+  "};"
 }
 
 ///|
@@ -835,12 +848,8 @@ fn get_param_types_runtime(params : Array[Node]) -> String {
   let mut result = "["
   for i = 0; i < params.length(); i = i + 1 {
     match params[i] {
-      Parameter(p) => {
-        result = result + type_to_runtime(p.type_annotation)
-      }
-      _ => {
-        result = result + "Object"
-      }
+      Parameter(p) => result = result + type_to_runtime(p.type_annotation)
+      _ => result = result + "Object"
     }
     if i < params.length() - 1 {
       result = result + ", "
@@ -873,10 +882,7 @@ fn class_uses_decorators(cd : ClassDeclaration) -> Bool {
 fn source_file_uses_decorators(sf : SourceFile) -> Bool {
   for stmt in sf.statements {
     match stmt {
-      ClassDeclaration(cd) =>
-        if class_uses_decorators(cd) {
-          return true
-        }
+      ClassDeclaration(cd) => if class_uses_decorators(cd) { return true }
       _ => ()
     }
   }
@@ -967,10 +973,7 @@ fn has_parameter_decorators(class_mem : Node) -> Bool {
   let params = get_member_parameters(class_mem)
   for param in params {
     match param {
-      Parameter(p) =>
-        if p.decorators.length() > 0 {
-          return true
-        }
+      Parameter(p) => if p.decorators.length() > 0 { return true }
       _ => ()
     }
   }
@@ -985,10 +988,8 @@ fn is_static_member(class_mem : Node) -> Bool {
       md.modifiers.iter().any(fn(m) { m == Modifier::Static })
     PropertyDeclaration(pd) =>
       pd.modifiers.iter().any(fn(m) { m == Modifier::Static })
-    GetAccessor(ga) =>
-      ga.modifiers.iter().any(fn(m) { m == Modifier::Static })
-    SetAccessor(sa) =>
-      sa.modifiers.iter().any(fn(m) { m == Modifier::Static })
+    GetAccessor(ga) => ga.modifiers.iter().any(fn(m) { m == Modifier::Static })
+    SetAccessor(sa) => sa.modifiers.iter().any(fn(m) { m == Modifier::Static })
     _ => false
   }
 }
@@ -1003,7 +1004,6 @@ fn emit_class_declaration(
   if has_declare_modifier(cd.modifiers) {
     return ""
   }
-
   let class_name = match cd.name {
     Some(Identifier(id)) => id.name
     _ => ""
@@ -1013,12 +1013,16 @@ fn emit_class_declaration(
 
   // Add source mapping at the start of the class declaration
   ctx.add_mapping(cd.location.start.line, cd.location.start.column, None)
-
   let mut result = ctx.get_indent()
 
   // If class has decorators, use let ClassName = class ClassName {...} pattern
   if has_class_decorators && class_name.length() > 0 {
-    result = result + export_prefix + "let " + class_name + " = class " + class_name
+    result = result +
+      export_prefix +
+      "let " +
+      class_name +
+      " = class " +
+      class_name
   } else {
     result = result + export_prefix + "class "
     match cd.name {
@@ -1071,7 +1075,8 @@ fn emit_class_declaration(
   }
 
   // If class has decorators or constructor param decorators, emit decorator application
-  if (has_class_decorators || has_ctor_param_decorators) && class_name.length() > 0 {
+  if (has_class_decorators || has_ctor_param_decorators) &&
+    class_name.length() > 0 {
     result = result + ";\n"
     result = result + ctx.get_indent() + class_name + " = __decorate([\n"
     let decorator_ctx = ctx.indent()
@@ -1095,12 +1100,14 @@ fn emit_class_declaration(
           ctor_params = ctor.parameters
           let params = ctor.parameters
           let mut param_decorator_emitted = false
-          for param_index = 0; param_index < params.length(); param_index = param_index +
-            1 {
+          for param_index = 0
+              param_index < params.length()
+              param_index = param_index + 1 {
             match params[param_index] {
               Parameter(p) =>
-                for dec_index = 0; dec_index < p.decorators.length(); dec_index = dec_index +
-                  1 {
+                for dec_index = 0
+                    dec_index < p.decorators.length()
+                    dec_index = dec_index + 1 {
                   if param_decorator_emitted {
                     result = result + ",\n"
                   }
@@ -1125,12 +1132,12 @@ fn emit_class_declaration(
     }
 
     // Emit design:paramtypes metadata for constructor parameters
-    result = result + "\n" +
+    result = result +
+      "\n" +
       decorator_ctx.get_indent() +
       "__metadata(\"design:paramtypes\", " +
       get_param_types_runtime(ctor_params) +
       ")\n"
-
     result = result + ctx.get_indent() + "], " + class_name + ")"
   }
 
@@ -1167,12 +1174,14 @@ fn emit_class_declaration(
           // Then emit parameter decorators with __param
           let params = get_member_parameters(class_member)
           let mut param_decorator_emitted = false
-          for param_index = 0; param_index < params.length(); param_index = param_index +
-            1 {
+          for param_index = 0
+              param_index < params.length()
+              param_index = param_index + 1 {
             match params[param_index] {
               Parameter(p) =>
-                for dec_index = 0; dec_index < p.decorators.length(); dec_index = dec_index +
-                  1 {
+                for dec_index = 0
+                    dec_index < p.decorators.length()
+                    dec_index = dec_index + 1 {
                   if param_decorator_emitted {
                     result = result + ",\n"
                   }
@@ -1195,7 +1204,8 @@ fn emit_class_declaration(
           // Emit design-time type metadata
           // design:type - the type of the member
           let design_type = get_member_design_type(class_member)
-          result = result + "\n" +
+          result = result +
+            "\n" +
             decorator_ctx.get_indent() +
             "__metadata(\"design:type\", " +
             design_type +
@@ -1203,20 +1213,20 @@ fn emit_class_declaration(
 
           // design:paramtypes - for methods/accessors with parameters
           match class_member {
-            MethodDeclaration(md) => {
-              result = result + ",\n" +
+            MethodDeclaration(md) =>
+              result = result +
+                ",\n" +
                 decorator_ctx.get_indent() +
                 "__metadata(\"design:paramtypes\", " +
                 get_param_types_runtime(md.parameters) +
                 ")"
-            }
-            SetAccessor(sa) => {
-              result = result + ",\n" +
+            SetAccessor(sa) =>
+              result = result +
+                ",\n" +
                 decorator_ctx.get_indent() +
                 "__metadata(\"design:paramtypes\", " +
                 get_param_types_runtime([sa.parameter]) +
                 ")"
-            }
             _ => ()
           }
 
@@ -1224,7 +1234,8 @@ fn emit_class_declaration(
           match class_member {
             MethodDeclaration(_) | GetAccessor(_) => {
               let return_type = get_member_return_type(class_member)
-              result = result + ",\n" +
+              result = result +
+                ",\n" +
                 decorator_ctx.get_indent() +
                 "__metadata(\"design:returntype\", " +
                 return_type +
@@ -1232,9 +1243,7 @@ fn emit_class_declaration(
             }
             _ => ()
           }
-
           result = result + "\n"
-
           result = result +
             ctx.get_indent() +
             "], " +
@@ -1260,9 +1269,7 @@ fn emit_class_expression(cd : ClassDeclaration, ctx : EmitterContext) -> String 
 
   // Emit optional class name
   match cd.name {
-    Some(Identifier(id)) => {
-      result = result + " " + id.name
-    }
+    Some(Identifier(id)) => result = result + " " + id.name
     _ => ()
   }
 
@@ -1278,7 +1285,6 @@ fn emit_class_expression(cd : ClassDeclaration, ctx : EmitterContext) -> String 
       }
     }
   }
-
   result = result + " {\n"
   let inner_ctx = ctx.indent()
   for class_member in cd.members {
@@ -1458,7 +1464,6 @@ fn emit_property_declaration(
   if has_abstract_modifier(pd.modifiers) {
     return ""
   }
-
   let mut result = ctx.get_indent()
 
   // Check if Static modifier is present
@@ -1490,7 +1495,6 @@ fn emit_method_declaration(
   if has_abstract_modifier(md.modifiers) {
     return ""
   }
-
   let mut result = ctx.get_indent()
 
   // Check if Static modifier is present
@@ -1618,16 +1622,19 @@ fn emit_import_equals_declaration(
 ) -> String {
   let indent = ctx.get_indent()
   let export_prefix = if ied.is_export { "exports." } else { "" }
-
   match ied.module_reference {
-    ModuleReference::ExternalModuleReference(module_path, _) => {
+    ModuleReference::ExternalModuleReference(module_path, _) =>
       // import X = require("module") -> const X = require("module") or exports.X = require("module")
       if ied.is_export {
-        indent + export_prefix + ied.name + " = require(\"" + module_path + "\");"
+        indent +
+        export_prefix +
+        ied.name +
+        " = require(\"" +
+        module_path +
+        "\");"
       } else {
         indent + "const " + ied.name + " = require(\"" + module_path + "\");"
       }
-    }
     ModuleReference::EntityName(entity) => {
       // import X = M.N -> const X = M.N or exports.X = M.N
       let entity_str = emit(entity, ctx)
@@ -1718,14 +1725,18 @@ fn emit_import_declaration_commonjs(
 ) -> String {
   let indent = ctx.get_indent()
   let module_spec = id.module_specifier
-
   match id.import_clause {
-    Some(clause) => {
+    Some(clause) =>
       // Check for namespace import: import * as foo from 'mod' -> const foo = require('mod')
       match clause.named_bindings {
         Some(NamespaceImport(name, _)) =>
-          return indent + "const " + name + " = require(\"" + module_spec + "\");"
-        Some(NamedImports(specifiers, _)) => {
+          return indent +
+            "const " +
+            name +
+            " = require(\"" +
+            module_spec +
+            "\");"
+        Some(NamedImports(specifiers, _)) =>
           // Named imports: import { a, b as c } from 'mod'
           // -> const { a, b: c } = require('mod')
           match clause.name {
@@ -1735,13 +1746,27 @@ fn emit_import_declaration_commonjs(
               // Or: const _mod = require('mod'); const foo = _mod.default; const { bar } = _mod;
               // Simplified: const _mod = require('mod'), foo = _mod.default, { bar } = _mod;
               let temp_var = "_" + sanitize_module_name(module_spec)
-              let mut result = indent + "const " + temp_var + " = require(\"" + module_spec + "\");\n"
-              result = result + indent + "const " + default_name + " = " + temp_var + ".default || " + temp_var + ";\n"
+              let mut result = indent +
+                "const " +
+                temp_var +
+                " = require(\"" +
+                module_spec +
+                "\");\n"
+              result = result +
+                indent +
+                "const " +
+                default_name +
+                " = " +
+                temp_var +
+                ".default || " +
+                temp_var +
+                ";\n"
               result = result + indent + "const { "
               for i = 0; i < specifiers.length(); i = i + 1 {
                 let spec = specifiers[i]
                 match spec.property_name {
-                  Some(prop_name) => result = result + prop_name + ": " + spec.name
+                  Some(prop_name) =>
+                    result = result + prop_name + ": " + spec.name
                   None => result = result + spec.name
                 }
                 if i < specifiers.length() - 1 {
@@ -1757,7 +1782,8 @@ fn emit_import_declaration_commonjs(
               for i = 0; i < specifiers.length(); i = i + 1 {
                 let spec = specifiers[i]
                 match spec.property_name {
-                  Some(prop_name) => result = result + prop_name + ": " + spec.name
+                  Some(prop_name) =>
+                    result = result + prop_name + ": " + spec.name
                   None => result = result + spec.name
                 }
                 if i < specifiers.length() - 1 {
@@ -1768,8 +1794,7 @@ fn emit_import_declaration_commonjs(
               return result
             }
           }
-        }
-        None => {
+        None =>
           // Default import only: import foo from 'mod'
           // -> const foo = require('mod').default || require('mod')
           // Or simpler: const foo = require('mod')
@@ -1777,17 +1802,25 @@ fn emit_import_declaration_commonjs(
             Some(name) => {
               // For CommonJS interop, we check for .default
               let temp_var = "_" + sanitize_module_name(module_spec)
-              return indent + "const " + temp_var + " = require(\"" + module_spec + "\"), " + name + " = " + temp_var + ".default || " + temp_var + ";"
+              return indent +
+                "const " +
+                temp_var +
+                " = require(\"" +
+                module_spec +
+                "\"), " +
+                name +
+                " = " +
+                temp_var +
+                ".default || " +
+                temp_var +
+                ";"
             }
             None => return indent + "require(\"" + module_spec + "\");"
           }
-        }
       }
-    }
-    None => {
+    None =>
       // Side-effect import: import 'mod' -> require('mod')
       return indent + "require(\"" + module_spec + "\");"
-    }
   }
 }
 
@@ -1797,7 +1830,10 @@ fn sanitize_module_name(module_spec : String) -> String {
   let mut result = ""
   for i = 0; i < module_spec.length(); i = i + 1 {
     let c = module_spec[i].unsafe_to_char()
-    if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_' {
+    if (c >= 'a' && c <= 'z') ||
+      (c >= 'A' && c <= 'Z') ||
+      (c >= '0' && c <= '9') ||
+      c == '_' {
       result = result + c.to_string()
     } else {
       result = result + "_"
@@ -1869,24 +1905,36 @@ fn emit_export_declaration_commonjs(
   ctx : EmitterContext,
 ) -> String {
   let indent = ctx.get_indent()
-
   match ed.export_clause {
     Some(clause) =>
       match clause {
-        NamedExports(specifiers, _) => {
+        NamedExports(specifiers, _) =>
           match ed.module_specifier {
             Some(ms) => {
               // export { a, b as c } from 'mod'
               // -> const _mod = require('mod'); exports.a = _mod.a; exports.c = _mod.b;
               let temp_var = "_" + sanitize_module_name(ms)
-              let mut result = indent + "const " + temp_var + " = require(\"" + ms + "\");\n"
+              let mut result = indent +
+                "const " +
+                temp_var +
+                " = require(\"" +
+                ms +
+                "\");\n"
               for i = 0; i < specifiers.length(); i = i + 1 {
                 let spec = specifiers[i]
                 let source_name = match spec.property_name {
                   Some(prop_name) => prop_name
                   None => spec.name
                 }
-                result = result + indent + "exports." + spec.name + " = " + temp_var + "." + source_name + ";"
+                result = result +
+                  indent +
+                  "exports." +
+                  spec.name +
+                  " = " +
+                  temp_var +
+                  "." +
+                  source_name +
+                  ";"
                 if i < specifiers.length() - 1 {
                   result = result + "\n"
                 }
@@ -1903,7 +1951,13 @@ fn emit_export_declaration_commonjs(
                   Some(prop_name) => prop_name
                   None => spec.name
                 }
-                result = result + indent + "exports." + spec.name + " = " + source_name + ";"
+                result = result +
+                  indent +
+                  "exports." +
+                  spec.name +
+                  " = " +
+                  source_name +
+                  ";"
                 if i < specifiers.length() - 1 {
                   result = result + "\n"
                 }
@@ -1911,22 +1965,20 @@ fn emit_export_declaration_commonjs(
               result
             }
           }
-        }
-        NamespaceExport(name, _) => {
+        NamespaceExport(name, _) =>
           // export * as ns from 'mod' -> exports.ns = require('mod')
           match ed.module_specifier {
-            Some(ms) => indent + "exports." + name + " = require(\"" + ms + "\");"
+            Some(ms) =>
+              indent + "exports." + name + " = require(\"" + ms + "\");"
             None => "" // Invalid, but handle gracefully
           }
-        }
       }
-    None => {
+    None =>
       // export * from 'mod' -> Object.assign(exports, require('mod'))
       match ed.module_specifier {
         Some(ms) => indent + "Object.assign(exports, require(\"" + ms + "\"));"
         None => "" // Invalid, but handle gracefully
       }
-    }
   }
 }
 
@@ -2583,7 +2635,10 @@ fn emit_yield_expression(ye : YieldExpression, ctx : EmitterContext) -> String {
 
 ///|
 /// Emit dynamic import expression: import('./module')
-fn emit_import_expression(ie : ImportExpression, ctx : EmitterContext) -> String {
+fn emit_import_expression(
+  ie : ImportExpression,
+  ctx : EmitterContext,
+) -> String {
   "import(" + emit(ie.source, ctx) + ")"
 }
 
@@ -2968,7 +3023,6 @@ fn emit_auto_accessor(aa : AutoAccessor, ctx : EmitterContext) -> String {
     }
     None => ()
   }
-
   result.write_string(";")
   result.to_string()
 }
@@ -2993,7 +3047,6 @@ fn emit_using_statement(us : UsingStatement, ctx : EmitterContext) -> String {
       result.write_string(", ")
     }
     first = false
-
     result.write_string(emit(decl.name, ctx))
     match decl.initializer {
       Some(init) => {
@@ -3003,7 +3056,6 @@ fn emit_using_statement(us : UsingStatement, ctx : EmitterContext) -> String {
       None => ()
     }
   }
-
   result.write_string(";")
   result.to_string()
 }

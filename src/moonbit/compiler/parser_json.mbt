@@ -21,11 +21,7 @@ pub fn parse_json(
       // Check for trailing content
       if not(is_at_end(parser)) {
         let loc = current_token(parser).location()
-        let parser = add_error(
-          parser,
-          "Unexpected token",
-          loc,
-        )
+        let parser = add_error(parser, "Unexpected token", loc)
         Err(parser.diagnostics)
       } else if parser.diagnostics.length() > 0 {
         Err(parser.diagnostics)
@@ -263,13 +259,7 @@ fn parse_json_object(parser : Parser) -> Result[(Node, Parser), Parser] {
           }
           _ => {
             let loc = current_token(parser).location()
-            return Err(
-              add_error(
-                parser,
-                "Unexpected token",
-                loc,
-              ),
-            )
+            return Err(add_error(parser, "Unexpected token", loc))
           }
         }
       }
@@ -380,13 +370,7 @@ fn parse_json_array(parser : Parser) -> Result[(Node, Parser), Parser] {
       }
       _ => {
         let loc = current_token(parser).location()
-        return Err(
-          add_error(
-            parser,
-            "Unexpected token",
-            loc,
-          ),
-        )
+        return Err(add_error(parser, "Unexpected token", loc))
       }
     }
   }

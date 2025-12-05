@@ -433,7 +433,8 @@ fn scan_single_token_v2(
 
     // === Private identifier (#name) ===
     // Only valid if followed by identifier start character
-    ['#', ch, .. rest] if ch >= 'a' && ch <= 'z' || ch >= 'A' && ch <= 'Z' ||
+    ['#', ch, .. rest] if (ch >= 'a' && ch <= 'z') ||
+      (ch >= 'A' && ch <= 'Z') ||
       ch == '_' ||
       ch == '$' => {
       let start_line = state.line
@@ -513,7 +514,8 @@ fn scan_single_token_v2(
           )
           (TemplateLiteral(content.to_string(), loc), rest2)
         }
-        TemplateScanResultV2::Head(rest2) | TemplateScanResultV2::Middle(rest2) => {
+        TemplateScanResultV2::Head(rest2)
+        | TemplateScanResultV2::Middle(rest2) => {
           let loc = SourceLocation::new(
             file_path,
             Position::new(start_line, start_col, start_offset),

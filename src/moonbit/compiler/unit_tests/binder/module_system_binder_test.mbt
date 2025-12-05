@@ -20,43 +20,40 @@ fn parse_and_bind_module(
 // Module Detection Tests
 // ============================================================================
 
+///|
 test "binder/module_system - detects ES module with import" {
   let source = "import { foo } from './bar';"
   match parse_and_bind_module(source) {
-    Ok(bound_file) => {
-      assert_eq(bound_file.module_info.is_external_module, true)
-    }
+    Ok(bound_file) => assert_eq(bound_file.module_info.is_external_module, true)
     Err(_) => fail("Parse/bind failed")
   }
 }
 
+///|
 test "binder/module_system - detects ES module with export" {
   let source = "export const x = 1;"
   match parse_and_bind_module(source) {
-    Ok(bound_file) => {
-      assert_eq(bound_file.module_info.is_external_module, true)
-    }
+    Ok(bound_file) => assert_eq(bound_file.module_info.is_external_module, true)
     Err(_) => fail("Parse/bind failed")
   }
 }
 
+///|
 test "binder/module_system - detects script file (no imports/exports)" {
   let source = "const x = 1;"
   match parse_and_bind_module(source) {
-    Ok(bound_file) => {
+    Ok(bound_file) =>
       // Files without import/export are scripts
       assert_eq(bound_file.module_info.is_external_module, false)
-    }
     Err(_) => fail("Parse/bind failed")
   }
 }
 
+///|
 test "binder/module_system - detects export default" {
   let source = "export default function foo() {}"
   match parse_and_bind_module(source) {
-    Ok(bound_file) => {
-      assert_eq(bound_file.module_info.is_external_module, true)
-    }
+    Ok(bound_file) => assert_eq(bound_file.module_info.is_external_module, true)
     Err(_) => fail("Parse/bind failed")
   }
 }
@@ -65,6 +62,7 @@ test "binder/module_system - detects export default" {
 // Import Binding Tests
 // ============================================================================
 
+///|
 test "binder/module_system - binds default import" {
   let source = "import foo from './bar';"
   match parse_and_bind_module(source) {
@@ -77,6 +75,7 @@ test "binder/module_system - binds default import" {
   }
 }
 
+///|
 test "binder/module_system - binds named import" {
   let source = "import { bar, baz } from './module';"
   match parse_and_bind_module(source) {
@@ -89,6 +88,7 @@ test "binder/module_system - binds named import" {
   }
 }
 
+///|
 test "binder/module_system - binds renamed import" {
   let source = "import { foo as myFoo } from './module';"
   match parse_and_bind_module(source) {
@@ -101,13 +101,13 @@ test "binder/module_system - binds renamed import" {
   }
 }
 
+///|
 test "binder/module_system - binds namespace import" {
   let source = "import * as mod from './module';"
   match parse_and_bind_module(source) {
-    Ok(bound_file) => {
+    Ok(bound_file) =>
       // mod should be in scope
       assert_true(bound_file.global_scope.symbols.get("mod") is Some(_))
-    }
     Err(_) => fail("Parse/bind failed")
   }
 }
@@ -116,6 +116,7 @@ test "binder/module_system - binds namespace import" {
 // Export Binding Tests
 // ============================================================================
 
+///|
 test "binder/module_system - binds exported variable" {
   let source = "export const myVar = 42;"
   match parse_and_bind_module(source) {
@@ -133,6 +134,7 @@ test "binder/module_system - binds exported variable" {
   }
 }
 
+///|
 test "binder/module_system - binds exported function" {
   let source = "export function myFunc() {}"
   match parse_and_bind_module(source) {
@@ -150,6 +152,7 @@ test "binder/module_system - binds exported function" {
   }
 }
 
+///|
 test "binder/module_system - binds exported class" {
   let source = "export class MyClass {}"
   match parse_and_bind_module(source) {
@@ -171,6 +174,7 @@ test "binder/module_system - binds exported class" {
 // Type-Only Import Tests
 // ============================================================================
 
+///|
 test "binder/module_system - binds type-only import" {
   let source = "import type { MyType } from './types';"
   match parse_and_bind_module(source) {
@@ -183,6 +187,7 @@ test "binder/module_system - binds type-only import" {
   }
 }
 
+///|
 test "binder/module_system - binds inline type-only specifier" {
   let source = "import { type MyType, myValue } from './module';"
   match parse_and_bind_module(source) {
@@ -198,32 +203,29 @@ test "binder/module_system - binds inline type-only specifier" {
 // Re-export Tests
 // ============================================================================
 
+///|
 test "binder/module_system - handles star re-export" {
   let source = "export * from './other';"
   match parse_and_bind_module(source) {
-    Ok(bound_file) => {
-      assert_eq(bound_file.module_info.is_external_module, true)
-    }
+    Ok(bound_file) => assert_eq(bound_file.module_info.is_external_module, true)
     Err(_) => fail("Parse/bind failed")
   }
 }
 
+///|
 test "binder/module_system - handles named re-export" {
   let source = "export { foo, bar } from './other';"
   match parse_and_bind_module(source) {
-    Ok(bound_file) => {
-      assert_eq(bound_file.module_info.is_external_module, true)
-    }
+    Ok(bound_file) => assert_eq(bound_file.module_info.is_external_module, true)
     Err(_) => fail("Parse/bind failed")
   }
 }
 
+///|
 test "binder/module_system - handles namespace re-export" {
   let source = "export * as ns from './other';"
   match parse_and_bind_module(source) {
-    Ok(bound_file) => {
-      assert_eq(bound_file.module_info.is_external_module, true)
-    }
+    Ok(bound_file) => assert_eq(bound_file.module_info.is_external_module, true)
     Err(_) => fail("Parse/bind failed")
   }
 }
@@ -232,6 +234,7 @@ test "binder/module_system - handles namespace re-export" {
 // Combined Import/Export Tests
 // ============================================================================
 
+///|
 test "binder/module_system - handles multiple imports and exports" {
   let source =
     #|import { a } from './a';

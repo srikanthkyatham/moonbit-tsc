@@ -236,7 +236,11 @@ pub fn apply_property_equality_narrowing(
     TObject(obj) =>
       match obj.fields.get(prop) {
         Some(field_info) =>
-          if types_v2_equal(field_info.ty, value_type) { ty } else { TNever }
+          if types_v2_equal(field_info.ty, value_type) {
+            ty
+          } else {
+            TNever
+          }
         None => TNever
       }
     _ => ty
@@ -267,7 +271,11 @@ pub fn apply_property_inequality_narrowing(
     TObject(obj) =>
       match obj.fields.get(prop) {
         Some(field_info) =>
-          if types_v2_equal(field_info.ty, value_type) { TNever } else { ty }
+          if types_v2_equal(field_info.ty, value_type) {
+            TNever
+          } else {
+            ty
+          }
         None => ty
       }
     _ => ty
@@ -486,7 +494,9 @@ pub fn is_property_equality_check(
   }
 
   // Helper to extract from property access
-  fn extract_prop_access(prop_access : PropertyAccessExpression) -> (String, String)? {
+  fn extract_prop_access(
+    prop_access : PropertyAccessExpression,
+  ) -> (String, String)? {
     match prop_access.expression {
       Identifier(obj) => Some((obj.name, prop_access.name))
       _ => None

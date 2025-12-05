@@ -31,7 +31,7 @@ pub fn ast_type_to_v2(env : TypeEnv, node : Node) -> TypeV2 {
       }
 
     // Type reference (e.g., Array<T>, MyType, T)
-    TypeReference(tr) => {
+    TypeReference(tr) =>
       // First check if it's a type parameter in scope
       match env.lookup_type_param(tr.type_name) {
         Some(param) => TTypeParam(param.name, param.constraint)
@@ -60,7 +60,6 @@ pub fn ast_type_to_v2(env : TypeEnv, node : Node) -> TypeV2 {
           }
         }
       }
-    }
 
     // Union type (A | B | C)
     UnionType(ut) => {
@@ -141,7 +140,7 @@ pub fn ast_type_to_v2(env : TypeEnv, node : Node) -> TypeV2 {
       let mut this_type : TypeV2? = None
       for p in ft.parameters {
         match p {
-          Parameter(param) => {
+          Parameter(param) =>
             // Check for `this` parameter: function foo(this: SomeType, ...)
             if param.is_this_parameter {
               this_type = match param.type_annotation {
@@ -159,13 +158,13 @@ pub fn ast_type_to_v2(env : TypeEnv, node : Node) -> TypeV2 {
                 is_rest: param.is_rest,
               })
             }
-          }
           _ => params.push(ParamInfoV2::required("unknown", TAny))
         }
       }
 
       // Check if return type is a type predicate
-      let (return_type, type_predicate) : (TypeV2, TypePredicateV2?) = match ft.return_type {
+      let (return_type, type_predicate) : (TypeV2, TypePredicateV2?) = match
+        ft.return_type {
         TypePredicate(tp) => {
           // Type predicate: "x is Type" or "asserts x is Type"
           let predicate_type = match tp.type_node {
@@ -183,8 +182,14 @@ pub fn ast_type_to_v2(env : TypeEnv, node : Node) -> TypeV2 {
         }
         other => (ast_type_to_v2(child_env, other), None)
       }
-
-      TFunction(FunctionTypeV2::{ type_params, params, rest_param: None, return_type, type_predicate, this_type })
+      TFunction(FunctionTypeV2::{
+        type_params,
+        params,
+        rest_param: None,
+        return_type,
+        type_predicate,
+        this_type,
+      })
     }
 
     // Literal type
@@ -264,11 +269,12 @@ pub fn ast_type_to_v2(env : TypeEnv, node : Node) -> TypeV2 {
           }
         }
         TypeOf => TAny // Would need runtime value resolution
-        Unique => {
+        Unique =>
           // unique symbol creates a distinct unique symbol type
           // For type annotations, we use a generated anonymous name
-          TUniqueSymbol(UniqueSymbolV2::new("$unique", generate_unique_symbol_id()))
-        }
+          TUniqueSymbol(
+            UniqueSymbolV2::new("$unique", generate_unique_symbol_id()),
+          )
         Readonly => ast_type_to_v2(env, to.type_node) // TODO: mark as readonly
       }
 
@@ -341,7 +347,6 @@ pub fn ast_type_to_v2(env : TypeEnv, node : Node) -> TypeV2 {
       // Convert modifiers
       let readonly_modifier = convert_mapped_modifier_v2(mt.readonly_modifier)
       let optional_modifier = convert_mapped_modifier_v2(mt.optional_modifier)
-
       TMapped(MappedTypeV2::{
         type_param,
         constraint,
@@ -410,7 +415,9 @@ fn extract_keyof_type(ty : TypeV2) -> TypeV2 {
 
 ///|
 /// Convert AST mapped type modifier to TypeV2 modifier
-fn convert_mapped_modifier_v2(modifier : MappedTypeModifier) -> MappedModifierV2 {
+fn convert_mapped_modifier_v2(
+  modifier : MappedTypeModifier,
+) -> MappedModifierV2 {
   match modifier {
     Unchanged => MappedModifierV2::Unchanged
     Plus => MappedModifierV2::Add
@@ -475,7 +482,6 @@ pub fn infer_generic_type_args(
       }
     }
   }
-
   { inferred_args: inferred, errors }
 }
 
@@ -520,7 +526,8 @@ fn do_infer_from_types(
             let prop_name = kv.0
             let field = kv.1
             match arg_obj.fields.get(prop_name) {
-              Some(arg_field) => do_infer_from_types(field.ty, arg_field.ty, inferred)
+              Some(arg_field) =>
+                do_infer_from_types(field.ty, arg_field.ty, inferred)
               None => ()
             }
           }
@@ -721,7 +728,7 @@ fn is_subtype_of_with_ctx(
       }
 
     // Tuple types
-    (TTuple(src_elems), TTuple(tgt_elems)) => {
+    (TTuple(src_elems), TTuple(tgt_elems)) =>
       if src_elems.length() < tgt_elems.length() {
         false
       } else {
@@ -732,19 +739,19 @@ fn is_subtype_of_with_ctx(
               result = false
               break
             }
-          } else if not(is_subtype_of_with_ctx(src_elems[i].ty, tgt_elem.ty, ctx)) {
+          } else if not(
+              is_subtype_of_with_ctx(src_elems[i].ty, tgt_elem.ty, ctx),
+            ) {
             result = false
             break
           }
         }
         result
       }
-    }
 
     // Default - not a subtype
     _ => false
   }
-
   result
 }
 
@@ -774,7 +781,13 @@ fn is_object_subtype_with_ctx(
             Some(src_sig) =>
               match get_index_key_type(src_sig.key_type) {
                 Some(StringKey) =>
-                  if not(is_subtype_of_with_ctx(src_sig.value_type, tgt_field.ty, ctx)) {
+                  if not(
+                      is_subtype_of_with_ctx(
+                        src_sig.value_type,
+                        tgt_field.ty,
+                        ctx,
+                      ),
+                    ) {
                     return false
                   }
                 _ => return false
@@ -792,19 +805,23 @@ fn is_object_subtype_with_ctx(
   // Check index signature compatibility
   match (source.index_signature, target.index_signature) {
     (Some(src_sig), Some(tgt_sig)) =>
-      if not(is_subtype_of_with_ctx(src_sig.value_type, tgt_sig.value_type, ctx)) {
+      if not(
+          is_subtype_of_with_ctx(src_sig.value_type, tgt_sig.value_type, ctx),
+        ) {
         return false
       }
     (None, Some(_)) => ()
     _ => ()
   }
-
   true
 }
 
 ///|
 /// Check if source function type is subtype of target
-fn is_function_subtype(source : FunctionTypeV2, target : FunctionTypeV2) -> Bool {
+fn is_function_subtype(
+  source : FunctionTypeV2,
+  target : FunctionTypeV2,
+) -> Bool {
   let ctx = RecursiveComparisonContext::new()
   is_function_subtype_with_ctx(source, target, ctx)
 }
@@ -919,7 +936,6 @@ pub fn check_generic_call(
   // Check arguments against instantiated parameter types
   let arg_errors = check_call_arguments_v2(env, instantiated, arguments)
   all_errors.append(arg_errors)
-
   { return_type: instantiated.return_type, errors: all_errors }
 }
 
@@ -1055,7 +1071,12 @@ pub fn resolve_overload(
 
   // If only one overload, use it directly (with detailed error reporting)
   if overloads.length() == 1 {
-    let result = check_generic_call(env, overloads[0], explicit_type_args, arguments)
+    let result = check_generic_call(
+      env,
+      overloads[0],
+      explicit_type_args,
+      arguments,
+    )
     return {
       matched_overload: Some(overloads[0]),
       matched_index: 0,
@@ -1067,7 +1088,6 @@ pub fn resolve_overload(
   // Multiple overloads - try each one in order
   let all_overload_errors : Array[Array[TypeMismatchError]] = []
   let arg_types = arguments.map(fn(arg) { infer_expr_type(env, arg) })
-
   for i, overload in overloads {
     // Convert explicit type arguments
     let explicit_args = explicit_type_args.map(fn(node) {
@@ -1075,11 +1095,14 @@ pub fn resolve_overload(
     })
 
     // Try to match this overload
-    let match_result = try_match_overload(env, overload, arg_types, explicit_args)
-
+    let match_result = try_match_overload(
+      env, overload, arg_types, explicit_args,
+    )
     if match_result.is_match {
       // Found a matching overload - use it
-      let result = check_generic_call(env, overload, explicit_type_args, arguments)
+      let result = check_generic_call(
+        env, overload, explicit_type_args, arguments,
+      )
       return {
         matched_overload: Some(overload),
         matched_index: i,
@@ -1093,7 +1116,9 @@ pub fn resolve_overload(
   }
 
   // No overload matched - create TS2769 error
-  let child_errors = create_overload_error_children(overloads, all_overload_errors)
+  let child_errors = create_overload_error_children(
+    overloads, all_overload_errors,
+  )
   {
     matched_overload: None,
     matched_index: -1,
@@ -1132,13 +1157,14 @@ fn try_match_overload(
   let errors : Array[TypeMismatchError] = []
 
   // Check argument count
-  let required_params = overload.params.filter(fn(p) { not(p.optional) }).length()
+  let required_params = overload.params
+    .filter(fn(p) { not(p.optional) })
+    .length()
   let max_params = if overload.rest_param is Some(_) {
     2147483647 // Effectively unlimited with rest param
   } else {
     overload.params.length()
   }
-
   if arg_types.length() < required_params {
     errors.push(TypeMismatchError::{
       path: PRoot,
@@ -1150,7 +1176,6 @@ fn try_match_overload(
     })
     return { is_match: false, errors }
   }
-
   if arg_types.length() > max_params {
     errors.push(TypeMismatchError::{
       path: PRoot,
@@ -1164,7 +1189,9 @@ fn try_match_overload(
   }
 
   // Try to infer type arguments
-  let inference = infer_generic_type_args(overload, arg_types, explicit_type_args)
+  let inference = infer_generic_type_args(
+    overload, arg_types, explicit_type_args,
+  )
   if not(inference.errors.is_empty()) {
     return { is_match: false, errors: inference.errors }
   }
@@ -1223,7 +1250,6 @@ fn try_match_overload(
       }
     }
   }
-
   { is_match: errors.is_empty(), errors }
 }
 
@@ -1257,4 +1283,3 @@ fn create_overload_error_children(
   }
   children
 }
-

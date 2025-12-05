@@ -59,9 +59,10 @@ test "unit/module-symbol-resolver/module-exports - create empty" {
 ///|
 test "unit/module-symbol-resolver/module-exports - add and get export" {
   let exports = @compiler.ModuleExports::empty("/project/src/utils.ts")
-  let export_symbol = @compiler.ExportedSymbol::new("formatDate", "formatDate", 10)
+  let export_symbol = @compiler.ExportedSymbol::new(
+    "formatDate", "formatDate", 10,
+  )
   exports.add_export("formatDate", export_symbol)
-
   match exports.get_export("formatDate") {
     Some(exp) => assert_eq(exp.symbol_id, 10)
     None => assert_true(false)
@@ -73,7 +74,6 @@ test "unit/module-symbol-resolver/module-exports - has export" {
   let exports = @compiler.ModuleExports::empty("/project/src/helpers.ts")
   let export_symbol = @compiler.ExportedSymbol::new("helper", "helper", 20)
   exports.add_export("helper", export_symbol)
-
   assert_true(exports.has_export("helper"))
   assert_eq(exports.has_export("nonexistent"), false)
 }
@@ -81,13 +81,10 @@ test "unit/module-symbol-resolver/module-exports - has export" {
 ///|
 test "unit/module-symbol-resolver/module-exports - get export names" {
   let exports = @compiler.ModuleExports::empty("/project/src/api.ts")
-
   let exp1 = @compiler.ExportedSymbol::new("fetchData", "fetchData", 30)
   let exp2 = @compiler.ExportedSymbol::new("postData", "postData", 31)
-
   exports.add_export("fetchData", exp1)
   exports.add_export("postData", exp2)
-
   let names = exports.get_export_names()
   assert_eq(names.length(), 2)
   assert_true(names.contains("fetchData"))
@@ -98,10 +95,8 @@ test "unit/module-symbol-resolver/module-exports - get export names" {
 test "unit/module-symbol-resolver/module-exports - default export" {
   let default_exp = @compiler.ExportedSymbol::new("default", "MyComponent", 100)
   let exports = @compiler.ModuleExports::with_default(
-    "/project/src/component.ts",
-    default_exp,
+    "/project/src/component.ts", default_exp,
   )
-
   match exports.default_export {
     Some(def) => {
       assert_eq(def.original_name, "MyComponent")
@@ -198,13 +193,10 @@ test "unit/module-symbol-resolver/resolver - create with defaults" {
 test "unit/module-symbol-resolver/resolver - register and get exports" {
   let module_resolver = @compiler.ModuleResolver::with_defaults("/project")
   let resolver = @compiler.ModuleSymbolResolver::new(module_resolver)
-
   let exports = @compiler.ModuleExports::empty("/project/src/utils.ts")
   let exp = @compiler.ExportedSymbol::new("helper", "helper", 100)
   exports.add_export("helper", exp)
-
   resolver.register_exports("/project/src/utils.ts", exports)
-
   match resolver.get_exports("/project/src/utils.ts") {
     Some(cached) => assert_true(cached.has_export("helper"))
     None => assert_true(false)
@@ -215,7 +207,6 @@ test "unit/module-symbol-resolver/resolver - register and get exports" {
 test "unit/module-symbol-resolver/resolver - add and get import bindings" {
   let module_resolver = @compiler.ModuleResolver::with_defaults("/project")
   let resolver = @compiler.ModuleSymbolResolver::new(module_resolver)
-
   let binding = @compiler.ImportBinding::new(
     "foo",
     1,
@@ -223,9 +214,7 @@ test "unit/module-symbol-resolver/resolver - add and get import bindings" {
     "foo",
     @compiler.ImportBindingKind::named_import(),
   )
-
   resolver.add_import_binding("/project/src/index.ts", binding)
-
   let bindings = resolver.get_import_bindings("/project/src/index.ts")
   assert_eq(bindings.length(), 1)
   assert_eq(bindings[0].local_name, "foo")
@@ -235,7 +224,6 @@ test "unit/module-symbol-resolver/resolver - add and get import bindings" {
 test "unit/module-symbol-resolver/resolver - get bindings for unknown file" {
   let module_resolver = @compiler.ModuleResolver::with_defaults("/project")
   let resolver = @compiler.ModuleSymbolResolver::new(module_resolver)
-
   let bindings = resolver.get_import_bindings("/unknown/file.ts")
   assert_eq(bindings.length(), 0)
 }
@@ -266,14 +254,10 @@ test "unit/module-symbol-resolver/circular - would be circular detection" {
 test "unit/module-symbol-resolver/circular - finish processing removes from stack" {
   let module_resolver = @compiler.ModuleResolver::with_defaults("/project")
   let resolver = @compiler.ModuleSymbolResolver::new(module_resolver)
-
   resolver.start_processing("/project/a.ts")
   resolver.start_processing("/project/b.ts")
-
   assert_true(resolver.would_be_circular("/project/a.ts"))
-
   resolver.finish_processing("/project/a.ts")
-
   assert_eq(resolver.would_be_circular("/project/a.ts"), false)
   assert_true(resolver.would_be_circular("/project/b.ts"))
 }
@@ -282,11 +266,9 @@ test "unit/module-symbol-resolver/circular - finish processing removes from stac
 test "unit/module-symbol-resolver/circular - get dependency chain" {
   let module_resolver = @compiler.ModuleResolver::with_defaults("/project")
   let resolver = @compiler.ModuleSymbolResolver::new(module_resolver)
-
   resolver.start_processing("/project/a.ts")
   resolver.start_processing("/project/b.ts")
   resolver.start_processing("/project/c.ts")
-
   let chain = resolver.get_dependency_chain()
   assert_eq(chain.length(), 3)
   assert_eq(chain[0], "/project/a.ts")
@@ -365,8 +347,7 @@ test "unit/module-symbol-resolver/link - link default import success" {
   // Setup exports with default
   let default_exp = @compiler.ExportedSymbol::new("default", "MyComponent", 99)
   let exports = @compiler.ModuleExports::with_default(
-    "/project/src/component.ts",
-    default_exp,
+    "/project/src/component.ts", default_exp,
   )
   resolver.register_exports("/project/src/component.ts", exports)
 
@@ -464,7 +445,8 @@ test "unit/module-symbol-resolver/resolve - resolve import path" {
   let result = resolver.resolve_import("./utils", "/project/src/index.ts")
   match result {
     Ok(_) => assert_true(false) // Should fail since file doesn't exist
-    Err(@compiler.ModuleNotFound(specifier, _)) => assert_eq(specifier, "./utils")
+    Err(@compiler.ModuleNotFound(specifier, _)) =>
+      assert_eq(specifier, "./utils")
     Err(_) => assert_true(false)
   }
 }

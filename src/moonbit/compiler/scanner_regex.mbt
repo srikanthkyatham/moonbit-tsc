@@ -62,7 +62,6 @@ fn scan_regex_pattern_v2(
     }
     remaining => remaining
   }
-
   Some((pattern.to_string(), flags.to_string(), rest2))
 }
 

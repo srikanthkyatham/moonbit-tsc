@@ -20,10 +20,9 @@ test "unit/template-literal/eval - simple literal template" {
 ///|
 test "unit/template-literal/eval - prefix suffix with string literal" {
   // `Hello, ${"World"}!` -> "Hello, World!"
-  let tl = @compiler.TemplateLiteralTypeV2::new(
-    ["Hello, ", "!"],
-    [@compiler.create_literal_string_type("World")],
-  )
+  let tl = @compiler.TemplateLiteralTypeV2::new(["Hello, ", "!"], [
+    @compiler.create_literal_string_type("World"),
+  ])
   let env = @compiler.TypeEnv::new()
   let result = @compiler.evaluate_template_literal_type_v2(env, tl)
   match result {
@@ -35,35 +34,34 @@ test "unit/template-literal/eval - prefix suffix with string literal" {
 ///|
 test "unit/template-literal/eval - union distribution" {
   // `on${"Click" | "Focus"}` -> "onClick" | "onFocus"
-  let tl = @compiler.TemplateLiteralTypeV2::new(
-    ["on", ""],
-    [
-      @compiler.create_union_type(
-        [
-          @compiler.create_literal_string_type("Click"),
-          @compiler.create_literal_string_type("Focus"),
-        ],
-      ),
-    ],
-  )
+  let tl = @compiler.TemplateLiteralTypeV2::new(["on", ""], [
+    @compiler.create_union_type([
+      @compiler.create_literal_string_type("Click"),
+      @compiler.create_literal_string_type("Focus"),
+    ]),
+  ])
   let env = @compiler.TypeEnv::new()
   let result = @compiler.evaluate_template_literal_type_v2(env, tl)
   match result {
     @compiler.TUnion(types) => {
       assert_eq(types.length(), 2)
       // Check both values are present
-      let has_click = types.iter().any(fn(t) {
-        match t {
-          @compiler.TLiteralString("onClick") => true
-          _ => false
-        }
-      })
-      let has_focus = types.iter().any(fn(t) {
-        match t {
-          @compiler.TLiteralString("onFocus") => true
-          _ => false
-        }
-      })
+      let has_click = types
+        .iter()
+        .any(fn(t) {
+          match t {
+            @compiler.TLiteralString("onClick") => true
+            _ => false
+          }
+        })
+      let has_focus = types
+        .iter()
+        .any(fn(t) {
+          match t {
+            @compiler.TLiteralString("onFocus") => true
+            _ => false
+          }
+        })
       assert_true(has_click)
       assert_true(has_focus)
     }
@@ -74,23 +72,16 @@ test "unit/template-literal/eval - union distribution" {
 ///|
 test "unit/template-literal/eval - multiple unions cartesian product" {
   // `${"a" | "b"}-${"x" | "y"}` -> "a-x" | "a-y" | "b-x" | "b-y"
-  let tl = @compiler.TemplateLiteralTypeV2::new(
-    ["", "-", ""],
-    [
-      @compiler.create_union_type(
-        [
-          @compiler.create_literal_string_type("a"),
-          @compiler.create_literal_string_type("b"),
-        ],
-      ),
-      @compiler.create_union_type(
-        [
-          @compiler.create_literal_string_type("x"),
-          @compiler.create_literal_string_type("y"),
-        ],
-      ),
-    ],
-  )
+  let tl = @compiler.TemplateLiteralTypeV2::new(["", "-", ""], [
+    @compiler.create_union_type([
+      @compiler.create_literal_string_type("a"),
+      @compiler.create_literal_string_type("b"),
+    ]),
+    @compiler.create_union_type([
+      @compiler.create_literal_string_type("x"),
+      @compiler.create_literal_string_type("y"),
+    ]),
+  ])
   let env = @compiler.TypeEnv::new()
   let result = @compiler.evaluate_template_literal_type_v2(env, tl)
   match result {
@@ -99,12 +90,14 @@ test "unit/template-literal/eval - multiple unions cartesian product" {
       // Check all combinations are present
       let expected = ["a-x", "a-y", "b-x", "b-y"]
       for exp in expected {
-        let found = types.iter().any(fn(t) {
-          match t {
-            @compiler.TLiteralString(s) => s == exp
-            _ => false
-          }
-        })
+        let found = types
+          .iter()
+          .any(fn(t) {
+            match t {
+              @compiler.TLiteralString(s) => s == exp
+              _ => false
+            }
+          })
         assert_true(found)
       }
     }
@@ -115,34 +108,33 @@ test "unit/template-literal/eval - multiple unions cartesian product" {
 ///|
 test "unit/template-literal/eval - number literal interpolation" {
   // `item-${1 | 2}` -> "item-1" | "item-2"
-  let tl = @compiler.TemplateLiteralTypeV2::new(
-    ["item-", ""],
-    [
-      @compiler.create_union_type(
-        [
-          @compiler.create_literal_number_type(1.0),
-          @compiler.create_literal_number_type(2.0),
-        ],
-      ),
-    ],
-  )
+  let tl = @compiler.TemplateLiteralTypeV2::new(["item-", ""], [
+    @compiler.create_union_type([
+      @compiler.create_literal_number_type(1.0),
+      @compiler.create_literal_number_type(2.0),
+    ]),
+  ])
   let env = @compiler.TypeEnv::new()
   let result = @compiler.evaluate_template_literal_type_v2(env, tl)
   match result {
     @compiler.TUnion(types) => {
       assert_eq(types.length(), 2)
-      let has_1 = types.iter().any(fn(t) {
-        match t {
-          @compiler.TLiteralString("item-1") => true
-          _ => false
-        }
-      })
-      let has_2 = types.iter().any(fn(t) {
-        match t {
-          @compiler.TLiteralString("item-2") => true
-          _ => false
-        }
-      })
+      let has_1 = types
+        .iter()
+        .any(fn(t) {
+          match t {
+            @compiler.TLiteralString("item-1") => true
+            _ => false
+          }
+        })
+      let has_2 = types
+        .iter()
+        .any(fn(t) {
+          match t {
+            @compiler.TLiteralString("item-2") => true
+            _ => false
+          }
+        })
       assert_true(has_1)
       assert_true(has_2)
     }
@@ -153,34 +145,33 @@ test "unit/template-literal/eval - number literal interpolation" {
 ///|
 test "unit/template-literal/eval - boolean literal interpolation" {
   // `is-${true | false}` -> "is-true" | "is-false"
-  let tl = @compiler.TemplateLiteralTypeV2::new(
-    ["is-", ""],
-    [
-      @compiler.create_union_type(
-        [
-          @compiler.create_literal_bool_type(true),
-          @compiler.create_literal_bool_type(false),
-        ],
-      ),
-    ],
-  )
+  let tl = @compiler.TemplateLiteralTypeV2::new(["is-", ""], [
+    @compiler.create_union_type([
+      @compiler.create_literal_bool_type(true),
+      @compiler.create_literal_bool_type(false),
+    ]),
+  ])
   let env = @compiler.TypeEnv::new()
   let result = @compiler.evaluate_template_literal_type_v2(env, tl)
   match result {
     @compiler.TUnion(types) => {
       assert_eq(types.length(), 2)
-      let has_true = types.iter().any(fn(t) {
-        match t {
-          @compiler.TLiteralString("is-true") => true
-          _ => false
-        }
-      })
-      let has_false = types.iter().any(fn(t) {
-        match t {
-          @compiler.TLiteralString("is-false") => true
-          _ => false
-        }
-      })
+      let has_true = types
+        .iter()
+        .any(fn(t) {
+          match t {
+            @compiler.TLiteralString("is-true") => true
+            _ => false
+          }
+        })
+      let has_false = types
+        .iter()
+        .any(fn(t) {
+          match t {
+            @compiler.TLiteralString("is-false") => true
+            _ => false
+          }
+        })
       assert_true(has_true)
       assert_true(has_false)
     }
@@ -191,10 +182,9 @@ test "unit/template-literal/eval - boolean literal interpolation" {
 ///|
 test "unit/template-literal/eval - broad type returns string" {
   // `prefix-${string}` -> string
-  let tl = @compiler.TemplateLiteralTypeV2::new(
-    ["prefix-", ""],
-    [@compiler.create_string_type()],
-  )
+  let tl = @compiler.TemplateLiteralTypeV2::new(["prefix-", ""], [
+    @compiler.create_string_type(),
+  ])
   let env = @compiler.TypeEnv::new()
   let result = @compiler.evaluate_template_literal_type_v2(env, tl)
   match result {
@@ -206,10 +196,9 @@ test "unit/template-literal/eval - broad type returns string" {
 ///|
 test "unit/template-literal/eval - number type returns string" {
   // `count-${number}` -> string
-  let tl = @compiler.TemplateLiteralTypeV2::new(
-    ["count-", ""],
-    [@compiler.create_number_type()],
-  )
+  let tl = @compiler.TemplateLiteralTypeV2::new(["count-", ""], [
+    @compiler.create_number_type(),
+  ])
   let env = @compiler.TypeEnv::new()
   let result = @compiler.evaluate_template_literal_type_v2(env, tl)
   match result {
@@ -244,28 +233,30 @@ test "unit/template-literal/uppercase - mixed case" {
 
 ///|
 test "unit/template-literal/uppercase - union" {
-  let ty = @compiler.create_union_type(
-    [
-      @compiler.create_literal_string_type("foo"),
-      @compiler.create_literal_string_type("bar"),
-    ],
-  )
+  let ty = @compiler.create_union_type([
+    @compiler.create_literal_string_type("foo"),
+    @compiler.create_literal_string_type("bar"),
+  ])
   let result = @compiler.evaluate_uppercase_type(ty)
   match result {
     @compiler.TUnion(types) => {
       assert_eq(types.length(), 2)
-      let has_foo = types.iter().any(fn(t) {
-        match t {
-          @compiler.TLiteralString("FOO") => true
-          _ => false
-        }
-      })
-      let has_bar = types.iter().any(fn(t) {
-        match t {
-          @compiler.TLiteralString("BAR") => true
-          _ => false
-        }
-      })
+      let has_foo = types
+        .iter()
+        .any(fn(t) {
+          match t {
+            @compiler.TLiteralString("FOO") => true
+            _ => false
+          }
+        })
+      let has_bar = types
+        .iter()
+        .any(fn(t) {
+          match t {
+            @compiler.TLiteralString("BAR") => true
+            _ => false
+          }
+        })
       assert_true(has_foo)
       assert_true(has_bar)
     }
@@ -335,28 +326,30 @@ test "unit/template-literal/capitalize - empty string" {
 
 ///|
 test "unit/template-literal/capitalize - union" {
-  let ty = @compiler.create_union_type(
-    [
-      @compiler.create_literal_string_type("click"),
-      @compiler.create_literal_string_type("focus"),
-    ],
-  )
+  let ty = @compiler.create_union_type([
+    @compiler.create_literal_string_type("click"),
+    @compiler.create_literal_string_type("focus"),
+  ])
   let result = @compiler.evaluate_capitalize_type(ty)
   match result {
     @compiler.TUnion(types) => {
       assert_eq(types.length(), 2)
-      let has_click = types.iter().any(fn(t) {
-        match t {
-          @compiler.TLiteralString("Click") => true
-          _ => false
-        }
-      })
-      let has_focus = types.iter().any(fn(t) {
-        match t {
-          @compiler.TLiteralString("Focus") => true
-          _ => false
-        }
-      })
+      let has_click = types
+        .iter()
+        .any(fn(t) {
+          match t {
+            @compiler.TLiteralString("Click") => true
+            _ => false
+          }
+        })
+      let has_focus = types
+        .iter()
+        .any(fn(t) {
+          match t {
+            @compiler.TLiteralString("Focus") => true
+            _ => false
+          }
+        })
       assert_true(has_click)
       assert_true(has_focus)
     }
@@ -477,31 +470,33 @@ test "unit/template-literal/eval - empty template" {
 ///|
 test "unit/template-literal/eval - null and undefined" {
   // `value-${null | undefined}` -> "value-null" | "value-undefined"
-  let tl = @compiler.TemplateLiteralTypeV2::new(
-    ["value-", ""],
-    [
-      @compiler.create_union_type(
-        [@compiler.create_null_type(), @compiler.create_undefined_type()],
-      ),
-    ],
-  )
+  let tl = @compiler.TemplateLiteralTypeV2::new(["value-", ""], [
+    @compiler.create_union_type([
+      @compiler.create_null_type(),
+      @compiler.create_undefined_type(),
+    ]),
+  ])
   let env = @compiler.TypeEnv::new()
   let result = @compiler.evaluate_template_literal_type_v2(env, tl)
   match result {
     @compiler.TUnion(types) => {
       assert_eq(types.length(), 2)
-      let has_null = types.iter().any(fn(t) {
-        match t {
-          @compiler.TLiteralString("value-null") => true
-          _ => false
-        }
-      })
-      let has_undef = types.iter().any(fn(t) {
-        match t {
-          @compiler.TLiteralString("value-undefined") => true
-          _ => false
-        }
-      })
+      let has_null = types
+        .iter()
+        .any(fn(t) {
+          match t {
+            @compiler.TLiteralString("value-null") => true
+            _ => false
+          }
+        })
+      let has_undef = types
+        .iter()
+        .any(fn(t) {
+          match t {
+            @compiler.TLiteralString("value-undefined") => true
+            _ => false
+          }
+        })
       assert_true(has_null)
       assert_true(has_undef)
     }
@@ -512,36 +507,26 @@ test "unit/template-literal/eval - null and undefined" {
 ///|
 test "unit/template-literal/eval - three interpolations" {
   // `${a | b}${1 | 2}${x | y}` should produce 8 combinations
-  let tl = @compiler.TemplateLiteralTypeV2::new(
-    ["", "", "", ""],
-    [
-      @compiler.create_union_type(
-        [
-          @compiler.create_literal_string_type("a"),
-          @compiler.create_literal_string_type("b"),
-        ],
-      ),
-      @compiler.create_union_type(
-        [
-          @compiler.create_literal_number_type(1.0),
-          @compiler.create_literal_number_type(2.0),
-        ],
-      ),
-      @compiler.create_union_type(
-        [
-          @compiler.create_literal_string_type("x"),
-          @compiler.create_literal_string_type("y"),
-        ],
-      ),
-    ],
-  )
+  let tl = @compiler.TemplateLiteralTypeV2::new(["", "", "", ""], [
+    @compiler.create_union_type([
+      @compiler.create_literal_string_type("a"),
+      @compiler.create_literal_string_type("b"),
+    ]),
+    @compiler.create_union_type([
+      @compiler.create_literal_number_type(1.0),
+      @compiler.create_literal_number_type(2.0),
+    ]),
+    @compiler.create_union_type([
+      @compiler.create_literal_string_type("x"),
+      @compiler.create_literal_string_type("y"),
+    ]),
+  ])
   let env = @compiler.TypeEnv::new()
   let result = @compiler.evaluate_template_literal_type_v2(env, tl)
   match result {
-    @compiler.TUnion(types) => {
+    @compiler.TUnion(types) =>
       // 2 * 2 * 2 = 8 combinations
       assert_eq(types.length(), 8)
-    }
     _ => assert_true(false)
   }
 }
@@ -553,10 +538,9 @@ test "unit/template-literal/eval - three interpolations" {
 ///|
 test "unit/template-literal/match - simple prefix pattern" {
   // Match "onClick" against `on${string}`
-  let pattern = @compiler.TemplateLiteralTypeV2::new(
-    ["on", ""],
-    [@compiler.create_string_type()],
-  )
+  let pattern = @compiler.TemplateLiteralTypeV2::new(["on", ""], [
+    @compiler.create_string_type(),
+  ])
   let result = @compiler.matches_template_literal_pattern("onClick", pattern)
   assert_true(result)
 }
@@ -564,24 +548,23 @@ test "unit/template-literal/match - simple prefix pattern" {
 ///|
 test "unit/template-literal/match - simple prefix no match" {
   // "handleClick" doesn't match `on${string}`
-  let pattern = @compiler.TemplateLiteralTypeV2::new(
-    ["on", ""],
-    [@compiler.create_string_type()],
+  let pattern = @compiler.TemplateLiteralTypeV2::new(["on", ""], [
+    @compiler.create_string_type(),
+  ])
+  let result = @compiler.matches_template_literal_pattern(
+    "handleClick", pattern,
   )
-  let result = @compiler.matches_template_literal_pattern("handleClick", pattern)
   assert_false(result)
 }
 
 ///|
 test "unit/template-literal/match - prefix and suffix pattern" {
   // Match "onClick_handler" against `on${string}_handler`
-  let pattern = @compiler.TemplateLiteralTypeV2::new(
-    ["on", "_handler"],
-    [@compiler.create_string_type()],
-  )
+  let pattern = @compiler.TemplateLiteralTypeV2::new(["on", "_handler"], [
+    @compiler.create_string_type(),
+  ])
   let result = @compiler.matches_template_literal_pattern(
-    "onClick_handler",
-    pattern,
+    "onClick_handler", pattern,
   )
   assert_true(result)
 }
@@ -605,13 +588,11 @@ test "unit/template-literal/match - exact literal no match" {
 ///|
 test "unit/template-literal/match - multiple interpolations" {
   // Match "user_123_admin" against `user_${string}_admin`
-  let pattern = @compiler.TemplateLiteralTypeV2::new(
-    ["user_", "_admin"],
-    [@compiler.create_string_type()],
-  )
+  let pattern = @compiler.TemplateLiteralTypeV2::new(["user_", "_admin"], [
+    @compiler.create_string_type(),
+  ])
   let result = @compiler.matches_template_literal_pattern(
-    "user_123_admin",
-    pattern,
+    "user_123_admin", pattern,
   )
   assert_true(result)
 }
@@ -619,10 +600,9 @@ test "unit/template-literal/match - multiple interpolations" {
 ///|
 test "unit/template-literal/match - number interpolation" {
   // Match "item-42" against `item-${number}` (number pattern)
-  let pattern = @compiler.TemplateLiteralTypeV2::new(
-    ["item-", ""],
-    [@compiler.create_number_type()],
-  )
+  let pattern = @compiler.TemplateLiteralTypeV2::new(["item-", ""], [
+    @compiler.create_number_type(),
+  ])
   let result = @compiler.matches_template_literal_pattern("item-42", pattern)
   assert_true(result)
 }
@@ -630,10 +610,9 @@ test "unit/template-literal/match - number interpolation" {
 ///|
 test "unit/template-literal/match - number interpolation negative" {
   // Match "item--5" against `item-${number}` (negative number)
-  let pattern = @compiler.TemplateLiteralTypeV2::new(
-    ["item-", ""],
-    [@compiler.create_number_type()],
-  )
+  let pattern = @compiler.TemplateLiteralTypeV2::new(["item-", ""], [
+    @compiler.create_number_type(),
+  ])
   let result = @compiler.matches_template_literal_pattern("item--5", pattern)
   assert_true(result)
 }
@@ -641,10 +620,9 @@ test "unit/template-literal/match - number interpolation negative" {
 ///|
 test "unit/template-literal/match - number interpolation non-numeric fails" {
   // "item-abc" doesn't match `item-${number}`
-  let pattern = @compiler.TemplateLiteralTypeV2::new(
-    ["item-", ""],
-    [@compiler.create_number_type()],
-  )
+  let pattern = @compiler.TemplateLiteralTypeV2::new(["item-", ""], [
+    @compiler.create_number_type(),
+  ])
   let result = @compiler.matches_template_literal_pattern("item-abc", pattern)
   assert_false(result)
 }
@@ -656,10 +634,9 @@ test "unit/template-literal/match - number interpolation non-numeric fails" {
 ///|
 test "unit/template-literal/assign - literal to template with string" {
   // "onClick" is assignable to `on${string}`
-  let pattern = @compiler.TemplateLiteralTypeV2::new(
-    ["on", ""],
-    [@compiler.create_string_type()],
-  )
+  let pattern = @compiler.TemplateLiteralTypeV2::new(["on", ""], [
+    @compiler.create_string_type(),
+  ])
   let source = @compiler.create_literal_string_type("onClick")
   let result = @compiler.is_assignable_to_template_literal(source, pattern)
   assert_true(result)
@@ -668,10 +645,9 @@ test "unit/template-literal/assign - literal to template with string" {
 ///|
 test "unit/template-literal/assign - literal not matching template" {
   // "handleClick" is not assignable to `on${string}`
-  let pattern = @compiler.TemplateLiteralTypeV2::new(
-    ["on", ""],
-    [@compiler.create_string_type()],
-  )
+  let pattern = @compiler.TemplateLiteralTypeV2::new(["on", ""], [
+    @compiler.create_string_type(),
+  ])
   let source = @compiler.create_literal_string_type("handleClick")
   let result = @compiler.is_assignable_to_template_literal(source, pattern)
   assert_false(result)
@@ -680,10 +656,9 @@ test "unit/template-literal/assign - literal not matching template" {
 ///|
 test "unit/template-literal/assign - string to broad template" {
   // string is assignable to `${string}` (broad template)
-  let pattern = @compiler.TemplateLiteralTypeV2::new(
-    ["", ""],
-    [@compiler.create_string_type()],
-  )
+  let pattern = @compiler.TemplateLiteralTypeV2::new(["", ""], [
+    @compiler.create_string_type(),
+  ])
   let source = @compiler.create_string_type()
   let result = @compiler.is_assignable_to_template_literal(source, pattern)
   assert_true(result)
@@ -692,16 +667,13 @@ test "unit/template-literal/assign - string to broad template" {
 ///|
 test "unit/template-literal/assign - union all matching" {
   // "onClick" | "onFocus" is assignable to `on${string}`
-  let pattern = @compiler.TemplateLiteralTypeV2::new(
-    ["on", ""],
-    [@compiler.create_string_type()],
-  )
-  let source = @compiler.create_union_type(
-    [
-      @compiler.create_literal_string_type("onClick"),
-      @compiler.create_literal_string_type("onFocus"),
-    ],
-  )
+  let pattern = @compiler.TemplateLiteralTypeV2::new(["on", ""], [
+    @compiler.create_string_type(),
+  ])
+  let source = @compiler.create_union_type([
+    @compiler.create_literal_string_type("onClick"),
+    @compiler.create_literal_string_type("onFocus"),
+  ])
   let result = @compiler.is_assignable_to_template_literal(source, pattern)
   assert_true(result)
 }
@@ -709,16 +681,13 @@ test "unit/template-literal/assign - union all matching" {
 ///|
 test "unit/template-literal/assign - union partial matching fails" {
   // "onClick" | "handleFocus" is NOT assignable to `on${string}`
-  let pattern = @compiler.TemplateLiteralTypeV2::new(
-    ["on", ""],
-    [@compiler.create_string_type()],
-  )
-  let source = @compiler.create_union_type(
-    [
-      @compiler.create_literal_string_type("onClick"),
-      @compiler.create_literal_string_type("handleFocus"),
-    ],
-  )
+  let pattern = @compiler.TemplateLiteralTypeV2::new(["on", ""], [
+    @compiler.create_string_type(),
+  ])
+  let source = @compiler.create_union_type([
+    @compiler.create_literal_string_type("onClick"),
+    @compiler.create_literal_string_type("handleFocus"),
+  ])
   let result = @compiler.is_assignable_to_template_literal(source, pattern)
   assert_false(result)
 }
@@ -729,28 +698,24 @@ test "unit/template-literal/assign - union partial matching fails" {
 
 ///|
 test "unit/template-literal/compat - same templates are compatible" {
-  let tl1 = @compiler.TemplateLiteralTypeV2::new(
-    ["prefix-", "-suffix"],
-    [@compiler.create_string_type()],
-  )
-  let tl2 = @compiler.TemplateLiteralTypeV2::new(
-    ["prefix-", "-suffix"],
-    [@compiler.create_string_type()],
-  )
+  let tl1 = @compiler.TemplateLiteralTypeV2::new(["prefix-", "-suffix"], [
+    @compiler.create_string_type(),
+  ])
+  let tl2 = @compiler.TemplateLiteralTypeV2::new(["prefix-", "-suffix"], [
+    @compiler.create_string_type(),
+  ])
   let result = @compiler.are_template_literals_compatible(tl1, tl2)
   assert_true(result)
 }
 
 ///|
 test "unit/template-literal/compat - different texts not compatible" {
-  let tl1 = @compiler.TemplateLiteralTypeV2::new(
-    ["prefix-", "-suffix"],
-    [@compiler.create_string_type()],
-  )
-  let tl2 = @compiler.TemplateLiteralTypeV2::new(
-    ["other-", "-suffix"],
-    [@compiler.create_string_type()],
-  )
+  let tl1 = @compiler.TemplateLiteralTypeV2::new(["prefix-", "-suffix"], [
+    @compiler.create_string_type(),
+  ])
+  let tl2 = @compiler.TemplateLiteralTypeV2::new(["other-", "-suffix"], [
+    @compiler.create_string_type(),
+  ])
   let result = @compiler.are_template_literals_compatible(tl1, tl2)
   assert_false(result)
 }
@@ -758,28 +723,25 @@ test "unit/template-literal/compat - different texts not compatible" {
 ///|
 test "unit/template-literal/compat - literal assignable to string position" {
   // `prefix-${"value"}-suffix` compatible with `prefix-${string}-suffix`
-  let tl1 = @compiler.TemplateLiteralTypeV2::new(
-    ["prefix-", "-suffix"],
-    [@compiler.create_literal_string_type("value")],
-  )
-  let tl2 = @compiler.TemplateLiteralTypeV2::new(
-    ["prefix-", "-suffix"],
-    [@compiler.create_string_type()],
-  )
+  let tl1 = @compiler.TemplateLiteralTypeV2::new(["prefix-", "-suffix"], [
+    @compiler.create_literal_string_type("value"),
+  ])
+  let tl2 = @compiler.TemplateLiteralTypeV2::new(["prefix-", "-suffix"], [
+    @compiler.create_string_type(),
+  ])
   let result = @compiler.are_template_literals_compatible(tl1, tl2)
   assert_true(result)
 }
 
 ///|
 test "unit/template-literal/compat - different interpolation count not compatible" {
-  let tl1 = @compiler.TemplateLiteralTypeV2::new(
-    ["a", "b"],
-    [@compiler.create_string_type()],
-  )
-  let tl2 = @compiler.TemplateLiteralTypeV2::new(
-    ["a", "b", "c"],
-    [@compiler.create_string_type(), @compiler.create_string_type()],
-  )
+  let tl1 = @compiler.TemplateLiteralTypeV2::new(["a", "b"], [
+    @compiler.create_string_type(),
+  ])
+  let tl2 = @compiler.TemplateLiteralTypeV2::new(["a", "b", "c"], [
+    @compiler.create_string_type(),
+    @compiler.create_string_type(),
+  ])
   let result = @compiler.are_template_literals_compatible(tl1, tl2)
   assert_false(result)
 }

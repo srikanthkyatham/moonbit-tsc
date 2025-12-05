@@ -50,7 +50,6 @@ fn tokenize_with_template_tracking(
   let mut scan_continuation = false
   let mut code : StringView = source[:]
   let mut prev_token : Token? = None
-
   fn make_loc(
     start_line : Int,
     start_col : Int,
@@ -65,9 +64,7 @@ fn tokenize_with_template_tracking(
 
   // Check for hashbang at file start
   let (hashbang_token, code_after_hashbang) = scan_hashbang_v2(
-    code,
-    state,
-    file_path,
+    code, state, file_path,
   )
   match hashbang_token {
     Some(token) => {
@@ -77,7 +74,6 @@ fn tokenize_with_template_tracking(
     }
     None => ()
   }
-
   while true {
     // After CloseBrace inside template, scan template continuation
     if scan_continuation {
@@ -110,10 +106,9 @@ fn tokenize_with_template_tracking(
           }
           code = rest
         }
-        TemplateScanResultV2::Head(_) => {
+        TemplateScanResultV2::Head(_) =>
           // Should not happen for continuation, but handle gracefully
           abort("Unexpected Head result from template continuation")
-        }
         TemplateScanResultV2::Unterminated(rest) => {
           let loc = make_loc(start_line, start_col, start_offset)
           let token = ScanError("Unterminated template literal.", 1160, loc)
@@ -129,9 +124,7 @@ fn tokenize_with_template_tracking(
 
     // Skip whitespace and check for special comments (JSDoc, directives)
     let (code_after_ws, special_token) = skip_whitespace_with_special_comments_v2(
-      code,
-      state,
-      file_path,
+      code, state, file_path,
     )
     code = code_after_ws
 
@@ -147,10 +140,7 @@ fn tokenize_with_template_tracking(
 
     // Scan single token with context for regex disambiguation
     let (token, rest) = scan_single_token_with_context_v2(
-      code,
-      state,
-      file_path,
-      prev_token,
+      code, state, file_path, prev_token,
     )
     tokens.push(token)
     code = rest
@@ -183,7 +173,6 @@ fn tokenize_with_template_tracking(
       EOF(_) => break
       _ => ()
     }
-
     prev_token = Some(token)
   }
   tokens
@@ -206,7 +195,6 @@ fn tokenize_with_jsx_support(
   let mut prev_token : Token? = None
   let mut jsx_mode : JsxModeV2 = JsxModeV2::Standard
   let jsx_mode_stack : Array[JsxModeV2] = []
-
   fn make_loc(
     start_line : Int,
     start_col : Int,
@@ -233,9 +221,7 @@ fn tokenize_with_jsx_support(
 
   // Check for hashbang at file start
   let (hashbang_token, code_after_hashbang) = scan_hashbang_v2(
-    code,
-    state,
-    file_path,
+    code, state, file_path,
   )
   match hashbang_token {
     Some(token) => {
@@ -245,7 +231,6 @@ fn tokenize_with_jsx_support(
     }
     None => ()
   }
-
   while true {
     // Handle template continuation after CloseBrace
     if scan_template_continuation {
@@ -298,9 +283,7 @@ fn tokenize_with_jsx_support(
       JsxModeV2::Standard => {
         // Skip whitespace and check for special comments (JSDoc, directives)
         let (code_after_ws, special_token) = skip_whitespace_with_special_comments_v2(
-          code,
-          state,
-          file_path,
+          code, state, file_path,
         )
         code = code_after_ws
 
@@ -347,10 +330,7 @@ fn tokenize_with_jsx_support(
           _ => {
             // Regular token scanning with context
             let (token, rest) = scan_single_token_with_context_v2(
-              code,
-              state,
-              file_path,
-              prev_token,
+              code, state, file_path, prev_token,
             )
             tokens.push(token)
             code = rest
@@ -477,14 +457,16 @@ fn tokenize_with_jsx_support(
           }
           _ => {
             // Identifier (tag name or attribute name)
-            let (token, rest) = scan_jsx_identifier(code_after_ws, state, file_path)
+            let (token, rest) = scan_jsx_identifier(
+              code_after_ws, state, file_path,
+            )
             tokens.push(token)
             prev_token = Some(token)
             code = rest
           }
         }
       }
-      JsxModeV2::JsxText => {
+      JsxModeV2::JsxText =>
         // JSX text content between tags
         match code {
           [] => {
@@ -542,7 +524,6 @@ fn tokenize_with_jsx_support(
             code = rest
           }
         }
-      }
       JsxModeV2::JsxExpression => {
         // Inside JSX expression {expr}
         let code_after_ws = skip_whitespace_v2(code, state)
@@ -569,10 +550,7 @@ fn tokenize_with_jsx_support(
           _ => {
             // Regular token inside expression
             let (token, rest) = scan_single_token_with_context_v2(
-              code,
-              state,
-              file_path,
-              prev_token,
+              code, state, file_path, prev_token,
             )
             tokens.push(token)
             code = rest
@@ -613,7 +591,6 @@ fn tokenize_with_jsx_support(
 pub fn tokenize_v2(source : String, file_path : String) -> Array[Token] {
   let tokens : Array[Token] = []
   let state : ScanState = { line: 1, col: 1, offset: 0 }
-
   fn make_loc(
     start_line : Int,
     start_col : Int,

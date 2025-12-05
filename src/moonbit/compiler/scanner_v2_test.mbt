@@ -812,7 +812,9 @@ test "scanner_v2_jsx self-closing element" {
 
 ///|
 test "scanner_v2_jsx with attribute" {
-  let tokens = @compiler.scan_all_v2_jsx("<div class=\"container\"/>", "test.tsx")
+  let tokens = @compiler.scan_all_v2_jsx(
+    "<div class=\"container\"/>", "test.tsx",
+  )
   // Expected: JsxTagOpen Identifier(div) Identifier(class) Equals StringLiteral SlashGreaterThan EOF
   assert_eq(tokens.length(), 7)
   match tokens[0] {
@@ -854,7 +856,9 @@ test "scanner_v2_jsx with attribute" {
 
 ///|
 test "scanner_v2 hashbang" {
-  let tokens = @compiler.scan_all_v2("#!/usr/bin/env node\nconst x = 1;", "test.ts")
+  let tokens = @compiler.scan_all_v2(
+    "#!/usr/bin/env node\nconst x = 1;", "test.ts",
+  )
   // Expected: Hashbang KeywordConst Identifier Equals NumericLiteral Semicolon EOF
   assert_true(tokens.length() >= 7)
   match tokens[0] {
@@ -875,14 +879,15 @@ test "scanner_v2 hashbang" {
 
 ///|
 test "scanner_v2 jsdoc comment" {
-  let tokens = @compiler.scan_all_v2("/** This is JSDoc */\nconst x = 1;", "test.ts")
+  let tokens = @compiler.scan_all_v2(
+    "/** This is JSDoc */\nconst x = 1;", "test.ts",
+  )
   // Expected: JSDocComment KeywordConst Identifier Equals NumericLiteral Semicolon EOF
   assert_true(tokens.length() >= 7)
   match tokens[0] {
-    JSDocComment(content, _) => {
+    JSDocComment(content, _) =>
       // Content should be " This is JSDoc " (without the /** and */)
       assert_true(content.contains("This is JSDoc"))
-    }
     _ => {
       println("Expected JSDocComment, got: \{tokens[0]}")
       assert_true(false)
@@ -920,7 +925,9 @@ test "scanner_v2 ts-ignore directive" {
 
 ///|
 test "scanner_v2 ts-expect-error directive" {
-  let tokens = @compiler.scan_all_v2("// @ts-expect-error some error\nconst x = 1;", "test.ts")
+  let tokens = @compiler.scan_all_v2(
+    "// @ts-expect-error some error\nconst x = 1;", "test.ts",
+  )
   assert_true(tokens.length() >= 7)
   match tokens[0] {
     CommentDirective(kind, arg, _) => {
@@ -942,7 +949,9 @@ test "scanner_v2 ts-expect-error directive" {
 
 ///|
 test "scanner_v2 triple-slash reference directive" {
-  let tokens = @compiler.scan_all_v2("/// <reference path=\"foo.ts\" />\nconst x = 1;", "test.ts")
+  let tokens = @compiler.scan_all_v2(
+    "/// <reference path=\"foo.ts\" />\nconst x = 1;", "test.ts",
+  )
   assert_true(tokens.length() >= 7)
   match tokens[0] {
     CommentDirective(kind, content, _) => {
@@ -964,12 +973,16 @@ test "scanner_v2 triple-slash reference directive" {
 
 ///|
 test "scanner_v2 regular comment skipped" {
-  let tokens = @compiler.scan_all_v2("// This is a regular comment\nconst x = 1;", "test.ts")
+  let tokens = @compiler.scan_all_v2(
+    "// This is a regular comment\nconst x = 1;", "test.ts",
+  )
   // Regular comments should be skipped, first token should be const
   match tokens[0] {
     KeywordConst(_) => ()
     _ => {
-      println("Expected KeywordConst (regular comment should be skipped), got: \{tokens[0]}")
+      println(
+        "Expected KeywordConst (regular comment should be skipped), got: \{tokens[0]}",
+      )
       assert_true(false)
     }
   }
@@ -977,12 +990,16 @@ test "scanner_v2 regular comment skipped" {
 
 ///|
 test "scanner_v2 block comment skipped" {
-  let tokens = @compiler.scan_all_v2("/* This is a block comment */\nconst x = 1;", "test.ts")
+  let tokens = @compiler.scan_all_v2(
+    "/* This is a block comment */\nconst x = 1;", "test.ts",
+  )
   // Regular block comments should be skipped
   match tokens[0] {
     KeywordConst(_) => ()
     _ => {
-      println("Expected KeywordConst (block comment should be skipped), got: \{tokens[0]}")
+      println(
+        "Expected KeywordConst (block comment should be skipped), got: \{tokens[0]}",
+      )
       assert_true(false)
     }
   }

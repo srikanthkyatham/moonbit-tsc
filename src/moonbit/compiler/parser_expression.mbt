@@ -154,7 +154,7 @@ fn try_parse_arrow_function(parser : Parser) -> Result[(Node, Parser), Parser] {
   // Check for line terminator before arrow (TS1200)
   let arrow_loc = current_token(parser).location()
   let parser = match current_token(parser) {
-    Arrow(_) => {
+    Arrow(_) =>
       // Check for line terminator before arrow
       if has_line_terminator_before_current(parser) {
         let parser = add_error_with_code(
@@ -168,7 +168,6 @@ fn try_parse_arrow_function(parser : Parser) -> Result[(Node, Parser), Parser] {
       } else {
         advance_parser(parser)
       }
-    }
     _ => return Err(original_parser)
   }
 
@@ -203,7 +202,7 @@ fn try_parse_single_param_arrow_function(
   // Check for line terminator before arrow (TS1200)
   let arrow_loc = current_token(parser).location()
   let parser = match current_token(parser) {
-    Arrow(_) => {
+    Arrow(_) =>
       // Check for line terminator before arrow
       if has_line_terminator_before_current(parser) {
         let parser = add_error_with_code(
@@ -217,7 +216,6 @@ fn try_parse_single_param_arrow_function(
       } else {
         advance_parser(parser)
       }
-    }
     _ => return Err(original_parser)
   }
 
@@ -450,7 +448,10 @@ fn parse_unary_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
                   // Has explicit arguments
                   let parser = advance_parser(parser)
                   let (arguments, parser) = parse_argument_list(parser)
-                  (make_new_expression(expr, Some(arguments), start_loc), parser)
+                  (
+                    make_new_expression(expr, Some(arguments), start_loc),
+                    parser,
+                  )
                 }
                 _ =>
                   // No arguments (e.g., new Date)
@@ -514,7 +515,9 @@ fn parse_unary_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
 ///|
 /// Parse template spans (the interpolated parts of a template literal)
 /// This is used for templates like `head${expr1}middle${expr2}tail`
-fn parse_template_spans(parser : Parser) -> Result[(Array[TemplateSpan], Parser), Parser] {
+fn parse_template_spans(
+  parser : Parser,
+) -> Result[(Array[TemplateSpan], Parser), Parser] {
   let template_spans : Array[TemplateSpan] = []
   let mut current_parser = parser
   while true {
@@ -546,10 +549,25 @@ fn parse_template_spans(parser : Parser) -> Result[(Array[TemplateSpan], Parser)
                 current_parser = advance_parser(current_parser)
                 // Continue loop to parse next expression
               }
-              _ => return Err(add_error(current_parser, "Unexpected token", current_token(current_parser).location()))
+              _ =>
+                return Err(
+                  add_error(
+                    current_parser,
+                    "Unexpected token",
+                    current_token(current_parser).location(),
+                  ),
+                )
             }
           }
-          _ => return Err(add_error_with_code(current_parser, ExpectedCloseBrace.to_message(), current_token(current_parser).location(), ExpectedCloseBrace))
+          _ =>
+            return Err(
+              add_error_with_code(
+                current_parser,
+                ExpectedCloseBrace.to_message(),
+                current_token(current_parser).location(),
+                ExpectedCloseBrace,
+              ),
+            )
         }
       }
       Err(p) => return Err(p)
@@ -629,7 +647,9 @@ fn continue_postfix_expression(
                 parser = advance_parser(next_parser)
                 let (arguments, next_parser) = parse_argument_list(parser)
                 parser = next_parser
-                left = make_call_expression(left, type_args, arguments, start_loc)
+                left = make_call_expression(
+                  left, type_args, arguments, start_loc,
+                )
               }
               _ => {
                 // Not a generic call, backtrack
@@ -764,7 +784,9 @@ fn continue_postfix_expression(
 ///|
 /// Parse member expression for new expression target (property access, element access, but NOT calls)
 /// This is used for parsing the target of `new` expressions
-fn parse_member_expression_for_new(parser : Parser) -> Result[(Node, Parser), Parser] {
+fn parse_member_expression_for_new(
+  parser : Parser,
+) -> Result[(Node, Parser), Parser] {
   let (left_val, parser_val) = match parse_primary_expression(parser) {
     Ok((expr, p)) => (expr, p)
     Err(p) => return Err(p)
@@ -830,7 +852,9 @@ fn parse_member_expression_for_new(parser : Parser) -> Result[(Node, Parser), Pa
               TemplateLiteral(value, loc) => {
                 let start_loc = get_location(left)
                 parser = advance_parser(next_parser)
-                left = make_simple_tagged_template(left, value, loc, type_args, start_loc)
+                left = make_simple_tagged_template(
+                  left, value, loc, type_args, start_loc,
+                )
               }
               // Tagged template with interpolation and type arguments: tag<T>`head${expr}...`
               TemplateHead(head, loc) => {
@@ -839,7 +863,9 @@ fn parse_member_expression_for_new(parser : Parser) -> Result[(Node, Parser), Pa
                 match parse_template_spans(parser) {
                   Ok((template_spans, p)) => {
                     parser = p
-                    left = make_interpolated_tagged_template(left, head, template_spans, loc, type_args, start_loc)
+                    left = make_interpolated_tagged_template(
+                      left, head, template_spans, loc, type_args, start_loc,
+                    )
                   }
                   Err(p) => return Err(p)
                 }
@@ -871,7 +897,14 @@ fn parse_member_expression_for_new(parser : Parser) -> Result[(Node, Parser), Pa
         match parse_template_spans(parser) {
           Ok((template_spans, p)) => {
             parser = p
-            left = make_interpolated_tagged_template(left, head, template_spans, loc, [], start_loc)
+            left = make_interpolated_tagged_template(
+              left,
+              head,
+              template_spans,
+              loc,
+              [],
+              start_loc,
+            )
           }
           Err(p) => return Err(p)
         }
@@ -919,7 +952,9 @@ fn parse_postfix_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
               TemplateLiteral(value, loc) => {
                 let start_loc = get_location(left)
                 parser = advance_parser(next_parser)
-                left = make_simple_tagged_template(left, value, loc, type_args, start_loc)
+                left = make_simple_tagged_template(
+                  left, value, loc, type_args, start_loc,
+                )
               }
               // Tagged template with interpolation and type arguments: tag<T>`head${expr}...`
               TemplateHead(head, loc) => {
@@ -928,7 +963,9 @@ fn parse_postfix_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
                 match parse_template_spans(parser) {
                   Ok((template_spans, p)) => {
                     parser = p
-                    left = make_interpolated_tagged_template(left, head, template_spans, loc, type_args, start_loc)
+                    left = make_interpolated_tagged_template(
+                      left, head, template_spans, loc, type_args, start_loc,
+                    )
                   }
                   Err(p) => return Err(p)
                 }
@@ -1136,12 +1173,18 @@ fn parse_postfix_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
         match parse_template_spans(parser) {
           Ok((template_spans, p)) => {
             parser = p
-            left = make_interpolated_tagged_template(left, head, template_spans, loc, [], start_loc)
+            left = make_interpolated_tagged_template(
+              left,
+              head,
+              template_spans,
+              loc,
+              [],
+              start_loc,
+            )
           }
           Err(p) => return Err(p)
         }
       }
-
       _ => should_continue = false
     }
   }
@@ -1518,7 +1561,6 @@ fn parse_primary_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
     // Dynamic import expression: import('./module') or import.meta
     KeywordImport(start_loc) => {
       let parser = advance_parser(parser) // consume 'import'
-
       match current_token(parser) {
         // import.meta
         Dot(_) => {
@@ -1612,15 +1654,7 @@ fn parse_primary_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
           advance_parser(parser),
         ),
       )
-
-    _ =>
-      Err(
-        add_error(
-          parser,
-          "Unexpected token",
-          token.location(),
-        ),
-      )
+    _ => Err(add_error(parser, "Unexpected token", token.location()))
   }
 }
 

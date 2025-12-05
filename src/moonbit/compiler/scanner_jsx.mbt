@@ -4,10 +4,7 @@
 ///|
 /// Check if character can start a JSX tag name
 fn is_jsx_tag_start(ch : Char) -> Bool {
-  (ch >= 'a' && ch <= 'z') ||
-  (ch >= 'A' && ch <= 'Z') ||
-  ch == '_' ||
-  ch == '$'
+  (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || ch == '_' || ch == '$'
 }
 
 ///|
@@ -21,7 +18,6 @@ fn scan_jsx_text_v2(
   let start_col = state.col
   let start_offset = state.offset
   let text = StringBuilder::new()
-
   let rest = loop code {
     [] as remaining => remaining
     ['<' | '{', ..] as remaining => remaining // End of text
@@ -39,7 +35,6 @@ fn scan_jsx_text_v2(
       continue rest
     }
   }
-
   let loc = SourceLocation::new(
     file_path,
     Position::new(start_line, start_col, start_offset),
@@ -59,7 +54,6 @@ fn scan_jsx_identifier(
   let start_col = state.col
   let start_offset = state.offset
   let ident = StringBuilder::new()
-
   let rest = loop code {
     ['a'..='z' | 'A'..='Z' | '0'..='9' | '_' | '$' | '-' as ch, .. rest] => {
       ident.write_char(ch)
@@ -69,7 +63,6 @@ fn scan_jsx_identifier(
     }
     remaining => remaining
   }
-
   let loc = SourceLocation::new(
     file_path,
     Position::new(start_line, start_col, start_offset),

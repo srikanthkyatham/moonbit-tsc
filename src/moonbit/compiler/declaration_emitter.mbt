@@ -245,7 +245,10 @@ pub fn type_v2_to_ts_string(ty : TypeV2) -> String {
         MappedModifierV2::Remove => output = output + "-?"
         MappedModifierV2::Unchanged => ()
       }
-      output = output + ": " + type_v2_to_ts_string(mapped.template_type) + "; }"
+      output = output +
+        ": " +
+        type_v2_to_ts_string(mapped.template_type) +
+        "; }"
       output
     }
     // Indexed access type
@@ -310,7 +313,9 @@ fn type_v2_object_to_ts_string(obj : ObjectTypeV2) -> String {
         TSymbol => "symbol"
         _ => "string"
       }
-      parts.push("[key: " + key_type + "]: " + type_v2_to_ts_string(idx.value_type))
+      parts.push(
+        "[key: " + key_type + "]: " + type_v2_to_ts_string(idx.value_type),
+      )
     }
     None => ()
   }
@@ -372,12 +377,11 @@ fn merge_interface_declarations(
   let other_statements : Array[Node] = []
   for stmt in statements {
     match stmt {
-      InterfaceDeclaration(iface) => {
+      InterfaceDeclaration(iface) =>
         match interface_map.get(iface.name) {
           Some(arr) => arr.push(iface)
           None => interface_map.set(iface.name, [iface])
         }
-      }
       _ => other_statements.push(stmt)
     }
   }
@@ -399,7 +403,9 @@ fn merge_interface_declarations(
 
 ///|
 /// Merge multiple interface declarations into one
-fn merge_interfaces(interfaces : Array[InterfaceDeclaration]) -> InterfaceDeclaration {
+fn merge_interfaces(
+  interfaces : Array[InterfaceDeclaration],
+) -> InterfaceDeclaration {
   // Use first interface as base
   let base = interfaces[0]
   let merged_members : Array[Node] = []
@@ -483,11 +489,14 @@ fn emit_flattened_export(
         None => spec_name
       }
       match env.lookup(lookup_name) {
-        Some(ty) => {
+        Some(ty) =>
           // Emit as type alias for the exported type
-          indent + "export type " + spec_name + " = " + type_v2_to_ts_string(ty) +
+          indent +
+          "export type " +
+          spec_name +
+          " = " +
+          type_v2_to_ts_string(ty) +
           ";"
-        }
         None =>
           // Fall back to regular export
           indent + "export { " + spec_name + " };"
@@ -511,7 +520,11 @@ fn extract_base_type_name(type_name : String) -> String {
     }
     result = result + c.to_string()
   }
-  if result.length() == 0 { type_name } else { result }
+  if result.length() == 0 {
+    type_name
+  } else {
+    result
+  }
 }
 
 ///|
@@ -610,7 +623,7 @@ fn filter_imports_for_declaration(
   let other_statements : Array[Node] = []
   for stmt in statements {
     match stmt {
-      ImportDeclaration(imp) => {
+      ImportDeclaration(imp) =>
         // Keep type-only imports as-is
         if is_type_only_import(imp) {
           kept_imports.push(imp)
@@ -621,10 +634,7 @@ fn filter_imports_for_declaration(
               let mut has_used = false
               // Check default import
               match clause.name {
-                Some(name) =>
-                  if used_types.contains(name) {
-                    has_used = true
-                  }
+                Some(name) => if used_types.contains(name) { has_used = true }
                 None => ()
               }
               // Check named imports
@@ -648,7 +658,6 @@ fn filter_imports_for_declaration(
             None => ()
           }
         }
-      }
       _ => other_statements.push(stmt)
     }
   }
@@ -664,11 +673,22 @@ fn filter_imports_for_declaration(
 fn should_inline_type_alias(ty : TypeV2) -> Bool {
   match ty {
     // Primitives are always inlinable
-    TNumber | TString | TBoolean | TNull | TUndefined | TVoid | TNever | TAny |
-    TUnknown | TSymbol | TBigInt => true
+    TNumber
+    | TString
+    | TBoolean
+    | TNull
+    | TUndefined
+    | TVoid
+    | TNever
+    | TAny
+    | TUnknown
+    | TSymbol
+    | TBigInt => true
     // Literals are inlinable
-    TLiteralString(_) | TLiteralNumber(_) | TLiteralBool(_) |
-    TLiteralBigInt(_) => true
+    TLiteralString(_)
+    | TLiteralNumber(_)
+    | TLiteralBool(_)
+    | TLiteralBigInt(_) => true
     // Small unions (up to 3 members) can be inlined
     TUnion(types) => types.length() <= 3
     // Type params should not be inlined
@@ -1632,7 +1652,10 @@ fn emit_decl_template_literal_type(
 ) -> String {
   let mut output = "`" + tlt.head
   for span in tlt.spans {
-    output = output + dollar_brace() + emit_decl_type_node(span.type_node, ctx) + "}" +
+    output = output +
+      dollar_brace() +
+      emit_decl_type_node(span.type_node, ctx) +
+      "}" +
       span.literal
   }
   output + "`"
@@ -1688,7 +1711,8 @@ fn emit_decl_type_literal_property(
     output = output + "?"
   }
   match prop.type_node {
-    Some(type_node) => output = output + ": " + emit_decl_type_node(type_node, ctx)
+    Some(type_node) =>
+      output = output + ": " + emit_decl_type_node(type_node, ctx)
     None => ()
   }
   output
@@ -1704,8 +1728,12 @@ fn emit_decl_index_signature_inline(
   if idx.is_readonly {
     output = output + "readonly "
   }
-  output = output + "[" + idx.parameter_name + ": " +
-    emit_decl_type_node(idx.parameter_type, ctx) + "]: " +
+  output = output +
+    "[" +
+    idx.parameter_name +
+    ": " +
+    emit_decl_type_node(idx.parameter_type, ctx) +
+    "]: " +
     emit_decl_type_node(idx.return_type, ctx)
   output
 }
@@ -1854,7 +1882,6 @@ fn emit_decl_mapped_type(
     MappedTypeModifier::Minus => output = output + "-readonly "
     MappedTypeModifier::Unchanged => ()
   }
-
   output = output + "[" + mapped.type_parameter.name + " in "
   match mapped.type_parameter.constraint {
     Some(constraint) => output = output + emit_decl_type_node(constraint, ctx)
@@ -1867,7 +1894,6 @@ fn emit_decl_mapped_type(
       output = output + " as " + emit_decl_type_node(name_type, ctx)
     None => ()
   }
-
   output = output + "]"
 
   // Emit optional modifier
@@ -1876,7 +1902,6 @@ fn emit_decl_mapped_type(
     MappedTypeModifier::Minus => output = output + "-?"
     MappedTypeModifier::Unchanged => ()
   }
-
   match mapped.type_node {
     Some(type_node) =>
       output = output + ": " + emit_decl_type_node(type_node, ctx)
@@ -1903,6 +1928,8 @@ fn emit_decl_expression(node : Node) -> String {
 }
 
 // Suppress warnings for functions reserved for future use
+
+///|
 fn init {
   ignore(collect_reexports)
   ignore(emit_flattened_export)

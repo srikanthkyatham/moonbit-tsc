@@ -10,13 +10,12 @@ fn inspect_diagnostics(source : String) -> String {
       match @compiler.bind_source_file(source_file) {
         Ok(bound) =>
           match @compiler.check_source_file(bound) {
-            Ok(typed) => {
+            Ok(typed) =>
               if typed.diagnostics.length() > 0 {
                 format_all_diagnostics(typed.diagnostics)
               } else {
                 "OK: No errors"
               }
-            }
             Err(diagnostics) => format_all_diagnostics(diagnostics)
           }
         Err(diagnostics) => format_all_diagnostics(diagnostics)
@@ -75,15 +74,16 @@ test "inspect/complex - deeply nested object type mismatch" {
     #|};
   let result = inspect_diagnostics(source)
   println(result)
-  inspect(result, content=(
-    
-    #|Found 3 diagnostic(s):
-    #|[1] TS2322: Type 'string' is not assignable to type 'number' at employees[element].age (line 16)
-    #|[2] TS2322: Type 'string' is not assignable to type 'number' at employees[element].address.zipCode (line 16)
-    #|[3] TS2322: Type 'number' is not assignable to type 'string' at headquarters.street (line 16)
-    #|
-
-  ))
+  inspect(
+    result,
+    content=(
+      #|Found 3 diagnostic(s):
+      #|[1] TS2322: Type 'string' is not assignable to type 'number' at employees[element].age (line 16)
+      #|[2] TS2322: Type 'string' is not assignable to type 'number' at employees[element].address.zipCode (line 16)
+      #|[3] TS2322: Type 'number' is not assignable to type 'string' at headquarters.street (line 16)
+      #|
+    ),
+  )
 }
 
 ///|
@@ -132,10 +132,13 @@ test "inspect/complex - function signature with multiple param mismatches" {
   let result = inspect_diagnostics(source)
   println(result)
   // Now correctly detects type errors in function arguments
-  inspect(result, content=
-    #|Found 1 diagnostic(s):
-    #|[1] TS2769: No overload matches this call. Arguments: (number, string, object, function) (line 14)
-    #|
+  inspect(
+    result,
+    content=(
+      #|Found 1 diagnostic(s):
+      #|[1] TS2769: No overload matches this call. Arguments: (number, string, object, function) (line 14)
+      #|
+    ),
   )
 }
 
@@ -156,11 +159,11 @@ test "inspect/complex - union of object types with discriminant mismatch" {
   // tsc correctly errors: Type '"hexagon"' is not assignable to type '"square" | "triangle" | "circle"'
   inspect(
     result,
-    content=
+    content=(
       #|Found 1 diagnostic(s):
       #|[1] TS2322: Type 'string' is not assignable to discriminant property 'kind'. Expected one of: 'circle' | 'square' | 'triangle' (line 6)
       #|
-    ,
+    ),
   )
 }
 
@@ -202,11 +205,11 @@ test "inspect/complex - mapped type with readonly violation" {
   // Now correctly errors with TS2540 for readonly violation
   inspect(
     result,
-    content=
+    content=(
       #|Found 1 diagnostic(s):
       #|[1] TS2540: Cannot assign to 'x' because it is a readonly property. (line 4)
       #|
-    ,
+    ),
   )
 }
 
@@ -280,12 +283,15 @@ test "inspect/complex - index signature constraint violation" {
     #|};
   let result = inspect_diagnostics(source)
   println(result)
-  inspect(result, content=(
-    #|Found 2 diagnostic(s):
-    #|[1] TS2322: Property 'b' of type 'number' is not assignable to index signature type 'string' (line 4)
-    #|[2] TS2322: Property 'c' of type 'boolean' is not assignable to index signature type 'string' (line 4)
-    #|
-  ))
+  inspect(
+    result,
+    content=(
+      #|Found 2 diagnostic(s):
+      #|[1] TS2322: Property 'b' of type 'number' is not assignable to index signature type 'string' (line 4)
+      #|[2] TS2322: Property 'c' of type 'boolean' is not assignable to index signature type 'string' (line 4)
+      #|
+    ),
+  )
 }
 
 ///|
@@ -298,10 +304,13 @@ test "inspect/complex - rest parameter type mismatch" {
   let result = inspect_diagnostics(source)
   println(result)
   // Now correctly detects type errors in rest parameters
-  inspect(result, content=
-    #|Found 1 diagnostic(s):
-    #|[1] TS2769: No overload matches this call. Arguments: (number, number, string, number, boolean) (line 4)
-    #|
+  inspect(
+    result,
+    content=(
+      #|Found 1 diagnostic(s):
+      #|[1] TS2769: No overload matches this call. Arguments: (number, number, string, number, boolean) (line 4)
+      #|
+    ),
   )
 }
 
@@ -319,11 +328,11 @@ test "inspect/complex - overloaded function with no matching signature" {
   // Now correctly detects no matching overload (aligned with tsc - only 1 error)
   inspect(
     result,
-    content=
+    content=(
       #|Found 1 diagnostic(s):
       #|[1] TS2769: No overload matches this call. Arguments: (boolean) (line 6)
       #|
-    ,
+    ),
   )
 }
 
@@ -344,9 +353,7 @@ test "inspect/complex - class implementing interface with wrong method signature
     #|}
   let result = inspect_diagnostics(source)
   println(result)
-  inspect(result, content=(
-    "OK: No errors"
-  ))
+  inspect(result, content="OK: No errors")
 }
 
 ///|
@@ -368,12 +375,14 @@ test "inspect/basic - simple string to number" {
   let source = "const x: number = \"hello\";"
   let result = inspect_diagnostics(source)
   println(result)
-  inspect(result, content=(
-    
-    #|Found 1 diagnostic(s):
-    #|[1] TS2322: Type 'string' is not assignable to type 'number' (line 1)
-    #|
-  ))
+  inspect(
+    result,
+    content=(
+      #|Found 1 diagnostic(s):
+      #|[1] TS2322: Type 'string' is not assignable to type 'number' (line 1)
+      #|
+    ),
+  )
 }
 
 ///|
@@ -381,12 +390,14 @@ test "inspect/basic - boolean to number" {
   let source = "const x: number = true;"
   let result = inspect_diagnostics(source)
   println(result)
-  inspect(result, content=(
-    
-    #|Found 1 diagnostic(s):
-    #|[1] TS2322: Type 'boolean' is not assignable to type 'number' (line 1)
-    #|
-  ))
+  inspect(
+    result,
+    content=(
+      #|Found 1 diagnostic(s):
+      #|[1] TS2322: Type 'boolean' is not assignable to type 'number' (line 1)
+      #|
+    ),
+  )
 }
 
 ///|
@@ -394,12 +405,14 @@ test "inspect/basic - union type mismatch" {
   let source = "const x: string | number = true;"
   let result = inspect_diagnostics(source)
   println(result)
-  inspect(result, content=(
-
-    #|Found 1 diagnostic(s):
-    #|[1] TS2322: Type 'boolean' is not assignable to type 'string | number' (line 1)
-    #|
-  ))
+  inspect(
+    result,
+    content=(
+      #|Found 1 diagnostic(s):
+      #|[1] TS2322: Type 'boolean' is not assignable to type 'string | number' (line 1)
+      #|
+    ),
+  )
 }
 
 ///|

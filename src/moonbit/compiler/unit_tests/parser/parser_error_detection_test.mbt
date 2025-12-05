@@ -14,7 +14,10 @@ fn parse_and_get_errors(source : String) -> Array[@compiler.Diagnostic] {
 
 ///|
 /// Helper to check if any diagnostic has a specific error code
-fn has_error_code(diagnostics : Array[@compiler.Diagnostic], code : Int) -> Bool {
+fn has_error_code(
+  diagnostics : Array[@compiler.Diagnostic],
+  code : Int,
+) -> Bool {
   for diag in diagnostics {
     if diag.code == code {
       return true
@@ -27,7 +30,7 @@ fn has_error_code(diagnostics : Array[@compiler.Diagnostic], code : Int) -> Bool
 /// Helper to check if any diagnostic contains a specific message substring
 fn has_error_message(
   diagnostics : Array[@compiler.Diagnostic],
-  substring : String
+  substring : String,
 ) -> Bool {
   for diag in diagnostics {
     if diag.message.contains(substring) {
@@ -56,7 +59,9 @@ test "parser error detection - TS1049 rest parameter cannot have initializer" {
   let source = "function foo(...args = []) { }"
   let errors = parse_and_get_errors(source)
   assert_true(has_error_code(errors, 1049))
-  assert_true(has_error_message(errors, "rest parameter cannot have an initializer"))
+  assert_true(
+    has_error_message(errors, "rest parameter cannot have an initializer"),
+  )
 }
 
 ///|
@@ -111,7 +116,9 @@ test "parser error detection - TS1095 set accessor must have one parameter" {
     #|}
   let errors = parse_and_get_errors(source)
   assert_true(has_error_code(errors, 1095))
-  assert_true(has_error_message(errors, "set' accessor must have exactly one parameter"))
+  assert_true(
+    has_error_message(errors, "set' accessor must have exactly one parameter"),
+  )
 }
 
 ///|
@@ -123,7 +130,9 @@ test "parser error detection - TS1095 set accessor too many parameters" {
     #|}
   let errors = parse_and_get_errors(source)
   assert_true(has_error_code(errors, 1095))
-  assert_true(has_error_message(errors, "set' accessor must have exactly one parameter"))
+  assert_true(
+    has_error_message(errors, "set' accessor must have exactly one parameter"),
+  )
 }
 
 ///|
@@ -135,7 +144,9 @@ test "parser error detection - TS1093 set accessor cannot have return type" {
     #|}
   let errors = parse_and_get_errors(source)
   assert_true(has_error_code(errors, 1093))
-  assert_true(has_error_message(errors, "set' accessor cannot have a return type"))
+  assert_true(
+    has_error_message(errors, "set' accessor cannot have a return type"),
+  )
 }
 
 // ============================================================================
@@ -413,7 +424,11 @@ test "parser error detection - TS1432 decorator after export" {
   let source = "export @decorator class Foo { }"
   let errors = parse_and_get_errors(source)
   assert_true(has_error_code(errors, 1432))
-  assert_true(has_error_message(errors, "Decorators must precede the name and all keywords"))
+  assert_true(
+    has_error_message(
+      errors, "Decorators must precede the name and all keywords",
+    ),
+  )
 }
 
 ///|
@@ -539,10 +554,8 @@ test "parser error detection - TS4092 set accessor with rest parameter" {
   // that may be implemented later in the type checker
   if errors.length() > 0 {
     // If errors detected, verify they are the expected ones or a general error
-    let has_relevant_error = has_error_code(errors, 4092) || has_error_code(
-        errors,
-        1095,
-      )
+    let has_relevant_error = has_error_code(errors, 4092) ||
+      has_error_code(errors, 1095)
     // Either we have the relevant error, or parsing failed with another error
     // which is acceptable during development
     ignore(has_relevant_error)
@@ -574,10 +587,8 @@ test "parser error detection - TS4094/TS1094 get accessor with parameters" {
     #|}
   let errors = parse_and_get_errors(source)
   // Should detect either TS1094 (parser error) or TS4094 (build error)
-  let has_relevant_error = has_error_code(errors, 1094) || has_error_code(
-      errors,
-      4094,
-    )
+  let has_relevant_error = has_error_code(errors, 1094) ||
+    has_error_code(errors, 4094)
   assert_true(has_relevant_error)
 }
 
@@ -607,10 +618,8 @@ test "parser error detection - TS4097/TS1095 set accessor no parameters" {
     #|}
   let errors = parse_and_get_errors(source)
   // Should detect either TS1095 (parser error) or TS4097 (build error)
-  let has_relevant_error = has_error_code(errors, 1095) || has_error_code(
-      errors,
-      4097,
-    )
+  let has_relevant_error = has_error_code(errors, 1095) ||
+    has_error_code(errors, 4097)
   assert_true(has_relevant_error)
 }
 
@@ -622,10 +631,8 @@ test "parser error detection - TS4097/TS1095 set accessor multiple parameters" {
     #|  set value(a, b) { }
     #|}
   let errors = parse_and_get_errors(source)
-  let has_relevant_error = has_error_code(errors, 1095) || has_error_code(
-      errors,
-      4097,
-    )
+  let has_relevant_error = has_error_code(errors, 1095) ||
+    has_error_code(errors, 4097)
   assert_true(has_relevant_error)
 }
 
@@ -976,10 +983,8 @@ test "parser error detection - JSX closing tag mismatch" {
   let errors = parse_and_get_errors(source)
   // Should detect JSX closing tag mismatch or TS2857
   if errors.length() > 0 {
-    let has_jsx_error = has_error_code(errors, 2857) || has_error_message(
-        errors,
-        "closing",
-      )
+    let has_jsx_error = has_error_code(errors, 2857) ||
+      has_error_message(errors, "closing")
     ignore(has_jsx_error)
   }
 }
@@ -1103,10 +1108,8 @@ test "parser error detection - TS2324 property missing" {
   // Type checker error
   if has_error_code(errors, 2324) || has_error_code(errors, 2741) {
     assert_true(
-      has_error_message(errors, "missing") || has_error_message(
-        errors,
-        "required",
-      ),
+      has_error_message(errors, "missing") ||
+      has_error_message(errors, "required"),
     )
   }
 }
@@ -1495,10 +1498,8 @@ test "parser error detection - TS2461 rest not last in destructuring" {
   let errors = parse_and_get_errors(source)
   // Should detect rest element not last
   if errors.length() > 0 {
-    let has_rest_error = has_error_code(errors, 2461) || has_error_code(
-        errors,
-        1014,
-      )
+    let has_rest_error = has_error_code(errors, 2461) ||
+      has_error_code(errors, 1014)
     ignore(has_rest_error)
   }
 }
@@ -1684,10 +1685,8 @@ test "parser error detection - TS2767 getter with this parameter" {
   let errors = parse_and_get_errors(source)
   // Should detect 'this' in getter - or TS1094 (no params)
   if errors.length() > 0 {
-    let has_relevant_error = has_error_code(errors, 2767) || has_error_code(
-        errors,
-        1094,
-      )
+    let has_relevant_error = has_error_code(errors, 2767) ||
+      has_error_code(errors, 1094)
     ignore(has_relevant_error)
   }
 }
@@ -1754,7 +1753,9 @@ test "parser error detection - TS1092 type params on constructor" {
     #|}
   let errors = parse_and_get_errors(source)
   assert_true(has_error_code(errors, 1092))
-  assert_true(has_error_message(errors, "Type parameters cannot appear on a constructor"))
+  assert_true(
+    has_error_message(errors, "Type parameters cannot appear on a constructor"),
+  )
 }
 
 ///|
@@ -1942,6 +1943,8 @@ test "parser error detection - TS2452 enum numeric member name detected" {
 }
 
 // Helper function to count occurrences of an error code
+
+///|
 fn count_error_code(errors : Array[@compiler.Diagnostic], code : Int) -> Int {
   let mut count = 0
   for err in errors {

@@ -35,7 +35,9 @@ pub fn get_accessibility(modifiers : Array[Modifier]) -> Accessibility {
 ///|
 /// Check if a modifier list contains 'static'
 pub fn is_static_modifier(modifiers : Array[Modifier]) -> Bool {
-  modifiers.iter().any(fn(m) {
+  modifiers
+  .iter()
+  .any(fn(m) {
     match m {
       Static => true
       _ => false
@@ -46,7 +48,9 @@ pub fn is_static_modifier(modifiers : Array[Modifier]) -> Bool {
 ///|
 /// Check if a modifier list contains 'abstract'
 pub fn is_abstract_modifier(modifiers : Array[Modifier]) -> Bool {
-  modifiers.iter().any(fn(m) {
+  modifiers
+  .iter()
+  .any(fn(m) {
     match m {
       Abstract => true
       _ => false
@@ -57,14 +61,15 @@ pub fn is_abstract_modifier(modifiers : Array[Modifier]) -> Bool {
 ///|
 /// Check if a modifier list contains 'readonly'
 pub fn is_readonly_modifier(modifiers : Array[Modifier]) -> Bool {
-  modifiers.iter().any(fn(m) {
+  modifiers
+  .iter()
+  .any(fn(m) {
     match m {
       Readonly => true
       _ => false
     }
   })
 }
-
 
 // ============================================================================
 // Class Member Info
@@ -95,7 +100,16 @@ pub fn ClassMemberInfo::new(
   is_optional : Bool,
   declared_in : String,
 ) -> ClassMemberInfo {
-  { name, ty, accessibility, is_static, is_abstract, is_readonly, is_optional, declared_in }
+  {
+    name,
+    ty,
+    accessibility,
+    is_static,
+    is_abstract,
+    is_readonly,
+    is_optional,
+    declared_in,
+  }
 }
 
 // ============================================================================
@@ -170,7 +184,8 @@ pub fn check_member_access(
                 expected: TAny,
                 actual: member_info.ty,
                 reason: PrivateMemberAccess(
-                  member_info.name, member_info.declared_in,
+                  member_info.name,
+                  member_info.declared_in,
                 ),
                 children: [],
                 suggestions: [
@@ -200,7 +215,8 @@ pub fn check_member_access(
                 expected: TAny,
                 actual: member_info.ty,
                 reason: ProtectedMemberAccess(
-                  member_info.name, member_info.declared_in,
+                  member_info.name,
+                  member_info.declared_in,
                 ),
                 children: [],
                 suggestions: [
@@ -235,8 +251,7 @@ pub fn check_abstract_class_instantiation(
         reason: AbstractClassInstantiation(class_info.name),
         children: [],
         suggestions: [
-          "Cannot create an instance of an abstract class.",
-          "Create a concrete subclass that implements all abstract members.",
+          "Cannot create an instance of an abstract class.", "Create a concrete subclass that implements all abstract members.",
         ],
       },
     ]
@@ -255,7 +270,6 @@ pub fn check_abstract_members_implemented(
   if class_info.is_abstract {
     return []
   }
-
   let errors : Array[TypeMismatchError] = []
 
   // Check each base class member
@@ -302,7 +316,6 @@ pub fn check_abstract_members_implemented(
       }
     }
   }
-
   errors
 }
 
@@ -337,9 +350,12 @@ pub fn check_method_override(
 
   // Check parameters - contravariant (derived can be wider)
   // Also, derived must accept at least as many parameters
-  let base_required = base_method.params.filter(fn(p) { not(p.optional) }).length()
-  let derived_required = derived_method.params.filter(fn(p) { not(p.optional) }).length()
-
+  let base_required = base_method.params
+    .filter(fn(p) { not(p.optional) })
+    .length()
+  let derived_required = derived_method.params
+    .filter(fn(p) { not(p.optional) })
+    .length()
   if derived_required > base_required {
     errors.push(TypeMismatchError::{
       path: PRoot,
@@ -375,7 +391,6 @@ pub fn check_method_override(
       }
     }
   }
-
   errors
 }
 
@@ -388,7 +403,6 @@ pub fn check_override_accessibility(
   // Cannot make a member more restrictive than base
   let base_level = accessibility_level(base_member.accessibility)
   let derived_level = accessibility_level(derived_member.accessibility)
-
   if derived_level < base_level {
     [
       TypeMismatchError::{
@@ -503,16 +517,23 @@ pub fn build_class_info(
   }
 
   // Process heritage clauses
-  let class_info = process_heritage_clauses(env, class_info, cd.heritage_clauses)
+  let class_info = process_heritage_clauses(
+    env,
+    class_info,
+    cd.heritage_clauses,
+  )
 
   // Process class members
-  let (class_info, member_errors) = process_class_members(env, class_info, cd.members)
+  let (class_info, member_errors) = process_class_members(
+    env,
+    class_info,
+    cd.members,
+  )
   errors.append(member_errors)
 
   // Build the object type
   let object_type = build_class_object_type(class_info)
-  let class_info = { ..class_info, object_type }
-
+  let class_info = { ..class_info, object_type, }
   { class_info, errors }
 }
 
@@ -524,7 +545,6 @@ fn process_heritage_clauses(
   clauses : Array[HeritageClause],
 ) -> ClassTypeInfo {
   let mut result = class_info
-
   for clause in clauses {
     match clause.kind {
       Extends =>
@@ -532,7 +552,7 @@ fn process_heritage_clauses(
         if clause.types.length() > 0 {
           let base = clause.types[0]
           match base {
-            TypeReference(tr) => {
+            TypeReference(tr) =>
               result = {
                 ..result,
                 base_class: Some(tr.type_name),
@@ -540,7 +560,6 @@ fn process_heritage_clauses(
                   ast_type_to_v2(env, ta)
                 }),
               }
-            }
             _ => ()
           }
         }
@@ -551,14 +570,14 @@ fn process_heritage_clauses(
             TypeReference(tr) =>
               result = {
                 ..result,
-                implemented_interfaces: result.implemented_interfaces + [tr.type_name],
+                implemented_interfaces: result.implemented_interfaces +
+                [tr.type_name],
               }
             _ => ()
           }
         }
     }
   }
-
   result
 }
 
@@ -574,7 +593,6 @@ fn process_class_members(
 
   // Create child env with class type params in scope
   let class_env = env.with_type_params(class_info.type_params)
-
   for class_member in class_members {
     match class_member {
       PropertyDeclaration(pd) => {
@@ -586,7 +604,6 @@ fn process_class_members(
               None => TAny
             }
         }
-
         let member_info = ClassMemberInfo::{
           name: pd.name,
           ty: member_ty,
@@ -597,18 +614,15 @@ fn process_class_members(
           is_optional: pd.is_optional,
           declared_in: class_info.name,
         }
-
         if member_info.is_static {
           result.static_members.set(pd.name, member_info)
         } else {
           result.members.set(pd.name, member_info)
         }
       }
-
       MethodDeclaration(md) => {
         // Build function type for the method
         let method_type = build_method_type(class_env, md)
-
         let member_info = ClassMemberInfo::{
           name: md.name,
           ty: TFunction(method_type),
@@ -619,14 +633,12 @@ fn process_class_members(
           is_optional: md.is_optional,
           declared_in: class_info.name,
         }
-
         if member_info.is_static {
           result.static_members.set(md.name, member_info)
         } else {
           result.members.set(md.name, member_info)
         }
       }
-
       ConstructorDeclaration(ctr) => {
         let ctr_type = build_constructor_type(class_env, ctr)
         result = { ..result, construct_signatures: [ctr_type] }
@@ -637,21 +649,21 @@ fn process_class_members(
             Parameter(p) => {
               let param_accessibility = get_accessibility(p.modifiers)
               // Check if this is a parameter property (has accessibility modifier)
-              let has_accessibility = p.modifiers.iter().any(fn(m) {
-                match m {
-                  Public | Private | Protected => true
-                  _ => false
-                }
-              })
+              let has_accessibility = p.modifiers
+                .iter()
+                .any(fn(m) {
+                  match m {
+                    Public | Private | Protected => true
+                    _ => false
+                  }
+                })
               let has_readonly = is_readonly_modifier(p.modifiers)
-
               if has_accessibility || has_readonly {
                 // This is a parameter property - add as class member
                 let param_ty = match p.type_annotation {
                   Some(ta) => ast_type_to_v2(class_env, ta)
                   None => TAny
                 }
-
                 let param_name = get_param_name(p.name)
                 let member_info = ClassMemberInfo::{
                   name: param_name,
@@ -674,13 +686,11 @@ fn process_class_members(
           }
         }
       }
-
       GetAccessor(ga) => {
         let getter_type = match ga.return_type {
           Some(rt) => ast_type_to_v2(class_env, rt)
           None => TAny
         }
-
         let member_info = ClassMemberInfo::{
           name: ga.name,
           ty: getter_type,
@@ -691,14 +701,12 @@ fn process_class_members(
           is_optional: false,
           declared_in: class_info.name,
         }
-
         if member_info.is_static {
           result.static_members.set(ga.name, member_info)
         } else {
           result.members.set(ga.name, member_info)
         }
       }
-
       SetAccessor(sa) => {
         // Get type from setter parameter
         let setter_type = match sa.parameter {
@@ -729,7 +737,6 @@ fn process_class_members(
             is_optional: false,
             declared_in: class_info.name,
           }
-
           if member_info.is_static {
             result.static_members.set(sa.name, member_info)
           } else {
@@ -737,11 +744,9 @@ fn process_class_members(
           }
         }
       }
-
       _ => ()
     }
   }
-
   (result, errors)
 }
 
@@ -771,7 +776,6 @@ fn build_method_type(env : TypeEnv, md : MethodDeclaration) -> FunctionTypeV2 {
   // Process parameters
   let params : Array[ParamInfoV2] = []
   let mut rest_param : ParamInfoV2? = None
-
   for param in md.parameters {
     match param {
       Parameter(p) => {
@@ -780,7 +784,6 @@ fn build_method_type(env : TypeEnv, md : MethodDeclaration) -> FunctionTypeV2 {
           None => TAny
         }
         let param_name = get_param_name(p.name)
-
         if p.is_rest {
           rest_param = Some(ParamInfoV2::{
             name: param_name,
@@ -806,8 +809,14 @@ fn build_method_type(env : TypeEnv, md : MethodDeclaration) -> FunctionTypeV2 {
     Some(rt) => ast_type_to_v2(method_env, rt)
     None => TAny
   }
-
-  { type_params, params, rest_param, return_type, type_predicate: None, this_type: None }
+  {
+    type_params,
+    params,
+    rest_param,
+    return_type,
+    type_predicate: None,
+    this_type: None,
+  }
 }
 
 ///|
@@ -818,7 +827,6 @@ fn build_constructor_type(
 ) -> FunctionTypeV2 {
   let params : Array[ParamInfoV2] = []
   let mut rest_param : ParamInfoV2? = None
-
   for param in cd.parameters {
     match param {
       Parameter(p) => {
@@ -827,7 +835,6 @@ fn build_constructor_type(
           None => TAny
         }
         let param_name = get_param_name(p.name)
-
         if p.is_rest {
           rest_param = Some(ParamInfoV2::{
             name: param_name,
@@ -847,15 +854,20 @@ fn build_constructor_type(
       _ => ()
     }
   }
-
-  { type_params: [], params, rest_param, return_type: TVoid, type_predicate: None, this_type: None }
+  {
+    type_params: [],
+    params,
+    rest_param,
+    return_type: TVoid,
+    type_predicate: None,
+    this_type: None,
+  }
 }
 
 ///|
 /// Build the ObjectTypeV2 for a class instance
 fn build_class_object_type(class_info : ClassTypeInfo) -> ObjectTypeV2 {
   let fields : Map[String, FieldInfoV2] = Map::new()
-
   for kv in class_info.members {
     let name = kv.0
     let member_info = kv.1
@@ -865,7 +877,6 @@ fn build_class_object_type(class_info : ClassTypeInfo) -> ObjectTypeV2 {
       is_readonly: member_info.is_readonly,
     })
   }
-
   {
     fields,
     symbol_fields: [],

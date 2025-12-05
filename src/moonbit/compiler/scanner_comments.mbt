@@ -46,10 +46,7 @@ fn skip_whitespace_v2(code : StringView, state : ScanState) -> StringView {
 
 ///|
 /// Skip single-line comment and return remaining code
-fn skip_line_comment(
-  code : StringView,
-  state : ScanState,
-) -> StringView {
+fn skip_line_comment(code : StringView, state : ScanState) -> StringView {
   loop code {
     ['\n', .. rest] => {
       state.line += 1
@@ -68,10 +65,7 @@ fn skip_line_comment(
 
 ///|
 /// Skip block comment and return remaining code
-fn skip_block_comment(
-  code : StringView,
-  state : ScanState,
-) -> StringView {
+fn skip_block_comment(code : StringView, state : ScanState) -> StringView {
   loop code {
     [.. "*/", .. rest] => {
       state.col += 2
@@ -131,7 +125,6 @@ fn scan_jsdoc_comment_v2(
   // Skip "/**"
   state.col += 3
   state.offset += 3
-
   fn make_loc() -> SourceLocation {
     SourceLocation::new(
       file_path,
@@ -165,7 +158,6 @@ fn scan_jsdoc_comment_v2(
     }
     [] as remaining => remaining // Unterminated
   }
-
   (JSDocComment(content.to_string(), make_loc()), rest)
 }
 
@@ -179,7 +171,6 @@ fn scan_comment_directive_v2(
   let start_line = state.line
   let start_col = state.col
   let start_offset = state.offset
-
   fn make_loc() -> SourceLocation {
     SourceLocation::new(
       file_path,
@@ -278,7 +269,6 @@ fn scan_comment_directive_v2(
     }
     [] as remaining => remaining
   }
-
   (CommentDirective(directive_kind, arg.to_string(), make_loc()), rest2)
 }
 
@@ -294,7 +284,6 @@ fn scan_hashbang_v2(
   if state.offset != 0 {
     return (None, code)
   }
-
   match code {
     [.. "#!", .. rest] => {
       let start_line = state.line
@@ -322,7 +311,6 @@ fn scan_hashbang_v2(
         }
         [] as remaining => remaining
       }
-
       let loc = SourceLocation::new(
         file_path,
         Position::new(start_line, start_col, start_offset),

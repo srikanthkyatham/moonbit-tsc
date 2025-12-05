@@ -95,17 +95,14 @@ pub fn check_index_signature_compatibility(
   // Check key type compatibility
   let source_key_type = get_index_key_type(source.key_type)
   let target_key_type = get_index_key_type(target.key_type)
-
   match (source_key_type, target_key_type) {
     (Some(sk), Some(tk)) =>
       if sk != tk {
         errors.push(
-          IndexKeyTypeMismatch(
-            {
-              expected_key: format_type_v2(target.key_type),
-              actual_key: format_type_v2(source.key_type),
-            },
-          ),
+          IndexKeyTypeMismatch({
+            expected_key: format_type_v2(target.key_type),
+            actual_key: format_type_v2(source.key_type),
+          }),
         )
       }
     (None, _) =>
@@ -117,12 +114,10 @@ pub fn check_index_signature_compatibility(
   // Check value type compatibility (covariant)
   if not(is_index_value_subtype(source.value_type, target.value_type)) {
     errors.push(
-      IndexValueTypeMismatch(
-        {
-          expected_value: format_type_v2(target.value_type),
-          actual_value: format_type_v2(source.value_type),
-        },
-      ),
+      IndexValueTypeMismatch({
+        expected_value: format_type_v2(target.value_type),
+        actual_value: format_type_v2(source.value_type),
+      }),
     )
   }
 
@@ -131,7 +126,6 @@ pub fn check_index_signature_compatibility(
   if target.is_readonly && not(source.is_readonly) {
     errors.push(ReadonlyIndexMismatch)
   }
-
   { is_compatible: errors.is_empty(), errors }
 }
 
@@ -142,7 +136,6 @@ fn is_index_value_subtype(source : TypeV2, target : TypeV2) -> Bool {
   if source == target {
     return true
   }
-
   match (source, target) {
     (TAny, _) => true
     (_, TAny) => true
@@ -175,7 +168,7 @@ pub fn check_numeric_string_covariance(
   string_sig : IndexSignatureV2?,
 ) -> IndexSignatureCheckResult {
   match (numeric_sig, string_sig) {
-    (Some(num), Some(str_sig)) => {
+    (Some(num), Some(str_sig)) =>
       // Numeric index value type must be subtype of string index value type
       if is_index_value_subtype(num.value_type, str_sig.value_type) {
         { is_compatible: true, errors: [] }
@@ -183,16 +176,13 @@ pub fn check_numeric_string_covariance(
         {
           is_compatible: false,
           errors: [
-            NumericIndexNotSubtypeOfString(
-              {
-                numeric_type: format_type_v2(num.value_type),
-                string_type: format_type_v2(str_sig.value_type),
-              },
-            ),
+            NumericIndexNotSubtypeOfString({
+              numeric_type: format_type_v2(num.value_type),
+              string_type: format_type_v2(str_sig.value_type),
+            }),
           ],
         }
       }
-    }
     // If only one or none exist, no covariance check needed
     _ => { is_compatible: true, errors: [] }
   }
@@ -279,7 +269,6 @@ pub fn check_extended_index_compatibility(
     source.string_index,
   )
   all_errors.append(cov_result.errors)
-
   { is_compatible: all_errors.is_empty(), errors: all_errors }
 }
 
@@ -318,10 +307,7 @@ pub fn apply_unchecked_indexed_access(
 
 ///|
 /// Check if an access is to a known property (not via index signature)
-pub fn is_known_property_access(
-  obj_type : ObjectTypeV2,
-  key : TypeV2,
-) -> Bool {
+pub fn is_known_property_access(obj_type : ObjectTypeV2, key : TypeV2) -> Bool {
   match key {
     TLiteralString(name) => obj_type.fields.contains(name)
     TLiteralNumber(n) => {
@@ -355,9 +341,7 @@ pub fn infer_index_access_type(
   match obj_type {
     TArray(elem_ty) =>
       apply_unchecked_indexed_access(
-        elem_ty,
-        no_unchecked_indexed_access,
-        false,
+        elem_ty, no_unchecked_indexed_access, false,
       )
     TTuple(elems) =>
       // For tuples, check if index is a literal number
@@ -448,7 +432,9 @@ pub fn is_object_subtype_with_index(
               // Index signature key must be string and value must be compatible
               match get_index_key_type(src_sig.key_type) {
                 Some(StringKey) =>
-                  if not(is_index_value_subtype(src_sig.value_type, tgt_field.ty)) {
+                  if not(
+                      is_index_value_subtype(src_sig.value_type, tgt_field.ty),
+                    ) {
                     return false
                   }
                 _ => return false
@@ -478,7 +464,6 @@ pub fn is_object_subtype_with_index(
       ()
     _ => ()
   }
-
   true
 }
 

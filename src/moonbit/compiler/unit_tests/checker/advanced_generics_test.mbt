@@ -4,6 +4,7 @@
 // Const Type Parameter Tests
 // ============================================================================
 
+///|
 test "unit/advanced_generics/const_param - TypeParamV2 const constructor" {
   let param = @compiler.TypeParamV2::const_param("T")
   assert_eq(param.name, "T")
@@ -12,13 +13,18 @@ test "unit/advanced_generics/const_param - TypeParamV2 const constructor" {
   assert_eq(param.variance is None, true)
 }
 
+///|
 test "unit/advanced_generics/const_param - TypeParamV2 const constrained" {
-  let param = @compiler.TypeParamV2::const_constrained("T", @compiler.create_string_type())
+  let param = @compiler.TypeParamV2::const_constrained(
+    "T",
+    @compiler.create_string_type(),
+  )
   assert_eq(param.name, "T")
   assert_eq(param.is_const, true)
   assert_eq(param.constraint, Some(@compiler.create_string_type()))
 }
 
+///|
 test "unit/advanced_generics/const_param - narrow literal string" {
   let param = @compiler.TypeParamV2::const_param("T")
   let inferred = @compiler.create_literal_string_type("hello")
@@ -26,6 +32,7 @@ test "unit/advanced_generics/const_param - narrow literal string" {
   assert_eq(result, @compiler.create_literal_string_type("hello"))
 }
 
+///|
 test "unit/advanced_generics/const_param - narrow literal number" {
   let param = @compiler.TypeParamV2::const_param("T")
   let inferred = @compiler.create_literal_number_type(42.0)
@@ -33,6 +40,7 @@ test "unit/advanced_generics/const_param - narrow literal number" {
   assert_eq(result, @compiler.create_literal_number_type(42.0))
 }
 
+///|
 test "unit/advanced_generics/const_param - narrow literal bool" {
   let param = @compiler.TypeParamV2::const_param("T")
   let inferred = @compiler.create_literal_bool_type(true)
@@ -40,6 +48,7 @@ test "unit/advanced_generics/const_param - narrow literal bool" {
   assert_eq(result, @compiler.create_literal_bool_type(true))
 }
 
+///|
 test "unit/advanced_generics/const_param - non-const doesnt narrow" {
   let param = @compiler.TypeParamV2::simple("T")
   let inferred = @compiler.create_string_type()
@@ -47,12 +56,19 @@ test "unit/advanced_generics/const_param - non-const doesnt narrow" {
   assert_eq(result, @compiler.create_string_type())
 }
 
+///|
 test "unit/advanced_generics/const_param - narrow tuple elements" {
   let param = @compiler.TypeParamV2::const_param("T")
   let tuple_type = @compiler.create_tuple_type([
-    @compiler.TupleElementV2::required(@compiler.create_literal_number_type(1.0)),
-    @compiler.TupleElementV2::required(@compiler.create_literal_number_type(2.0)),
-    @compiler.TupleElementV2::required(@compiler.create_literal_number_type(3.0)),
+    @compiler.TupleElementV2::required(
+      @compiler.create_literal_number_type(1.0),
+    ),
+    @compiler.TupleElementV2::required(
+      @compiler.create_literal_number_type(2.0),
+    ),
+    @compiler.TupleElementV2::required(
+      @compiler.create_literal_number_type(3.0),
+    ),
   ])
   let result = @compiler.narrow_to_literal_for_const(param, tuple_type)
   // Result should still have literal number types
@@ -69,43 +85,106 @@ test "unit/advanced_generics/const_param - narrow tuple elements" {
 // Variance Analysis Tests
 // ============================================================================
 
+///|
 test "unit/advanced_generics/variance - covariant in return position" {
   let return_type = @compiler.create_type_param("T", None)
   let variance = @compiler.analyze_variance("T", return_type)
   assert_eq(variance, @compiler.Variance::covariant())
 }
 
+///|
 test "unit/advanced_generics/variance - bivariant when not used" {
   let variance = @compiler.analyze_variance("T", @compiler.create_string_type())
   assert_eq(variance, @compiler.Variance::bivariant())
 }
 
+///|
 test "unit/advanced_generics/variance - covariant in array element" {
-  let array_type = @compiler.create_array_type(@compiler.create_type_param("T", None))
+  let array_type = @compiler.create_array_type(
+    @compiler.create_type_param("T", None),
+  )
   let variance = @compiler.analyze_variance("T", array_type)
   assert_eq(variance, @compiler.Variance::covariant())
 }
 
+///|
 test "unit/advanced_generics/variance - combine variances" {
-  assert_eq(@compiler.combine_variances(@compiler.Variance::bivariant(), @compiler.Variance::covariant()), @compiler.Variance::covariant())
-  assert_eq(@compiler.combine_variances(@compiler.Variance::covariant(), @compiler.Variance::covariant()), @compiler.Variance::covariant())
-  assert_eq(@compiler.combine_variances(@compiler.Variance::contravariant(), @compiler.Variance::contravariant()), @compiler.Variance::contravariant())
-  assert_eq(@compiler.combine_variances(@compiler.Variance::covariant(), @compiler.Variance::contravariant()), @compiler.Variance::invariant())
-  assert_eq(@compiler.combine_variances(@compiler.Variance::invariant(), @compiler.Variance::covariant()), @compiler.Variance::invariant())
+  assert_eq(
+    @compiler.combine_variances(
+      @compiler.Variance::bivariant(),
+      @compiler.Variance::covariant(),
+    ),
+    @compiler.Variance::covariant(),
+  )
+  assert_eq(
+    @compiler.combine_variances(
+      @compiler.Variance::covariant(),
+      @compiler.Variance::covariant(),
+    ),
+    @compiler.Variance::covariant(),
+  )
+  assert_eq(
+    @compiler.combine_variances(
+      @compiler.Variance::contravariant(),
+      @compiler.Variance::contravariant(),
+    ),
+    @compiler.Variance::contravariant(),
+  )
+  assert_eq(
+    @compiler.combine_variances(
+      @compiler.Variance::covariant(),
+      @compiler.Variance::contravariant(),
+    ),
+    @compiler.Variance::invariant(),
+  )
+  assert_eq(
+    @compiler.combine_variances(
+      @compiler.Variance::invariant(),
+      @compiler.Variance::covariant(),
+    ),
+    @compiler.Variance::invariant(),
+  )
 }
 
+///|
 test "unit/advanced_generics/variance - is compatible" {
-  assert_true(@compiler.is_variance_compatible(@compiler.Variance::covariant(), @compiler.Variance::covariant()))
-  assert_true(@compiler.is_variance_compatible(@compiler.Variance::bivariant(), @compiler.Variance::covariant()))
-  assert_true(@compiler.is_variance_compatible(@compiler.Variance::bivariant(), @compiler.Variance::contravariant()))
-  assert_false(@compiler.is_variance_compatible(@compiler.Variance::covariant(), @compiler.Variance::contravariant()))
-  assert_false(@compiler.is_variance_compatible(@compiler.Variance::invariant(), @compiler.Variance::covariant()))
+  assert_true(
+    @compiler.is_variance_compatible(
+      @compiler.Variance::covariant(),
+      @compiler.Variance::covariant(),
+    ),
+  )
+  assert_true(
+    @compiler.is_variance_compatible(
+      @compiler.Variance::bivariant(),
+      @compiler.Variance::covariant(),
+    ),
+  )
+  assert_true(
+    @compiler.is_variance_compatible(
+      @compiler.Variance::bivariant(),
+      @compiler.Variance::contravariant(),
+    ),
+  )
+  assert_false(
+    @compiler.is_variance_compatible(
+      @compiler.Variance::covariant(),
+      @compiler.Variance::contravariant(),
+    ),
+  )
+  assert_false(
+    @compiler.is_variance_compatible(
+      @compiler.Variance::invariant(),
+      @compiler.Variance::covariant(),
+    ),
+  )
 }
 
 // ============================================================================
 // Higher-Order Generics Tests
 // ============================================================================
 
+///|
 test "unit/advanced_generics/hkt - create simple HKT" {
   let hkt = @compiler.HigherKindedType::new("Array", 1)
   assert_eq(hkt.name, "Array")
@@ -114,11 +193,15 @@ test "unit/advanced_generics/hkt - create simple HKT" {
   assert_eq(hkt.body is None, true)
 }
 
+///|
 test "unit/advanced_generics/hkt - create HKT with params" {
   let hkt = @compiler.HigherKindedType::with_params(
     "Result",
     [@compiler.TypeParamV2::simple("T"), @compiler.TypeParamV2::simple("E")],
-    @compiler.create_union_type([@compiler.create_type_param("T", None), @compiler.create_type_param("E", None)])
+    @compiler.create_union_type([
+      @compiler.create_type_param("T", None),
+      @compiler.create_type_param("E", None),
+    ]),
   )
   assert_eq(hkt.name, "Result")
   assert_eq(hkt.arity, 2)
@@ -126,38 +209,67 @@ test "unit/advanced_generics/hkt - create HKT with params" {
   assert_eq(hkt.body is Some(_), true)
 }
 
+///|
 test "unit/advanced_generics/hkt - apply type args to simple HKT" {
   let hkt = @compiler.HigherKindedType::new("Array", 1)
-  let result = @compiler.apply_higher_kinded_type(hkt, [@compiler.create_number_type()])
-  assert_eq(result, @compiler.create_generic_instance("Array", [@compiler.create_number_type()]))
+  let result = @compiler.apply_higher_kinded_type(hkt, [
+    @compiler.create_number_type(),
+  ])
+  assert_eq(
+    result,
+    @compiler.create_generic_instance("Array", [@compiler.create_number_type()]),
+  )
 }
 
+///|
 test "unit/advanced_generics/hkt - arity mismatch returns generic instance" {
   let hkt = @compiler.HigherKindedType::new("Map", 2)
-  let result = @compiler.apply_higher_kinded_type(hkt, [@compiler.create_string_type()])
-  assert_eq(result, @compiler.create_generic_instance("Map", [@compiler.create_string_type()]))
+  let result = @compiler.apply_higher_kinded_type(hkt, [
+    @compiler.create_string_type(),
+  ])
+  assert_eq(
+    result,
+    @compiler.create_generic_instance("Map", [@compiler.create_string_type()]),
+  )
 }
 
+///|
 test "unit/advanced_generics/hkt - is_higher_kinded" {
-  assert_true(@compiler.is_higher_kinded(@compiler.create_generic_instance("Array", [@compiler.create_number_type()])))
-  assert_true(@compiler.is_higher_kinded(@compiler.create_type_param("T", None)))
+  assert_true(
+    @compiler.is_higher_kinded(
+      @compiler.create_generic_instance("Array", [
+        @compiler.create_number_type(),
+      ]),
+    ),
+  )
+  assert_true(
+    @compiler.is_higher_kinded(@compiler.create_type_param("T", None)),
+  )
   assert_false(@compiler.is_higher_kinded(@compiler.create_number_type()))
   assert_false(@compiler.is_higher_kinded(@compiler.create_string_type()))
 }
 
+///|
 test "unit/advanced_generics/hkt - get_type_constructor" {
-  let tc = @compiler.get_type_constructor(@compiler.create_generic_instance("Array", [@compiler.create_number_type()]))
+  let tc = @compiler.get_type_constructor(
+    @compiler.create_generic_instance("Array", [@compiler.create_number_type()]),
+  )
   assert_eq(tc, Some("Array"))
   let tc2 = @compiler.get_type_constructor(@compiler.create_number_type())
   assert_eq(tc2 is None, true)
 }
 
+///|
 test "unit/advanced_generics/hkt - get_type_arguments" {
-  let args = @compiler.get_type_arguments(@compiler.create_generic_instance("Map", [@compiler.create_string_type(), @compiler.create_number_type()]))
+  let args = @compiler.get_type_arguments(
+    @compiler.create_generic_instance("Map", [
+      @compiler.create_string_type(),
+      @compiler.create_number_type(),
+    ]),
+  )
   assert_eq(args.length(), 2)
   assert_eq(args[0], @compiler.create_string_type())
   assert_eq(args[1], @compiler.create_number_type())
-
   let args2 = @compiler.get_type_arguments(@compiler.create_number_type())
   assert_eq(args2.length(), 0)
 }
@@ -166,13 +278,14 @@ test "unit/advanced_generics/hkt - get_type_arguments" {
 // Integration Tests
 // ============================================================================
 
+///|
 test "unit/advanced_generics/integration - TypeParamV2 full constructor" {
   let param = @compiler.TypeParamV2::full(
     "T",
     Some(@compiler.create_number_type()),
     Some(@compiler.create_literal_number_type(0.0)),
     true,
-    Some(@compiler.Variance::covariant())
+    Some(@compiler.Variance::covariant()),
   )
   assert_eq(param.name, "T")
   assert_eq(param.constraint, Some(@compiler.create_number_type()))
@@ -181,33 +294,53 @@ test "unit/advanced_generics/integration - TypeParamV2 full constructor" {
   assert_eq(param.variance, Some(@compiler.Variance::covariant()))
 }
 
+///|
 test "unit/advanced_generics/integration - TypeParamV2 with_variance constructor" {
-  let param = @compiler.TypeParamV2::with_variance("T", @compiler.Variance::contravariant())
+  let param = @compiler.TypeParamV2::with_variance(
+    "T",
+    @compiler.Variance::contravariant(),
+  )
   assert_eq(param.name, "T")
   assert_eq(param.is_const, false)
   assert_eq(param.variance, Some(@compiler.Variance::contravariant()))
 }
 
+///|
 test "unit/advanced_generics/variance - variance enum constructors" {
   assert_eq(@compiler.Variance::covariant(), @compiler.Variance::covariant())
-  assert_eq(@compiler.Variance::contravariant(), @compiler.Variance::contravariant())
+  assert_eq(
+    @compiler.Variance::contravariant(),
+    @compiler.Variance::contravariant(),
+  )
   assert_eq(@compiler.Variance::invariant(), @compiler.Variance::invariant())
   assert_eq(@compiler.Variance::bivariant(), @compiler.Variance::bivariant())
 }
 
+///|
 test "unit/advanced_generics/variance - position constructors" {
   assert_eq(@compiler.TypePosition::output(), @compiler.TypePosition::output())
   assert_eq(@compiler.TypePosition::input(), @compiler.TypePosition::input())
 }
 
+///|
 test "unit/advanced_generics/variance - flip position" {
-  assert_eq(@compiler.flip_position(@compiler.TypePosition::output()), @compiler.TypePosition::input())
-  assert_eq(@compiler.flip_position(@compiler.TypePosition::input()), @compiler.TypePosition::output())
+  assert_eq(
+    @compiler.flip_position(@compiler.TypePosition::output()),
+    @compiler.TypePosition::input(),
+  )
+  assert_eq(
+    @compiler.flip_position(@compiler.TypePosition::input()),
+    @compiler.TypePosition::output(),
+  )
 }
 
+///|
 test "unit/advanced_generics/const_param - narrow union type" {
   let param = @compiler.TypeParamV2::const_param("T")
-  let union_type = @compiler.create_union_type([@compiler.create_literal_string_type("a"), @compiler.create_literal_string_type("b")])
+  let union_type = @compiler.create_union_type([
+    @compiler.create_literal_string_type("a"),
+    @compiler.create_literal_string_type("b"),
+  ])
   let result = @compiler.narrow_to_literal_for_const(param, union_type)
   match result {
     @compiler.TUnion(types) => {
@@ -219,12 +352,16 @@ test "unit/advanced_generics/const_param - narrow union type" {
   }
 }
 
+///|
 test "unit/advanced_generics/const_param - narrow array element type" {
   let param = @compiler.TypeParamV2::const_param("T")
-  let array_type = @compiler.create_array_type(@compiler.create_literal_number_type(42.0))
+  let array_type = @compiler.create_array_type(
+    @compiler.create_literal_number_type(42.0),
+  )
   let result = @compiler.narrow_to_literal_for_const(param, array_type)
   match result {
-    @compiler.TArray(elem) => assert_eq(elem, @compiler.create_literal_number_type(42.0))
+    @compiler.TArray(elem) =>
+      assert_eq(elem, @compiler.create_literal_number_type(42.0))
     _ => fail("Expected array type")
   }
 }

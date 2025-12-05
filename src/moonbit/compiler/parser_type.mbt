@@ -959,15 +959,13 @@ fn parse_primary_type_with_readonly(
                                 match parse_type(parser) {
                                   Ok((value_type, p)) => {
                                     members.push(
-                                      Node::IndexSignatureDeclaration(
-                                        IndexSignatureDeclaration::{
-                                          parameter_name: param_name,
-                                          parameter_type: key_type,
-                                          return_type: value_type,
-                                          is_readonly: false,
-                                          location: member_loc,
-                                        },
-                                      ),
+                                      Node::IndexSignatureDeclaration(IndexSignatureDeclaration::{
+                                        parameter_name: param_name,
+                                        parameter_type: key_type,
+                                        return_type: value_type,
+                                        is_readonly: false,
+                                        location: member_loc,
+                                      }),
                                     )
                                     parser = p
                                     // Optional comma or semicolon
@@ -1101,15 +1099,13 @@ fn parse_primary_type_with_readonly(
                                     match parse_type(parser) {
                                       Ok((value_type, p)) => {
                                         members.push(
-                                          Node::IndexSignatureDeclaration(
-                                            IndexSignatureDeclaration::{
-                                              parameter_name: param_name,
-                                              parameter_type: key_type,
-                                              return_type: value_type,
-                                              is_readonly: true,
-                                              location: member_loc,
-                                            },
-                                          ),
+                                          Node::IndexSignatureDeclaration(IndexSignatureDeclaration::{
+                                            parameter_name: param_name,
+                                            parameter_type: key_type,
+                                            return_type: value_type,
+                                            is_readonly: true,
+                                            location: member_loc,
+                                          }),
                                         )
                                         parser = p
                                         match current_token(parser) {
@@ -1204,10 +1200,8 @@ fn parse_primary_type_with_readonly(
                   // TS2700: Rest types may only be created from object types
                   return Err(
                     add_error_checked(
-                      parser,
-                      "Rest types may only be created from object types.",
-                      spread_loc,
-                      2700,
+                      parser, "Rest types may only be created from object types.",
+                      spread_loc, 2700,
                     ),
                   )
                 }
@@ -1262,7 +1256,8 @@ fn parse_primary_type_with_readonly(
                         parser = p
                         // Optional comma or semicolon
                         match current_token(parser) {
-                          Comma(_) | Semicolon(_) => parser = advance_parser(parser)
+                          Comma(_) | Semicolon(_) =>
+                            parser = advance_parser(parser)
                           _ => ()
                         }
                       }
@@ -1278,12 +1273,7 @@ fn parse_primary_type_with_readonly(
       }
 
       // Return TypeLiteral node with parsed members
-      Ok(
-        (
-          Node::TypeLiteral(TypeLiteral::{ members, location: loc }),
-          parser,
-        ),
-      )
+      Ok((Node::TypeLiteral(TypeLiteral::{ members, location: loc }), parser))
     }
     LessThan(_) => {
       // Generic function type: <T>(param: T) => T

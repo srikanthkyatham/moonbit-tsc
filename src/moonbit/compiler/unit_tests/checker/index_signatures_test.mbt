@@ -17,7 +17,9 @@ fn parse_and_check_index(source : String) -> @compiler.CheckResult {
 
 ///|
 /// Helper function to just parse source code
-fn parse_only_index(source : String) -> Result[@compiler.SourceFile, Array[@compiler.Diagnostic]] {
+fn parse_only_index(
+  source : String,
+) -> Result[@compiler.SourceFile, Array[@compiler.Diagnostic]] {
   let tokens = @compiler.scan_all_v2(source, "test.ts")
   @compiler.parse_source_file(tokens, "test.ts")
 }
@@ -26,6 +28,7 @@ fn parse_only_index(source : String) -> Result[@compiler.SourceFile, Array[@comp
 // Index Signature Parsing Tests
 // ============================================================================
 
+///|
 test "index/parsing - string index signature" {
   let source =
     #|interface StringMap {
@@ -38,6 +41,7 @@ test "index/parsing - string index signature" {
   }
 }
 
+///|
 test "index/parsing - number index signature" {
   let source =
     #|interface NumberIndexed {
@@ -50,6 +54,7 @@ test "index/parsing - number index signature" {
   }
 }
 
+///|
 test "index/parsing - symbol index signature" {
   let source =
     #|interface SymbolIndexed {
@@ -62,6 +67,7 @@ test "index/parsing - symbol index signature" {
   }
 }
 
+///|
 test "index/parsing - readonly index signature" {
   let source =
     #|interface ReadonlyMap {
@@ -74,6 +80,7 @@ test "index/parsing - readonly index signature" {
   }
 }
 
+///|
 test "index/parsing - both string and number index signatures" {
   let source =
     #|interface Mixed {
@@ -87,6 +94,7 @@ test "index/parsing - both string and number index signatures" {
   }
 }
 
+///|
 test "index/parsing - index signature with explicit properties" {
   let source =
     #|interface Dictionary {
@@ -104,6 +112,7 @@ test "index/parsing - index signature with explicit properties" {
 // Index Signature Type Checking Tests
 // ============================================================================
 
+///|
 test "index/check - object with string index signature" {
   let source =
     #|interface StringMap {
@@ -117,6 +126,7 @@ test "index/check - object with string index signature" {
   }
 }
 
+///|
 test "index/check - accessing index signature property" {
   let source =
     #|interface StringMap {
@@ -131,6 +141,7 @@ test "index/check - accessing index signature property" {
   }
 }
 
+///|
 test "index/check - array index access" {
   let source =
     #|const arr: string[] = ["a", "b", "c"];
@@ -143,6 +154,7 @@ test "index/check - array index access" {
   }
 }
 
+///|
 test "index/check - tuple index access" {
   let source =
     #|const tuple: [string, number, boolean] = ["hello", 42, true];
@@ -155,6 +167,7 @@ test "index/check - tuple index access" {
   }
 }
 
+///|
 test "index/check - Record utility type" {
   let source =
     #|type Dict = Record<string, number>;
@@ -171,6 +184,7 @@ test "index/check - Record utility type" {
 // Numeric-String Covariance Tests
 // ============================================================================
 
+///|
 test "index/covariance - valid numeric subtype of string" {
   // This should be valid: numeric index returns subset of string index
   let source =
@@ -185,6 +199,7 @@ test "index/covariance - valid numeric subtype of string" {
   }
 }
 
+///|
 test "index/covariance - number index same as string index" {
   let source =
     #|interface SameMixed {
@@ -198,6 +213,7 @@ test "index/covariance - number index same as string index" {
   }
 }
 
+///|
 test "index/covariance - only number index" {
   let source =
     #|interface NumberOnly {
@@ -216,6 +232,7 @@ test "index/covariance - only number index" {
 // Property Compatibility with Index Signature Tests
 // ============================================================================
 
+///|
 test "index/property - compatible property type" {
   let source =
     #|interface StringDict {
@@ -229,6 +246,7 @@ test "index/property - compatible property type" {
   }
 }
 
+///|
 test "index/property - compatible union property type" {
   let source =
     #|interface MixedDict {
@@ -243,6 +261,7 @@ test "index/property - compatible union property type" {
   }
 }
 
+///|
 test "index/property - optional property with index" {
   let source =
     #|interface OptionalProps {
@@ -260,6 +279,7 @@ test "index/property - optional property with index" {
 // Readonly Index Signature Tests
 // ============================================================================
 
+///|
 test "index/readonly - readonly index signature parsing" {
   let source =
     #|interface ReadonlyDict {
@@ -272,6 +292,7 @@ test "index/readonly - readonly index signature parsing" {
   }
 }
 
+///|
 test "index/readonly - ReadonlyArray has readonly index" {
   let source =
     #|declare const arr: ReadonlyArray<number>;
@@ -287,6 +308,7 @@ test "index/readonly - ReadonlyArray has readonly index" {
 // Symbol Index Signature Tests
 // ============================================================================
 
+///|
 test "index/symbol - symbol index signature parsing" {
   let source =
     #|interface SymbolMap {
@@ -299,6 +321,7 @@ test "index/symbol - symbol index signature parsing" {
   }
 }
 
+///|
 test "index/symbol - accessing with symbol key" {
   let source =
     #|interface SymbolMap {
@@ -318,6 +341,7 @@ test "index/symbol - accessing with symbol key" {
 // Complex Index Signature Scenarios
 // ============================================================================
 
+///|
 test "index/complex - class with index signature parsing" {
   // Classes with index signatures parse correctly even if type checking is complex
   let source =
@@ -331,6 +355,7 @@ test "index/complex - class with index signature parsing" {
   }
 }
 
+///|
 test "index/complex - interface extending with index" {
   let source =
     #|interface Base {
@@ -346,6 +371,7 @@ test "index/complex - interface extending with index" {
   }
 }
 
+///|
 test "index/complex - mapped type creates index-like behavior" {
   let source =
     #|type StringRecord = {
@@ -358,6 +384,7 @@ test "index/complex - mapped type creates index-like behavior" {
   }
 }
 
+///|
 test "index/complex - intersection with index signature" {
   let source =
     #|type Named = { name: string };
@@ -370,6 +397,7 @@ test "index/complex - intersection with index signature" {
   }
 }
 
+///|
 test "index/complex - union of indexed types" {
   let source =
     #|interface StringMap { [key: string]: string; }
@@ -386,6 +414,7 @@ test "index/complex - union of indexed types" {
 // Type Literal Index Signature Tests
 // ============================================================================
 
+///|
 test "index/literal - type literal with index signature" {
   let source =
     #|type Dict = {
@@ -399,6 +428,7 @@ test "index/literal - type literal with index signature" {
   }
 }
 
+///|
 test "index/literal - object literal assignable to indexed type" {
   let source =
     #|interface StringMap { [key: string]: string; }
@@ -414,6 +444,7 @@ test "index/literal - object literal assignable to indexed type" {
 // Index Access Expression Tests
 // ============================================================================
 
+///|
 test "index/access - computed property access" {
   let source =
     #|const obj: { [key: string]: number } = { a: 1, b: 2 };
@@ -426,6 +457,7 @@ test "index/access - computed property access" {
   }
 }
 
+///|
 test "index/access - bracket notation on object" {
   let source =
     #|const obj = { name: "test" };
@@ -437,6 +469,7 @@ test "index/access - bracket notation on object" {
   }
 }
 
+///|
 test "index/access - chained index access" {
   let source =
     #|const nested: { [key: string]: { [key: string]: number } } = { a: { b: 1 } };

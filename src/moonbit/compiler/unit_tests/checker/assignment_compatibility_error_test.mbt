@@ -25,7 +25,7 @@ fn check_ts_source(source : String) -> @compiler.CheckResult {
 /// Helper to check if any diagnostic has a specific error code
 fn check_has_error_code(
   diagnostics : Array[@compiler.Diagnostic],
-  code : Int
+  code : Int,
 ) -> Bool {
   for diag in diagnostics {
     if diag.code == code {
@@ -39,7 +39,7 @@ fn check_has_error_code(
 /// Helper to check if any diagnostic contains a specific message substring
 fn check_has_error_message(
   diagnostics : Array[@compiler.Diagnostic],
-  substring : String
+  substring : String,
 ) -> Bool {
   for diag in diagnostics {
     if diag.message.contains(substring) {
@@ -75,9 +75,7 @@ test "checker error detection - TS2322 number to string" {
   let result = check_ts_source(source)
   match result {
     Ok(_) => assert_true(false) // This error is implemented
-    Err(diagnostics) => {
-      assert_true(check_has_error_code(diagnostics, 2322))
-    }
+    Err(diagnostics) => assert_true(check_has_error_code(diagnostics, 2322))
   }
 }
 
@@ -88,9 +86,7 @@ test "checker error detection - TS2322 boolean to number" {
   let result = check_ts_source(source)
   match result {
     Ok(_) => assert_true(false)
-    Err(diagnostics) => {
-      assert_true(check_has_error_code(diagnostics, 2322))
-    }
+    Err(diagnostics) => assert_true(check_has_error_code(diagnostics, 2322))
   }
 }
 
@@ -101,9 +97,7 @@ test "checker error detection - TS2322 array type mismatch" {
   let result = check_ts_source(source)
   match result {
     Ok(_) => assert_true(false)
-    Err(diagnostics) => {
-      assert_true(check_has_error_code(diagnostics, 2322))
-    }
+    Err(diagnostics) => assert_true(check_has_error_code(diagnostics, 2322))
   }
 }
 
@@ -156,10 +150,9 @@ test "checker error detection - valid type assignment" {
   let result = check_ts_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => {
+    Err(diagnostics) =>
       // Should not have type assignment errors
       assert_true(not(check_has_error_code(diagnostics, 2322)))
-    }
   }
 }
 
@@ -172,9 +165,8 @@ test "checker error detection - valid let reassignment" {
   let result = check_ts_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => {
+    Err(diagnostics) =>
       assert_true(not(check_has_error_code(diagnostics, 2588)))
-    }
   }
 }
 
@@ -187,9 +179,8 @@ test "checker error detection - valid function call" {
   let result = check_ts_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => {
+    Err(diagnostics) =>
       assert_true(not(check_has_error_code(diagnostics, 2554)))
-    }
   }
 }
 
@@ -204,9 +195,8 @@ test "checker error detection - valid class instantiation" {
   let result = check_ts_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => {
+    Err(diagnostics) =>
       assert_true(not(check_has_error_code(diagnostics, 2511)))
-    }
   }
 }
 
@@ -220,9 +210,8 @@ test "checker error detection - valid property access" {
   let result = check_ts_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => {
+    Err(diagnostics) =>
       assert_true(not(check_has_error_code(diagnostics, 2339)))
-    }
   }
 }
 
@@ -241,9 +230,8 @@ test "checker error detection - valid class inheritance" {
   let result = check_ts_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => {
+    Err(diagnostics) =>
       assert_true(not(check_has_error_code(diagnostics, 2377)))
-    }
   }
 }
 
@@ -258,11 +246,10 @@ test "checker error detection - TS2304 undefined variable" {
   let result = check_ts_source(source)
   match result {
     Ok(_) => () // May not be implemented yet
-    Err(diagnostics) => {
+    Err(diagnostics) =>
       if check_has_error_code(diagnostics, 2304) {
         assert_true(check_has_error_message(diagnostics, "Cannot find name"))
       }
-    }
   }
 }
 
@@ -273,11 +260,10 @@ test "checker error detection - TS2304 undefined function" {
   let result = check_ts_source(source)
   match result {
     Ok(_) => () // May not be implemented yet
-    Err(diagnostics) => {
+    Err(diagnostics) =>
       if check_has_error_code(diagnostics, 2304) {
         assert_true(check_has_error_message(diagnostics, "Cannot find name"))
       }
-    }
   }
 }
 
@@ -288,11 +274,10 @@ test "checker error detection - TS2304 undefined type" {
   let result = check_ts_source(source)
   match result {
     Ok(_) => () // May not be implemented yet
-    Err(diagnostics) => {
+    Err(diagnostics) =>
       if check_has_error_code(diagnostics, 2304) {
         assert_true(check_has_error_message(diagnostics, "Cannot find name"))
       }
-    }
   }
 }
 
@@ -309,11 +294,10 @@ test "checker error detection - TS2339 non-existent property" {
   let result = check_ts_source(source)
   match result {
     Ok(_) => () // May not be implemented yet
-    Err(diagnostics) => {
+    Err(diagnostics) =>
       if check_has_error_code(diagnostics, 2339) {
         assert_true(check_has_error_message(diagnostics, "does not exist"))
       }
-    }
   }
 }
 
@@ -326,11 +310,10 @@ test "checker error detection - TS2339 non-existent method" {
   let result = check_ts_source(source)
   match result {
     Ok(_) => () // May not be implemented yet
-    Err(diagnostics) => {
+    Err(diagnostics) =>
       if check_has_error_code(diagnostics, 2339) {
         assert_true(check_has_error_message(diagnostics, "does not exist"))
       }
-    }
   }
 }
 
@@ -343,11 +326,10 @@ test "checker error detection - TS2339 property on primitive" {
   let result = check_ts_source(source)
   match result {
     Ok(_) => () // May not be implemented yet
-    Err(diagnostics) => {
+    Err(diagnostics) =>
       if check_has_error_code(diagnostics, 2339) {
         assert_true(check_has_error_message(diagnostics, "does not exist"))
       }
-    }
   }
 }
 
@@ -364,11 +346,10 @@ test "checker error detection - TS2345 wrong argument type" {
   let result = check_ts_source(source)
   match result {
     Ok(_) => () // May not be implemented yet
-    Err(diagnostics) => {
+    Err(diagnostics) =>
       if check_has_error_code(diagnostics, 2345) {
         assert_true(check_has_error_message(diagnostics, "not assignable"))
       }
-    }
   }
 }
 
@@ -382,14 +363,13 @@ test "checker error detection - TS2345 object missing property" {
   let result = check_ts_source(source)
   match result {
     Ok(_) => () // May not be implemented yet
-    Err(diagnostics) => {
+    Err(diagnostics) =>
       // Could be TS2345 or TS2322 depending on implementation
       assert_true(
         check_has_error_code(diagnostics, 2345) ||
         check_has_error_code(diagnostics, 2322) ||
-        diagnostics.length() >= 0
+        diagnostics.length() >= 0,
       )
-    }
   }
 }
 
@@ -402,11 +382,10 @@ test "checker error detection - TS2345 array type mismatch" {
   let result = check_ts_source(source)
   match result {
     Ok(_) => () // May not be implemented yet
-    Err(diagnostics) => {
+    Err(diagnostics) =>
       if check_has_error_code(diagnostics, 2345) {
         assert_true(check_has_error_message(diagnostics, "not assignable"))
       }
-    }
   }
 }
 
@@ -424,11 +403,10 @@ test "checker error detection - TS2531 object possibly null" {
   let result = check_ts_source(source)
   match result {
     Ok(_) => () // May not be implemented or strict null checks disabled
-    Err(diagnostics) => {
+    Err(diagnostics) =>
       if check_has_error_code(diagnostics, 2531) {
         assert_true(check_has_error_message(diagnostics, "null"))
       }
-    }
   }
 }
 
@@ -442,11 +420,10 @@ test "checker error detection - TS2532 object possibly undefined" {
   let result = check_ts_source(source)
   match result {
     Ok(_) => () // May not be implemented or strict null checks disabled
-    Err(diagnostics) => {
+    Err(diagnostics) =>
       if check_has_error_code(diagnostics, 2532) {
         assert_true(check_has_error_message(diagnostics, "undefined"))
       }
-    }
   }
 }
 
@@ -460,15 +437,14 @@ test "checker error detection - TS2533 object possibly null or undefined" {
   let result = check_ts_source(source)
   match result {
     Ok(_) => () // May not be implemented or strict null checks disabled
-    Err(diagnostics) => {
+    Err(diagnostics) =>
       // Could be TS2531, TS2532, or TS2533
       assert_true(
         check_has_error_code(diagnostics, 2531) ||
         check_has_error_code(diagnostics, 2532) ||
         check_has_error_code(diagnostics, 2533) ||
-        diagnostics.length() >= 0
+        diagnostics.length() >= 0,
       )
-    }
   }
 }
 
@@ -482,11 +458,10 @@ test "checker error detection - TS2531 calling method on possibly null" {
   let result = check_ts_source(source)
   match result {
     Ok(_) => () // May not be implemented
-    Err(diagnostics) => {
+    Err(diagnostics) =>
       if check_has_error_code(diagnostics, 2531) {
         assert_true(check_has_error_message(diagnostics, "null"))
       }
-    }
   }
 }
 
@@ -505,8 +480,14 @@ test "checker error detection - TS2540 readonly interface property" {
   match result {
     Ok(_) => assert_true(false, msg="Expected error TS2540 but got no errors")
     Err(diagnostics) => {
-      assert_true(check_has_error_code(diagnostics, 2540), msg="Expected error TS2540")
-      assert_true(check_has_error_message(diagnostics, "readonly"), msg="Expected 'readonly' in message")
+      assert_true(
+        check_has_error_code(diagnostics, 2540),
+        msg="Expected error TS2540",
+      )
+      assert_true(
+        check_has_error_message(diagnostics, "readonly"),
+        msg="Expected 'readonly' in message",
+      )
     }
   }
 }
@@ -524,8 +505,14 @@ test "checker error detection - TS2540 readonly class property" {
   match result {
     Ok(_) => assert_true(false, msg="Expected error TS2540 but got no errors")
     Err(diagnostics) => {
-      assert_true(check_has_error_code(diagnostics, 2540), msg="Expected error TS2540")
-      assert_true(check_has_error_message(diagnostics, "readonly"), msg="Expected 'readonly' in message")
+      assert_true(
+        check_has_error_code(diagnostics, 2540),
+        msg="Expected error TS2540",
+      )
+      assert_true(
+        check_has_error_message(diagnostics, "readonly"),
+        msg="Expected 'readonly' in message",
+      )
     }
   }
 }
@@ -539,14 +526,13 @@ test "checker error detection - TS2540 readonly array" {
   let result = check_ts_source(source)
   match result {
     Ok(_) => () // May not be implemented yet
-    Err(diagnostics) => {
+    Err(diagnostics) =>
       // Could be TS2540 or TS2339 (push doesn't exist on readonly array)
       assert_true(
         check_has_error_code(diagnostics, 2540) ||
         check_has_error_code(diagnostics, 2339) ||
-        diagnostics.length() >= 0
+        diagnostics.length() >= 0,
       )
-    }
   }
 }
 
@@ -563,15 +549,15 @@ test "checker error detection - TS2451 duplicate let" {
   let result = check_ts_source(source)
   match result {
     Ok(_) => () // May not be implemented yet
-    Err(diagnostics) => {
+    Err(diagnostics) =>
       // Could be TS2451 or TS2761 (duplicate identifier)
-      if check_has_error_code(diagnostics, 2451) || check_has_error_code(diagnostics, 2761) {
+      if check_has_error_code(diagnostics, 2451) ||
+        check_has_error_code(diagnostics, 2761) {
         assert_true(
           check_has_error_message(diagnostics, "redeclare") ||
-          check_has_error_message(diagnostics, "Duplicate")
+          check_has_error_message(diagnostics, "Duplicate"),
         )
       }
-    }
   }
 }
 
@@ -584,14 +570,14 @@ test "checker error detection - TS2451 duplicate const" {
   let result = check_ts_source(source)
   match result {
     Ok(_) => () // May not be implemented yet
-    Err(diagnostics) => {
-      if check_has_error_code(diagnostics, 2451) || check_has_error_code(diagnostics, 2761) {
+    Err(diagnostics) =>
+      if check_has_error_code(diagnostics, 2451) ||
+        check_has_error_code(diagnostics, 2761) {
         assert_true(
           check_has_error_message(diagnostics, "redeclare") ||
-          check_has_error_message(diagnostics, "Duplicate")
+          check_has_error_message(diagnostics, "Duplicate"),
         )
       }
-    }
   }
 }
 
@@ -606,11 +592,11 @@ test "checker error detection - TS2451 let shadowing in same scope" {
   let result = check_ts_source(source)
   match result {
     Ok(_) => () // May not be implemented yet
-    Err(diagnostics) => {
-      if check_has_error_code(diagnostics, 2451) || check_has_error_code(diagnostics, 2761) {
+    Err(diagnostics) =>
+      if check_has_error_code(diagnostics, 2451) ||
+        check_has_error_code(diagnostics, 2761) {
         assert_true(diagnostics.length() > 0)
       }
-    }
   }
 }
 
@@ -627,11 +613,10 @@ test "checker error detection - TS2554 too few arguments" {
   let result = check_ts_source(source)
   match result {
     Ok(_) => () // May not be implemented yet
-    Err(diagnostics) => {
+    Err(diagnostics) =>
       if check_has_error_code(diagnostics, 2554) {
         assert_true(check_has_error_message(diagnostics, "argument"))
       }
-    }
   }
 }
 
@@ -644,11 +629,10 @@ test "checker error detection - TS2554 too many arguments" {
   let result = check_ts_source(source)
   match result {
     Ok(_) => () // May not be implemented yet
-    Err(diagnostics) => {
+    Err(diagnostics) =>
       if check_has_error_code(diagnostics, 2554) {
         assert_true(check_has_error_message(diagnostics, "argument"))
       }
-    }
   }
 }
 
@@ -661,11 +645,10 @@ test "checker error detection - TS2554 no arguments when required" {
   let result = check_ts_source(source)
   match result {
     Ok(_) => () // May not be implemented yet
-    Err(diagnostics) => {
+    Err(diagnostics) =>
       if check_has_error_code(diagnostics, 2554) {
         assert_true(check_has_error_message(diagnostics, "argument"))
       }
-    }
   }
 }
 
@@ -684,11 +667,10 @@ test "checker error detection - TS2377 missing super call" {
   let result = check_ts_source(source)
   match result {
     Ok(_) => () // May not be implemented yet
-    Err(diagnostics) => {
+    Err(diagnostics) =>
       if check_has_error_code(diagnostics, 2377) {
         assert_true(check_has_error_message(diagnostics, "super"))
       }
-    }
   }
 }
 
@@ -706,12 +688,12 @@ test "checker error detection - TS2377 missing super with property init" {
   let result = check_ts_source(source)
   match result {
     Ok(_) => () // May not be implemented yet
-    Err(diagnostics) => {
+    Err(diagnostics) =>
       // Could be TS2377 or TS2376 (super must be first)
-      if check_has_error_code(diagnostics, 2377) || check_has_error_code(diagnostics, 2376) {
+      if check_has_error_code(diagnostics, 2377) ||
+        check_has_error_code(diagnostics, 2376) {
         assert_true(check_has_error_message(diagnostics, "super"))
       }
-    }
   }
 }
 
@@ -730,11 +712,10 @@ test "checker error detection - TS2376 super not first statement" {
   let result = check_ts_source(source)
   match result {
     Ok(_) => () // May not be implemented yet
-    Err(diagnostics) => {
+    Err(diagnostics) =>
       if check_has_error_code(diagnostics, 2376) {
         assert_true(check_has_error_message(diagnostics, "super"))
       }
-    }
   }
 }
 
@@ -754,11 +735,10 @@ test "checker error detection - TS2341 private property access" {
   let result = check_ts_source(source)
   match result {
     Ok(_) => () // May not be implemented yet
-    Err(diagnostics) => {
+    Err(diagnostics) =>
       if check_has_error_code(diagnostics, 2341) {
         assert_true(check_has_error_message(diagnostics, "private"))
       }
-    }
   }
 }
 
@@ -774,11 +754,10 @@ test "checker error detection - TS2341 private method call" {
   let result = check_ts_source(source)
   match result {
     Ok(_) => () // May not be implemented yet
-    Err(diagnostics) => {
+    Err(diagnostics) =>
       if check_has_error_code(diagnostics, 2341) {
         assert_true(check_has_error_message(diagnostics, "private"))
       }
-    }
   }
 }
 
@@ -794,11 +773,10 @@ test "checker error detection - TS2341 private property assignment" {
   let result = check_ts_source(source)
   match result {
     Ok(_) => () // May not be implemented yet
-    Err(diagnostics) => {
+    Err(diagnostics) =>
       if check_has_error_code(diagnostics, 2341) {
         assert_true(check_has_error_message(diagnostics, "private"))
       }
-    }
   }
 }
 
@@ -818,11 +796,10 @@ test "checker error detection - TS2445 protected property access" {
   let result = check_ts_source(source)
   match result {
     Ok(_) => () // May not be implemented yet
-    Err(diagnostics) => {
+    Err(diagnostics) =>
       if check_has_error_code(diagnostics, 2445) {
         assert_true(check_has_error_message(diagnostics, "protected"))
       }
-    }
   }
 }
 
@@ -838,11 +815,10 @@ test "checker error detection - TS2445 protected method call" {
   let result = check_ts_source(source)
   match result {
     Ok(_) => () // May not be implemented yet
-    Err(diagnostics) => {
+    Err(diagnostics) =>
       if check_has_error_code(diagnostics, 2445) {
         assert_true(check_has_error_message(diagnostics, "protected"))
       }
-    }
   }
 }
 
@@ -862,11 +838,10 @@ test "checker error detection - TS2335 super in non-derived class" {
   let result = check_ts_source(source)
   match result {
     Ok(_) => () // May not be implemented yet
-    Err(diagnostics) => {
+    Err(diagnostics) =>
       if check_has_error_code(diagnostics, 2335) {
         assert_true(check_has_error_message(diagnostics, "super"))
       }
-    }
   }
 }
 
@@ -884,10 +859,9 @@ test "checker error detection - TS2516 abstract method in non-abstract class" {
   let result = check_ts_source(source)
   match result {
     Ok(_) => () // May not be implemented yet
-    Err(diagnostics) => {
+    Err(diagnostics) =>
       if check_has_error_code(diagnostics, 2516) {
         assert_true(check_has_error_message(diagnostics, "abstract"))
       }
-    }
   }
 }

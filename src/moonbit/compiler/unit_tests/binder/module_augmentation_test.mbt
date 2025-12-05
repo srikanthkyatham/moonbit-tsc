@@ -34,9 +34,7 @@ test "ambient in script" {
     #|declare module "lodash" { export function map(): void; }
   let result = parse_and_bind_for_augmentation(source)
   match result {
-    Ok(bound) => {
-      assert_eq(bound.module_augmentations.length(), 0)
-    }
+    Ok(bound) => assert_eq(bound.module_augmentations.length(), 0)
     Err(_) => assert_true(false)
   }
 }
@@ -48,9 +46,7 @@ test "augmentation with export" {
     #|declare module "lib" { interface Opts { y?: boolean; } }
   let result = parse_and_bind_for_augmentation(source)
   match result {
-    Ok(bound) => {
-      assert_eq(bound.module_augmentations.length(), 1)
-    }
+    Ok(bound) => assert_eq(bound.module_augmentations.length(), 1)
     Err(_) => assert_true(false)
   }
 }

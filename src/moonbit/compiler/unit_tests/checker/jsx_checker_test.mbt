@@ -17,7 +17,9 @@ fn parse_and_check_jsx(source : String) -> @compiler.CheckResult {
 
 ///|
 /// Helper function to just parse JSX source code
-fn parse_only_jsx(source : String) -> Result[@compiler.SourceFile, Array[@compiler.Diagnostic]] {
+fn parse_only_jsx(
+  source : String,
+) -> Result[@compiler.SourceFile, Array[@compiler.Diagnostic]] {
   let tokens = @compiler.scan_all_v2(source, "test.tsx")
   @compiler.parse_source_file(tokens, "test.tsx")
 }
@@ -26,6 +28,7 @@ fn parse_only_jsx(source : String) -> Result[@compiler.SourceFile, Array[@compil
 // JSX Parsing Tests
 // ============================================================================
 
+///|
 test "jsx/parsing - simple element" {
   let source =
     #|const elem = <div>Hello</div>;
@@ -36,6 +39,7 @@ test "jsx/parsing - simple element" {
   }
 }
 
+///|
 test "jsx/parsing - self-closing element" {
   let source =
     #|const elem = <br />;
@@ -46,6 +50,7 @@ test "jsx/parsing - self-closing element" {
   }
 }
 
+///|
 test "jsx/parsing - element with attributes" {
   let source =
     #|const elem = <div className="container" id="main">Content</div>;
@@ -56,6 +61,7 @@ test "jsx/parsing - element with attributes" {
   }
 }
 
+///|
 test "jsx/parsing - element with expression attribute" {
   let source =
     #|const name = "test";
@@ -67,6 +73,7 @@ test "jsx/parsing - element with expression attribute" {
   }
 }
 
+///|
 test "jsx/parsing - nested elements" {
   let source =
     #|const elem = <div><span>Nested</span></div>;
@@ -77,6 +84,7 @@ test "jsx/parsing - nested elements" {
   }
 }
 
+///|
 test "jsx/parsing - fragment" {
   let source =
     #|const elem = <>First<span>Second</span></>;
@@ -87,6 +95,7 @@ test "jsx/parsing - fragment" {
   }
 }
 
+///|
 test "jsx/parsing - component element" {
   let source =
     #|function MyComponent() { return <div>Hello</div>; }
@@ -98,6 +107,7 @@ test "jsx/parsing - component element" {
   }
 }
 
+///|
 test "jsx/parsing - spread attribute" {
   let source =
     #|const props = { className: "test" };
@@ -113,6 +123,7 @@ test "jsx/parsing - spread attribute" {
 // JSX Type Checking Tests
 // ============================================================================
 
+///|
 test "jsx/check - intrinsic element type check" {
   let source =
     #|const elem = <div>Hello</div>;
@@ -123,6 +134,7 @@ test "jsx/check - intrinsic element type check" {
   }
 }
 
+///|
 test "jsx/check - self-closing element type check" {
   let source =
     #|const elem = <input type="text" />;
@@ -133,6 +145,7 @@ test "jsx/check - self-closing element type check" {
   }
 }
 
+///|
 test "jsx/check - element with string attribute" {
   let source =
     #|const elem = <div className="container">Content</div>;
@@ -143,6 +156,7 @@ test "jsx/check - element with string attribute" {
   }
 }
 
+///|
 test "jsx/check - element with expression children" {
   let source =
     #|const name = "World";
@@ -154,6 +168,7 @@ test "jsx/check - element with expression children" {
   }
 }
 
+///|
 test "jsx/check - fragment type check" {
   let source =
     #|const elem = <><span>A</span><span>B</span></>;
@@ -164,6 +179,7 @@ test "jsx/check - fragment type check" {
   }
 }
 
+///|
 test "jsx/check - nested elements type check" {
   let source =
     #|const elem = <div><span><strong>Deep</strong></span></div>;
@@ -174,6 +190,7 @@ test "jsx/check - nested elements type check" {
   }
 }
 
+///|
 test "jsx/check - boolean attribute" {
   let source =
     #|const elem = <input disabled />;
@@ -184,6 +201,7 @@ test "jsx/check - boolean attribute" {
   }
 }
 
+///|
 test "jsx/check - multiple attributes" {
   let source =
     #|const elem = <input type="text" name="field" value="test" />;
@@ -198,6 +216,7 @@ test "jsx/check - multiple attributes" {
 // JSX Component Tests
 // ============================================================================
 
+///|
 test "jsx/component - function component parse" {
   // Parsing test for function component with typed props
   let source =
@@ -212,6 +231,7 @@ test "jsx/component - function component parse" {
   }
 }
 
+///|
 test "jsx/component - arrow function component parse" {
   // Parsing test for arrow function component
   let source =
@@ -224,6 +244,7 @@ test "jsx/component - arrow function component parse" {
   }
 }
 
+///|
 test "jsx/component - component with children parse" {
   // Parsing test for component with children
   let source =
@@ -242,6 +263,7 @@ test "jsx/component - component with children parse" {
 // JSX Children Validation Tests
 // ============================================================================
 
+///|
 test "jsx/children - text children" {
   let source =
     #|const elem = <div>Just text</div>;
@@ -252,6 +274,7 @@ test "jsx/children - text children" {
   }
 }
 
+///|
 test "jsx/children - expression children" {
   let source =
     #|const count = 42;
@@ -263,6 +286,7 @@ test "jsx/children - expression children" {
   }
 }
 
+///|
 test "jsx/children - mixed children" {
   let source =
     #|const name = "World";
@@ -274,6 +298,7 @@ test "jsx/children - mixed children" {
   }
 }
 
+///|
 test "jsx/children - array children" {
   let source =
     #|const items = ["a", "b", "c"];
@@ -285,6 +310,7 @@ test "jsx/children - array children" {
   }
 }
 
+///|
 test "jsx/children - conditional children" {
   let source =
     #|const show = true;
@@ -296,6 +322,7 @@ test "jsx/children - conditional children" {
   }
 }
 
+///|
 test "jsx/children - null children" {
   let source =
     #|const elem = <div>{null}</div>;
@@ -310,6 +337,7 @@ test "jsx/children - null children" {
 // JSX Return Type Tests
 // ============================================================================
 
+///|
 test "jsx/return - function returns jsx" {
   let source =
     #|function render() {
@@ -322,6 +350,7 @@ test "jsx/return - function returns jsx" {
   }
 }
 
+///|
 test "jsx/return - arrow function returns jsx" {
   let source =
     #|const render = () => <div>Content</div>;
@@ -332,6 +361,7 @@ test "jsx/return - arrow function returns jsx" {
   }
 }
 
+///|
 test "jsx/return - component returns fragment" {
   let source =
     #|function List() {
@@ -353,6 +383,7 @@ test "jsx/return - component returns fragment" {
 // JSX Attribute Expression Tests
 // ============================================================================
 
+///|
 test "jsx/attr - callback attribute" {
   let source =
     #|const elem = <button onClick={() => console.log("clicked")}>Click</button>;
@@ -363,6 +394,7 @@ test "jsx/attr - callback attribute" {
   }
 }
 
+///|
 test "jsx/attr - template literal attribute" {
   // Template literal in JSX attribute
   let source =
@@ -375,6 +407,7 @@ test "jsx/attr - template literal attribute" {
   }
 }
 
+///|
 test "jsx/attr - object attribute" {
   let source =
     #|const style = { color: "red" };
@@ -386,6 +419,7 @@ test "jsx/attr - object attribute" {
   }
 }
 
+///|
 test "jsx/attr - inline object attribute" {
   let source =
     #|const elem = <div style={{ color: "blue", fontSize: 14 }}>Styled</div>;
@@ -400,6 +434,7 @@ test "jsx/attr - inline object attribute" {
 // JSX Edge Cases
 // ============================================================================
 
+///|
 test "jsx/edge - element as attribute value" {
   let source =
     #|const icon = <span>*</span>;
@@ -411,6 +446,7 @@ test "jsx/edge - element as attribute value" {
   }
 }
 
+///|
 test "jsx/edge - deeply nested" {
   let source =
     #|const elem = <div><div><div><div><span>Deep</span></div></div></div></div>;
@@ -421,6 +457,7 @@ test "jsx/edge - deeply nested" {
   }
 }
 
+///|
 test "jsx/edge - empty element" {
   let source =
     #|const elem = <div></div>;

@@ -89,9 +89,8 @@ test "unit/module-resolver/resolve - relative module produces ModuleNotFound" {
 
   // Since file_exists returns false, we expect ModuleNotFound
   match result {
-    Err(@compiler.ModuleNotFound(specifier, _searched)) => {
+    Err(@compiler.ModuleNotFound(specifier, _searched)) =>
       assert_eq(specifier, "./utils")
-    }
     Ok(_) => assert_true(false)
     Err(_) => assert_true(false)
   }
@@ -101,12 +100,13 @@ test "unit/module-resolver/resolve - relative module produces ModuleNotFound" {
 test "unit/module-resolver/resolve - node_modules package searches correctly" {
   let resolver = @compiler.ModuleResolver::with_defaults("/project/src")
   let result = resolver.resolve_module_name("lodash", "/project/src/index.ts")
-
   match result {
     Err(@compiler.ModuleNotFound(specifier, searched)) => {
       assert_eq(specifier, "lodash")
       // Should have searched in node_modules directories
-      let has_node_modules = searched.iter().any(fn(s) { s.contains("node_modules") })
+      let has_node_modules = searched
+        .iter()
+        .any(fn(s) { s.contains("node_modules") })
       assert_true(has_node_modules)
     }
     Ok(_) => assert_true(false)
@@ -117,8 +117,9 @@ test "unit/module-resolver/resolve - node_modules package searches correctly" {
 ///|
 test "unit/module-resolver/resolve - scoped package @types/node" {
   let resolver = @compiler.ModuleResolver::with_defaults("/project")
-  let result = resolver.resolve_module_name("@types/node", "/project/src/index.ts")
-
+  let result = resolver.resolve_module_name(
+    "@types/node", "/project/src/index.ts",
+  )
   match result {
     Err(@compiler.ModuleNotFound(specifier, searched)) => {
       assert_eq(specifier, "@types/node")
@@ -135,15 +136,15 @@ test "unit/module-resolver/resolve - scoped package @types/node" {
 test "unit/module-resolver/resolve - scoped package with subpath @angular/core/testing" {
   let resolver = @compiler.ModuleResolver::with_defaults("/project")
   let result = resolver.resolve_module_name(
-    "@angular/core/testing",
-    "/project/src/app.ts",
+    "@angular/core/testing", "/project/src/app.ts",
   )
-
   match result {
     Err(@compiler.ModuleNotFound(specifier, searched)) => {
       assert_eq(specifier, "@angular/core/testing")
       // Should have searched for package with subpath
-      let has_angular = searched.iter().any(fn(s) { s.contains("@angular/core") })
+      let has_angular = searched
+        .iter()
+        .any(fn(s) { s.contains("@angular/core") })
       assert_true(has_angular)
     }
     Ok(_) => assert_true(false)
@@ -159,7 +160,6 @@ test "unit/module-resolver/resolve - scoped package with subpath @angular/core/t
 test "unit/module-resolver/extensions - tries all configured extensions" {
   let resolver = @compiler.ModuleResolver::with_defaults("/project")
   let result = resolver.resolve_module_name("./utils", "/project/src/index.ts")
-
   match result {
     Err(@compiler.ModuleNotFound(_, searched)) => {
       let has_ts = searched.iter().any(fn(s) { s.has_suffix(".ts") })
@@ -177,8 +177,9 @@ test "unit/module-resolver/extensions - tries all configured extensions" {
 ///|
 test "unit/module-resolver/extensions - tries index files in directories" {
   let resolver = @compiler.ModuleResolver::with_defaults("/project")
-  let result = resolver.resolve_module_name("./components", "/project/src/index.ts")
-
+  let result = resolver.resolve_module_name(
+    "./components", "/project/src/index.ts",
+  )
   match result {
     Err(@compiler.ModuleNotFound(_, searched)) => {
       // Should have tried index files
@@ -201,7 +202,6 @@ test "unit/module-resolver/diagnostic - module not found diagnostic" {
     "/project/src/index.ts",
     ["/project/src/missing.ts", "/project/src/missing.tsx"],
   )
-
   assert_eq(diagnostic.code, 2307)
   assert_true(diagnostic.message.contains("./missing"))
   assert_eq(diagnostic.location.file_path, "/project/src/index.ts")
@@ -213,7 +213,6 @@ test "unit/module-resolver/diagnostic - circular dependency diagnostic" {
     ["a.ts", "b.ts", "c.ts", "a.ts"],
     "/project/a.ts",
   )
-
   assert_true(diagnostic.message.contains("Circular dependency"))
   assert_true(diagnostic.message.contains("->"))
 }
@@ -227,7 +226,9 @@ test "unit/module-resolver/cache - caches failed lookups" {
   let resolver = @compiler.ModuleResolver::with_defaults("/project")
 
   // First resolution attempt
-  let _result1 = resolver.resolve_module_name("./missing", "/project/src/index.ts")
+  let _result1 = resolver.resolve_module_name(
+    "./missing", "/project/src/index.ts",
+  )
 
   // Check that failed lookups cache has an entry
   let cache_key = "/project/src/index.ts|./missing"
@@ -245,7 +246,6 @@ test "unit/module-resolver/cache - caches failed lookups" {
 ///|
 test "unit/module-resolver/options - default options have correct values" {
   let options = @compiler.ModuleResolutionOptions::default()
-
   assert_eq(options.extensions.length(), 5)
   assert_eq(options.resolve_json_module, false)
   assert_eq(options.type_roots.length(), 1)
@@ -254,7 +254,6 @@ test "unit/module-resolver/options - default options have correct values" {
 ///|
 test "unit/module-resolver/options - extensions include TypeScript and JavaScript" {
   let options = @compiler.ModuleResolutionOptions::default()
-
   assert_true(options.extensions.contains(".ts"))
   assert_true(options.extensions.contains(".tsx"))
   assert_true(options.extensions.contains(".d.ts"))
@@ -270,8 +269,9 @@ test "unit/module-resolver/options - extensions include TypeScript and JavaScrip
 test "unit/module-resolver/normalize - resolves .. in paths" {
   let resolver = @compiler.ModuleResolver::with_defaults("/project")
   // Test with path containing . and ..
-  let result = resolver.resolve_module_name("./foo/../bar", "/project/src/index.ts")
-
+  let result = resolver.resolve_module_name(
+    "./foo/../bar", "/project/src/index.ts",
+  )
   match result {
     Err(@compiler.ModuleNotFound(_, searched)) => {
       // The normalized path should have resolved the ..
@@ -287,14 +287,14 @@ test "unit/module-resolver/normalize - resolves .. in paths" {
 test "unit/module-resolver/normalize - handles deep relative paths" {
   let resolver = @compiler.ModuleResolver::with_defaults("/project")
   let result = resolver.resolve_module_name(
-    "../../shared/utils",
-    "/project/src/features/auth/login.ts",
+    "../../shared/utils", "/project/src/features/auth/login.ts",
   )
-
   match result {
     Err(@compiler.ModuleNotFound(_, searched)) => {
       // Should resolve to /project/src/shared/utils
-      let has_shared = searched.iter().any(fn(s) { s.contains("/src/shared/utils") })
+      let has_shared = searched
+        .iter()
+        .any(fn(s) { s.contains("/src/shared/utils") })
       assert_true(has_shared)
     }
     Ok(_) => assert_true(false)

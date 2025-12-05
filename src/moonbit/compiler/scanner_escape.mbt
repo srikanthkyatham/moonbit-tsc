@@ -43,7 +43,7 @@ fn parse_unicode_escape_v2(code : StringView) -> (String, Int)? {
           }
           return Some((code_point_to_string_v2(code_point), i + 2)) // +2 for { and }
         }
-        [ch, .. rest2] => {
+        [ch, .. rest2] =>
           match hex_digit_value_v2(ch) {
             Some(value) => {
               code_point = code_point * 16 + value
@@ -53,7 +53,6 @@ fn parse_unicode_escape_v2(code : StringView) -> (String, Int)? {
             }
             None => return None
           }
-        }
         [] => return None
       }
     }
@@ -63,7 +62,7 @@ fn parse_unicode_escape_v2(code : StringView) -> (String, Int)? {
       let mut remaining = code
       for i = 0; i < 4; i = i + 1 {
         match remaining {
-          [ch, .. rest] => {
+          [ch, .. rest] =>
             match hex_digit_value_v2(ch) {
               Some(value) => {
                 code_point = code_point * 16 + value
@@ -71,7 +70,6 @@ fn parse_unicode_escape_v2(code : StringView) -> (String, Int)? {
               }
               None => return None
             }
-          }
           [] => return None
         }
       }
@@ -85,7 +83,7 @@ fn parse_unicode_escape_v2(code : StringView) -> (String, Int)? {
 /// Returns (parsed_char, chars_consumed) or None if invalid
 fn parse_hex_escape_v2(code : StringView) -> (String, Int)? {
   match code {
-    [h1, h2, ..] => {
+    [h1, h2, ..] =>
       match (hex_digit_value_v2(h1), hex_digit_value_v2(h2)) {
         (Some(v1), Some(v2)) => {
           let value = v1 * 16 + v2
@@ -93,7 +91,6 @@ fn parse_hex_escape_v2(code : StringView) -> (String, Int)? {
         }
         _ => None
       }
-    }
     _ => None
   }
 }

@@ -122,7 +122,8 @@ test "parse jsdoc - deprecated tag" {
   let result = @compiler.parse_jsdoc(content)
   assert_eq(result.tags.length(), 1)
   match result.tags[0] {
-    @compiler.Deprecated(dep) => assert_true(dep.description.contains("newFunction"))
+    @compiler.Deprecated(dep) =>
+      assert_true(dep.description.contains("newFunction"))
     _ => assert_true(false)
   }
 }

@@ -227,9 +227,7 @@ test "scan comment skipping" {
 
 ///|
 test "scan multiline comment skipping" {
-  let tokens = scan_all_v2(
-    "/* multi\nline\ncomment */const x = 5;", "test.ts",
-  )
+  let tokens = scan_all_v2("/* multi\nline\ncomment */const x = 5;", "test.ts")
 
   // Comments should be skipped: const, identifier, =, number, ;, EOF
   assert_eq(tokens.length(), 6)

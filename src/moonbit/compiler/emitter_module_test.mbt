@@ -8,6 +8,7 @@
 // EmitterContext Module Kind Tests
 // ============================================================================
 
+///|
 test "emitter/module_kind - default context uses ESModule" {
   let ctx = EmitterContext::default()
   match ctx.module_kind {
@@ -16,6 +17,7 @@ test "emitter/module_kind - default context uses ESModule" {
   }
 }
 
+///|
 test "emitter/module_kind - with_options sets ESModule" {
   let ctx = EmitterContext::with_options(ESModule, false)
   match ctx.module_kind {
@@ -24,6 +26,7 @@ test "emitter/module_kind - with_options sets ESModule" {
   }
 }
 
+///|
 test "emitter/module_kind - with_options sets CommonJS" {
   let ctx = EmitterContext::with_options(CommonJS, false)
   match ctx.module_kind {
@@ -32,6 +35,7 @@ test "emitter/module_kind - with_options sets CommonJS" {
   }
 }
 
+///|
 test "emitter/module_kind - indent preserves module kind ESModule" {
   let ctx = EmitterContext::with_options(ESModule, false)
   let indented = ctx.indent()
@@ -41,6 +45,7 @@ test "emitter/module_kind - indent preserves module kind ESModule" {
   }
 }
 
+///|
 test "emitter/module_kind - indent preserves module kind CommonJS" {
   let ctx = EmitterContext::with_options(CommonJS, false)
   let indented = ctx.indent()
@@ -54,9 +59,15 @@ test "emitter/module_kind - indent preserves module kind CommonJS" {
 // Source Map with Module Kind Tests
 // ============================================================================
 
+///|
 test "emitter/module_sourcemap - with_options_and_source_map preserves module kind CommonJS" {
   let builder = SourceMapBuilder::new()
-  let ctx = EmitterContext::with_options_and_source_map(CommonJS, true, builder, "test.ts")
+  let ctx = EmitterContext::with_options_and_source_map(
+    CommonJS,
+    true,
+    builder,
+    "test.ts",
+  )
   match ctx.module_kind {
     CommonJS => assert_true(true)
     _ => fail("Expected CommonJS")
@@ -65,9 +76,15 @@ test "emitter/module_sourcemap - with_options_and_source_map preserves module ki
   assert_true(ctx.source_map_builder is Some(_))
 }
 
+///|
 test "emitter/module_sourcemap - ESModule with source map" {
   let builder = SourceMapBuilder::new()
-  let ctx = EmitterContext::with_options_and_source_map(ESModule, false, builder, "input.ts")
+  let ctx = EmitterContext::with_options_and_source_map(
+    ESModule,
+    false,
+    builder,
+    "input.ts",
+  )
   match ctx.module_kind {
     ESModule => assert_true(true)
     _ => fail("Expected ESModule")
@@ -82,12 +99,14 @@ test "emitter/module_sourcemap - ESModule with source map" {
 // EmitterContext Text Emission Tests
 // ============================================================================
 
+///|
 test "emitter/emit_text - tracks column position" {
   let ctx = EmitterContext::with_options(ESModule, false)
   ctx.emit_text("const x")
   assert_eq(ctx.generated_column, 7)
 }
 
+///|
 test "emitter/emit_newline - increments line" {
   let ctx = EmitterContext::with_options(ESModule, false)
   ctx.emit_text("line1")
@@ -96,6 +115,7 @@ test "emitter/emit_newline - increments line" {
   assert_eq(ctx.generated_column, 0)
 }
 
+///|
 test "emitter/indent - increases indent level" {
   let ctx = EmitterContext::with_options(ESModule, false)
   assert_eq(ctx.indent_level, 0)
@@ -107,11 +127,13 @@ test "emitter/indent - increases indent level" {
 // Module Kind with es_module_interop Tests
 // ============================================================================
 
+///|
 test "emitter/es_module_interop - default is false" {
   let ctx = EmitterContext::default()
   assert_eq(ctx.es_module_interop, false)
 }
 
+///|
 test "emitter/es_module_interop - preserved after indent" {
   let ctx = EmitterContext::default()
   let indented = ctx.indent()

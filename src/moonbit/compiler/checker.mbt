@@ -382,9 +382,7 @@ fn next_type_id(checker : TypeChecker) -> (Int, TypeChecker) {
 /// Push a new local scope onto the scope stack
 fn push_local_scope(checker : TypeChecker) -> TypeChecker {
   let scopes = checker.local_scopes
-  scopes.push(
-    LocalScope::{ variables: Map::new(), const_vars: @hashset.new() },
-  )
+  scopes.push(LocalScope::{ variables: Map::new(), const_vars: @hashset.new() })
   { ..checker, local_scopes: scopes }
 }
 
@@ -394,6 +392,7 @@ fn pop_local_scope(checker : TypeChecker) -> TypeChecker {
   let scopes = checker.local_scopes
   if scopes.length() > 0 {
     let _ = scopes.pop()
+
   }
   { ..checker, local_scopes: scopes }
 }
@@ -490,7 +489,7 @@ fn exit_regular_function(checker : TypeChecker) -> TypeChecker {
     regular_function_depth: checker.regular_function_depth - 1,
     // Restore: innermost is arrow if we're still inside an arrow but no more regular functions between
     innermost_function_is_arrow: checker.regular_function_depth == 1 &&
-      checker.arrow_function_depth > 0,
+    checker.arrow_function_depth > 0,
   }
 }
 
@@ -558,7 +557,8 @@ fn add_binding_pattern_variables(
       }
       c
     }
-    BindingElement(elem) => add_binding_pattern_variables(checker, elem.name, var_type)
+    BindingElement(elem) =>
+      add_binding_pattern_variables(checker, elem.name, var_type)
     SpreadExpression(spread) =>
       add_binding_pattern_variables(checker, spread.expression, var_type)
     _ => checker
@@ -679,7 +679,8 @@ fn hoist_var_declarations(checker : TypeChecker, stmt : Node) -> TypeChecker {
     TryStatement(try_stmt) => {
       let checker = hoist_var_declarations(checker, try_stmt.try_block)
       let checker = match try_stmt.catch_clause {
-        Some(catch_clause) => hoist_var_declarations(checker, catch_clause.block)
+        Some(catch_clause) =>
+          hoist_var_declarations(checker, catch_clause.block)
         None => checker
       }
       match try_stmt.finally_block {
@@ -697,7 +698,11 @@ fn hoist_var_declarations(checker : TypeChecker, stmt : Node) -> TypeChecker {
 
 ///|
 /// Add a var binding to the current local scope during hoisting
-fn hoist_var_decl_binding(checker : TypeChecker, name : Node, var_type : Type) -> TypeChecker {
+fn hoist_var_decl_binding(
+  checker : TypeChecker,
+  name : Node,
+  var_type : Type,
+) -> TypeChecker {
   match name {
     Identifier(id) => add_local_variable(checker, id.name, var_type)
     ArrayBindingPattern(pattern) => {
@@ -795,7 +800,9 @@ fn is_array_like_type(t : Type) -> Bool {
         Some(_) => true // User-defined class instances are potentially iterable
         None =>
           // For plain objects, check for numeric index signature
-          obj_type.index_signatures.iter().any(fn(idx_sig) {
+          obj_type.index_signatures
+          .iter()
+          .any(fn(idx_sig) {
             match idx_sig.parameter_type {
               Number(_) => true
               _ => false
@@ -857,18 +864,16 @@ fn add_object_binding_elements_to_scope(
       Identifier(id) => id.name
       _ => "" // Nested patterns would need recursive handling
     }
-
     if binding_name != "" {
       // Look up the property type from the object type
       let (prop_type, c) = match obj_type {
         Object(obj) =>
           match obj.properties.get(source_prop_name) {
-            Some(prop_sig) => {
+            Some(prop_sig) =>
               // If the property is optional and we have a default initializer,
               // the type is the property type with undefined removed
               // For now, just use the property type
               (prop_sig.prop_type, checker)
-            }
             None => any_type(checker) // Property not found, use any
           }
         // For type references (like `Thing`), we need to look up the type alias
@@ -1631,6 +1636,8 @@ fn infer_type_parameters_recursive(
 // ============================================================================
 
 // Maximum number of constituents allowed in a union type before reporting TS2590
+
+///|
 let max_union_constituents : Int = 100000
 
 ///|
@@ -1813,7 +1820,11 @@ pub fn check_source_file_with_external_types(
   )
 
   // Build import map from module_info.imports
-  let import_map = build_import_map(bound.module_info.imports, bound.file_path, external_registry)
+  let import_map = build_import_map(
+    bound.module_info.imports,
+    bound.file_path,
+    external_registry,
+  )
 
   // Store external registry and import map in checker for type resolution
   let checker = {
@@ -1857,16 +1868,18 @@ fn build_import_map(
   registry : ExternalTypeRegistry,
 ) -> Map[String, (String, String)] {
   let import_map : Map[String, (String, String)] = Map::new()
-
   for import_info in imports {
     let module_spec = import_info.module_specifier
 
     // Resolve module path - first try registry mappings, then relative path resolution
-    let resolved_module = resolve_module_path_with_registry(module_spec, current_file, registry)
+    let resolved_module = resolve_module_path_with_registry(
+      module_spec, current_file, registry,
+    )
 
     // Handle default import
     match import_info.default_import {
-      Some(local_name) => import_map.set(local_name, (resolved_module, "default"))
+      Some(local_name) =>
+        import_map.set(local_name, (resolved_module, "default"))
       None => ()
     }
 
@@ -1889,13 +1902,16 @@ fn build_import_map(
       import_map.set(local_name, (resolved_module, original_name))
     }
   }
-
   import_map
 }
 
 ///|
 /// Resolve a module specifier using the registry mappings (for node_modules) and relative paths
-fn resolve_module_path_with_registry(module_spec : String, current_file : String, registry : ExternalTypeRegistry) -> String {
+fn resolve_module_path_with_registry(
+  module_spec : String,
+  current_file : String,
+  registry : ExternalTypeRegistry,
+) -> String {
   // Handle relative imports (./foo, ../bar)
   if module_spec.has_prefix("./") || module_spec.has_prefix("../") {
     // Get directory of current file
@@ -1974,7 +1990,6 @@ fn get_directory_from_path(path : String) -> String {
 fn normalize_import_path(path : String) -> String {
   let parts = split_path(path)
   let result : Array[String] = []
-
   for part in parts {
     if part == "." {
       // Skip current directory
@@ -1983,6 +1998,7 @@ fn normalize_import_path(path : String) -> String {
       // Go up one directory
       if result.length() > 0 && result[result.length() - 1] != ".." {
         let _ = result.pop()
+
       } else {
         result.push(part)
       }
@@ -1990,9 +2006,15 @@ fn normalize_import_path(path : String) -> String {
       result.push(part)
     }
   }
-
-  "/" + result.iter().fold(init="", fn(acc, part) {
-    if acc.length() == 0 { part } else { acc + "/" + part }
+  "/" +
+  result
+  .iter()
+  .fold(init="", fn(acc, part) {
+    if acc.length() == 0 {
+      part
+    } else {
+      acc + "/" + part
+    }
   })
 }
 
@@ -2033,11 +2055,11 @@ fn resolve_import_type(checker : TypeChecker, name : String) -> Type? {
   // Check if this name is an import
   match checker.import_map.get(name) {
     None => None
-    Some((module_path, original_name)) => {
+    Some((module_path, original_name)) =>
       // Look up in external registry
       match checker.external_registry {
         None => None
-        Some(registry) => {
+        Some(registry) =>
           if original_name == "default" {
             // Default import
             match registry.lookup_default(module_path) {
@@ -2047,7 +2069,8 @@ fn resolve_import_type(checker : TypeChecker, name : String) -> Type? {
           } else if original_name == "*" {
             // Namespace import - create module type
             match registry.get_module(module_path) {
-              Some(module_types) => Some(module_types_to_object_type(module_types))
+              Some(module_types) =>
+                Some(module_types_to_object_type(module_types))
               None => None
             }
           } else {
@@ -2057,16 +2080,18 @@ fn resolve_import_type(checker : TypeChecker, name : String) -> Type? {
               None => None
             }
           }
-        }
       }
-    }
   }
 }
 
 ///|
 /// Lookup a member of an imported namespace from external types
 /// For imports like "import * as m4 from 'm4'", look up m4.foo in the external registry
-fn lookup_imported_namespace_member(checker : TypeChecker, namespace_name : String, member_name : String) -> Type? {
+fn lookup_imported_namespace_member(
+  checker : TypeChecker,
+  namespace_name : String,
+  member_name : String,
+) -> Type? {
   // Check if this namespace is an import
   match checker.import_map.get(namespace_name) {
     None => None
@@ -2078,13 +2103,12 @@ fn lookup_imported_namespace_member(checker : TypeChecker, namespace_name : Stri
       // Look up in external registry
       match checker.external_registry {
         None => None
-        Some(registry) => {
+        Some(registry) =>
           // Look up the export from the module
           match registry.lookup_export(module_path, member_name) {
             Some(info) => Some(type_v2_to_type(info.ty))
             None => None
           }
-        }
       }
     }
   }
@@ -2098,7 +2122,7 @@ fn object_type_v2_to_type(obj : ObjectTypeV2) -> ObjectType {
   for entry in obj.fields {
     let (name, field) = entry
     props.set(name, PropertySignature::{
-      name: name,
+      name,
       prop_type: type_v2_to_type(field.ty),
       is_optional: field.optional,
       is_readonly: field.is_readonly,
@@ -2109,7 +2133,7 @@ fn object_type_v2_to_type(obj : ObjectTypeV2) -> ObjectType {
     call_signatures: [],
     construct_signatures: [],
     index_signatures: [],
-    info: info,
+    info,
     class_name: obj.class_name,
   }
 }
@@ -2119,7 +2143,7 @@ fn object_type_v2_to_type(obj : ObjectTypeV2) -> ObjectType {
 fn resolve_global_namespace(checker : TypeChecker, name : String) -> Type? {
   match checker.external_registry {
     None => None
-    Some(registry) => {
+    Some(registry) =>
       match registry.lookup_global_namespace(name) {
         Some(ns_type) => {
           let obj_type = object_type_v2_to_type(ns_type)
@@ -2127,7 +2151,6 @@ fn resolve_global_namespace(checker : TypeChecker, name : String) -> Type? {
         }
         None => None
       }
-    }
   }
 }
 
@@ -2159,7 +2182,7 @@ fn type_v2_to_type(ty : TypeV2) -> Type {
       for entry in obj.fields {
         let (name, field) = entry
         props.set(name, PropertySignature::{
-          name: name,
+          name,
           prop_type: type_v2_to_type(field.ty),
           is_optional: field.optional,
           is_readonly: field.is_readonly,
@@ -2170,14 +2193,12 @@ fn type_v2_to_type(ty : TypeV2) -> Type {
         call_signatures: [],
         construct_signatures: [],
         index_signatures: [],
-        info: info,
+        info,
         class_name: obj.class_name,
       })
     }
-    TArray(elem) => Array(CheckerArrayType::{
-      element_type: type_v2_to_type(elem),
-      info: info,
-    })
+    TArray(elem) =>
+      Array(CheckerArrayType::{ element_type: type_v2_to_type(elem), info })
     TTuple(elements) => {
       let elem_types = elements.map(fn(elem) {
         TupleElement::{
@@ -2187,10 +2208,7 @@ fn type_v2_to_type(ty : TypeV2) -> Type {
           label: elem.label,
         }
       })
-      Tuple(CheckerTupleType::{
-        element_types: elem_types,
-        info: info,
-      })
+      Tuple(CheckerTupleType::{ element_types: elem_types, info })
     }
     TFunction(func) => {
       let params = func.params.map(fn(p) {
@@ -2204,83 +2222,74 @@ fn type_v2_to_type(ty : TypeV2) -> Type {
       Function(CheckerFunctionType::{
         parameters: params,
         return_type: type_v2_to_type(func.return_type),
-        info: info,
+        info,
       })
     }
     TUnion(types) => {
       let converted = types.map(type_v2_to_type)
-      Union(CheckerUnionType::{
-        types: converted,
-        info: info,
-      })
+      Union(CheckerUnionType::{ types: converted, info })
     }
     TIntersection(types) => {
       let converted = types.map(type_v2_to_type)
-      Intersection(CheckerIntersectionType::{
-        types: converted,
-        info: info,
-      })
+      Intersection(CheckerIntersectionType::{ types: converted, info })
     }
     TLiteralString(s) => StringLiteral(s, info)
     TLiteralNumber(n) => NumberLiteral(n, info)
     TLiteralBool(b) => BooleanLiteral(b, info)
     TLiteralBigInt(_) => BigInt(info) // BigInt literal treated as BigInt type
-    TGenericInstance(name, type_args) => TypeReference(TypeReferenceType::{
-      name: name,
-      type_arguments: type_args.map(type_v2_to_type),
-      info: info,
-    })
-    TTypeParam(name, constraint) => {
-      // Type parameters are represented as type references for now
+    TGenericInstance(name, type_args) =>
       TypeReference(TypeReferenceType::{
-        name: name,
-        type_arguments: [],
-        info: info,
+        name,
+        type_arguments: type_args.map(type_v2_to_type),
+        info,
       })
-    }
-    TConditional(cond) => Conditional(CheckerConditionalType::{
-      check_type: type_v2_to_type(cond.check_type),
-      extends_type: type_v2_to_type(cond.extends_type),
-      true_type: type_v2_to_type(cond.true_type),
-      false_type: type_v2_to_type(cond.false_type),
-      info: info,
-    })
-    TIndexAccess(idx) => IndexAccess(CheckerIndexAccessType::{
-      object_type: type_v2_to_type(idx.object_type),
-      index_type: type_v2_to_type(idx.index_type),
-      info: info,
-      is_keyof: false,
-    })
-    TMapped(mapped) => Mapped(CheckerMappedType::{
-      type_parameter: CheckerTypeParameter::{
-        name: mapped.type_param.name,
-        constraint: match mapped.type_param.constraint {
-          Some(c) => Some(type_v2_to_type(c))
+    TTypeParam(name, constraint) =>
+      // Type parameters are represented as type references for now
+      TypeReference(TypeReferenceType::{ name, type_arguments: [], info })
+    TConditional(cond) =>
+      Conditional(CheckerConditionalType::{
+        check_type: type_v2_to_type(cond.check_type),
+        extends_type: type_v2_to_type(cond.extends_type),
+        true_type: type_v2_to_type(cond.true_type),
+        false_type: type_v2_to_type(cond.false_type),
+        info,
+      })
+    TIndexAccess(idx) =>
+      IndexAccess(CheckerIndexAccessType::{
+        object_type: type_v2_to_type(idx.object_type),
+        index_type: type_v2_to_type(idx.index_type),
+        info,
+        is_keyof: false,
+      })
+    TMapped(mapped) =>
+      Mapped(CheckerMappedType::{
+        type_parameter: CheckerTypeParameter::{
+          name: mapped.type_param.name,
+          constraint: match mapped.type_param.constraint {
+            Some(c) => Some(type_v2_to_type(c))
+            None => None
+          },
+          default_type: match mapped.type_param.default_type {
+            Some(d) => Some(type_v2_to_type(d))
+            None => None
+          },
+        },
+        name_type: match mapped.name_type {
+          Some(n) => Some(type_v2_to_type(n))
           None => None
         },
-        default_type: match mapped.type_param.default_type {
-          Some(d) => Some(type_v2_to_type(d))
-          None => None
-        },
-      },
-      name_type: match mapped.name_type {
-        Some(n) => Some(type_v2_to_type(n))
-        None => None
-      },
-      template_type: type_v2_to_type(mapped.template_type),
-      readonly_modifier: MappedModifier::Unchanged,
-      optional_modifier: MappedModifier::Unchanged,
-      info: info,
-    })
-    TInfer(name) => Infer(CheckerInferType::{
-      type_parameter_name: name,
-      info: info,
-    })
-    TTemplateLiteral(tpl) => TemplateLiteral(CheckerTemplateLiteralType::{
-      texts: tpl.texts,
-      types: tpl.types.map(type_v2_to_type),
-      info: info,
-    })
+        template_type: type_v2_to_type(mapped.template_type),
+        readonly_modifier: MappedModifier::Unchanged,
+        optional_modifier: MappedModifier::Unchanged,
+        info,
+      })
+    TInfer(name) => Infer(CheckerInferType::{ type_parameter_name: name, info })
+    TTemplateLiteral(tpl) =>
+      TemplateLiteral(CheckerTemplateLiteralType::{
+        texts: tpl.texts,
+        types: tpl.types.map(type_v2_to_type),
+        info,
+      })
     TError => Error(info)
   }
 }
@@ -2290,17 +2299,15 @@ fn type_v2_to_type(ty : TypeV2) -> Type {
 fn module_types_to_object_type(module_types : ModuleTypes) -> Type {
   let props : Map[String, PropertySignature] = Map::new()
   let type_info = default_type_info()
-
   for entry in module_types.named_exports {
     let (name, export_info) = entry
     props.set(name, PropertySignature::{
-      name: name,
+      name,
       prop_type: type_v2_to_type(export_info.ty),
       is_optional: false,
       is_readonly: true,
     })
   }
-
   Object(ObjectType::{
     properties: props,
     call_signatures: [],
@@ -2359,7 +2366,6 @@ fn check_statements(
 
   // Check function overloads (TS2391, TS2383, TS2394)
   checker = check_statement_overloads(statements, checker)
-
   for i = 0; i < statements.length(); i = i + 1 {
     checker = check_statement(checker, statements[i])
   }
@@ -2417,7 +2423,9 @@ fn check_module_declaration(
           let checker = push_local_scope(checker)
           // Add all exports to namespace_symbols so lookup_symbol can find them
           // Use direct map mutation (Map.set mutates in place)
-          exports.each(fn(name, sym) { checker.namespace_symbols.set(name, sym) })
+          exports.each(fn(name, sym) {
+            checker.namespace_symbols.set(name, sym)
+          })
           // Check the body with the namespace scope active
           let checker = match mod_decl.body {
             Some(BlockStatement(block)) =>
@@ -2520,24 +2528,20 @@ fn collect_type_reference_names_inner(t : Type, names : Array[String]) -> Unit {
         collect_type_reference_names_inner(param.param_type, names)
       }
     }
-    Union(union_type) => {
+    Union(union_type) =>
       for constituent in union_type.types {
         collect_type_reference_names_inner(constituent, names)
       }
-    }
-    Intersection(intersection_type) => {
+    Intersection(intersection_type) =>
       for constituent in intersection_type.types {
         collect_type_reference_names_inner(constituent, names)
       }
-    }
-    Array(arr_type) => {
+    Array(arr_type) =>
       collect_type_reference_names_inner(arr_type.element_type, names)
-    }
-    Tuple(tuple_type) => {
+    Tuple(tuple_type) =>
       for elem in tuple_type.element_types {
         collect_type_reference_names_inner(elem.element_type, names)
       }
-    }
     Conditional(cond_type) => {
       collect_type_reference_names_inner(cond_type.check_type, names)
       collect_type_reference_names_inner(cond_type.extends_type, names)
@@ -2571,14 +2575,13 @@ fn collect_type_reference_names_inner(t : Type, names : Array[String]) -> Unit {
 fn is_symbol_exported(checker : TypeChecker, name : String) -> Bool {
   // First check if it's a built-in type (always accessible)
   let builtins = [
-    "Array", "Object", "String", "Number", "Boolean", "Function", "Symbol",
-    "BigInt", "Promise", "Map", "Set", "WeakMap", "WeakSet", "Date", "RegExp",
-    "Error", "TypeError", "RangeError", "SyntaxError", "ReferenceError",
-    "Partial", "Required", "Readonly", "Pick", "Omit", "Record", "Exclude",
-    "Extract", "NonNullable", "ReturnType", "Parameters", "InstanceType",
-    "ConstructorParameters", "ThisParameterType", "OmitThisParameter",
-    "ThisType", "Awaited", "Generator", "AsyncGenerator", "IterableIterator",
-    "AsyncIterableIterator", "ReadonlyArray", "ReadonlyMap", "ReadonlySet",
+    "Array", "Object", "String", "Number", "Boolean", "Function", "Symbol", "BigInt",
+    "Promise", "Map", "Set", "WeakMap", "WeakSet", "Date", "RegExp", "Error", "TypeError",
+    "RangeError", "SyntaxError", "ReferenceError", "Partial", "Required", "Readonly",
+    "Pick", "Omit", "Record", "Exclude", "Extract", "NonNullable", "ReturnType",
+    "Parameters", "InstanceType", "ConstructorParameters", "ThisParameterType", "OmitThisParameter",
+    "ThisType", "Awaited", "Generator", "AsyncGenerator", "IterableIterator", "AsyncIterableIterator",
+    "ReadonlyArray", "ReadonlyMap", "ReadonlySet",
   ]
   if builtins.contains(name) {
     return true
@@ -2587,11 +2590,10 @@ fn is_symbol_exported(checker : TypeChecker, name : String) -> Bool {
   // Check if symbol exists and is exported
   match lookup_symbol(checker, name) {
     Some(symbol) => symbol.flags.is_export
-    None => {
+    None =>
       // If we can't find the symbol, it might be from another file
       // In single-file mode, assume it's accessible (conservative)
       true
-    }
   }
 }
 
@@ -2660,7 +2662,9 @@ fn check_inferred_type_accessibility(
   }
 
   // Infer the return type from body
-  let (return_type_opt, checker) = infer_function_body_return_type(checker, func)
+  let (return_type_opt, checker) = infer_function_body_return_type(
+    checker, func,
+  )
   match return_type_opt {
     Some(return_type) => {
       // Collect all type references in the return type
@@ -2696,7 +2700,6 @@ fn check_variable_statement(
 
   // Check if this is an exported variable (for TS2494 check)
   let is_exported = has_export_modifier(var_stmt.modifiers)
-
   for i = 0; i < var_stmt.declarations.length(); i = i + 1 {
     let decl = var_stmt.declarations[i]
     checker = check_variable_declaration(checker, decl, var_stmt.is_const)
@@ -2705,15 +2708,30 @@ fn check_variable_statement(
     // Only check if NOT ambient declaration (declare const x: T is allowed)
     if var_stmt.is_const && not(is_ambient) {
       match decl.initializer {
-        None => {
+        None =>
           checker = add_diagnostic_with_code(
             checker,
             "'const' declarations must be initialized.",
             decl.location,
             TS1155,
           )
-        }
         Some(_) => ()
+      }
+    }
+
+    // TS1182: A destructuring declaration must have an initializer
+    // Only check if NOT ambient declaration (declare var is allowed without initializer)
+    // Note: for-of/for-in loop bindings are handled separately and don't go through this function
+    if not(is_ambient) {
+      match (decl.name, decl.initializer) {
+        (ArrayBindingPattern(_), None) | (ObjectBindingPattern(_), None) =>
+          checker = add_diagnostic_with_code(
+            checker,
+            "A destructuring declaration must have an initializer.",
+            decl.location,
+            TS1182,
+          )
+        _ => ()
       }
     }
 
@@ -2811,7 +2829,10 @@ fn collect_type_names_from_type_node(node : Node) -> Array[String] {
 
 ///|
 /// Helper to recursively collect type names from type annotation nodes
-fn collect_type_names_from_type_node_inner(node : Node, names : Array[String]) -> Unit {
+fn collect_type_names_from_type_node_inner(
+  node : Node,
+  names : Array[String],
+) -> Unit {
   match node {
     TypeReference(type_ref) => {
       names.push(type_ref.type_name)
@@ -2820,26 +2841,22 @@ fn collect_type_names_from_type_node_inner(node : Node, names : Array[String]) -
         collect_type_names_from_type_node_inner(arg, names)
       }
     }
-    UnionType(union_type) => {
+    UnionType(union_type) =>
       for t in union_type.types {
         collect_type_names_from_type_node_inner(t, names)
       }
-    }
-    IntersectionType(intersection_type) => {
+    IntersectionType(intersection_type) =>
       for t in intersection_type.types {
         collect_type_names_from_type_node_inner(t, names)
       }
-    }
-    ArrayType(arr_type) => {
+    ArrayType(arr_type) =>
       collect_type_names_from_type_node_inner(arr_type.element_type, names)
-    }
-    TupleType(tuple_type) => {
+    TupleType(tuple_type) =>
       // element_types is Array[Node]
       for elem in tuple_type.element_types {
         collect_type_names_from_type_node_inner(elem, names)
       }
-    }
-    TypeLiteral(type_literal) => {
+    TypeLiteral(type_literal) =>
       // Check property types in type literal (members is Array[Node])
       for mem in type_literal.members {
         match mem {
@@ -2851,7 +2868,6 @@ fn collect_type_names_from_type_node_inner(node : Node, names : Array[String]) -
           _ => ()
         }
       }
-    }
     FunctionType(func_type) => {
       // Check return type
       collect_type_names_from_type_node_inner(func_type.return_type, names)
@@ -2891,7 +2907,9 @@ fn check_variable_declaration(
   // For const declarations with literal type annotations, infer literal types from expressions
   let (init_type, checker) = match decl.initializer {
     Some(init) => {
-      let (t, c) = infer_type_with_context(checker, init, declared_type, is_const)
+      let (t, c) = infer_type_with_context(
+        checker, init, declared_type, is_const,
+      )
       (Some(t), c)
     }
     None => (None, checker)
@@ -2967,7 +2985,6 @@ fn check_variable_declaration(
       add_object_binding_elements_to_scope(checker, obj_pat, var_type, is_const)
     _ => checker
   }
-
   checker
 }
 
@@ -3056,7 +3073,10 @@ fn infer_type_with_context(
 
 ///|
 /// Check if a union type contains a specific string literal
-fn union_contains_string_literal(union : CheckerUnionType, value : String) -> Bool {
+fn union_contains_string_literal(
+  union : CheckerUnionType,
+  value : String,
+) -> Bool {
   for t in union.types {
     match t {
       StringLiteral(v, _) => if v == value { return true }
@@ -3068,7 +3088,10 @@ fn union_contains_string_literal(union : CheckerUnionType, value : String) -> Bo
 
 ///|
 /// Check if a union type contains a specific number literal
-fn union_contains_number_literal(union : CheckerUnionType, value : Double) -> Bool {
+fn union_contains_number_literal(
+  union : CheckerUnionType,
+  value : Double,
+) -> Bool {
   for t in union.types {
     match t {
       NumberLiteral(v, _) => if v == value { return true }
@@ -3080,7 +3103,10 @@ fn union_contains_number_literal(union : CheckerUnionType, value : Double) -> Bo
 
 ///|
 /// Check if a union type contains a specific boolean literal
-fn union_contains_boolean_literal(union : CheckerUnionType, value : Bool) -> Bool {
+fn union_contains_boolean_literal(
+  union : CheckerUnionType,
+  value : Bool,
+) -> Bool {
   for t in union.types {
     match t {
       BooleanLiteral(v, _) => if v == value { return true }
@@ -3176,14 +3202,12 @@ fn infer_identifier_type(
           TS2496,
         )
         return any_type(checker)
-      } else {
         // ES2015+: Arrow functions can access enclosing function's arguments
         // Only if we're inside a regular function (somewhere in the outer scope)
-        if is_in_regular_function(checker) {
-          return get_arguments_type(checker)
-        }
-        // Otherwise it's an error - no enclosing function
+      } else if is_in_regular_function(checker) {
+        return get_arguments_type(checker)
       }
+      // Otherwise it's an error - no enclosing function
     } else if is_in_regular_function(checker) {
       // Innermost function is a regular function - arguments is available
       return get_arguments_type(checker)
@@ -3260,21 +3284,24 @@ fn infer_identifier_type(
                   infer_symbol_type(c, symbol)
               }
             }
-            None => {
+            None =>
               // Check for built-in globals before emitting error
               match get_builtin_global_type(checker, id.name) {
                 Some((builtin_type, c)) => (builtin_type, c)
-                None => {
+                None =>
                   // Check for imported types from external modules
                   match resolve_import_type(checker, id.name) {
                     Some(imported_type) => (imported_type, checker)
-                    None => {
+                    None =>
                       // Check for global namespaces from external types (e.g., declare module M1 in .d.ts files)
                       match resolve_global_namespace(checker, id.name) {
                         Some(ns_type) => (ns_type, checker)
                         None => {
                           // Variable not found - try to find a similar name for suggestion
-                          let suggestion = find_similar_name_in_scope(checker, id.name)
+                          let suggestion = find_similar_name_in_scope(
+                            checker,
+                            id.name,
+                          )
                           let checker = match suggestion {
                             Some(similar_name) =>
                               add_diagnostic_with_code(
@@ -3322,11 +3349,8 @@ fn infer_identifier_type(
                           any_type(checker)
                         }
                       }
-                    }
                   }
-                }
               }
-            }
           }
       }
   }
@@ -3459,7 +3483,7 @@ fn namespace_has_value_exports(symbol : Symbol) -> Bool {
 fn get_builtin_global_type(
   checker : TypeChecker,
   name : String,
-) -> ((Type, TypeChecker))? {
+) -> (Type, TypeChecker)? {
   if name == "console" {
     Some(get_console_type(checker))
   } else if name == "JSON" {
@@ -3501,7 +3525,9 @@ fn get_builtin_global_type(
   } else if name == "undefined" {
     // undefined is a global constant
     let (id, checker) = next_type_id(checker)
-    Some((Type::Undefined(TypeInfo::{ id, flags: TypeFlags::default() }), checker))
+    Some(
+      (Type::Undefined(TypeInfo::{ id, flags: TypeFlags::default() }), checker),
+    )
   } else if name == "Map" {
     Some(get_map_constructor_type(checker))
   } else if name == "Set" {
@@ -3531,31 +3557,25 @@ fn get_arguments_type(checker : TypeChecker) -> (Type, TypeChecker) {
 
   // length property
   let (num_id, checker) = next_type_id(checker)
-  properties.set(
-    "length",
-    PropertySignature::{
-      name: "length",
-      prop_type: Type::Number(TypeInfo::{ id: num_id, flags: default_flags }),
-      is_optional: false,
-      is_readonly: false,
-    },
-  )
+  properties.set("length", PropertySignature::{
+    name: "length",
+    prop_type: Type::Number(TypeInfo::{ id: num_id, flags: default_flags }),
+    is_optional: false,
+    is_readonly: false,
+  })
 
   // callee property (Function type)
   let (func_id, checker) = next_type_id(checker)
-  properties.set(
-    "callee",
-    PropertySignature::{
-      name: "callee",
-      prop_type: Type::Function(CheckerFunctionType::{
-        parameters: [],
-        return_type: Type::Any(any_info),
-        info: TypeInfo::{ id: func_id, flags: default_flags },
-      }),
-      is_optional: false,
-      is_readonly: false,
-    },
-  )
+  properties.set("callee", PropertySignature::{
+    name: "callee",
+    prop_type: Type::Function(CheckerFunctionType::{
+      parameters: [],
+      return_type: Type::Any(any_info),
+      info: TypeInfo::{ id: func_id, flags: default_flags },
+    }),
+    is_optional: false,
+    is_readonly: false,
+  })
 
   // Create the arguments type with numeric index signature
   let arguments_type = Type::Object(ObjectType::{
@@ -3573,7 +3593,6 @@ fn get_arguments_type(checker : TypeChecker) -> (Type, TypeChecker) {
     info: TypeInfo::{ id, flags: default_flags },
     class_name: None,
   })
-
   (arguments_type, checker)
 }
 
@@ -3605,7 +3624,6 @@ fn get_console_type(checker : TypeChecker) -> (Type, TypeChecker) {
     is_readonly: false,
   }
   console_methods.set("log", log_method)
-
   let warn_method = PropertySignature::{
     name: "warn",
     prop_type: Type::Function(CheckerFunctionType::{
@@ -3617,7 +3635,6 @@ fn get_console_type(checker : TypeChecker) -> (Type, TypeChecker) {
     is_readonly: false,
   }
   console_methods.set("warn", warn_method)
-
   let error_method = PropertySignature::{
     name: "error",
     prop_type: Type::Function(CheckerFunctionType::{
@@ -3629,7 +3646,6 @@ fn get_console_type(checker : TypeChecker) -> (Type, TypeChecker) {
     is_readonly: false,
   }
   console_methods.set("error", error_method)
-
   let info_method = PropertySignature::{
     name: "info",
     prop_type: Type::Function(CheckerFunctionType::{
@@ -3641,7 +3657,6 @@ fn get_console_type(checker : TypeChecker) -> (Type, TypeChecker) {
     is_readonly: false,
   }
   console_methods.set("info", info_method)
-
   let debug_method = PropertySignature::{
     name: "debug",
     prop_type: Type::Function(CheckerFunctionType::{
@@ -3653,7 +3668,6 @@ fn get_console_type(checker : TypeChecker) -> (Type, TypeChecker) {
     is_readonly: false,
   }
   console_methods.set("debug", debug_method)
-
   let console_type = Type::Object(ObjectType::{
     properties: console_methods,
     call_signatures: [],
@@ -3662,7 +3676,6 @@ fn get_console_type(checker : TypeChecker) -> (Type, TypeChecker) {
     info: TypeInfo::{ id, flags: default_flags },
     class_name: None,
   })
-
   (console_type, checker)
 }
 
@@ -3678,12 +3691,14 @@ fn get_json_type(checker : TypeChecker) -> (Type, TypeChecker) {
   let parse_method = PropertySignature::{
     name: "parse",
     prop_type: Type::Function(CheckerFunctionType::{
-      parameters: [CheckerParameter::{
-        name: "text",
-        param_type: Type::String(info),
-        is_optional: false,
-        is_rest: false,
-      }],
+      parameters: [
+        CheckerParameter::{
+          name: "text",
+          param_type: Type::String(info),
+          is_optional: false,
+          is_rest: false,
+        },
+      ],
       return_type: Type::Any(info),
       info,
     }),
@@ -3696,12 +3711,14 @@ fn get_json_type(checker : TypeChecker) -> (Type, TypeChecker) {
   let stringify_method = PropertySignature::{
     name: "stringify",
     prop_type: Type::Function(CheckerFunctionType::{
-      parameters: [CheckerParameter::{
-        name: "value",
-        param_type: Type::Any(info),
-        is_optional: false,
-        is_rest: false,
-      }],
+      parameters: [
+        CheckerParameter::{
+          name: "value",
+          param_type: Type::Any(info),
+          is_optional: false,
+          is_rest: false,
+        },
+      ],
       return_type: Type::String(info),
       info,
     }),
@@ -3709,7 +3726,6 @@ fn get_json_type(checker : TypeChecker) -> (Type, TypeChecker) {
     is_readonly: false,
   }
   json_methods.set("stringify", stringify_method)
-
   let json_type = Type::Object(ObjectType::{
     properties: json_methods,
     call_signatures: [],
@@ -3718,7 +3734,6 @@ fn get_json_type(checker : TypeChecker) -> (Type, TypeChecker) {
     info: TypeInfo::{ id, flags: default_flags },
     class_name: None,
   })
-
   (json_type, checker)
 }
 
@@ -3734,12 +3749,14 @@ fn get_math_type(checker : TypeChecker) -> (Type, TypeChecker) {
   let abs_method = PropertySignature::{
     name: "abs",
     prop_type: Type::Function(CheckerFunctionType::{
-      parameters: [CheckerParameter::{
-        name: "x",
-        param_type: Type::Number(info),
-        is_optional: false,
-        is_rest: false,
-      }],
+      parameters: [
+        CheckerParameter::{
+          name: "x",
+          param_type: Type::Number(info),
+          is_optional: false,
+          is_rest: false,
+        },
+      ],
       return_type: Type::Number(info),
       info,
     }),
@@ -3752,12 +3769,14 @@ fn get_math_type(checker : TypeChecker) -> (Type, TypeChecker) {
   let floor_method = PropertySignature::{
     name: "floor",
     prop_type: Type::Function(CheckerFunctionType::{
-      parameters: [CheckerParameter::{
-        name: "x",
-        param_type: Type::Number(info),
-        is_optional: false,
-        is_rest: false,
-      }],
+      parameters: [
+        CheckerParameter::{
+          name: "x",
+          param_type: Type::Number(info),
+          is_optional: false,
+          is_rest: false,
+        },
+      ],
       return_type: Type::Number(info),
       info,
     }),
@@ -3770,12 +3789,14 @@ fn get_math_type(checker : TypeChecker) -> (Type, TypeChecker) {
   let ceil_method = PropertySignature::{
     name: "ceil",
     prop_type: Type::Function(CheckerFunctionType::{
-      parameters: [CheckerParameter::{
-        name: "x",
-        param_type: Type::Number(info),
-        is_optional: false,
-        is_rest: false,
-      }],
+      parameters: [
+        CheckerParameter::{
+          name: "x",
+          param_type: Type::Number(info),
+          is_optional: false,
+          is_rest: false,
+        },
+      ],
       return_type: Type::Number(info),
       info,
     }),
@@ -3801,12 +3822,14 @@ fn get_math_type(checker : TypeChecker) -> (Type, TypeChecker) {
   let sqrt_method = PropertySignature::{
     name: "sqrt",
     prop_type: Type::Function(CheckerFunctionType::{
-      parameters: [CheckerParameter::{
-        name: "x",
-        param_type: Type::Number(info),
-        is_optional: false,
-        is_rest: false,
-      }],
+      parameters: [
+        CheckerParameter::{
+          name: "x",
+          param_type: Type::Number(info),
+          is_optional: false,
+          is_rest: false,
+        },
+      ],
       return_type: Type::Number(info),
       info,
     }),
@@ -3828,12 +3851,14 @@ fn get_math_type(checker : TypeChecker) -> (Type, TypeChecker) {
   let sin_method = PropertySignature::{
     name: "sin",
     prop_type: Type::Function(CheckerFunctionType::{
-      parameters: [CheckerParameter::{
-        name: "x",
-        param_type: Type::Number(info),
-        is_optional: false,
-        is_rest: false,
-      }],
+      parameters: [
+        CheckerParameter::{
+          name: "x",
+          param_type: Type::Number(info),
+          is_optional: false,
+          is_rest: false,
+        },
+      ],
       return_type: Type::Number(info),
       info,
     }),
@@ -3846,12 +3871,14 @@ fn get_math_type(checker : TypeChecker) -> (Type, TypeChecker) {
   let cos_method = PropertySignature::{
     name: "cos",
     prop_type: Type::Function(CheckerFunctionType::{
-      parameters: [CheckerParameter::{
-        name: "x",
-        param_type: Type::Number(info),
-        is_optional: false,
-        is_rest: false,
-      }],
+      parameters: [
+        CheckerParameter::{
+          name: "x",
+          param_type: Type::Number(info),
+          is_optional: false,
+          is_rest: false,
+        },
+      ],
       return_type: Type::Number(info),
       info,
     }),
@@ -3864,12 +3891,14 @@ fn get_math_type(checker : TypeChecker) -> (Type, TypeChecker) {
   let tan_method = PropertySignature::{
     name: "tan",
     prop_type: Type::Function(CheckerFunctionType::{
-      parameters: [CheckerParameter::{
-        name: "x",
-        param_type: Type::Number(info),
-        is_optional: false,
-        is_rest: false,
-      }],
+      parameters: [
+        CheckerParameter::{
+          name: "x",
+          param_type: Type::Number(info),
+          is_optional: false,
+          is_rest: false,
+        },
+      ],
       return_type: Type::Number(info),
       info,
     }),
@@ -3882,12 +3911,14 @@ fn get_math_type(checker : TypeChecker) -> (Type, TypeChecker) {
   let max_method = PropertySignature::{
     name: "max",
     prop_type: Type::Function(CheckerFunctionType::{
-      parameters: [CheckerParameter::{
-        name: "values",
-        param_type: Type::Number(info),
-        is_optional: false,
-        is_rest: true,
-      }],
+      parameters: [
+        CheckerParameter::{
+          name: "values",
+          param_type: Type::Number(info),
+          is_optional: false,
+          is_rest: true,
+        },
+      ],
       return_type: Type::Number(info),
       info,
     }),
@@ -3900,12 +3931,14 @@ fn get_math_type(checker : TypeChecker) -> (Type, TypeChecker) {
   let min_method = PropertySignature::{
     name: "min",
     prop_type: Type::Function(CheckerFunctionType::{
-      parameters: [CheckerParameter::{
-        name: "values",
-        param_type: Type::Number(info),
-        is_optional: false,
-        is_rest: true,
-      }],
+      parameters: [
+        CheckerParameter::{
+          name: "values",
+          param_type: Type::Number(info),
+          is_optional: false,
+          is_rest: true,
+        },
+      ],
       return_type: Type::Number(info),
       info,
     }),
@@ -3944,12 +3977,14 @@ fn get_math_type(checker : TypeChecker) -> (Type, TypeChecker) {
   let round_method = PropertySignature::{
     name: "round",
     prop_type: Type::Function(CheckerFunctionType::{
-      parameters: [CheckerParameter::{
-        name: "x",
-        param_type: Type::Number(info),
-        is_optional: false,
-        is_rest: false,
-      }],
+      parameters: [
+        CheckerParameter::{
+          name: "x",
+          param_type: Type::Number(info),
+          is_optional: false,
+          is_rest: false,
+        },
+      ],
       return_type: Type::Number(info),
       info,
     }),
@@ -3962,12 +3997,14 @@ fn get_math_type(checker : TypeChecker) -> (Type, TypeChecker) {
   let log_method = PropertySignature::{
     name: "log",
     prop_type: Type::Function(CheckerFunctionType::{
-      parameters: [CheckerParameter::{
-        name: "x",
-        param_type: Type::Number(info),
-        is_optional: false,
-        is_rest: false,
-      }],
+      parameters: [
+        CheckerParameter::{
+          name: "x",
+          param_type: Type::Number(info),
+          is_optional: false,
+          is_rest: false,
+        },
+      ],
       return_type: Type::Number(info),
       info,
     }),
@@ -3980,12 +4017,14 @@ fn get_math_type(checker : TypeChecker) -> (Type, TypeChecker) {
   let exp_method = PropertySignature::{
     name: "exp",
     prop_type: Type::Function(CheckerFunctionType::{
-      parameters: [CheckerParameter::{
-        name: "x",
-        param_type: Type::Number(info),
-        is_optional: false,
-        is_rest: false,
-      }],
+      parameters: [
+        CheckerParameter::{
+          name: "x",
+          param_type: Type::Number(info),
+          is_optional: false,
+          is_rest: false,
+        },
+      ],
       return_type: Type::Number(info),
       info,
     }),
@@ -4002,7 +4041,6 @@ fn get_math_type(checker : TypeChecker) -> (Type, TypeChecker) {
     is_readonly: true,
   }
   math_methods.set("E", e_prop)
-
   let math_type = Type::Object(ObjectType::{
     properties: math_methods,
     call_signatures: [],
@@ -4011,7 +4049,6 @@ fn get_math_type(checker : TypeChecker) -> (Type, TypeChecker) {
     info: TypeInfo::{ id, flags: default_flags },
     class_name: None,
   })
-
   (math_type, checker)
 }
 
@@ -4027,12 +4064,14 @@ fn get_promise_type(checker : TypeChecker) -> (Type, TypeChecker) {
   let resolve_method = PropertySignature::{
     name: "resolve",
     prop_type: Type::Function(CheckerFunctionType::{
-      parameters: [CheckerParameter::{
-        name: "value",
-        param_type: Type::Any(info),
-        is_optional: true,
-        is_rest: false,
-      }],
+      parameters: [
+        CheckerParameter::{
+          name: "value",
+          param_type: Type::Any(info),
+          is_optional: true,
+          is_rest: false,
+        },
+      ],
       return_type: Type::Any(info), // Returns Promise<T>
       info,
     }),
@@ -4045,12 +4084,14 @@ fn get_promise_type(checker : TypeChecker) -> (Type, TypeChecker) {
   let reject_method = PropertySignature::{
     name: "reject",
     prop_type: Type::Function(CheckerFunctionType::{
-      parameters: [CheckerParameter::{
-        name: "reason",
-        param_type: Type::Any(info),
-        is_optional: true,
-        is_rest: false,
-      }],
+      parameters: [
+        CheckerParameter::{
+          name: "reason",
+          param_type: Type::Any(info),
+          is_optional: true,
+          is_rest: false,
+        },
+      ],
       return_type: Type::Any(info), // Returns Promise<never>
       info,
     }),
@@ -4063,12 +4104,14 @@ fn get_promise_type(checker : TypeChecker) -> (Type, TypeChecker) {
   let all_method = PropertySignature::{
     name: "all",
     prop_type: Type::Function(CheckerFunctionType::{
-      parameters: [CheckerParameter::{
-        name: "values",
-        param_type: Type::Any(info),
-        is_optional: false,
-        is_rest: false,
-      }],
+      parameters: [
+        CheckerParameter::{
+          name: "values",
+          param_type: Type::Any(info),
+          is_optional: false,
+          is_rest: false,
+        },
+      ],
       return_type: Type::Any(info),
       info,
     }),
@@ -4076,7 +4119,6 @@ fn get_promise_type(checker : TypeChecker) -> (Type, TypeChecker) {
     is_readonly: false,
   }
   promise_methods.set("all", all_method)
-
   let promise_type = Type::Object(ObjectType::{
     properties: promise_methods,
     call_signatures: [],
@@ -4085,7 +4127,6 @@ fn get_promise_type(checker : TypeChecker) -> (Type, TypeChecker) {
     info: TypeInfo::{ id, flags: default_flags },
     class_name: None,
   })
-
   (promise_type, checker)
 }
 
@@ -4114,12 +4155,14 @@ fn get_date_type(checker : TypeChecker) -> (Type, TypeChecker) {
   let parse_method = PropertySignature::{
     name: "parse",
     prop_type: Type::Function(CheckerFunctionType::{
-      parameters: [CheckerParameter::{
-        name: "s",
-        param_type: Type::String(info),
-        is_optional: false,
-        is_rest: false,
-      }],
+      parameters: [
+        CheckerParameter::{
+          name: "s",
+          param_type: Type::String(info),
+          is_optional: false,
+          is_rest: false,
+        },
+      ],
       return_type: Type::Number(info),
       info,
     }),
@@ -4131,19 +4174,16 @@ fn get_date_type(checker : TypeChecker) -> (Type, TypeChecker) {
   // Create Date instance type with methods like getTime, getFullYear, etc.
   let (instance_id, checker) = next_type_id(checker)
   let instance_methods : Map[String, PropertySignature] = Map::new()
-  instance_methods.set(
-    "getTime",
-    PropertySignature::{
-      name: "getTime",
-      prop_type: Type::Function(CheckerFunctionType::{
-        parameters: [],
-        return_type: Type::Number(info),
-        info,
-      }),
-      is_optional: false,
-      is_readonly: false,
-    },
-  )
+  instance_methods.set("getTime", PropertySignature::{
+    name: "getTime",
+    prop_type: Type::Function(CheckerFunctionType::{
+      parameters: [],
+      return_type: Type::Number(info),
+      info,
+    }),
+    is_optional: false,
+    is_readonly: false,
+  })
   let date_instance_type = Type::Object(ObjectType::{
     properties: instance_methods,
     call_signatures: [],
@@ -4162,16 +4202,17 @@ fn get_date_type(checker : TypeChecker) -> (Type, TypeChecker) {
 
   // Construct signature with value: new Date(value) => Date
   let construct_sig_value = CheckerSignature::{
-    parameters: [CheckerParameter::{
-      name: "value",
-      param_type: Type::Any(info),
-      is_optional: true,
-      is_rest: false,
-    }],
+    parameters: [
+      CheckerParameter::{
+        name: "value",
+        param_type: Type::Any(info),
+        is_optional: true,
+        is_rest: false,
+      },
+    ],
     return_type: date_instance_type,
     type_parameters: [],
   }
-
   let date_type = Type::Object(ObjectType::{
     properties: date_methods,
     call_signatures: [],
@@ -4180,7 +4221,6 @@ fn get_date_type(checker : TypeChecker) -> (Type, TypeChecker) {
     info: TypeInfo::{ id, flags: default_flags },
     class_name: None,
   })
-
   (date_type, checker)
 }
 
@@ -4196,12 +4236,14 @@ fn get_string_constructor_type(checker : TypeChecker) -> (Type, TypeChecker) {
   let from_char_code = PropertySignature::{
     name: "fromCharCode",
     prop_type: Type::Function(CheckerFunctionType::{
-      parameters: [CheckerParameter::{
-        name: "codes",
-        param_type: Type::Number(info),
-        is_optional: false,
-        is_rest: true,
-      }],
+      parameters: [
+        CheckerParameter::{
+          name: "codes",
+          param_type: Type::Number(info),
+          is_optional: false,
+          is_rest: true,
+        },
+      ],
       return_type: Type::String(info),
       info,
     }),
@@ -4222,16 +4264,17 @@ fn get_string_constructor_type(checker : TypeChecker) -> (Type, TypeChecker) {
 
   // Construct signature: new String(value?) => String
   let construct_sig = CheckerSignature::{
-    parameters: [CheckerParameter::{
-      name: "value",
-      param_type: Type::Any(info),
-      is_optional: true,
-      is_rest: false,
-    }],
+    parameters: [
+      CheckerParameter::{
+        name: "value",
+        param_type: Type::Any(info),
+        is_optional: true,
+        is_rest: false,
+      },
+    ],
     return_type: string_instance_type,
     type_parameters: [],
   }
-
   let string_type = Type::Object(ObjectType::{
     properties: string_methods,
     call_signatures: [],
@@ -4240,7 +4283,6 @@ fn get_string_constructor_type(checker : TypeChecker) -> (Type, TypeChecker) {
     info: TypeInfo::{ id, flags: default_flags },
     class_name: None,
   })
-
   (string_type, checker)
 }
 
@@ -4256,12 +4298,14 @@ fn get_symbol_constructor_type(checker : TypeChecker) -> (Type, TypeChecker) {
   let for_method = PropertySignature::{
     name: "for",
     prop_type: Type::Function(CheckerFunctionType::{
-      parameters: [CheckerParameter::{
-        name: "key",
-        param_type: Type::String(info),
-        is_optional: false,
-        is_rest: false,
-      }],
+      parameters: [
+        CheckerParameter::{
+          name: "key",
+          param_type: Type::String(info),
+          is_optional: false,
+          is_rest: false,
+        },
+      ],
       return_type: Type::Symbol(info),
       info,
     }),
@@ -4278,7 +4322,6 @@ fn get_symbol_constructor_type(checker : TypeChecker) -> (Type, TypeChecker) {
     is_readonly: true,
   }
   symbol_methods.set("iterator", iterator_prop)
-
   let symbol_type = Type::Object(ObjectType::{
     properties: symbol_methods,
     call_signatures: [],
@@ -4287,7 +4330,6 @@ fn get_symbol_constructor_type(checker : TypeChecker) -> (Type, TypeChecker) {
     info: TypeInfo::{ id, flags: default_flags },
     class_name: None,
   })
-
   (symbol_type, checker)
 }
 
@@ -4300,34 +4342,24 @@ fn get_error_constructor_type(checker : TypeChecker) -> (Type, TypeChecker) {
 
   // Error instance type - returned when constructed
   let error_instance_properties : Map[String, PropertySignature] = Map::new()
-  error_instance_properties.set(
-    "message",
-    PropertySignature::{
-      name: "message",
-      prop_type: Type::String(info),
-      is_optional: false,
-      is_readonly: false,
-    },
-  )
-  error_instance_properties.set(
-    "name",
-    PropertySignature::{
-      name: "name",
-      prop_type: Type::String(info),
-      is_optional: false,
-      is_readonly: false,
-    },
-  )
-  error_instance_properties.set(
-    "stack",
-    PropertySignature::{
-      name: "stack",
-      prop_type: Type::String(info),
-      is_optional: true,
-      is_readonly: false,
-    },
-  )
-
+  error_instance_properties.set("message", PropertySignature::{
+    name: "message",
+    prop_type: Type::String(info),
+    is_optional: false,
+    is_readonly: false,
+  })
+  error_instance_properties.set("name", PropertySignature::{
+    name: "name",
+    prop_type: Type::String(info),
+    is_optional: false,
+    is_readonly: false,
+  })
+  error_instance_properties.set("stack", PropertySignature::{
+    name: "stack",
+    prop_type: Type::String(info),
+    is_optional: true,
+    is_readonly: false,
+  })
   let (instance_id, checker) = next_type_id(checker)
   let error_instance_type = Type::Object(ObjectType::{
     properties: error_instance_properties,
@@ -4361,7 +4393,6 @@ fn get_error_constructor_type(checker : TypeChecker) -> (Type, TypeChecker) {
     info: TypeInfo::{ id, flags: default_flags },
     class_name: None,
   })
-
   (error_type, checker)
 }
 
@@ -4377,12 +4408,14 @@ fn get_array_constructor_type(checker : TypeChecker) -> (Type, TypeChecker) {
   let is_array_method = PropertySignature::{
     name: "isArray",
     prop_type: Type::Function(CheckerFunctionType::{
-      parameters: [CheckerParameter::{
-        name: "arg",
-        param_type: Type::Any(info),
-        is_optional: false,
-        is_rest: false,
-      }],
+      parameters: [
+        CheckerParameter::{
+          name: "arg",
+          param_type: Type::Any(info),
+          is_optional: false,
+          is_rest: false,
+        },
+      ],
       return_type: Type::Boolean(info),
       info,
     }),
@@ -4395,12 +4428,14 @@ fn get_array_constructor_type(checker : TypeChecker) -> (Type, TypeChecker) {
   let from_method = PropertySignature::{
     name: "from",
     prop_type: Type::Function(CheckerFunctionType::{
-      parameters: [CheckerParameter::{
-        name: "arrayLike",
-        param_type: Type::Any(info),
-        is_optional: false,
-        is_rest: false,
-      }],
+      parameters: [
+        CheckerParameter::{
+          name: "arrayLike",
+          param_type: Type::Any(info),
+          is_optional: false,
+          is_rest: false,
+        },
+      ],
       return_type: Type::Any(info),
       info,
     }),
@@ -4408,7 +4443,6 @@ fn get_array_constructor_type(checker : TypeChecker) -> (Type, TypeChecker) {
     is_readonly: false,
   }
   array_methods.set("from", from_method)
-
   let array_type = Type::Object(ObjectType::{
     properties: array_methods,
     call_signatures: [],
@@ -4417,7 +4451,6 @@ fn get_array_constructor_type(checker : TypeChecker) -> (Type, TypeChecker) {
     info: TypeInfo::{ id, flags: default_flags },
     class_name: None,
   })
-
   (array_type, checker)
 }
 
@@ -4433,12 +4466,14 @@ fn get_object_constructor_type(checker : TypeChecker) -> (Type, TypeChecker) {
   let keys_method = PropertySignature::{
     name: "keys",
     prop_type: Type::Function(CheckerFunctionType::{
-      parameters: [CheckerParameter::{
-        name: "o",
-        param_type: Type::Any(info),
-        is_optional: false,
-        is_rest: false,
-      }],
+      parameters: [
+        CheckerParameter::{
+          name: "o",
+          param_type: Type::Any(info),
+          is_optional: false,
+          is_rest: false,
+        },
+      ],
       return_type: Type::Any(info), // string[]
       info,
     }),
@@ -4451,12 +4486,14 @@ fn get_object_constructor_type(checker : TypeChecker) -> (Type, TypeChecker) {
   let values_method = PropertySignature::{
     name: "values",
     prop_type: Type::Function(CheckerFunctionType::{
-      parameters: [CheckerParameter::{
-        name: "o",
-        param_type: Type::Any(info),
-        is_optional: false,
-        is_rest: false,
-      }],
+      parameters: [
+        CheckerParameter::{
+          name: "o",
+          param_type: Type::Any(info),
+          is_optional: false,
+          is_rest: false,
+        },
+      ],
       return_type: Type::Any(info),
       info,
     }),
@@ -4469,12 +4506,14 @@ fn get_object_constructor_type(checker : TypeChecker) -> (Type, TypeChecker) {
   let entries_method = PropertySignature::{
     name: "entries",
     prop_type: Type::Function(CheckerFunctionType::{
-      parameters: [CheckerParameter::{
-        name: "o",
-        param_type: Type::Any(info),
-        is_optional: false,
-        is_rest: false,
-      }],
+      parameters: [
+        CheckerParameter::{
+          name: "o",
+          param_type: Type::Any(info),
+          is_optional: false,
+          is_rest: false,
+        },
+      ],
       return_type: Type::Any(info),
       info,
     }),
@@ -4487,17 +4526,20 @@ fn get_object_constructor_type(checker : TypeChecker) -> (Type, TypeChecker) {
   let assign_method = PropertySignature::{
     name: "assign",
     prop_type: Type::Function(CheckerFunctionType::{
-      parameters: [CheckerParameter::{
-        name: "target",
-        param_type: Type::Any(info),
-        is_optional: false,
-        is_rest: false,
-      }, CheckerParameter::{
-        name: "sources",
-        param_type: Type::Any(info),
-        is_optional: false,
-        is_rest: true,
-      }],
+      parameters: [
+        CheckerParameter::{
+          name: "target",
+          param_type: Type::Any(info),
+          is_optional: false,
+          is_rest: false,
+        },
+        CheckerParameter::{
+          name: "sources",
+          param_type: Type::Any(info),
+          is_optional: false,
+          is_rest: true,
+        },
+      ],
       return_type: Type::Any(info),
       info,
     }),
@@ -4505,7 +4547,6 @@ fn get_object_constructor_type(checker : TypeChecker) -> (Type, TypeChecker) {
     is_readonly: false,
   }
   object_methods.set("assign", assign_method)
-
   let object_type = Type::Object(ObjectType::{
     properties: object_methods,
     call_signatures: [],
@@ -4514,7 +4555,6 @@ fn get_object_constructor_type(checker : TypeChecker) -> (Type, TypeChecker) {
     info: TypeInfo::{ id, flags: default_flags },
     class_name: None,
   })
-
   (object_type, checker)
 }
 
@@ -4530,12 +4570,14 @@ fn get_number_constructor_type(checker : TypeChecker) -> (Type, TypeChecker) {
   let is_nan_method = PropertySignature::{
     name: "isNaN",
     prop_type: Type::Function(CheckerFunctionType::{
-      parameters: [CheckerParameter::{
-        name: "number",
-        param_type: Type::Any(info),
-        is_optional: false,
-        is_rest: false,
-      }],
+      parameters: [
+        CheckerParameter::{
+          name: "number",
+          param_type: Type::Any(info),
+          is_optional: false,
+          is_rest: false,
+        },
+      ],
       return_type: Type::Boolean(info),
       info,
     }),
@@ -4548,12 +4590,14 @@ fn get_number_constructor_type(checker : TypeChecker) -> (Type, TypeChecker) {
   let is_finite_method = PropertySignature::{
     name: "isFinite",
     prop_type: Type::Function(CheckerFunctionType::{
-      parameters: [CheckerParameter::{
-        name: "number",
-        param_type: Type::Any(info),
-        is_optional: false,
-        is_rest: false,
-      }],
+      parameters: [
+        CheckerParameter::{
+          name: "number",
+          param_type: Type::Any(info),
+          is_optional: false,
+          is_rest: false,
+        },
+      ],
       return_type: Type::Boolean(info),
       info,
     }),
@@ -4566,12 +4610,14 @@ fn get_number_constructor_type(checker : TypeChecker) -> (Type, TypeChecker) {
   let parse_int_method = PropertySignature::{
     name: "parseInt",
     prop_type: Type::Function(CheckerFunctionType::{
-      parameters: [CheckerParameter::{
-        name: "string",
-        param_type: Type::String(info),
-        is_optional: false,
-        is_rest: false,
-      }],
+      parameters: [
+        CheckerParameter::{
+          name: "string",
+          param_type: Type::String(info),
+          is_optional: false,
+          is_rest: false,
+        },
+      ],
       return_type: Type::Number(info),
       info,
     }),
@@ -4579,7 +4625,6 @@ fn get_number_constructor_type(checker : TypeChecker) -> (Type, TypeChecker) {
     is_readonly: false,
   }
   number_methods.set("parseInt", parse_int_method)
-
   let number_type = Type::Object(ObjectType::{
     properties: number_methods,
     call_signatures: [],
@@ -4588,7 +4633,6 @@ fn get_number_constructor_type(checker : TypeChecker) -> (Type, TypeChecker) {
     info: TypeInfo::{ id, flags: default_flags },
     class_name: None,
   })
-
   (number_type, checker)
 }
 
@@ -4597,7 +4641,6 @@ fn get_number_constructor_type(checker : TypeChecker) -> (Type, TypeChecker) {
 fn get_boolean_constructor_type(checker : TypeChecker) -> (Type, TypeChecker) {
   let (id, checker) = next_type_id(checker)
   let default_flags = TypeFlags::default()
-
   let boolean_type = Type::Object(ObjectType::{
     properties: Map::new(),
     call_signatures: [],
@@ -4606,7 +4649,6 @@ fn get_boolean_constructor_type(checker : TypeChecker) -> (Type, TypeChecker) {
     info: TypeInfo::{ id, flags: default_flags },
     class_name: None,
   })
-
   (boolean_type, checker)
 }
 
@@ -4668,7 +4710,6 @@ fn get_map_constructor_type(checker : TypeChecker) -> (Type, TypeChecker) {
     return_type: map_instance_type,
     type_parameters: [],
   }
-
   let map_type = Type::Object(ObjectType::{
     properties: map_methods,
     call_signatures: [],
@@ -4677,7 +4718,6 @@ fn get_map_constructor_type(checker : TypeChecker) -> (Type, TypeChecker) {
     info: TypeInfo::{ id, flags: default_flags },
     class_name: None,
   })
-
   (map_type, checker)
 }
 
@@ -4712,7 +4752,6 @@ fn get_set_constructor_type(checker : TypeChecker) -> (Type, TypeChecker) {
     return_type: set_instance_type,
     type_parameters: [],
   }
-
   let set_type = Type::Object(ObjectType::{
     properties: Map::new(),
     call_signatures: [],
@@ -4721,7 +4760,6 @@ fn get_set_constructor_type(checker : TypeChecker) -> (Type, TypeChecker) {
     info: TypeInfo::{ id, flags: default_flags },
     class_name: None,
   })
-
   (set_type, checker)
 }
 
@@ -4756,7 +4794,6 @@ fn get_weakmap_constructor_type(checker : TypeChecker) -> (Type, TypeChecker) {
     return_type: weakmap_instance_type,
     type_parameters: [],
   }
-
   let weakmap_type = Type::Object(ObjectType::{
     properties: Map::new(),
     call_signatures: [],
@@ -4765,7 +4802,6 @@ fn get_weakmap_constructor_type(checker : TypeChecker) -> (Type, TypeChecker) {
     info: TypeInfo::{ id, flags: default_flags },
     class_name: None,
   })
-
   (weakmap_type, checker)
 }
 
@@ -4800,7 +4836,6 @@ fn get_weakset_constructor_type(checker : TypeChecker) -> (Type, TypeChecker) {
     return_type: weakset_instance_type,
     type_parameters: [],
   }
-
   let weakset_type = Type::Object(ObjectType::{
     properties: Map::new(),
     call_signatures: [],
@@ -4809,7 +4844,6 @@ fn get_weakset_constructor_type(checker : TypeChecker) -> (Type, TypeChecker) {
     info: TypeInfo::{ id, flags: default_flags },
     class_name: None,
   })
-
   (weakset_type, checker)
 }
 
@@ -4833,7 +4867,6 @@ fn get_require_type(checker : TypeChecker) -> (Type, TypeChecker) {
     return_type: Type::Any(info),
     info: TypeInfo::{ id, flags: default_flags },
   })
-
   (require_type, checker)
 }
 
@@ -4853,7 +4886,6 @@ fn get_exports_type(checker : TypeChecker) -> (Type, TypeChecker) {
     return_type: Type::Any(TypeInfo::{ id: 0, flags: default_flags }),
     is_readonly: false,
   }
-
   let exports_type = Type::Object(ObjectType::{
     properties: Map::new(),
     call_signatures: [],
@@ -4862,7 +4894,6 @@ fn get_exports_type(checker : TypeChecker) -> (Type, TypeChecker) {
     info,
     class_name: None,
   })
-
   (exports_type, checker)
 }
 
@@ -4881,7 +4912,6 @@ fn get_module_type(checker : TypeChecker) -> (Type, TypeChecker) {
     return_type: Type::Any(TypeInfo::{ id: 0, flags: default_flags }),
     is_readonly: false,
   }
-
   let exports_inner_type = Type::Object(ObjectType::{
     properties: Map::new(),
     call_signatures: [],
@@ -4890,7 +4920,6 @@ fn get_module_type(checker : TypeChecker) -> (Type, TypeChecker) {
     info: TypeInfo::{ id: 0, flags: default_flags },
     class_name: None,
   })
-
   let module_properties : Map[String, PropertySignature] = Map::new()
   module_properties.set("exports", PropertySignature::{
     name: "exports",
@@ -4898,7 +4927,6 @@ fn get_module_type(checker : TypeChecker) -> (Type, TypeChecker) {
     is_optional: false,
     is_readonly: false,
   })
-
   let module_type = Type::Object(ObjectType::{
     properties: module_properties,
     call_signatures: [],
@@ -4907,7 +4935,6 @@ fn get_module_type(checker : TypeChecker) -> (Type, TypeChecker) {
     info,
     class_name: None,
   })
-
   (module_type, checker)
 }
 
@@ -4932,13 +4959,10 @@ fn infer_symbol_type(
   // For Alias symbols (imports), try to resolve from external registry
   if symbol.kind == SymbolKind::Alias {
     match resolve_import_type(checker, symbol.name) {
-      Some(imported_type) => {
-        return (imported_type, checker)
-      }
+      Some(imported_type) => return (imported_type, checker)
       None => ()
     }
   }
-
   match symbol.value_declaration {
     Some(node) => infer_declaration_type(checker, node, symbol)
     None => any_type(checker)
@@ -5157,11 +5181,7 @@ fn infer_overloaded_function_type(
 
         // Only add overload signatures (those without body), not the implementation
         if func.body is None {
-          call_signatures.push({
-            parameters,
-            return_type,
-            type_parameters: [],
-          })
+          call_signatures.push({ parameters, return_type, type_parameters: [] })
         }
       }
       _ => ()
@@ -5222,34 +5242,30 @@ fn infer_class_declaration_type(
       for type_node in heritage_clause.types {
         // Get the type of the parent class by looking up the class name
         let (parent_type, c) = match type_node {
-          TypeReference(type_ref) => {
+          TypeReference(type_ref) =>
             // Look up the class by name
             match lookup_symbol(checker, type_ref.type_name) {
-              Some(parent_symbol) => {
+              Some(parent_symbol) =>
                 match get_symbol_type(checker, parent_symbol) {
                   (Some(t), c) => (t, c)
                   (None, c) => infer_symbol_type(c, parent_symbol)
                 }
-              }
               None => any_type(checker)
             }
-          }
           _ => infer_type(checker, type_node)
         }
         checker = c
         // If parent is an object type, copy its static properties
         match parent_type {
-          Object(parent_obj) => {
+          Object(parent_obj) =>
             for entry in parent_obj.properties.iter() {
               static_properties.set(entry.0, entry.1)
             }
-          }
           _ => ()
         }
       }
     }
   }
-
   for class_member in class_decl.members {
     match class_member {
       PropertyDeclaration(prop) => {
@@ -5422,7 +5438,6 @@ fn infer_method_type(
 
   // Pop the local scope
   let checker = pop_local_scope(checker)
-
   let (info, checker) = create_type_info(checker)
   (Type::Function({ parameters, return_type, info }), checker)
 }
@@ -5474,8 +5489,15 @@ fn infer_binary_expression_type(
   // For assignment operators, the left side is a destructuring pattern (not a value)
   // Set flag to avoid TS2548 errors for rest elements in patterns
   let is_assignment = match bin_expr.operator {
-    Assign | AddAssign | SubtractAssign | MultiplyAssign | DivideAssign
-    | RemainderAssign | BitwiseAndAssign | BitwiseOrAssign | BitwiseXorAssign => true
+    Assign
+    | AddAssign
+    | SubtractAssign
+    | MultiplyAssign
+    | DivideAssign
+    | RemainderAssign
+    | BitwiseAndAssign
+    | BitwiseOrAssign
+    | BitwiseXorAssign => true
     _ => false
   }
   let checker = if is_assignment {
@@ -5548,29 +5570,21 @@ fn infer_binary_expression_type(
         number_type(checker)
       }
     // Comparison operators: any op any -> boolean
-    LessThan
-    | GreaterThan
-    | LessThanEquals
-    | GreaterThanEquals => boolean_type(checker)
+    LessThan | GreaterThan | LessThanEquals | GreaterThanEquals =>
+      boolean_type(checker)
     // Loose equality operators - no type overlap check (type coercion allowed)
     Equals | NotEquals => boolean_type(checker)
     // Strict equality operators - check for no overlap between types (TS2367)
     StrictEquals | StrictNotEquals => {
       let checker = check_equality_type_overlap(
-        checker,
-        left_type,
-        right_type,
-        bin_expr,
+        checker, left_type, right_type, bin_expr,
       )
       boolean_type(checker)
     }
     // instanceof operator: obj instanceof Constructor -> boolean
     InstanceOf => {
       let checker = check_instanceof_operands(
-        checker,
-        left_type,
-        right_type,
-        bin_expr,
+        checker, left_type, right_type, bin_expr,
       )
       boolean_type(checker)
     }
@@ -5626,13 +5640,12 @@ fn infer_binary_expression_type(
             None =>
               // Fall back to global scope lookup
               match lookup_symbol(checker, id.name) {
-                Some(symbol) => {
+                Some(symbol) =>
                   // Get the declared type (not narrowed) for assignment checking
                   match get_symbol_type(checker, symbol) {
                     (Some(t), c2) => (c2, Some(t))
                     (None, c2) => (c2, None)
                   }
-                }
                 None => (checker, None) // Can't find symbol, skip type check
               }
           }
@@ -5659,9 +5672,9 @@ fn infer_binary_expression_type(
           let checker = match object_type {
             Object(obj_type) => {
               // Check if any index signature is readonly
-              let has_readonly_index = obj_type.index_signatures.iter().any(fn(
-                idx_sig
-              ) { idx_sig.is_readonly })
+              let has_readonly_index = obj_type.index_signatures
+                .iter()
+                .any(fn(idx_sig) { idx_sig.is_readonly })
               if has_readonly_index {
                 add_diagnostic_with_code(
                   c,
@@ -5686,7 +5699,7 @@ fn infer_binary_expression_type(
                 // Rest element must be an identifier (simple variable)
                 match spread_expr {
                   Identifier(_) => () // Valid - simple variable
-                  _ => {
+                  _ =>
                     // TS2701: The target of an object rest assignment must be a variable or a property access.
                     // In destructuring contexts, only simple identifiers are allowed
                     checker = add_diagnostic_with_code(
@@ -5695,7 +5708,6 @@ fn infer_binary_expression_type(
                       loc,
                       TS2701,
                     )
-                  }
                 }
               _ => ()
             }
@@ -5825,7 +5837,9 @@ fn infer_unary_expression_type(
     Delete => {
       // TS2703: The operand of a 'delete' operator must be a property reference
       let checker = match un_expr.operand {
-        PropertyAccessExpression(_) | ElementAccessExpression(_) | OptionalChain(_) =>
+        PropertyAccessExpression(_)
+        | ElementAccessExpression(_)
+        | OptionalChain(_) =>
           // Valid delete targets
           checker
         Identifier(_) =>
@@ -5905,7 +5919,9 @@ fn infer_call_expression_type(
   }
 
   // Now mark super as called AFTER arguments have been checked
-  let checker = if is_super_call && checker.in_constructor && checker.in_derived_class &&
+  let checker = if is_super_call &&
+    checker.in_constructor &&
+    checker.in_derived_class &&
     not(checker.in_extends_null_class) {
     { ..checker, super_called: true }
   } else {
@@ -6408,7 +6424,6 @@ fn check_type_arguments(
   let min_required = count_required_type_params(type_params)
   let max_allowed = type_params.length()
   let actual = type_args.length()
-
   if actual < min_required || actual > max_allowed {
     // Use TS2707 when there's a range (optional type params exist)
     if min_required != max_allowed {
@@ -6839,25 +6854,23 @@ fn mark_assignment_pattern_variables_initialized(
                   )
                 } else {
                   checker = mark_assignment_pattern_variables_initialized(
-                    checker,
-                    value,
+                    checker, value,
                   )
                 }
               _ =>
                 checker = mark_assignment_pattern_variables_initialized(
-                  checker,
-                  value,
+                  checker, value,
                 )
             }
           ShorthandProperty(name, _) => {
             // { x } - x is both source and target
             let _ = checker.uninitialized_vars.remove(name)
+
           }
           SpreadAssignment(spread_expr, _) =>
             // { ...rest } - rest is the target
             checker = mark_assignment_pattern_variables_initialized(
-              checker,
-              spread_expr,
+              checker, spread_expr,
             )
           _ => ()
         }
@@ -6879,8 +6892,7 @@ fn mark_assignment_pattern_variables_initialized(
               _ =>
                 // Regular element or nested pattern
                 checker = mark_assignment_pattern_variables_initialized(
-                  checker,
-                  node,
+                  checker, node,
                 )
             }
           None => () // Elision
@@ -6894,7 +6906,9 @@ fn mark_assignment_pattern_variables_initialized(
       for elem in arr.elements {
         match elem {
           Some(node) =>
-            checker = mark_assignment_pattern_variables_initialized(checker, node)
+            checker = mark_assignment_pattern_variables_initialized(
+              checker, node,
+            )
           None => ()
         }
       }
@@ -6903,7 +6917,10 @@ fn mark_assignment_pattern_variables_initialized(
     ObjectBindingPattern(obj) => {
       let mut checker = checker
       for elem in obj.properties {
-        checker = mark_assignment_pattern_variables_initialized(checker, elem.name)
+        checker = mark_assignment_pattern_variables_initialized(
+          checker,
+          elem.name,
+        )
       }
       checker
     }
@@ -7152,7 +7169,7 @@ fn check_readonly_property_assignment(
   location : SourceLocation,
 ) -> TypeChecker {
   match object_type {
-    Object(obj_type) => {
+    Object(obj_type) =>
       // Check if the property exists and is readonly
       match obj_type.properties.get(prop_name) {
         Some(prop_sig) =>
@@ -7168,19 +7185,19 @@ fn check_readonly_property_assignment(
           }
         None => checker // Property not found, will be caught by other checks
       }
-    }
-    TypeReference(type_ref) => {
+    TypeReference(type_ref) =>
       // Resolve the type reference and check
       match lookup_symbol(checker, type_ref.name) {
         Some(symbol) =>
           match get_symbol_type(checker, symbol) {
             (Some(resolved), c) =>
-              check_readonly_property_assignment(c, resolved, prop_name, location)
+              check_readonly_property_assignment(
+                c, resolved, prop_name, location,
+              )
             (None, _) => checker
           }
         None => checker
       }
-    }
     _ => checker
   }
 }
@@ -7292,7 +7309,8 @@ fn lookup_property_in_type(
             Some(symbol) =>
               match symbol.kind {
                 Interface =>
-                  match get_interface_property_type(checker, symbol, prop_name) {
+                  match
+                    get_interface_property_type(checker, symbol, prop_name) {
                     (Some(prop_type), checker) => (Some(prop_type), checker)
                     (None, checker) => (None, checker)
                   }
@@ -7566,7 +7584,9 @@ fn get_class_member_visibility(
 
 ///|
 /// Get visibility from modifiers array
-fn get_visibility_from_modifiers(modifiers : Array[Modifier]) -> MemberVisibility {
+fn get_visibility_from_modifiers(
+  modifiers : Array[Modifier],
+) -> MemberVisibility {
   for modifier in modifiers {
     match modifier {
       Modifier::Private => return MemberVisibility::Private
@@ -7626,10 +7646,8 @@ fn is_subclass_of(
                   Some(name) =>
                     if name == parent_name {
                       return true
-                    } else {
-                      if is_subclass_of(checker, name, parent_name) {
-                        return true
-                      }
+                    } else if is_subclass_of(checker, name, parent_name) {
+                      return true
                     }
                   None => ()
                 }
@@ -7673,9 +7691,11 @@ fn check_member_visibility(
   }
   match class_name_opt {
     Some(class_name) => {
-      let visibility = get_class_member_visibility(checker, class_name, member_name)
+      let visibility = get_class_member_visibility(
+        checker, class_name, member_name,
+      )
       match visibility {
-        MemberVisibility::Private => {
+        MemberVisibility::Private =>
           // Check if we're inside the same class
           match get_current_class_name(checker) {
             Some(current_class) =>
@@ -7699,8 +7719,7 @@ fn check_member_visibility(
                 TS2341,
               )
           }
-        }
-        MemberVisibility::Protected => {
+        MemberVisibility::Protected =>
           // Check if we're inside the same class or a subclass
           if is_inside_class_or_subclass(checker, class_name) {
             checker // Access allowed
@@ -7713,7 +7732,6 @@ fn check_member_visibility(
               TS2445,
             )
           }
-        }
         MemberVisibility::Public => checker // Public access is always allowed
       }
     }
@@ -7725,7 +7743,8 @@ fn check_member_visibility(
 /// Unwrap parenthesized expressions to get the inner expression
 fn unwrap_parenthesized_expression(expr : Node) -> Node {
   match expr {
-    ParenthesizedExpression(paren) => unwrap_parenthesized_expression(paren.expression)
+    ParenthesizedExpression(paren) =>
+      unwrap_parenthesized_expression(paren.expression)
     _ => expr
   }
 }
@@ -7787,10 +7806,8 @@ fn find_similar_property(object_type : Type, prop_name : String) -> String? {
     Object(obj_type) => obj_type.properties
     _ => return None
   }
-
   let mut best_match : String? = None
   let mut best_distance = 3 // Maximum distance threshold for suggestions
-
   for entry in properties.iter() {
     let candidate = entry.0
     // Skip if the candidate is too different in length
@@ -7802,14 +7819,12 @@ fn find_similar_property(object_type : Type, prop_name : String) -> String? {
     if len_diff > 2 {
       continue
     }
-
     let distance = levenshtein_distance(prop_name, candidate)
     if distance < best_distance && distance > 0 {
       best_distance = distance
       best_match = Some(candidate)
     }
   }
-
   best_match
 }
 
@@ -7842,7 +7857,7 @@ fn find_similar_name_in_scope(checker : TypeChecker, name : String) -> String? {
 
   // Search global scope
   match checker.global_scope {
-    Some(global) => {
+    Some(global) =>
       for entry in global.symbols.iter() {
         let candidate = entry.0
         let len_diff = if candidate.length() > name.length() {
@@ -7858,10 +7873,8 @@ fn find_similar_name_in_scope(checker : TypeChecker, name : String) -> String? {
           }
         }
       }
-    }
     None => ()
   }
-
   best_match
 }
 
@@ -7878,7 +7891,7 @@ fn check_is_static_member_of_class(
   // First check if the object type has class tracking info
   let class_name = match object_type {
     TypeReference(type_ref) => type_ref.name
-    Object(obj_type) => {
+    Object(obj_type) =>
       // Check if Object has class_name tracking (instance of a class)
       match obj_type.class_name {
         Some(name) => name
@@ -7896,7 +7909,6 @@ fn check_is_static_member_of_class(
           }
         }
       }
-    }
     _ => return (false, "")
   }
 
@@ -7914,7 +7926,7 @@ fn check_is_static_member_of_class(
 fn get_class_name_from_symbol_declarations(sym : Symbol) -> String {
   for i = 0; i < sym.declarations.length(); i = i + 1 {
     match sym.declarations[i] {
-      VariableStatement(var_stmt) => {
+      VariableStatement(var_stmt) =>
         for j = 0; j < var_stmt.declarations.length(); j = j + 1 {
           let decl = var_stmt.declarations[j]
           match decl.initializer {
@@ -7926,7 +7938,6 @@ fn get_class_name_from_symbol_declarations(sym : Symbol) -> String {
             _ => continue
           }
         }
-      }
       _ => continue
     }
   }
@@ -7970,18 +7981,17 @@ fn infer_property_access_type(
       // First try to look up in external registry (for imports like "import * as m4 from 'm4'")
       match lookup_imported_namespace_member(checker, ns_name, prop.name) {
         Some(member_type) => (member_type, checker)
-        None => {
+        None =>
           // Fall back to local symbol exports
           match ns_symbol.exports {
             Some(exports) =>
               match exports.get(prop.name) {
-                Some(member_symbol) => {
+                Some(member_symbol) =>
                   // Found the exported member - get its type
                   match get_symbol_type(checker, member_symbol) {
                     (Some(t), c) => (t, c)
                     (None, c) => infer_symbol_type(c, member_symbol)
                   }
-                }
                 None => {
                   // TS2694: Namespace has no exported member
                   let checker = add_diagnostic_with_code(
@@ -8004,7 +8014,6 @@ fn infer_property_access_type(
               any_type(checker)
             }
           }
-        }
       }
     }
     None => {
@@ -8042,7 +8051,6 @@ fn infer_property_access_type(
             prop.name,
             prop.expression,
           )
-
           let checker = match object_type {
             Any(_) | Unknown(_) => checker // Don't error for any/unknown
             Object(_) | TypeReference(_) =>
@@ -8143,16 +8151,23 @@ fn infer_element_access_type(
       }
     None => checker
   }
-
   let no_unchecked = checker.no_unchecked_indexed_access
   match object_type {
     Array(arr_type) => {
       // Check if index type is valid (number or string for arrays)
       let checker = match index_type {
-        Number(_) | NumberLiteral(_, _) | String(_) | StringLiteral(_, _) |
-        Any(_) | Unknown(_) => checker
-        Boolean(_) | BooleanLiteral(_, _) | Object(_) | Void(_) | Null(_) |
-        Undefined(_) => {
+        Number(_)
+        | NumberLiteral(_, _)
+        | String(_)
+        | StringLiteral(_, _)
+        | Any(_)
+        | Unknown(_) => checker
+        Boolean(_)
+        | BooleanLiteral(_, _)
+        | Object(_)
+        | Void(_)
+        | Null(_)
+        | Undefined(_) =>
           // TS2538: Type cannot be used as an index type
           add_diagnostic_with_code(
             checker,
@@ -8160,7 +8175,6 @@ fn infer_element_access_type(
             get_node_location(elem.argument_expression),
             TS2538,
           )
-        }
         _ => checker
       }
       // Array access - add undefined if noUncheckedIndexedAccess is enabled
@@ -8228,8 +8242,13 @@ fn infer_element_access_type(
                   }
                 None => any_type(checker)
               }
-            Boolean(_) | BooleanLiteral(_, _) | Object(_) | Array(_) | Void(_) |
-            Null(_) | Undefined(_) => {
+            Boolean(_)
+            | BooleanLiteral(_, _)
+            | Object(_)
+            | Array(_)
+            | Void(_)
+            | Null(_)
+            | Undefined(_) => {
               // TS2538: Type cannot be used as an index type
               let checker = add_diagnostic_with_code(
                 checker,
@@ -8576,11 +8595,7 @@ fn infer_template_expression_type(
   if all_literal_nodes {
     // Create a template literal type (even for templates without expressions)
     let (info, checker) = create_type_info(checker)
-    let tl_type : Type = Type::TemplateLiteral({
-      texts,
-      types,
-      info,
-    })
+    let tl_type : Type = Type::TemplateLiteral({ texts, types, info })
     (tl_type, checker)
   } else {
     // Fall back to plain string type for non-literal expressions
@@ -8602,14 +8617,13 @@ fn infer_tagged_template_expression_type(
   let mut checker = checker
   let expr_types : Array[(Type, SourceLocation)] = []
   match tte.template {
-    TemplateExpression(template) => {
+    TemplateExpression(template) =>
       for i = 0; i < template.template_spans.length(); i = i + 1 {
         let span = template.template_spans[i]
         let (expr_type, c) = infer_type(checker, span.expression)
         expr_types.push((expr_type, get_node_location(span.expression)))
         checker = c
       }
-    }
     // NoSubstitutionTemplateLiteral is just a string literal, no expressions to check
     _ => ()
   }
@@ -8619,16 +8633,24 @@ fn infer_tagged_template_expression_type(
     Any(_) => any_type(checker)
     Function(func) => {
       // Check template expression types against function parameters (skip first param which is TemplateStringsArray)
-      let checker = check_tagged_template_args(checker, func.parameters, expr_types)
+      let checker = check_tagged_template_args(
+        checker,
+        func.parameters,
+        expr_types,
+      )
       // The return type of the tag function is the result type
       (func.return_type, checker)
     }
     // For other types, try to find a call signature
-    Object(obj) => {
+    Object(obj) =>
       if obj.call_signatures.length() > 0 {
         // Check template expression types against call signature parameters
         let sig = obj.call_signatures[0]
-        let checker = check_tagged_template_args(checker, sig.parameters, expr_types)
+        let checker = check_tagged_template_args(
+          checker,
+          sig.parameters,
+          expr_types,
+        )
         // Use the first call signature's return type
         (sig.return_type, checker)
       } else {
@@ -8636,20 +8658,23 @@ fn infer_tagged_template_expression_type(
         let type_name = type_to_string(tag_type)
         let checker = add_diagnostic_with_code(
           checker,
-          "This expression is not callable. Type '" + type_name + "' has no call signatures.",
+          "This expression is not callable. Type '" +
+          type_name +
+          "' has no call signatures.",
           get_node_location(tte.tag),
           TS2349,
         )
         any_type(checker)
       }
-    }
     // String, Number, Boolean types are not callable
     String(_) | StringLiteral(_) | TemplateLiteral(_) => {
       // TS2349: String types are not callable
       let type_name = type_to_string(tag_type)
       let checker = add_diagnostic_with_code(
         checker,
-        "This expression is not callable. Type '" + type_name + "' has no call signatures.",
+        "This expression is not callable. Type '" +
+        type_name +
+        "' has no call signatures.",
         get_node_location(tte.tag),
         TS2349,
       )
@@ -8660,7 +8685,9 @@ fn infer_tagged_template_expression_type(
       let type_name = type_to_string(tag_type)
       let checker = add_diagnostic_with_code(
         checker,
-        "This expression is not callable. Type '" + type_name + "' has no call signatures.",
+        "This expression is not callable. Type '" +
+        type_name +
+        "' has no call signatures.",
         get_node_location(tte.tag),
         TS2349,
       )
@@ -8683,7 +8710,6 @@ fn check_tagged_template_args(
   if parameters.length() < 2 {
     return checker
   }
-
   let mut checker = checker
 
   // Check if last parameter is a rest parameter
@@ -8694,7 +8720,6 @@ fn check_tagged_template_args(
       Array(arr) => arr.element_type
       _ => last_param.param_type
     }
-
     for i = 0; i < expr_types.length(); i = i + 1 {
       let (expr_type, loc) = expr_types[i]
       if not(is_assignable(expr_type, rest_element_type)) {
@@ -8703,7 +8728,11 @@ fn check_tagged_template_args(
         let param_type_str = type_to_string(rest_element_type)
         checker = add_diagnostic_with_code(
           checker,
-          "Argument of type '" + expr_type_str + "' is not assignable to parameter of type '" + param_type_str + "'.",
+          "Argument of type '" +
+          expr_type_str +
+          "' is not assignable to parameter of type '" +
+          param_type_str +
+          "'.",
           loc,
           TS2345,
         )
@@ -8712,7 +8741,7 @@ fn check_tagged_template_args(
   } else {
     // Regular parameters (starting from index 1, skipping TemplateStringsArray)
     for i = 0; i < expr_types.length(); i = i + 1 {
-      let param_index = i + 1  // Skip first param
+      let param_index = i + 1 // Skip first param
       if param_index < parameters.length() {
         let param = parameters[param_index]
         let (expr_type, loc) = expr_types[i]
@@ -8722,7 +8751,11 @@ fn check_tagged_template_args(
           let param_type_str = type_to_string(param.param_type)
           checker = add_diagnostic_with_code(
             checker,
-            "Argument of type '" + expr_type_str + "' is not assignable to parameter of type '" + param_type_str + "'.",
+            "Argument of type '" +
+            expr_type_str +
+            "' is not assignable to parameter of type '" +
+            param_type_str +
+            "'.",
             loc,
             TS2345,
           )
@@ -8730,7 +8763,6 @@ fn check_tagged_template_args(
       }
     }
   }
-
   checker
 }
 
@@ -8754,8 +8786,10 @@ fn infer_this_type(
   // TS17009: 'super' must be called before accessing 'this' in derived class constructor
   // Note: Only check when 'this' is directly in the constructor, not inside nested arrow functions
   // Arrow functions inherit 'this' but don't count as direct constructor body access
-  let checker = if checker.in_constructor && checker.in_derived_class &&
-    not(checker.super_called) && checker.arrow_function_depth == 0 {
+  let checker = if checker.in_constructor &&
+    checker.in_derived_class &&
+    not(checker.super_called) &&
+    checker.arrow_function_depth == 0 {
     add_diagnostic_with_code(
       checker,
       "'super' must be called before accessing 'this' in the constructor of a derived class.",
@@ -8767,7 +8801,7 @@ fn infer_this_type(
   }
   match checker.current_this_type {
     Some(this_type) => (this_type, checker)
-    None => {
+    None =>
       // When current_this_type is None, we're at global scope or in a function
       // - Arrow functions: 'this' is lexically bound, so it's 'typeof globalThis' in global scope
       // - Regular functions: 'this' is dynamically bound, so it's 'any' (no error for property access)
@@ -8782,7 +8816,6 @@ fn infer_this_type(
         // Regular function or global scope outside arrow function - 'this' is any
         any_type(checker)
       }
-    }
   }
 }
 
@@ -8918,7 +8951,11 @@ fn infer_yield_expression_type(
       // TS2770: Check if yield operand type has a problematic 'then' member
       // In an async generator, the yield operand must either be a valid promise
       // or must not contain a callable 'then' member
-      let checker = check_yield_operand_then_member(checker, expr_type, ye.location)
+      let checker = check_yield_operand_then_member(
+        checker,
+        expr_type,
+        ye.location,
+      )
 
       // For yield*, should iterate over the expression
       // For plain yield, return the expression type
@@ -9034,7 +9071,9 @@ fn check_promise_then_circular_reference(
               Parameter(p) =>
                 match p.type_annotation {
                   Some(type_node) =>
-                    if type_references_name_in_callback(type_node, interface_name) {
+                    if type_references_name_in_callback(
+                        type_node, interface_name,
+                      ) {
                       return add_diagnostic_with_code(
                         checker,
                         "Type '\{interface_name}' is referenced directly or indirectly in the fulfillment callback of its own 'then' method.",
@@ -9253,11 +9292,7 @@ fn infer_function_expression_type(
   let checker = exit_regular_function(checker)
 
   // Exit async function context if needed
-  let checker = if fe.is_async {
-    exit_async_function(checker)
-  } else {
-    checker
-  }
+  let checker = if fe.is_async { exit_async_function(checker) } else { checker }
 
   // Pop the local scope
   let checker = pop_local_scope(checker)
@@ -9272,12 +9307,30 @@ fn infer_array_literal_type(
   checker : TypeChecker,
   arr : ArrayLiteralExpression,
 ) -> (Type, TypeChecker) {
-  // Infer element types and create union
+  // TS1186: Check for rest elements with initializers at the start
+  // This needs to be checked before we infer types to catch syntax errors
   let mut checker = checker
+  for elem in arr.elements {
+    match elem {
+      Some(SpreadExpression(spread)) =>
+        match spread.expression {
+          BinaryExpression(be) if be.operator == Assign =>
+            checker = add_diagnostic_with_code(
+              checker,
+              "A rest element cannot have an initializer.",
+              spread.location,
+              TS1186,
+            )
+          _ => ()
+        }
+      _ => ()
+    }
+  }
+  // Infer element types and create union
   let element_types = []
   for i = 0; i < arr.elements.length(); i = i + 1 {
     match arr.elements[i] {
-      Some(elem) => {
+      Some(elem) =>
         // Check for spread expressions - they must spread iterable types (TS2548)
         match elem {
           SpreadExpression(spread) => {
@@ -9290,7 +9343,8 @@ fn infer_array_literal_type(
               let is_iterable = match spread_type {
                 Array(_) => true
                 String(_) => true
-                TypeReference(ref_type) => ref_type.name == "Array" || ref_type.name == "String"
+                TypeReference(ref_type) =>
+                  ref_type.name == "Array" || ref_type.name == "String"
                 _ => false
               }
               if not(is_iterable) {
@@ -9319,7 +9373,6 @@ fn infer_array_literal_type(
             checker = c
           }
         }
-      }
       None => ()
     }
   }
@@ -9420,7 +9473,7 @@ fn infer_object_literal_type(
           Any(_) | Unknown(_) => () // Allow spreading any/unknown
           Intersection(_) => () // Allow spreading intersections (may contain objects)
           Union(_) => () // Allow spreading unions (may contain objects)
-          TypeReference(_) => {
+          TypeReference(_) =>
             // TS2762: Spread types may only be created from object types
             // Type parameter T might not be an object type
             checker = add_diagnostic_with_code(
@@ -9429,8 +9482,7 @@ fn infer_object_literal_type(
               loc,
               TS2762,
             )
-          }
-          _ => {
+          _ =>
             // TS2762: Spread types may only be created from object types
             checker = add_diagnostic_with_code(
               checker,
@@ -9438,12 +9490,13 @@ fn infer_object_literal_type(
               loc,
               TS2762,
             )
-          }
         }
       }
       MethodDeclaration(name, func_expr, _) => {
         // Shorthand method declaration: { method() { ... } }
-        let (method_type, c) = infer_function_expression_type(checker, func_expr)
+        let (method_type, c) = infer_function_expression_type(
+          checker, func_expr,
+        )
         properties.set(name, {
           name,
           prop_type: method_type,
@@ -9454,7 +9507,9 @@ fn infer_object_literal_type(
       }
       GetAccessor(name, func_expr, _) => {
         // Getter accessor: { get prop() { ... } }
-        let (getter_type, c) = infer_function_expression_type(checker, func_expr)
+        let (getter_type, c) = infer_function_expression_type(
+          checker, func_expr,
+        )
         // The property type is the return type of the getter
         let prop_type = match getter_type {
           Function(func_type) => func_type.return_type
@@ -9470,7 +9525,9 @@ fn infer_object_literal_type(
       }
       SetAccessor(name, func_expr, _) => {
         // Setter accessor: { set prop(value) { ... } }
-        let (setter_type, c) = infer_function_expression_type(checker, func_expr)
+        let (setter_type, c) = infer_function_expression_type(
+          checker, func_expr,
+        )
         // The property type is the parameter type of the setter
         let prop_type = match setter_type {
           Function(func_type) =>
@@ -9607,7 +9664,6 @@ fn infer_arrow_function_type(
 
   // Pop the local scope
   let checker = pop_local_scope(checker)
-
   let (info, checker) = create_type_info(checker)
   (Function({ parameters, return_type, info }), checker)
 }
@@ -9662,7 +9718,11 @@ fn collect_return_types_from_statement(
       }
     IfStatement(if_stmt) => {
       // Check both branches for return statements
-      collect_return_types_from_statement(checker, if_stmt.then_statement, return_types)
+      collect_return_types_from_statement(
+        checker,
+        if_stmt.then_statement,
+        return_types,
+      )
       match if_stmt.else_statement {
         Some(else_stmt) =>
           collect_return_types_from_statement(checker, else_stmt, return_types)
@@ -9681,15 +9741,25 @@ fn collect_return_types_from_statement(
         }
       }
     TryStatement(try_stmt) => {
-      collect_return_types_from_statement(checker, try_stmt.try_block, return_types)
+      collect_return_types_from_statement(
+        checker,
+        try_stmt.try_block,
+        return_types,
+      )
       match try_stmt.catch_clause {
         Some(catch_clause) =>
-          collect_return_types_from_statement(checker, catch_clause.block, return_types)
+          collect_return_types_from_statement(
+            checker,
+            catch_clause.block,
+            return_types,
+          )
         None => ()
       }
       match try_stmt.finally_block {
         Some(finally_block) =>
-          collect_return_types_from_statement(checker, finally_block, return_types)
+          collect_return_types_from_statement(
+            checker, finally_block, return_types,
+          )
         None => ()
       }
     }
@@ -10606,7 +10676,6 @@ fn check_numeric_operands(
   } else {
     checker
   }
-
   checker
 }
 
@@ -10646,7 +10715,6 @@ fn check_numeric_operands_with_locations(
   } else {
     checker
   }
-
   checker
 }
 
@@ -10696,10 +10764,15 @@ fn check_instanceof_operands(
   let checker = match left_type {
     Any(_) | Unknown(_) | Object(_) | TypeReference(_) | Array(_) | Null(_) =>
       checker
-    Number(_) | Boolean(_) | String(_) | Void(_) | Undefined(_) | NumberLiteral(
-      _,
-      _,
-    ) | StringLiteral(_, _) | BooleanLiteral(_, _) | TemplateLiteral(_) =>
+    Number(_)
+    | Boolean(_)
+    | String(_)
+    | Void(_)
+    | Undefined(_)
+    | NumberLiteral(_, _)
+    | StringLiteral(_, _)
+    | BooleanLiteral(_, _)
+    | TemplateLiteral(_) =>
       add_diagnostic_with_code(
         checker,
         "The left-hand side of an 'instanceof' expression must be of type 'any', an object type or a type parameter, but here has type '\{type_to_string(left_type)}'",
@@ -10712,10 +10785,16 @@ fn check_instanceof_operands(
   // TS2359: Right-hand side must be of type 'any' or Function type
   match right_type {
     Any(_) | Function(_) | TypeReference(_) => checker
-    Number(_) | Boolean(_) | String(_) | Void(_) | Undefined(_) | Null(_) | NumberLiteral(
-      _,
-      _,
-    ) | StringLiteral(_, _) | BooleanLiteral(_, _) | TemplateLiteral(_) =>
+    Number(_)
+    | Boolean(_)
+    | String(_)
+    | Void(_)
+    | Undefined(_)
+    | Null(_)
+    | NumberLiteral(_, _)
+    | StringLiteral(_, _)
+    | BooleanLiteral(_, _)
+    | TemplateLiteral(_) =>
       add_diagnostic_with_code(
         checker,
         "The right-hand side of an 'instanceof' expression must be of type 'any' or of a type assignable to the 'Function' interface type, but here has type '\{type_to_string(right_type)}'",
@@ -10747,7 +10826,6 @@ fn check_equality_type_overlap(
     NotEquals | StrictNotEquals => "true"
     _ => "false"
   }
-
   add_diagnostic_with_code(
     checker,
     "This condition will always return '\{result}' since the types '\{type_to_string(left_type)}' and '\{type_to_string(right_type)}' have no overlap.",
@@ -10827,7 +10905,10 @@ fn types_have_overlap(left : Type, right : Type) -> Bool {
 /// For template literals with expressions, we can only match if:
 /// 1. The template has no expressions and the text matches exactly
 /// 2. The template has expressions but the string could be produced by any value of those expressions
-fn template_literal_matches_string(tl : CheckerTemplateLiteralType, s : String) -> Bool {
+fn template_literal_matches_string(
+  tl : CheckerTemplateLiteralType,
+  s : String,
+) -> Bool {
   // If template has no types (no expressions), just concatenate texts and compare
   if tl.types.length() == 0 {
     // No expressions - just check if concatenated texts match
@@ -10859,10 +10940,11 @@ fn template_literal_matches_string(tl : CheckerTemplateLiteralType, s : String) 
 ///|
 /// Try to evaluate a template literal type to a concrete string
 /// Returns Some(string) if all expressions are literals, None otherwise
-fn evaluate_template_literal_to_string(tl : CheckerTemplateLiteralType) -> String? {
+fn evaluate_template_literal_to_string(
+  tl : CheckerTemplateLiteralType,
+) -> String? {
   // texts has one more element than types (for template `a${b}c`, texts=["a","c"], types=[typeof b])
   let mut result = ""
-
   for i = 0; i < tl.texts.length(); i = i + 1 {
     result = result + tl.texts[i]
     if i < tl.types.length() {
@@ -10870,7 +10952,8 @@ fn evaluate_template_literal_to_string(tl : CheckerTemplateLiteralType) -> Strin
       match tl.types[i] {
         StringLiteral(s, _) => result = result + s
         NumberLiteral(n, _) => result = result + n.to_string()
-        BooleanLiteral(b, _) => result = result + (if b { "true" } else { "false" })
+        BooleanLiteral(b, _) =>
+          result = result + (if b { "true" } else { "false" })
         _ => return None // Non-literal type, can't evaluate
       }
     }
@@ -10880,7 +10963,10 @@ fn evaluate_template_literal_to_string(tl : CheckerTemplateLiteralType) -> Strin
 
 ///|
 /// Check if two template literals could produce the same string
-fn template_literals_could_match(tl1 : CheckerTemplateLiteralType, tl2 : CheckerTemplateLiteralType) -> Bool {
+fn template_literals_could_match(
+  tl1 : CheckerTemplateLiteralType,
+  tl2 : CheckerTemplateLiteralType,
+) -> Bool {
   // Try to evaluate both to concrete strings
   let eval1 = evaluate_template_literal_to_string(tl1)
   let eval2 = evaluate_template_literal_to_string(tl2)
@@ -10891,8 +10977,8 @@ fn template_literals_could_match(tl1 : CheckerTemplateLiteralType, tl2 : Checker
       // If first texts are different, they likely can't match
       if tl1.texts.length() > 0 && tl2.texts.length() > 0 {
         if tl1.texts[0] != tl2.texts[0] &&
-           not(tl1.texts[0].has_prefix(tl2.texts[0])) &&
-           not(tl2.texts[0].has_prefix(tl1.texts[0])) {
+          not(tl1.texts[0].has_prefix(tl2.texts[0])) &&
+          not(tl2.texts[0].has_prefix(tl1.texts[0])) {
           return false
         }
       }
@@ -11006,6 +11092,47 @@ fn check_function_declaration(
         }
       _ => ()
     }
+    // Check TS2461: Array binding pattern parameter with non-array default value
+    match param {
+      Parameter(p) =>
+        match (p.name, p.initializer) {
+          (ArrayBindingPattern(_), Some(init)) => {
+            let (init_type, c) = infer_type(checker, init)
+            checker = c
+            // Check if default value type is array-like
+            if not(is_array_like_type(init_type)) {
+              checker = add_diagnostic_with_code(
+                checker,
+                "Type '\{type_to_string(init_type)}' is not an array type.",
+                p.location,
+                TS2461,
+              )
+            }
+          }
+          _ => ()
+        }
+      _ => ()
+    }
+    // Check TS2463: Binding pattern parameter cannot be optional in implementation signature
+    // Only report this error for true optional parameters (using ? syntax), not for
+    // parameters with default values (using = syntax). Parameters with default values
+    // may have is_optional = true but they have an initializer.
+    match param {
+      Parameter(p) =>
+        if p.is_optional && p.initializer.is_empty() {
+          match p.name {
+            ArrayBindingPattern(_) | ObjectBindingPattern(_) =>
+              checker = add_diagnostic_with_code(
+                checker,
+                "A binding pattern parameter cannot be optional in an implementation signature.",
+                p.location,
+                TS2463,
+              )
+            _ => ()
+          }
+        }
+      _ => ()
+    }
   }
 
   // Track async function context for TS2465
@@ -11108,7 +11235,11 @@ fn check_if_statement(
   let (cond_type, checker) = infer_type(checker, if_stmt.condition)
 
   // Check for always-true conditions (TS2773, TS2774)
-  let checker = check_condition_always_true(checker, if_stmt.condition, cond_type)
+  let checker = check_condition_always_true(
+    checker,
+    if_stmt.condition,
+    cond_type,
+  )
 
   // Save current narrowed types before entering branches
   let saved_narrowed_types = checker.narrowed_types
@@ -11150,14 +11281,13 @@ fn check_condition_always_true(
   match condition {
     Identifier(ident) =>
       match cond_type {
-        Function(_) => {
+        Function(_) =>
           return add_diagnostic_with_code(
             checker,
             "This condition will always return true since this function is always defined. Did you mean to call it instead?",
             ident.location,
             TS2773,
           )
-        }
         Object(obj) =>
           // Check if it's a callable object type
           if obj.call_signatures.length() > 0 {
@@ -11193,7 +11323,6 @@ fn check_condition_always_true(
       }
     _ => ()
   }
-
   checker
 }
 
@@ -11259,7 +11388,10 @@ fn check_for_statement(
 
 ///|
 /// Check if the left-hand side of a for-in statement is valid (TS2406)
-fn check_for_in_left_side(checker : TypeChecker, initializer : Node) -> TypeChecker {
+fn check_for_in_left_side(
+  checker : TypeChecker,
+  initializer : Node,
+) -> TypeChecker {
   match initializer {
     // Valid: for (const key in obj), for (let key in obj), for (var key in obj)
     VariableStatement(_) => checker
@@ -11326,7 +11458,7 @@ fn add_for_in_variable_to_scope(
 ) -> TypeChecker {
   let (str_type, checker) = string_type(checker)
   match initializer {
-    VariableStatement(var_stmt) => {
+    VariableStatement(var_stmt) =>
       // Handle: for (const key in obj)
       if var_stmt.declarations.length() > 0 {
         let decl = var_stmt.declarations[0]
@@ -11337,7 +11469,6 @@ fn add_for_in_variable_to_scope(
       } else {
         checker
       }
-    }
     Identifier(_) =>
       // Handle: for (key in obj) where key was previously declared
       checker
@@ -11347,7 +11478,10 @@ fn add_for_in_variable_to_scope(
 
 ///|
 /// Check if the left-hand side of a for-of statement is valid (TS2487)
-fn check_for_of_left_side(checker : TypeChecker, initializer : Node) -> TypeChecker {
+fn check_for_of_left_side(
+  checker : TypeChecker,
+  initializer : Node,
+) -> TypeChecker {
   match initializer {
     // Valid: for (const item of arr), for (let item of arr), for (var item of arr)
     VariableStatement(_) => checker
@@ -11409,7 +11543,7 @@ fn add_for_of_variable_to_scope(
   // Get the element type from the iterable
   let (elem_type, checker) = get_for_of_element_type(checker, iterable_type)
   match initializer {
-    VariableStatement(var_stmt) => {
+    VariableStatement(var_stmt) =>
       // Handle: for (const item of arr)
       if var_stmt.declarations.length() > 0 {
         let decl = var_stmt.declarations[0]
@@ -11420,7 +11554,6 @@ fn add_for_of_variable_to_scope(
       } else {
         checker
       }
-    }
     Identifier(_) =>
       // Handle: for (item of arr) where item was previously declared
       checker
@@ -11577,10 +11710,7 @@ fn contains_super_call(node : Node) -> Bool {
     VariableStatement(vs) => {
       for decl in vs.declarations {
         match decl.initializer {
-          Some(init) =>
-            if contains_super_call(init) {
-              return true
-            }
+          Some(init) => if contains_super_call(init) { return true }
           None => ()
         }
       }
@@ -11623,10 +11753,7 @@ fn contains_super_call(node : Node) -> Bool {
     ArrayLiteralExpression(ale) => {
       for elem in ale.elements {
         match elem {
-          Some(e) =>
-            if contains_super_call(e) {
-              return true
-            }
+          Some(e) => if contains_super_call(e) { return true }
           None => ()
         }
       }
@@ -11726,7 +11853,10 @@ fn class_has_initialized_or_parameter_properties(
 
 ///|
 /// Check that super() is the first statement in constructor (TS2376)
-fn check_super_is_first_statement(checker : TypeChecker, body : Node) -> TypeChecker {
+fn check_super_is_first_statement(
+  checker : TypeChecker,
+  body : Node,
+) -> TypeChecker {
   match body {
     BlockStatement(block) => {
       // Find the first non-empty statement
@@ -11910,7 +12040,11 @@ fn check_class_declaration(
             // Push local scope for constructor
             let checker = push_local_scope(checker)
             // Set in_constructor flag and track super call status for TS2337/TS17009
-            let checker = { ..checker, in_constructor: true, super_called: false }
+            let checker = {
+              ..checker,
+              in_constructor: true,
+              super_called: false,
+            }
             // Add constructor parameters to scope
             let mut checker = checker
             for param in ctor.parameters {
@@ -11988,13 +12122,19 @@ fn check_class_declaration(
             }
             // Check for TS2729: property forward reference (only for non-static properties)
             let checker = if not(is_static) {
-              check_property_forward_reference(checker, init, not_yet_initialized)
+              check_property_forward_reference(
+                checker, init, not_yet_initialized,
+              )
             } else {
               checker
             }
             let (_, c) = infer_type(checker, init)
             // Restore in_static_context flag and mark property as initialized
-            let c = if is_static { { ..c, in_static_context: false } } else { c }
+            let c = if is_static {
+              { ..c, in_static_context: false }
+            } else {
+              c
+            }
             // Remove from not_yet_initialized after processing (for TS2729)
             if not(is_static) {
               not_yet_initialized.remove(prop.name)
@@ -12016,11 +12156,17 @@ fn check_class_declaration(
   }
 
   // Check for abstract members in non-abstract class (TS2516)
-  let checker = check_abstract_members_in_non_abstract_class(checker, class_decl)
+  let checker = check_abstract_members_in_non_abstract_class(
+    checker, class_decl,
+  )
 
   // Check for constructor overloads (TS2390)
   let class_name = get_class_decl_name(class_decl)
-  let checker = check_class_constructor_overloads(class_name, class_decl.members, checker)
+  let checker = check_class_constructor_overloads(
+    class_name,
+    class_decl.members,
+    checker,
+  )
 
   // Check for method overloads static consistency (TS2388)
   let checker = check_class_method_overloads(class_decl.members, checker)
@@ -12047,7 +12193,6 @@ fn check_abstract_members_in_non_abstract_class(
   if class_decl.is_abstract {
     return checker
   }
-
   let mut checker = checker
   for mem in class_decl.members {
     match mem {
@@ -12075,7 +12220,6 @@ fn check_abstract_members_in_non_abstract_class(
 
   // Check that non-abstract class implements all abstract members from base class (TS2515)
   checker = check_abstract_member_implementation(checker, class_decl)
-
   checker
 }
 
@@ -12089,7 +12233,6 @@ fn check_abstract_member_implementation(
   if class_decl.is_abstract {
     return checker
   }
-
   let mut checker = checker
 
   // Get the base class from extends clause
@@ -12097,12 +12240,14 @@ fn check_abstract_member_implementation(
     if heritage_clause.kind == Extends {
       for type_node in heritage_clause.types {
         match type_node {
-          TypeReference(type_ref) => {
+          TypeReference(type_ref) =>
             // Look up the base class by name
             match lookup_symbol(checker, type_ref.type_name) {
               Some(base_symbol) => {
                 // Get abstract members from base class
-                let abstract_members = get_abstract_members_from_symbol(base_symbol)
+                let abstract_members = get_abstract_members_from_symbol(
+                  base_symbol,
+                )
 
                 // Get implemented members in the derived class
                 let implemented_members = get_class_member_names(class_decl)
@@ -12121,7 +12266,6 @@ fn check_abstract_member_implementation(
               }
               None => ()
             }
-          }
           _ => ()
         }
       }
@@ -12155,12 +12299,13 @@ fn get_class_member_names(class_decl : ClassDeclaration) -> Array[String] {
 
 ///|
 /// Get abstract members from a symbol (returns array of (name, location) pairs)
-fn get_abstract_members_from_symbol(symbol : Symbol) -> Array[(String, SourceLocation)] {
+fn get_abstract_members_from_symbol(
+  symbol : Symbol,
+) -> Array[(String, SourceLocation)] {
   let abstract_members : Array[(String, SourceLocation)] = []
-
   for decl in symbol.declarations {
     match decl {
-      ClassDeclaration(class_decl) => {
+      ClassDeclaration(class_decl) =>
         for mem in class_decl.members {
           match mem {
             MethodDeclaration(meth) =>
@@ -12174,11 +12319,9 @@ fn get_abstract_members_from_symbol(symbol : Symbol) -> Array[(String, SourceLoc
             _ => ()
           }
         }
-      }
       _ => ()
     }
   }
-
   abstract_members
 }
 
@@ -12193,7 +12336,9 @@ fn check_property_use_before_assignment(
   let assigned_props : Map[String, Bool] = Map::new()
 
   // Scan the constructor body for this.prop accesses
-  check_this_property_accesses(checker, body, uninitialized_props, assigned_props)
+  check_this_property_accesses(
+    checker, body, uninitialized_props, assigned_props,
+  )
 }
 
 ///|
@@ -12274,7 +12419,7 @@ fn check_this_property_accesses(
     // Read of this.prop
     PropertyAccessExpression(pa) =>
       match pa.expression {
-        ThisExpression(_) => {
+        ThisExpression(_) =>
           // Reading this.prop - check if it's assigned
           if uninitialized_props.contains(pa.name) &&
             not(assigned_props.get(pa.name).unwrap_or(false)) {
@@ -12288,7 +12433,6 @@ fn check_this_property_accesses(
           } else {
             checker
           }
-        }
         _ =>
           // Check the expression part
           check_this_property_accesses(
@@ -12308,10 +12452,7 @@ fn check_this_property_accesses(
       )
       for arg in call.arguments {
         checker = check_this_property_accesses(
-          checker,
-          arg,
-          uninitialized_props,
-          assigned_props,
+          checker, arg, uninitialized_props, assigned_props,
         )
       }
       checker
@@ -12328,10 +12469,7 @@ fn check_this_property_accesses(
     BlockStatement(block) => {
       for stmt in block.statements {
         checker = check_this_property_accesses(
-          checker,
-          stmt,
-          uninitialized_props,
-          assigned_props,
+          checker, stmt, uninitialized_props, assigned_props,
         )
       }
       checker
@@ -12342,10 +12480,7 @@ fn check_this_property_accesses(
         match decl.initializer {
           Some(init) =>
             checker = check_this_property_accesses(
-              checker,
-              init,
-              uninitialized_props,
-              assigned_props,
+              checker, init, uninitialized_props, assigned_props,
             )
           None => ()
         }
@@ -12357,10 +12492,7 @@ fn check_this_property_accesses(
       match ret.expression {
         Some(expr) =>
           check_this_property_accesses(
-            checker,
-            expr,
-            uninitialized_props,
-            assigned_props,
+            checker, expr, uninitialized_props, assigned_props,
           )
         None => checker
       }
@@ -12381,10 +12513,7 @@ fn check_this_property_accesses(
       match if_stmt.else_statement {
         Some(else_stmt) =>
           check_this_property_accesses(
-            checker,
-            else_stmt,
-            uninitialized_props,
-            assigned_props,
+            checker, else_stmt, uninitialized_props, assigned_props,
           )
         None => checker
       }
@@ -12444,7 +12573,6 @@ fn check_interface_declaration(
 ) -> TypeChecker {
   // Check type parameter names for reserved keywords (TS2368)
   let checker = check_type_parameter_names(checker, iface_decl.type_parameters)
-
   let mut checker = checker
   // First pass: collect index signature return types and validate param types
   let string_index_type : Ref[Type?] = { val: None }
@@ -12493,7 +12621,7 @@ fn check_interface_declaration(
   }
   // Second pass: check property types against index signature
   match string_index_type.val {
-    Some(idx_ret_type) => {
+    Some(idx_ret_type) =>
       for interface_member in iface_decl.members {
         match interface_member {
           PropertyDeclaration(prop) => {
@@ -12510,7 +12638,9 @@ fn check_interface_declaration(
             }
             checker = c
             // TS2745: Check if property type is assignable to index signature type
-            let is_compatible = is_simple_type_compatible(prop_type, idx_ret_type)
+            let is_compatible = is_simple_type_compatible(
+              prop_type, idx_ret_type,
+            )
             if not(is_compatible) {
               checker = add_diagnostic_with_code(
                 checker,
@@ -12523,7 +12653,6 @@ fn check_interface_declaration(
           _ => ()
         }
       }
-    }
     None => ()
   }
   // TS2771: Check for circular reference in Promise-like interface's then method
@@ -12557,7 +12686,7 @@ fn check_interface_heritage_conflicts(
           _ => None
         }
         match base_name {
-          Some(name) => {
+          Some(name) =>
             // Look up the interface symbol
             match lookup_symbol(checker, name) {
               Some(symbol) => {
@@ -12565,15 +12694,25 @@ fn check_interface_heritage_conflicts(
                 let (base_type_opt, c) = resolve_interface_type(checker, symbol)
                 checker = c
                 match base_type_opt {
-                  Some(Object(obj_type)) => {
+                  Some(Object(obj_type)) =>
                     // Check each property against already collected properties
                     for prop_entry in obj_type.properties {
                       let (prop_name, prop_sig) = prop_entry
                       match base_properties.get(prop_name) {
-                        Some((existing_type, existing_source)) => {
+                        Some((existing_type, existing_source)) =>
                           // Check if types are compatible
-                          if not(is_simple_type_compatible(prop_sig.prop_type, existing_type)) &&
-                            not(is_simple_type_compatible(existing_type, prop_sig.prop_type)) {
+                          if not(
+                              is_simple_type_compatible(
+                                prop_sig.prop_type,
+                                existing_type,
+                              ),
+                            ) &&
+                            not(
+                              is_simple_type_compatible(
+                                existing_type,
+                                prop_sig.prop_type,
+                              ),
+                            ) {
                             checker = add_diagnostic_with_code(
                               checker,
                               "Property '\{prop_name}' has conflicting declarations and is inaccessible in type '\{iface_decl.name}' (from '\{existing_source}' and '\{name}')",
@@ -12581,23 +12720,19 @@ fn check_interface_heritage_conflicts(
                               TS2746,
                             )
                           }
-                        }
-                        None => {
+                        None =>
                           // First time seeing this property
                           base_properties.set(
                             prop_name,
                             (prop_sig.prop_type, name),
                           )
-                        }
                       }
                     }
-                  }
                   _ => ()
                 }
               }
               None => ()
             }
-          }
           None => ()
         }
       }
@@ -12622,7 +12757,10 @@ fn check_type_alias_declaration(
 
 ///|
 /// Recursively check type nodes for rest/spread type errors
-fn check_type_node_for_rest_errors(checker : TypeChecker, node : Node) -> TypeChecker {
+fn check_type_node_for_rest_errors(
+  checker : TypeChecker,
+  node : Node,
+) -> TypeChecker {
   match node {
     TypeLiteral(tl) => {
       let mut checker = checker
@@ -12630,7 +12768,10 @@ fn check_type_node_for_rest_errors(checker : TypeChecker, node : Node) -> TypeCh
         match type_member {
           SpreadExpression(spread_expr) => {
             // Check if spread target is an object type
-            let (spread_type, c) = get_type_from_type_node(checker, spread_expr.expression)
+            let (spread_type, c) = get_type_from_type_node(
+              checker,
+              spread_expr.expression,
+            )
             checker = c
             match spread_type {
               Some(Object(_)) | Some(Any(_)) | Some(Unknown(_)) | None => ()
@@ -12653,7 +12794,7 @@ fn check_type_node_for_rest_errors(checker : TypeChecker, node : Node) -> TypeCh
       let mut checker = checker
       for elem in tt.element_types {
         match elem {
-          RestType(rt) => {
+          RestType(rt) =>
             // Check if the rest element type is an array type
             match rt.element_type {
               ArrayType(_) => () // Valid: ...number[]
@@ -12665,7 +12806,6 @@ fn check_type_node_for_rest_errors(checker : TypeChecker, node : Node) -> TypeCh
                   TS2574,
                 )
             }
-          }
           _ => ()
         }
       }
@@ -12764,7 +12904,11 @@ fn check_enum_declaration(
   // This ensures await/yield in enum initializers will trigger TS1308/TS1163 errors
   let saved_async_depth = checker.async_function_depth
   let saved_generator_depth = checker.generator_function_depth
-  let checker = { ..checker, async_function_depth: 0, generator_function_depth: 0 }
+  let checker = {
+    ..checker,
+    async_function_depth: 0,
+    generator_function_depth: 0,
+  }
 
   // Collect all enum member names for forward reference checking
   let all_member_names : Map[String, Bool] = Map::new()
@@ -12801,7 +12945,10 @@ fn check_enum_reserved_name(
   enum_decl : EnumDeclaration,
 ) -> TypeChecker {
   // List of reserved type names that cannot be used as enum names
-  let reserved_names = ["any", "number", "string", "boolean", "symbol", "never", "unknown", "object", "undefined"]
+  let reserved_names = [
+    "any", "number", "string", "boolean", "symbol", "never", "unknown", "object",
+    "undefined",
+  ]
   for reserved in reserved_names {
     if enum_decl.name == reserved {
       return add_diagnostic_with_code(
@@ -12829,7 +12976,7 @@ fn check_enum_merging_first_initializer(
   let first_member = enum_decl.members[0]
   match first_member.initializer {
     Some(_) => checker // This declaration has an initializer, no error
-    None => {
+    None =>
       // This declaration omits the initializer for first element
       // Check if there are other declarations that also omit it
       // Use lookup_symbol which checks namespace_symbols first, then global scope
@@ -12844,8 +12991,9 @@ fn check_enum_merging_first_initializer(
               EnumDeclaration(prev_enum) =>
                 // Only consider declarations that come BEFORE the current one
                 // (their start offset is less than ours)
-                if prev_enum.location.start.offset < enum_decl.location.start.offset &&
-                   prev_enum.members.length() > 0 {
+                if prev_enum.location.start.offset <
+                  enum_decl.location.start.offset &&
+                  prev_enum.members.length() > 0 {
                   match prev_enum.members[0].initializer {
                     None => {
                       earlier_omits_initializer = true
@@ -12871,7 +13019,6 @@ fn check_enum_merging_first_initializer(
         }
         None => checker
       }
-    }
   }
 }
 
@@ -12887,13 +13034,12 @@ fn add_previous_enum_members_to_scope(
       let mut checker = checker
       for decl in enum_symbol.declarations {
         match decl {
-          EnumDeclaration(prev_enum) => {
+          EnumDeclaration(prev_enum) =>
             // Add each member from previous declarations
             for mem in prev_enum.members {
               let member_type = Type::Number(default_type_info())
               checker = add_local_variable(checker, mem.name, member_type)
             }
-          }
           _ => ()
         }
       }
@@ -12965,7 +13111,8 @@ fn check_enum_initializer_forward_reference(
   match expr {
     Identifier(id) =>
       // If the identifier is an enum member that hasn't been seen yet, it's a forward reference
-      if all_member_names.contains(id.name) && not(seen_members.contains(id.name)) {
+      if all_member_names.contains(id.name) &&
+        not(seen_members.contains(id.name)) {
         add_diagnostic_with_code(
           checker,
           "Enum member '\{id.name}' cannot be accessed before it is defined.",
@@ -13135,14 +13282,14 @@ enum ConstEnumValue {
 
 ///|
 /// Evaluate a const enum initializer to detect Infinity/NaN
-fn evaluate_const_enum_value(expr : Node) -> Option[ConstEnumValue] {
+fn evaluate_const_enum_value(expr : Node) -> ConstEnumValue? {
   match expr {
     NumericLiteral(lit) => {
       // Parse the string value to a double
       let v = @strconv.parse_double(lit.value) catch { _ => 0.0 }
       Some(ConstEnumValue::FiniteValue(v))
     }
-    Identifier(id) => {
+    Identifier(id) =>
       // Check for special identifiers like NaN and Infinity
       if id.name == "NaN" {
         Some(ConstEnumValue::NaNValue)
@@ -13152,10 +13299,9 @@ fn evaluate_const_enum_value(expr : Node) -> Option[ConstEnumValue] {
         // Other identifiers (enum members) - assume finite
         None
       }
-    }
-    UnaryExpression(un) => {
+    UnaryExpression(un) =>
       match un.operator {
-        UnaryOperator::Minus => {
+        UnaryOperator::Minus =>
           match evaluate_const_enum_value(un.operand) {
             Some(ConstEnumValue::FiniteValue(v)) =>
               Some(ConstEnumValue::FiniteValue(-v))
@@ -13164,18 +13310,19 @@ fn evaluate_const_enum_value(expr : Node) -> Option[ConstEnumValue] {
             Some(ConstEnumValue::NaNValue) => Some(ConstEnumValue::NaNValue)
             None => None
           }
-        }
         UnaryOperator::Plus => evaluate_const_enum_value(un.operand)
         _ => None
       }
-    }
     BinaryExpression(bin) => {
       let left = evaluate_const_enum_value(bin.left)
       let right = evaluate_const_enum_value(bin.right)
       match (left, right) {
-        (Some(ConstEnumValue::FiniteValue(l)), Some(ConstEnumValue::FiniteValue(r))) => {
+        (
+          Some(ConstEnumValue::FiniteValue(l)),
+          Some(ConstEnumValue::FiniteValue(r)),
+        ) =>
           match bin.operator {
-            BinaryOperator::Divide => {
+            BinaryOperator::Divide =>
               // Division - check for Infinity or NaN
               if r == 0.0 {
                 if l == 0.0 {
@@ -13186,13 +13333,11 @@ fn evaluate_const_enum_value(expr : Node) -> Option[ConstEnumValue] {
               } else {
                 Some(ConstEnumValue::FiniteValue(l / r))
               }
-            }
             BinaryOperator::Add => Some(ConstEnumValue::FiniteValue(l + r))
             BinaryOperator::Subtract => Some(ConstEnumValue::FiniteValue(l - r))
             BinaryOperator::Multiply => Some(ConstEnumValue::FiniteValue(l * r))
             _ => None
           }
-        }
         (Some(ConstEnumValue::InfinityValue), _) =>
           Some(ConstEnumValue::InfinityValue)
         (_, Some(ConstEnumValue::InfinityValue)) =>
@@ -13202,7 +13347,8 @@ fn evaluate_const_enum_value(expr : Node) -> Option[ConstEnumValue] {
         _ => None
       }
     }
-    ParenthesizedExpression(paren) => evaluate_const_enum_value(paren.expression)
+    ParenthesizedExpression(paren) =>
+      evaluate_const_enum_value(paren.expression)
     _ => None
   }
 }
@@ -13273,7 +13419,6 @@ fn check_import_declaration(
     module_spec.has_suffix(".tsx") ||
     module_spec.has_suffix(".js") ||
     module_spec.has_suffix(".jsx")
-
   if has_prohibited_extension {
     // Determine which extension was used
     let ext = if module_spec.has_suffix(".tsx") {
@@ -13322,36 +13467,43 @@ pub fn validate_import_resolution(
 
   // Check if module exists in registry
   match module_registry.get(module_spec) {
-    None => {
+    None =>
       // TS2307: Cannot find module
-      diagnostics.push(create_module_not_found_diagnostic_with_location(module_spec, import_decl.location))
-    }
-    Some(module_exports) => {
+      diagnostics.push(
+        create_module_not_found_diagnostic_with_location(
+          module_spec,
+          import_decl.location,
+        ),
+      )
+    Some(module_exports) =>
       // Check if the file is a module (has exports)
       if not(module_exports.is_module) {
         // TS2306: File is not a module
-        diagnostics.push(create_file_not_module_diagnostic(module_spec, import_decl.location))
+        diagnostics.push(
+          create_file_not_module_diagnostic(module_spec, import_decl.location),
+        )
       } else {
         // Validate import clause
         match import_decl.import_clause {
           Some(clause) => {
             // Check default import
             match clause.name {
-              Some(_default_name) => {
+              Some(_default_name) =>
                 if not(module_exports.has_default_export) {
                   // TS1192: Module has no default export
-                  diagnostics.push(create_no_default_export_diagnostic_with_location(
-                    module_spec,
-                    import_decl.location,
-                  ))
+                  diagnostics.push(
+                    create_no_default_export_diagnostic_with_location(
+                      module_spec,
+                      import_decl.location,
+                    ),
+                  )
                 }
-              }
               None => ()
             }
 
             // Check named bindings
             match clause.named_bindings {
-              Some(NamedImports(specifiers, _)) => {
+              Some(NamedImports(specifiers, _)) =>
                 for specifier in specifiers {
                   let import_name = match specifier.property_name {
                     Some(prop) => prop
@@ -13359,28 +13511,26 @@ pub fn validate_import_resolution(
                   }
                   if not(module_exports.exports.contains(import_name)) {
                     // TS2305: Module has no exported member
-                    diagnostics.push(create_export_not_found_diagnostic_with_location(
-                      import_name,
-                      module_spec,
-                      specifier.location,
-                    ))
+                    diagnostics.push(
+                      create_export_not_found_diagnostic_with_location(
+                        import_name,
+                        module_spec,
+                        specifier.location,
+                      ),
+                    )
                   }
                 }
-              }
-              Some(NamespaceImport(_, _)) => {
+              Some(NamespaceImport(_, _)) =>
                 // Namespace import is always valid if the module exists
                 ()
-              }
               None => ()
             }
           }
-          None => {
+          None =>
             // Side-effect import (import 'module') - always valid if module exists
             ()
-          }
         }
       }
-    }
   }
   diagnostics
 }
@@ -13402,7 +13552,7 @@ pub fn ResolvedModuleExports::from_bound_file(
       ExportDeclaration(ed) => {
         is_module = true
         match ed.export_clause {
-          Some(NamedExports(specifiers, _)) => {
+          Some(NamedExports(specifiers, _)) =>
             for spec in specifiers {
               // ExportSpecifier: name is String, property_name is String?
               // export { foo } -> name = "foo", property_name = None
@@ -13410,11 +13560,8 @@ pub fn ResolvedModuleExports::from_bound_file(
               // The exported name is always `name`
               exports.add(spec.name)
             }
-          }
-          Some(NamespaceExport(name, _)) => {
-            exports.add(name)
-          }
-          None => ()  // export * from 'mod'
+          Some(NamespaceExport(name, _)) => exports.add(name)
+          None => () // export * from 'mod'
         }
       }
       ExportAssignment(_) => {
@@ -13422,7 +13569,7 @@ pub fn ResolvedModuleExports::from_bound_file(
         // Both export = and export default create a default export
         has_default = true
       }
-      FunctionDeclaration(fd) => {
+      FunctionDeclaration(fd) =>
         if has_export_modifier_in_list(fd.modifiers) {
           is_module = true
           if has_default_modifier_in_list(fd.modifiers) {
@@ -13435,8 +13582,7 @@ pub fn ResolvedModuleExports::from_bound_file(
             }
           }
         }
-      }
-      ClassDeclaration(cd) => {
+      ClassDeclaration(cd) =>
         if has_export_modifier_in_list(cd.modifiers) {
           is_module = true
           if has_default_modifier_in_list(cd.modifiers) {
@@ -13449,8 +13595,7 @@ pub fn ResolvedModuleExports::from_bound_file(
             }
           }
         }
-      }
-      VariableStatement(vs) => {
+      VariableStatement(vs) =>
         if has_export_modifier_in_list(vs.modifiers) {
           is_module = true
           for decl in vs.declarations {
@@ -13460,29 +13605,24 @@ pub fn ResolvedModuleExports::from_bound_file(
             }
           }
         }
-      }
-      InterfaceDeclaration(iface) => {
+      InterfaceDeclaration(iface) =>
         if has_export_modifier_in_list(iface.modifiers) {
           is_module = true
           exports.add(iface.name)
         }
-      }
-      TypeAliasDeclaration(td) => {
+      TypeAliasDeclaration(td) =>
         if has_export_modifier_in_list(td.modifiers) {
           is_module = true
           exports.add(td.name)
         }
-      }
-      EnumDeclaration(ed) => {
+      EnumDeclaration(ed) =>
         if has_export_modifier_in_list(ed.modifiers) {
           is_module = true
           exports.add(ed.name)
         }
-      }
       _ => ()
     }
   }
-
   { file_path, is_module, has_default_export: has_default, exports }
 }
 
@@ -13542,7 +13682,7 @@ fn check_try_statement(
 
       // Check type annotation if present (TS2467)
       let (catch_type, checker) = match catch_clause.type_annotation {
-        Some(type_node) => {
+        Some(type_node) =>
           // Validate the type annotation is 'any' or 'unknown'
           match get_type_from_type_node(checker, type_node) {
             (Some(t), checker) => {
@@ -13569,7 +13709,6 @@ fn check_try_statement(
             }
             (None, checker) => any_type(checker)
           }
-        }
         None =>
           // No type annotation - default to 'any'
           any_type(checker)
@@ -13578,7 +13717,8 @@ fn check_try_statement(
       // Add the catch clause variable to scope if present
       // Handles Identifier, ArrayBindingPattern, and ObjectBindingPattern
       let checker = match catch_clause.variable_declaration {
-        Some(var_decl) => add_binding_pattern_variables(checker, var_decl, catch_type)
+        Some(var_decl) =>
+          add_binding_pattern_variables(checker, var_decl, catch_type)
         None => checker
       }
       let checker = check_statement(checker, catch_clause.block)
@@ -13612,7 +13752,6 @@ fn check_switch_statement(
   // Infer the type of the switch expression
   let (switch_type, checker) = infer_type(checker, switch_stmt.expression)
   let mut checker = checker
-
   for i = 0; i < switch_stmt.cases.length(); i = i + 1 {
     let case_clause = switch_stmt.cases[i]
     match case_clause.expression {
@@ -13629,7 +13768,6 @@ fn check_switch_statement(
             TS2678,
           )
         }
-
         checker = check_statements(checker, case_clause.statements)
       }
       None =>
@@ -13716,11 +13854,22 @@ fn expression_has_side_effects(expr : Node) -> Bool {
     // Assignment expressions have side effects
     BinaryExpression(bin) =>
       match bin.operator {
-        Assign | AddAssign | SubtractAssign | MultiplyAssign | DivideAssign |
-        RemainderAssign | BitwiseAndAssign | BitwiseOrAssign | BitwiseXorAssign |
-        ExponentiateAssign | LeftShiftAssign | RightShiftAssign |
-        UnsignedRightShiftAssign | LogicalAndAssign | LogicalOrAssign |
-        NullishCoalescingAssign => true
+        Assign
+        | AddAssign
+        | SubtractAssign
+        | MultiplyAssign
+        | DivideAssign
+        | RemainderAssign
+        | BitwiseAndAssign
+        | BitwiseOrAssign
+        | BitwiseXorAssign
+        | ExponentiateAssign
+        | LeftShiftAssign
+        | RightShiftAssign
+        | UnsignedRightShiftAssign
+        | LogicalAndAssign
+        | LogicalOrAssign
+        | NullishCoalescingAssign => true
         // Comma operator on the left - check if either part has side effects
         Comma =>
           expression_has_side_effects(bin.left) ||
@@ -13740,7 +13889,8 @@ fn expression_has_side_effects(expr : Node) -> Bool {
     // Delete has side effects (removes property)
     // Already handled in UnaryExpression
     // Parenthesized - check inner expression
-    ParenthesizedExpression(paren) => expression_has_side_effects(paren.expression)
+    ParenthesizedExpression(paren) =>
+      expression_has_side_effects(paren.expression)
     // All other expressions (literals, identifiers, property access, etc.) have no side effects
     _ => false
   }
@@ -13799,7 +13949,8 @@ fn check_parameter_self_reference(
               Identifier(id) => id.name
               _ => ""
             }
-            if param_name != "" && expression_contains_identifier(init, param_name) {
+            if param_name != "" &&
+              expression_contains_identifier(init, param_name) {
               checker = add_diagnostic_with_code(
                 checker,
                 "Parameter '\{param_name}' cannot reference itself.",
@@ -13839,10 +13990,19 @@ fn check_property_forward_reference(
           }
           checker
         }
-        _ => check_property_forward_reference(checker, pa.expression, uninitialized_props)
+        _ =>
+          check_property_forward_reference(
+            checker,
+            pa.expression,
+            uninitialized_props,
+          )
       }
     BinaryExpression(bin) => {
-      checker = check_property_forward_reference(checker, bin.left, uninitialized_props)
+      checker = check_property_forward_reference(
+        checker,
+        bin.left,
+        uninitialized_props,
+      )
       check_property_forward_reference(checker, bin.right, uninitialized_props)
     }
     UnaryExpression(un) =>
@@ -13858,7 +14018,11 @@ fn check_property_forward_reference(
         cond.when_true,
         uninitialized_props,
       )
-      check_property_forward_reference(checker, cond.when_false, uninitialized_props)
+      check_property_forward_reference(
+        checker,
+        cond.when_false,
+        uninitialized_props,
+      )
     }
     CallExpression(call) => {
       checker = check_property_forward_reference(
@@ -13867,7 +14031,9 @@ fn check_property_forward_reference(
         uninitialized_props,
       )
       for arg in call.arguments {
-        checker = check_property_forward_reference(checker, arg, uninitialized_props)
+        checker = check_property_forward_reference(
+          checker, arg, uninitialized_props,
+        )
       }
       checker
     }
@@ -13880,7 +14046,9 @@ fn check_property_forward_reference(
       match new_expr.arguments {
         Some(args) =>
           for arg in args {
-            checker = check_property_forward_reference(checker, arg, uninitialized_props)
+            checker = check_property_forward_reference(
+              checker, arg, uninitialized_props,
+            )
           }
         None => ()
       }
@@ -13890,7 +14058,9 @@ fn check_property_forward_reference(
       for elem in arr.elements {
         match elem {
           Some(e) =>
-            checker = check_property_forward_reference(checker, e, uninitialized_props)
+            checker = check_property_forward_reference(
+              checker, e, uninitialized_props,
+            )
           None => ()
         }
       }
@@ -13901,30 +14071,22 @@ fn check_property_forward_reference(
         match prop {
           PropertyAssignment(_, initializer, _) =>
             checker = check_property_forward_reference(
-              checker,
-              initializer,
-              uninitialized_props,
+              checker, initializer, uninitialized_props,
             )
           ShorthandProperty(_, _) => ()
           SpreadAssignment(expression, _) =>
             checker = check_property_forward_reference(
-              checker,
-              expression,
-              uninitialized_props,
+              checker, expression, uninitialized_props,
             )
           MethodDeclaration(_, _, _) => ()
           GetAccessor(_, _, _) => ()
           SetAccessor(_, _, _) => ()
           ComputedPropertyAssignment(key_expr, value_expr, _) => {
             checker = check_property_forward_reference(
-              checker,
-              key_expr,
-              uninitialized_props,
+              checker, key_expr, uninitialized_props,
             )
             checker = check_property_forward_reference(
-              checker,
-              value_expr,
-              uninitialized_props,
+              checker, value_expr, uninitialized_props,
             )
           }
         }
@@ -13932,7 +14094,11 @@ fn check_property_forward_reference(
       checker
     }
     ParenthesizedExpression(paren) =>
-      check_property_forward_reference(checker, paren.expression, uninitialized_props)
+      check_property_forward_reference(
+        checker,
+        paren.expression,
+        uninitialized_props,
+      )
     ElementAccessExpression(elem) => {
       checker = check_property_forward_reference(
         checker,
@@ -13962,7 +14128,11 @@ fn check_property_forward_reference(
       checker
     }
     AwaitExpression(await_expr) =>
-      check_property_forward_reference(checker, await_expr.expression, uninitialized_props)
+      check_property_forward_reference(
+        checker,
+        await_expr.expression,
+        uninitialized_props,
+      )
     _ => checker
   }
 }
@@ -14012,7 +14182,9 @@ fn get_type_parameters_from_symbol(symbol : Symbol) -> Array[TypeParameter] {
 
 ///|
 /// Count required type parameters (those without defaults)
-fn count_required_type_params_from_ast(type_params : Array[TypeParameter]) -> Int {
+fn count_required_type_params_from_ast(
+  type_params : Array[TypeParameter],
+) -> Int {
   let mut count = 0
   for param in type_params {
     if param.default is None {
@@ -14034,7 +14206,6 @@ fn validate_type_argument_count(
 ) -> TypeChecker {
   let min_required = count_required_type_params_from_ast(type_params)
   let max_allowed = type_params.length()
-
   if type_args_count < min_required || type_args_count > max_allowed {
     if min_required != max_allowed {
       // TS2707: Generic type requires between N and M type arguments
@@ -14321,7 +14492,6 @@ fn get_type_from_type_node(
       let call_signatures : Array[CheckerSignature] = []
       let construct_signatures : Array[CheckerSignature] = []
       let index_signatures : Array[IndexSignature] = []
-
       for mem in type_literal.members {
         match mem {
           TypeLiteralProperty(tl_prop) => {
@@ -14364,13 +14534,15 @@ fn get_type_from_type_node(
           }
           IndexSignatureDeclaration(idx_sig) => {
             // Get parameter type (string or number)
-            let (param_type, c) = match get_type_from_type_node(checker, idx_sig.parameter_type) {
+            let (param_type, c) = match
+              get_type_from_type_node(checker, idx_sig.parameter_type) {
               (Some(t), c2) => (t, c2)
               (None, c2) => any_type(c2)
             }
             checker = c
             // Get return type (return_type is Node, not Node?)
-            let (return_type, c) = match get_type_from_type_node(checker, idx_sig.return_type) {
+            let (return_type, c) = match
+              get_type_from_type_node(checker, idx_sig.return_type) {
               (Some(t), c2) => (t, c2)
               (None, c2) => any_type(c2)
             }
@@ -14382,7 +14554,7 @@ fn get_type_from_type_node(
               is_readonly: idx_sig.is_readonly,
             })
           }
-          MethodDeclaration(method_decl) => {
+          MethodDeclaration(method_decl) =>
             // Handle method signatures - check for construct/call signatures
             if method_decl.name == "new" {
               // Construct signature: new (params): ReturnType
@@ -14396,7 +14568,9 @@ fn get_type_from_type_node(
               call_signatures.push(sig)
             } else {
               // Regular method - add as property
-              let (method_type, c) = get_method_signature_type(checker, method_decl)
+              let (method_type, c) = get_method_signature_type(
+                checker, method_decl,
+              )
               checker = c
               properties.set(method_decl.name, {
                 name: method_decl.name,
@@ -14405,11 +14579,9 @@ fn get_type_from_type_node(
                 is_readonly: false,
               })
             }
-          }
           _ => ()
         }
       }
-
       let (info, checker) = create_type_info(checker)
       (
         Some(
@@ -14474,21 +14646,18 @@ fn get_type_from_type_node(
       }
 
       // Get return type
-      let (return_type, checker) = match get_type_from_type_node(
-        checker,
-        func_type.return_type,
-      ) {
+      let (return_type, checker) = match
+        get_type_from_type_node(checker, func_type.return_type) {
         (Some(t), c) => (t, c)
         (None, c) => any_type(c)
       }
-
       let (info, checker) = create_type_info(checker)
       (Some(Type::Function({ parameters, return_type, info })), checker)
     }
     TypeOperator(type_op) =>
       // Handle type operators: keyof T, typeof x, readonly T, unique symbol
       match type_op.operator {
-        KeyOf => {
+        KeyOf =>
           // For keyof, we need to get the inner type and extract its keys as a union
           match get_type_from_type_node(checker, type_op.type_node) {
             (Some(inner_type), c) => {
@@ -14530,7 +14699,7 @@ fn get_type_from_type_node(
                 }
               }
             }
-            (None, c) => {
+            (None, c) =>
               // The inner type wasn't found - check if it's a type parameter reference
               match type_op.type_node {
                 Node::TypeReference(type_ref) => {
@@ -14558,9 +14727,7 @@ fn get_type_from_type_node(
                 }
                 _ => (None, c)
               }
-            }
           }
-        }
         TypeOf => {
           // typeof x - would need to look up the value and get its type
           // For now, return any
@@ -14585,7 +14752,7 @@ fn get_type_from_type_node(
 fn extract_keys_from_type(t : Type) -> Array[Type] {
   let keys : Array[Type] = []
   match t {
-    Object(obj) => {
+    Object(obj) =>
       for kv in obj.properties {
         // Create a string literal type for each property name
         let info : TypeInfo = {
@@ -14594,7 +14761,6 @@ fn extract_keys_from_type(t : Type) -> Array[Type] {
         }
         keys.push(StringLiteral(kv.0, info))
       }
-    }
     _ => ()
   }
   keys
@@ -14619,7 +14785,6 @@ fn get_method_checker_signature(
   // Build parameters
   let mut checker = checker
   let parameters : Array[CheckerParameter] = []
-
   for param in method_decl.parameters {
     match param {
       Parameter(p) => {
@@ -14652,7 +14817,6 @@ fn get_method_checker_signature(
       }
     None => any_type(checker)
   }
-
   ({ parameters, return_type, type_parameters: [] }, checker)
 }
 
@@ -14665,7 +14829,6 @@ fn get_method_signature_type(
   // Build parameters
   let mut checker = checker
   let parameters : Array[CheckerParameter] = []
-
   for param in method_decl.parameters {
     match param {
       Parameter(p) => {
@@ -14698,7 +14861,6 @@ fn get_method_signature_type(
       }
     None => any_type(checker)
   }
-
   let (info, checker) = create_type_info(checker)
   (Function({ parameters, return_type, info }), checker)
 }
@@ -14802,34 +14964,31 @@ fn type_to_string(t : Type) -> String {
     Conditional(cond) =>
       "\{type_to_string(cond.check_type)} extends \{type_to_string(cond.extends_type)} ? \{type_to_string(cond.true_type)} : \{type_to_string(cond.false_type)}"
     Mapped(_) => "{ [K in ...]: ... }"
-    TemplateLiteral(tl) => {
+    TemplateLiteral(tl) =>
       // Try to evaluate to a concrete string for better error messages
       match evaluate_template_literal_to_string(tl) {
         Some(s) => "\"\{s}\""
         None => "`...`"
       }
-    }
     IndexAccess(ia) =>
       "\{type_to_string(ia.object_type)}[\{type_to_string(ia.index_type)}]"
     Infer(inf) => "infer \{inf.type_parameter_name}"
     Function(_) => "function"
-    Object(obj) => {
+    Object(obj) =>
       // First check for named types (class instances, typeof globalThis, etc.)
       match obj.class_name {
         Some(name) => name
-        None => {
+        None =>
           // Display empty object literals as {} (like TypeScript does)
           if obj.properties.size() == 0 &&
-             obj.call_signatures.length() == 0 &&
-             obj.construct_signatures.length() == 0 &&
-             obj.index_signatures.length() == 0 {
+            obj.call_signatures.length() == 0 &&
+            obj.construct_signatures.length() == 0 &&
+            obj.index_signatures.length() == 0 {
             "{}"
           } else {
             "object"
           }
-        }
       }
-    }
     TypeReference(type_ref) => type_ref.name
     Error(_) => "error"
   }
@@ -14881,7 +15040,10 @@ pub fn split_by_dot(name : String) -> Array[String] {
 ///|
 /// Look up a qualified symbol like Foo.Bar.Baz
 /// First looks up Foo, then Bar in Foo's exports/members, etc.
-fn lookup_qualified_symbol(checker : TypeChecker, qualified_name : String) -> Symbol? {
+fn lookup_qualified_symbol(
+  checker : TypeChecker,
+  qualified_name : String,
+) -> Symbol? {
   let parts = split_by_dot(qualified_name)
   if parts.length() == 0 {
     return None
@@ -14922,7 +15084,6 @@ fn lookup_qualified_symbol(checker : TypeChecker, qualified_name : String) -> Sy
       }
     }
   }
-
   current_symbol
 }
 
@@ -15023,7 +15184,11 @@ fn resolve_interface_type(
               None => any_type(checker)
             }
             checker = c
-            let func_sig : CheckerSignature = { parameters, return_type, type_parameters: [] }
+            let func_sig : CheckerSignature = {
+              parameters,
+              return_type,
+              type_parameters: [],
+            }
             // Check if this is a construct signature (name "new") or call signature (name "")
             if meth.name == "new" {
               construct_signatures.push(func_sig)
@@ -15103,7 +15268,6 @@ fn resolve_interface_type(
   let resolving = checker.resolving_symbols
   resolving.remove(interface_symbol.id)
   checker = { ..checker, resolving_symbols: resolving }
-
   (result, checker)
 }
 
@@ -15150,9 +15314,10 @@ fn resolve_type_alias_type(
       }
     _ =>
       // Try declarations array if value_declaration is not a TypeAliasDeclaration
-      match type_alias_symbol.declarations.iter().find_first(
-        fn(decl) { decl is TypeAliasDeclaration(_) },
-      ) {
+      match
+        type_alias_symbol.declarations
+        .iter()
+        .find_first(fn(decl) { decl is TypeAliasDeclaration(_) }) {
         Some(TypeAliasDeclaration(type_alias)) =>
           match get_type_from_type_node(checker, type_alias.type_node) {
             (Some(t), c) => {
@@ -15172,7 +15337,6 @@ fn resolve_type_alias_type(
   let resolving = checker.resolving_symbols
   resolving.remove(type_alias_symbol.id)
   checker = { ..checker, resolving_symbols: resolving }
-
   (result, checker)
 }
 
@@ -15184,8 +15348,9 @@ fn resolve_type_alias_type_with_args(
   type_args : Array[Node],
 ) -> (Type?, TypeChecker) {
   // First resolve the base type alias
-  let (base_type_opt, checker) = resolve_type_alias_type(checker, type_alias_symbol)
-
+  let (base_type_opt, checker) = resolve_type_alias_type(
+    checker, type_alias_symbol,
+  )
   match base_type_opt {
     Some(base_type) => {
       // Get type parameter names from the type alias declaration
@@ -15206,12 +15371,16 @@ fn resolve_type_alias_type_with_args(
 
       // Create substitution map
       let subst_map : Map[String, Type] = Map::new()
-      for i = 0; i < type_param_names.length() && i < resolved_args.length(); i = i + 1 {
+      for i = 0
+          i < type_param_names.length() && i < resolved_args.length()
+          i = i + 1 {
         subst_map.set(type_param_names[i], resolved_args[i])
       }
 
       // Substitute and expand
-      let (result, checker) = substitute_and_expand_type(checker, base_type, subst_map)
+      let (result, checker) = substitute_and_expand_type(
+        checker, base_type, subst_map,
+      )
       (Some(result), checker)
     }
     None => (None, checker)
@@ -15249,23 +15418,33 @@ fn substitute_and_expand_type(
           let mut checker = checker
           let new_args : Array[Type] = []
           for arg in type_ref.type_arguments {
-            let (new_arg, c) = substitute_and_expand_type(checker, arg, subst_map)
+            let (new_arg, c) = substitute_and_expand_type(
+              checker, arg, subst_map,
+            )
             new_args.push(new_arg)
             checker = c
           }
           let (info, checker) = create_type_info(checker)
-          (TypeReference({ name: type_ref.name, type_arguments: new_args, info }), checker)
+          (
+            TypeReference({
+              name: type_ref.name,
+              type_arguments: new_args,
+              info,
+            }),
+            checker,
+          )
         }
       }
     // Mapped type - expand if constraint is keyof of a known type
-    Mapped(mapped) =>
-      expand_mapped_type_with_subst(checker, mapped, subst_map)
+    Mapped(mapped) => expand_mapped_type_with_subst(checker, mapped, subst_map)
     // Union type - substitute in each member
     Union(union) => {
       let mut checker = checker
       let new_types : Array[Type] = []
       for member in union.types {
-        let (new_member, c) = substitute_and_expand_type(checker, member, subst_map)
+        let (new_member, c) = substitute_and_expand_type(
+          checker, member, subst_map,
+        )
         new_types.push(new_member)
         checker = c
       }
@@ -15288,7 +15467,11 @@ fn substitute_and_expand_type(
       let new_props : Map[String, PropertySignature] = Map::new()
       for entry in obj.properties {
         let (name, prop) = entry
-        let (new_type, c) = substitute_and_expand_type(checker, prop.prop_type, subst_map)
+        let (new_type, c) = substitute_and_expand_type(
+          checker,
+          prop.prop_type,
+          subst_map,
+        )
         new_props.set(name, { ..prop, prop_type: new_type })
         checker = c
       }
@@ -15426,12 +15609,7 @@ fn substitute_template_type(
     TypeReference(type_ref) =>
       match subst_map.get(type_ref.name) {
         Some(t) => t
-        None =>
-          if type_ref.name == key_param {
-            prop_type
-          } else {
-            template
-          }
+        None => if type_ref.name == key_param { prop_type } else { template }
       }
     // Other types - return as is
     _ => template
@@ -15526,14 +15704,12 @@ pub fn validate_isolated_modules(
       start: Position::{ line: 1, column: 1, offset: 0 },
       end: Position::{ line: 1, column: 1, offset: 0 },
     }
-    diagnostics.push(
-      Diagnostic::{
-        code: 1208,
-        category: DiagnosticCategory::Error,
-        message: "'isolatedModules' requires all files to be modules (have import or export statements).",
-        location,
-      },
-    )
+    diagnostics.push(Diagnostic::{
+      code: 1208,
+      category: DiagnosticCategory::Error,
+      message: "'isolatedModules' requires all files to be modules (have import or export statements).",
+      location,
+    })
   }
 
   // TS1209: const enum declarations are not allowed
@@ -15541,19 +15717,16 @@ pub fn validate_isolated_modules(
     match stmt {
       EnumDeclaration(enum_decl) =>
         if enum_decl.is_const {
-          diagnostics.push(
-            Diagnostic::{
-              code: 1209,
-              category: DiagnosticCategory::Error,
-              message: "const enums are not allowed when 'isolatedModules' is enabled. Use regular enums instead.",
-              location: enum_decl.location,
-            },
-          )
+          diagnostics.push(Diagnostic::{
+            code: 1209,
+            category: DiagnosticCategory::Error,
+            message: "const enums are not allowed when 'isolatedModules' is enabled. Use regular enums instead.",
+            location: enum_decl.location,
+          })
         }
       _ => ()
     }
   }
-
   diagnostics
 }
 
@@ -15591,7 +15764,7 @@ pub fn validate_verbatim_module_syntax(
         match import_decl.import_clause {
           Some(clause) =>
             match clause.named_bindings {
-              Some(NamedImports::NamedImports(specifiers, _)) => {
+              Some(NamedImports::NamedImports(specifiers, _)) =>
                 for specifier in specifiers {
                   // Skip if the specifier is type-only
                   if specifier.is_type_only {
@@ -15604,17 +15777,14 @@ pub fn validate_verbatim_module_syntax(
                   // Check if this symbol is a type-only symbol in the local scope
                   // Since we can't resolve cross-file imports, we check local declarations
                   if type_only_symbols.get(local_name).unwrap_or(false) {
-                    diagnostics.push(
-                      Diagnostic::{
-                        code: 1485,
-                        category: DiagnosticCategory::Error,
-                        message: "'\{local_name}' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.",
-                        location: specifier.location,
-                      },
-                    )
+                    diagnostics.push(Diagnostic::{
+                      code: 1485,
+                      category: DiagnosticCategory::Error,
+                      message: "'\{local_name}' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.",
+                      location: specifier.location,
+                    })
                   }
                 }
-              }
               _ => ()
             }
           None => ()
@@ -15635,7 +15805,7 @@ pub fn validate_verbatim_module_syntax(
 
         // Check named exports
         match export_decl.export_clause {
-          Some(NamedExports::NamedExports(specifiers, _)) => {
+          Some(NamedExports::NamedExports(specifiers, _)) =>
             for specifier in specifiers {
               // Skip if the specifier is type-only
               if specifier.is_type_only {
@@ -15651,26 +15821,21 @@ pub fn validate_verbatim_module_syntax(
 
               // Check if this symbol is a type-only symbol
               if type_only_symbols.get(local_name).unwrap_or(false) {
-                diagnostics.push(
-                  Diagnostic::{
-                    code: 1486,
-                    category: DiagnosticCategory::Error,
-                    message: "'\{local_name}' is a type and must be exported using a type-only export when 'verbatimModuleSyntax' is enabled.",
-                    location: specifier.location,
-                  },
-                )
+                diagnostics.push(Diagnostic::{
+                  code: 1486,
+                  category: DiagnosticCategory::Error,
+                  message: "'\{local_name}' is a type and must be exported using a type-only export when 'verbatimModuleSyntax' is enabled.",
+                  location: specifier.location,
+                })
               }
             }
-          }
-          Some(NamedExports::NamespaceExport(_, _)) =>
-            () // Namespace exports (export * as ns) don't need type-only checking
+          Some(NamedExports::NamespaceExport(_, _)) => () // Namespace exports (export * as ns) don't need type-only checking
           None => ()
         }
       }
       _ => ()
     }
   }
-
   diagnostics
 }
 
@@ -15715,7 +15880,6 @@ fn exact_opt_find_interface_properties(
 ) -> Map[String, ExactOptPropertyInfo] {
   // Returns map of property name -> property info
   let props : Map[String, ExactOptPropertyInfo] = Map::new()
-
   for stmt in bound.statements {
     match stmt {
       InterfaceDeclaration(iface) =>
@@ -15723,13 +15887,10 @@ fn exact_opt_find_interface_properties(
           for mem in iface.members {
             match mem {
               PropertyDeclaration(prop_decl) =>
-                props.set(
-                  prop_decl.name,
-                  {
-                    is_optional: prop_decl.is_optional,
-                    type_node: prop_decl.type_annotation,
-                  },
-                )
+                props.set(prop_decl.name, {
+                  is_optional: prop_decl.is_optional,
+                  type_node: prop_decl.type_annotation,
+                })
               _ => ()
             }
           }
@@ -15742,13 +15903,10 @@ fn exact_opt_find_interface_properties(
               for mem in tl.members {
                 match mem {
                   PropertyDeclaration(prop_decl) =>
-                    props.set(
-                      prop_decl.name,
-                      {
-                        is_optional: prop_decl.is_optional,
-                        type_node: prop_decl.type_annotation,
-                      },
-                    )
+                    props.set(prop_decl.name, {
+                      is_optional: prop_decl.is_optional,
+                      type_node: prop_decl.type_annotation,
+                    })
                   _ => ()
                 }
               }
@@ -15780,7 +15938,8 @@ pub fn validate_exact_optional_property_types(
             (Some(TypeReference(type_ref)), Some(ObjectLiteralExpression(obj))) => {
               // Get the interface properties
               let interface_props = exact_opt_find_interface_properties(
-                bound, type_ref.type_name,
+                bound,
+                type_ref.type_name,
               )
 
               // Check each property in the object literal
@@ -15798,14 +15957,12 @@ pub fn validate_exact_optional_property_types(
                               None => false
                             }
                             if not(includes_undefined) {
-                              diagnostics.push(
-                                Diagnostic::{
-                                  code: 2412,
-                                  category: DiagnosticCategory::Error,
-                                  message: "Type 'undefined' is not assignable to type with 'exactOptionalPropertyTypes' enabled. Consider adding 'undefined' to the type of the target.",
-                                  location,
-                                },
-                              )
+                              diagnostics.push(Diagnostic::{
+                                code: 2412,
+                                category: DiagnosticCategory::Error,
+                                message: "Type 'undefined' is not assignable to type with 'exactOptionalPropertyTypes' enabled. Consider adding 'undefined' to the type of the target.",
+                                location,
+                              })
                             }
                           }
                         None => ()
@@ -15821,7 +15978,6 @@ pub fn validate_exact_optional_property_types(
       _ => ()
     }
   }
-
   diagnostics
 }
 
@@ -15833,8 +15989,18 @@ pub fn validate_exact_optional_property_types(
 /// Check if a type parameter name is a reserved TypeScript type name
 fn is_reserved_type_name(name : String) -> Bool {
   match name {
-    "string" | "number" | "boolean" | "symbol" | "bigint" | "void" | "any" | "object" | "never" | "unknown" | "undefined" | "null" =>
-      true
+    "string"
+    | "number"
+    | "boolean"
+    | "symbol"
+    | "bigint"
+    | "void"
+    | "any"
+    | "object"
+    | "never"
+    | "unknown"
+    | "undefined"
+    | "null" => true
     _ => false
   }
 }
@@ -15849,7 +16015,6 @@ fn check_type_parameter_names(
   let mut checker = checker
   let mut seen_optional = false
   let mut first_optional_name = ""
-
   for param in type_params {
     // TS2368: Check reserved type names
     if is_reserved_type_name(param.name) {
@@ -15921,7 +16086,6 @@ pub fn extract_module_types_with_registry(
     require_bindings,
     external_registry,
   }
-
   for statement in bound_file.statements {
     match statement {
       // Export declaration: export { a, b } or export { a as b }
@@ -15930,7 +16094,11 @@ pub fn extract_module_types_with_registry(
           Some(NamedExports(specifiers, _)) =>
             for spec in specifiers {
               // Get type from global scope if available
-              let ty = resolve_export_type(bound_file.global_scope, spec.name, env)
+              let ty = resolve_export_type(
+                bound_file.global_scope,
+                spec.name,
+                env,
+              )
               let info = ExternalTypeInfo::value(ty, spec.name)
               module_types.add_export(spec.name, info)
             }
@@ -15945,7 +16113,8 @@ pub fn extract_module_types_with_registry(
       // Export assignment: export = x or export default x
       ExportAssignment(ea) => {
         let ty = match ea.expression {
-          Identifier(id) => resolve_export_type(bound_file.global_scope, id.name, env)
+          Identifier(id) =>
+            resolve_export_type(bound_file.global_scope, id.name, env)
           _ => TAny
         }
         let info = if ea.is_export_equals {
@@ -16044,38 +16213,52 @@ pub fn extract_module_types_with_registry(
       // These become global namespaces in .d.ts files
       ModuleDeclaration(md) => {
         // Extract namespace members and add to global_namespaces
-        let ns_type = module_declaration_to_object_type(env, bound_file.global_scope, md)
+        let ns_type = module_declaration_to_object_type(
+          env,
+          bound_file.global_scope,
+          md,
+        )
         module_types.global_namespaces.set(md.name, ns_type)
       }
 
       // CommonJS: exports.xxx = value  or  module.exports = value
-      ExpressionStatement(es) => {
+      ExpressionStatement(es) =>
         match es.expression {
           // exports.xxx = value
-          BinaryExpression(be) if be.operator == Assign => {
+          BinaryExpression(be) if be.operator == Assign =>
             match be.left {
               // exports.propertyName = ... OR module.exports = ...
-              PropertyAccessExpression(pae) => {
+              PropertyAccessExpression(pae) =>
                 match pae.expression {
                   Identifier(id) if id.name == "exports" => {
                     // Found exports.xxx = value, extract type from RHS
                     // Use context to resolve require() bindings
-                    let ty = expression_to_type_v2_with_context(cjs_ctx, be.right)
+                    let ty = expression_to_type_v2_with_context(
+                      cjs_ctx,
+                      be.right,
+                    )
                     let info = ExternalTypeInfo::value(ty, pae.name)
                     module_types.add_export(pae.name, info)
                   }
                   // module.exports = value (whole module assignment)
                   // pae.expression = Identifier("module"), pae.name = "exports"
-                  Identifier(id) if id.name == "module" && pae.name == "exports" => {
+                  Identifier(id) if id.name == "module" && pae.name == "exports" =>
                     // module.exports = value or module.exports = { ... }
-                    extract_module_exports_assignment_with_context(cjs_ctx, module_types, be.right)
-                  }
+                    extract_module_exports_assignment_with_context(
+                      cjs_ctx,
+                      module_types,
+                      be.right,
+                    )
                   // module.exports.xxx = value (nested property)
                   PropertyAccessExpression(inner_pae) =>
                     match inner_pae.expression {
-                      Identifier(inner_id) if inner_id.name == "module" && inner_pae.name == "exports" => {
+                      Identifier(inner_id) if inner_id.name == "module" &&
+                        inner_pae.name == "exports" => {
                         // module.exports.xxx = value
-                        let ty = expression_to_type_v2_with_context(cjs_ctx, be.right)
+                        let ty = expression_to_type_v2_with_context(
+                          cjs_ctx,
+                          be.right,
+                        )
                         let info = ExternalTypeInfo::value(ty, pae.name)
                         module_types.add_export(pae.name, info)
                       }
@@ -16083,18 +16266,13 @@ pub fn extract_module_types_with_registry(
                     }
                   _ => ()
                 }
-              }
               _ => ()
             }
-          }
           _ => ()
         }
-      }
-
       _ => ()
     }
   }
-
   module_types
 }
 
@@ -16124,17 +16302,16 @@ fn extract_module_exports_assignment_with_context(
 ) -> Unit {
   match expression {
     // module.exports = { key1: value1, key2: value2 }
-    ObjectLiteralExpression(ole) => {
+    ObjectLiteralExpression(ole) =>
       for prop in ole.properties {
         match prop {
           // PropertyAssignment(name: String, value: Node, location: SourceLocation)
-          PropertyAssignment(name, value, _) => {
+          PropertyAssignment(name, value, _) =>
             if name.length() > 0 {
               let ty = expression_to_type_v2_with_context(ctx, value)
               let info = ExternalTypeInfo::value(ty, name)
               module_types.add_export(name, info)
             }
-          }
           // ShorthandProperty(name: String, location: SourceLocation)
           ShorthandProperty(name, _) => {
             // Try to resolve from require bindings
@@ -16145,19 +16322,17 @@ fn extract_module_exports_assignment_with_context(
           _ => ()
         }
       }
-    }
     // module.exports = identifier (re-export everything from identifier)
     Identifier(id) => {
       // Try to resolve from require bindings
       let ty = resolve_identifier_type(ctx, id.name)
       match ty {
-        TObject(obj) => {
+        TObject(obj) =>
           // Re-export all fields from the resolved type
           obj.fields.each(fn(field_name, field_info) {
             let info = ExternalTypeInfo::value(field_info.ty, field_name)
             module_types.add_export(field_name, info)
           })
-        }
         _ => () // Can't resolve, skip
       }
     }
@@ -16173,7 +16348,10 @@ fn extract_module_exports_assignment_with_context(
 
 ///|
 /// Convert a function expression to TypeV2
-fn function_expression_to_type_v2(env : TypeEnv, fe : FunctionExpression) -> TypeV2 {
+fn function_expression_to_type_v2(
+  env : TypeEnv,
+  fe : FunctionExpression,
+) -> TypeV2 {
   let params : Array[ParamInfoV2] = []
   for param in fe.parameters {
     match param {
@@ -16218,20 +16396,19 @@ fn collect_require_bindings(
   current_file : String,
 ) -> Map[String, String] {
   let bindings : Map[String, String] = Map::new()
-
   for statement in statements {
     match statement {
       // var x = require('mod') or const x = require('mod')
-      VariableStatement(vs) => {
+      VariableStatement(vs) =>
         for vd in vs.declarations {
           // Check if initializer is a require() call
           match vd.initializer {
-            Some(init) => {
+            Some(init) =>
               match init {
-                CallExpression(ce) => {
+                CallExpression(ce) =>
                   // Check if this is require('...')
                   match ce.expression {
-                    Identifier(id) if id.name == "require" => {
+                    Identifier(id) if id.name == "require" =>
                       // Get the module specifier from the first argument
                       if ce.arguments.length() > 0 {
                         match ce.arguments[0] {
@@ -16253,21 +16430,16 @@ fn collect_require_bindings(
                           _ => ()
                         }
                       }
-                    }
                     _ => ()
                   }
-                }
                 _ => ()
               }
-            }
             None => ()
           }
         }
-      }
       _ => ()
     }
   }
-
   bindings
 }
 
@@ -16277,7 +16449,11 @@ fn resolve_require_path(specifier : String, current_file : String) -> String {
   if specifier.has_prefix("./") || specifier.has_prefix("../") {
     // Relative path - resolve relative to current file
     let dir = get_directory_from_path(current_file)
-    let joined = if dir.length() > 0 { dir + "/" + specifier } else { specifier }
+    let joined = if dir.length() > 0 {
+      dir + "/" + specifier
+    } else {
+      specifier
+    }
     // Normalize and return
     normalize_import_path(joined)
   } else {
@@ -16314,12 +16490,20 @@ fn expression_to_type_v2(env : TypeEnv, expr : Node) -> TypeV2 {
 
 ///|
 /// Convert an expression to TypeV2 with full CommonJS context for require resolution
-fn expression_to_type_v2_with_context(ctx : CommonJSTypeContext, expr : Node) -> TypeV2 {
+fn expression_to_type_v2_with_context(
+  ctx : CommonJSTypeContext,
+  expr : Node,
+) -> TypeV2 {
   match expr {
     // Literal values
     NumericLiteral(_) => TNumber
     StringLiteral(_) => TString
-    BooleanLiteral(bl) => if bl.value { TLiteralBool(true) } else { TLiteralBool(false) }
+    BooleanLiteral(bl) =>
+      if bl.value {
+        TLiteralBool(true)
+      } else {
+        TLiteralBool(false)
+      }
     NullLiteral(_) => TNull
 
     // Function expressions
@@ -16332,7 +16516,7 @@ fn expression_to_type_v2_with_context(ctx : CommonJSTypeContext, expr : Node) ->
       for prop in ole.properties {
         match prop {
           // PropertyAssignment(name: String, value: Node, location: SourceLocation)
-          PropertyAssignment(name, value, _) => {
+          PropertyAssignment(name, value, _) =>
             if name.length() > 0 {
               let ty = expression_to_type_v2_with_context(ctx, value)
               fields.set(name, FieldInfoV2::{
@@ -16341,7 +16525,6 @@ fn expression_to_type_v2_with_context(ctx : CommonJSTypeContext, expr : Node) ->
                 is_readonly: false,
               })
             }
-          }
           // ShorthandProperty(name: String, location: SourceLocation)
           ShorthandProperty(name, _) => {
             // For shorthand properties, try to resolve from require bindings
@@ -16373,25 +16556,23 @@ fn expression_to_type_v2_with_context(ctx : CommonJSTypeContext, expr : Node) ->
     Identifier(id) => resolve_identifier_type(ctx, id.name)
 
     // Property access on identifier - try to resolve the base from require bindings
-    PropertyAccessExpression(pae) => {
+    PropertyAccessExpression(pae) =>
       match pae.expression {
         Identifier(id) => {
           // Try to resolve base.property from require bindings
           let base_type = resolve_identifier_type(ctx, id.name)
           // If we got an object type, try to look up the property
           match base_type {
-            TObject(obj) => {
+            TObject(obj) =>
               match obj.fields.get(pae.name) {
                 Some(field) => field.ty
                 None => TAny
               }
-            }
             _ => TAny
           }
         }
         _ => TAny
       }
-    }
 
     // Default to any for complex expressions
     _ => TAny
@@ -16403,7 +16584,7 @@ fn expression_to_type_v2_with_context(ctx : CommonJSTypeContext, expr : Node) ->
 fn resolve_identifier_type(ctx : CommonJSTypeContext, name : String) -> TypeV2 {
   // Check if this identifier is a require binding
   match ctx.require_bindings.get(name) {
-    Some(module_path) => {
+    Some(module_path) =>
       // Found a require binding, try to resolve from external registry
       match ctx.external_registry {
         Some(registry) => {
@@ -16419,7 +16600,6 @@ fn resolve_identifier_type(ctx : CommonJSTypeContext, name : String) -> TypeV2 {
         }
         None => TAny
       }
-    }
     None => TAny
   }
 }
@@ -16439,7 +16619,6 @@ fn module_types_to_type_v2(module_types : ModuleTypes) -> TypeV2 {
       })
     }
   })
-
   TObject(ObjectTypeV2::{
     fields,
     symbol_fields: [],
@@ -16510,7 +16689,8 @@ fn module_declaration_to_object_type(
           // Process each exported member
           exports.each(fn(name, sym) {
             let ty = match sym.value_declaration {
-              Some(FunctionDeclaration(fd)) => function_declaration_to_type(env, fd)
+              Some(FunctionDeclaration(fd)) =>
+                function_declaration_to_type(env, fd)
               Some(VariableStatement(vs)) =>
                 if vs.declarations.length() > 0 {
                   variable_declaration_to_type(env, vs.declarations[0])
@@ -16596,7 +16776,6 @@ fn module_declaration_to_object_type(
       }
     _ => ()
   }
-
   ObjectTypeV2::{
     fields,
     symbol_fields: [],
@@ -16642,7 +16821,6 @@ fn class_declaration_to_type(env : TypeEnv, cd : ClassDeclaration) -> TypeV2 {
   let fields : Map[String, FieldInfoV2] = Map::new()
   let call_signatures : Array[FunctionTypeV2] = []
   let construct_signatures : Array[FunctionTypeV2] = []
-
   for mem in cd.members {
     match mem {
       PropertyDeclaration(prop) => {
@@ -16759,7 +16937,10 @@ fn class_declaration_to_type(env : TypeEnv, cd : ClassDeclaration) -> TypeV2 {
 
 ///|
 /// Convert a variable declaration to TypeV2
-fn variable_declaration_to_type(env : TypeEnv, decl : VariableDeclaration) -> TypeV2 {
+fn variable_declaration_to_type(
+  env : TypeEnv,
+  decl : VariableDeclaration,
+) -> TypeV2 {
   match decl.type_annotation {
     Some(type_node) => ast_type_to_v2(env, type_node)
     None =>
@@ -16789,6 +16970,8 @@ pub fn extract_module_types_from_source(
 }
 
 // Suppress warnings for functions reserved for future use
+
+///|
 fn init {
   ignore(check_type_arguments)
   ignore(get_class_name_from_symbol_declarations)

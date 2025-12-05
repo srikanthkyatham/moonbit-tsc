@@ -557,9 +557,9 @@ test "unit/mapped/readonly - Readonly prevents assignment" {
     Err(diagnostics) => {
       assert_true(diagnostics.length() > 0)
       // Check for TS2540 error code (readonly property assignment)
-      let has_readonly_error = diagnostics.iter().any(
-        fn(d) { d.message.contains("readonly") },
-      )
+      let has_readonly_error = diagnostics
+        .iter()
+        .any(fn(d) { d.message.contains("readonly") })
       assert_true(has_readonly_error)
     }
   }

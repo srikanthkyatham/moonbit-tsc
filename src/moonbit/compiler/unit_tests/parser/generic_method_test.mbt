@@ -223,7 +223,9 @@ test "parser/generic-method - readonly modifier with generic method" {
 
 ///|
 test "checker/generic-method - basic generic method type check" {
-  let result = generic_method_parse_bind_check("class C { foo<T>(x: T): T { return x; } }")
+  let result = generic_method_parse_bind_check(
+    "class C { foo<T>(x: T): T { return x; } }",
+  )
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(_) => assert_true(false)

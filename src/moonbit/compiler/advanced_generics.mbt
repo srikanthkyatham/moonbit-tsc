@@ -33,22 +33,23 @@ fn narrow_to_const_type(ty : TypeV2) -> TypeV2 {
     TLiteralBigInt(_) => ty
 
     // Arrays become readonly tuples with literal elements
-    TArray(elem_ty) => {
+    TArray(elem_ty) =>
       // For const, arrays should become readonly tuples
       // But we can't know the length, so we keep array with narrowed element type
       TArray(narrow_to_const_type(elem_ty))
-    }
 
     // Tuples get narrowed element types
     TTuple(elements) =>
-      TTuple(elements.map(fn(elem) {
-        TupleElementV2::{
-          ty: narrow_to_const_type(elem.ty),
-          optional: elem.optional,
-          is_rest: elem.is_rest,
-          label: elem.label,
-        }
-      }))
+      TTuple(
+        elements.map(fn(elem) {
+          TupleElementV2::{
+            ty: narrow_to_const_type(elem.ty),
+            optional: elem.optional,
+            is_rest: elem.is_rest,
+            label: elem.label,
+          }
+        }),
+      )
 
     // Objects get narrowed field types
     TObject(obj) => {
@@ -169,7 +170,6 @@ fn analyze_variance_recursive(
         result,
         analyze_variance_recursive(param_name, func.return_type, position),
       )
-
       result
     }
 
@@ -186,8 +186,15 @@ fn analyze_variance_recursive(
         } else {
           // Non-readonly: both read and write, so invariant
           let covar = analyze_variance_recursive(param_name, field.ty, Output)
-          let contravar = analyze_variance_recursive(param_name, field.ty, Input)
-          result = combine_variances(result, combine_variances(covar, contravar))
+          let contravar = analyze_variance_recursive(
+            param_name,
+            field.ty,
+            Input,
+          )
+          result = combine_variances(
+            result,
+            combine_variances(covar, contravar),
+          )
         }
       })
       result
@@ -216,7 +223,6 @@ fn analyze_variance_recursive(
       }
       result
     }
-
     TIntersection(types) => {
       let mut result = Bivariant
       for t in types {
@@ -292,10 +298,7 @@ pub fn combine_variances(v1 : Variance, v2 : Variance) -> Variance {
 
 ///|
 /// Check if variance assignment is compatible
-pub fn is_variance_compatible(
-  actual : Variance,
-  expected : Variance,
-) -> Bool {
+pub fn is_variance_compatible(actual : Variance, expected : Variance) -> Bool {
   match (actual, expected) {
     // Same variance is always compatible
     _ if actual == expected => true
@@ -372,8 +375,7 @@ pub fn resolve_recursive_type(
 
   // Check if already resolved
   match state.resolved.get(key) {
-    Some(ty) =>
-      return { resolved_type: ty, has_cycle: false, error: None }
+    Some(ty) => return { resolved_type: ty, has_cycle: false, error: None }
     None => ()
   }
 
@@ -382,7 +384,11 @@ pub fn resolve_recursive_type(
     return {
       resolved_type: TAny,
       has_cycle: false,
-      error: Some("Maximum recursion depth exceeded when resolving type '" + type_name + "'"),
+      error: Some(
+        "Maximum recursion depth exceeded when resolving type '" +
+        type_name +
+        "'",
+      ),
     }
   }
 
@@ -416,9 +422,7 @@ fn create_type_key(type_name : String, type_args : Array[TypeV2]) -> String {
   if type_args.is_empty() {
     type_name
   } else {
-    let args_str = type_args
-      .map(fn(t) { type_to_string_simple(t) })
-      .join(", ")
+    let args_str = type_args.map(fn(t) { type_to_string_simple(t) }).join(", ")
     type_name + "<" + args_str + ">"
   }
 }
@@ -476,10 +480,7 @@ pub struct HigherKindedType {
 
 ///|
 /// Create a simple higher-kinded type
-pub fn HigherKindedType::new(
-  name : String,
-  arity : Int,
-) -> HigherKindedType {
+pub fn HigherKindedType::new(name : String, arity : Int) -> HigherKindedType {
   { name, arity, params: [], body: None }
 }
 
@@ -575,10 +576,14 @@ pub fn infer_type_args_with_const(
   for i, arg_ty in arg_types {
     if i < func.params.length() {
       let param_ty = func.params[i].ty
-      do_infer_from_types_with_const(param_ty, arg_ty, func.type_params, inferred)
+      do_infer_from_types_with_const(
+        param_ty,
+        arg_ty,
+        func.type_params,
+        inferred,
+      )
     }
   }
-
   inferred
 }
 
@@ -594,27 +599,33 @@ fn do_infer_from_types_with_const(
     TTypeParam(name, _) =>
       if not(inferred.contains(name)) {
         // Check if this is a const parameter
-        let is_const = type_params.iter().any(fn(p) { p.name == name && p.is_const })
+        let is_const = type_params
+          .iter()
+          .any(fn(p) { p.name == name && p.is_const })
         if is_const {
           inferred.set(name, narrow_to_const_type(arg_ty))
         } else {
           inferred.set(name, arg_ty)
         }
       }
-
     TArray(elem_ty) =>
       match arg_ty {
         TArray(arg_elem) =>
-          do_infer_from_types_with_const(elem_ty, arg_elem, type_params, inferred)
-        TTuple(elems) => {
+          do_infer_from_types_with_const(
+            elem_ty, arg_elem, type_params, inferred,
+          )
+        TTuple(elems) =>
           // Array matched with tuple - infer from elements
           for elem in elems {
-            do_infer_from_types_with_const(elem_ty, elem.ty, type_params, inferred)
+            do_infer_from_types_with_const(
+              elem_ty,
+              elem.ty,
+              type_params,
+              inferred,
+            )
           }
-        }
         _ => ()
       }
-
     TTuple(elems) =>
       match arg_ty {
         TTuple(arg_elems) =>
@@ -630,7 +641,6 @@ fn do_infer_from_types_with_const(
           }
         _ => ()
       }
-
     TObject(obj) =>
       match arg_ty {
         TObject(arg_obj) =>
@@ -648,7 +658,6 @@ fn do_infer_from_types_with_const(
           })
         _ => ()
       }
-
     TFunction(func) =>
       match arg_ty {
         TFunction(arg_func) => {
@@ -671,7 +680,6 @@ fn do_infer_from_types_with_const(
         }
         _ => ()
       }
-
     _ => ()
   }
 }

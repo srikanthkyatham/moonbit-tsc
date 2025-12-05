@@ -23,7 +23,13 @@ pub fn infer_jsx_element_type(
   }
 
   // Check the element type based on tag name
-  let checker = check_jsx_element_type(checker, tag_name, attributes, type_args, element.children)
+  let checker = check_jsx_element_type(
+    checker,
+    tag_name,
+    attributes,
+    type_args,
+    element.children,
+  )
 
   // JSX expressions always return JSX.Element type
   get_jsx_element_type(checker)
@@ -76,24 +82,26 @@ fn check_jsx_element_type(
 ) -> TypeChecker {
   // Determine if this is an intrinsic element or component
   match tag_name {
-    Identifier(name, loc) => {
+    Identifier(name, loc) =>
       if is_intrinsic_element(name) {
         // Intrinsic element (lowercase): look up in JSX.IntrinsicElements
         check_intrinsic_element(checker, name, attributes, children, loc)
       } else {
         // Custom component (uppercase): look up component type
-        check_component_element(checker, name, attributes, type_args, children, loc)
+        check_component_element(
+          checker, name, attributes, type_args, children, loc,
+        )
       }
-    }
     NamespacedName(ns_prefix, local_name, loc) => {
       // Namespaced elements (e.g., svg:rect) are treated as intrinsic
       let full_name = ns_prefix + ":" + local_name
       check_intrinsic_element(checker, full_name, attributes, children, loc)
     }
-    PropertyAccess(_, _, _) => {
+    PropertyAccess(_, _, _) =>
       // Property access components (e.g., Module.Component)
-      check_property_access_component(checker, tag_name, attributes, type_args, children)
-    }
+      check_property_access_component(
+        checker, tag_name, attributes, type_args, children,
+      )
   }
 }
 
@@ -117,7 +125,9 @@ fn check_intrinsic_element(
   _loc : SourceLocation,
 ) -> TypeChecker {
   // Look up element type in JSX.IntrinsicElements
-  let (element_props_type, checker) = get_intrinsic_element_type(checker, tag_name)
+  let (element_props_type, checker) = get_intrinsic_element_type(
+    checker, tag_name,
+  )
 
   // Validate attributes against expected props
   let checker = match element_props_type {
@@ -204,21 +214,18 @@ fn get_intrinsic_element_type(
 ) -> (Type?, TypeChecker) {
   // Look up JSX namespace
   match lookup_symbol(checker, "JSX") {
-    Some(jsx_symbol) => {
+    Some(jsx_symbol) =>
       // Look for IntrinsicElements in JSX namespace
       match get_jsx_intrinsic_elements(checker, jsx_symbol) {
-        (Some(intrinsic_type), checker) => {
+        (Some(intrinsic_type), checker) =>
           // Look up the specific element type
           get_indexed_type(checker, intrinsic_type, tag_name)
-        }
         (None, checker) => (None, checker)
       }
-    }
-    None => {
+    None =>
       // JSX namespace not found - this is common in projects without React types
       // Don't report error, just skip type checking
       (None, checker)
-    }
   }
 }
 
@@ -231,13 +238,12 @@ fn get_jsx_intrinsic_elements(
   // Get the JSX namespace type
   let (jsx_type, checker) = get_symbol_type(checker, jsx_symbol)
   match jsx_type {
-    Some(Object(obj_type)) => {
+    Some(Object(obj_type)) =>
       // Look for IntrinsicElements property
       match obj_type.properties.get("IntrinsicElements") {
         Some(prop) => (Some(prop.prop_type), checker)
         None => (None, checker)
       }
-    }
     _ => (None, checker)
   }
 }
@@ -250,7 +256,7 @@ fn get_indexed_type(
   key : String,
 ) -> (Type?, TypeChecker) {
   match obj_type {
-    Object(ot) => {
+    Object(ot) =>
       // First check for exact property match
       match ot.properties.get(key) {
         Some(prop) => (Some(prop.prop_type), checker)
@@ -260,7 +266,8 @@ fn get_indexed_type(
             // Use string index signature
             for i = 0; i < ot.index_signatures.length(); i = i + 1 {
               match ot.index_signatures[i].parameter_type {
-                String(_) => return (Some(ot.index_signatures[i].return_type), checker)
+                String(_) =>
+                  return (Some(ot.index_signatures[i].return_type), checker)
                 _ => continue
               }
             }
@@ -268,7 +275,6 @@ fn get_indexed_type(
           (None, checker)
         }
       }
-    }
     _ => (None, checker)
   }
 }
@@ -288,17 +294,21 @@ fn check_jsx_attributes(
 
   // Build map of provided attributes
   let provided_attrs : Map[String, Type] = Map::new()
-
   for i = 0; i < attributes.length(); i = i + 1 {
     match attributes[i] {
       Attribute(attr_node) => {
         let attr_name = get_jsx_attribute_name(attr_node.name)
-        let (attr_type, c) = infer_jsx_attribute_value_type(checker, attr_node.initializer)
+        let (attr_type, c) = infer_jsx_attribute_value_type(
+          checker,
+          attr_node.initializer,
+        )
         checker = c
         provided_attrs.set(attr_name, attr_type)
 
         // Check attribute type against expected
-        checker = check_single_attribute(checker, attr_name, attr_type, expected_props)
+        checker = check_single_attribute(
+          checker, attr_name, attr_type, expected_props,
+        )
       }
       SpreadAttribute(expr, _) => {
         // Type check the spread expression
@@ -344,7 +354,12 @@ fn check_single_attribute(
             checker
           } else {
             let loc = make_default_location(checker.file_path)
-            jsx_error_unknown_prop(checker, attr_name, jsx_type_to_string(expected_props), loc)
+            jsx_error_unknown_prop(
+              checker,
+              attr_name,
+              jsx_type_to_string(expected_props),
+              loc,
+            )
           }
       }
     _ => checker
@@ -375,7 +390,12 @@ fn check_required_props(
         let (name, prop_sig) = entry
         if not(prop_sig.is_optional) && not(provided.contains(name)) {
           let loc = make_default_location(c.file_path)
-          c = jsx_error_missing_prop(c, name, jsx_type_to_string(expected_props), loc)
+          c = jsx_error_missing_prop(
+            c,
+            name,
+            jsx_type_to_string(expected_props),
+            loc,
+          )
         }
       }
       c
@@ -418,18 +438,15 @@ fn infer_jsx_attribute_value_type(
       let flags = TypeFlags::{ is_readonly: false, is_optional: false }
       (StringLiteral(s, { id, flags }), { ..checker, next_type_id: id + 1 })
     }
-    Some(Expression(expr, _)) => {
+    Some(Expression(expr, _)) =>
       // Expression attribute - infer expression type
       infer_type(checker, expr)
-    }
-    Some(Element(element, _)) => {
+    Some(Element(element, _)) =>
       // JSX element attribute
       infer_type(checker, element)
-    }
-    None => {
+    None =>
       // Boolean attribute (no value means true)
       boolean_type(checker)
-    }
   }
 }
 
@@ -441,7 +458,10 @@ fn check_jsx_attribute_expression(
 ) -> TypeChecker {
   match attr {
     Attribute(attr_node) => {
-      let (_, checker) = infer_jsx_attribute_value_type(checker, attr_node.initializer)
+      let (_, checker) = infer_jsx_attribute_value_type(
+        checker,
+        attr_node.initializer,
+      )
       checker
     }
     SpreadAttribute(expr, _) => {
@@ -500,7 +520,10 @@ fn check_jsx_child(checker : TypeChecker, child : JsxChild) -> TypeChecker {
 
 ///|
 /// Validate that a type is valid as JSX child
-fn validate_jsx_child_type(checker : TypeChecker, child_type : Type) -> TypeChecker {
+fn validate_jsx_child_type(
+  checker : TypeChecker,
+  child_type : Type,
+) -> TypeChecker {
   // Valid JSX children: string, number, boolean, null, undefined, JSX.Element, arrays thereof
   match child_type {
     String(_) | Number(_) | Boolean(_) | Null(_) | Undefined(_) => checker
@@ -519,7 +542,10 @@ fn validate_jsx_child_type(checker : TypeChecker, child_type : Type) -> TypeChec
 
 ///|
 /// Get props type from function component type
-fn get_function_props_type(_checker : TypeChecker, fn_type : CheckerFunctionType) -> Type? {
+fn get_function_props_type(
+  _checker : TypeChecker,
+  fn_type : CheckerFunctionType,
+) -> Type? {
   // Function component: props is the first parameter
   if fn_type.parameters.length() > 0 {
     Some(fn_type.parameters[0].param_type)
@@ -530,7 +556,10 @@ fn get_function_props_type(_checker : TypeChecker, fn_type : CheckerFunctionType
 
 ///|
 /// Get props type from class component type
-fn get_class_component_props_type(_checker : TypeChecker, obj_type : ObjectType) -> Type? {
+fn get_class_component_props_type(
+  _checker : TypeChecker,
+  obj_type : ObjectType,
+) -> Type? {
   // Class component: look for constructor or props property
   match obj_type.properties.get("props") {
     Some(prop) => Some(prop.prop_type)
@@ -550,12 +579,11 @@ fn get_jsx_element_type(checker : TypeChecker) -> (Type, TypeChecker) {
     Some(jsx_symbol) => {
       let (jsx_type, checker) = get_symbol_type(checker, jsx_symbol)
       match jsx_type {
-        Some(Object(obj_type)) => {
+        Some(Object(obj_type)) =>
           match obj_type.properties.get("Element") {
             Some(element_prop) => (element_prop.prop_type, checker)
             None => create_jsx_element_type(checker)
           }
-        }
         _ => create_jsx_element_type(checker)
       }
     }
@@ -592,15 +620,10 @@ fn add_jsx_diagnostic(
   message : String,
   location : SourceLocation,
 ) -> TypeChecker {
-  let diag = Diagnostic::{
-    code,
-    message,
-    category: Error,
-    location,
-  }
+  let diag = Diagnostic::{ code, message, category: Error, location }
   let diagnostics = checker.diagnostics
   diagnostics.push(diag)
-  { ..checker, diagnostics }
+  { ..checker, diagnostics, }
 }
 
 ///|
@@ -613,7 +636,9 @@ fn jsx_error_cannot_find_component(
   add_jsx_diagnostic(
     checker,
     2604,
-    "JSX element type '" + component + "' does not have any construct or call signatures.",
+    "JSX element type '" +
+    component +
+    "' does not have any construct or call signatures.",
     loc,
   )
 }
@@ -630,7 +655,13 @@ fn jsx_error_prop_type_mismatch(
   add_jsx_diagnostic(
     checker,
     2322,
-    "Type '" + actual + "' is not assignable to type '" + expected + "' for prop '" + prop_name + "'.",
+    "Type '" +
+    actual +
+    "' is not assignable to type '" +
+    expected +
+    "' for prop '" +
+    prop_name +
+    "'.",
     loc,
   )
 }
@@ -646,7 +677,11 @@ fn jsx_error_unknown_prop(
   add_jsx_diagnostic(
     checker,
     2339,
-    "Property '" + prop_name + "' does not exist on type '" + element_type + "'.",
+    "Property '" +
+    prop_name +
+    "' does not exist on type '" +
+    element_type +
+    "'.",
     loc,
   )
 }
@@ -662,7 +697,11 @@ fn jsx_error_missing_prop(
   add_jsx_diagnostic(
     checker,
     2741,
-    "Property '" + prop_name + "' is missing in props but required in type '" + element_type + "'.",
+    "Property '" +
+    prop_name +
+    "' is missing in props but required in type '" +
+    element_type +
+    "'.",
     loc,
   )
 }
@@ -690,14 +729,12 @@ fn is_type_assignable(source : Type, target : Type) -> Bool {
     (BooleanLiteral(_, _), Boolean(_)) => true
     (Null(_), Undefined(_)) => true // Loose equality
     (Undefined(_), Null(_)) => true
-    (_, Union(ut)) => {
+    (_, Union(ut)) =>
       // Source assignable to union if assignable to any member
       ut.types.iter().any(fn(t) { is_type_assignable(source, t) })
-    }
-    (Union(ut), _) => {
+    (Union(ut), _) =>
       // Union assignable to target if all members assignable
       ut.types.iter().all(fn(t) { is_type_assignable(t, target) })
-    }
     _ => true // Be permissive for complex types
   }
 }
