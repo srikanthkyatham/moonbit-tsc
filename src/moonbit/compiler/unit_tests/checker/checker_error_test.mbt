@@ -1598,3 +1598,104 @@ test "unit/checker/error - valid parameter assignment" {
     Err(_) => assert_true(false) // Should not have errors
   }
 }
+
+// ============================================================================
+// Destructuring Pattern Tests
+// ============================================================================
+
+///|
+test "unit/checker/destructuring - catch clause array destructuring" {
+  // Test that catch clause with array destructuring properly binds variables
+  let result = parse_bind_check_errors(
+    "try { throw [0, 1]; } catch ([a, b]) { const sum = a + b; }",
+  )
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false) // Should not have "Cannot find name" errors
+  }
+}
+
+///|
+test "unit/checker/destructuring - catch clause object destructuring" {
+  // Test that catch clause with object destructuring properly binds variables
+  let result = parse_bind_check_errors(
+    "try { throw { msg: 'error' }; } catch ({ msg }) { console.log(msg); }",
+  )
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/checker/destructuring - function parameter array pattern" {
+  // Test function with array destructuring parameter (without type annotation)
+  // Variables bind as 'any' when no annotation provided
+  let result = parse_bind_check_errors(
+    "function foo([a, b]) { return a; }",
+  )
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/checker/destructuring - function parameter object pattern" {
+  // Test function with object destructuring parameter (without type annotation)
+  let result = parse_bind_check_errors(
+    "function foo({ x, y }) { return x; }",
+  )
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/checker/destructuring - arrow function array pattern" {
+  // Test arrow function with array destructuring parameter
+  let result = parse_bind_check_errors(
+    "const foo = ([a, b]) => a;",
+  )
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/checker/destructuring - arrow function object pattern" {
+  // Test arrow function with object destructuring parameter
+  let result = parse_bind_check_errors(
+    "const foo = ({ x, y }) => x;",
+  )
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/checker/destructuring - nested parameter destructuring" {
+  // Test nested destructuring in function parameters
+  let result = parse_bind_check_errors(
+    "function foo({ outer: { inner } }) { return inner; }",
+  )
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/checker/destructuring - function expression with destructuring" {
+  // Test function expression with destructuring parameter
+  let result = parse_bind_check_errors(
+    "const foo = function({ a, b }) { return a + b; };",
+  )
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false)
+  }
+}

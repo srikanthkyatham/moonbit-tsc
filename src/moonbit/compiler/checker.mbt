@@ -753,25 +753,22 @@ fn is_in_innermost_scope(checker : TypeChecker, name : String) -> Bool {
 fn add_parameter_to_scope(checker : TypeChecker, param : Node) -> TypeChecker {
   match param {
     Parameter(p) => {
-      // Get the parameter name
-      let name = match p.name {
-        Identifier(id) => Some(id.name)
-        _ => None // Binding patterns would need recursive handling
-      }
-      match name {
-        Some(n) => {
-          // Get the parameter type from type annotation, or any if not specified
-          let (param_type, checker) = match p.type_annotation {
-            Some(type_node) =>
-              match get_type_from_type_node(checker, type_node) {
-                (Some(t), c) => (t, c)
-                (None, c) => any_type(c)
-              }
-            None => any_type(checker)
+      // Get the parameter type from type annotation, or any if not specified
+      let (param_type, checker) = match p.type_annotation {
+        Some(type_node) =>
+          match get_type_from_type_node(checker, type_node) {
+            (Some(t), c) => (t, c)
+            (None, c) => any_type(c)
           }
-          add_local_variable(checker, n, param_type)
-        }
-        None => checker
+        None => any_type(checker)
+      }
+      // Handle parameter name (identifier or binding pattern)
+      match p.name {
+        Identifier(id) => add_local_variable(checker, id.name, param_type)
+        // Handle binding patterns (destructuring) in parameters
+        ArrayBindingPattern(_) | ObjectBindingPattern(_) =>
+          add_binding_pattern_variables(checker, p.name, param_type)
+        _ => checker
       }
     }
     _ => checker
@@ -8835,8 +8832,31 @@ fn infer_function_expression_type(
   }
 
   // Now add parameters to local scope for body checking
-  for param in preliminary_params {
-    checker = add_local_variable(checker, param.name, param.param_type)
+  // We need to iterate the original parameters to handle binding patterns
+  for param_node in fe.parameters {
+    match param_node {
+      Parameter(p) => {
+        let (param_type, c) = match p.type_annotation {
+          Some(type_node) => {
+            let (type_opt, c) = get_type_from_type_node(checker, type_node)
+            match type_opt {
+              Some(t) => (t, c)
+              None => any_type(c)
+            }
+          }
+          None => any_type(checker)
+        }
+        checker = c
+        // Handle identifier or binding pattern
+        checker = match p.name {
+          Identifier(id) => add_local_variable(checker, id.name, param_type)
+          ArrayBindingPattern(_) | ObjectBindingPattern(_) =>
+            add_binding_pattern_variables(checker, p.name, param_type)
+          _ => checker
+        }
+      }
+      _ => ()
+    }
   }
 
   // Track regular function context (for 'arguments' object availability)
@@ -9153,9 +9173,13 @@ fn infer_arrow_function_type(
           is_optional: param.is_optional,
           is_rest: param.is_rest,
         })
-        // Add parameter to local scope
-        let param_name = get_parameter_name(param.name)
-        checker = add_local_variable(checker, param_name, param_type)
+        // Add parameter to local scope (handles identifiers and binding patterns)
+        checker = match param.name {
+          Identifier(id) => add_local_variable(checker, id.name, param_type)
+          ArrayBindingPattern(_) | ObjectBindingPattern(_) =>
+            add_binding_pattern_variables(checker, param.name, param_type)
+          _ => checker
+        }
       }
       _ => ()
     }

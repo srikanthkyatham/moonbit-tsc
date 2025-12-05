@@ -1380,32 +1380,38 @@ fn bind_parameters_aux(
     let param = parameters[index]
     let binder = match param {
       Parameter(p) => {
-        // Extract name from identifier node
-        let (param_name, param_location) = match p.name {
-          Identifier(id) => (id.name, id.location)
-          _ => return binder // Binding pattern not supported
+        // Handle binding patterns (destructuring) in parameters
+        match p.name {
+          Identifier(id) => {
+            let param_name = id.name
+            let param_location = id.location
+            // Check for strict mode reserved identifiers (TS1210)
+            // Class bodies are automatically in strict mode
+            let binder = if is_strict &&
+              (param_name == "arguments" || param_name == "eval") {
+              let diagnostic = Diagnostic::error(
+                "Invalid use of '\{param_name}'. Class definitions are automatically in strict mode.",
+                param_location,
+                1210,
+              )
+              let new_diagnostics = binder.diagnostics
+              new_diagnostics.push(diagnostic)
+              { ..binder, diagnostics: new_diagnostics }
+            } else {
+              binder
+            }
+            let symbol = Symbol::new(
+              param_name,
+              SymbolKind::Parameter,
+              binder.next_symbol_id,
+            )
+            declare_symbol(binder, param_name, symbol)
+          }
+          // Handle binding patterns (destructuring) in parameters
+          ArrayBindingPattern(_) | ObjectBindingPattern(_) =>
+            bind_binding_pattern(binder, p.name, false, false)
+          _ => binder
         }
-        // Check for strict mode reserved identifiers (TS1210)
-        // Class bodies are automatically in strict mode
-        let binder = if is_strict &&
-          (param_name == "arguments" || param_name == "eval") {
-          let diagnostic = Diagnostic::error(
-            "Invalid use of '\{param_name}'. Class definitions are automatically in strict mode.",
-            param_location,
-            1210,
-          )
-          let new_diagnostics = binder.diagnostics
-          new_diagnostics.push(diagnostic)
-          { ..binder, diagnostics: new_diagnostics }
-        } else {
-          binder
-        }
-        let symbol = Symbol::new(
-          param_name,
-          SymbolKind::Parameter,
-          binder.next_symbol_id,
-        )
-        declare_symbol(binder, param_name, symbol)
       }
       _ => binder
     }
