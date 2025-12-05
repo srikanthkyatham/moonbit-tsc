@@ -205,6 +205,7 @@ pub enum ParserErrorCode {
   ModifierCannotAppearOnClassElement(String) // TS1044
   ModifierCannotAppearOnConstructor(String) // TS1089
   ModifiersNotAllowedHere // TS1184
+  ParameterPropertyBindingPattern // TS1187: A parameter property may not be declared using a binding pattern
 
   // Constructor errors
   TypeParamsOnConstructor // TS1092
@@ -337,6 +338,7 @@ pub fn ParserErrorCode::to_int(self : ParserErrorCode) -> Int {
     ModifierCannotAppearOnClassElement(_) => 1044 // TS1044: '{0}' modifier cannot appear on a class element
     ModifierCannotAppearOnConstructor(_) => 1089 // TS1089: '{0}' modifier cannot appear on a constructor declaration
     ModifiersNotAllowedHere => 1184 // TS1184: Modifiers cannot appear here
+    ParameterPropertyBindingPattern => 1187 // TS1187: A parameter property may not be declared using a binding pattern
 
     // Constructor errors
     TypeParamsOnConstructor => 1092 // TS1092: Type parameters cannot appear on a constructor declaration
@@ -477,6 +479,8 @@ pub fn ParserErrorCode::to_message(self : ParserErrorCode) -> String {
     ModifierCannotAppearOnConstructor(modifier) =>
       "'" + modifier + "' modifier cannot appear on a constructor declaration."
     ModifiersNotAllowedHere => "Modifiers cannot appear here."
+    ParameterPropertyBindingPattern =>
+      "A parameter property may not be declared using a binding pattern."
 
     // Constructor errors
     TypeParamsOnConstructor =>
@@ -2544,6 +2548,24 @@ fn parse_parameter(parser : Parser) -> Result[(Node, Parser), Parser] {
           RestParameterCannotHaveInitializer,
         )
       None => parser
+    }
+  } else {
+    parser
+  }
+
+  // TS1187: A parameter property may not be declared using a binding pattern
+  // Parameter properties (with public, private, protected, or readonly modifiers)
+  // can only be declared with a simple identifier, not with destructuring patterns
+  let parser = if modifiers.length() > 0 {
+    match name {
+      ArrayBindingPattern(_) | ObjectBindingPattern(_) =>
+        add_error_with_code(
+          parser,
+          ParameterPropertyBindingPattern.to_message(),
+          start_loc,
+          ParameterPropertyBindingPattern,
+        )
+      _ => parser
     }
   } else {
     parser

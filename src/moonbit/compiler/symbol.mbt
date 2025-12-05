@@ -336,6 +336,7 @@ pub enum DiagnosticCode {
   TS1155 // 'const' declarations must be initialized
   TS1160 // Unterminated template literal
   TS1163 // A 'yield' expression is only allowed in a generator body
+  TS1187 // A parameter property may not be declared using a binding pattern
   TS1308 // 'await' expressions are only allowed within async functions and at the top levels of modules
   TS1357 // An enum member name must be followed by a ',', '=', or '}'
 
@@ -720,6 +721,7 @@ pub fn DiagnosticCode::to_int(self : DiagnosticCode) -> Int {
     TS1155 => 1155
     TS1160 => 1160
     TS1163 => 1163
+    TS1187 => 1187
     TS1308 => 1308
     TS1357 => 1357
     // Name Resolution Errors (2304-2318)
@@ -1034,6 +1036,7 @@ pub fn DiagnosticCode::from_int(code : Int) -> DiagnosticCode? {
     1155 => Some(TS1155)
     1160 => Some(TS1160)
     1163 => Some(TS1163)
+    1187 => Some(TS1187)
     1308 => Some(TS1308)
     1357 => Some(TS1357)
     // Name Resolution Errors (2304-2318)

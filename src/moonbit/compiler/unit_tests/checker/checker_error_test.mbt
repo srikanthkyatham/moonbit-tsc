@@ -1795,3 +1795,63 @@ test "unit/checker/destructuring - array assignment pattern marks variables init
     Err(_) => assert_true(false)
   }
 }
+
+///|
+test "unit/checker/TS1187 - parameter property with array binding pattern" {
+  // TS1187: A parameter property may not be declared using a binding pattern
+  let result = parse_bind_check_errors(
+    "class C { constructor(public [x, y]: number[]) {} }",
+  )
+  match result {
+    Ok(_) => assert_true(false) // Should have errors
+    Err(diagnostics) => assert_true(has_diagnostic_code(diagnostics, 1187))
+  }
+}
+
+///|
+test "unit/checker/TS1187 - parameter property with object binding pattern" {
+  // TS1187: A parameter property may not be declared using a binding pattern
+  let result = parse_bind_check_errors(
+    "class C { constructor(public { x, y }: { x: number, y: number }) {} }",
+  )
+  match result {
+    Ok(_) => assert_true(false) // Should have errors
+    Err(diagnostics) => assert_true(has_diagnostic_code(diagnostics, 1187))
+  }
+}
+
+///|
+test "unit/checker/TS1187 - private parameter property with binding pattern" {
+  // TS1187 with private modifier
+  let result = parse_bind_check_errors(
+    "class C { constructor(private [a, b]: string[]) {} }",
+  )
+  match result {
+    Ok(_) => assert_true(false) // Should have errors
+    Err(diagnostics) => assert_true(has_diagnostic_code(diagnostics, 1187))
+  }
+}
+
+///|
+test "unit/checker/TS1187 - readonly parameter property with binding pattern" {
+  // TS1187 with readonly modifier
+  let result = parse_bind_check_errors(
+    "class C { constructor(readonly [a, b]: string[]) {} }",
+  )
+  match result {
+    Ok(_) => assert_true(false) // Should have errors
+    Err(diagnostics) => assert_true(has_diagnostic_code(diagnostics, 1187))
+  }
+}
+
+///|
+test "unit/checker/no TS1187 - regular parameter with binding pattern" {
+  // No error for regular parameter (without modifier) using binding pattern
+  let result = parse_bind_check_errors(
+    "class C { constructor([a, b]: string[]) {} }",
+  )
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false)
+  }
+}
