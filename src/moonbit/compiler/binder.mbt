@@ -645,6 +645,12 @@ fn bind_binding_pattern(
       }
       binder
     }
+    // Handle binding element with initializer: [a = 1] or {x: y = 1}
+    BindingElement(elem) =>
+      bind_binding_pattern(binder, elem.name, is_const, is_export)
+    // Handle spread/rest element: [...rest] or [...[a, b]]
+    SpreadExpression(spread) =>
+      bind_binding_pattern(binder, spread.expression, is_const, is_export)
     _ => binder // Unknown pattern type
   }
 }

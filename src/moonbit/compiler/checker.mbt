@@ -529,6 +529,41 @@ fn add_local_const_variable(
 }
 
 ///|
+/// Add variables from a binding pattern to the current local scope
+/// This handles ArrayBindingPattern, ObjectBindingPattern, and nested patterns
+fn add_binding_pattern_variables(
+  checker : TypeChecker,
+  pattern : Node,
+  var_type : Type,
+) -> TypeChecker {
+  match pattern {
+    Identifier(id) => add_local_variable(checker, id.name, var_type)
+    ArrayBindingPattern(arr_pattern) => {
+      let mut c = checker
+      for i = 0; i < arr_pattern.elements.length(); i = i + 1 {
+        match arr_pattern.elements[i] {
+          Some(elem) => c = add_binding_pattern_variables(c, elem, var_type)
+          None => ()
+        }
+      }
+      c
+    }
+    ObjectBindingPattern(obj_pattern) => {
+      let mut c = checker
+      for i = 0; i < obj_pattern.properties.length(); i = i + 1 {
+        let prop = obj_pattern.properties[i]
+        c = add_binding_pattern_variables(c, prop.name, var_type)
+      }
+      c
+    }
+    BindingElement(elem) => add_binding_pattern_variables(checker, elem.name, var_type)
+    SpreadExpression(spread) =>
+      add_binding_pattern_variables(checker, spread.expression, var_type)
+    _ => checker
+  }
+}
+
+///|
 /// Check if a local variable is const
 fn is_local_const_variable(checker : TypeChecker, name : String) -> Bool {
   let scopes = checker.local_scopes
@@ -13136,14 +13171,9 @@ fn check_try_statement(
       }
 
       // Add the catch clause variable to scope if present
+      // Handles Identifier, ArrayBindingPattern, and ObjectBindingPattern
       let checker = match catch_clause.variable_declaration {
-        Some(var_decl) => {
-          // The variable_declaration is typically an Identifier or BindingPattern
-          match var_decl {
-            Identifier(id) => add_local_variable(checker, id.name, catch_type)
-            _ => checker
-          }
-        }
+        Some(var_decl) => add_binding_pattern_variables(checker, var_decl, catch_type)
         None => checker
       }
       let checker = check_statement(checker, catch_clause.block)
