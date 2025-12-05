@@ -659,6 +659,7 @@ fn TypeChecker::create_type_info(self : TypeChecker) -> (TypeInfo, TypeChecker) 
     external_registry: self.external_registry,
     import_map: self.import_map,
     namespace_symbols: self.namespace_symbols,
+    in_destructuring_pattern: self.in_destructuring_pattern,
   }
   (info, new_checker)
 }

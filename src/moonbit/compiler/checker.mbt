@@ -291,6 +291,7 @@ pub struct TypeChecker {
   external_registry : ExternalTypeRegistry? // Registry of types from other modules for cross-file checking
   import_map : Map[String, (String, String)] // Map from local name -> (module_specifier, original_name)
   namespace_symbols : Map[String, Symbol] // Symbols from current namespace for TS2432 enum merging checks
+  in_destructuring_pattern : Bool // Tracks if we're inferring type of a destructuring pattern (left side of assignment)
 } derive(Show)
 
 ///|
@@ -366,6 +367,7 @@ pub fn TypeChecker::new_with_options(
     external_registry: None,
     import_map: Map::new(),
     namespace_symbols: Map::new(),
+    in_destructuring_pattern: false,
   }
 }
 
@@ -787,13 +789,19 @@ fn is_array_like_type(t : Type) -> Bool {
       // All members of union must be array-like
       union_type.types.iter().all(fn(mem) { is_array_like_type(mem) })
     Object(obj_type) =>
-      // Check if has numeric index signature
-      obj_type.index_signatures.iter().any(fn(idx_sig) {
-        match idx_sig.parameter_type {
-          Number(_) => true
-          _ => false
-        }
-      })
+      // In ES6+, user-defined classes can be iterable via [Symbol.iterator]
+      // Accept any class instance (has class_name) as potentially iterable
+      match obj_type.class_name {
+        Some(_) => true // User-defined class instances are potentially iterable
+        None =>
+          // For plain objects, check for numeric index signature
+          obj_type.index_signatures.iter().any(fn(idx_sig) {
+            match idx_sig.parameter_type {
+              Number(_) => true
+              _ => false
+            }
+          })
+      }
     TypeReference(_) => true // Type references might be arrays
     _ => false
   }
@@ -2719,12 +2727,20 @@ fn check_variable_statement(
     // 1. NOT ambient declaration
     // 2. Has type annotation but no initializer
     // 3. Is let or const (NOT var - var is hoisted and initialized to undefined)
+    // 4. Type annotation is NOT 'any' (any-typed vars are implicitly allowed uninitialized)
     let is_block_scoped = var_stmt.is_let || var_stmt.is_const
     if not(is_ambient) && is_block_scoped {
       match (decl.name, decl.type_annotation, decl.initializer) {
-        (Identifier(id), Some(_), None) => {
-          // Block-scoped variable declared with type but no initializer - track it
-          checker.uninitialized_vars.set(id.name, decl.location.start.line)
+        (Identifier(id), Some(type_ann), None) => {
+          // Skip tracking if type annotation is 'any'
+          let is_any_type = match type_ann {
+            KeywordType(kt) => kt.kind == Any
+            _ => false
+          }
+          if not(is_any_type) {
+            // Block-scoped variable declared with type but no initializer - track it
+            checker.uninitialized_vars.set(id.name, decl.location.start.line)
+          }
         }
         _ => ()
       }
@@ -5455,7 +5471,21 @@ fn infer_binary_expression_type(
       mark_assignment_pattern_variables_initialized(checker, bin_expr.left)
     _ => checker
   }
+  // For assignment operators, the left side is a destructuring pattern (not a value)
+  // Set flag to avoid TS2548 errors for rest elements in patterns
+  let is_assignment = match bin_expr.operator {
+    Assign | AddAssign | SubtractAssign | MultiplyAssign | DivideAssign
+    | RemainderAssign | BitwiseAndAssign | BitwiseOrAssign | BitwiseXorAssign => true
+    _ => false
+  }
+  let checker = if is_assignment {
+    { ..checker, in_destructuring_pattern: true }
+  } else {
+    checker
+  }
   let (left_type, checker) = infer_type(checker, bin_expr.left)
+  // Reset the flag after inferring left side
+  let checker = { ..checker, in_destructuring_pattern: false }
   let (right_type, checker) = infer_type(checker, bin_expr.right)
 
   // Determine result type based on operator
@@ -5683,7 +5713,10 @@ fn infer_binary_expression_type(
             checker,
             ArrayLiteralExpression(arr),
           )
-          (checker, left_type)
+          // For array destructuring, right side can be any iterable (not just array)
+          // Use Any type to skip assignability check - iterability was checked elsewhere
+          let (any, _) = any_type(checker)
+          (checker, any)
         }
         PropertyAccessExpression(prop) => {
           // Check for readonly property assignment (TS2540)
@@ -6795,11 +6828,27 @@ fn mark_assignment_pattern_variables_initialized(
       for prop in obj.properties {
         match prop {
           PropertyAssignment(_, value, _) =>
-            // { x: y } - y is the target
-            checker = mark_assignment_pattern_variables_initialized(
-              checker,
-              value,
-            )
+            // { x: y } or { x: y = default } - y is the target, default is read
+            match value {
+              BinaryExpression(bin) =>
+                // { x: y = default } - only y is target, default is read
+                if bin.operator == Assign {
+                  checker = mark_assignment_pattern_variables_initialized(
+                    checker,
+                    bin.left,
+                  )
+                } else {
+                  checker = mark_assignment_pattern_variables_initialized(
+                    checker,
+                    value,
+                  )
+                }
+              _ =>
+                checker = mark_assignment_pattern_variables_initialized(
+                  checker,
+                  value,
+                )
+            }
           ShorthandProperty(name, _) => {
             // { x } - x is both source and target
             let _ = checker.uninitialized_vars.remove(name)
@@ -9234,20 +9283,24 @@ fn infer_array_literal_type(
           SpreadExpression(spread) => {
             let (spread_type, c) = infer_type(checker, spread.expression)
             checker = c
-            // Check if type is iterable (array, string, or has Symbol.iterator)
-            let is_iterable = match spread_type {
-              Array(_) => true
-              String(_) => true
-              TypeReference(ref_type) => ref_type.name == "Array" || ref_type.name == "String"
-              _ => false
-            }
-            if not(is_iterable) {
-              checker = add_diagnostic_with_code(
-                checker,
-                "Type is not an array type or a string type. Use a spread only on iterable types",
-                get_node_location(spread.expression),
-                TS2548,
-              )
+            // Only check iterability for spread sources (array construction), not targets
+            // in_destructuring_pattern is set when we're on the left side of an assignment
+            if not(checker.in_destructuring_pattern) {
+              // Check if type is iterable (array, string, or has Symbol.iterator)
+              let is_iterable = match spread_type {
+                Array(_) => true
+                String(_) => true
+                TypeReference(ref_type) => ref_type.name == "Array" || ref_type.name == "String"
+                _ => false
+              }
+              if not(is_iterable) {
+                checker = add_diagnostic_with_code(
+                  checker,
+                  "Type is not an array type or a string type. Use a spread only on iterable types",
+                  get_node_location(spread.expression),
+                  TS2548,
+                )
+              }
             }
             // For arrays, extract element type
             match spread_type {

@@ -1855,3 +1855,78 @@ test "unit/checker/no TS1187 - regular parameter with binding pattern" {
     Err(_) => assert_true(false)
   }
 }
+
+// =============================================================================
+// Destructuring Pattern Tests
+// =============================================================================
+
+///|
+/// Test: TS2454 should not trigger for any-typed variables in destructuring patterns
+test "TS2454 not triggered for any-typed uninitialized variables" {
+  // Variables declared with type `any` should not trigger TS2454 even if uninitialized
+  let result = parse_bind_check_errors(
+    #|let a: any, b: any, c: any = {x: {a: 1, y: 2}}, d: any;
+    #|({x: {a, ...b} = d} = c);
+  )
+  match result {
+    Ok(_) => () // Should compile without TS2454
+    Err(diagnostics) => {
+      // Should not have TS2454 for 'd'
+      assert_true(not(has_diagnostic_code(diagnostics, 2454)))
+    }
+  }
+}
+
+///|
+/// Test: Array destructuring should work with class instances that implement iterator
+test "Array destructuring with class instance - no TS2460" {
+  let result = parse_bind_check_errors(
+    #|class SymbolIterator {
+    #|    next() {
+    #|        return { value: 1, done: false };
+    #|    }
+    #|    [Symbol.iterator]() {
+    #|        return this;
+    #|    }
+    #|}
+    #|var [a, b] = new SymbolIterator;
+  )
+  match result {
+    Ok(_) => () // Should compile without TS2460
+    Err(diagnostics) => {
+      assert_true(not(has_diagnostic_code(diagnostics, 2460)))
+    }
+  }
+}
+
+///|
+/// Test: Rest element in destructuring pattern should not trigger TS2548
+test "Rest element in destructuring pattern - no TS2548" {
+  let result = parse_bind_check_errors(
+    #|var c = {};
+    #|[...c] = ["", 0];
+  )
+  match result {
+    Ok(_) => () // Should compile - rest element is a target, not source
+    Err(diagnostics) => {
+      // Should not have TS2548 for rest in pattern
+      assert_true(not(has_diagnostic_code(diagnostics, 2548)))
+    }
+  }
+}
+
+///|
+/// Test: Spread in array construction (not pattern) SHOULD trigger TS2548 for non-iterable
+test "Spread in array construction - TS2548 for object" {
+  let result = parse_bind_check_errors(
+    #|const obj = { a: 1, b: 2 };
+    #|const arr = [...obj];
+  )
+  match result {
+    Ok(_) => assert_true(false) // Should produce error
+    Err(diagnostics) => {
+      // Should have TS2548 for spreading non-iterable object
+      assert_true(has_diagnostic_code(diagnostics, 2548) || has_diagnostic_code(diagnostics, 2488))
+    }
+  }
+}
