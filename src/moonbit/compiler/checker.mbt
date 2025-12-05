@@ -562,7 +562,9 @@ fn check_local_const_assignment(
 ///|
 /// Hoist var declarations in a statement block to the current local scope.
 /// This ensures that var declarations are visible even in their own initializers.
+/// Hoists `var` declarations and function declarations to the current scope.
 /// Only hoists `var` declarations, not `let` or `const` (which have temporal dead zone).
+/// Function declarations are always hoisted in JavaScript/TypeScript.
 fn hoist_var_declarations(checker : TypeChecker, stmt : Node) -> TypeChecker {
   let (any_t, checker) = any_type(checker)
   match stmt {
@@ -583,6 +585,23 @@ fn hoist_var_declarations(checker : TypeChecker, stmt : Node) -> TypeChecker {
         checker = hoist_var_decl_binding(checker, decl.name, any_t)
       }
       checker
+    }
+    FunctionDeclaration(func) => {
+      // Only hoist nested function declarations (inside another function body)
+      // Top-level functions are handled via global scope and may have overloads
+      // We check if we're in a local scope (local_scopes is non-empty)
+      if checker.local_scopes.is_empty() {
+        return checker // Top-level function, don't hoist to local scope
+      }
+      // Hoist function declaration - add function type to current local scope
+      // This enables forward references to nested functions within the same function body
+      let name = match func.name {
+        Some(Identifier(id)) => id.name
+        _ => return checker // Anonymous function
+      }
+      // Get function type and add to local scope
+      let (func_type, checker) = get_function_declaration_type(checker, func)
+      add_local_variable(checker, name, func_type)
     }
     // Recurse into statements that can contain var declarations
     IfStatement(if_stmt) => {
@@ -4722,6 +4741,52 @@ fn infer_from_initializer(
     }
     None => any_type(checker)
   }
+}
+
+///|
+/// Get type of a function declaration (for hoisting, without caching to symbol)
+fn get_function_declaration_type(
+  checker : TypeChecker,
+  func : FunctionDeclaration,
+) -> (Type, TypeChecker) {
+  // Build parameter list
+  let parameters : Array[CheckerParameter] = []
+  let mut checker = checker
+  for param_node in func.parameters {
+    match param_node {
+      Parameter(p) => {
+        let (param_type, c) = match p.type_annotation {
+          Some(type_node) =>
+            match get_type_from_type_node(checker, type_node) {
+              (Some(t), c2) => (t, c2)
+              (None, c2) => any_type(c2)
+            }
+          None => any_type(checker)
+        }
+        checker = c
+        parameters.push({
+          name: get_parameter_name(p.name),
+          param_type,
+          is_optional: p.is_optional,
+          is_rest: p.is_rest,
+        })
+      }
+      _ => ()
+    }
+  }
+
+  // Get return type
+  let (return_type, checker) = match func.return_type {
+    Some(type_node) =>
+      match get_type_from_type_node(checker, type_node) {
+        (Some(t), c) => (t, c)
+        (None, c) => any_type(c)
+      }
+    None => any_type(checker)
+  }
+  let (info, checker) = create_type_info(checker)
+  let func_type = Type::Function({ parameters, return_type, info })
+  (func_type, checker)
 }
 
 ///|

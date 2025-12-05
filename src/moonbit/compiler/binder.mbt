@@ -143,7 +143,53 @@ pub fn bind_source_file(source_file : SourceFile) -> BindResult {
 ///|
 /// Bind a list of statements
 fn bind_statements(binder : Binder, statements : Array[Node]) -> Binder {
+  // Two-pass binding for function hoisting:
+  // 1. First pass: bind all function declarations (hoisting)
+  let binder = hoist_function_declarations(binder, statements, 0)
+  // 2. Second pass: bind all statements (function declarations will be skipped since already bound)
   bind_statements_aux(binder, statements, 0)
+}
+
+///|
+/// First pass: hoist all function declarations to the top of the scope
+fn hoist_function_declarations(
+  binder : Binder,
+  statements : Array[Node],
+  index : Int,
+) -> Binder {
+  if index >= statements.length() {
+    binder
+  } else {
+    let stmt = statements[index]
+    let binder = match stmt {
+      FunctionDeclaration(func) => bind_function_declaration_name_only(binder, func)
+      _ => binder
+    }
+    hoist_function_declarations(binder, statements, index + 1)
+  }
+}
+
+///|
+/// Bind only the function name to the current scope (for hoisting)
+/// The full function binding (parameters, body) happens in the second pass
+fn bind_function_declaration_name_only(
+  binder : Binder,
+  func : FunctionDeclaration,
+) -> Binder {
+  let name = match func.name {
+    Some(Identifier(id)) => id.name
+    _ => return binder // Anonymous function
+  }
+  // Use declare_symbol which handles function overloads by merging declarations
+  let symbol = Symbol::new(name, SymbolKind::Function, binder.next_symbol_id)
+  let symbol = symbol.add_declaration(Node::FunctionDeclaration(func))
+  let is_export = binder_has_export_modifier(func.modifiers)
+  let symbol = if is_export {
+    { ..symbol, flags: { ..symbol.flags, is_export: true } }
+  } else {
+    symbol
+  }
+  declare_symbol(binder, name, symbol)
 }
 
 ///|
@@ -614,16 +660,23 @@ fn bind_function_declaration(
     Some(Identifier(id)) => id.name
     _ => return binder // Anonymous function
   }
-  let symbol = Symbol::new(name, SymbolKind::Function, binder.next_symbol_id)
-  let symbol = symbol.add_declaration(Node::FunctionDeclaration(func))
-  // Set is_export flag if function has export modifier
-  let is_export = binder_has_export_modifier(func.modifiers)
-  let symbol = if is_export {
-    { ..symbol, flags: { ..symbol.flags, is_export: true } }
-  } else {
-    symbol
+  // Check if symbol was already declared by hoisting
+  // If not, declare it now (for non-hoisted contexts like module level)
+  let scope = current_scope(binder)
+  let binder = match scope.symbols.get(name) {
+    Some(_) => binder // Already hoisted
+    None => {
+      let symbol = Symbol::new(name, SymbolKind::Function, binder.next_symbol_id)
+      let symbol = symbol.add_declaration(Node::FunctionDeclaration(func))
+      let is_export = binder_has_export_modifier(func.modifiers)
+      let symbol = if is_export {
+        { ..symbol, flags: { ..symbol.flags, is_export: true } }
+      } else {
+        symbol
+      }
+      declare_symbol(binder, name, symbol)
+    }
   }
-  let binder = declare_symbol(binder, name, symbol)
 
   // Create new scope and container for function body
   let binder = push_scope(binder)
@@ -635,8 +688,9 @@ fn bind_function_declaration(
   // Bind parameters
   let binder = bind_parameters(binder, func.parameters)
 
-  // Bind body
+  // Bind body - if it's a block, bind statements directly to avoid extra scope
   let binder = match func.body {
+    Some(BlockStatement(block)) => bind_statements(binder, block.statements)
     Some(body) => bind_statement(binder, body)
     None => binder
   }

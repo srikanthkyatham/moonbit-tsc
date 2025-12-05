@@ -634,3 +634,80 @@ test "unit/mapped/multiple-uses - Same mapped type used multiple times" {
     Err(_) => assert_true(false)
   }
 }
+
+// ============================================================================
+// Function Hoisting Tests
+// Tests for function declarations being hoisted to top of scope
+// ============================================================================
+
+///|
+test "unit/hoisting/nested-forward-reference - call nested function before declaration" {
+  // Nested functions should be hoisted, allowing forward references
+  let result = parse_bind_check_v2(
+    "function outer() { foo(10); function foo(x: number) { return x; } }",
+  )
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/hoisting/nested-multiple-functions - multiple nested functions with forward refs" {
+  // Multiple nested functions can reference each other
+  let result = parse_bind_check_v2(
+    "function outer() { bar(foo(10)); function foo(x: number): number { return x; } function bar(y: number): number { return y * 2; } }",
+  )
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/hoisting/nested-recursive - recursive nested function" {
+  // Nested functions can call themselves recursively
+  let result = parse_bind_check_v2(
+    "function outer() { factorial(5); function factorial(n: number): number { return n <= 1 ? 1 : n * factorial(n - 1); } }",
+  )
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/hoisting/nested-mutual-recursion - mutually recursive nested functions" {
+  // Nested functions can call each other mutually
+  let result = parse_bind_check_v2(
+    "function outer() { isEven(10); function isEven(n: number): boolean { return n === 0 ? true : isOdd(n - 1); } function isOdd(n: number): boolean { return n === 0 ? false : isEven(n - 1); } }",
+  )
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/hoisting/top-level-forward-reference - top-level function forward reference" {
+  // Top-level functions are also hoisted
+  let result = parse_bind_check_v2(
+    "const result = foo(42); function foo(x: number): number { return x; }",
+  )
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unit/hoisting/overloads-still-work - function overloads with hoisting" {
+  // Function overloads should still work correctly with hoisting
+  let result = parse_bind_check_v2(
+    "function foo(x: number): number; function foo(x: string): string; function foo(x: any): any { return x; } const s = foo('hello');",
+  )
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false)
+  }
+}
