@@ -8550,3 +8550,43 @@ test "unit/generator/TS1163-yield-outside-generator - yield outside generator tr
       )
   }
 }
+
+///|
+test "unit/generator/TS1163-yield-in-arrow-inside-generator - yield in arrow function" {
+  // yield inside arrow function (even if nested in generator) should trigger TS1163
+  let source =
+    #|function* test() {
+    #|  return () => ({
+    #|    b: yield 2,
+    #|  });
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => fail("Expected TS1163 error for yield in arrow function")
+    Err(diagnostics) =>
+      assert_true(
+        has_error(diagnostics, 1163),
+        msg="yield in arrow function should trigger TS1163",
+      )
+  }
+}
+
+///|
+test "unit/generator/TS1163-yield-in-nested-function - yield in nested non-generator function" {
+  // yield inside nested non-generator function (even if nested in generator) should trigger TS1163
+  let source =
+    #|function* foo() {
+    #|  function bar() {
+    #|    yield 1;
+    #|  }
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => fail("Expected TS1163 error for yield in nested function")
+    Err(diagnostics) =>
+      assert_true(
+        has_error(diagnostics, 1163),
+        msg="yield in nested non-generator function should trigger TS1163",
+      )
+  }
+}
