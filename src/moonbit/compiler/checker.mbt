@@ -8570,16 +8570,31 @@ fn infer_new_expression_type(
   }
 
   // Check if the target has a construct signature (TS2747)
-  // Skip check for class types (lookup symbol to determine)
+  // Skip check for class types and built-in constructors
+  let builtin_constructors = [
+    "Array", "Object", "String", "Number", "Boolean", "Function", "Symbol",
+    "BigInt", "Date", "RegExp", "Error", "TypeError", "RangeError", "SyntaxError",
+    "ReferenceError", "EvalError", "URIError", "Map", "Set", "WeakMap", "WeakSet",
+    "Promise", "Proxy", "ArrayBuffer", "SharedArrayBuffer", "DataView",
+    "Int8Array", "Uint8Array", "Uint8ClampedArray", "Int16Array", "Uint16Array",
+    "Int32Array", "Uint32Array", "Float32Array", "Float64Array", "BigInt64Array",
+    "BigUint64Array",
+  ]
   let is_class_type = match new_expr.expression {
     Identifier(id) =>
-      match lookup_symbol(checker, id.name) {
-        Some(symbol) =>
-          match symbol.kind {
-            Class => true
-            _ => false
-          }
-        None => false
+      // Check if it's a built-in constructor
+      if builtin_constructors.contains(id.name) {
+        true
+      } else {
+        // Check if it's a user-defined class
+        match lookup_symbol(checker, id.name) {
+          Some(symbol) =>
+            match symbol.kind {
+              Class => true
+              _ => false
+            }
+          None => false
+        }
       }
     _ => false
   }

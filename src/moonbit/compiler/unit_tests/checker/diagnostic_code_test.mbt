@@ -4302,6 +4302,100 @@ test "DiagnosticCode - valid new with construct signature" {
 }
 
 ///|
+test "DiagnosticCode - valid new with built-in Array constructor" {
+  let source =
+    #|const arr = new Array();
+    #|const arr2 = new Array<number>();
+    #|const arr3 = new Array(10);
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2747)))
+  }
+}
+
+///|
+test "DiagnosticCode - valid new with built-in Map and Set constructors" {
+  let source =
+    #|const map = new Map();
+    #|const set = new Set();
+    #|const weakMap = new WeakMap();
+    #|const weakSet = new WeakSet();
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2747)))
+  }
+}
+
+///|
+test "DiagnosticCode - valid new with built-in Date and RegExp constructors" {
+  let source =
+    #|const date = new Date();
+    #|const regex = new RegExp("pattern");
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2747)))
+  }
+}
+
+///|
+test "DiagnosticCode - valid new with built-in Error constructors" {
+  let source =
+    #|const err = new Error("message");
+    #|const typeErr = new TypeError("type error");
+    #|const rangeErr = new RangeError("range error");
+    #|const syntaxErr = new SyntaxError("syntax error");
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2747)))
+  }
+}
+
+///|
+test "DiagnosticCode - valid new with built-in Promise constructor" {
+  let source =
+    #|const promise = new Promise<number>((resolve, reject) => resolve(42));
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2747)))
+  }
+}
+
+///|
+test "DiagnosticCode - valid new with built-in TypedArray constructors" {
+  let source =
+    #|const int8 = new Int8Array(10);
+    #|const uint8 = new Uint8Array(10);
+    #|const float32 = new Float32Array(10);
+    #|const float64 = new Float64Array(10);
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2747)))
+  }
+}
+
+///|
+test "DiagnosticCode - valid new with Array in namespace" {
+  // This is the specific case from exportDeclarations conformance tests
+  let source =
+    #|namespace A {
+    #|  class B { id: number; }
+    #|  export var beez: Array<B>;
+    #|  export var beez2 = new Array<B>();
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2747)))
+  }
+}
+
+///|
 test "DiagnosticCode - TS2748: self-reference in initializer" {
   // Variable referencing itself in its own initializer
   let source =
