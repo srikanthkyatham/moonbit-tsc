@@ -2780,13 +2780,10 @@ fn check_variable_statement(
       }
     }
 
-    // TS2494: Check if exported variable uses private type
-    // Note: This check should only apply when generating .d.ts files (--declaration)
-    // During regular type-checking, TypeScript allows exported members to use non-exported types
-    // TODO: Re-enable this when --declaration flag support is added
-    // if is_exported {
-    //   checker = check_exported_variable_private_type(checker, decl)
-    // }
+    // TS2494: Exported variable using private type
+    // Note: Modern TypeScript (5.x) does NOT emit TS2494 in most cases.
+    // When generating .d.ts files, TypeScript includes non-exported types rather than erroring.
+    // We match TypeScript behavior by not checking for TS2494.
     ignore(is_exported)
 
     // Track uninitialized variables for TS2454 (definite assignment)

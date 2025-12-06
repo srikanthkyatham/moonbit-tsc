@@ -2243,15 +2243,25 @@ test "DiagnosticCode - TS2710 namespace with value exports is OK" {
 }
 
 // TS2494: Exported variable using private type
-// Note: This check is currently disabled because TypeScript only emits TS2494
-// when generating declaration files (--declaration).
-// TODO: Re-enable when --declaration flag support is added
+// Note: Modern TypeScript (5.x) does NOT emit TS2494 in most cases.
+// When generating .d.ts files, TypeScript includes non-exported types in the output
+// rather than erroring. TS2494 is largely a legacy error code.
+// Our implementation matches TypeScript behavior by not checking for TS2494.
 
 ///|
-test "DiagnosticCode - TS2494 exported variable using private type (SKIPPED)" {
-  // TS2494 check is disabled - TypeScript only emits this when generating .d.ts files
-  // This test is skipped until --declaration flag support is added
-  ()
+test "DiagnosticCode - TS2494 TypeScript allows non-exported types in exports" {
+  // TypeScript 5.x allows this - it includes the interface in .d.ts output
+  // rather than erroring. We match this behavior.
+  let source =
+    #|interface PrivateType { value: number; }
+    #|export const x: PrivateType = { value: 1 };
+  let result = check_source(source)
+  match result {
+    Ok(tf) =>
+      // Modern TypeScript does NOT emit TS2494 for this case
+      assert_true(not(has_error(tf.diagnostics, 2494)))
+    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2494)))
+  }
 }
 
 ///|
@@ -2262,7 +2272,7 @@ test "DiagnosticCode - TS2494 exported variable with exported type is OK" {
   let result = check_source(source)
   match result {
     Ok(tf) =>
-      // Should NOT have TS2494 because type is exported
+      // No error because type is exported
       assert_true(not(has_error(tf.diagnostics, 2494)))
     Err(diagnostics) => assert_true(not(has_error(diagnostics, 2494)))
   }
@@ -2275,11 +2285,10 @@ test "DiagnosticCode - TS2494 exported variable with inferred private type" {
     #|function createPrivate(): PrivateType { return { value: 1 }; }
     #|export const x = createPrivate();
   let result = check_source(source)
-  // This may or may not trigger TS2494 depending on type inference
-  // Just verify no crash occurs
+  // TypeScript allows this - no TS2494 error
   match result {
-    Ok(_) => assert_true(true)
-    Err(_) => assert_true(true)
+    Ok(tf) => assert_true(not(has_error(tf.diagnostics, 2494)))
+    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2494)))
   }
 }
 
