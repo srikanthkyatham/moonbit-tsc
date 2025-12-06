@@ -11,6 +11,7 @@ pub struct Symbol {
   value_declaration : Node?
   members : SymbolTable?
   exports : SymbolTable?
+  locals : SymbolTable? // All members in namespace (exported + non-exported)
   id : Int // Unique identifier
 } derive(Show)
 
@@ -94,6 +95,7 @@ pub fn Symbol::new(name : String, kind : SymbolKind, id : Int) -> Symbol {
     value_declaration: None,
     members: None,
     exports: None,
+    locals: None,
     id,
   }
 }

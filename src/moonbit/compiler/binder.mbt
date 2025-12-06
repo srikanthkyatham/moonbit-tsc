@@ -1110,11 +1110,14 @@ fn bind_module_declaration(
       None => binder
     }
 
-    // Capture exports from the module scope before popping
+    // Capture exports and all locals from the module scope before popping
     let module_scope = current_scope(binder)
     let exports : SymbolTable = Map::new()
+    let locals : SymbolTable = Map::new()
     module_scope.symbols.each(fn(name, sym) {
-      // Only include exported members
+      // All members go into locals for internal access
+      locals.set(name, sym)
+      // Only exported members go into exports for external access
       if sym.flags.is_export {
         exports.set(name, sym)
       }
@@ -1124,7 +1127,7 @@ fn bind_module_declaration(
     let binder = pop_container(binder)
     let binder = pop_scope(binder)
 
-    // Now create the namespace symbol with the captured exports
+    // Now create the namespace symbol with the captured exports and locals
     let symbol = Symbol::new(
       mod_decl.name,
       SymbolKind::Module,
@@ -1138,6 +1141,11 @@ fn bind_module_declaration(
       flags: { ..symbol.flags, is_export, },
       exports: if exports.length() > 0 {
         Some(exports)
+      } else {
+        None
+      },
+      locals: if locals.length() > 0 {
+        Some(locals)
       } else {
         None
       },
@@ -2115,6 +2123,7 @@ fn declare_symbol(binder : Binder, name : String, symbol : Symbol) -> Binder {
                 value_declaration: existing_symbol.value_declaration,
                 members: existing_symbol.members,
                 exports: existing_symbol.exports,
+                locals: existing_symbol.locals,
                 id: existing_symbol.id,
               }
               let new_symbols = scope.symbols
@@ -2535,6 +2544,32 @@ pub fn merge_symbols(a : Symbol, b : Symbol) -> Symbol {
     (None, None) => None
   }
 
+  // Merge locals (all members including non-exported, for namespace internal access)
+  let locals : SymbolTable? = match (a.locals, b.locals) {
+    (Some(a_locals), Some(b_locals)) => {
+      let merged : SymbolTable = Map::new()
+      // Copy a_locals to merged
+      a_locals.each(fn(name, symbol) { merged.set(name, symbol) })
+      // Add b_locals, merging if the symbol exists and can be merged
+      b_locals.each(fn(name, symbol) {
+        match merged.get(name) {
+          Some(existing) =>
+            if can_merge_symbols(existing, symbol) {
+              merged.set(name, merge_symbols(existing, symbol))
+            } else {
+              // Can't merge - overwrite (error already reported elsewhere)
+              merged.set(name, symbol)
+            }
+          None => merged.set(name, symbol)
+        }
+      })
+      Some(merged)
+    }
+    (Some(l), None) => Some(l)
+    (None, Some(l)) => Some(l)
+    (None, None) => None
+  }
+
   // Merge flags
   let flags = SymbolFlags::{
     is_export: a.flags.is_export || b.flags.is_export,
@@ -2553,7 +2588,7 @@ pub fn merge_symbols(a : Symbol, b : Symbol) -> Symbol {
     is_abstract: a.flags.is_abstract,
     is_async: a.flags.is_async,
   }
-  { ..a, declarations, members, exports, flags }
+  { ..a, declarations, members, exports, locals, flags }
 }
 
 ///|

@@ -2457,17 +2457,18 @@ fn check_module_declaration(
   checker : TypeChecker,
   mod_decl : ModuleDeclaration,
 ) -> TypeChecker {
-  // Look up the namespace symbol to get its exports
-  // This is needed for TS2432 checking of merged enums inside namespaces
+  // Look up the namespace symbol to get its locals (all members, not just exports)
+  // This allows internal access to non-exported members within the namespace
   match lookup_symbol(checker, mod_decl.name) {
     Some(ns_symbol) =>
-      match ns_symbol.exports {
-        Some(exports) => {
-          // Push the namespace exports as a local scope
+      // Use locals (all members) for internal namespace scope, not just exports
+      match ns_symbol.locals {
+        Some(locals) => {
+          // Push the namespace locals as a local scope
           let checker = push_local_scope(checker)
-          // Add all exports to namespace_symbols so lookup_symbol can find them
+          // Add all locals to namespace_symbols so lookup_symbol can find them
           // Use direct map mutation (Map.set mutates in place)
-          exports.each(fn(name, sym) {
+          locals.each(fn(name, sym) {
             checker.namespace_symbols.set(name, sym)
           })
           // Check the body with the namespace scope active
@@ -2478,12 +2479,12 @@ fn check_module_declaration(
             None => checker
           }
           // Clear namespace_symbols after checking (to not leak between namespaces)
-          exports.each(fn(name, _sym) { checker.namespace_symbols.remove(name) })
+          locals.each(fn(name, _sym) { checker.namespace_symbols.remove(name) })
           // Pop the namespace scope
           pop_local_scope(checker)
         }
         None =>
-          // No exports, just check the body
+          // No locals, just check the body
           match mod_decl.body {
             Some(BlockStatement(block)) =>
               check_statements(checker, block.statements)
@@ -2780,9 +2781,13 @@ fn check_variable_statement(
     }
 
     // TS2494: Check if exported variable uses private type
-    if is_exported {
-      checker = check_exported_variable_private_type(checker, decl)
-    }
+    // Note: This check should only apply when generating .d.ts files (--declaration)
+    // During regular type-checking, TypeScript allows exported members to use non-exported types
+    // TODO: Re-enable this when --declaration flag support is added
+    // if is_exported {
+    //   checker = check_exported_variable_private_type(checker, decl)
+    // }
+    ignore(is_exported)
 
     // Track uninitialized variables for TS2454 (definite assignment)
     // Only track if:
@@ -8096,23 +8101,24 @@ fn infer_property_access_type(
                     (None, c) => infer_symbol_type(c, member_symbol)
                   }
                 None => {
-                  // TS2694: Namespace has no exported member
+                  // TS2339: Property does not exist on type 'typeof X'
+                  // (TypeScript uses TS2339 for property access, not TS2694)
                   let checker = add_diagnostic_with_code(
                     checker,
-                    "Namespace '\{ns_name}' has no exported member '\{prop.name}'.",
+                    "Property '\{prop.name}' does not exist on type 'typeof \{ns_name}'.",
                     prop.location,
-                    TS2694,
+                    TS2339,
                   )
                   any_type(checker)
                 }
               }
             None => {
-              // Namespace has no exports - TS2694
+              // TS2339: Property does not exist on type 'typeof X'
               let checker = add_diagnostic_with_code(
                 checker,
-                "Namespace '\{ns_name}' has no exported member '\{prop.name}'.",
+                "Property '\{prop.name}' does not exist on type 'typeof \{ns_name}'.",
                 prop.location,
-                TS2694,
+                TS2339,
               )
               any_type(checker)
             }
