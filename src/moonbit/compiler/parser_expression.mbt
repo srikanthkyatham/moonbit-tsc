@@ -358,16 +358,22 @@ fn parse_unary_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
       }
       // Yield can have an optional expression
       let parser = increment_depth(parser)
-      // Try to parse expression, but it's optional for yield
+      // Try to parse expression, but it's optional for yield (but not for yield*)
       match current_token(parser) {
         // These tokens indicate end of yield expression (no argument)
-        Semicolon(_)
-        | CloseParen(_)
-        | CloseBracket(_)
-        | CloseBrace(_)
-        | Comma(_)
-        | Colon(_) => {
+        Semicolon(loc)
+        | CloseParen(loc)
+        | CloseBracket(loc)
+        | CloseBrace(loc)
+        | Comma(loc)
+        | Colon(loc) => {
           let parser = decrement_depth(parser)
+          // TS1109: yield* requires an expression after it
+          let parser = if is_delegate {
+            add_error(parser, "Expression expected.", loc)
+          } else {
+            parser
+          }
           return Ok(
             (make_yield_expression(None, is_delegate, start_loc), parser),
           )
@@ -387,8 +393,18 @@ fn parse_unary_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
               )
             }
             Err(_) => {
-              // No expression, that's okay for yield
+              // No expression, that's okay for yield but not for yield*
               let parser = decrement_depth(parser)
+              // TS1109: yield* requires an expression after it
+              let parser = if is_delegate {
+                add_error(
+                  parser,
+                  "Expression expected.",
+                  current_token(parser).location(),
+                )
+              } else {
+                parser
+              }
               return Ok(
                 (make_yield_expression(None, is_delegate, start_loc), parser),
               )

@@ -108,6 +108,29 @@ fn CompileResult::failure(diagnostics : Array[Diagnostic]) -> CompileResult {
 }
 
 ///|
+/// Extract inline test options from source directives (e.g., // @noImplicitAny: true)
+fn extract_inline_options(source : String) -> TestOptions {
+  let mut no_implicit_any = false
+  let lines = split_lines(source)
+  for line in lines {
+    let trimmed = ffi_trim_start(line)
+    if trimmed.has_prefix("// @") || trimmed.has_prefix("//@") {
+      // Handle both "// @" and "//@" formats (TypeScript conformance tests use "//@")
+      let prefix_len = if trimmed.has_prefix("// @") { 4 } else { 3 }
+      let directive = ffi_substring_from(trimmed, prefix_len)
+      if directive.has_prefix("noImplicitAny:") {
+        let val = ffi_trim(ffi_substring_from(directive, 14))
+        no_implicit_any = val == "true"
+      }
+    } else if not(trimmed.has_prefix("//")) && trimmed.length() > 0 {
+      // Stop at first non-comment line
+      break
+    }
+  }
+  { ..TestOptions::default(), no_implicit_any }
+}
+
+///|
 /// Main compilation function - compiles a single TypeScript file
 /// This is the primary FFI entry point
 pub fn compile_source(
@@ -115,6 +138,15 @@ pub fn compile_source(
   file_path : String,
   options : CompileOptions,
 ) -> CompileResult {
+  // Extract inline test options from source directives
+  let inline_opts = extract_inline_options(source)
+  // Apply inline options to compile options
+  let options = if inline_opts.no_implicit_any {
+    { ..options, no_implicit_any: true }
+  } else {
+    options
+  }
+
   // Phase 1: Scan source into tokens
   let tokens = scan_all_v2(source, file_path)
 
@@ -155,6 +187,7 @@ pub fn compile_source(
             bound_source,
             options.no_unchecked_indexed_access,
             options.target,
+            no_implicit_any=options.no_implicit_any,
           )
 
           // Collect type errors but continue compilation
@@ -352,6 +385,15 @@ pub fn compile_source_with_external_types(
   options : CompileOptions,
   external_registry : ExternalTypeRegistry,
 ) -> CompileResult {
+  // Extract inline test options from source directives
+  let inline_opts = extract_inline_options(source)
+  // Apply inline options to compile options
+  let options = if inline_opts.no_implicit_any {
+    { ..options, no_implicit_any: true }
+  } else {
+    options
+  }
+
   // Phase 1: Scan source into tokens
   let tokens = scan_all_v2(source, file_path)
 
@@ -393,6 +435,7 @@ pub fn compile_source_with_external_types(
             external_registry,
             options.no_unchecked_indexed_access,
             options.target,
+            no_implicit_any=options.no_implicit_any,
           )
 
           // Collect type errors but continue compilation
@@ -556,6 +599,7 @@ pub(all) struct TestOptions {
   target : String? // "es5", "es2015", etc.
   strict : Bool
   no_emit : Bool
+  no_implicit_any : Bool // @noImplicitAny: true
   lib : Array[String] // Library files to include
 } derive(Show)
 
@@ -569,7 +613,14 @@ pub(all) struct MultiFileTest {
 ///|
 /// Default test options
 pub fn TestOptions::default() -> TestOptions {
-  { module_kind: None, target: None, strict: false, no_emit: false, lib: [] }
+  {
+    module_kind: None,
+    target: None,
+    strict: false,
+    no_emit: false,
+    no_implicit_any: false,
+    lib: [],
+  }
 }
 
 ///|
@@ -695,6 +746,9 @@ pub fn split_multi_file_test(
         let lib_val = ffi_trim(ffi_substring_from(directive, 4))
         let libs = ffi_split_by_comma(lib_val)
         options = { ..options, lib: libs }
+      } else if directive.has_prefix("noImplicitAny:") {
+        let no_implicit_any_val = ffi_trim(ffi_substring_from(directive, 14))
+        options = { ..options, no_implicit_any: no_implicit_any_val == "true" }
       }
       // Skip other directives (don't add to content)
     } else {
@@ -863,6 +917,9 @@ fn apply_test_options(
   }
   if test_options.no_emit {
     opts = { ..opts, no_emit: true }
+  }
+  if test_options.no_implicit_any {
+    opts = { ..opts, no_implicit_any: true }
   }
   opts
 }

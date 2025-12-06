@@ -331,6 +331,7 @@ pub fn TypeChecker::new_with_options(
   global_scope : Scope?,
   no_unchecked_indexed_access : Bool,
   target : Target,
+  no_implicit_any~ : Bool = false,
 ) -> TypeChecker {
   {
     next_type_id: 0,
@@ -369,7 +370,7 @@ pub fn TypeChecker::new_with_options(
     import_map: Map::new(),
     namespace_symbols: Map::new(),
     in_destructuring_pattern: false,
-    no_implicit_any: false,
+    no_implicit_any,
   }
 }
 
@@ -1816,12 +1817,14 @@ pub fn check_source_file_with_options(
   bound : BoundSourceFile,
   no_unchecked_indexed_access : Bool,
   target : Target,
+  no_implicit_any~ : Bool = false,
 ) -> CheckResult {
   let checker = TypeChecker::new_with_options(
     bound.file_path,
     Some(bound.global_scope),
     no_unchecked_indexed_access,
     target,
+    no_implicit_any~,
   )
   // Push a top-level scope for the source file so local variables are tracked
   let checker = push_local_scope(checker)
@@ -1857,12 +1860,14 @@ pub fn check_source_file_with_external_types(
   external_registry : ExternalTypeRegistry,
   no_unchecked_indexed_access : Bool,
   target : Target,
+  no_implicit_any~ : Bool = false,
 ) -> CheckResult {
   let checker = TypeChecker::new_with_options(
     bound.file_path,
     Some(bound.global_scope),
     no_unchecked_indexed_access,
     target,
+    no_implicit_any~,
   )
 
   // Build import map from module_info.imports
@@ -9103,21 +9108,10 @@ fn infer_yield_expression_type(
       (expr_type, checker)
     }
     None => {
-      // TS2764: 'yield' expression implicitly results in an 'any' type
-      // because its containing generator lacks a return-type annotation
-      // Only emit when noImplicitAny is enabled
-      let checker = if checker.no_implicit_any &&
-        is_in_generator_function(checker) &&
-        not(checker.generator_has_return_type) {
-        add_diagnostic_with_code(
-          checker,
-          "'yield' expression implicitly results in an 'any' type because its containing generator lacks a return-type annotation.",
-          ye.location,
-          TS2764,
-        )
-      } else {
-        checker
-      }
+      // Note: TS7057 ('yield' expression implicitly results in an 'any' type) is only
+      // emitted when the result of yield is actually used (e.g., yield yield;).
+      // For bare yield; statements, only TS7055 on the function is emitted.
+      // We don't emit here because we need parent context to know if result is used.
       let (t, checker) = undefined_type(checker)
       (t, checker)
     }
@@ -11301,6 +11295,130 @@ fn is_numeric_type(t : Type) -> Bool {
   }
 }
 
+///|
+/// Check if a function body contains bare yield expressions (without expression)
+/// Used to determine if TS7055 should be emitted (only when generator has yields
+/// that would result in implicit any - i.e., bare `yield;` without a value)
+fn body_contains_bare_yield(body : Node?) -> Bool {
+  match body {
+    Some(BlockStatement(b)) => statements_contain_bare_yield(b.statements)
+    _ => false
+  }
+}
+
+///|
+/// Check if statements contain bare yield expressions (yield without expression)
+fn statements_contain_bare_yield(statements : Array[Node]) -> Bool {
+  for stmt in statements {
+    match stmt {
+      YieldExpression(ye) =>
+        // Bare yield: yield; (no expression)
+        match ye.expression {
+          None => return true
+          Some(_) => ()
+        }
+      ExpressionStatement(es) =>
+        match es.expression {
+          YieldExpression(ye) =>
+            match ye.expression {
+              None => return true
+              Some(_) => ()
+            }
+          _ => ()
+        }
+      BlockStatement(b) =>
+        if statements_contain_bare_yield(b.statements) {
+          return true
+        }
+      IfStatement(is_node) => {
+        if statements_contain_bare_yield_in_node(is_node.then_statement) {
+          return true
+        }
+        match is_node.else_statement {
+          Some(else_node) =>
+            if statements_contain_bare_yield_in_node(else_node) {
+              return true
+            }
+          None => ()
+        }
+      }
+      WhileStatement(ws) =>
+        if statements_contain_bare_yield_in_node(ws.statement) {
+          return true
+        }
+      DoWhileStatement(dws) =>
+        if statements_contain_bare_yield_in_node(dws.statement) {
+          return true
+        }
+      ForStatement(fs) =>
+        if statements_contain_bare_yield_in_node(fs.statement) {
+          return true
+        }
+      ForInStatement(fis) =>
+        if statements_contain_bare_yield_in_node(fis.statement) {
+          return true
+        }
+      ForOfStatement(fos) =>
+        if statements_contain_bare_yield_in_node(fos.statement) {
+          return true
+        }
+      TryStatement(ts) => {
+        if statements_contain_bare_yield_in_node(ts.try_block) {
+          return true
+        }
+        match ts.catch_clause {
+          Some(cc) =>
+            if statements_contain_bare_yield_in_node(cc.block) {
+              return true
+            }
+          None => ()
+        }
+        match ts.finally_block {
+          Some(fb) =>
+            if statements_contain_bare_yield_in_node(fb) {
+              return true
+            }
+          None => ()
+        }
+      }
+      LabeledStatement(ls) =>
+        if statements_contain_bare_yield_in_node(ls.statement) {
+          return true
+        }
+      // Don't descend into nested functions/generators
+      FunctionDeclaration(_) => ()
+      FunctionExpression(_) => ()
+      ArrowFunction(_) => ()
+      MethodDeclaration(_) => ()
+      _ => ()
+    }
+  }
+  false
+}
+
+///|
+/// Check if a Node (typically a body) contains bare yield expressions
+fn statements_contain_bare_yield_in_node(node : Node) -> Bool {
+  match node {
+    BlockStatement(b) => statements_contain_bare_yield(b.statements)
+    ExpressionStatement(es) =>
+      match es.expression {
+        YieldExpression(ye) =>
+          match ye.expression {
+            None => true
+            Some(_) => false
+          }
+        _ => false
+      }
+    YieldExpression(ye) =>
+      match ye.expression {
+        None => true
+        Some(_) => false
+      }
+    _ => false
+  }
+}
+
 // ============================================================================
 // Function Declaration Checking
 // ============================================================================
@@ -11327,6 +11445,52 @@ fn check_function_declaration(
       func.location,
       TS1221,
     )
+  } else {
+    checker
+  }
+
+  // Check for TS2505: A generator cannot have a 'void' type annotation
+  let checker = if func.is_generator {
+    match func.return_type {
+      Some(return_type_node) => {
+        // Check if return type is 'void'
+        let is_void_type = match return_type_node {
+          KeywordType(kt) => kt.kind == Void
+          _ => false
+        }
+        if is_void_type {
+          add_diagnostic_with_code(
+            checker,
+            "A generator cannot have a 'void' type annotation.",
+            get_location(return_type_node),
+            TS2505,
+          )
+        } else {
+          checker
+        }
+      }
+      None => {
+        // TS7055: Generator function lacks return-type annotation
+        // Only emit when noImplicitAny is enabled AND the function has bare yield statements
+        // Generators that yield concrete values (yield 0) don't need this error
+        if checker.no_implicit_any && body_contains_bare_yield(func.body) {
+          let name = match func.name {
+            Some(Identifier(id)) => id.name
+            _ => "(anonymous)"
+          }
+          add_diagnostic_with_code(
+            checker,
+            "'" +
+            name +
+            "', which lacks return-type annotation, implicitly has an 'any' yield type.",
+            func.location,
+            TS7055,
+          )
+        } else {
+          checker
+        }
+      }
+    }
   } else {
     checker
   }
@@ -12461,7 +12625,18 @@ fn check_class_declaration(
             } else {
               checker
             }
+            // TS1163: yield is not allowed in class property initializers
+            // Save and reset generator context - class property initializers are not
+            // inside the generator body even if the class is inside a generator function
+            let saved_generator_depth = checker.generator_function_depth
+            let checker = {
+              ..checker,
+              generator_function_depth: 0,
+              generator_has_return_type: false,
+            }
             let (_, c) = infer_type(checker, init)
+            // Restore generator context
+            let c = { ..c, generator_function_depth: saved_generator_depth }
             // Restore in_static_context flag and mark property as initialized
             let c = if is_static {
               { ..c, in_static_context: false }

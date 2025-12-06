@@ -677,6 +677,7 @@ fn build_coordinator_options(
     verbose: options.verbose,
     external_types_json: options.external_types_json,
     no_emit: options.no_emit,
+    no_implicit_any: options.no_implicit_any,
   }
 }
 
@@ -764,6 +765,15 @@ fn build_coordinator_options_from_tsconfig(
       None => false
     }
   }
+  // Get noImplicitAny from tsconfig or CLI
+  let no_implicit_any = if cli_options.no_implicit_any {
+    true
+  } else {
+    match tsconfig.compiler_options {
+      Some(opts) => opts.no_implicit_any.unwrap_or(false)
+      None => false
+    }
+  }
   @coordinator.CoordinatorOptions::{
     target,
     module_kind,
@@ -777,6 +787,7 @@ fn build_coordinator_options_from_tsconfig(
     verbose: cli_options.verbose,
     external_types_json: cli_options.external_types_json,
     no_emit,
+    no_implicit_any,
   }
 }
 

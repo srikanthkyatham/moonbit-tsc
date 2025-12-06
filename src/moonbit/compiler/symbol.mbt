@@ -336,6 +336,7 @@ pub enum DiagnosticCode {
   // Syntax Errors (1xxx)
   // ============================================================================
   TS1005 // '{0}' expected
+  TS1109 // Expression expected
   TS1155 // 'const' declarations must be initialized
   TS1160 // Unterminated template literal
   TS1163 // A 'yield' expression is only allowed in a generator body
@@ -473,11 +474,13 @@ pub enum DiagnosticCode {
   // ============================================================================
   TS2484 // Export declaration conflicts with exported declaration of '{0}'
   TS2487 // The left-hand side of a 'for...of' statement must be a variable or a property access
+  TS2488 // Type '{0}' must have a '[Symbol.iterator]()' method that returns an iterator
   TS2493 // Tuple type '{0}' of length '{1}' has no element at index '{2}'
   TS2494 // Using a private name '{0}'
   TS2496 // The 'arguments' object cannot be referenced in an arrow function or a top-level script
   TS2497 // This module can only be referenced with ECMAScript imports/exports
   TS2502 // '{0}' is referenced directly or indirectly in its own base expression
+  TS2505 // A generator cannot have a 'void' type annotation
 
   // ============================================================================
   // Abstract Class Errors (2508-2520)
@@ -716,9 +719,11 @@ pub enum DiagnosticCode {
   TS4097 // A 'set' accessor must have exactly one parameter
 
   // ============================================================================
-  // Unreachable Code (7000-7099)
+  // Unreachable Code & Implicit Any (7000-7099)
   // ============================================================================
   TS7027 // Unreachable code detected
+  TS7055 // '{0}', which lacks return-type annotation, implicitly has an 'any' yield type
+  TS7057 // 'yield' expression implicitly results in an 'any' type because its containing generator lacks a return-type annotation
 } derive(Show, Eq)
 
 ///|
@@ -727,6 +732,7 @@ pub fn DiagnosticCode::to_int(self : DiagnosticCode) -> Int {
   match self {
     // Syntax Errors (1xxx)
     TS1005 => 1005
+    TS1109 => 1109
     TS1155 => 1155
     TS1160 => 1160
     TS1163 => 1163
@@ -838,11 +844,13 @@ pub fn DiagnosticCode::to_int(self : DiagnosticCode) -> Int {
     // Export & Module Errors (2484-2502)
     TS2484 => 2484
     TS2487 => 2487
+    TS2488 => 2488
     TS2493 => 2493
     TS2494 => 2494
     TS2496 => 2496
     TS2497 => 2497
     TS2502 => 2502
+    TS2505 => 2505
     // Abstract Class Errors (2508-2520)
     TS2508 => 2508
     TS2510 => 2510
@@ -1034,8 +1042,10 @@ pub fn DiagnosticCode::to_int(self : DiagnosticCode) -> Int {
     TS4092 => 4092
     TS4094 => 4094
     TS4097 => 4097
-    // Unreachable Code (7000-7099)
+    // Unreachable Code & Implicit Any (7000-7099)
     TS7027 => 7027
+    TS7055 => 7055
+    TS7057 => 7057
     // Shorthand property and enum errors (18xxx)
     TS18004 => 18004
     TS18033 => 18033
@@ -1047,6 +1057,8 @@ pub fn DiagnosticCode::to_int(self : DiagnosticCode) -> Int {
 pub fn DiagnosticCode::from_int(code : Int) -> DiagnosticCode? {
   match code {
     // Syntax Errors (1xxx)
+    1005 => Some(TS1005)
+    1109 => Some(TS1109)
     1155 => Some(TS1155)
     1160 => Some(TS1160)
     1163 => Some(TS1163)
@@ -1154,14 +1166,16 @@ pub fn DiagnosticCode::from_int(code : Int) -> DiagnosticCode? {
     // Shorthand property and enum errors (18xxx)
     18004 => Some(TS18004)
     18033 => Some(TS18033)
-    // Export & Module Errors (2484-2502)
+    // Export & Module Errors (2484-2505)
     2484 => Some(TS2484)
     2487 => Some(TS2487)
+    2488 => Some(TS2488)
     2493 => Some(TS2493)
     2494 => Some(TS2494)
     2496 => Some(TS2496)
     2497 => Some(TS2497)
     2502 => Some(TS2502)
+    2505 => Some(TS2505)
     // Abstract Class Errors (2508-2520)
     2508 => Some(TS2508)
     2510 => Some(TS2510)
@@ -1352,8 +1366,10 @@ pub fn DiagnosticCode::from_int(code : Int) -> DiagnosticCode? {
     4092 => Some(TS4092)
     4094 => Some(TS4094)
     4097 => Some(TS4097)
-    // Unreachable Code (7000-7099)
+    // Unreachable Code & Implicit Any (7000-7099)
     7027 => Some(TS7027)
+    7055 => Some(TS7055)
+    7057 => Some(TS7057)
     _ => None
   }
 }

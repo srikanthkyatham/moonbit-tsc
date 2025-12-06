@@ -26,17 +26,19 @@ pub fn is_any_typescript_file(path : String) -> Bool {
 
 ///|
 /// Discover TypeScript files from a list of paths (files or directories)
+/// When a file is explicitly passed (including .d.ts), it is accepted
+/// When walking directories, only .ts/.tsx files are collected (not .d.ts)
 pub async fn discover_files(paths : Array[String]) -> Array[String] raise Error {
   let files : Array[String] = []
   for path in paths {
-    if is_typescript_file(path) {
-      // Direct file path
+    if is_any_typescript_file(path) {
+      // Direct file path (including .d.ts when explicitly passed)
       files.push(path)
     } else {
       // Check if it's a directory
       let file_kind = @fs.kind(path)
       if file_kind == @fs.FileKind::Directory {
-        // Walk directory for TypeScript files
+        // Walk directory for TypeScript files (excludes .d.ts)
         walk_directory(path, files)
       }
     }
