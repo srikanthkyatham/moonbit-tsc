@@ -279,6 +279,7 @@ pub struct TypeChecker {
   regular_function_depth : Int // Tracks nesting depth in regular functions (> 0 means inside regular function)
   innermost_function_is_arrow : Bool // True if the innermost containing function is an arrow function
   generator_has_return_type : Bool // Tracks if current generator has a return type annotation
+  generator_yield_type : Type? // Expected yield type from generator return type annotation (e.g., Foo from IterableIterator<Foo>)
   block_scoped_decls : Map[String, Int] // Variable name -> declaration line (for TS2448 TDZ check)
   uninitialized_vars : Map[String, Int] // Variable name -> declaration line (for TS2454 definite assignment)
   in_static_context : Bool // Tracks if we're in a static property initializer (for TS2334)
@@ -353,6 +354,7 @@ pub fn TypeChecker::new_with_options(
     regular_function_depth: 0,
     innermost_function_is_arrow: false,
     generator_has_return_type: false,
+    generator_yield_type: None,
     block_scoped_decls: Map::new(),
     uninitialized_vars: Map::new(),
     in_static_context: false,
@@ -450,11 +452,13 @@ fn is_in_async_function(checker : TypeChecker) -> Bool {
 fn enter_generator_function(
   checker : TypeChecker,
   has_return_type : Bool,
+  yield_type~ : Type? = None,
 ) -> TypeChecker {
   {
     ..checker,
     generator_function_depth: checker.generator_function_depth + 1,
     generator_has_return_type: has_return_type,
+    generator_yield_type: yield_type,
   }
 }
 
@@ -465,6 +469,7 @@ fn exit_generator_function(checker : TypeChecker) -> TypeChecker {
     ..checker,
     generator_function_depth: checker.generator_function_depth - 1,
     generator_has_return_type: false,
+    generator_yield_type: None,
   }
 }
 
@@ -9094,6 +9099,23 @@ fn infer_yield_expression_type(
     Some(expr) => {
       let (expr_type, checker) = infer_type(checker, expr)
 
+      // TS7057: If the expression is a yield expression and we're in a generator
+      // without return type annotation, and noImplicitAny is set, report error
+      let checker = match expr {
+        YieldExpression(_) =>
+          if checker.no_implicit_any && not(checker.generator_has_return_type) {
+            add_diagnostic_with_code(
+              checker,
+              "'yield' expression implicitly results in an 'any' type because its containing generator lacks a return-type annotation.",
+              get_node_location(expr),
+              TS7057,
+            )
+          } else {
+            checker
+          }
+        _ => checker
+      }
+
       // TS2770: Check if yield operand type has a problematic 'then' member
       // In an async generator, the yield operand must either be a valid promise
       // or must not contain a callable 'then' member
@@ -9102,6 +9124,13 @@ fn infer_yield_expression_type(
         expr_type,
         ye.location,
       )
+
+      // TS2488: For yield*, the operand must be iterable (have [Symbol.iterator]())
+      let checker = if ye.is_delegate {
+        check_yield_delegate_iterable(checker, expr_type, expr, ye.location)
+      } else {
+        checker
+      }
 
       // For yield*, should iterate over the expression
       // For plain yield, return the expression type
@@ -9185,6 +9214,149 @@ fn check_yield_operand_then_member(
     )
   } else {
     checker
+  }
+}
+
+///|
+/// Check if yield* operand is iterable (TS2488)
+/// Type must have a '[Symbol.iterator]()' method that returns an iterator
+fn check_yield_delegate_iterable(
+  checker : TypeChecker,
+  operand_type : Type,
+  expr : Node,
+  location : SourceLocation,
+) -> TypeChecker {
+  // Check if the type is iterable
+  if not(is_type_iterable(operand_type)) {
+    let type_str = type_to_string_for_error(operand_type, expr)
+    add_diagnostic_with_code(
+      checker,
+      "Type '" + type_str + "' must have a '[Symbol.iterator]()' method that returns an iterator.",
+      location,
+      TS2488,
+    )
+  } else {
+    checker
+  }
+}
+
+///|
+/// Check if a type is iterable (has [Symbol.iterator]() method)
+fn is_type_iterable(t : Type) -> Bool {
+  match t {
+    // any is always considered iterable
+    Any(_) => true
+    // Arrays are iterable
+    Array(_) => true
+    // Strings are iterable
+    String(_) => true
+    // Generator types are iterable
+    TypeReference(type_ref) =>
+      type_ref.name == "Generator" ||
+      type_ref.name == "Iterator" ||
+      type_ref.name == "IterableIterator" ||
+      type_ref.name == "Iterable" ||
+      type_ref.name == "AsyncGenerator" ||
+      type_ref.name == "AsyncIterator" ||
+      type_ref.name == "AsyncIterable" ||
+      type_ref.name == "AsyncIterableIterator" ||
+      type_ref.name == "Array" ||
+      type_ref.name == "Map" ||
+      type_ref.name == "Set" ||
+      type_ref.name == "String"
+    // Object types - check if they have Symbol.iterator or are known iterable classes
+    Object(obj) =>
+      // Check if this is a class instance with a known name
+      match obj.class_name {
+        Some(name) =>
+          // Known iterable built-in classes
+          name == "Array" ||
+          name == "Map" ||
+          name == "Set" ||
+          name == "String" ||
+          name == "NodeList" ||
+          name == "HTMLCollection" ||
+          name == "TypedArray" ||
+          name == "Int8Array" ||
+          name == "Uint8Array" ||
+          name == "Uint8ClampedArray" ||
+          name == "Int16Array" ||
+          name == "Uint16Array" ||
+          name == "Int32Array" ||
+          name == "Uint32Array" ||
+          name == "Float32Array" ||
+          name == "Float64Array" ||
+          name == "BigInt64Array" ||
+          name == "BigUint64Array"
+        // For anonymous object types (object literals), they could have Symbol.iterator defined
+        // via computed property syntax. Since we can't easily detect this, be permissive for
+        // anonymous objects and let the actual iteration fail at runtime if needed
+        None => true
+      }
+    // Union types - all members must be iterable
+    Union(ut) => {
+      for member_type in ut.types {
+        if not(is_type_iterable(member_type)) {
+          return false
+        }
+      }
+      true
+    }
+    // Function types are NOT iterable (this is the key case for TS2488)
+    Function(_) => false
+    // Primitive types (except string) are not iterable
+    Number(_) => false
+    Boolean(_) => false
+    BigInt(_) => false
+    Symbol(_) => false
+    Undefined(_) => false
+    Null(_) => false
+    // Other types - be permissive
+    _ => true
+  }
+}
+
+///|
+/// Check if an object type has an iterator-related property
+fn has_iterator_property(obj : ObjectType) -> Bool {
+  for prop_name in obj.properties.keys() {
+    // Check for various iterator-related property names
+    // TypeScript uses different representations for Symbol.iterator
+    if prop_name.contains("iterator") ||
+      prop_name.contains("Iterator") ||
+      prop_name == "__@iterator" {
+      return true
+    }
+  }
+  false
+}
+
+///|
+/// Convert a type to a string for error messages, using the expression for context
+fn type_to_string_for_error(t : Type, expr : Node) -> String {
+  match t {
+    Function(_) => {
+      // For function types, try to get more specific info
+      // Check if this is a generator function reference
+      match expr {
+        Identifier(_) => "() => any"
+        _ => "() => any"
+      }
+    }
+    Any(_) => "any"
+    Unknown(_) => "unknown"
+    Number(_) => "number"
+    String(_) => "string"
+    Boolean(_) => "boolean"
+    Void(_) => "void"
+    Undefined(_) => "undefined"
+    Null(_) => "null"
+    Never(_) => "never"
+    Symbol(_) => "symbol"
+    BigInt(_) => "bigint"
+    Array(arr) => type_to_string(arr.element_type) + "[]"
+    TypeReference(tr) => tr.name
+    _ => type_to_string(t)
   }
 }
 
@@ -11419,6 +11591,187 @@ fn statements_contain_bare_yield_in_node(node : Node) -> Bool {
   }
 }
 
+///|
+/// Check if a return type node is a valid generator return type
+/// Generator can be assigned to object types, iterator types, etc.
+/// But NOT to primitive types (number, string, boolean, etc.)
+fn is_valid_generator_return_type(return_type_node : Node) -> Bool {
+  match return_type_node {
+    // Primitive keyword types are NOT valid (Generator can't be assigned to them)
+    KeywordType(kt) =>
+      match kt.kind {
+        // Invalid primitive types - Generator is not assignable to these
+        Number => false
+        String => false
+        Boolean => false
+        Symbol => false
+        BigInt => false
+        // Valid types that Generator can be assigned to
+        Any => true
+        Unknown => true
+        Object => true
+        Never => true // Never is bottom type, everything assignable
+        Void => true // Handled separately with TS2505
+        Undefined => true
+        Null => true
+        Const => true
+      }
+    // TypeReference - check if it's an iterator type (always valid)
+    // or a class/interface type (also valid, Generator is assignable to {})
+    TypeReference(_) => true
+    // Object type literals (like {}) are valid - Generator extends object
+    TypeLiteral(_) => true
+    // Union types - valid if at least one member is valid
+    UnionType(ut) => {
+      for t in ut.types {
+        if is_valid_generator_return_type(t) {
+          return true
+        }
+      }
+      false
+    }
+    // Intersection types - need to check each member
+    IntersectionType(it) => {
+      for t in it.types {
+        if not(is_valid_generator_return_type(t)) {
+          return false
+        }
+      }
+      true
+    }
+    // Array types, tuple types, etc. - Generator is not assignable to these
+    ArrayType(_) => false
+    TupleType(_) => false
+    // Function types - Generator is not assignable
+    FunctionType(_) => false
+    // Other types default to valid (be permissive)
+    _ => true
+  }
+}
+
+///|
+/// Check if a type name is a valid iterator type name
+fn is_iterator_type_name(name : String) -> Bool {
+  name == "Generator" ||
+  name == "Iterator" ||
+  name == "IterableIterator" ||
+  name == "Iterable" ||
+  name == "AsyncGenerator" ||
+  name == "AsyncIterator" ||
+  name == "AsyncIterable" ||
+  name == "AsyncIterableIterator"
+}
+
+///|
+/// Extract the yield type from a generator return type node
+/// e.g., from IterableIterator<Foo> extracts Foo as a Type
+fn extract_yield_type_from_return_type(
+  checker : TypeChecker,
+  return_type_node : Node,
+) -> (Type?, TypeChecker) {
+  match return_type_node {
+    TypeReference(tr) =>
+      // Check if this is an iterator type with type arguments
+      if is_iterator_type_name(tr.type_name) && tr.type_arguments.length() > 0 {
+        // The first type argument is typically the yield type
+        // e.g., Generator<T>, IterableIterator<T>, Iterator<T>
+        let first_arg = tr.type_arguments[0]
+        match get_type_from_type_node(checker, first_arg) {
+          (Some(yield_type), checker) => (Some(yield_type), checker)
+          (None, checker) => (None, checker)
+        }
+      } else {
+        (None, checker)
+      }
+    _ => (None, checker)
+  }
+}
+
+///|
+/// Convert a type node to a string representation for error messages
+fn type_node_to_string(node : Node) -> String {
+  match node {
+    KeywordType(kt) =>
+      match kt.kind {
+        Any => "any"
+        Unknown => "unknown"
+        Number => "number"
+        String => "string"
+        Boolean => "boolean"
+        Void => "void"
+        Undefined => "undefined"
+        Null => "null"
+        Never => "never"
+        Object => "object"
+        Symbol => "symbol"
+        BigInt => "bigint"
+        Const => "const"
+      }
+    TypeReference(tr) => {
+      // type_name is a String, type_arguments is Array[Node]
+      let name = tr.type_name
+      if tr.type_arguments.length() > 0 {
+        let sb = StringBuilder::new()
+        sb.write_string(name)
+        sb.write_string("<")
+        for i, arg in tr.type_arguments {
+          if i > 0 {
+            sb.write_string(", ")
+          }
+          sb.write_string(type_node_to_string(arg))
+        }
+        sb.write_string(">")
+        sb.to_string()
+      } else {
+        name
+      }
+    }
+    ArrayType(at) => type_node_to_string(at.element_type) + "[]"
+    LiteralType(lt) =>
+      match lt.literal {
+        StringLiteral(sl) => "\"" + sl.value + "\""
+        NumericLiteral(nl) => nl.value
+        BooleanLiteral(bl) => if bl.value { "true" } else { "false" }
+        NullLiteral(_) => "null"
+        _ => "literal"
+      }
+    UnionType(ut) => {
+      let sb = StringBuilder::new()
+      for i, t in ut.types {
+        if i > 0 {
+          sb.write_string(" | ")
+        }
+        sb.write_string(type_node_to_string(t))
+      }
+      sb.to_string()
+    }
+    IntersectionType(it) => {
+      let sb = StringBuilder::new()
+      for i, t in it.types {
+        if i > 0 {
+          sb.write_string(" & ")
+        }
+        sb.write_string(type_node_to_string(t))
+      }
+      sb.to_string()
+    }
+    TupleType(tt) => {
+      let sb = StringBuilder::new()
+      sb.write_string("[")
+      for i, elem in tt.element_types {
+        if i > 0 {
+          sb.write_string(", ")
+        }
+        sb.write_string(type_node_to_string(elem))
+      }
+      sb.write_string("]")
+      sb.to_string()
+    }
+    Identifier(id) => id.name
+    _ => "unknown"
+  }
+}
+
 // ============================================================================
 // Function Declaration Checking
 // ============================================================================
@@ -11466,7 +11819,24 @@ fn check_function_declaration(
             TS2505,
           )
         } else {
-          checker
+          // TS2322: Generator return type must be an iterator type
+          // Check if return type is a valid iterator type (Generator, Iterator, IterableIterator, etc.)
+          let is_valid_generator_return = is_valid_generator_return_type(
+            return_type_node,
+          )
+          if not(is_valid_generator_return) {
+            let return_type_str = type_node_to_string(return_type_node)
+            add_diagnostic_with_code(
+              checker,
+              "Type 'Generator<any, any, unknown>' is not assignable to type '" +
+              return_type_str +
+              "'.",
+              get_location(return_type_node),
+              TS2322,
+            )
+          } else {
+            checker
+          }
         }
       }
       None => {
@@ -11598,12 +11968,18 @@ fn check_function_declaration(
   // For non-generator functions, we must reset generator_function_depth to 0
   // to ensure yield in nested non-generator functions triggers TS1163
   let saved_generator_depth = checker.generator_function_depth
-  let checker = if func.is_generator {
+  let (checker, saved_yield_type) = if func.is_generator {
     let has_return_type = func.return_type is Some(_)
-    enter_generator_function(checker, has_return_type)
+    // Extract yield type from return type annotation (e.g., Foo from IterableIterator<Foo>)
+    let (yield_type, checker) = match func.return_type {
+      Some(return_type_node) =>
+        extract_yield_type_from_return_type(checker, return_type_node)
+      None => (None, checker)
+    }
+    (enter_generator_function(checker, has_return_type, yield_type=yield_type), checker.generator_yield_type)
   } else {
     // Reset generator context - yield is not valid in non-generator functions
-    { ..checker, generator_function_depth: 0, generator_has_return_type: false }
+    ({ ..checker, generator_function_depth: 0, generator_has_return_type: false, generator_yield_type: None }, checker.generator_yield_type)
   }
 
   // Track regular function context (for 'arguments' object availability)

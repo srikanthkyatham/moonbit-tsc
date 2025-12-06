@@ -2402,3 +2402,142 @@ test "unit/checker/string type is array-like" {
       assert_true(false)
   }
 }
+
+// ============================================================================
+// Generator and Yield Expression Error Tests
+// ============================================================================
+
+///|
+/// Test: TS1163 - yield not allowed outside generator
+test "unit/checker/TS1163 - yield outside generator" {
+  let result = parse_bind_check_errors("function f() { yield 1; }")
+  match result {
+    Ok(_) => assert_true(false) // Should have an error
+    Err(diagnostics) => {
+      assert_true(has_diagnostic_code(diagnostics, 1163))
+      assert_true(
+        has_diagnostic_containing(
+          diagnostics, "yield' expression is only allowed in a generator body",
+        ),
+      )
+    }
+  }
+}
+
+///|
+/// Test: TS1163 - yield in arrow function (not generator)
+test "unit/checker/TS1163 - yield in arrow function" {
+  let result = parse_bind_check_errors(
+    "function* g() { const f = () => yield 1; }",
+  )
+  match result {
+    Ok(_) => assert_true(false) // Should have an error
+    Err(diagnostics) => {
+      assert_true(has_diagnostic_code(diagnostics, 1163))
+    }
+  }
+}
+
+///|
+/// Test: Valid yield in generator function
+test "unit/checker/valid yield in generator" {
+  let result = parse_bind_check_errors("function* g() { yield 1; yield 2; }")
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false) // Should not have errors
+  }
+}
+
+///|
+/// Test: Valid yield* with array (iterable)
+test "unit/checker/valid yield* with array" {
+  let result = parse_bind_check_errors("function* g() { yield* [1, 2, 3]; }")
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false) // Should not have errors
+  }
+}
+
+///|
+/// Test: TS2488 - yield* with non-iterable class
+test "unit/checker/TS2488 - yield* with non-iterable class" {
+  let result = parse_bind_check_errors(
+    "class Foo { x: number = 1 } function* g() { yield* new Foo(); }",
+  )
+  match result {
+    Ok(_) => assert_true(false) // Should have an error
+    Err(diagnostics) => {
+      assert_true(has_diagnostic_code(diagnostics, 2488))
+      assert_true(
+        has_diagnostic_containing(
+          diagnostics, "must have a '[Symbol.iterator]()' method",
+        ),
+      )
+    }
+  }
+}
+
+///|
+/// Test: Valid yield* with string (iterable)
+test "unit/checker/valid yield* with string" {
+  let result = parse_bind_check_errors(
+    "function* g() { yield* \"hello\"; }",
+  )
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false) // Should not have errors
+  }
+}
+
+///|
+/// Test: TS2505 - generator with void return type
+test "unit/checker/TS2505 - generator with void return type" {
+  let result = parse_bind_check_errors("function* g(): void { yield 1; }")
+  match result {
+    Ok(_) => assert_true(false) // Should have an error
+    Err(diagnostics) => {
+      assert_true(has_diagnostic_code(diagnostics, 2505))
+      assert_true(
+        has_diagnostic_containing(
+          diagnostics, "cannot have a 'void' type annotation",
+        ),
+      )
+    }
+  }
+}
+
+///|
+/// Test: TS2322 - generator return type must be iterable
+test "unit/checker/TS2322 - generator with primitive return type" {
+  let result = parse_bind_check_errors("function* g(): number { yield 1; }")
+  match result {
+    Ok(_) => assert_true(false) // Should have an error
+    Err(diagnostics) => {
+      assert_true(has_diagnostic_code(diagnostics, 2322))
+    }
+  }
+}
+
+///|
+/// Test: Valid generator with IterableIterator return type
+test "unit/checker/valid generator with IterableIterator" {
+  let result = parse_bind_check_errors(
+    "function* g(): IterableIterator<number> { yield 1; yield 2; }",
+  )
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false) // Should not have errors
+  }
+}
+
+///|
+/// Test: Valid generator with Generator return type
+test "unit/checker/valid generator with Generator return type" {
+  let result = parse_bind_check_errors(
+    "function* g(): Generator<number> { yield 1; yield 2; }",
+  )
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(_) => assert_true(false) // Should not have errors
+  }
+}
