@@ -342,6 +342,7 @@ pub enum DiagnosticCode {
   TS1182 // A destructuring declaration must have an initializer
   TS1186 // A rest element cannot have an initializer
   TS1187 // A parameter property may not be declared using a binding pattern
+  TS1221 // Generators are not allowed in an ambient context
   TS1308 // 'await' expressions are only allowed within async functions and at the top levels of modules
   TS1357 // An enum member name must be followed by a ',', '=', or '}'
   TS1359 // Identifier expected. '{0}' is a reserved word that cannot be used here
@@ -732,6 +733,7 @@ pub fn DiagnosticCode::to_int(self : DiagnosticCode) -> Int {
     TS1182 => 1182
     TS1186 => 1186
     TS1187 => 1187
+    TS1221 => 1221
     TS1308 => 1308
     TS1357 => 1357
     TS1359 => 1359
@@ -1051,6 +1053,7 @@ pub fn DiagnosticCode::from_int(code : Int) -> DiagnosticCode? {
     1182 => Some(TS1182)
     1186 => Some(TS1186)
     1187 => Some(TS1187)
+    1221 => Some(TS1221)
     1308 => Some(TS1308)
     1357 => Some(TS1357)
     1359 => Some(TS1359)

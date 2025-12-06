@@ -525,3 +525,178 @@ test "unit/parser/class-members/static-accessor - static computed getter and set
     }
   }
 }
+
+// ============================================================================
+// Generator Method Parsing
+// ============================================================================
+
+///|
+test "unit/parser/class-members/generator - basic generator method" {
+  let source =
+    #|class C {
+    #|  *generator() {
+    #|    yield 1;
+    #|    yield 2;
+    #|  }
+    #|}
+  match parse_only(source) {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => {
+      println("Errors: \{diagnostics}")
+      assert_true(false)
+    }
+  }
+}
+
+///|
+test "unit/parser/class-members/generator - generator method with return type" {
+  let source =
+    #|class C {
+    #|  *generator(): Generator<number> {
+    #|    yield 1;
+    #|  }
+    #|}
+  match parse_only(source) {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => {
+      println("Errors: \{diagnostics}")
+      assert_true(false)
+    }
+  }
+}
+
+///|
+test "unit/parser/class-members/generator - generator method with parameters" {
+  let source =
+    #|class C {
+    #|  *generator(x: number, y: string) {
+    #|    yield x;
+    #|    yield y;
+    #|  }
+    #|}
+  match parse_only(source) {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => {
+      println("Errors: \{diagnostics}")
+      assert_true(false)
+    }
+  }
+}
+
+///|
+test "unit/parser/class-members/generator - generator method with type parameters" {
+  let source =
+    #|class C {
+    #|  *generator<T>(value: T): Generator<T> {
+    #|    yield value;
+    #|  }
+    #|}
+  match parse_only(source) {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => {
+      println("Errors: \{diagnostics}")
+      assert_true(false)
+    }
+  }
+}
+
+///|
+test "unit/parser/class-members/generator - async generator method" {
+  let source =
+    #|class C {
+    #|  async *asyncGenerator() {
+    #|    yield 1;
+    #|    yield 2;
+    #|  }
+    #|}
+  match parse_only(source) {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => {
+      println("Errors: \{diagnostics}")
+      assert_true(false)
+    }
+  }
+}
+
+///|
+test "unit/parser/class-members/generator - multiple generator methods" {
+  let source =
+    #|class C {
+    #|  *gen1() { yield 1; }
+    #|  *gen2() { yield 2; }
+    #|  regularMethod() { return 3; }
+    #|  *gen3() { yield 4; }
+    #|}
+  match parse_only(source) {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => {
+      println("Errors: \{diagnostics}")
+      assert_true(false)
+    }
+  }
+}
+
+///|
+test "unit/parser/class-members/generator - generator with yield star" {
+  let source =
+    #|class C {
+    #|  *generator() {
+    #|    yield* [1, 2, 3];
+    #|  }
+    #|}
+  match parse_only(source) {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => {
+      println("Errors: \{diagnostics}")
+      assert_true(false)
+    }
+  }
+}
+
+///|
+test "unit/parser/class-members/generator - generator in declare class parses" {
+  // Note: This should parse successfully but produce TS1221 error in type checking
+  let source =
+    #|declare class C {
+    #|  *generator(): any;
+    #|}
+  match parse_only(source) {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => {
+      println("Errors: \{diagnostics}")
+      assert_true(false)
+    }
+  }
+}
+
+///|
+test "unit/parser/class-members/generator - generator function outside class" {
+  let source =
+    #|function* gen() {
+    #|  yield 1;
+    #|  yield 2;
+    #|}
+  match parse_only(source) {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => {
+      println("Errors: \{diagnostics}")
+      assert_true(false)
+    }
+  }
+}
+
+///|
+test "unit/parser/class-members/generator - async generator function outside class" {
+  let source =
+    #|async function* asyncGen() {
+    #|  yield 1;
+    #|  yield 2;
+    #|}
+  match parse_only(source) {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => {
+      println("Errors: \{diagnostics}")
+      assert_true(false)
+    }
+  }
+}

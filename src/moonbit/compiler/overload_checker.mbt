@@ -942,8 +942,10 @@ fn method_has_abstract_modifier(modifiers : Array[Modifier]) -> Bool {
 
 ///|
 /// Collect method overloads from class members
+/// class_is_ambient indicates if the containing class has 'declare' modifier
 pub fn collect_method_overloads(
   members : Array[Node],
+  class_is_ambient : Bool,
 ) -> Map[String, MethodOverloads] {
   let overloads : Map[String, MethodOverloads] = Map::new()
   for mem in members {
@@ -963,7 +965,7 @@ pub fn collect_method_overloads(
         match meth.body {
           None => {
             // This is an overload signature
-            let sig = extract_method_overload_signature(meth)
+            let sig = extract_method_overload_signature(meth, class_is_ambient)
             existing.signatures.push(sig)
             overloads.set(name, existing)
           }
@@ -987,8 +989,10 @@ pub fn collect_method_overloads(
 
 ///|
 /// Extract overload signature from method declaration
+/// class_is_ambient indicates if the containing class has 'declare' modifier
 fn extract_method_overload_signature(
   meth : MethodDeclaration,
+  class_is_ambient : Bool,
 ) -> MethodOverloadSignature {
   let parameters : Array[OverloadParameter] = []
   for param_node in meth.parameters {
@@ -1004,7 +1008,8 @@ fn extract_method_overload_signature(
     }
   }
   let is_static = method_has_static_modifier(meth.modifiers)
-  let is_ambient = overload_has_declare_modifier(meth.modifiers)
+  // Method is ambient if the class is ambient or the method itself has 'declare'
+  let is_ambient = class_is_ambient || overload_has_declare_modifier(meth.modifiers)
   {
     parameters,
     return_type: meth.return_type,
@@ -1072,11 +1077,13 @@ pub fn validate_method_overloads(
 
 ///|
 /// Check method overloads in a class (TS2388)
+/// class_is_ambient indicates if the class has 'declare' modifier
 pub fn check_class_method_overloads(
   members : Array[Node],
+  class_is_ambient : Bool,
   checker : TypeChecker,
 ) -> TypeChecker {
-  let all_overloads = collect_method_overloads(members)
+  let all_overloads = collect_method_overloads(members, class_is_ambient)
 
   // Validate each method's overloads
   for name, overloads in all_overloads {

@@ -292,6 +292,7 @@ pub struct TypeChecker {
   import_map : Map[String, (String, String)] // Map from local name -> (module_specifier, original_name)
   namespace_symbols : Map[String, Symbol] // Symbols from current namespace for TS2432 enum merging checks
   in_destructuring_pattern : Bool // Tracks if we're inferring type of a destructuring pattern (left side of assignment)
+  no_implicit_any : Bool // Error on expressions and declarations with an implied 'any' type
 } derive(Show)
 
 ///|
@@ -368,6 +369,7 @@ pub fn TypeChecker::new_with_options(
     import_map: Map::new(),
     namespace_symbols: Map::new(),
     in_destructuring_pattern: false,
+    no_implicit_any: false,
   }
 }
 
@@ -5482,6 +5484,14 @@ fn infer_method_type(
     checker
   }
 
+  // Track generator function context for yield expressions
+  let checker = if method_decl.is_generator {
+    let has_return_type = method_decl.return_type is Some(_)
+    enter_generator_function(checker, has_return_type)
+  } else {
+    checker
+  }
+
   // Build parameter list and add parameters to local scope
   let parameters : Array[CheckerParameter] = []
   let mut checker = checker
@@ -5532,6 +5542,13 @@ fn infer_method_type(
       }
     }
     None => checker
+  }
+
+  // Exit generator function context if needed
+  let checker = if method_decl.is_generator {
+    exit_generator_function(checker)
+  } else {
+    checker
   }
 
   // Exit async function context if needed
@@ -9085,7 +9102,9 @@ fn infer_yield_expression_type(
     None => {
       // TS2764: 'yield' expression implicitly results in an 'any' type
       // because its containing generator lacks a return-type annotation
-      let checker = if is_in_generator_function(checker) &&
+      // Only emit when noImplicitAny is enabled
+      let checker = if checker.no_implicit_any &&
+        is_in_generator_function(checker) &&
         not(checker.generator_has_return_type) {
         add_diagnostic_with_code(
           checker,
@@ -11209,6 +11228,18 @@ fn check_function_declaration(
     checker
   }
 
+  // Check for TS1221: Generators are not allowed in an ambient context
+  let checker = if func.is_generator && is_ambient {
+    add_diagnostic_with_code(
+      checker,
+      "Generators are not allowed in an ambient context.",
+      func.location,
+      TS1221,
+    )
+  } else {
+    checker
+  }
+
   // Check for TS2372: parameter cannot reference itself
   let checker = check_parameter_self_reference(checker, func.parameters)
 
@@ -12239,7 +12270,21 @@ fn check_class_declaration(
           }
           None => checker
         }
-      MethodDeclaration(method_dec) =>
+      MethodDeclaration(method_dec) => {
+        // Check for TS1221: Generators are not allowed in an ambient context
+        // A method is ambient if the class has 'declare' modifier or the method has no body
+        let class_is_ambient = is_ambient_declaration(class_decl.modifiers)
+        let method_is_ambient = class_is_ambient || method_dec.body is None
+        let checker = if method_dec.is_generator && method_is_ambient {
+          add_diagnostic_with_code(
+            checker,
+            "Generators are not allowed in an ambient context.",
+            method_dec.location,
+            TS1221,
+          )
+        } else {
+          checker
+        }
         match method_dec.body {
           Some(body) => {
             // Push local scope for method
@@ -12255,6 +12300,13 @@ fn check_class_declaration(
             } else {
               checker
             }
+            // Track generator function context for yield expressions
+            let checker = if method_dec.is_generator {
+              let has_return_type = method_dec.return_type is Some(_)
+              enter_generator_function(checker, has_return_type)
+            } else {
+              checker
+            }
             // Add method parameters to scope
             let mut checker = checker
             for param in method_dec.parameters {
@@ -12263,6 +12315,12 @@ fn check_class_declaration(
             // Hoist var declarations to the method scope before checking body
             let checker = hoist_var_declarations(checker, body)
             let checker = check_statement(checker, body)
+            // Exit generator function context if needed
+            let checker = if method_dec.is_generator {
+              exit_generator_function(checker)
+            } else {
+              checker
+            }
             // Exit async function context if needed
             let checker = if method_dec.is_async {
               exit_async_function(checker)
@@ -12276,6 +12334,7 @@ fn check_class_declaration(
             // Also check method signatures without body for TS2369
             check_method_parameter_properties(checker, method_dec.parameters)
         }
+      }
       PropertyDeclaration(prop) => {
         // Check if this is a static property for TS2334
         let is_static = has_modifier(prop.modifiers, Modifier::Static)
@@ -12335,7 +12394,12 @@ fn check_class_declaration(
   )
 
   // Check for method overloads static consistency (TS2388)
-  let checker = check_class_method_overloads(class_decl.members, checker)
+  let class_is_ambient = is_ambient_declaration(class_decl.modifiers)
+  let checker = check_class_method_overloads(
+    class_decl.members,
+    class_is_ambient,
+    checker,
+  )
 
   // Restore previous context flags
   {

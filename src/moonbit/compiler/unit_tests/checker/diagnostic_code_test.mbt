@@ -4975,18 +4975,21 @@ test "DiagnosticCode - valid function rest parameter" {
 
 // ============================================================================
 // TS2764: 'yield' expression implicitly results in an 'any' type
+// Note: TS2764 is only emitted when --noImplicitAny is enabled
 // ============================================================================
 
 ///|
-test "DiagnosticCode - TS2764 yield expression implicitly any" {
+test "DiagnosticCode - TS2764 no error without noImplicitAny" {
+  // By default (noImplicitAny = false), yield without value in generator without
+  // return type should NOT trigger TS2764 (TypeScript allows implicit any)
   let source =
     #|function* gen() {
     #|  yield; // yield without value in generator without return type
     #|}
   let result = check_source(source)
   match result {
-    Ok(_) => assert_true(false) // Should detect yield implicitly any
-    Err(diagnostics) => assert_true(has_error(diagnostics, 2764))
+    Ok(_) => () // Success - no TS2764 when noImplicitAny is false
+    Err(diagnostics) => assert_false(has_error(diagnostics, 2764))
   }
 }
 
@@ -8332,5 +8335,218 @@ test "DiagnosticCode - TS2339 this.name in nested arrow function in global scope
         msg="Error should mention 'name' property",
       )
     }
+  }
+}
+
+// ============================================================================
+// Generator Methods and TS1221: Generators are not allowed in an ambient context
+// ============================================================================
+
+///|
+test "unit/generator/generator-method-in-class - generator method parses correctly" {
+  // Generator method syntax: *methodName() { }
+  let source =
+    #|class C {
+    #|    *generator() {
+    #|        yield 1;
+    #|        yield 2;
+    #|    }
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => () // Should succeed - generator method is valid
+    Err(_) => fail("Generator method in class should parse and type check correctly")
+  }
+}
+
+///|
+test "unit/generator/generator-method-with-return-type - generator method with return type" {
+  // Generator method with explicit return type
+  let source =
+    #|class C {
+    #|    *generator(): Generator<number> {
+    #|        yield 1;
+    #|        yield 2;
+    #|    }
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => () // Should succeed
+    Err(_) => fail("Generator method with return type should parse correctly")
+  }
+}
+
+///|
+test "unit/generator/yield-in-generator-method - yield is valid in generator method" {
+  // yield should not trigger TS1163 inside generator method
+  let source =
+    #|class C {
+    #|    *gen() {
+    #|        yield 42;
+    #|    }
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => () // Should succeed
+    Err(diagnostics) =>
+      // Should NOT have TS1163 - yield IS inside a generator
+      assert_false(
+        has_error(diagnostics, 1163),
+        msg="yield in generator method should NOT trigger TS1163",
+      )
+  }
+}
+
+///|
+test "unit/generator/TS1221-declare-class-generator - generators not allowed in declare class" {
+  // TS1221: Generators are not allowed in an ambient context
+  let source =
+    #|declare class C {
+    #|    *generator(): any;
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(tf) => {
+      assert_true(
+        has_error(tf.diagnostics, 1221),
+        msg="Should report TS1221 for generator in declare class",
+      )
+    }
+    Err(diagnostics) =>
+      assert_true(
+        has_error(diagnostics, 1221),
+        msg="Should report TS1221 for generator in declare class",
+      )
+  }
+}
+
+///|
+test "unit/generator/TS1221-declare-function-generator - generators not allowed in declare function" {
+  // TS1221: Generators are not allowed in an ambient context
+  let source =
+    #|declare function* gen(): any;
+  let result = check_source(source)
+  match result {
+    Ok(tf) => {
+      assert_true(
+        has_error(tf.diagnostics, 1221),
+        msg="Should report TS1221 for generator in declare function",
+      )
+    }
+    Err(diagnostics) =>
+      assert_true(
+        has_error(diagnostics, 1221),
+        msg="Should report TS1221 for generator in declare function",
+      )
+  }
+}
+
+///|
+test "unit/generator/TS1221-method-without-body - generator method without body in ambient" {
+  // Method overload signature (no body) that is a generator should trigger TS1221
+  let source =
+    #|declare class C {
+    #|    *method(): any;
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(tf) => {
+      assert_true(
+        has_error(tf.diagnostics, 1221),
+        msg="Should report TS1221 for generator method signature in declare class",
+      )
+    }
+    Err(diagnostics) =>
+      assert_true(
+        has_error(diagnostics, 1221),
+        msg="Should report TS1221 for generator method signature in declare class",
+      )
+  }
+}
+
+///|
+test "unit/generator/no-TS1221-regular-class - no TS1221 for generator in regular class" {
+  // Regular class with generator method should NOT trigger TS1221
+  let source =
+    #|class C {
+    #|    *generator() {
+    #|        yield 1;
+    #|    }
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(tf) =>
+      assert_false(
+        has_error(tf.diagnostics, 1221),
+        msg="Should NOT report TS1221 for generator in regular class",
+      )
+    Err(diagnostics) =>
+      assert_false(
+        has_error(diagnostics, 1221),
+        msg="Should NOT report TS1221 for generator in regular class",
+      )
+  }
+}
+
+///|
+test "unit/generator/no-TS1221-regular-function - no TS1221 for regular generator function" {
+  // Regular generator function should NOT trigger TS1221
+  let source =
+    #|function* gen() {
+    #|    yield 1;
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(tf) =>
+      assert_false(
+        has_error(tf.diagnostics, 1221),
+        msg="Should NOT report TS1221 for regular generator function",
+      )
+    Err(diagnostics) =>
+      assert_false(
+        has_error(diagnostics, 1221),
+        msg="Should NOT report TS1221 for regular generator function",
+      )
+  }
+}
+
+///|
+test "unit/generator/async-generator-method - async generator method in class" {
+  // async *method() syntax
+  let source =
+    #|class C {
+    #|    async *asyncGenerator() {
+    #|        yield 1;
+    #|    }
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => () // Should succeed
+    Err(diagnostics) =>
+      // Should NOT have TS1163 - yield IS inside a generator
+      assert_false(
+        has_error(diagnostics, 1163),
+        msg="yield in async generator method should NOT trigger TS1163",
+      )
+  }
+}
+
+///|
+test "unit/generator/TS1163-yield-outside-generator - yield outside generator triggers TS1163" {
+  // yield outside generator method should trigger TS1163
+  let source =
+    #|class C {
+    #|    regularMethod() {
+    #|        yield 1;
+    #|    }
+    #|}
+  let result = check_source(source)
+  match result {
+    Ok(_) => fail("Expected TS1163 error for yield outside generator")
+    Err(diagnostics) =>
+      assert_true(
+        has_error(diagnostics, 1163),
+        msg="yield outside generator should trigger TS1163",
+      )
   }
 }

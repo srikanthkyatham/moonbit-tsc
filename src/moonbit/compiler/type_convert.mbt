@@ -660,6 +660,7 @@ fn TypeChecker::create_type_info(self : TypeChecker) -> (TypeInfo, TypeChecker) 
     import_map: self.import_map,
     namespace_symbols: self.namespace_symbols,
     in_destructuring_pattern: self.in_destructuring_pattern,
+    no_implicit_any: self.no_implicit_any,
   }
   (info, new_checker)
 }

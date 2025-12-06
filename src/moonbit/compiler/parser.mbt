@@ -4701,6 +4701,65 @@ fn parse_class_member_with_decorators(
       }
     }
 
+    // Generator method: *method() { }
+    Star(star_loc) => {
+      let parser = advance_parser(parser)
+      match current_token(parser) {
+        Identifier(name, _) => {
+          let parser = advance_parser(parser)
+          // Type parameters
+          let (type_parameters, parser) = match current_token(parser) {
+            LessThan(_) => parse_type_parameters(parser)
+            _ => ([], parser)
+          }
+          // Parameters
+          let parser = match current_token(parser) {
+            OpenParen(_) => advance_parser(parser)
+            _ => parser
+          }
+          let (parameters, parser) = parse_parameter_list(parser)
+          // Return type
+          let (return_type, parser) = match current_token(parser) {
+            Colon(_) => {
+              let parser = advance_parser(parser)
+              match parse_type(parser) {
+                Ok((ty, p)) => (Some(ty), p)
+                Err(p) => (None, p)
+              }
+            }
+            _ => (None, parser)
+          }
+          // Body
+          let (body, parser) = match current_token(parser) {
+            OpenBrace(_) =>
+              match parse_function_body(parser) {
+                Ok((b, p)) => (Some(b), p)
+                Err(p) => (None, p)
+              }
+            Semicolon(_) => (None, advance_parser(parser))
+            _ => (None, parser)
+          }
+          acc.push(
+            Node::MethodDeclaration(MethodDeclaration::{
+              name,
+              type_parameters,
+              parameters,
+              return_type,
+              body,
+              decorators,
+              modifiers: [],
+              is_async: false,
+              is_generator: true,
+              is_optional: false,
+              location: star_loc,
+            }),
+          )
+          parse_class_members_aux(parser, acc)
+        }
+        _ => parse_class_members_aux(parser, acc)
+      }
+    }
+
     // Property or method
     Identifier(name, loc) => {
       let parser = advance_parser(parser)
