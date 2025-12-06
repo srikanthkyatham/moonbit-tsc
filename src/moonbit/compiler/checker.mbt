@@ -5485,11 +5485,14 @@ fn infer_method_type(
   }
 
   // Track generator function context for yield expressions
+  // For non-generator methods, we must reset generator_function_depth to 0
+  // to ensure yield in nested non-generator methods triggers TS1163
+  let saved_generator_depth = checker.generator_function_depth
   let checker = if method_decl.is_generator {
     let has_return_type = method_decl.return_type is Some(_)
     enter_generator_function(checker, has_return_type)
   } else {
-    checker
+    { ..checker, generator_function_depth: 0, generator_has_return_type: false }
   }
 
   // Build parameter list and add parameters to local scope
@@ -5544,11 +5547,11 @@ fn infer_method_type(
     None => checker
   }
 
-  // Exit generator function context if needed
+  // Exit generator function context or restore saved depth
   let checker = if method_decl.is_generator {
     exit_generator_function(checker)
   } else {
-    checker
+    { ..checker, generator_function_depth: saved_generator_depth }
   }
 
   // Exit async function context if needed
@@ -9329,6 +9332,16 @@ fn infer_function_expression_type(
     checker
   }
 
+  // Reset generator context for non-generator function expressions
+  // yield is not valid inside a non-generator function, even if nested in a generator
+  let saved_generator_depth = checker.generator_function_depth
+  let checker = if fe.is_generator {
+    let has_return_type = fe.return_type is Some(_)
+    enter_generator_function(checker, has_return_type)
+  } else {
+    { ..checker, generator_function_depth: 0, generator_has_return_type: false }
+  }
+
   // Build a function type from the function expression and add parameters to local scope
   let mut checker = checker
 
@@ -9430,6 +9443,13 @@ fn infer_function_expression_type(
 
   // Exit regular function context
   let checker = exit_regular_function(checker)
+
+  // Exit generator function context or restore saved depth
+  let checker = if fe.is_generator {
+    exit_generator_function(checker)
+  } else {
+    { ..checker, generator_function_depth: saved_generator_depth }
+  }
 
   // Exit async function context if needed
   let checker = if fe.is_async { exit_async_function(checker) } else { checker }
@@ -9730,6 +9750,11 @@ fn infer_arrow_function_type(
     checker
   }
 
+  // Arrow functions cannot be generators, so reset generator context
+  // This ensures yield inside arrow functions triggers TS1163
+  let saved_generator_depth = checker.generator_function_depth
+  let checker = { ..checker, generator_function_depth: 0, generator_has_return_type: false }
+
   // Build parameter list and add parameters to local scope
   let parameters = []
   let mut checker = checker
@@ -9798,6 +9823,9 @@ fn infer_arrow_function_type(
   } else {
     checker
   }
+
+  // Restore generator context
+  let checker = { ..checker, generator_function_depth: saved_generator_depth }
 
   // Exit arrow function context
   let checker = exit_arrow_function(checker)
@@ -11340,11 +11368,15 @@ fn check_function_declaration(
   }
 
   // Track generator function context for TS2764
+  // For non-generator functions, we must reset generator_function_depth to 0
+  // to ensure yield in nested non-generator functions triggers TS1163
+  let saved_generator_depth = checker.generator_function_depth
   let checker = if func.is_generator {
     let has_return_type = func.return_type is Some(_)
     enter_generator_function(checker, has_return_type)
   } else {
-    checker
+    // Reset generator context - yield is not valid in non-generator functions
+    { ..checker, generator_function_depth: 0, generator_has_return_type: false }
   }
 
   // Track regular function context (for 'arguments' object availability)
@@ -11363,11 +11395,12 @@ fn check_function_declaration(
     None => checker
   }
 
-  // Exit generator function context
+  // Exit generator function context or restore saved depth
   let checker = if func.is_generator {
     exit_generator_function(checker)
   } else {
-    checker
+    // Restore the saved generator context
+    { ..checker, generator_function_depth: saved_generator_depth }
   }
 
   // Exit async function context
