@@ -3960,6 +3960,134 @@ test "parse class expression with method" {
   }
 }
 
+///|
+test "parse decorated class expression" {
+  let source = "const MyClass = @dec class {}"
+  let tokens = tokens_from_source(source)
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        VariableStatement(vs) =>
+          match vs.declarations[0].initializer {
+            Some(ClassExpression(ce)) => {
+              assert_eq(ce.decorators.length(), 1)
+              match ce.decorators[0] {
+                Decorator(d) =>
+                  match d.expression {
+                    Identifier(id) => assert_eq(id.name, "dec")
+                    _ => assert_true(false)
+                  }
+                _ => assert_true(false)
+              }
+            }
+            _ => assert_true(false)
+          }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse class expression with multiple decorators" {
+  let source = "const MyClass = @dec1 @dec2 class {}"
+  let tokens = tokens_from_source(source)
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        VariableStatement(vs) =>
+          match vs.declarations[0].initializer {
+            Some(ClassExpression(ce)) => {
+              assert_eq(ce.decorators.length(), 2)
+            }
+            _ => assert_true(false)
+          }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse decorated named class expression" {
+  let source = "const MyClass = @dec class Foo {}"
+  let tokens = tokens_from_source(source)
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        VariableStatement(vs) =>
+          match vs.declarations[0].initializer {
+            Some(ClassExpression(ce)) => {
+              assert_eq(ce.decorators.length(), 1)
+              match ce.name {
+                Some(Identifier(id)) => assert_eq(id.name, "Foo")
+                _ => assert_true(false)
+              }
+            }
+            _ => assert_true(false)
+          }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse decorated class expression in parentheses" {
+  let source = "const x = (@dec class {})"
+  let tokens = tokens_from_source(source)
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      match source_file.statements[0] {
+        VariableStatement(vs) =>
+          match vs.declarations[0].initializer {
+            Some(ParenthesizedExpression(pe)) =>
+              match pe.expression {
+                ClassExpression(ce) => assert_eq(ce.decorators.length(), 1)
+                _ => assert_true(false)
+              }
+            _ => assert_true(false)
+          }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse exported const with decorated class expression" {
+  let source = "export const C = @dec class {};"
+  let tokens = tokens_from_source(source)
+  let result = parse_source_file(tokens, "test.ts")
+  match result {
+    Ok(source_file) => {
+      assert_eq(source_file.statements.length(), 1)
+      // export const is parsed as VariableStatement with modifiers
+      match source_file.statements[0] {
+        VariableStatement(vs) =>
+          match vs.declarations[0].initializer {
+            Some(ClassExpression(ce)) => assert_eq(ce.decorators.length(), 1)
+            _ => assert_true(false)
+          }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
 // ============================================================================
 // Meta Property Tests (import.meta, new.target)
 // ============================================================================

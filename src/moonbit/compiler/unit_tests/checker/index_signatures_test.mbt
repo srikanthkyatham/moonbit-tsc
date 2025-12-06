@@ -356,6 +356,37 @@ test "index/complex - class with index signature parsing" {
 }
 
 ///|
+test "index/complex - class with multiple index signatures" {
+  // Classes can have both number and string index signatures
+  let source =
+    #|class Points {
+    #|  [idx: number]: string;
+    #|  [key: string]: string;
+    #|}
+  let result = parse_only_index(source)
+  match result {
+    Ok(sf) => assert_true(sf.statements.length() > 0)
+    Err(_) => fail("Parse failed")
+  }
+}
+
+///|
+test "index/complex - class with index signature and properties" {
+  // Classes can have index signatures alongside regular properties and methods
+  let source =
+    #|class DataStore {
+    #|  [key: string]: any;
+    #|  length: number;
+    #|  getData(): string { return ""; }
+    #|}
+  let result = parse_only_index(source)
+  match result {
+    Ok(sf) => assert_true(sf.statements.length() > 0)
+    Err(_) => fail("Parse failed")
+  }
+}
+
+///|
 test "index/complex - interface extending with index" {
   let source =
     #|interface Base {

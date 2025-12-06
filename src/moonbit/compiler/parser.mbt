@@ -4840,8 +4840,65 @@ fn parse_class_member_with_decorators(
     }
 
     // Computed property name: ["computedName"]() or ["computedName"]: type
+    // OR Index signature: [key: type]: valueType
     OpenBracket(start_loc) => {
       let parser = advance_parser(parser)
+      // Check if this is an index signature: [identifier: type]: valueType
+      // Index signatures have pattern: Identifier ":" Type "]" ":"
+      let is_index_signature = match current_token(parser) {
+        Identifier(_, _) =>
+          match peek_token(parser) {
+            Colon(_) => true
+            _ => false
+          }
+        _ => false
+      }
+      if is_index_signature {
+        // Parse as index signature
+        let index_name = match current_token(parser) {
+          Identifier(n, _) => n
+          _ => ""
+        }
+        let parser = advance_parser(parser) // consume identifier
+        let parser = advance_parser(parser) // consume ':'
+        // Parse index type (string or number)
+        let (index_type, parser) = match parse_type(parser) {
+          Ok((t, p)) => (t, p)
+          Err(p) => return (acc, p)
+        }
+        // Expect closing bracket
+        let parser = match current_token(parser) {
+          CloseBracket(_) => advance_parser(parser)
+          _ => parser
+        }
+        // Expect colon for value type
+        let parser = match current_token(parser) {
+          Colon(_) => advance_parser(parser)
+          _ => parser
+        }
+        // Parse value type
+        let (value_type, parser) = match parse_type(parser) {
+          Ok((t, p)) => (t, p)
+          Err(p) => return (acc, p)
+        }
+        // Optional semicolon
+        let parser = match current_token(parser) {
+          Semicolon(_) => advance_parser(parser)
+          _ => parser
+        }
+        // Create index signature
+        acc.push(
+          Node::IndexSignatureDeclaration(IndexSignatureDeclaration::{
+            parameter_name: index_name,
+            parameter_type: index_type,
+            return_type: value_type,
+            is_readonly: false,
+            location: start_loc,
+          }),
+        )
+        return parse_class_members_aux(parser, acc)
+      }
+      // Not an index signature - parse as computed property
       // Parse the expression inside brackets
       match parse_expression(parser) {
         Ok((name_expr, parser)) => {

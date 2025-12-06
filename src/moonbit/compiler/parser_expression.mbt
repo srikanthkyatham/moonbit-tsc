@@ -1482,7 +1482,24 @@ fn parse_primary_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
     }
 
     // Class expression (e.g., class {} or class Foo {})
-    KeywordClass(start_loc) => parse_class_expression(parser, start_loc)
+    KeywordClass(start_loc) => parse_class_expression(parser, start_loc, [])
+
+    // Decorated class expression (e.g., @dec class {})
+    At(_) => {
+      let start_loc = current_token(parser).location()
+      let (decorators, parser) = parse_decorators(parser)
+      match current_token(parser) {
+        KeywordClass(_) => parse_class_expression(parser, start_loc, decorators)
+        _ =>
+          Err(
+            add_error(
+              parser,
+              "Decorators are only valid on class declarations",
+              current_token(parser).location(),
+            ),
+          )
+      }
+    }
 
     // JSX element or Type assertion with angle brackets (<Type>expr)
     LessThan(_) => {
@@ -1968,10 +1985,11 @@ fn parse_arrow_function_single_param(
 }
 
 ///|
-/// Parse class expression (e.g., class {} or class Foo {})
+/// Parse class expression (e.g., class {} or class Foo {} or @dec class {})
 fn parse_class_expression(
   parser : Parser,
   start_loc : SourceLocation,
+  decorators : Array[Node],
 ) -> Result[(Node, Parser), Parser] {
   let parser = advance_parser(parser) // consume 'class'
 
@@ -2010,7 +2028,7 @@ fn parse_class_expression(
                 heritage_clauses,
                 members,
                 is_abstract: false,
-                decorators: [],
+                decorators,
                 modifiers: [],
                 location: SourceLocation::new(
                   start_loc.file_path,
