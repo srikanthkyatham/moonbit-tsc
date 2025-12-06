@@ -395,8 +395,9 @@ fn parse_primary_type_with_readonly(
     // typeof in type position: typeof variable
     KeywordTypeOf(_) => {
       let parser = advance_parser(parser)
-      match current_token(parser) {
-        Identifier(id_name, id_loc) => {
+      // Handle identifiers and contextual keywords like 'yield' that can be variable names
+      match try_get_identifier_name(current_token(parser)) {
+        Some((id_name, id_loc)) => {
           let parser = advance_parser(parser)
           Ok(
             (
@@ -412,7 +413,7 @@ fn parse_primary_type_with_readonly(
             ),
           )
         }
-        _ =>
+        None =>
           Err(
             add_error(
               parser,
@@ -554,8 +555,9 @@ fn parse_primary_type_with_readonly(
         // typeof in type position: typeof variable
         let parser = advance_parser(parser)
         // Parse the expression/identifier being typeof'd
-        match current_token(parser) {
-          Identifier(id_name, id_loc) => {
+        // Handle identifiers and contextual keywords like 'yield' that can be variable names
+        match try_get_identifier_name(current_token(parser)) {
+          Some((id_name, id_loc)) => {
             let parser = advance_parser(parser)
             Ok(
               (
@@ -571,7 +573,7 @@ fn parse_primary_type_with_readonly(
               ),
             )
           }
-          _ =>
+          None =>
             Err(
               add_error(
                 parser,

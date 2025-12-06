@@ -1474,11 +1474,18 @@ fn parse_primary_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
     // Object literal
     OpenBrace(_) => parse_object_literal(parser)
 
-    // Function expression (e.g., function() {} or function foo() {})
+    // Function expression (e.g., function() {} or function foo() {} or function*() {})
     KeywordFunction(start_loc) => {
       let parser = advance_parser(parser) // consume 'function'
+      // Check for generator function expression: function*() {}
+      let (is_generator, parser) = match current_token(parser) {
+        Star(_) => (true, advance_parser(parser))
+        _ => (false, parser)
+      }
       let (name, parser) = parse_optional_function_name(parser)
-      parse_function_expression_body(parser, name, false, start_loc)
+      parse_function_expression_body_with_generator(
+        parser, name, false, is_generator, start_loc,
+      )
     }
 
     // Class expression (e.g., class {} or class Foo {})
@@ -1551,11 +1558,18 @@ fn parse_primary_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
     KeywordAsync(start_loc) => {
       let parser = advance_parser(parser) // consume 'async'
       match current_token(parser) {
-        // async function expression
+        // async function expression (including async generator: async function*())
         KeywordFunction(_) => {
           let parser = advance_parser(parser) // consume 'function'
+          // Check for async generator: async function*()
+          let (is_generator, parser) = match current_token(parser) {
+            Star(_) => (true, advance_parser(parser))
+            _ => (false, parser)
+          }
           let (name, parser) = parse_optional_function_name(parser)
-          parse_function_expression_body(parser, name, true, start_loc)
+          parse_function_expression_body_with_generator(
+            parser, name, true, is_generator, start_loc,
+          )
         }
         // async arrow function: async () => ... or async (params) => ...
         OpenParen(_) => parse_async_arrow_with_params(parser, start_loc)
@@ -1912,6 +1926,66 @@ fn parse_object_property(
         parser, name, start_loc, "numeric property name",
       )
     }
+    // getter with computed property name: get [expr]() { }
+    Identifier("get", _) => {
+      let parser = advance_parser(parser) // consume 'get'
+      match current_token(parser) {
+        OpenBracket(_) => {
+          let parser = advance_parser(parser) // consume [
+          match parse_assignment_expression(parser) {
+            Ok((name_expr, parser)) =>
+              match current_token(parser) {
+                CloseBracket(_) => {
+                  let parser = advance_parser(parser) // consume ]
+                  parse_computed_getter_body(parser, name_expr, start_loc)
+                }
+                _ =>
+                  Err(
+                    add_error_with_code(
+                      parser,
+                      ExpectedCloseBracket.to_message(),
+                      current_token(parser).location(),
+                      ExpectedCloseBracket,
+                    ),
+                  )
+              }
+            Err(parser) => Err(parser)
+          }
+        }
+        // Regular getter: get name() { } - or 'get' as property name
+        _ => parse_get_or_set_or_property(parser, "get", start_loc)
+      }
+    }
+    // setter with computed property name: set [expr](value) { }
+    Identifier("set", _) => {
+      let parser = advance_parser(parser) // consume 'set'
+      match current_token(parser) {
+        OpenBracket(_) => {
+          let parser = advance_parser(parser) // consume [
+          match parse_assignment_expression(parser) {
+            Ok((name_expr, parser)) =>
+              match current_token(parser) {
+                CloseBracket(_) => {
+                  let parser = advance_parser(parser) // consume ]
+                  parse_computed_setter_body(parser, name_expr, start_loc)
+                }
+                _ =>
+                  Err(
+                    add_error_with_code(
+                      parser,
+                      ExpectedCloseBracket.to_message(),
+                      current_token(parser).location(),
+                      ExpectedCloseBracket,
+                    ),
+                  )
+              }
+            Err(parser) => Err(parser)
+          }
+        }
+        // Regular setter: set name(value) { } - or 'set' as property name
+        _ => parse_get_or_set_or_property(parser, "set", start_loc)
+      }
+    }
     _ =>
       // Parse property name as identifier or reserved keyword
       // Reserved keywords are allowed as property names in object literals: { while: 1 }
@@ -2208,5 +2282,236 @@ fn parse_computed_method_body(
       )
     }
     Err(parser) => Err(parser)
+  }
+}
+
+///|
+/// Parse computed getter body: get [expr]() { }
+fn parse_computed_getter_body(
+  parser : Parser,
+  name_expr : Node,
+  start_loc : SourceLocation,
+) -> Result[(ObjectProperty, Parser), Parser] {
+  // Expect (
+  let parser = match current_token(parser) {
+    OpenParen(_) => advance_parser(parser)
+    _ => parser
+  }
+  let (parameters, parser) = parse_parameter_list(parser)
+  // Parse optional return type
+  let (return_type, parser) = parse_optional_return_type(parser)
+  // Parse getter body
+  match parse_function_body(parser) {
+    Ok((body, parser)) => {
+      let func_expr = FunctionExpression::{
+        name: None,
+        type_parameters: [],
+        parameters,
+        return_type,
+        body,
+        is_async: false,
+        is_generator: false,
+        location: start_loc,
+      }
+      Ok(
+        (
+          ObjectProperty::ComputedGetAccessor(name_expr, func_expr, start_loc),
+          parser,
+        ),
+      )
+    }
+    Err(parser) => Err(parser)
+  }
+}
+
+///|
+/// Parse computed setter body: set [expr](value) { }
+fn parse_computed_setter_body(
+  parser : Parser,
+  name_expr : Node,
+  start_loc : SourceLocation,
+) -> Result[(ObjectProperty, Parser), Parser] {
+  // Expect (
+  let parser = match current_token(parser) {
+    OpenParen(_) => advance_parser(parser)
+    _ => parser
+  }
+  let (parameters, parser) = parse_parameter_list(parser)
+  // Parse optional return type (though setters shouldn't have one)
+  let (return_type, parser) = parse_optional_return_type(parser)
+  // Parse setter body
+  match parse_function_body(parser) {
+    Ok((body, parser)) => {
+      let func_expr = FunctionExpression::{
+        name: None,
+        type_parameters: [],
+        parameters,
+        return_type,
+        body,
+        is_async: false,
+        is_generator: false,
+        location: start_loc,
+      }
+      Ok(
+        (
+          ObjectProperty::ComputedSetAccessor(name_expr, func_expr, start_loc),
+          parser,
+        ),
+      )
+    }
+    Err(parser) => Err(parser)
+  }
+}
+
+///|
+/// Parse get/set accessor or treat as property name
+fn parse_get_or_set_or_property(
+  parser : Parser,
+  accessor_name : String,
+  start_loc : SourceLocation,
+) -> Result[(ObjectProperty, Parser), Parser] {
+  // Check what comes after get/set
+  match current_token(parser) {
+    // Identifier follows - this is a getter/setter: get name() or set name(val)
+    Identifier(prop_name, _) => {
+      let parser = advance_parser(parser) // consume property name
+      match current_token(parser) {
+        OpenParen(_) => {
+          let parser = advance_parser(parser) // consume (
+          let (parameters, parser) = parse_parameter_list(parser)
+          let (return_type, parser) = parse_optional_return_type(parser)
+          match parse_function_body(parser) {
+            Ok((body, parser)) => {
+              let func_expr = FunctionExpression::{
+                name: None,
+                type_parameters: [],
+                parameters,
+                return_type,
+                body,
+                is_async: false,
+                is_generator: false,
+                location: start_loc,
+              }
+              if accessor_name == "get" {
+                Ok(
+                  (
+                    ObjectProperty::GetAccessor(prop_name, func_expr, start_loc),
+                    parser,
+                  ),
+                )
+              } else {
+                Ok(
+                  (
+                    ObjectProperty::SetAccessor(prop_name, func_expr, start_loc),
+                    parser,
+                  ),
+                )
+              }
+            }
+            Err(parser) => Err(parser)
+          }
+        }
+        // Not followed by ( - treat 'get'/'set' as property name
+        _ => parse_as_property_after_name(parser, accessor_name, start_loc)
+      }
+    }
+    // String literal property name: get "name"()
+    StringLiteral(prop_name, _) => {
+      let parser = advance_parser(parser) // consume string literal
+      match current_token(parser) {
+        OpenParen(_) => {
+          let parser = advance_parser(parser) // consume (
+          let (parameters, parser) = parse_parameter_list(parser)
+          let (return_type, parser) = parse_optional_return_type(parser)
+          match parse_function_body(parser) {
+            Ok((body, parser)) => {
+              let func_expr = FunctionExpression::{
+                name: None,
+                type_parameters: [],
+                parameters,
+                return_type,
+                body,
+                is_async: false,
+                is_generator: false,
+                location: start_loc,
+              }
+              if accessor_name == "get" {
+                Ok(
+                  (
+                    ObjectProperty::GetAccessor(prop_name, func_expr, start_loc),
+                    parser,
+                  ),
+                )
+              } else {
+                Ok(
+                  (
+                    ObjectProperty::SetAccessor(prop_name, func_expr, start_loc),
+                    parser,
+                  ),
+                )
+              }
+            }
+            Err(parser) => Err(parser)
+          }
+        }
+        _ => parse_as_property_after_name(parser, accessor_name, start_loc)
+      }
+    }
+    // Not followed by identifier or [ - treat 'get'/'set' as property name
+    _ => parse_as_property_after_name(parser, accessor_name, start_loc)
+  }
+}
+
+///|
+/// Parse as property after we've consumed the property name
+fn parse_as_property_after_name(
+  parser : Parser,
+  prop_name : String,
+  start_loc : SourceLocation,
+) -> Result[(ObjectProperty, Parser), Parser] {
+  match current_token(parser) {
+    // Method: get() { } or set() { }
+    OpenParen(_) => {
+      let parser = advance_parser(parser) // consume (
+      let (parameters, parser) = parse_parameter_list(parser)
+      let (return_type, parser) = parse_optional_return_type(parser)
+      match parse_function_body(parser) {
+        Ok((body, parser)) => {
+          let func_expr = FunctionExpression::{
+            name: None,
+            type_parameters: [],
+            parameters,
+            return_type,
+            body,
+            is_async: false,
+            is_generator: false,
+            location: start_loc,
+          }
+          Ok(
+            (
+              ObjectProperty::MethodDeclaration(prop_name, func_expr, start_loc),
+              parser,
+            ),
+          )
+        }
+        Err(parser) => Err(parser)
+      }
+    }
+    // Property: get: value or set: value
+    Colon(_) => {
+      let parser = advance_parser(parser) // consume :
+      match parse_assignment_expression(parser) {
+        Ok((value, parser)) =>
+          Ok(
+            (
+              ObjectProperty::PropertyAssignment(prop_name, value, start_loc),
+              parser,
+            ),
+          )
+        Err(parser) => Err(parser)
+      }
+    }
+    // Shorthand: { get } or { set }
+    _ => Ok((ObjectProperty::ShorthandProperty(prop_name, start_loc), parser))
   }
 }

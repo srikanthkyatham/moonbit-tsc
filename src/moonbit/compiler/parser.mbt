@@ -9481,6 +9481,8 @@ fn try_get_identifier_name(token : Token) -> (String, SourceLocation)? {
     KeywordNever(loc) => Some(("never", loc))
     KeywordUnknown(loc) => Some(("unknown", loc))
     KeywordUndefined(loc) => Some(("undefined", loc))
+    // yield can be an identifier outside of generators and strict mode
+    KeywordYield(loc) => Some(("yield", loc))
     _ => None
   }
 }

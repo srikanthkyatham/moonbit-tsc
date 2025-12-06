@@ -808,3 +808,164 @@ test "unit/parser/object-literal/computed-variable - method with variable as com
     }
   }
 }
+
+// ============================================================================
+// Yield as Identifier Tests
+// ============================================================================
+
+///|
+test "unit/parser/yield-identifier/var-yield - yield as variable name outside generator" {
+  let source =
+    #|var yield;
+  match parse_only(source) {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => {
+      println("Errors: \{diagnostics}")
+      assert_true(false)
+    }
+  }
+}
+
+///|
+test "unit/parser/yield-identifier/let-yield - yield as let variable" {
+  let source =
+    #|let yield = 1;
+  match parse_only(source) {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => {
+      println("Errors: \{diagnostics}")
+      assert_true(false)
+    }
+  }
+}
+
+///|
+test "unit/parser/yield-identifier/typeof-yield - typeof yield in type position" {
+  let source =
+    #|var yield;
+    #|function* g() {
+    #|    var v: typeof yield;
+    #|}
+  match parse_only(source) {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => {
+      println("Errors: \{diagnostics}")
+      assert_true(false)
+    }
+  }
+}
+
+// ============================================================================
+// Computed Getter/Setter with Yield Tests
+// ============================================================================
+
+///|
+test "unit/parser/object-literal/computed-getter - get [expr]() in object" {
+  let source =
+    #|function* g() {
+    #|    let x = {
+    #|        get [yield 0]() {
+    #|            return 0;
+    #|        }
+    #|    }
+    #|}
+  match parse_only(source) {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => {
+      println("Errors: \{diagnostics}")
+      assert_true(false)
+    }
+  }
+}
+
+///|
+test "unit/parser/object-literal/computed-setter - set [expr](val) in object" {
+  let source =
+    #|function* g() {
+    #|    let x = {
+    #|        set [yield 0](val) {
+    #|            console.log(val);
+    #|        }
+    #|    }
+    #|}
+  match parse_only(source) {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => {
+      println("Errors: \{diagnostics}")
+      assert_true(false)
+    }
+  }
+}
+
+// ============================================================================
+// Generator Function Expression Tests
+// ============================================================================
+
+///|
+test "unit/parser/generator-expr/basic - generator function expression" {
+  let source =
+    #|let x = function*() { yield 1; };
+  match parse_only(source) {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => {
+      println("Errors: \{diagnostics}")
+      assert_true(false)
+    }
+  }
+}
+
+///|
+test "unit/parser/generator-expr/named - named generator function expression" {
+  let source =
+    #|let x = function* gen() { yield 1; };
+  match parse_only(source) {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => {
+      println("Errors: \{diagnostics}")
+      assert_true(false)
+    }
+  }
+}
+
+///|
+test "unit/parser/generator-expr/iife - generator IIFE" {
+  let source =
+    #|let x = function*() { yield 1; }();
+  match parse_only(source) {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => {
+      println("Errors: \{diagnostics}")
+      assert_true(false)
+    }
+  }
+}
+
+///|
+test "unit/parser/generator-expr/yield-star-iife - yield * generator IIFE" {
+  let source =
+    #|function* g() {
+    #|    yield * function* () {
+    #|        yield 1;
+    #|    } ();
+    #|}
+  match parse_only(source) {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => {
+      println("Errors: \{diagnostics}")
+      assert_true(false)
+    }
+  }
+}
+
+///|
+test "unit/parser/generator-expr/async-generator - async generator function expression" {
+  let source =
+    #|let x = async function*() { yield 1; };
+  match parse_only(source) {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => {
+      println("Errors: \{diagnostics}")
+      assert_true(false)
+    }
+  }
+}

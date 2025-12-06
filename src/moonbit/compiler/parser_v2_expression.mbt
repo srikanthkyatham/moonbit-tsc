@@ -426,6 +426,40 @@ fn parse_function_expression_body(
 }
 
 ///|
+/// Parse function expression body with generator support
+/// Used for both regular, async, and generator function expressions
+fn parse_function_expression_body_with_generator(
+  parser : Parser,
+  name : String?,
+  is_async : Bool,
+  is_generator : Bool,
+  start_loc : SourceLocation,
+) -> Result[(Node, Parser), Parser] {
+  // Expect opening paren
+  match expect(parser, fn(t) { matches_open_paren(t) }) {
+    Ok(parser) => {
+      let parser = advance_parser(parser)
+      let (params, parser) = parse_parameter_list(parser)
+      let (return_type, parser) = parse_optional_return_type(parser)
+      match parse_function_body(parser) {
+        Ok((body, parser)) =>
+          Ok(
+            (
+              make_function_expression(
+                name, params, return_type, body, is_async, is_generator,
+                start_loc,
+              ),
+              parser,
+            ),
+          )
+        Err(parser) => Err(parser)
+      }
+    }
+    Err(parser) => Err(parser)
+  }
+}
+
+///|
 /// Parse async arrow function with parenthesized parameters
 fn parse_async_arrow_with_params(
   parser : Parser,
