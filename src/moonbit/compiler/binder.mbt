@@ -1883,6 +1883,33 @@ fn bind_object_properties_aux(
         let binder = bind_expression(binder, name_expr)
         bind_expression(binder, value)
       }
+      ComputedMethodDeclaration(name_expr, func, _) => {
+        let binder = bind_expression(binder, name_expr)
+        let binder = push_scope(binder)
+        let binder = push_container(binder, ContainerKind::Function)
+        let binder = bind_parameters(binder, func.parameters)
+        let binder = bind_statement(binder, func.body)
+        let binder = pop_container(binder)
+        pop_scope(binder)
+      }
+      ComputedGetAccessor(name_expr, func, _) => {
+        let binder = bind_expression(binder, name_expr)
+        let binder = push_scope(binder)
+        let binder = push_container(binder, ContainerKind::Function)
+        let binder = bind_parameters(binder, func.parameters)
+        let binder = bind_statement(binder, func.body)
+        let binder = pop_container(binder)
+        pop_scope(binder)
+      }
+      ComputedSetAccessor(name_expr, func, _) => {
+        let binder = bind_expression(binder, name_expr)
+        let binder = push_scope(binder)
+        let binder = push_container(binder, ContainerKind::Function)
+        let binder = bind_parameters(binder, func.parameters)
+        let binder = bind_statement(binder, func.body)
+        let binder = pop_container(binder)
+        pop_scope(binder)
+      }
       _ => binder
     }
     bind_object_properties_aux(binder, properties, index + 1)

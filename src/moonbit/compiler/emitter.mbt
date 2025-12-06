@@ -2533,6 +2533,27 @@ fn emit_object_literal_expression(
           emit_function_expression(func_expr, ctx)
       ComputedPropertyAssignment(name_expr, value, _) =>
         result = result + "[" + emit(name_expr, ctx) + "]: " + emit(value, ctx)
+      ComputedMethodDeclaration(name_expr, func_expr, _) => {
+        let gen_prefix = if func_expr.is_generator { "*" } else { "" }
+        result = result +
+          gen_prefix +
+          "[" +
+          emit(name_expr, ctx) +
+          "]" +
+          emit_function_expression(func_expr, ctx)
+      }
+      ComputedGetAccessor(name_expr, func_expr, _) =>
+        result = result +
+          "get [" +
+          emit(name_expr, ctx) +
+          "]" +
+          emit_function_expression(func_expr, ctx)
+      ComputedSetAccessor(name_expr, func_expr, _) =>
+        result = result +
+          "set [" +
+          emit(name_expr, ctx) +
+          "]" +
+          emit_function_expression(func_expr, ctx)
     }
     if i < ole.properties.length() - 1 {
       result = result + ", "

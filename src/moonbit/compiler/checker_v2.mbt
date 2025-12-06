@@ -342,6 +342,19 @@ fn infer_object_literal_v2(
         let result = infer_expr_v2(env, value)
         all_errors.append(result.errors)
       }
+      ComputedMethodDeclaration(_, func, _) => {
+        // For computed methods, we can't statically know the key
+        let result = infer_function_v2(env, func)
+        all_errors.append(result.errors)
+      }
+      ComputedGetAccessor(_, func, _) => {
+        let result = infer_function_v2(env, func)
+        all_errors.append(result.errors)
+      }
+      ComputedSetAccessor(_, func, _) => {
+        let result = infer_function_v2(env, func)
+        all_errors.append(result.errors)
+      }
     }
   }
   let obj_ty = ObjectTypeV2::{
@@ -459,6 +472,18 @@ fn check_object_literal_v2(
       }
       ComputedPropertyAssignment(_, value, _) => {
         let result = infer_expr_v2(env, value)
+        all_errors.append(result.errors)
+      }
+      ComputedMethodDeclaration(_, func, _) => {
+        let result = infer_function_v2(env, func)
+        all_errors.append(result.errors)
+      }
+      ComputedGetAccessor(_, func, _) => {
+        let result = infer_function_v2(env, func)
+        all_errors.append(result.errors)
+      }
+      ComputedSetAccessor(_, func, _) => {
+        let result = infer_function_v2(env, func)
         all_errors.append(result.errors)
       }
     }

@@ -665,6 +665,9 @@ pub enum ObjectProperty {
   GetAccessor(String, FunctionExpression, SourceLocation)
   SetAccessor(String, FunctionExpression, SourceLocation)
   ComputedPropertyAssignment(Node, Node, SourceLocation) // [expression]: value
+  ComputedMethodDeclaration(Node, FunctionExpression, SourceLocation) // [expression]() { }
+  ComputedGetAccessor(Node, FunctionExpression, SourceLocation) // get [expression]() { }
+  ComputedSetAccessor(Node, FunctionExpression, SourceLocation) // set [expression]() { }
 } derive(Show)
 
 ///|

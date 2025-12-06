@@ -9715,6 +9715,69 @@ fn infer_object_literal_type(
         }
         checker = c
       }
+      ComputedMethodDeclaration(name_expr, func_expr, _) => {
+        // Computed method: { [expr]() { ... } }
+        let key = get_property_name(name_expr)
+        let key = if key == "" { "[computed]" } else { key }
+        let (_, c) = infer_type(checker, name_expr)
+        let (method_type, c) = infer_function_expression_type(c, func_expr)
+        properties.set(key, {
+          name: key,
+          prop_type: method_type,
+          is_optional: false,
+          is_readonly: false,
+        })
+        checker = c
+      }
+      ComputedGetAccessor(name_expr, func_expr, _) => {
+        // Computed getter: { get [expr]() { ... } }
+        let key = get_property_name(name_expr)
+        let key = if key == "" { "[computed]" } else { key }
+        let (_, c) = infer_type(checker, name_expr)
+        let (getter_type, c) = infer_function_expression_type(c, func_expr)
+        let prop_type = match getter_type {
+          Function(func_type) => func_type.return_type
+          _ => getter_type
+        }
+        properties.set(key, {
+          name: key,
+          prop_type,
+          is_optional: false,
+          is_readonly: true,
+        })
+        checker = c
+      }
+      ComputedSetAccessor(name_expr, func_expr, _) => {
+        // Computed setter: { set [expr](value) { ... } }
+        let key = get_property_name(name_expr)
+        let key = if key == "" { "[computed]" } else { key }
+        let (_, c) = infer_type(checker, name_expr)
+        let (setter_type, c) = infer_function_expression_type(c, func_expr)
+        let prop_type = match setter_type {
+          Function(func_type) =>
+            if func_type.parameters.length() > 0 {
+              func_type.parameters[0].param_type
+            } else {
+              let (t, _) = any_type(c)
+              t
+            }
+          _ => {
+            let (t, _) = any_type(c)
+            t
+          }
+        }
+        match properties.get(key) {
+          Some(_) => ()
+          None =>
+            properties.set(key, {
+              name: key,
+              prop_type,
+              is_optional: false,
+              is_readonly: false,
+            })
+        }
+        checker = c
+      }
     }
   }
   let (info, checker) = create_type_info(checker)
@@ -11973,6 +12036,18 @@ fn contains_super_call(node : Node) -> Bool {
             }
           ComputedPropertyAssignment(_, value, _) =>
             if contains_super_call(value) {
+              return true
+            }
+          ComputedMethodDeclaration(_, func, _) =>
+            if contains_super_call(func.body) {
+              return true
+            }
+          ComputedGetAccessor(_, func, _) =>
+            if contains_super_call(func.body) {
+              return true
+            }
+          ComputedSetAccessor(_, func, _) =>
+            if contains_super_call(func.body) {
               return true
             }
         }
@@ -14352,6 +14427,18 @@ fn check_property_forward_reference(
               checker, value_expr, uninitialized_props,
             )
           }
+          ComputedMethodDeclaration(key_expr, _, _) =>
+            checker = check_property_forward_reference(
+              checker, key_expr, uninitialized_props,
+            )
+          ComputedGetAccessor(key_expr, _, _) =>
+            checker = check_property_forward_reference(
+              checker, key_expr, uninitialized_props,
+            )
+          ComputedSetAccessor(key_expr, _, _) =>
+            checker = check_property_forward_reference(
+              checker, key_expr, uninitialized_props,
+            )
         }
       }
       checker

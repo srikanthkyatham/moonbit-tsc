@@ -1781,7 +1781,7 @@ fn parse_object_property(
 ) -> Result[(ObjectProperty, Parser), Parser] {
   let start_loc = current_token(parser).location()
 
-  // Check for spread property or computed property
+  // Check for spread property, generator method, or computed property
   match current_token(parser) {
     DotDotDot(_) => {
       let parser = advance_parser(parser) // consume ...
@@ -1791,8 +1791,56 @@ fn parse_object_property(
         Err(parser) => Err(parser)
       }
     }
+    // Generator method: *name() { } or *[expr]() { }
+    Star(_) => {
+      let parser = advance_parser(parser) // consume *
+      match current_token(parser) {
+        // Generator method with computed name: *[expr]() { }
+        OpenBracket(_) => {
+          let parser = advance_parser(parser) // consume [
+          match parse_assignment_expression(parser) {
+            Ok((name_expr, parser)) =>
+              match current_token(parser) {
+                CloseBracket(_) => {
+                  let parser = advance_parser(parser) // consume ]
+                  parse_computed_method_body(
+                    parser, name_expr, start_loc, false, true,
+                  )
+                }
+                _ =>
+                  Err(
+                    add_error_with_code(
+                      parser,
+                      ExpectedCloseBracket.to_message(),
+                      current_token(parser).location(),
+                      ExpectedCloseBracket,
+                    ),
+                  )
+              }
+            Err(parser) => Err(parser)
+          }
+        }
+        // Generator method with identifier name: *name() { }
+        _ =>
+          match try_get_property_name_with_reserved(current_token(parser)) {
+            Some((prop_name, _, _)) => {
+              let parser = advance_parser(parser)
+              parse_method_body(parser, prop_name, start_loc, false, true)
+            }
+            None =>
+              Err(
+                add_error_with_code(
+                  parser,
+                  "Property name expected after '*'",
+                  current_token(parser).location(),
+                  IdentifierExpected,
+                ),
+              )
+          }
+      }
+    }
     OpenBracket(_) => {
-      // Computed property: [expression]: value
+      // Computed property: [expression]: value or [expression]() { }
       let parser = advance_parser(parser) // consume [
       match parse_assignment_expression(parser) {
         Ok((name_expr, parser)) =>
@@ -1800,6 +1848,17 @@ fn parse_object_property(
             CloseBracket(_) => {
               let parser = advance_parser(parser) // consume ]
               match current_token(parser) {
+                // Computed method: [expr]() { }
+                OpenParen(_) =>
+                  parse_computed_method_body(
+                    parser, name_expr, start_loc, false, false,
+                  )
+                // Computed property with type parameters: [expr]<T>() { }
+                LessThan(_) =>
+                  parse_computed_method_body(
+                    parser, name_expr, start_loc, false, false,
+                  )
+                // Computed property assignment: [expr]: value
                 Colon(_) => {
                   let parser = advance_parser(parser) // consume :
                   match parse_assignment_expression(parser) {
@@ -2060,5 +2119,94 @@ fn parse_class_expression(
           ExpectedOpenBrace,
         ),
       )
+  }
+}
+
+///|
+/// Parse method body for object literal methods with identifier name
+fn parse_method_body(
+  parser : Parser,
+  name : String,
+  start_loc : SourceLocation,
+  is_async : Bool,
+  is_generator : Bool,
+) -> Result[(ObjectProperty, Parser), Parser] {
+  // Parse type parameters if present
+  let (type_parameters, parser) = match current_token(parser) {
+    LessThan(_) => parse_type_parameters(parser)
+    _ => ([], parser)
+  }
+  // Parse parameters
+  let parser = match current_token(parser) {
+    OpenParen(_) => advance_parser(parser)
+    _ => parser
+  }
+  let (parameters, parser) = parse_parameter_list(parser)
+  // Parse optional return type
+  let (return_type, parser) = parse_optional_return_type(parser)
+  // Parse method body
+  match parse_function_body(parser) {
+    Ok((body, parser)) => {
+      let func_expr = FunctionExpression::{
+        name: None,
+        type_parameters,
+        parameters,
+        return_type,
+        body,
+        is_async,
+        is_generator,
+        location: start_loc,
+      }
+      Ok((ObjectProperty::MethodDeclaration(name, func_expr, start_loc), parser))
+    }
+    Err(parser) => Err(parser)
+  }
+}
+
+///|
+/// Parse method body for computed property methods [expr]() { }
+fn parse_computed_method_body(
+  parser : Parser,
+  name_expr : Node,
+  start_loc : SourceLocation,
+  is_async : Bool,
+  is_generator : Bool,
+) -> Result[(ObjectProperty, Parser), Parser] {
+  // Parse type parameters if present
+  let (type_parameters, parser) = match current_token(parser) {
+    LessThan(_) => parse_type_parameters(parser)
+    _ => ([], parser)
+  }
+  // Parse parameters
+  let parser = match current_token(parser) {
+    OpenParen(_) => advance_parser(parser)
+    _ => parser
+  }
+  let (parameters, parser) = parse_parameter_list(parser)
+  // Parse optional return type
+  let (return_type, parser) = parse_optional_return_type(parser)
+  // Parse method body
+  match parse_function_body(parser) {
+    Ok((body, parser)) => {
+      let func_expr = FunctionExpression::{
+        name: None,
+        type_parameters,
+        parameters,
+        return_type,
+        body,
+        is_async,
+        is_generator,
+        location: start_loc,
+      }
+      Ok(
+        (
+          ObjectProperty::ComputedMethodDeclaration(
+            name_expr, func_expr, start_loc,
+          ),
+          parser,
+        ),
+      )
+    }
+    Err(parser) => Err(parser)
   }
 }

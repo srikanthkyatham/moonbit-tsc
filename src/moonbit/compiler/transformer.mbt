@@ -1957,6 +1957,33 @@ fn transform_object_literal_expression(
           transform(value, ctx),
           loc,
         )
+      ComputedMethodDeclaration(name_expr, func, loc) =>
+        match transform_function_expression(func, ctx) {
+          FunctionExpression(fe) =>
+            ComputedMethodDeclaration(transform(name_expr, ctx), fe, loc)
+          _ =>
+            abort(
+              "transform_function_expression should return FunctionExpression",
+            )
+        }
+      ComputedGetAccessor(name_expr, func, loc) =>
+        match transform_function_expression(func, ctx) {
+          FunctionExpression(fe) =>
+            ComputedGetAccessor(transform(name_expr, ctx), fe, loc)
+          _ =>
+            abort(
+              "transform_function_expression should return FunctionExpression",
+            )
+        }
+      ComputedSetAccessor(name_expr, func, loc) =>
+        match transform_function_expression(func, ctx) {
+          FunctionExpression(fe) =>
+            ComputedSetAccessor(transform(name_expr, ctx), fe, loc)
+          _ =>
+            abort(
+              "transform_function_expression should return FunctionExpression",
+            )
+        }
     }
     transformed_properties.push(transformed_prop)
   }

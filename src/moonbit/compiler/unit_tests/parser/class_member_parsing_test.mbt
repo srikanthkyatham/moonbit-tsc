@@ -700,3 +700,111 @@ test "unit/parser/class-members/generator - async generator function outside cla
     }
   }
 }
+
+// ============================================================================
+// Object Literal Method Parsing Tests
+// ============================================================================
+
+///|
+test "unit/parser/object-literal/generator-method - basic generator method" {
+  let source =
+    #|let x = {
+    #|  *gen() {
+    #|    yield 1;
+    #|  }
+    #|};
+  match parse_only(source) {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => {
+      println("Errors: \{diagnostics}")
+      assert_true(false)
+    }
+  }
+}
+
+///|
+test "unit/parser/object-literal/computed-method - method with computed name" {
+  let source =
+    #|let x = {
+    #|  ["name"]() {
+    #|    return 1;
+    #|  }
+    #|};
+  match parse_only(source) {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => {
+      println("Errors: \{diagnostics}")
+      assert_true(false)
+    }
+  }
+}
+
+///|
+test "unit/parser/object-literal/generator-computed - generator with computed name" {
+  let source =
+    #|let x = {
+    #|  *["gen"]() {
+    #|    yield 1;
+    #|  }
+    #|};
+  match parse_only(source) {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => {
+      println("Errors: \{diagnostics}")
+      assert_true(false)
+    }
+  }
+}
+
+///|
+test "unit/parser/object-literal/symbol-iterator - generator with Symbol.iterator" {
+  let source =
+    #|let x = {
+    #|  *[Symbol.iterator]() {
+    #|    yield 1;
+    #|  }
+    #|};
+  match parse_only(source) {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => {
+      println("Errors: \{diagnostics}")
+      assert_true(false)
+    }
+  }
+}
+
+///|
+test "unit/parser/object-literal/mixed-methods - regular and generator methods" {
+  let source =
+    #|let x = {
+    #|  regular() { return 1; },
+    #|  *gen() { yield 2; },
+    #|  ["computed"]() { return 3; },
+    #|  *["genComputed"]() { yield 4; }
+    #|};
+  match parse_only(source) {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => {
+      println("Errors: \{diagnostics}")
+      assert_true(false)
+    }
+  }
+}
+
+///|
+test "unit/parser/object-literal/computed-variable - method with variable as computed name" {
+  let source =
+    #|const key = "method";
+    #|let x = {
+    #|  [key]() {
+    #|    return 1;
+    #|  }
+    #|};
+  match parse_only(source) {
+    Ok(_) => assert_true(true)
+    Err(diagnostics) => {
+      println("Errors: \{diagnostics}")
+      assert_true(false)
+    }
+  }
+}
