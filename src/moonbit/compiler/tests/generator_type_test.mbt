@@ -279,3 +279,56 @@ test "object with generator method" {
     Err(_) => fail("Expected object with generator method to pass")
   }
 }
+
+///|
+test "yield* from object with Symbol.iterator" {
+  let source =
+    #|function* g(): IterableIterator<number> {
+    #|    yield * {
+    #|        *[Symbol.iterator]() {
+    #|            yield 1;
+    #|            yield 2;
+    #|        }
+    #|    };
+    #|}
+  let result = @compiler.type_check(source, "test.ts")
+  match result {
+    Ok(_) => () // Expected to pass
+    Err(_) => fail("Expected yield* from Symbol.iterator to pass")
+  }
+}
+
+///|
+test "yield* from object with Symbol.iterator and function type" {
+  let source =
+    #|function* g(): IterableIterator<(x: string) => number> {
+    #|    yield * {
+    #|        *[Symbol.iterator]() {
+    #|            yield x => x.length;
+    #|        }
+    #|    };
+    #|}
+  let result = @compiler.type_check(source, "test.ts")
+  match result {
+    Ok(_) => () // Expected to pass
+    Err(_) => fail("Expected yield* from Symbol.iterator with function type to pass")
+  }
+}
+
+///|
+test "yield* from variable with Symbol.iterator" {
+  let source =
+    #|const obj = {
+    #|    *[Symbol.iterator]() {
+    #|        yield (x: string) => x.length;
+    #|    }
+    #|};
+    #|function* g(): IterableIterator<(x: string) => number> {
+    #|    yield * obj;
+    #|}
+  let result = @compiler.type_check(source, "test.ts")
+  match result {
+    Ok(_) => () // Expected to pass
+    Err(_) => fail("Expected yield* from variable with Symbol.iterator to pass")
+  }
+}

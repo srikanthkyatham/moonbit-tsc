@@ -511,17 +511,7 @@ fn collect_yield_type(
   }
   // For yield*, extract element type from the iterable
   let type_to_collect = if is_delegate {
-    // Simple inline extraction for Array types
-    match yield_type {
-      Array(arr) => arr.element_type
-      Type::TypeReference(ref_type) =>
-        if ref_type.name == "Array" && ref_type.type_arguments.length() > 0 {
-          ref_type.type_arguments[0]
-        } else {
-          yield_type
-        }
-      _ => yield_type
-    }
+    extract_yield_delegate_element_type(yield_type)
   } else {
     yield_type
   }
@@ -529,6 +519,63 @@ fn collect_yield_type(
   let new_collected = checker.collected_yield_types.copy()
   new_collected.push(type_to_collect)
   { ..checker, collected_yield_types: new_collected }
+}
+
+///|
+/// Extract the element type from an iterable type for yield* collection
+/// For yield*, we need to know what type the iterable produces
+fn extract_yield_delegate_element_type(t : Type) -> Type {
+  match t {
+    // Array types - element is the array element type
+    Array(arr) => arr.element_type
+    // TypeReference - check for known iterable types
+    Type::TypeReference(ref_type) => {
+      if ref_type.type_arguments.length() > 0 {
+        // Array<T>, Set<T>, Map<K,V> (first arg), Generator<T>, Iterator<T>, Iterable<T>, IterableIterator<T>
+        if ref_type.name == "Array" ||
+          ref_type.name == "Set" ||
+          ref_type.name == "Generator" ||
+          ref_type.name == "Iterator" ||
+          ref_type.name == "Iterable" ||
+          ref_type.name == "IterableIterator" {
+          ref_type.type_arguments[0]
+        } else if ref_type.name == "Map" && ref_type.type_arguments.length() >= 2 {
+          // Map yields [K, V] tuples - just use any for now
+          t
+        } else {
+          t
+        }
+      } else {
+        t
+      }
+    }
+    // Object types with Symbol.iterator - check for generator methods
+    Object(obj) => {
+      // Check if this object has call signatures (generator function type)
+      if obj.call_signatures.length() > 0 {
+        let sig = obj.call_signatures[0]
+        // If the call signature returns a Generator/Iterator, extract its element type
+        match sig.return_type {
+          Type::TypeReference(ret_ref) =>
+            if (ret_ref.name == "Generator" ||
+              ret_ref.name == "Iterator" ||
+              ret_ref.name == "IterableIterator") &&
+              ret_ref.type_arguments.length() > 0 {
+              ret_ref.type_arguments[0]
+            } else {
+              t
+            }
+          _ => t
+        }
+      } else {
+        // Anonymous object literals with *[Symbol.iterator]() are considered iterables
+        // Their element type depends on what Symbol.iterator yields
+        // For now, be permissive and return the object type
+        t
+      }
+    }
+    _ => t
+  }
 }
 
 ///|
@@ -12651,6 +12698,48 @@ fn extract_iterable_element_type(
       } else {
         (None, checker)
       }
+    Object(obj) => {
+      // Check if this object has a [Symbol.iterator]() method
+      // Symbol.iterator can be represented in different ways: "__@iterator", etc.
+      let mut iterator_method_type : Type? = None
+      for entry in obj.properties {
+        let (prop_name, prop) = entry
+        // Check for various representations of Symbol.iterator
+        if prop_name.contains("iterator") ||
+          prop_name.contains("Iterator") ||
+          prop_name == "__@iterator" {
+          iterator_method_type = Some(prop.prop_type)
+          break
+        }
+      }
+
+      // If we found the iterator method, extract its return type
+      match iterator_method_type {
+        Some(Function(func)) => {
+          // The iterator method returns an iterator/generator
+          // Extract the element type from the return type
+          let (elem_type, checker) = extract_iterable_element_type(
+            checker,
+            func.return_type,
+          )
+          (elem_type, checker)
+        }
+        // Handle case where the property type is already resolved to a TypeReference
+        Some(TypeReference(tr)) => {
+          // This shouldn't normally happen for a method, but handle it
+          if (tr.name == "Generator" ||
+          tr.name == "Iterable" ||
+          tr.name == "Iterator" ||
+          tr.name == "IterableIterator") &&
+          tr.type_arguments.length() > 0 {
+            (Some(tr.type_arguments[0]), checker)
+          } else {
+            (None, checker)
+          }
+        }
+        _ => (None, checker)
+      }
+    }
     _ => (None, checker)
   }
 }
@@ -12667,9 +12756,14 @@ fn check_generator_return_type_assignability(
   // Collect yield types from the function body
   let (yield_types, checker) = collect_yield_types_from_body(checker, func.body)
 
-  // Determine the combined yield type (void if no yields)
+  // Determine the combined yield type
+  // For empty generators, infer yield type from Iterable<T> in return type if present
   let (yield_type, checker) = if yield_types.length() == 0 {
-    void_type(checker)
+    // Try to infer from Iterable<T> in return type
+    match get_iterable_type_argument(checker, declared_return_type) {
+      (Some(iterable_arg), c) => (iterable_arg, c)
+      (None, c) => void_type(c)
+    }
   } else if yield_types.length() == 1 {
     (yield_types[0], checker)
   } else {
@@ -12716,6 +12810,59 @@ fn create_generator_type(checker : TypeChecker, yield_type : Type) -> (Type, Typ
     }),
     checker,
   )
+}
+
+///|
+/// Get the type argument from Iterable<T> in the return type
+/// This is used to infer the yield type for empty generators
+fn get_iterable_type_argument(
+  checker : TypeChecker,
+  t : Type,
+) -> (Type?, TypeChecker) {
+  match t {
+    TypeReference(tr) => {
+      // Direct Iterable<T> reference
+      if tr.name == "Iterable" && tr.type_arguments.length() > 0 {
+        return (Some(tr.type_arguments[0]), checker)
+      }
+      // Check if it's an interface that extends Iterable<T>
+      match lookup_symbol(checker, tr.name) {
+        Some(symbol) =>
+          match symbol.kind {
+            Interface =>
+              match symbol.value_declaration {
+                Some(InterfaceDeclaration(iface)) => {
+                  // Check heritage clauses for Iterable<T>
+                  for heritage in iface.heritage_clauses {
+                    for type_node in heritage.types {
+                      // Heritage types can be TypeReference nodes
+                      match type_node {
+                        TypeReference(type_ref) =>
+                          if type_ref.type_name == "Iterable" &&
+                            type_ref.type_arguments.length() > 0 {
+                            match get_type_from_type_node(
+                              checker,
+                              type_ref.type_arguments[0],
+                            ) {
+                              (Some(arg_type), c) => return (Some(arg_type), c)
+                              (None, _) => ()
+                            }
+                          }
+                        _ => ()
+                      }
+                    }
+                  }
+                  (None, checker)
+                }
+                _ => (None, checker)
+              }
+            _ => (None, checker)
+          }
+        None => (None, checker)
+      }
+    }
+    _ => (None, checker)
+  }
 }
 
 ///|
@@ -17247,6 +17394,21 @@ fn get_property_name(node : Node) -> String {
   match node {
     Identifier(id) => id.name
     StringLiteral(s) => s.value
+    // Handle Symbol.iterator as a special case
+    PropertyAccessExpression(pae) => {
+      match pae.expression {
+        Identifier(obj_id) if obj_id.name == "Symbol" => {
+          if pae.name == "iterator" {
+            "__@iterator"
+          } else if pae.name == "asyncIterator" {
+            "__@asyncIterator"
+          } else {
+            ""
+          }
+        }
+        _ => ""
+      }
+    }
     _ => ""
   }
 }
