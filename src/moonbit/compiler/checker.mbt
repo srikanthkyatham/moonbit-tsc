@@ -6890,7 +6890,7 @@ fn get_binary_type_guard(
     }
     InstanceOf =>
       // x instanceof Class
-      get_instanceof_guard(bin.left, bin.right)
+      get_instanceof_guard_with_type(checker, bin.left, bin.right)
     _ => None
   }
 }
@@ -6943,15 +6943,27 @@ fn get_null_guard(left : Node, right : Node) -> TypeGuardInfo? {
 
 ///|
 /// Get instanceof guard: x instanceof Class
-fn get_instanceof_guard(left : Node, right : Node) -> TypeGuardInfo? {
+/// Creates the class type for narrowing when x instanceof Class is true
+fn get_instanceof_guard_with_type(
+  checker : TypeChecker,
+  left : Node,
+  right : Node,
+) -> TypeGuardInfo? {
   match (left, right) {
-    (Identifier(id), Identifier(_)) =>
-      // Return guard info - actual type narrowing would require symbol lookup
+    (Identifier(id), Identifier(class_id)) => {
+      // Create TypeReference for the class
+      let (info, _) = create_type_info(checker)
+      let class_type = Type::TypeReference({
+        name: class_id.name,
+        type_arguments: [],
+        info,
+      })
       Some({
         parameter_name: id.name,
-        type_when_true: None, // Would be the class type
-        type_when_false: None,
+        type_when_true: Some(class_type),
+        type_when_false: None, // Could exclude the class type from union
       })
+    }
     _ => None
   }
 }
@@ -7500,6 +7512,75 @@ fn lookup_property_in_type(
           }
       }
     TypeReference(type_ref) => {
+      // Handle built-in Promise methods
+      if type_ref.name == "Promise" || type_ref.name == "PromiseLike" {
+        match prop_name {
+          "then" => {
+            // then<TResult1, TResult2>(onfulfilled?, onrejected?): Promise<TResult1 | TResult2>
+            // For simplicity, return a function that returns Promise<any>
+            let (any_t, checker) = any_type(checker)
+            let (info, checker) = create_type_info(checker)
+            let then_return = Type::TypeReference({
+              name: "Promise",
+              type_arguments: [any_t],
+              info,
+            })
+            let (fn_info, checker) = create_type_info(checker)
+            let then_type = Type::Function({
+              parameters: [
+                { name: "onfulfilled", param_type: any_t, is_optional: true, is_rest: false },
+                { name: "onrejected", param_type: any_t, is_optional: true, is_rest: false },
+              ],
+              return_type: then_return,
+              info: fn_info,
+            })
+            return (Some(then_type), checker)
+          }
+          "catch" => {
+            // catch<TResult>(onrejected?): Promise<T | TResult>
+            let (any_t, checker) = any_type(checker)
+            let (info, checker) = create_type_info(checker)
+            let catch_return = Type::TypeReference({
+              name: "Promise",
+              type_arguments: [any_t],
+              info,
+            })
+            let (fn_info, checker) = create_type_info(checker)
+            let catch_type = Type::Function({
+              parameters: [
+                { name: "onrejected", param_type: any_t, is_optional: true, is_rest: false },
+              ],
+              return_type: catch_return,
+              info: fn_info,
+            })
+            return (Some(catch_type), checker)
+          }
+          "finally" => {
+            // finally(onfinally?): Promise<T>
+            let (any_t, checker) = any_type(checker)
+            let (info, checker) = create_type_info(checker)
+            let finally_return = Type::TypeReference({
+              name: "Promise",
+              type_arguments: if type_ref.type_arguments.length() > 0 {
+                [type_ref.type_arguments[0]]
+              } else {
+                [any_t]
+              },
+              info,
+            })
+            let (fn_info, checker) = create_type_info(checker)
+            let finally_type = Type::Function({
+              parameters: [
+                { name: "onfinally", param_type: any_t, is_optional: true, is_rest: false },
+              ],
+              return_type: finally_return,
+              info: fn_info,
+            })
+            return (Some(finally_type), checker)
+          }
+          _ => () // Fall through to normal lookup
+        }
+      }
       // Resolve the type reference and look up property in resolved type
       let (resolved, checker) = resolve_type_reference(checker, type_ref)
       match resolved {
@@ -12801,6 +12882,22 @@ fn filter_undefined_from_type(t : Type) -> Type? {
 }
 
 ///|
+/// Unwrap a Promise<T> type to get T
+/// For async functions, return statements should be checked against T, not Promise<T>
+fn unwrap_promise_type(t : Type) -> Type {
+  match t {
+    TypeReference(ref_type) =>
+      if (ref_type.name == "Promise" || ref_type.name == "PromiseLike") &&
+        ref_type.type_arguments.length() > 0 {
+        ref_type.type_arguments[0]
+      } else {
+        t
+      }
+    _ => t
+  }
+}
+
+///|
 /// Check if a return type node is a valid generator return type
 /// Generator can be assigned to object types, iterator types, etc.
 /// But NOT to primitive types (number, string, boolean, etc.)
@@ -13237,8 +13334,16 @@ fn check_function_declaration(
     match func.return_type {
       Some(return_type_node) =>
         match get_type_from_type_node(checker, return_type_node) {
-          (Some(declared_return), c) =>
-            check_return_type_consistency(c, func, declared_return)
+          (Some(declared_return), c) => {
+            // For async functions, unwrap the Promise type for return type checking
+            // async function foo(): Promise<T> { return x; } - x should be checked against T
+            let effective_return_type = if func.is_async {
+              unwrap_promise_type(declared_return)
+            } else {
+              declared_return
+            }
+            check_return_type_consistency(c, func, effective_return_type)
+          }
           (None, c) => c
         }
       None => checker
