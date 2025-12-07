@@ -12786,6 +12786,103 @@ fn extract_iterable_element_type(
 }
 
 ///|
+/// Check for conflicting Iterator<T> and Iterable<U> in heritage clauses
+/// This detects cases like: interface Bad extends Iterator<number>, Iterable<string> {}
+fn check_for_iterator_iterable_conflict_in_heritage(
+  checker : TypeChecker,
+  _return_type : Type,
+  return_type_node : Node,
+) -> TypeChecker {
+  // Check the type node (AST) instead of the resolved type
+  // The resolved type may already be an empty Object
+  match return_type_node {
+    TypeReference(tr) => {
+      // Look up the interface symbol
+      let mut checker = checker
+      match lookup_symbol(checker, tr.type_name) {
+        Some(symbol) => {
+          match symbol.kind {
+            Interface => {
+              match symbol.value_declaration {
+                Some(InterfaceDeclaration(iface)) => {
+                  // Check heritage clauses for Iterator and Iterable
+                  let mut iterator_type_arg : Type? = None
+                  let mut iterable_type_arg : Type? = None
+
+                  for heritage in iface.heritage_clauses {
+                    for type_node in heritage.types {
+                      match type_node {
+                        TypeReference(type_ref) => {
+                          // Check for Iterator<T>
+                          if type_ref.type_name == "Iterator" &&
+                            type_ref.type_arguments.length() > 0 {
+                            match get_type_from_type_node(
+                              checker,
+                              type_ref.type_arguments[0],
+                            ) {
+                              (Some(arg_type), c) => {
+                                iterator_type_arg = Some(arg_type)
+                                checker = c
+                              }
+                              (None, _) => ()
+                            }
+                          }
+                          // Check for Iterable<T>
+                          if type_ref.type_name == "Iterable" &&
+                            type_ref.type_arguments.length() > 0 {
+                            match get_type_from_type_node(
+                              checker,
+                              type_ref.type_arguments[0],
+                            ) {
+                              (Some(arg_type), c) => {
+                                iterable_type_arg = Some(arg_type)
+                                checker = c
+                              }
+                              (None, _) => ()
+                            }
+                          }
+                        }
+                        _ => ()
+                      }
+                    }
+                  }
+
+                  // Check for conflict
+                  match (iterator_type_arg, iterable_type_arg) {
+                    (Some(iter_type), Some(itbl_type)) => {
+                      if not(types_equal(iter_type, itbl_type)) {
+                        // Report TS2322 error
+                        let itbl_str = type_to_string(itbl_type)
+                        let gen_type_str = "Generator<\{itbl_str}, any, any>"
+                        let target_str = type_node_to_string(return_type_node)
+                        let message = "Type '\{gen_type_str}' is not assignable to type '\{target_str}'."
+                        add_diagnostic_with_code(
+                          checker,
+                          message,
+                          get_location(return_type_node),
+                          TS2322,
+                        )
+                      } else {
+                        checker
+                      }
+                    }
+                    _ => checker
+                  }
+                }
+                _ => checker
+              }
+            }
+            _ => checker
+          }
+        }
+        None => checker
+      }
+    }
+    _ => checker
+  }
+}
+
+///|
 /// Check if a Generator type is assignable to a declared return type
 /// This handles checking for missing properties (TS2741) and type incompatibility (TS2322)
 fn check_generator_return_type_assignability(
@@ -12797,10 +12894,26 @@ fn check_generator_return_type_assignability(
   // Collect yield types from the function body
   let (yield_types, checker) = collect_yield_types_from_body(checker, func.body)
 
+  // Check for conflicting Iterator<T> and Iterable<U> in heritage clauses
+  // This must be done BEFORE resolving because resolve_interface_type doesn't merge heritage
+  let checker = check_for_iterator_iterable_conflict_in_heritage(
+    checker,
+    declared_return_type,
+    return_type_node,
+  )
+
+  // Resolve the declared return type for assignability checking
+  let (resolved_for_conflict_check, checker) = resolve_type_for_generator_check(
+    checker,
+    declared_return_type,
+  )
+
   // Determine the combined yield type
   // For empty generators, infer yield type from Iterable<T> in return type if present
   let (yield_type, checker) = if yield_types.length() == 0 {
-    // Try to infer from Iterable<T> in return type
+    // For empty generators, use the Iterable<T> type argument if present
+    // Note: The conflict detection above will have already reported an error if
+    // Iterator<T> and Iterable<U> have different type arguments
     match get_iterable_type_argument(checker, declared_return_type) {
       (Some(iterable_arg), c) => (iterable_arg, c)
       (None, c) => void_type(c)
@@ -12815,12 +12928,9 @@ fn check_generator_return_type_assignability(
   // Create Generator<YieldType, void, unknown> type
   let (generator_type, checker) = create_generator_type(checker, yield_type)
 
-  // Now check if the generator type is assignable to the declared return type
-  // Resolve the declared return type to get its structural form
-  let (resolved_return, checker) = resolve_type_for_generator_check(
-    checker,
-    declared_return_type,
-  )
+  // Reuse the resolved type we already computed for conflict checking
+  // This avoids resolving the return type twice
+  let resolved_return = resolved_for_conflict_check
 
   // Check assignability - use type_node_to_string for accurate type name in errors
   let original_target_str = type_node_to_string(return_type_node)
@@ -12903,6 +13013,134 @@ fn get_iterable_type_argument(
       }
     }
     _ => (None, checker)
+  }
+}
+
+///|
+/// Get the type argument from Iterator<T> in the return type
+fn get_iterator_type_argument(
+  checker : TypeChecker,
+  t : Type,
+) -> (Type?, TypeChecker) {
+  match t {
+    TypeReference(tr) => {
+      // Direct Iterator<T> reference
+      if tr.name == "Iterator" && tr.type_arguments.length() > 0 {
+        return (Some(tr.type_arguments[0]), checker)
+      }
+      // Check if it's an interface that extends Iterator<T>
+      match lookup_symbol(checker, tr.name) {
+        Some(symbol) =>
+          match symbol.kind {
+            Interface =>
+              match symbol.value_declaration {
+                Some(InterfaceDeclaration(iface)) => {
+                  // Check heritage clauses for Iterator<T>
+                  for heritage in iface.heritage_clauses {
+                    for type_node in heritage.types {
+                      match type_node {
+                        TypeReference(type_ref) =>
+                          if type_ref.type_name == "Iterator" &&
+                            type_ref.type_arguments.length() > 0 {
+                            match get_type_from_type_node(
+                              checker,
+                              type_ref.type_arguments[0],
+                            ) {
+                              (Some(arg_type), c) => return (Some(arg_type), c)
+                              (None, _) => ()
+                            }
+                          }
+                        _ => ()
+                      }
+                    }
+                  }
+                  (None, checker)
+                }
+                _ => (None, checker)
+              }
+            _ => (None, checker)
+          }
+        None => (None, checker)
+      }
+    }
+    _ => (None, checker)
+  }
+}
+
+///|
+/// Get both Iterator<T> and Iterable<U> type arguments from the return type
+/// Returns (Iterator arg, Iterable arg, checker)
+/// This is used to detect conflicts in generator return types
+fn get_iterator_and_iterable_type_arguments(
+  checker : TypeChecker,
+  t : Type,
+) -> (Type?, Type?, TypeChecker) {
+  match t {
+    TypeReference(tr) => {
+      let mut iterator_arg : Type? = None
+      let mut iterable_arg : Type? = None
+      let mut checker = checker
+
+      // Direct Iterator<T> or Iterable<U> reference
+      if tr.name == "Iterator" && tr.type_arguments.length() > 0 {
+        iterator_arg = Some(tr.type_arguments[0])
+      } else if tr.name == "Iterable" && tr.type_arguments.length() > 0 {
+        iterable_arg = Some(tr.type_arguments[0])
+      }
+
+      // Check if it's an interface that extends Iterator<T> and/or Iterable<U>
+      match lookup_symbol(checker, tr.name) {
+        Some(symbol) =>
+          match symbol.kind {
+            Interface =>
+              match symbol.value_declaration {
+                Some(InterfaceDeclaration(iface)) => {
+                  // Check heritage clauses for Iterator<T> and Iterable<U>
+                  for heritage in iface.heritage_clauses {
+                    for type_node in heritage.types {
+                      match type_node {
+                        TypeReference(type_ref) => {
+                          if type_ref.type_name == "Iterator" &&
+                            type_ref.type_arguments.length() > 0 {
+                            match get_type_from_type_node(
+                              checker,
+                              type_ref.type_arguments[0],
+                            ) {
+                              (Some(arg_type), c) => {
+                                iterator_arg = Some(arg_type)
+                                checker = c
+                              }
+                              (None, _) => ()
+                            }
+                          } else if type_ref.type_name == "Iterable" &&
+                            type_ref.type_arguments.length() > 0 {
+                            match get_type_from_type_node(
+                              checker,
+                              type_ref.type_arguments[0],
+                            ) {
+                              (Some(arg_type), c) => {
+                                iterable_arg = Some(arg_type)
+                                checker = c
+                              }
+                              (None, _) => ()
+                            }
+                          }
+                        }
+                        _ => ()
+                      }
+                    }
+                  }
+                }
+                _ => ()
+              }
+            _ => ()
+          }
+        None => ()
+      }
+
+      (iterator_arg, iterable_arg, checker)
+    }
+    _ => (None, None, checker)
   }
 }
 

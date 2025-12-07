@@ -369,3 +369,115 @@ test "generator type inference with nested Symbol.iterator" {
     Err(_) => fail("Expected generator with nested Symbol.iterator to pass")
   }
 }
+
+///|
+test "Iterator/Iterable conflict - different types should error" {
+  let source =
+    #|interface BadGenerator extends Iterator<number>, Iterable<string> { }
+    #|function* g(): BadGenerator { }
+  let result = @compiler.type_check(source, "test.ts")
+  match result {
+    Err(diagnostics) => {
+      // Should have TS2322 error about type incompatibility
+      let has_ts2322 = diagnostics.any(
+        fn(d) { d.message.contains("not assignable") },
+      )
+      if not(has_ts2322) {
+        fail(
+          "Expected TS2322 error for conflicting Iterator<number> and Iterable<string>",
+        )
+      }
+    }
+    Ok(_) =>
+      fail(
+        "Expected error for interface with conflicting Iterator<number> and Iterable<string>",
+      )
+  }
+}
+
+///|
+test "Iterator/Iterable conflict - same types should pass" {
+  let source =
+    #|interface GoodGenerator extends Iterator<string>, Iterable<string> { }
+    #|function* g(): GoodGenerator {
+    #|    yield "hello";
+    #|}
+  let result = @compiler.type_check(source, "test.ts")
+  match result {
+    Ok(_) => () // Expected to pass when Iterator and Iterable have same type
+    Err(_) =>
+      fail(
+        "Expected to pass when Iterator<string> and Iterable<string> have matching types",
+      )
+  }
+}
+
+///|
+test "Iterator/Iterable conflict - complex types" {
+  let source =
+    #|interface ConflictGen extends Iterator<{x: number}>, Iterable<{y: string}> { }
+    #|function* g(): ConflictGen { }
+  let result = @compiler.type_check(source, "test.ts")
+  match result {
+    Err(diagnostics) => {
+      let has_error = diagnostics.any(
+        fn(d) { d.message.contains("not assignable") },
+      )
+      if not(has_error) {
+        fail("Expected error for conflicting object types in Iterator/Iterable")
+      }
+    }
+    Ok(_) =>
+      fail(
+        "Expected error for interface with conflicting complex types in Iterator/Iterable",
+      )
+  }
+}
+
+///|
+test "Iterator/Iterable conflict - function types" {
+  let source =
+    #|interface FnConflictGen extends Iterator<(x: number) => string>, Iterable<(x: string) => number> { }
+    #|function* g(): FnConflictGen { }
+  let result = @compiler.type_check(source, "test.ts")
+  match result {
+    Err(diagnostics) => {
+      let has_error = diagnostics.any(
+        fn(d) { d.message.contains("not assignable") },
+      )
+      if not(has_error) {
+        fail(
+          "Expected error for conflicting function types in Iterator/Iterable",
+        )
+      }
+    }
+    Ok(_) =>
+      fail(
+        "Expected error for interface with conflicting function types in Iterator/Iterable",
+      )
+  }
+}
+
+///|
+test "Iterator/Iterable conflict - empty generator" {
+  let source =
+    #|interface EmptyConflict extends Iterator<number>, Iterable<string> { }
+    #|function* g(): EmptyConflict {
+    #|    // Empty generator - should still detect the conflict
+    #|}
+  let result = @compiler.type_check(source, "test.ts")
+  match result {
+    Err(diagnostics) => {
+      let has_error = diagnostics.any(
+        fn(d) { d.message.contains("not assignable") },
+      )
+      if not(has_error) {
+        fail("Expected error even for empty generator with conflicting types")
+      }
+    }
+    Ok(_) =>
+      fail(
+        "Expected error for empty generator with conflicting Iterator/Iterable",
+      )
+  }
+}
