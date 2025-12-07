@@ -569,9 +569,50 @@ fn extract_yield_delegate_element_type(t : Type) -> Type {
         }
       } else {
         // Anonymous object literals with *[Symbol.iterator]() are considered iterables
-        // Their element type depends on what Symbol.iterator yields
-        // For now, be permissive and return the object type
-        t
+        // Check if this object has a [Symbol.iterator]() method and extract its element type
+        let mut iterator_method_type : Type? = None
+        for entry in obj.properties {
+          let (prop_name, prop) = entry
+          // Check for various representations of Symbol.iterator
+          if prop_name.contains("iterator") ||
+            prop_name.contains("Iterator") ||
+            prop_name == "__@iterator" {
+            iterator_method_type = Some(prop.prop_type)
+            break
+          }
+        }
+
+        // If we found the iterator method, extract its return type's element type
+        match iterator_method_type {
+          Some(Function(func)) => {
+            // The iterator method returns an iterator/generator
+            // Extract the element type from the return type
+            match func.return_type {
+              Type::TypeReference(ret_ref) =>
+                if (ret_ref.name == "Generator" ||
+                  ret_ref.name == "Iterator" ||
+                  ret_ref.name == "IterableIterator") &&
+                  ret_ref.type_arguments.length() > 0 {
+                  // Recursively extract in case it's nested
+                  extract_yield_delegate_element_type(ret_ref.type_arguments[0])
+                } else {
+                  ret_ref.type_arguments.get(0).unwrap_or(t)
+                }
+              _ => t
+            }
+          }
+          Some(Type::TypeReference(ret_ref)) =>
+            // The property is already a TypeReference (shouldn't normally happen for methods)
+            if (ret_ref.name == "Generator" ||
+              ret_ref.name == "Iterator" ||
+              ret_ref.name == "IterableIterator") &&
+              ret_ref.type_arguments.length() > 0 {
+              ret_ref.type_arguments[0]
+            } else {
+              t
+            }
+          _ => t
+        }
       }
     }
     _ => t

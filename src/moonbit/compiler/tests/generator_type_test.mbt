@@ -332,3 +332,40 @@ test "yield* from variable with Symbol.iterator" {
     Err(_) => fail("Expected yield* from variable with Symbol.iterator to pass")
   }
 }
+
+///|
+test "generator with Symbol.iterator and overload resolution" {
+  let source =
+    #|declare function foo<T, U>(x: T, fun: () => Iterable<(x: T) => U>, fun2: (y: U) => T): T;
+    #|
+    #|foo("", function* () {
+    #|    yield* {
+    #|        *[Symbol.iterator]() {
+    #|            yield x => x.length;
+    #|        }
+    #|    }
+    #|}, p => undefined);
+  let result = @compiler.type_check(source, "test.ts")
+  match result {
+    Ok(_) => () // Expected to pass
+    Err(_) => fail("Expected overload resolution with Symbol.iterator to pass")
+  }
+}
+
+///|
+test "generator type inference with nested Symbol.iterator" {
+  let source =
+    #|function* gen() {
+    #|    yield* {
+    #|        *[Symbol.iterator]() {
+    #|            yield (x: number) => x * 2;
+    #|        }
+    #|    };
+    #|}
+    #|const result = gen();
+  let result = @compiler.type_check(source, "test.ts")
+  match result {
+    Ok(_) => () // Expected to pass - type should be inferred correctly
+    Err(_) => fail("Expected generator with nested Symbol.iterator to pass")
+  }
+}
