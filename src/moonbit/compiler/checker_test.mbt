@@ -2989,6 +2989,83 @@ test "check async generator" {
   }
 }
 
+///|
+test "check yield type compatibility - TS2741 error for incompatible types" {
+  // Baz has {z: number} but Foo expects {x: number} - should error
+  let result = parse_bind_and_check(
+    "class Foo { x: number } class Baz { z: number } function* g(): IterableIterator<Foo> { yield new Baz; }",
+  )
+  match result {
+    Ok(_) => {
+      // Should have errors, not Ok
+      assert_true(false)
+    }
+    Err(diagnostics) => {
+      // Check for TS2741 error about missing property 'x'
+      let has_ts2741 = diagnostics.iter().any(fn(d) {
+        d.message.contains("Property") && d.message.contains("is missing")
+      })
+      assert_true(has_ts2741)
+    }
+  }
+}
+
+///|
+test "check yield type compatibility - subclass is compatible" {
+  // Bar extends Foo, so Bar should be compatible with Foo
+  let result = parse_bind_and_check(
+    "class Foo { x: number } class Bar extends Foo { y: string } function* g(): IterableIterator<Foo> { yield new Bar; }",
+  )
+  match result {
+    Ok(typed) => {
+      // Should have no errors - Bar is compatible with Foo
+      let type_errors = typed.diagnostics.iter().filter(fn(d) {
+        d.message.contains("Property") && d.message.contains("is missing")
+      }).collect()
+      assert_eq(type_errors.length(), 0)
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "check yield delegate type compatibility - TS2741 error for incompatible array elements" {
+  // yield* with array of Baz when expecting Foo should error
+  let result = parse_bind_and_check(
+    "class Foo { x: number } class Baz { z: number } function* g(): IterableIterator<Foo> { yield * [new Baz]; }",
+  )
+  match result {
+    Ok(_) => {
+      // Should have errors, not Ok
+      assert_true(false)
+    }
+    Err(diagnostics) => {
+      // Check for TS2741 error about missing property 'x'
+      let has_ts2741 = diagnostics.iter().any(fn(d) {
+        d.message.contains("Property") && d.message.contains("is missing")
+      })
+      assert_true(has_ts2741)
+    }
+  }
+}
+
+///|
+test "check yield delegate type compatibility - subclass array is compatible" {
+  // yield* with array of Bar (extends Foo) should be compatible
+  let result = parse_bind_and_check(
+    "class Foo { x: number } class Bar extends Foo { y: string } function* g(): IterableIterator<Foo> { yield * [new Bar]; }",
+  )
+  match result {
+    Ok(typed) => {
+      let type_errors = typed.diagnostics.iter().filter(fn(d) {
+        d.message.contains("Property") && d.message.contains("is missing")
+      }).collect()
+      assert_eq(type_errors.length(), 0)
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
 // ============================================================================
 // Object Type Literal Tests
 // ============================================================================
@@ -3696,7 +3773,10 @@ test "check instanceof type guard" {
   )
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
-    Err(_) => assert_true(false)
+    Err(errs) => {
+      let msg = errs.fold(init="", fn(acc, e) { acc + e.message + "; " })
+      fail("Test failed with errors: \{msg}")
+    }
   }
 }
 

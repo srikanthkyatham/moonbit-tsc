@@ -5353,7 +5353,7 @@ fn infer_class_declaration_type(
   let static_properties : Map[String, PropertySignature] = Map::new()
   let instance_properties : Map[String, PropertySignature] = Map::new()
 
-  // Inherit static properties from parent class (if extends clause exists)
+  // Inherit properties from parent class (if extends clause exists)
   for heritage_clause in class_decl.heritage_clauses {
     if heritage_clause.kind == Extends {
       for type_node in heritage_clause.types {
@@ -5372,12 +5372,24 @@ fn infer_class_declaration_type(
           _ => infer_type(checker, type_node)
         }
         checker = c
-        // If parent is an object type, copy its static properties
+        // If parent is an object type (class constructor), inherit both static and instance properties
         match parent_type {
-          Object(parent_obj) =>
+          Object(parent_obj) => {
+            // Copy static properties from parent
             for entry in parent_obj.properties.iter() {
               static_properties.set(entry.0, entry.1)
             }
+            // Copy instance properties from parent's construct signature
+            if parent_obj.construct_signatures.length() > 0 {
+              match parent_obj.construct_signatures[0].return_type {
+                Object(parent_instance) =>
+                  for entry in parent_instance.properties.iter() {
+                    instance_properties.set(entry.0, entry.1)
+                  }
+                _ => ()
+              }
+            }
+          }
           _ => ()
         }
       }
@@ -9116,6 +9128,17 @@ fn infer_yield_expression_type(
         _ => checker
       }
 
+      // TS2741: Check if yield operand type is compatible with expected yield type
+      // For regular yield (not yield*), check the operand directly
+      // For yield*, check if elements of the iterable are compatible
+      let checker = if not(ye.is_delegate) {
+        check_yield_type_compatibility(checker, expr_type, expr, ye.location)
+      } else {
+        // For yield*, we need to check the element type of the iterable
+        // against the expected yield type
+        check_yield_delegate_type_compatibility(checker, expr_type, expr, ye.location)
+      }
+
       // TS2770: Check if yield operand type has a problematic 'then' member
       // In an async generator, the yield operand must either be a valid promise
       // or must not contain a callable 'then' member
@@ -9214,6 +9237,337 @@ fn check_yield_operand_then_member(
     )
   } else {
     checker
+  }
+}
+
+///|
+/// Check if yield operand type is compatible with expected yield type (TS2741)
+/// Reports error if the operand type is missing required properties
+fn check_yield_type_compatibility(
+  checker : TypeChecker,
+  operand_type : Type,
+  expr : Node,
+  location : SourceLocation,
+) -> TypeChecker {
+  // Only check if we have an expected yield type
+  match checker.generator_yield_type {
+    Some(expected_type) => {
+      // Check if operand_type is assignable to expected_type
+      // For TS2741, we check if operand is missing properties
+      let (missing_prop_opt, checker) = find_missing_property_with_checker(
+        checker,
+        operand_type,
+        expected_type,
+      )
+      match missing_prop_opt {
+        Some(missing_prop) => {
+          let operand_type_str = get_type_name_for_error(operand_type, expr)
+          let expected_type_str = type_to_string(expected_type)
+          add_diagnostic_with_code(
+            checker,
+            "Property '" +
+            missing_prop +
+            "' is missing in type '" +
+            operand_type_str +
+            "' but required in type '" +
+            expected_type_str +
+            "'.",
+            location,
+            TS2741,
+          )
+        }
+        None => checker
+      }
+    }
+    None => checker
+  }
+}
+
+///|
+/// Check if yield* delegate type elements are compatible with expected yield type (TS2741)
+fn check_yield_delegate_type_compatibility(
+  checker : TypeChecker,
+  operand_type : Type,
+  expr : Node,
+  location : SourceLocation,
+) -> TypeChecker {
+  // Only check if we have an expected yield type
+  match checker.generator_yield_type {
+    Some(expected_type) => {
+      // Get the element type of the iterable
+      let element_type = get_iterable_element_type(operand_type)
+      match element_type {
+        Some(elem_type) => {
+          // Check if element type is compatible
+          let (missing_prop_opt, checker) = find_missing_property_with_checker(
+            checker,
+            elem_type,
+            expected_type,
+          )
+          match missing_prop_opt {
+            Some(missing_prop) => {
+              let operand_type_str = get_type_name_for_error(elem_type, expr)
+              let expected_type_str = type_to_string(expected_type)
+              add_diagnostic_with_code(
+                checker,
+                "Property '" +
+                missing_prop +
+                "' is missing in type '" +
+                operand_type_str +
+                "' but required in type '" +
+                expected_type_str +
+                "'.",
+                location,
+                TS2741,
+              )
+            }
+            None => checker
+          }
+        }
+        None => checker
+      }
+    }
+    None => checker
+  }
+}
+
+///|
+/// Find a missing property in the source type that is required in the target type
+/// This version takes a checker to resolve type references
+fn find_missing_property_with_checker(
+  checker : TypeChecker,
+  source : Type,
+  target : Type,
+) -> (String?, TypeChecker) {
+  // First, try to resolve TypeReferences to their actual types (classes)
+  let (resolved_source, checker) = resolve_type_for_property_check(
+    checker,
+    source,
+  )
+  let (resolved_target, checker) = resolve_type_for_property_check(
+    checker,
+    target,
+  )
+
+  // Now check for missing properties with resolved types
+  match resolved_target {
+    Object(target_obj) => {
+      // Check each required property in the target
+      for prop_name in target_obj.properties.keys() {
+        let prop = target_obj.properties[prop_name]
+        // Skip optional properties
+        if prop.is_optional {
+          continue
+        }
+        // Check if source has this property
+        if not(type_has_property_with_resolved(resolved_source, prop_name)) {
+          return (Some(prop_name), checker)
+        }
+      }
+      (None, checker)
+    }
+    TypeReference(target_ref) =>
+      // Target is still a type reference (couldn't resolve)
+      // Check if source is structurally compatible
+      match resolved_source {
+        Object(source_obj) =>
+          match source_obj.class_name {
+            Some(source_name) =>
+              if source_name == target_ref.name {
+                (None, checker) // Same class
+              } else {
+                // Different classes - need to look up target class properties
+                match get_class_properties(checker, target_ref.name) {
+                  Some(target_props) => {
+                    // Check if source has all target properties
+                    for prop_name in target_props.keys() {
+                      let prop = target_props[prop_name]
+                      if not(prop.is_optional) &&
+                        not(
+                          type_has_property_with_resolved(
+                            resolved_source,
+                            prop_name,
+                          ),
+                        ) {
+                        return (Some(prop_name), checker)
+                      }
+                    }
+                    (None, checker)
+                  }
+                  None => (None, checker) // Can't find target class
+                }
+              }
+            None => (None, checker)
+          }
+        TypeReference(source_ref) =>
+          // Both are type references
+          if source_ref.name == target_ref.name {
+            (None, checker) // Same type
+          } else {
+            // Different type names - look up and compare properties
+            match (
+              get_class_properties(checker, source_ref.name),
+              get_class_properties(checker, target_ref.name),
+            ) {
+              (Some(source_props), Some(target_props)) => {
+                // Check if source has all required target properties
+                for prop_name in target_props.keys() {
+                  let prop = target_props[prop_name]
+                  if not(prop.is_optional) && not(source_props.contains(prop_name)) {
+                    return (Some(prop_name), checker)
+                  }
+                }
+                (None, checker)
+              }
+              _ => (None, checker) // Can't find class definitions
+            }
+          }
+        _ => (None, checker)
+      }
+    _ => (None, checker)
+  }
+}
+
+///|
+/// Resolve a type for property checking - looks up class types to get their Object representation
+fn resolve_type_for_property_check(
+  checker : TypeChecker,
+  t : Type,
+) -> (Type, TypeChecker) {
+  match t {
+    TypeReference(type_ref) => {
+      // Try to look up the class and get its instance type
+      match lookup_symbol(checker, type_ref.name) {
+        Some(symbol) =>
+          match symbol.kind {
+            Class => {
+              // Get the class's type and extract instance type from construct signature
+              // Try cached type first, then infer if not cached
+              let (class_type, checker) = match get_symbol_type(checker, symbol) {
+                (Some(ct), c) => (ct, c)
+                (None, c) => infer_symbol_type(c, symbol)
+              }
+              // The instance type is in the construct signature's return type
+              match class_type {
+                Object(obj) =>
+                  if obj.construct_signatures.length() > 0 {
+                    (obj.construct_signatures[0].return_type, checker)
+                  } else {
+                    (t, checker)
+                  }
+                _ => (t, checker)
+              }
+            }
+            Interface =>
+              // Get interface type
+              match resolve_interface_type(checker, symbol) {
+                (Some(interface_t), c) => (interface_t, c)
+                (None, c) => (t, c)
+              }
+            _ => (t, checker)
+          }
+        None => (t, checker)
+      }
+    }
+    _ => (t, checker)
+  }
+}
+
+///|
+/// Get the properties of a class by name (returns the instance properties)
+fn get_class_properties(
+  checker : TypeChecker,
+  class_name : String,
+) -> Map[String, PropertySignature]? {
+  match lookup_symbol(checker, class_name) {
+    Some(symbol) =>
+      match symbol.kind {
+        Class => {
+          // Get class type and extract instance properties from construct signature
+          // Try cached type first, then infer if not cached
+          let (class_type_opt, _) = match get_symbol_type(checker, symbol) {
+            (Some(ct), c) => (Some(ct), c)
+            (None, c) => {
+              let (t, c2) = infer_symbol_type(c, symbol)
+              (Some(t), c2)
+            }
+          }
+          match class_type_opt {
+            Some(Object(obj)) =>
+              if obj.construct_signatures.length() > 0 {
+                match obj.construct_signatures[0].return_type {
+                  Object(instance_obj) => Some(instance_obj.properties)
+                  _ => None
+                }
+              } else {
+                None
+              }
+            _ => None
+          }
+        }
+        Interface =>
+          // Get interface properties
+          match resolve_interface_type(checker, symbol) {
+            (Some(Object(obj)), _) => Some(obj.properties)
+            _ => None
+          }
+        _ => None
+      }
+    None => None
+  }
+}
+
+///|
+/// Check if a type has a property - handles resolved types
+fn type_has_property_with_resolved(t : Type, prop_name : String) -> Bool {
+  match t {
+    Object(obj) => obj.properties.contains(prop_name)
+    Any(_) => true // any has all properties
+    TypeReference(tr) =>
+      // If still unresolved, assume it has the property (conservative)
+      // This shouldn't happen if resolution worked
+      tr.name == "any" || tr.name == "unknown"
+    _ => false
+  }
+}
+
+///|
+/// Check if a type has a property
+fn type_has_property(t : Type, prop_name : String) -> Bool {
+  match t {
+    Object(obj) => obj.properties.contains(prop_name)
+    Any(_) => true // any has all properties
+    _ => false
+  }
+}
+
+///|
+/// Get the element type of an iterable
+fn get_iterable_element_type(t : Type) -> Type? {
+  match t {
+    Array(arr) => Some(arr.element_type)
+    TypeReference(tr) =>
+      // For Iterator<T>, Generator<T>, etc., the element type is the first type arg
+      if tr.type_arguments.length() > 0 {
+        Some(tr.type_arguments[0])
+      } else {
+        None
+      }
+    _ => None
+  }
+}
+
+///|
+/// Get the type name for error messages, using the expression for context
+fn get_type_name_for_error(t : Type, expr : Node) -> String {
+  match t {
+    Object(obj) =>
+      match obj.class_name {
+        Some(name) => name
+        None => type_to_string(t)
+      }
+    TypeReference(tr) => tr.name
+    _ => type_to_string_for_error(t, expr)
   }
 }
 
@@ -11592,6 +11946,402 @@ fn statements_contain_bare_yield_in_node(node : Node) -> Bool {
 }
 
 ///|
+/// Collect yield types from a generator function body
+/// Returns a list of types from all yield expressions (excluding nested generators)
+fn collect_yield_types_from_body(
+  checker : TypeChecker,
+  body : Node?,
+) -> (Array[Type], TypeChecker) {
+  let yield_types : Array[Type] = []
+  match body {
+    Some(BlockStatement(block)) => {
+      let (types, checker) = collect_yield_types_from_statements(
+        checker,
+        block.statements,
+      )
+      for t in types {
+        yield_types.push(t)
+      }
+      (yield_types, checker)
+    }
+    _ => (yield_types, checker)
+  }
+}
+
+///|
+/// Collect yield types from statements
+fn collect_yield_types_from_statements(
+  checker : TypeChecker,
+  statements : Array[Node],
+) -> (Array[Type], TypeChecker) {
+  let yield_types : Array[Type] = []
+  let mut checker = checker
+  for stmt in statements {
+    let (types, c) = collect_yield_types_from_node(checker, stmt)
+    checker = c
+    for t in types {
+      yield_types.push(t)
+    }
+  }
+  (yield_types, checker)
+}
+
+///|
+/// Collect yield types from a single node (recursively)
+fn collect_yield_types_from_node(
+  checker : TypeChecker,
+  node : Node,
+) -> (Array[Type], TypeChecker) {
+  let yield_types : Array[Type] = []
+  let mut checker = checker
+  match node {
+    YieldExpression(ye) => {
+      match ye.expression {
+        Some(expr) => {
+          let (expr_type, c) = infer_type(checker, expr)
+          checker = c
+          if ye.is_delegate {
+            // yield*: extract element type from iterable
+            let (elem_type, c) = extract_iterable_element_type(checker, expr_type)
+            checker = c
+            match elem_type {
+              Some(et) => yield_types.push(et)
+              None => yield_types.push(expr_type) // fallback
+            }
+          } else {
+            yield_types.push(expr_type)
+          }
+        }
+        None => {
+          // bare yield - yields undefined
+          let (undef, c) = undefined_type(checker)
+          checker = c
+          yield_types.push(undef)
+        }
+      }
+      (yield_types, checker)
+    }
+    ExpressionStatement(es) => {
+      let (types, c) = collect_yield_types_from_node(checker, es.expression)
+      (types, c)
+    }
+    BlockStatement(b) => collect_yield_types_from_statements(checker, b.statements)
+    IfStatement(is_node) => {
+      let (types1, c) = collect_yield_types_from_node(checker, is_node.then_statement)
+      checker = c
+      for t in types1 {
+        yield_types.push(t)
+      }
+      match is_node.else_statement {
+        Some(else_node) => {
+          let (types2, c) = collect_yield_types_from_node(checker, else_node)
+          checker = c
+          for t in types2 {
+            yield_types.push(t)
+          }
+        }
+        None => ()
+      }
+      (yield_types, checker)
+    }
+    WhileStatement(ws) => collect_yield_types_from_node(checker, ws.statement)
+    DoWhileStatement(dws) => collect_yield_types_from_node(checker, dws.statement)
+    ForStatement(fs) => collect_yield_types_from_node(checker, fs.statement)
+    ForInStatement(fis) => collect_yield_types_from_node(checker, fis.statement)
+    ForOfStatement(fos) => collect_yield_types_from_node(checker, fos.statement)
+    TryStatement(ts) => {
+      let (types1, c) = collect_yield_types_from_node(checker, ts.try_block)
+      checker = c
+      for t in types1 {
+        yield_types.push(t)
+      }
+      match ts.catch_clause {
+        Some(cc) => {
+          let (types2, c) = collect_yield_types_from_node(checker, cc.block)
+          checker = c
+          for t in types2 {
+            yield_types.push(t)
+          }
+        }
+        None => ()
+      }
+      match ts.finally_block {
+        Some(fb) => {
+          let (types3, c) = collect_yield_types_from_node(checker, fb)
+          checker = c
+          for t in types3 {
+            yield_types.push(t)
+          }
+        }
+        None => ()
+      }
+      (yield_types, checker)
+    }
+    LabeledStatement(ls) => collect_yield_types_from_node(checker, ls.statement)
+    SwitchStatement(ss) => {
+      for case_clause in ss.cases {
+        let (types, c) = collect_yield_types_from_statements(checker, case_clause.statements)
+        checker = c
+        for t in types {
+          yield_types.push(t)
+        }
+      }
+      (yield_types, checker)
+    }
+    // Don't descend into nested functions/generators - they have their own scope
+    FunctionDeclaration(_) => (yield_types, checker)
+    FunctionExpression(_) => (yield_types, checker)
+    ArrowFunction(_) => (yield_types, checker)
+    MethodDeclaration(_) => (yield_types, checker)
+    // Also check binary expressions, call expressions etc for yield
+    BinaryExpression(be) => {
+      let (types1, c) = collect_yield_types_from_node(checker, be.left)
+      checker = c
+      for t in types1 {
+        yield_types.push(t)
+      }
+      let (types2, c) = collect_yield_types_from_node(checker, be.right)
+      checker = c
+      for t in types2 {
+        yield_types.push(t)
+      }
+      (yield_types, checker)
+    }
+    ConditionalExpression(ce) => {
+      let (types1, c) = collect_yield_types_from_node(checker, ce.when_true)
+      checker = c
+      for t in types1 {
+        yield_types.push(t)
+      }
+      let (types2, c) = collect_yield_types_from_node(checker, ce.when_false)
+      checker = c
+      for t in types2 {
+        yield_types.push(t)
+      }
+      (yield_types, checker)
+    }
+    ReturnStatement(rs) => {
+      match rs.expression {
+        Some(expr) => {
+          let (types, c) = collect_yield_types_from_node(checker, expr)
+          (types, c)
+        }
+        None => (yield_types, checker)
+      }
+    }
+    VariableStatement(vs) => {
+      for decl in vs.declarations {
+        match decl.initializer {
+          Some(init) => {
+            let (types, c) = collect_yield_types_from_node(checker, init)
+            checker = c
+            for t in types {
+              yield_types.push(t)
+            }
+          }
+          None => ()
+        }
+      }
+      (yield_types, checker)
+    }
+    _ => (yield_types, checker)
+  }
+}
+
+///|
+/// Extract the element type from an Iterable type
+fn extract_iterable_element_type(
+  checker : TypeChecker,
+  iter_type : Type,
+) -> (Type?, TypeChecker) {
+  match iter_type {
+    Type::Array(arr) => (Some(arr.element_type), checker)
+    TypeReference(tr) =>
+      // Handle Generator<T>, Iterable<T>, Iterator<T>, etc.
+      if (tr.name == "Generator" ||
+      tr.name == "Iterable" ||
+      tr.name == "Iterator" ||
+      tr.name == "IterableIterator") &&
+      tr.type_arguments.length() > 0 {
+        (Some(tr.type_arguments[0]), checker)
+      } else {
+        (None, checker)
+      }
+    _ => (None, checker)
+  }
+}
+
+///|
+/// Check if a Generator type is assignable to a declared return type
+/// This handles checking for missing properties (TS2741) and type incompatibility (TS2322)
+fn check_generator_return_type_assignability(
+  checker : TypeChecker,
+  func : FunctionDeclaration,
+  declared_return_type : Type,
+  return_type_node : Node,
+) -> TypeChecker {
+  // Collect yield types from the function body
+  let (yield_types, checker) = collect_yield_types_from_body(checker, func.body)
+
+  // Determine the combined yield type
+  let (yield_type, checker) = if yield_types.length() == 0 {
+    // No yields - use void
+    void_type(checker)
+  } else if yield_types.length() == 1 {
+    (yield_types[0], checker)
+  } else {
+    // Multiple yield types - create union
+    union_type(checker, yield_types)
+  }
+
+  // Create Generator<YieldType, void, unknown> type
+  let (generator_type, checker) = create_generator_type(checker, yield_type)
+
+  // Now check if the generator type is assignable to the declared return type
+  // Resolve the declared return type to get its structural form
+  let (resolved_return, checker) = resolve_type_for_generator_check(
+    checker,
+    declared_return_type,
+  )
+
+  // Check assignability - use type_node_to_string for accurate type name in errors
+  let original_target_str = type_node_to_string(return_type_node)
+  check_generator_type_assignability(
+    checker,
+    generator_type,
+    yield_type,
+    resolved_return,
+    original_target_str,
+    get_location(return_type_node),
+  )
+}
+
+///|
+/// Create a Generator<T, TReturn, TNext> type
+fn create_generator_type(checker : TypeChecker, yield_type : Type) -> (Type, TypeChecker) {
+  let (info, checker) = create_type_info(checker)
+  let (any_t, checker) = any_type(checker)
+  (
+    TypeReference({
+      name: "Generator",
+      type_arguments: [yield_type, any_t, any_t],
+      info,
+    }),
+    checker,
+  )
+}
+
+///|
+/// Resolve a type for generator return type checking
+/// This resolves interfaces and type references to their structural form
+fn resolve_type_for_generator_check(
+  checker : TypeChecker,
+  t : Type,
+) -> (Type, TypeChecker) {
+  match t {
+    TypeReference(tr) =>
+      // Try to resolve the type reference
+      match lookup_symbol(checker, tr.name) {
+        Some(symbol) =>
+          match symbol.kind {
+            Interface => {
+              // Resolve interface to its object type
+              match resolve_interface_type(checker, symbol) {
+                (Some(resolved), checker) => (resolved, checker)
+                (None, checker) => (t, checker)
+              }
+            }
+            _ => (t, checker)
+          }
+        None => (t, checker)
+      }
+    _ => (t, checker)
+  }
+}
+
+///|
+/// Check if a Generator type is assignable to a target type
+fn check_generator_type_assignability(
+  checker : TypeChecker,
+  generator_type : Type,
+  yield_type : Type,
+  resolved_target : Type,
+  original_target_str : String,
+  location : SourceLocation,
+) -> TypeChecker {
+  match resolved_target {
+    Object(target_obj) => {
+      // Check if target has any properties that Generator doesn't have
+      // Generator has: next, return, throw, [Symbol.iterator]
+      let generator_props = ["next", "return", "throw"]
+      let mut checker = checker
+      for entry in target_obj.properties {
+        let (prop_name, target_prop) = entry
+        // Check if this is a property Generator doesn't have
+        let is_generator_prop = generator_props.iter().any(fn(p) { p == prop_name })
+        if not(is_generator_prop) && not(target_prop.is_optional) {
+          // TS2741: Property is missing
+          checker = add_diagnostic_with_code(
+            checker,
+            "Property '\{prop_name}' is missing in type '\{type_to_string(generator_type)}' but required in type '\{original_target_str}'.",
+            location,
+            TS2741,
+          )
+        }
+      }
+      checker
+    }
+    TypeReference(target_ref) =>
+      // Check if target is an iterator type and verify type parameter compatibility
+      if is_iterator_type_name(target_ref.name) {
+        // Check if yield type is compatible with the expected element type
+        if target_ref.type_arguments.length() > 0 {
+          let expected_yield = target_ref.type_arguments[0]
+          check_yield_type_vs_expected(
+            checker,
+            generator_type,
+            yield_type,
+            expected_yield,
+            original_target_str,
+            location,
+          )
+        } else {
+          checker
+        }
+      } else {
+        // Non-iterator type reference - Generator is not assignable
+        // This is handled by is_valid_generator_return_type already
+        checker
+      }
+    _ => checker
+  }
+}
+
+///|
+/// Check if actual yield type is compatible with expected yield type from return type annotation
+fn check_yield_type_vs_expected(
+  checker : TypeChecker,
+  generator_type : Type,
+  actual_yield : Type,
+  expected_yield : Type,
+  original_target_str : String,
+  location : SourceLocation,
+) -> TypeChecker {
+  // Simple structural check - actual must be assignable to expected
+  if is_assignable(actual_yield, expected_yield) {
+    checker
+  } else {
+    // TS2322: Type not assignable
+    add_diagnostic_with_code(
+      checker,
+      "Type '\{type_to_string(generator_type)}' is not assignable to type '\{original_target_str}'.",
+      location,
+      TS2322,
+    )
+  }
+}
+
+///|
 /// Check if a return type node is a valid generator return type
 /// Generator can be assigned to object types, iterator types, etc.
 /// But NOT to primitive types (number, string, boolean, etc.)
@@ -12026,6 +12776,27 @@ fn check_function_declaration(
         (None, c) => c
       }
     None => checker
+  }
+
+  // Check generator return type assignability (TS2741, TS2322)
+  // This checks if the Generator type is structurally assignable to the declared return type
+  let checker = if func.is_generator {
+    match func.return_type {
+      Some(return_type_node) =>
+        match get_type_from_type_node(checker, return_type_node) {
+          (Some(declared_return), c) =>
+            check_generator_return_type_assignability(
+              c,
+              func,
+              declared_return,
+              return_type_node,
+            )
+          (None, c) => c
+        }
+      None => checker
+    }
+  } else {
+    checker
   }
 
   // Check TS2742: Inferred type cannot be named without reference
@@ -15298,6 +16069,21 @@ fn get_type_from_type_node(
                   } else {
                     resolve_type_alias_type(checker, symbol)
                   }
+                Class => {
+                  // For class types, create a TypeReference to the class
+                  // This preserves the class name for later type checking
+                  let (info, c) = create_type_info(checker)
+                  (
+                    Some(
+                      Type::TypeReference({
+                        name: type_ref.type_name,
+                        type_arguments: [],
+                        info,
+                      }),
+                    ),
+                    c,
+                  )
+                }
                 Module => {
                   // TS2709: Cannot use namespace as a type
                   let checker = add_diagnostic_with_code(
