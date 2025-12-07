@@ -280,6 +280,7 @@ pub struct TypeChecker {
   innermost_function_is_arrow : Bool // True if the innermost containing function is an arrow function
   generator_has_return_type : Bool // Tracks if current generator has a return type annotation
   generator_yield_type : Type? // Expected yield type from generator return type annotation (e.g., Foo from IterableIterator<Foo>)
+  collected_yield_types : Array[Type] // Collected yield types during generator body checking (for type inference)
   block_scoped_decls : Map[String, Int] // Variable name -> declaration line (for TS2448 TDZ check)
   uninitialized_vars : Map[String, Int] // Variable name -> declaration line (for TS2454 definite assignment)
   in_static_context : Bool // Tracks if we're in a static property initializer (for TS2334)
@@ -355,6 +356,7 @@ pub fn TypeChecker::new_with_options(
     innermost_function_is_arrow: false,
     generator_has_return_type: false,
     generator_yield_type: None,
+    collected_yield_types: [],
     block_scoped_decls: Map::new(),
     uninitialized_vars: Map::new(),
     in_static_context: false,
@@ -449,34 +451,84 @@ fn is_in_async_function(checker : TypeChecker) -> Bool {
 
 ///|
 /// Enter generator function context (increment depth)
+/// Returns (updated checker, saved collected yield types for restoration)
 fn enter_generator_function(
   checker : TypeChecker,
   has_return_type : Bool,
   yield_type~ : Type? = None,
-) -> TypeChecker {
-  {
-    ..checker,
-    generator_function_depth: checker.generator_function_depth + 1,
-    generator_has_return_type: has_return_type,
-    generator_yield_type: yield_type,
-  }
+) -> (TypeChecker, Array[Type]) {
+  let saved_yield_types = checker.collected_yield_types
+  (
+    {
+      ..checker,
+      generator_function_depth: checker.generator_function_depth + 1,
+      generator_has_return_type: has_return_type,
+      generator_yield_type: yield_type,
+      collected_yield_types: [], // Reset for new generator
+    },
+    saved_yield_types,
+  )
 }
 
 ///|
 /// Exit generator function context (decrement depth)
-fn exit_generator_function(checker : TypeChecker) -> TypeChecker {
-  {
-    ..checker,
-    generator_function_depth: checker.generator_function_depth - 1,
-    generator_has_return_type: false,
-    generator_yield_type: None,
-  }
+/// Returns (updated checker with collected types, collected yield types from this generator)
+fn exit_generator_function(
+  checker : TypeChecker,
+  saved_yield_types : Array[Type],
+) -> (TypeChecker, Array[Type]) {
+  let collected = checker.collected_yield_types
+  (
+    {
+      ..checker,
+      generator_function_depth: checker.generator_function_depth - 1,
+      generator_has_return_type: false,
+      generator_yield_type: None,
+      collected_yield_types: saved_yield_types, // Restore parent's collected types
+    },
+    collected,
+  )
 }
 
 ///|
 /// Check if currently inside a generator function
 fn is_in_generator_function(checker : TypeChecker) -> Bool {
   checker.generator_function_depth > 0
+}
+
+///|
+/// Collect a yield type for Generator type inference
+/// For yield*, we extract the element type from the iterable
+/// For plain yield, we use the type directly
+fn collect_yield_type(
+  checker : TypeChecker,
+  yield_type : Type,
+  is_delegate : Bool,
+) -> TypeChecker {
+  // Only collect if we're in a generator function
+  if not(is_in_generator_function(checker)) {
+    return checker
+  }
+  // For yield*, extract element type from the iterable
+  let type_to_collect = if is_delegate {
+    // Simple inline extraction for Array types
+    match yield_type {
+      Array(arr) => arr.element_type
+      Type::TypeReference(ref_type) =>
+        if ref_type.name == "Array" && ref_type.type_arguments.length() > 0 {
+          ref_type.type_arguments[0]
+        } else {
+          yield_type
+        }
+      _ => yield_type
+    }
+  } else {
+    yield_type
+  }
+  // Add to collected types
+  let new_collected = checker.collected_yield_types.copy()
+  new_collected.push(type_to_collect)
+  { ..checker, collected_yield_types: new_collected }
 }
 
 ///|
@@ -5510,11 +5562,12 @@ fn infer_method_type(
   // For non-generator methods, we must reset generator_function_depth to 0
   // to ensure yield in nested non-generator methods triggers TS1163
   let saved_generator_depth = checker.generator_function_depth
-  let checker = if method_decl.is_generator {
+  let saved_collected_yield_types = checker.collected_yield_types
+  let (checker, saved_yield_types) = if method_decl.is_generator {
     let has_return_type = method_decl.return_type is Some(_)
     enter_generator_function(checker, has_return_type)
   } else {
-    { ..checker, generator_function_depth: 0, generator_has_return_type: false }
+    ({ ..checker, generator_function_depth: 0, generator_has_return_type: false }, [])
   }
 
   // Build parameter list and add parameters to local scope
@@ -5570,10 +5623,10 @@ fn infer_method_type(
   }
 
   // Exit generator function context or restore saved depth
-  let checker = if method_decl.is_generator {
-    exit_generator_function(checker)
+  let (checker, _collected_yield_types) = if method_decl.is_generator {
+    exit_generator_function(checker, saved_yield_types)
   } else {
-    { ..checker, generator_function_depth: saved_generator_depth }
+    ({ ..checker, generator_function_depth: saved_generator_depth, collected_yield_types: saved_collected_yield_types }, [])
   }
 
   // Exit async function context if needed
@@ -9155,6 +9208,11 @@ fn infer_yield_expression_type(
         checker
       }
 
+      // Collect yield type for Generator type inference
+      // For yield*, we collect the element type of the iterable
+      // For plain yield, we collect the expression type
+      let checker = collect_yield_type(checker, expr_type, ye.is_delegate)
+
       // For yield*, should iterate over the expression
       // For plain yield, return the expression type
       (expr_type, checker)
@@ -9165,6 +9223,8 @@ fn infer_yield_expression_type(
       // For bare yield; statements, only TS7055 on the function is emitted.
       // We don't emit here because we need parent context to know if result is used.
       let (t, checker) = undefined_type(checker)
+      // Collect undefined as a yield type for bare yield
+      let checker = collect_yield_type(checker, t, false)
       (t, checker)
     }
   }
@@ -9855,11 +9915,12 @@ fn infer_function_expression_type(
   // Reset generator context for non-generator function expressions
   // yield is not valid inside a non-generator function, even if nested in a generator
   let saved_generator_depth = checker.generator_function_depth
-  let checker = if fe.is_generator {
+  let saved_collected_yield_types = checker.collected_yield_types
+  let (checker, saved_yield_types) = if fe.is_generator {
     let has_return_type = fe.return_type is Some(_)
     enter_generator_function(checker, has_return_type)
   } else {
-    { ..checker, generator_function_depth: 0, generator_has_return_type: false }
+    ({ ..checker, generator_function_depth: 0, generator_has_return_type: false }, [])
   }
 
   // Build a function type from the function expression and add parameters to local scope
@@ -9965,10 +10026,10 @@ fn infer_function_expression_type(
   let checker = exit_regular_function(checker)
 
   // Exit generator function context or restore saved depth
-  let checker = if fe.is_generator {
-    exit_generator_function(checker)
+  let (checker, collected_yield_types) = if fe.is_generator {
+    exit_generator_function(checker, saved_yield_types)
   } else {
-    { ..checker, generator_function_depth: saved_generator_depth }
+    ({ ..checker, generator_function_depth: saved_generator_depth, collected_yield_types: saved_collected_yield_types }, [])
   }
 
   // Exit async function context if needed
@@ -9977,8 +10038,40 @@ fn infer_function_expression_type(
   // Pop the local scope
   let checker = pop_local_scope(checker)
 
-  // Return the function type we already built
-  (func_type, checker)
+  // For generator functions, create a Generator type if no explicit return type
+  // The Generator type is inferred from collected yield types
+  let (final_type, checker) = if fe.is_generator && fe.return_type is None {
+    // Create Generator<TYield, TReturn, TNext> type
+    // TYield = union of all yield types (or never if empty)
+    // TReturn = void (no explicit return)
+    // TNext = unknown
+    let (yield_union_type, checker) = if collected_yield_types.is_empty() {
+      never_type(checker)
+    } else if collected_yield_types.length() == 1 {
+      (collected_yield_types[0], checker)
+    } else {
+      // Create union of all yield types
+      let (info, checker) = create_type_info(checker)
+      (Union({ types: collected_yield_types, info }), checker)
+    }
+    let (return_type_void, checker) = void_type(checker)
+    let (unknown_type, checker) = unknown_type(checker)
+    let (info, checker) = create_type_info(checker)
+    // Create Generator<TYield, void, unknown> type as a TypeReference
+    let generator_type = Type::TypeReference({
+      name: "Generator",
+      type_arguments: [yield_union_type, return_type_void, unknown_type],
+      info,
+    })
+    // Wrap in function type
+    let (func_info, checker) = create_type_info(checker)
+    (Type::Function({ parameters: preliminary_params, return_type: generator_type, info: func_info }), checker)
+  } else {
+    (func_type, checker)
+  }
+
+  // Return the function type
+  (final_type, checker)
 }
 
 ///|
@@ -10600,6 +10693,14 @@ fn is_assignable(source : Type, target : Type) -> Bool {
     // Object types - structural typing
     (Object(source_obj), Object(target_obj)) =>
       is_object_assignable(source_obj, target_obj)
+    // Object with class_name -> TypeReference (class instance to class type)
+    (Object(source_obj), TypeReference(target_ref)) =>
+      match source_obj.class_name {
+        Some(class_name) =>
+          // Class names match and no type arguments - compatible
+          class_name == target_ref.name && target_ref.type_arguments.length() == 0
+        None => false
+      }
     // Function types - check parameter and return types
     (Function(source_fn), Function(target_fn)) =>
       is_function_assignable(source_fn, target_fn)
@@ -10642,6 +10743,37 @@ fn is_assignable(source : Type, target : Type) -> Bool {
 }
 
 ///|
+/// Check if a type name is a built-in TypeScript generic type
+/// These are types that are part of the TypeScript standard library
+/// but may not be in the symbol table when type checking
+fn is_builtin_generic_type(name : String) -> Bool {
+  match name {
+    "Generator"
+    | "Iterator"
+    | "Iterable"
+    | "IterableIterator"
+    | "AsyncGenerator"
+    | "AsyncIterator"
+    | "AsyncIterable"
+    | "AsyncIterableIterator"
+    | "Promise"
+    | "PromiseLike"
+    | "Array"
+    | "ReadonlyArray"
+    | "Map"
+    | "Set"
+    | "WeakMap"
+    | "WeakSet"
+    | "ReadonlyMap"
+    | "ReadonlySet"
+    | "IteratorResult"
+    | "IteratorYieldResult"
+    | "IteratorReturnResult" => true
+    _ => false
+  }
+}
+
+///|
 /// Check if type reference is assignable
 fn is_type_reference_assignable(
   source : TypeReferenceType,
@@ -10659,20 +10791,52 @@ fn is_type_reference_assignable(
     }
     return true
   }
-  // Different names - for structurally equivalent recursive types (like A<T> vs B<T>),
-  // consider them assignable if they have the same number of type arguments
-  // and all type arguments are assignable. This handles cases like:
-  // interface A<T> { x: A<()=>T>; } and interface B<T> { x: B<()=>T>; }
-  // where A<string> should be assignable to B<string>
-  if source.type_arguments.length() != target.type_arguments.length() {
-    return false
-  }
-  for i = 0; i < source.type_arguments.length(); i = i + 1 {
-    if not(is_assignable(source.type_arguments[i], target.type_arguments[i])) {
-      return false
+
+  // Special handling for Generator<TYield, TReturn, TNext> assignability
+  // Generator extends Iterator<TYield> which implements Iterable<TYield>
+  if source.name == "Generator" && source.type_arguments.length() >= 1 {
+    let source_yield_type = source.type_arguments[0]
+
+    // Generator<TYield> -> Iterable<T>: TYield must be assignable to T
+    if target.name == "Iterable" && target.type_arguments.length() >= 1 {
+      let target_element_type = target.type_arguments[0]
+      return is_assignable(source_yield_type, target_element_type)
+    }
+
+    // Generator<TYield> -> Iterator<T>: TYield must be assignable to T
+    if target.name == "Iterator" && target.type_arguments.length() >= 1 {
+      let target_yield_type = target.type_arguments[0]
+      return is_assignable(source_yield_type, target_yield_type)
+    }
+
+    // Generator<TYield> -> IterableIterator<T>: TYield must be assignable to T
+    if target.name == "IterableIterator" && target.type_arguments.length() >= 1 {
+      let target_element_type = target.type_arguments[0]
+      return is_assignable(source_yield_type, target_element_type)
     }
   }
-  true
+
+  // Different names - for built-in generic types with different names,
+  // return false (they need explicit handling like Generator -> Iterable above)
+  // But for class types and other user-defined types with no type arguments,
+  // we need structural compatibility checking which happens elsewhere.
+  //
+  // For class types (no type arguments), return true here to allow structural
+  // checking to happen via Object type comparison. The actual structural check
+  // should happen in check_assignment_detailed when both types have resolved
+  // object representations.
+  if source.type_arguments.length() == 0 &&
+    target.type_arguments.length() == 0 &&
+    not(is_builtin_generic_type(source.name)) &&
+    not(is_builtin_generic_type(target.name)) {
+    // For class types, defer to structural checking (handled elsewhere)
+    // This allows Bar extends Foo to work
+    true
+  } else {
+    // For generic types with different names and type arguments, return false
+    // This prevents Generator<T> from being incorrectly assignable to unrelated types
+    false
+  }
 }
 
 ///|
@@ -11017,6 +11181,42 @@ fn check_assignment_detailed(
       return check_tuple_assignability_detailed(
         checker, source_tuple, target_tuple, location, path,
       )
+    _ => ()
+  }
+
+  // Check TypeReference types (classes, Generator, Iterable, etc.)
+  match (source, target) {
+    (TypeReference(source_ref), TypeReference(target_ref)) =>
+      return check_type_reference_assignability_detailed(
+        checker, source_ref, target_ref, location, path,
+      )
+    _ => ()
+  }
+
+  // Handle Object with class_name -> TypeReference (class instance assigned to class type)
+  // This happens when: const f: Foo = new Foo();
+  // new Foo() returns Object{class_name: Some("Foo")} but target is TypeReference("Foo", [])
+  match (source, target) {
+    (Object(source_obj), TypeReference(target_ref)) =>
+      match source_obj.class_name {
+        Some(source_class_name) => {
+          // If class names match and target has no type arguments, they're compatible
+          if source_class_name == target_ref.name &&
+            target_ref.type_arguments.length() == 0 {
+            return checker
+          }
+          // Check if source class inherits from target class
+          // Resolve target class to object type and check structural compatibility
+          match resolve_class_to_object_type(checker, target_ref.name) {
+            Some(target_obj) =>
+              return check_object_assignability_detailed(
+                checker, source_obj, target_obj, location, path,
+              )
+            None => () // Fall through to default handling
+          }
+        }
+        None => () // Object without class_name - fall through
+      }
     _ => ()
   }
 
@@ -11411,6 +11611,209 @@ fn check_tuple_assignability_detailed(
     }
   }
   checker
+}
+
+///|
+/// Check TypeReference assignability with detailed error reporting
+/// Handles Generator -> Iterable, class types, etc.
+fn check_type_reference_assignability_detailed(
+  checker : TypeChecker,
+  source : TypeReferenceType,
+  target : TypeReferenceType,
+  location : SourceLocation,
+  path : String,
+) -> TypeChecker {
+  // Same type name - check type arguments
+  if source.name == target.name {
+    if source.type_arguments.length() != target.type_arguments.length() {
+      return add_diagnostic_with_code(
+        checker,
+        "Type '\{source.name}' requires \{target.type_arguments.length()} type argument(s) but got \{source.type_arguments.length()}.",
+        location,
+        TS2322,
+      )
+    }
+    let mut checker = checker
+    for i = 0; i < source.type_arguments.length(); i = i + 1 {
+      checker = check_assignment_detailed(
+        checker,
+        source.type_arguments[i],
+        target.type_arguments[i],
+        location,
+        path,
+      )
+    }
+    return checker
+  }
+
+  // Special handling for Generator<TYield, TReturn, TNext> -> Iterable<T>
+  if source.name == "Generator" && source.type_arguments.length() >= 1 {
+    let source_yield_type = source.type_arguments[0]
+    // Filter out undefined from yield type - bare yield; statements don't affect type compatibility
+    let filtered_yield_opt = filter_undefined_from_type(source_yield_type)
+
+    // Generator<TYield> -> Iterable<T>: TYield must be assignable to T
+    if target.name == "Iterable" && target.type_arguments.length() >= 1 {
+      let target_element_type = target.type_arguments[0]
+      match filtered_yield_opt {
+        None => return checker // Only undefined yields - compatible with any element type
+        Some(filtered_yield) =>
+          return check_assignment_detailed(
+            checker, filtered_yield, target_element_type, location, path,
+          )
+      }
+    }
+
+    // Generator<TYield> -> Iterator<T>: TYield must be assignable to T
+    if target.name == "Iterator" && target.type_arguments.length() >= 1 {
+      let target_yield_type = target.type_arguments[0]
+      match filtered_yield_opt {
+        None => return checker // Only undefined yields - compatible with any element type
+        Some(filtered_yield) =>
+          return check_assignment_detailed(
+            checker, filtered_yield, target_yield_type, location, path,
+          )
+      }
+    }
+
+    // Generator<TYield> -> IterableIterator<T>: TYield must be assignable to T
+    if target.name == "IterableIterator" && target.type_arguments.length() >= 1 {
+      let target_element_type = target.type_arguments[0]
+      match filtered_yield_opt {
+        None => return checker // Only undefined yields - compatible with any element type
+        Some(filtered_yield) =>
+          return check_assignment_detailed(
+            checker, filtered_yield, target_element_type, location, path,
+          )
+      }
+    }
+  }
+
+  // For class types (no type arguments), resolve to their object types and check
+  // structural compatibility
+  if source.type_arguments.length() == 0 &&
+    target.type_arguments.length() == 0 &&
+    not(is_builtin_generic_type(source.name)) &&
+    not(is_builtin_generic_type(target.name)) {
+    // Resolve class types to their object types for structural comparison
+    let source_obj_opt = resolve_class_to_object_type(checker, source.name)
+    let target_obj_opt = resolve_class_to_object_type(checker, target.name)
+
+    match (source_obj_opt, target_obj_opt) {
+      (Some(source_obj), Some(target_obj)) =>
+        // Check structural compatibility between resolved object types
+        return check_object_assignability_detailed(
+          checker, source_obj, target_obj, location, path,
+        )
+      _ => {
+        // Can't resolve types - fall through to default handling
+        ()
+      }
+    }
+  }
+
+  // Default: types are not assignable
+  let source_str = type_ref_to_string(source)
+  let target_str = type_ref_to_string(target)
+  let msg = if path == "" {
+    "Type '\{source_str}' is not assignable to type '\{target_str}'"
+  } else {
+    "Type '\{source_str}' is not assignable to type '\{target_str}' at \{path}"
+  }
+  add_diagnostic_with_code(checker, msg, location, TS2322)
+}
+
+///|
+/// Convert TypeReferenceType to string for error messages
+fn type_ref_to_string(ref_type : TypeReferenceType) -> String {
+  if ref_type.type_arguments.length() > 0 {
+    let args_str = ref_type.type_arguments.map(type_to_string).join(", ")
+    ref_type.name + "<" + args_str + ">"
+  } else {
+    ref_type.name
+  }
+}
+
+///|
+/// Resolve a class name to its object type for structural comparison
+fn resolve_class_to_object_type(
+  checker : TypeChecker,
+  class_name : String,
+) -> ObjectType? {
+  match lookup_symbol(checker, class_name) {
+    Some(symbol) =>
+      match symbol.kind {
+        Class => {
+          // Get the class from the symbol and extract its properties
+          let properties : Map[String, PropertySignature] = Map::new()
+          // Use the value_declaration to get the class declaration
+          match symbol.value_declaration {
+            Some(node) =>
+              match node {
+                ClassDeclaration(class_decl) => {
+                  // First, add inherited properties from the parent class
+                  for heritage_clause in class_decl.heritage_clauses {
+                    if heritage_clause.kind == Extends {
+                      for type_node in heritage_clause.types {
+                        // Extract the parent class name from heritage node
+                        let parent_name = get_name_from_heritage_node(type_node)
+                        match parent_name {
+                          Some(name) =>
+                            // Recursively get parent class properties
+                            match resolve_class_to_object_type(checker, name) {
+                              Some(parent_obj) =>
+                                for entry in parent_obj.properties {
+                                  let (prop_name, prop_sig) = entry
+                                  properties[prop_name] = prop_sig
+                                }
+                              None => ()
+                            }
+                          None => ()
+                        }
+                      }
+                    }
+                  }
+                  // Then add this class's own properties (overriding inherited ones)
+                  for mem in class_decl.members {
+                    match mem {
+                      PropertyDeclaration(prop_decl) => {
+                        let (prop_type, _) = match prop_decl.type_annotation {
+                          Some(type_node) =>
+                            match get_type_from_type_node(checker, type_node) {
+                              (Some(t), _) => (t, checker)
+                              (None, _) => any_type(checker)
+                            }
+                          None => any_type(checker)
+                        }
+                        properties[prop_decl.name] = PropertySignature::{
+                          name: prop_decl.name,
+                          prop_type,
+                          is_optional: prop_decl.is_optional,
+                          is_readonly: false,
+                        }
+                      }
+                      _ => ()
+                    }
+                  }
+                }
+                _ => ()
+              }
+            None => ()
+          }
+          let (info, _) = create_type_info(checker)
+          Some({
+            properties,
+            call_signatures: [],
+            construct_signatures: [],
+            index_signatures: [],
+            info,
+            class_name: Some(class_name),
+          })
+        }
+        _ => None
+      }
+    None => None
+  }
 }
 
 ///|
@@ -12183,9 +12586,8 @@ fn check_generator_return_type_assignability(
   // Collect yield types from the function body
   let (yield_types, checker) = collect_yield_types_from_body(checker, func.body)
 
-  // Determine the combined yield type
+  // Determine the combined yield type (void if no yields)
   let (yield_type, checker) = if yield_types.length() == 0 {
-    // No yields - use void
     void_type(checker)
   } else if yield_types.length() == 1 {
     (yield_types[0], checker)
@@ -12206,13 +12608,17 @@ fn check_generator_return_type_assignability(
 
   // Check assignability - use type_node_to_string for accurate type name in errors
   let original_target_str = type_node_to_string(return_type_node)
-  check_generator_type_assignability(
+
+  // If no yields, skip the yield type compatibility check but still do structural checking
+  let has_yields = yield_types.length() > 0
+  check_generator_type_assignability_v2(
     checker,
     generator_type,
     yield_type,
     resolved_return,
     original_target_str,
     get_location(return_type_node),
+    has_yields,
   )
 }
 
@@ -12260,14 +12666,15 @@ fn resolve_type_for_generator_check(
 }
 
 ///|
-/// Check if a Generator type is assignable to a target type
-fn check_generator_type_assignability(
+/// Check if a Generator type is assignable to a target type (v2 with has_yields param)
+fn check_generator_type_assignability_v2(
   checker : TypeChecker,
   generator_type : Type,
   yield_type : Type,
   resolved_target : Type,
   original_target_str : String,
   location : SourceLocation,
+  has_yields : Bool,
 ) -> TypeChecker {
   match resolved_target {
     Object(target_obj) => {
@@ -12294,8 +12701,9 @@ fn check_generator_type_assignability(
     TypeReference(target_ref) =>
       // Check if target is an iterator type and verify type parameter compatibility
       if is_iterator_type_name(target_ref.name) {
-        // Check if yield type is compatible with the expected element type
-        if target_ref.type_arguments.length() > 0 {
+        // Only check yield type compatibility if there are actual yields
+        // Empty generators are compatible with any element type
+        if has_yields && target_ref.type_arguments.length() > 0 {
           let expected_yield = target_ref.type_arguments[0]
           check_yield_type_vs_expected(
             checker,
@@ -12327,17 +12735,68 @@ fn check_yield_type_vs_expected(
   original_target_str : String,
   location : SourceLocation,
 ) -> TypeChecker {
-  // Simple structural check - actual must be assignable to expected
-  if is_assignable(actual_yield, expected_yield) {
-    checker
-  } else {
-    // TS2322: Type not assignable
-    add_diagnostic_with_code(
-      checker,
-      "Type '\{type_to_string(generator_type)}' is not assignable to type '\{original_target_str}'.",
-      location,
-      TS2322,
-    )
+  // Filter out undefined from the actual yield type
+  // In TypeScript, bare yield; statements don't affect the type parameter
+  // when there's an explicit return type annotation
+  let filtered_yield = filter_undefined_from_type(actual_yield)
+
+  // If after filtering, there's nothing left (only undefined yields), it's valid
+  match filtered_yield {
+    None => checker
+    Some(yield_type) => {
+      // Check if the yield type is assignable to the expected type
+      // Use check_assignment_detailed which handles class inheritance
+      let initial_error_count = checker.diagnostics.length()
+      let checked = check_assignment_detailed(
+        checker,
+        yield_type,
+        expected_yield,
+        location,
+        "",
+      )
+      // If there were new errors, we need to report the generator type error instead
+      if checked.diagnostics.length() > initial_error_count {
+        // Remove the detailed error and add a generator-specific error
+        let diagnostics : Array[Diagnostic] = []
+        for i = 0; i < initial_error_count; i = i + 1 {
+          diagnostics.push(checked.diagnostics[i])
+        }
+        add_diagnostic_with_code(
+          { ..checked, diagnostics },
+          "Type '\{type_to_string(generator_type)}' is not assignable to type '\{original_target_str}'.",
+          location,
+          TS2322,
+        )
+      } else {
+        checked
+      }
+    }
+  }
+}
+
+///|
+/// Filter undefined from a type - returns None if only undefined, Some(type) otherwise
+fn filter_undefined_from_type(t : Type) -> Type? {
+  match t {
+    Undefined(_) => None
+    Union(u) => {
+      // Filter out undefined from the union
+      let filtered : Array[Type] = []
+      for member in u.types {
+        match member {
+          Undefined(_) => () // Skip undefined
+          _ => filtered.push(member)
+        }
+      }
+      if filtered.length() == 0 {
+        None
+      } else if filtered.length() == 1 {
+        Some(filtered[0])
+      } else {
+        Some(Union({ types: filtered, info: u.info }))
+      }
+    }
+    _ => Some(t)
   }
 }
 
@@ -12718,7 +13177,8 @@ fn check_function_declaration(
   // For non-generator functions, we must reset generator_function_depth to 0
   // to ensure yield in nested non-generator functions triggers TS1163
   let saved_generator_depth = checker.generator_function_depth
-  let (checker, saved_yield_type) = if func.is_generator {
+  let saved_collected_yield_types = checker.collected_yield_types
+  let (checker, saved_yield_types) = if func.is_generator {
     let has_return_type = func.return_type is Some(_)
     // Extract yield type from return type annotation (e.g., Foo from IterableIterator<Foo>)
     let (yield_type, checker) = match func.return_type {
@@ -12726,10 +13186,10 @@ fn check_function_declaration(
         extract_yield_type_from_return_type(checker, return_type_node)
       None => (None, checker)
     }
-    (enter_generator_function(checker, has_return_type, yield_type=yield_type), checker.generator_yield_type)
+    enter_generator_function(checker, has_return_type, yield_type=yield_type)
   } else {
     // Reset generator context - yield is not valid in non-generator functions
-    ({ ..checker, generator_function_depth: 0, generator_has_return_type: false, generator_yield_type: None }, checker.generator_yield_type)
+    ({ ..checker, generator_function_depth: 0, generator_has_return_type: false, generator_yield_type: None }, [])
   }
 
   // Track regular function context (for 'arguments' object availability)
@@ -12749,11 +13209,11 @@ fn check_function_declaration(
   }
 
   // Exit generator function context or restore saved depth
-  let checker = if func.is_generator {
-    exit_generator_function(checker)
+  let (checker, _collected_yield_types) = if func.is_generator {
+    exit_generator_function(checker, saved_yield_types)
   } else {
     // Restore the saved generator context
-    { ..checker, generator_function_depth: saved_generator_depth }
+    ({ ..checker, generator_function_depth: saved_generator_depth, collected_yield_types: saved_collected_yield_types }, [])
   }
 
   // Exit async function context
@@ -12768,14 +13228,21 @@ fn check_function_declaration(
 
   // Check return type consistency if a return type is declared
   // This must happen AFTER body is checked so variables are in scope
-  let checker = match func.return_type {
-    Some(return_type_node) =>
-      match get_type_from_type_node(checker, return_type_node) {
-        (Some(declared_return), c) =>
-          check_return_type_consistency(c, func, declared_return)
-        (None, c) => c
-      }
-    None => checker
+  // Skip for generators - their return type is checked differently (via yield types)
+  let checker = if func.is_generator {
+    // For generators, return statements are checked separately
+    // (against the TReturn type argument, not the full Generator/Iterator type)
+    checker
+  } else {
+    match func.return_type {
+      Some(return_type_node) =>
+        match get_type_from_type_node(checker, return_type_node) {
+          (Some(declared_return), c) =>
+            check_return_type_consistency(c, func, declared_return)
+          (None, c) => c
+        }
+      None => checker
+    }
   }
 
   // Check generator return type assignability (TS2741, TS2322)
@@ -13720,11 +14187,11 @@ fn check_class_declaration(
               checker
             }
             // Track generator function context for yield expressions
-            let checker = if method_dec.is_generator {
+            let (checker, saved_yield_types) = if method_dec.is_generator {
               let has_return_type = method_dec.return_type is Some(_)
               enter_generator_function(checker, has_return_type)
             } else {
-              checker
+              (checker, [])
             }
             // Add method parameters to scope
             let mut checker = checker
@@ -13735,10 +14202,10 @@ fn check_class_declaration(
             let checker = hoist_var_declarations(checker, body)
             let checker = check_statement(checker, body)
             // Exit generator function context if needed
-            let checker = if method_dec.is_generator {
-              exit_generator_function(checker)
+            let (checker, _collected_yield_types) = if method_dec.is_generator {
+              exit_generator_function(checker, saved_yield_types)
             } else {
-              checker
+              (checker, [])
             }
             // Exit async function context if needed
             let checker = if method_dec.is_async {
@@ -16097,7 +16564,41 @@ fn get_type_from_type_node(
                 _ => (None, checker) // Other symbol kinds not yet supported
               }
             }
-            None => (None, checker)
+            None =>
+              // Handle well-known TypeScript built-in types that may not be in the symbol table
+              // These are standard library types like Generator, Iterable, Iterator, etc.
+              if is_builtin_generic_type(type_ref.type_name) {
+                // Create a TypeReference for the built-in type with resolved type arguments
+                let mut checker = checker
+                let resolved_args : Array[Type] = []
+                for i = 0; i < type_ref.type_arguments.length(); i = i + 1 {
+                  match get_type_from_type_node(checker, type_ref.type_arguments[i]) {
+                    (Some(arg_type), c) => {
+                      resolved_args.push(arg_type)
+                      checker = c
+                    }
+                    (None, c) => {
+                      // If we can't resolve a type argument, use any as fallback
+                      let (any_t, c2) = any_type(c)
+                      resolved_args.push(any_t)
+                      checker = c2
+                    }
+                  }
+                }
+                let (info, checker) = create_type_info(checker)
+                (
+                  Some(
+                    Type::TypeReference({
+                      name: type_ref.type_name,
+                      type_arguments: resolved_args,
+                      info,
+                    }),
+                  ),
+                  checker,
+                )
+              } else {
+                (None, checker)
+              }
           }
       }
     ArrayType(array_type) =>
