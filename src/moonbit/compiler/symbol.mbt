@@ -1516,6 +1516,8 @@ pub enum ContainerKind {
   Function
   Block
   ForStatement
+  ForOfStatement
+  ForInStatement
   CatchBlock
   EnumDeclaration
 } derive(Show, Eq)

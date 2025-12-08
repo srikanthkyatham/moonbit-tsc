@@ -547,6 +547,84 @@ fn bind_statement(binder : Binder, node : Node) -> Binder {
       create_unreachable_flow(binder)
     }
 
+    // For-of statement
+    ForOfStatement(for_of_stmt) => {
+      let binder = push_scope(binder)
+      let binder = push_container(binder, ContainerKind::ForOfStatement)
+
+      // Bind the initializer (loop variable)
+      let binder = bind_for_of_initializer(binder, for_of_stmt.initializer)
+
+      // Bind the expression being iterated over
+      let binder = bind_expression(binder, for_of_stmt.expression)
+
+      // Create loop label for break/continue targets
+      let break_label_id = binder.cfg_builder.next_id
+      let continue_label_id = break_label_id + 1
+      let binder = create_loop_label_flow(
+        binder,
+        Some(break_label_id),
+        Some(continue_label_id),
+      )
+
+      // Push loop context for break/continue handling
+      let cfg_builder = binder.cfg_builder.push_loop(
+        break_label_id,
+        continue_label_id,
+        None,
+      )
+      let binder = { ..binder, cfg_builder, }
+
+      // Bind loop body
+      let binder = bind_statement(binder, for_of_stmt.statement)
+
+      // Pop loop context
+      let cfg_builder = binder.cfg_builder.pop_loop()
+      let binder = { ..binder, cfg_builder, }
+
+      let binder = pop_container(binder)
+      pop_scope(binder)
+    }
+
+    // For-in statement
+    ForInStatement(for_in_stmt) => {
+      let binder = push_scope(binder)
+      let binder = push_container(binder, ContainerKind::ForInStatement)
+
+      // Bind the initializer (loop variable)
+      let binder = bind_for_of_initializer(binder, for_in_stmt.initializer)
+
+      // Bind the expression being iterated over
+      let binder = bind_expression(binder, for_in_stmt.expression)
+
+      // Create loop label for break/continue targets
+      let break_label_id = binder.cfg_builder.next_id
+      let continue_label_id = break_label_id + 1
+      let binder = create_loop_label_flow(
+        binder,
+        Some(break_label_id),
+        Some(continue_label_id),
+      )
+
+      // Push loop context for break/continue handling
+      let cfg_builder = binder.cfg_builder.push_loop(
+        break_label_id,
+        continue_label_id,
+        None,
+      )
+      let binder = { ..binder, cfg_builder, }
+
+      // Bind loop body
+      let binder = bind_statement(binder, for_in_stmt.statement)
+
+      // Pop loop context
+      let cfg_builder = binder.cfg_builder.pop_loop()
+      let binder = { ..binder, cfg_builder, }
+
+      let binder = pop_container(binder)
+      pop_scope(binder)
+    }
+
     // Other statements - no binding needed
     _ => binder
   }
@@ -561,6 +639,80 @@ fn bind_variable_declarations(
   is_export : Bool,
 ) -> Binder {
   bind_variable_declarations_aux(binder, declarations, is_const, is_export, 0)
+}
+
+///|
+/// Bind variable declarations with optional hoisting
+fn bind_variable_declarations_with_hoisting(
+  binder : Binder,
+  declarations : Array[VariableDeclaration],
+  is_const : Bool,
+  is_export : Bool,
+  hoist_to_function_scope : Bool,
+) -> Binder {
+  bind_variable_declarations_with_hoisting_aux(
+    binder,
+    declarations,
+    is_const,
+    is_export,
+    hoist_to_function_scope,
+    0,
+  )
+}
+
+///|
+fn bind_variable_declarations_with_hoisting_aux(
+  binder : Binder,
+  declarations : Array[VariableDeclaration],
+  is_const : Bool,
+  is_export : Bool,
+  hoist_to_function_scope : Bool,
+  index : Int,
+) -> Binder {
+  if index >= declarations.length() {
+    binder
+  } else {
+    let decl = declarations[index]
+    let binder = bind_variable_declaration_with_hoisting(
+      binder,
+      decl,
+      is_const,
+      is_export,
+      hoist_to_function_scope,
+    )
+    bind_variable_declarations_with_hoisting_aux(
+      binder,
+      declarations,
+      is_const,
+      is_export,
+      hoist_to_function_scope,
+      index + 1,
+    )
+  }
+}
+
+///|
+fn bind_variable_declaration_with_hoisting(
+  binder : Binder,
+  decl : VariableDeclaration,
+  is_const : Bool,
+  is_export : Bool,
+  hoist_to_function_scope : Bool,
+) -> Binder {
+  // Bind the pattern (identifier, array pattern, or object pattern)
+  let binder = bind_binding_pattern_internal(
+    binder,
+    decl.name,
+    is_const,
+    is_export,
+    hoist_to_function_scope,
+  )
+
+  // Bind initializer expression if present
+  match decl.initializer {
+    Some(init) => bind_expression(binder, init)
+    None => binder
+  }
 }
 
 ///|
@@ -604,12 +756,51 @@ fn bind_variable_declaration(
 }
 
 ///|
+/// Bind for-of/for-in loop initializer
+/// Handles: var/let/const declarations and expression patterns
+fn bind_for_of_initializer(binder : Binder, initializer : Node) -> Binder {
+  match initializer {
+    // Variable declaration (for (var/let/const x of ...))
+    VariableStatement(var_stmt) => {
+      // For var declarations, we need to hoist to function scope
+      // For let/const, bind to loop scope (current scope)
+      // is_var = not is_const and not is_let
+      let is_var = not(var_stmt.is_const) && not(var_stmt.is_let)
+      bind_variable_declarations_with_hoisting(
+        binder,
+        var_stmt.declarations,
+        var_stmt.is_const,
+        false, // Not exported
+        is_var, // Hoist var to function scope
+      )
+    }
+    // Expression pattern (for (x of ...) where x is already declared)
+    _ => {
+      // Just bind as an expression (property access, identifier, etc.)
+      bind_expression(binder, initializer)
+    }
+  }
+}
+
+///|
 /// Bind a binding pattern (recursively binds all identifiers)
 fn bind_binding_pattern(
   binder : Binder,
   pattern : Node,
   is_const : Bool,
   is_export : Bool,
+) -> Binder {
+  bind_binding_pattern_internal(binder, pattern, is_const, is_export, false)
+}
+
+///|
+/// Internal helper for binding patterns with optional var hoisting
+fn bind_binding_pattern_internal(
+  binder : Binder,
+  pattern : Node,
+  is_const : Bool,
+  is_export : Bool,
+  hoist_to_function_scope : Bool,
 ) -> Binder {
   match pattern {
     Identifier(id) => {
@@ -627,14 +818,26 @@ fn bind_binding_pattern(
       if is_export {
         symbol = { ..symbol, flags: { ..symbol.flags, is_export: true } }
       }
-      declare_symbol(binder, id.name, symbol)
+
+      // For var declarations in nested scopes, hoist to function scope
+      if hoist_to_function_scope && not(is_const) {
+        declare_symbol_in_function_scope(binder, id.name, symbol)
+      } else {
+        declare_symbol(binder, id.name, symbol)
+      }
     }
     ArrayBindingPattern(array_pattern) => {
       let mut binder = binder
       for i = 0; i < array_pattern.elements.length(); i = i + 1 {
         match array_pattern.elements[i] {
           Some(element) =>
-            binder = bind_binding_pattern(binder, element, is_const, is_export)
+            binder = bind_binding_pattern_internal(
+              binder,
+              element,
+              is_const,
+              is_export,
+              hoist_to_function_scope,
+            )
           None => () // Hole in pattern
         }
       }
@@ -644,16 +847,34 @@ fn bind_binding_pattern(
       let mut binder = binder
       for i = 0; i < obj_pattern.properties.length(); i = i + 1 {
         let prop = obj_pattern.properties[i]
-        binder = bind_binding_pattern(binder, prop.name, is_const, is_export)
+        binder = bind_binding_pattern_internal(
+          binder,
+          prop.name,
+          is_const,
+          is_export,
+          hoist_to_function_scope,
+        )
       }
       binder
     }
     // Handle binding element with initializer: [a = 1] or {x: y = 1}
     BindingElement(elem) =>
-      bind_binding_pattern(binder, elem.name, is_const, is_export)
+      bind_binding_pattern_internal(
+        binder,
+        elem.name,
+        is_const,
+        is_export,
+        hoist_to_function_scope,
+      )
     // Handle spread/rest element: [...rest] or [...[a, b]]
     SpreadExpression(spread) =>
-      bind_binding_pattern(binder, spread.expression, is_const, is_export)
+      bind_binding_pattern_internal(
+        binder,
+        spread.expression,
+        is_const,
+        is_export,
+        hoist_to_function_scope,
+      )
     _ => binder // Unknown pattern type
   }
 }
@@ -2075,6 +2296,75 @@ pub fn is_top_level(binder : Binder) -> Bool {
 
 ///|
 /// Declare a symbol in the current scope
+///|
+/// Declare a symbol in the function scope (for var hoisting)
+fn declare_symbol_in_function_scope(
+  binder : Binder,
+  name : String,
+  symbol : Symbol,
+) -> Binder {
+  // Find the function or source file scope
+  let mut scope_index = binder.scopes.length() - 1
+  while scope_index >= 0 {
+    let container = binder.containers[scope_index]
+    match container.kind {
+      ContainerKind::Function | ContainerKind::SourceFile => {
+        // Found the function/source file scope
+        let scope = binder.scopes[scope_index]
+        // Check for existing symbol
+        match scope.symbols.get(name) {
+          Some(existing_symbol) => {
+            // Allow var merging
+            if existing_symbol.kind == SymbolKind::Variable &&
+              symbol.kind == SymbolKind::Variable &&
+              not(existing_symbol.flags.is_const) &&
+              not(symbol.flags.is_const) {
+              // Merge the symbols
+              let merged_symbol = merge_symbols(existing_symbol, symbol)
+              let new_symbols = scope.symbols
+              new_symbols.set(name, merged_symbol)
+              let updated_scope = { ..scope, symbols: new_symbols }
+              let new_scopes = binder.scopes
+              new_scopes[scope_index] = updated_scope
+              return {
+                ..binder,
+                scopes: new_scopes,
+                next_symbol_id: binder.next_symbol_id + 1,
+              }
+            } else {
+              // Duplicate declaration error
+              let diagnostic = Diagnostic::error(
+                "Duplicate identifier '\{name}'.",
+                get_symbol_location(symbol),
+                2300,
+              )
+              let new_diagnostics = binder.diagnostics
+              new_diagnostics.push(diagnostic)
+              return { ..binder, diagnostics: new_diagnostics }
+            }
+          }
+          None => {
+            // Add new symbol
+            let new_symbols = scope.symbols
+            new_symbols.set(name, symbol)
+            let updated_scope = { ..scope, symbols: new_symbols }
+            let new_scopes = binder.scopes
+            new_scopes[scope_index] = updated_scope
+            return {
+              ..binder,
+              scopes: new_scopes,
+              next_symbol_id: binder.next_symbol_id + 1,
+            }
+          }
+        }
+      }
+      _ => scope_index = scope_index - 1
+    }
+  }
+  // If no function scope found, declare in current scope
+  declare_symbol(binder, name, symbol)
+}
+
 fn declare_symbol(binder : Binder, name : String, symbol : Symbol) -> Binder {
   let scope = current_scope(binder)
 
