@@ -1042,7 +1042,26 @@ fn bind_module_declaration(
     let augmentation_scope = current_scope(binder)
     let declarations = augmentation_scope.symbols
 
-    // Create global augmentation record
+    // Merge declarations into global scope (first scope in stack)
+    // Global augmentations should be available globally
+    let global_symbols = binder.scopes[0].symbols
+    for entry in declarations {
+      let (name, symbol) = entry
+      // Merge or add symbol to global scope
+      match global_symbols.get(name) {
+        Some(existing_symbol) => {
+          // Merge with existing symbol (for interfaces, namespaces, etc.)
+          let merged = merge_symbols(existing_symbol, symbol)
+          global_symbols.set(name, merged)
+        }
+        None => {
+          // Add new symbol to global scope
+          global_symbols.set(name, symbol)
+        }
+      }
+    }
+
+    // Create global augmentation record (for potential later use)
     let augmentation = GlobalAugmentation::{
       declarations,
       body: mod_decl.body,
