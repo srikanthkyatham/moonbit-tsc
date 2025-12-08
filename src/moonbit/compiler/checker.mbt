@@ -14535,6 +14535,14 @@ fn check_for_of_left_side(
     PropertyAccessExpression(_) => checker
     // Valid: for (obj["prop"] of arr) - element access assignment
     ElementAccessExpression(_) => checker
+    // Valid: for ([a, b] of arr) - array destructuring without declaration
+    ArrayBindingPattern(_) => checker
+    // Valid: for ({x, y} of arr) - object destructuring without declaration
+    ObjectBindingPattern(_) => checker
+    // Valid: for ([a, b] of arr) - array literal used as destructuring pattern
+    ArrayLiteralExpression(_) => checker
+    // Valid: for ({x, y} of arr) - object literal used as destructuring pattern
+    ObjectLiteralExpression(_) => checker
     // Invalid: expressions like (1 + 2), function calls, etc.
     _ =>
       add_diagnostic_with_code(
@@ -14644,6 +14652,11 @@ fn add_for_of_variable_to_scope(
         None => checker
       }
     }
+    // Handle: for ([a, b] of arr) or for ({x, y} of arr)
+    // Bare destructuring pattern (without var/let/const)
+    // Variables should already be declared
+    ArrayBindingPattern(_) | ObjectBindingPattern(_) | ArrayLiteralExpression(_) | ObjectLiteralExpression(_) =>
+      checker
     _ => checker
   }
 }

@@ -1,0 +1,217 @@
+ Name Resolution & Module Errors (8) - Done
+
+  - TS2306: File is not a module
+  - TS2318: Cannot find global type
+  - TS2691: Import path cannot end with extension
+  - TS2692: Cannot find module or type declarations
+  - TS2694: Namespace has no exported member
+  - TS2709: Cannot use namespace as type
+  - TS2710: Cannot use namespace as value
+  - TS2766: Cannot find module (moduleResolution)
+
+  Type Assignment & Compatibility (19) - done
+
+  - TS2320: Interface cannot simultaneously extend types
+  - TS2324: Property is missing in type
+  - TS2326: Types of parameters are incompatible
+  - TS2328: Types of property are incompatible
+  - TS2329: Index signature is missing
+  - TS2334: 'this' cannot be referenced in static property
+  - TS2344: Type does not satisfy constraint
+  - TS2348: Value has no properties in common
+  - TS2350: Only void function can be called with new
+  - TS2352: Conversion may be a mistake
+  - TS2717: Type cannot be assigned to type
+  - TS2739: Type is missing properties from type
+  - TS2740: Type is missing properties (and more)
+  - TS2744: Type does not satisfy constraint
+  - TS2752: Type not assignable (different types same name)
+  - TS2757: Type not assignable
+  - TS2758: Types of property incompatible
+
+  Operator & Expression Errors (12) - done
+
+  - TS2358: Left-hand side of instanceof must be object type
+  - TS2359: Right-hand side of instanceof must be Function type
+  - TS2367: Condition will always return same value
+  - TS2695: Left side of comma operator unused
+  - TS2772: Cannot use 'in' operator
+  - TS2773: Condition will always return true (function)
+  - TS2774: Condition will always return true
+  - TS2800: Operator cannot be applied to types
+  - TS2737: BigInt literals not available
+
+  Function & Parameter Errors (12) - done
+
+  - TS2368: Type parameter name cannot be X
+  - TS2369: Parameter property only in constructor
+  - TS2371: Parameter initializer only in function/constructor
+  - TS2372: Parameter cannot reference itself
+  - TS2383: Overload signatures must all be ambient or non-ambient
+  - TS2388: Function overload must not be static
+  - TS2389: Function implementation signature must be assignable
+  - TS2390: Constructor implementation is missing
+  - TS2395: Individual declarations must be all exported/local
+  - TS2706: Required type parameters may not follow optional
+  - TS2707: Generic type requires between N and M type arguments
+
+  For-in/For-of Errors (3) - done
+
+  - TS2406: Left-hand side of for...in must be variable
+  - TS2407: Right-hand side of for...in must be object type
+  - TS2487: Left-hand side of for...of must be variable
+
+  Class & Interface Errors (20) - done 
+
+  - TS2411: Property type not assignable to index type
+  - TS2412: exactOptionalPropertyTypes error
+  - TS2417: Class static side incorrectly extends
+  - TS2446: Property is protected in type but public
+  - TS2508: No base constructor has specified type arguments
+  - TS2510: Base constructors must have same return type
+  - TS2517: Non-abstract class member cannot be abstract
+  - TS2520: abstract modifier only on class/method/property
+  - TS2630: Cannot assign abstract constructor
+  - TS2631: Cannot assign to readonly property
+  - TS2632: Separate declarations of private property
+  - TS2633: Type has or is using private name
+  - TS2673: Constructor is private
+  - TS2674: Constructor is protected
+  - TS2684: 'this' context not assignable
+  - TS2685: 'this' types of signatures are incompatible
+  - TS2718: super must be called before accessing super property
+  - TS2750: Cannot extend primitive type
+  - TS2751: Cannot assign abstract constructor
+  - TS2776: Cannot read private member
+
+  Property & Index Errors (12) - done
+
+  - TS2459: Type has no property and no string index
+  - TS2460: Type is not an array type
+  - TS2538: Type cannot be used as index type
+  - TS2542: Index signature only permits reading
+  - TS2716: Index signature parameter type must be string/number/symbol
+  - TS2729: Property used before initialization (already tested but listed)
+  - TS2745: Property incompatible with index signature
+  - TS2746: Property has conflicting declarations
+  - TS2747: new expression target lacks construct signature
+  - TS2748: Cannot access before initialization
+  - TS2810: Property can only be assigned using 'this' access
+
+  Array & Iteration Errors (8) - done 
+
+  - TS2548: Type is not array or string type
+  - TS2549: Type is not array or string (downlevelIteration)
+  - TS2551: Property does not exist, did you mean?
+  - TS2552: Cannot find name, did you mean?
+  - TS2557: Expected N arguments but got more
+  - TS2574: Rest element type must be array type
+  - TS2575: No overload expects N arguments
+  - TS2802: Type can only be iterated with downlevelIteration
+
+  Spread & Rest Errors (6) - Done 
+
+  - TS2565: Property used before being assigned
+  - TS2566: Rest element cannot contain binding pattern
+  - TS2700: Rest types may only be created from object types
+  - TS2701: Object rest assignment target must be variable
+  - TS2702: Object rest assignment may not be optional property
+  - TS2762: Spread types may only be created from object types
+
+  Async/Generator/Yield Errors (4) - Done
+
+  - TS2764: yield expression implicitly results in any
+  - TS2770: Type of yield operand in async generator
+  - TS2771: Type referenced in then method
+
+  Enum Errors (5) - Done
+
+  - TS2467: Catch clause variable must be any or unknown
+  - TS2475: const enums usage restrictions
+  - TS2476: const enum member access
+  - TS2494: Using private name
+  - TS2651: Member initializer cannot reference later members
+
+  Module & Export Errors (9) - Done
+
+  - TS2484: Export declaration conflicts
+  - TS2496: arguments object cannot be referenced
+  - TS2497: Module can only be referenced with ES imports
+  - TS2502: Referenced in its own base expression
+  - TS2527: Inferred type references inaccessible type
+  - TS2649: Cannot augment module
+  - TS2686: Refers to UMD global
+  - TS2687: All declarations must have identical modifiers
+  - TS2688: Cannot find type definition file
+
+  Type Complexity & Inference Errors (8) -
+
+  - TS2576: Property is static member of type
+  - TS2578: Unused @ts-expect-error directive
+  - TS2579: Cannot find name (test runner types)
+  - TS2580: Cannot find name (target library)
+  - TS2584: Cannot find name (target library)
+  - TS2590: Expression produces union too complex
+  - TS2591: Cannot import type declaration files
+  - TS2742: Inferred type cannot be named without reference
+
+  Value/Type Usage Errors (6)
+
+  - TS2689: Cannot extend interface, did you mean implements
+  - TS2711: Object literal may only specify known properties (did you mean)
+  - TS2713: Cannot invoke expression without call signature
+  - TS2753: Cannot be used as value (export type)
+  - TS2754: Async function return type must be Promise
+  - TS2755: Inferred type exceeds maximum length
+
+  Callable & Constructable Errors (12)
+
+  - TS2730: infer declarations only in extends clause
+  - TS2733: Property was also declared here
+  - TS2834: Expression not callable (get accessor)
+  - TS2835: Union type signatures not compatible
+  - TS2839: Import never used as value
+  - TS2845: unique symbol property must be readonly
+  - TS2848: Cannot assign to import
+  - TS2855: No value exists for shorthand property
+  - TS2856: Classes may not have field named constructor
+  - TS2857: JSX element has no corresponding closing tag
+  - TS2859: super call must be root-level statement
+
+  Private Member Errors (10)
+
+  - TS2792: Cannot find module (resolveJsonModule)
+  - TS2793: File is not under rootDir
+  - TS2794: Expected N arguments (did you forget void)
+  - TS2803: Cannot assign to private method
+  - TS2804: Expected N type arguments but got M
+  - TS2806: void is not valid destructuring target
+  - TS2807: Optional element cannot follow rest element
+  - TS2808: Required element cannot follow optional element
+  - TS2809: Index signature must have type annotation
+
+  JSX Errors (4)
+
+  - TS2602: JSX element implicitly has type any
+  - TS2604: JSX element type has no construct/call signatures
+  - TS2607: JSX element class does not support attributes
+  - TS2608: Cannot use JSX unless --jsx flag provided
+  - TS2657: JSX expressions must have one parent element
+
+  TS4xxx Build/Emit Errors (30 - all untested)
+
+  - TS4000, TS4002, TS4004, TS4020, TS4022, TS4023, TS4025, TS4030, TS4031, TS4032, TS4033, TS4043, TS4044, TS4045, TS4048, TS4049, TS4055, TS4058, TS4060, TS4063, TS4064, TS4065, TS4067, TS4083, TS4084, TS4090
+
+  ---
+  Summary: 178 of 265 error codes (67%) don't have tests. The TS4xxx (build/emit) errors are entirely untested since they're only used during declaration file generation which isn't implemented yet.
+
+
+
+Current situation
+
+    | Test   | Description                                 | Why Complex                                                           |
+  |--------|---------------------------------------------|-----------------------------------------------------------------------|
+  | TS2566 | Rest element cannot contain binding pattern | Requires parser changes for object destructuring                      |
+  | TS2700 | Rest types from object types only           | Requires type-level spread type validation                            |
+  | TS2701 | Object rest assignment must be variable     | Requires destructuring assignment target validation                   |
+  | TS2702 | Rest element cannot have property name      | Requires interface member validation   

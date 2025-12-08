@@ -1,0 +1,289 @@
+// Assignment & Compatibility Errors (TS2307-TS2859)
+  // Note: TS2304-TS2306 are in DiagnosticCode for the type checker
+  // ============================================================================
+  CannotFindModule(String) // TS2307
+  TypeIsNotGeneric(String) // TS2315
+  CannotFindGlobalType(String) // TS2318
+  InterfaceCannotExtendConflictingTypes(String, String, String) // TS2320
+  PropertyMissingInType(String, String) // TS2324
+  ParameterTypesIncompatible(String, String) // TS2326
+  PropertyTypesIncompatible(String) // TS2328
+  IndexSignatureMissingInType(String) // TS2329
+  ThisCannotBeReferenced // TS2332
+  ThisCannotBeReferencedInStaticProperty // TS2334
+  SuperOnlyInDerivedClass // TS2335
+  SuperCallsNotPermittedOutsideConstructors // TS2337
+  PropertyDoesNotExistOnType(String, String) // TS2339
+  PropertyIsPrivate(String, String) // TS2341
+  ArgumentNotAssignableToParameter(String, String) // TS2345
+  TypeHasNoPropertiesInCommon(String, String) // TS2348
+  OnlyVoidFunctionCanBeCalledWithNew // TS2350
+  ExpressionNotConstructable // TS2351
+  ConversionMayBeMistake(String, String) // TS2352
+  ImportedHelperNotFound // TS2354
+  ArithmeticOperandMustBeNumberOrBigInt // TS2356
+  IncrementDecrementOperandMustBeVariable // TS2357
+  InstanceofLeftMustBeObjectType // TS2358
+  InstanceofRightMustBeFunction // TS2359
+  ArithmeticLeftMustBeNumber // TS2362
+  AssignmentLeftMustBeVariable // TS2364
+  FunctionLacksEndingReturn // TS2366
+  ComparisonAppearUnintentional // TS2367
+  TypeParameterNameCannotBe(String) // TS2368
+  ParameterPropertyOnlyInConstructor // TS2369
+  ParameterInitializerOnlyInImplementation // TS2371
+  ParameterCannotReferenceSelf(String) // TS2372
+  SuperCallMustBeFirst // TS2376
+  DerivedClassMustHaveSuper // TS2377
+  GetAccessorMustReturnValue // TS2378
+  GetSetVisibilityMustAgree // TS2379
+  GetSetMustHaveSameType // TS2380
+  FunctionImplementationNameMismatch // TS2388
+  FunctionSignatureIncompatibleWithOverload // TS2389
+  ConstructorImplementationMissing // TS2390
+  DuplicateFunctionImplementation // TS2393
+  MergedDeclarationExportMismatch // TS2395
+  SubsequentVariableMustHaveSameType // TS2403
+  ForInLeftMustBeVariable // TS2406
+  ForInRightMustBeObject // TS2407
+  ClassIncorrectlyImplementsInterface(String, String) // TS2410
+  IndexTypeNotAssignable(String, String, String, String) // TS2411
+  TypeNotAssignableWithExactOptionalProperties(String, String) // TS2412
+  ClassIncorrectlyExtendsBase(String, String) // TS2415
+  PropertyNotAssignableToBaseProperty(String, String) // TS2416
+  ClassStaticSideIncorrectlyExtendsBase(String, String) // TS2417
+  ClassIncorrectlyImplementsInterface2(String, String) // TS2420
+  InterfaceIncorrectlyExtendsInterface(String, String) // TS2430
+  PropertyIsProtected(String, String) // TS2445
+  PropertyProtectedNotDerived(String, String, String) // TS2446
+  BlockScopedVarUsedBeforeDeclaration(String) // TS2448
+  CannotRedeclareBlockScoped(String) // TS2451
+  EnumMemberCannotHaveNumericName // TS2452
+  VariableUsedBeforeAssigned(String) // TS2454
+  TypeAliasCircularlyReferences(String) // TS2456
+  TypeHasNoPropertyAndNoIndexSignature(String, String) // TS2459
+  VoidIsNotArrayType // TS2460
+  RestElementMustBeLastInDestructuring // TS2461
+  RestElementCannotHaveInitializer // TS2462
+  ComputedPropertyMustBeStringOrNumber // TS2464
+  AwaitOnlyInAsyncFunction // TS2465
+  YieldOnlyInGenerator // TS2466
+  CatchVariableMustBeAnyOrUnknown // TS2467
+  ConstEnumInitializerMustBeLiteral // TS2474
+  ConstEnumNotAllowedInIsolatedModules // TS2475
+  ConstEnumMemberOnlyStringLiteral // TS2476
+  ExportDeclarationConflicts(String) // TS2484
+  ForOfLeftMustBeVariable // TS2487
+  TupleHasNoElementAtIndex(String, String, String) // TS2493
+  UsingPrivateName(String) // TS2494
+  ArgumentsObjectCannotBeReferenced // TS2496
+  CannotInvokePossiblyNull // TS2497
+  CircularBaseExpression(String) // TS2502
+  NoBaseConstructorWithTypeArguments // TS2508
+  BaseConstructorsMustHaveSameReturnType // TS2510
+  NonAbstractClassMissingAbstractMember(String, String) // TS2515
+  AbstractMethodOnlyInAbstractClass // TS2516
+  NonAbstractClassCannotHaveAbstractProperty // TS2517
+  AbstractModifierOnlyOnClassMethodProperty // TS2520
+  InferredTypeReferencesInaccessible(String, String) // TS2527
+  ModuleCannotHaveMultipleDefaultExports // TS2528
+  ObjectPossiblyNull // TS2531
+  ObjectPossiblyUndefined // TS2532
+  ObjectPossiblyNullOrUndefined // TS2533
+  TypeCannotBeUsedToIndex(String, String) // TS2536
+  TypeCannotBeUsedAsIndex(String) // TS2538
+  CannotAssignToReadonly(String) // TS2540
+  IndexSignatureOnlyPermitsReading(String) // TS2542
+  TypeNotArrayOrString(String) // TS2548
+  TypeNotArrayOrStringOrIterator(String) // TS2549
+  ParameterHasNameButNoType // TS2550
+  PropertyDoesNotExistDidYouMean(String, String, String) // TS2551
+  CannotFindNameDidYouMean(String, String) // TS2552
+  ComputedValuesNotPermittedInStringEnum // TS2553
+  ExpectedAtLeastArguments(Int, Int) // TS2555
+  SpreadArgumentMustBeTupleOrRest // TS2556
+  ExpectedArgumentsButGotMore(Int, Int) // TS2557
+  TypeHasNoPropertiesInCommon2(String, String) // TS2559
+  ObjectLiteralMayOnlySpecifyKnownProperties // TS2561
+  PropertyHasNoInitializer(String) // TS2564
+  PropertyUsedBeforeAssigned(String) // TS2565
+  RestElementCannotContainBindingPattern // TS2566
+  ObjectIsOfTypeUnknown // TS2571
+  RestElementTypeMustBeArray // TS2574
+  NoOverloadExpectsArguments(Int) // TS2575
+  PropertyDoesNotExistOnType2(String, String) // TS2576
+  UnusedTsExpectError // TS2578
+  CannotFindNameNeedTypeDefinitions(String) // TS2579
+  CannotFindNameNeedTargetLibrary(String) // TS2580
+  CannotFindNameNeedTarget(String) // TS2584
+  TypeInstantiationTooDeep // TS2589
+  UnionTypeTooComplex // TS2590
+  CannotImportTypeDeclarationFiles // TS2591
+  CannotAugmentNonModule(String) // TS2593
+  MergedDeclarationMustAllBeExported // TS2595
+  JSXElementImplicitlyHasTypeAny // TS2602
+  JSXElementTypeNoSignatures(String) // TS2604
+  JSXElementClassDoesNotSupportAttributes // TS2607
+  CannotUseJSXWithoutFlag // TS2608
+  ComputedPropertyValueNotAssignable(String, String) // TS2615
+  DeclarationEmitRequiresTypeResolution // TS2617
+  CannotAssignAbstractConstructorToNonAbstract // TS2630
+  ConditionAlwaysReturns(String) // TS2631
+  TypeHasSeparatePrivatePropertyDeclarations(String) // TS2632
+  TypeHasOrUsesPrivateName(String) // TS2633
+  DuplicateIdentifierCompilerReserves(String, String) // TS2637
+  CannotAugmentModuleWithValueExports(String) // TS2649
+  EnumMemberCannotReferencePrecedingMembers // TS2651
+  DuplicateIdentifierAsyncHelper(String) // TS2652
+  ExpressionResolvesToCompilerDeclaration(String) // TS2653
+  CallSignaturesIncompatible // TS2655
+  ConstructSignaturesIncompatible // TS2656
+  JSXExpressionsMustHaveOneParent // TS2657
+  SuperOnlyInObjectLiteral // TS2659
+  SuperPropertyAccessOnlyInConstructor // TS2660
+  DerivedConstructorMustReturnObjectOrUndefined // TS2673
+  VoidTypeNotValidForMappedTypes // TS2674
+  CannotInitializeOuterScopedVariable // TS2675
+  AssertionsRequireExplicitTypeAnnotation // TS2676
+  TypeLiteralPropertyCannotHaveInitializer // TS2677
+  DeclareInAmbientContext2 // TS2678
+  ConstructorCannotHaveThisParameter // TS2681
+  ThisImplicitlyHasTypeAny // TS2683
+  ThisContextNotAssignable(String) // TS2684
+  ThisTypesOfSignaturesIncompatible // TS2685
+  RefersToUMDGlobal(String) // TS2686
+  ClassNameCannotBeObject // TS2687
+  CannotFindTypeDefinition(String) // TS2688
+  CannotExtendInterfaceWithImplements(String) // TS2689
+  TypeOnlyRefersToType(String) // TS2690
+  ImportPathCannotEndWithTs // TS2691
+  TypeCannotBeUsedAsTypeParameter(String) // TS2692
+  CannotFindNameNeedTypeAnnotation(String) // TS2693
+  NamespaceHasNoExportedMember(String, String) // TS2694
+  ForInLeftCannotBeDestructuring // TS2695
+  RestTypesOnlyFromObjects // TS2700
+  ObjectRestTargetMustBeVariable // TS2701
+  ObjectRestCannotBeOptionalPropertyAccess // TS2702
+  ObjectRestCannotContainComputedProperty // TS2703
+  IteratorMustHaveNextMethod // TS2704
+  RequiredTypeParamsMayNotFollowOptional // TS2706
+  GenericTypeRequiresTypeArguments(String, Int, Int) // TS2707
+  CannotUseNamespaceAsType(String) // TS2709
+  CannotUseNamespaceAsValue(String) // TS2710
+  ObjectLiteralPropertyDoesNotExist(String) // TS2711
+  CannotInvokeExpressionWithoutCallSignature // TS2713
+  InstanceofRightMustBeCallable // TS2714
+  MappedObjectTypeImplicitlyAny // TS2715
+  IndexSignatureParameterTypeMustBeStringOrNumber // TS2716
+  TypeCannotBeAssigned(String, String) // TS2717
+  SuperCannotBeCalledBeforeSuperCall // TS2718
+  CannotInvokePossiblyUndefined // TS2722
+  CannotInvokePossiblyNullOrUndefined // TS2723
+  PropertyUsedBeforeInitialization(String) // TS2729
+  InferKeywordOnlyInExtendsConditional // TS2730
+  ThisBasedTypeGuardNotCompatible // TS2732
+  PropertyAlsoDeclaredHere(String) // TS2733
+  MissingSemicolon // TS2734
+  BigIntLiteralsNotAvailable // TS2737
+  TypeMissingProperties(String, String, String) // TS2739
+  TypeMissingPropertiesAndMore(String, String, String, Int) // TS2740
+  PropertyMissingInTypeButRequired(String, String, String) // TS2741
+  InferredTypeCannotBeNamed(String) // TS2742
+  TypeDoesNotSatisfyConstraint(String, String) // TS2744
+  PropertyIncompatibleWithIndexSignature(String) // TS2745
+  PropertyHasConflictingDeclarations(String) // TS2746
+  BaseClassIncludesPrivateProperty // TS2747
+  CannotAccessBeforeInitialization(String) // TS2748
+  RefersToValueUsedAsType(String) // TS2749
+  BaseClassCannotHaveStaticAbstractMembers // TS2750
+  CannotAssignAbstractClassConstructor // TS2751
+  CannotUseAsValueExportType(String) // TS2752
+  CannotUseAsValueImportType(String) // TS2753
+  AsyncFunctionReturnTypeMustBePromise // TS2754
+  InferredTypeExceedsMaxLength // TS2755
+  TypeNotAssignableDifferentNames(String, String) // TS2757
+  PropertyTypesIncompatible2(String) // TS2758
+  DuplicateIdentifier(String) // TS2761
+  SpreadTypesOnlyFromObjects // TS2762
+  YieldExpressionImplicitlyAny // TS2764
+  ParameterNameNoTypeDidYouMean(String, String) // TS2765
+  CannotFindModule2(String) // TS2766
+  GetSetCannotDeclareThisParameter // TS2767
+  YieldOperandMustBeAwaited // TS2770
+  TypeReferencesItselfInAnnotation // TS2771
+  CannotUseInOperator(String, String) // TS2772
+  ConditionAlwaysTrueNoOverlap // TS2773
+  UnionTypeTooComplex2 // TS2774
+  ThisCannotBeUsedAsType // TS2775
+  CannotReadPrivateMemberOutsideClass(String) // TS2776
+  DeleteOperandMustBeOptional // TS2790
+  CannotFindModuleNeedResolveJsonModule(String) // TS2792
+  FileNotUnderRootDir(String, String) // TS2793
+  ExpectedArgumentsDidYouForgetVoid(Int, Int) // TS2794
+  NewExpressionWithTypeLackingConstructSignature // TS2795
+  NewExpressionCannotBeInvoked // TS2796
+  NewExpressionOnlyInValidContext // TS2797
+  NewExpressionImplicitlyYieldsAny // TS2799
+  OperatorCannotBeApplied(String, String, String) // TS2800
+  TypeCanOnlyBeIteratedWithDownlevelIteration(String) // TS2802
+  CannotAssignToPrivateMethod(String) // TS2803
+  ExpectedTypeArgumentsOverloads(Int, Int) // TS2804
+  VoidNotValidDestructuringTarget // TS2806
+  OptionalElementCannotFollowRest // TS2807
+  RequiredElementCannotFollowOptional // TS2808
+  IndexSignatureMustHaveTypeAnnotation // TS2809
+  CanOnlyWritePropertyOnThisValue(String) // TS2810
+  PrivateIdentifiersCannotBeParameters // TS2813
+  SyntaxReservedInMtsCtc // TS2815
+  AwaitExpressionRequiresPromise // TS2816
+  TypeNotArrayOrHasIterator(String) // TS2817
+  ForAwaitOfCannotIterateTypes // TS2820
+  CouldNotFindDeclarationFile(String) // TS2821
+  IndexSignatureIncompatibleWithOptionalProperty(String) // TS2825
+  AssignmentLeftCannotBeOptionalPropertyAccess // TS2832
+  CannotAssignToGetOnlyProperty(String) // TS2833
+  ExpressionNotCallable // TS2834
+  UnionTypeNoMatchingNewSignature(String) // TS2835
+  TypeNoNewSignatures(String) // TS2836
+  ImportNeverUsedAsValue // TS2839
+  DecoratorUsedOnUnknownField // TS2840
+  CannotCallSuperFromNonDerivedConstructor // TS2841
+  UniqueSymbolPropertyMustBeReadonly // TS2845
+  CannotAssignToImport(String) // TS2848
+  OperatorCannotBeApplied2(String, String, String) // TS2851
+  NoValueExistsForShorthandProperty(String) // TS2855
+  ClassesMayNotHaveConstructorField // TS2856
+  JSXElementNoClosingTag(String) // TS2857
+  SuperCallMustBeRootLevel // TS2859
+  // Build/Emit Errors (TS4000-4999)
+  ImportDeclarationUsingPrivateName(String, String) // TS4000
+  TypeParameterHasCircularDefault(String) // TS4002
+  ParameterOfExportedFunctionUsingPrivateName(String, String) // TS4004
+  ExtendsClauseUsingPrivateName(String, String) // TS4020
+  ImplementsClauseUsingPrivateName(String, String) // TS4022
+  ExtendsExpressionNotClassOrInterface(String) // TS4023
+  ExportedVariableUsingExternalModuleName(String, String) // TS4025
+  PublicPropertyUsingPrivateName(String, String) // TS4030
+  PublicStaticPropertyUsingPrivateName(String) // TS4031
+  TypeParameterOfExportedFunctionUsingPrivateName(String) // TS4032
+  TypeParameterOfPublicStaticMethodUsingPrivateName(String) // TS4033
+  ReturnTypeOfPublicGetterUsingPrivateName // TS4043
+  ParameterOfPublicSetterUsingPrivateName(String) // TS4044
+  ReturnTypeOfMethodFromExportedInterfaceUsingPrivateName // TS4045
+  ParameterOfMethodFromExportedInterfaceUsingPrivateName(String) // TS4048
+  ReturnTypeOfConstructorSignatureUsingPrivateName // TS4049
+  ReturnTypeOfCallSignatureUsingPrivateName // TS4055
+  ParameterOfCallSignatureUsingPrivateName(String) // TS4058
+  ReturnTypeOfIndexSignatureUsingPrivateName // TS4060
+  ParameterOfIndexSignatureUsingPrivateName(String) // TS4063
+  DefaultExportUsingPrivateName(String) // TS4064
+  TypeParameterOfExportedTypeAliasUsingPrivateName(String) // TS4065
+  PropertyOfExportedMappedTypeUsingPrivateName(String) // TS4067
+  ExportedTypeAliasUsingPrivateName(String, String) // TS4083
+  TypeParameterOfExportedClassExpressionUsingPrivateName(String, String) // TS4084
+  CannotFindParameter(String) // TS4090
+  RestParameterMustBeArrayType // TS4091
+  SetAccessorCannotHaveRestParameter // TS4092
+  GetAccessorMustHaveAtMostOneParameter // TS4094
+  SetAccessorMustHaveOneParameter // TS4097
+} 
