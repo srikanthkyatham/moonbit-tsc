@@ -9607,6 +9607,9 @@ fn try_get_identifier_name(token : Token) -> (String, SourceLocation)? {
     KeywordUndefined(loc) => Some(("undefined", loc))
     // yield can be an identifier outside of generators and strict mode
     KeywordYield(loc) => Some(("yield", loc))
+    // let can be used as an identifier in var declarations (e.g., var let = 5)
+    // This is valid in non-strict mode and even in strict mode for var declarations
+    KeywordLet(loc) => Some(("let", loc))
     _ => None
   }
 }
