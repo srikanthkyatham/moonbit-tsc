@@ -14549,7 +14549,9 @@ fn check_for_of_left_side(
 ///|
 /// Check for-of statement
 /// Validates TS2487: Left-hand side must be a variable
-/// Validates that right-hand side is iterable (array, string, or has [Symbol.iterator])
+/// Validates TS2488: Right-hand side must be iterable (array, string, or has [Symbol.iterator])
+/// Validates TS2588: Cannot assign to const variable
+/// Validates TS2322: Type compatibility for pre-declared variables
 fn check_for_of_statement(
   checker : TypeChecker,
   for_of_stmt : ForOfStatement,
@@ -14568,6 +14570,7 @@ fn check_for_of_statement(
     checker,
     for_of_stmt.initializer,
     iterable_type,
+    get_node_location(for_of_stmt.expression),
   )
 
   // Check the body statement
@@ -14583,38 +14586,115 @@ fn add_for_of_variable_to_scope(
   checker : TypeChecker,
   initializer : Node,
   iterable_type : Type,
+  expr_location : SourceLocation,
 ) -> TypeChecker {
   // Get the element type from the iterable
-  let (elem_type, checker) = get_for_of_element_type(checker, iterable_type)
+  let (elem_type, checker) = get_for_of_element_type(
+    checker,
+    iterable_type,
+    expr_location,
+  )
   match initializer {
     VariableStatement(var_stmt) =>
-      // Handle: for (const item of arr)
+      // Handle: for (const item of arr) or for (const [a, b] of arr)
       if var_stmt.declarations.length() > 0 {
         let decl = var_stmt.declarations[0]
         match decl.name {
           Identifier(id) => add_local_variable(checker, id.name, elem_type)
+          ArrayBindingPattern(_) | ObjectBindingPattern(_) =>
+            // Handle destructuring patterns
+            add_binding_pattern_variables(checker, decl.name, elem_type)
           _ => checker
         }
       } else {
         checker
       }
-    Identifier(_) =>
+    Identifier(id) => {
       // Handle: for (item of arr) where item was previously declared
-      checker
+      // Check if item is a const variable (TS2588)
+      let checker = if is_local_const_variable(checker, id.name) {
+        add_diagnostic_with_code(
+          checker,
+          "Cannot assign to '\{id.name}' because it is a constant.",
+          get_node_location(initializer),
+          TS2588,
+        )
+      } else {
+        checker
+      }
+
+      // Type check: ensure elem_type is assignable to variable's declared type
+      let var_type = lookup_local_variable(checker, id.name)
+      match var_type {
+        Some(declared_type) => {
+          if not(is_assignable(elem_type, declared_type)) {
+            let elem_str = type_to_string(elem_type)
+            let var_str = type_to_string(declared_type)
+            let msg = "Type '\{elem_str}' is not assignable to type '\{var_str}'."
+            add_diagnostic_with_code(
+              checker,
+              msg,
+              get_node_location(initializer),
+              TS2322,
+            )
+          } else {
+            checker
+          }
+        }
+        None => checker
+      }
+    }
     _ => checker
   }
 }
 
 ///|
 /// Get the element type of an iterable for for-of loops
+/// Validates iterator protocol and reports appropriate errors:
+/// - TS2488: Type must have '[Symbol.iterator]()' method that returns an iterator
+/// - TS2569: Type is not an array type or a string type
 fn get_for_of_element_type(
   checker : TypeChecker,
   iterable_type : Type,
+  expr_location : SourceLocation,
 ) -> (Type, TypeChecker) {
   match iterable_type {
     Array(arr) => (arr.element_type, checker)
     String(_) => string_type(checker) // Iterating string produces strings
-    _ => any_type(checker) // Fallback to any
+    _ => {
+      // Try to extract element type using iterator protocol
+      let (elem_type_opt, checker) = extract_iterable_element_type(
+        checker,
+        iterable_type,
+      )
+      match elem_type_opt {
+        Some(elem_type) => (elem_type, checker)
+        None => {
+          // Could not extract element type - check if we should report error
+          // Only report TS2488 for obviously non-iterable types (primitives)
+          // For complex types (Object, TypeReference, etc.), fall back to 'any'
+          // to avoid false positives when Symbol.iterator might be present but
+          // not yet resolved in the type system
+          let should_error = match iterable_type {
+            Number(_) | Boolean(_) | Null(_) | Undefined(_) | Void(_) => true
+            Object(_) | TypeReference(_) | Union(_) | Intersection(_) => false
+            Any(_) => false // any is always iterable
+            _ => false // Default: don't error for complex types
+          }
+
+          let checker = if should_error {
+            let type_str = type_to_string(iterable_type)
+            let msg = "Type '\{type_str}' must have a '[Symbol.iterator]()' method that returns an iterator."
+            add_diagnostic_with_code(checker, msg, expr_location, TS2488)
+          } else {
+            checker
+          }
+
+          let (any_t, checker) = any_type(checker)
+          (any_t, checker)
+        }
+      }
+    }
   }
 }
 
