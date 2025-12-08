@@ -207,3 +207,56 @@ test "regular for loop with multiple declarations - should not trigger TS1188" {
   let diags = check_for_of_errors(source)
   assert_false(has_error_code(diags, 1188))
 }
+
+// ============================================================================
+// TS2451: Cannot redeclare block-scoped variable in destructuring
+// ============================================================================
+
+///|
+test "for-of with duplicate bindings in array pattern - should error TS2451" {
+  let source =
+    #|for (let [v, v] of [[]]) {}
+  let diags = check_for_of_errors(source)
+  assert_true(has_error_code(diags, 2451))
+}
+
+///|
+test "for-of with duplicate bindings in nested pattern - should error TS2300/TS2451" {
+  let source =
+    #|for (const [[x, y], [x, z]] of []) {}
+  let diags = check_for_of_errors(source)
+  // Can be either TS2300 (binder) or TS2451 (checker)
+  assert_true(has_error_code(diags, 2300) || has_error_code(diags, 2451))
+}
+
+///|
+test "for-of with duplicate bindings in object pattern - should error TS2451" {
+  let source =
+    #|for (let {a, a} of []) {}
+  let diags = check_for_of_errors(source)
+  assert_true(has_error_code(diags, 2451))
+}
+
+///|
+test "for-of with no duplicate bindings - should pass" {
+  let source =
+    #|for (let [x, y] of [[]]) {}
+  let diags = check_for_of_errors(source)
+  assert_false(has_error_code(diags, 2451))
+}
+
+///|
+test "for-of with var and duplicate bindings - should pass (var allows duplicates)" {
+  let source =
+    #|for (var [v, v] of [[]]) {}
+  let diags = check_for_of_errors(source)
+  assert_false(has_error_code(diags, 2451))
+}
+
+///|
+test "for-of with complex nested pattern no duplicates - should pass" {
+  let source =
+    #|for (const {a: {b, c}, d: [e, f]} of []) {}
+  let diags = check_for_of_errors(source)
+  assert_false(has_error_code(diags, 2451))
+}

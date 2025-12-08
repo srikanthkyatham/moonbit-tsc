@@ -752,6 +752,84 @@ fn add_local_const_variable(
 }
 
 ///|
+/// Collect all binding names from a destructuring pattern
+fn collect_binding_names(pattern : Node, names : Array[String]) -> Unit {
+  match pattern {
+    Identifier(id) => names.push(id.name)
+    ArrayBindingPattern(arr_pattern) => {
+      for i = 0; i < arr_pattern.elements.length(); i = i + 1 {
+        match arr_pattern.elements[i] {
+          Some(elem) => collect_binding_names(elem, names)
+          None => ()
+        }
+      }
+    }
+    ObjectBindingPattern(obj_pattern) => {
+      for i = 0; i < obj_pattern.properties.length(); i = i + 1 {
+        let elem = obj_pattern.properties[i]
+        collect_binding_names(elem.name, names)
+      }
+    }
+    BindingElement(elem) => collect_binding_names(elem.name, names)
+    _ => ()
+  }
+}
+
+///|
+/// Check for duplicate binding names in destructuring pattern (TS2451)
+fn check_duplicate_bindings(
+  checker : TypeChecker,
+  pattern : Node,
+) -> TypeChecker {
+  let names : Array[String] = []
+  collect_binding_names(pattern, names)
+
+  // Check for duplicates
+  let seen : @hashmap.HashMap[String, SourceLocation] = @hashmap.new()
+  let mut c = checker
+
+  fn check_name(name : String, location : SourceLocation) -> Unit {
+    match seen.get(name) {
+      Some(_) => {
+        c = add_diagnostic_with_code(
+          c,
+          "Cannot redeclare block-scoped variable '\{name}'.",
+          location,
+          TS2451,
+        )
+      }
+      None => seen.set(name, location)
+    }
+  }
+
+  // Recursively check all identifiers with their locations
+  fn check_pattern(pat : Node) -> Unit {
+    match pat {
+      Identifier(id) => check_name(id.name, id.location)
+      ArrayBindingPattern(arr_pattern) => {
+        for i = 0; i < arr_pattern.elements.length(); i = i + 1 {
+          match arr_pattern.elements[i] {
+            Some(elem) => check_pattern(elem)
+            None => ()
+          }
+        }
+      }
+      ObjectBindingPattern(obj_pattern) => {
+        for i = 0; i < obj_pattern.properties.length(); i = i + 1 {
+          let elem = obj_pattern.properties[i]
+          check_pattern(elem.name)
+        }
+      }
+      BindingElement(elem) => check_pattern(elem.name)
+      _ => ()
+    }
+  }
+
+  check_pattern(pattern)
+  c
+}
+
+///|
 /// Add variables from a binding pattern to the current local scope
 /// This handles ArrayBindingPattern, ObjectBindingPattern, and nested patterns
 fn add_binding_pattern_variables(
@@ -14678,9 +14756,16 @@ fn add_for_of_variable_to_scope(
         let decl = var_stmt.declarations[0]
         match decl.name {
           Identifier(id) => add_local_variable(checker, id.name, elem_type)
-          ArrayBindingPattern(_) | ObjectBindingPattern(_) =>
+          ArrayBindingPattern(_) | ObjectBindingPattern(_) => {
+            // Check for duplicate bindings (TS2451) if let/const
+            let checker = if var_stmt.is_let || var_stmt.is_const {
+              check_duplicate_bindings(checker, decl.name)
+            } else {
+              checker
+            }
             // Handle destructuring patterns
             add_binding_pattern_variables(checker, decl.name, elem_type)
+          }
           _ => checker
         }
       } else {
