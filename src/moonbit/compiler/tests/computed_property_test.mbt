@@ -336,7 +336,7 @@ test "multiple getters with computed names - no duplicate error" {
 }
 
 ///|
-test "computed property and method with same Symbol - allowed" {
+test "computed property and method with same Symbol - should error" {
   let source =
     #|class C {
     #|    [Symbol.iterator] = 0;
@@ -345,20 +345,32 @@ test "computed property and method with same Symbol - allowed" {
   let result = @compiler.type_check(source, "test.ts")
   match result {
     Ok(typed) => {
-      // Should not have TS2300 duplicate identifier errors
-      // Note: TypeScript allows both property and method with same computed name
+      // Should have TS2300 duplicate identifier error
+      // Note: TypeScript does NOT allow duplicate computed property names
+      // Verified with tsc 5.9.3: reports "TS2300: Duplicate identifier '[Symbol.iterator]'"
+      // Our compiler correctly detects this and reports it during binding phase
       let has_duplicate_error = typed.diagnostics
         .iter()
         .any(fn(d) {
           d.code == 2300 && d.message.contains("Duplicate identifier")
         })
-      if has_duplicate_error {
+      if not(has_duplicate_error) {
         fail(
-          "Should not report duplicate identifier for computed property and method",
+          "Should report TS2300 duplicate identifier for same computed property name",
         )
       }
     }
-    Err(_) => fail("Computed property and method with same Symbol should parse")
+    Err(diagnostics) => {
+      // Binding errors cause Err result - check for TS2300 in diagnostics
+      let has_duplicate_error = diagnostics
+        .iter()
+        .any(fn(d) {
+          d.code == 2300 && d.message.contains("Duplicate identifier")
+        })
+      if not(has_duplicate_error) {
+        fail("Should report TS2300 during binding for duplicate Symbol property")
+      }
+    }
   }
 }
 
