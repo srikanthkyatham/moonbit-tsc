@@ -15548,6 +15548,11 @@ fn check_interface_declaration(
       for interface_member in iface_decl.members {
         match interface_member {
           PropertyDeclaration(prop) => {
+            // Skip computed properties (Symbol properties) - they are not subject to index signature constraints
+            // Symbol properties like [Symbol.iterator] are in a separate namespace from string/number properties
+            if prop.name == "[computed]" {
+              continue
+            }
             let (prop_type, c) = match prop.type_annotation {
               Some(type_node) =>
                 match get_type_from_type_node(checker, type_node) {

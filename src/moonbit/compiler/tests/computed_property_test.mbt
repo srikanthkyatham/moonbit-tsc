@@ -388,3 +388,212 @@ test "multiple computed properties in interface - no duplicate error" {
     Err(_) => fail("Multiple computed properties in interface should parse")
   }
 }
+
+// ============================================================================
+// Computed Properties in Type Literals
+// Tests that computed properties work in type literals (object types)
+// ============================================================================
+
+///|
+test "computed property in type literal" {
+  let source =
+    #|var obj: {
+    #|    [Symbol.isConcatSpreadable]: string;
+    #|}
+  let result = @compiler.type_check(source, "test.ts")
+  match result {
+    Ok(_) => () // Expected to pass
+    Err(_) => fail("Computed property in type literal should parse")
+  }
+}
+
+///|
+test "multiple computed properties in type literal" {
+  let source =
+    #|type T = {
+    #|    [Symbol.iterator]: number;
+    #|    [Symbol.toStringTag]: string;
+    #|}
+  let result = @compiler.type_check(source, "test.ts")
+  match result {
+    Ok(_) => () // Expected to pass
+    Err(_) => fail("Multiple computed properties in type literal should parse")
+  }
+}
+
+///|
+test "optional computed property in type literal" {
+  let source =
+    #|type T = {
+    #|    [Symbol.iterator]?: number;
+    #|}
+  let result = @compiler.type_check(source, "test.ts")
+  match result {
+    Ok(_) => () // Expected to pass
+    Err(_) => fail("Optional computed property in type literal should parse")
+  }
+}
+
+///|
+test "readonly computed property in type literal" {
+  let source =
+    #|type T = {
+    #|    readonly [Symbol.iterator]: number;
+    #|}
+  let result = @compiler.type_check(source, "test.ts")
+  match result {
+    Ok(_) => () // Expected to pass
+    Err(_) => fail("Readonly computed property in type literal should parse")
+  }
+}
+
+///|
+test "computed property and index signature in type literal" {
+  let source =
+    #|type T = {
+    #|    [key: string]: any;
+    #|    [Symbol.iterator]: number;
+    #|}
+  let result = @compiler.type_check(source, "test.ts")
+  match result {
+    Ok(_) => () // Expected to pass
+    Err(_) =>
+      fail(
+        "Computed property and index signature in type literal should coexist",
+      )
+  }
+}
+
+///|
+test "computed property with member access expression" {
+  let source =
+    #|const key = Symbol.iterator;
+    #|type T = {
+    #|    [key]: number;
+    #|}
+  let result = @compiler.type_check(source, "test.ts")
+  match result {
+    Ok(_) => () // Expected to pass
+    Err(_) => fail("Computed property with identifier should parse")
+  }
+}
+
+// ============================================================================
+// Symbol Properties Should Not Be Checked Against Index Signatures
+// Tests that Symbol properties (computed properties) are in a separate namespace
+// from string/number properties and should not be validated against index signatures
+// ============================================================================
+
+///|
+test "Symbol property with string index signature - no conflict" {
+  let source =
+    #|interface I1 {
+    #|    [Symbol.toStringTag]: string;
+    #|    [key: string]: number;
+    #|}
+  let result = @compiler.type_check(source, "test.ts")
+  match result {
+    Ok(typed) => {
+      // Should NOT have TS2745 error about property incompatible with index signature
+      let has_index_sig_error = typed.diagnostics
+        .iter()
+        .any(fn(d) {
+          d.code == 2745 &&
+          d.message.contains("not assignable to") &&
+          d.message.contains("index type")
+        })
+      if has_index_sig_error {
+        fail(
+          "Symbol properties should not be checked against string index signatures",
+        )
+      }
+    }
+    Err(_) => fail("Symbol property with string index signature should parse")
+  }
+}
+
+///|
+test "Symbol property with number index signature - no conflict" {
+  let source =
+    #|interface I2 {
+    #|    [Symbol.toStringTag]: string;
+    #|    [key: number]: boolean;
+    #|}
+  let result = @compiler.type_check(source, "test.ts")
+  match result {
+    Ok(typed) => {
+      let has_index_sig_error = typed.diagnostics
+        .iter()
+        .any(fn(d) {
+          d.code == 2745 &&
+          d.message.contains("not assignable to") &&
+          d.message.contains("index type")
+        })
+      if has_index_sig_error {
+        fail(
+          "Symbol properties should not be checked against number index signatures",
+        )
+      }
+    }
+    Err(_) => fail("Symbol property with number index signature should parse")
+  }
+}
+
+///|
+test "Multiple Symbol properties with index signatures - no conflict" {
+  let source =
+    #|declare const mySymbol: unique symbol;
+    #|interface I3 {
+    #|    [mySymbol]: string;
+    #|    [Symbol.iterator]: number;
+    #|    [key: string]: boolean;
+    #|}
+  let result = @compiler.type_check(source, "test.ts")
+  match result {
+    Ok(typed) => {
+      let has_index_sig_error = typed.diagnostics
+        .iter()
+        .any(fn(d) {
+          d.code == 2745 &&
+          d.message.contains("not assignable to") &&
+          d.message.contains("index type")
+        })
+      if has_index_sig_error {
+        fail(
+          "Multiple Symbol properties should not conflict with index signatures",
+        )
+      }
+    }
+    Err(_) =>
+      fail("Multiple Symbol properties with index signature should parse")
+  }
+}
+
+///|
+test "Regular property SHOULD be checked against index signature" {
+  let source =
+    #|interface I {
+    #|    name: string;
+    #|    [key: string]: number;
+    #|}
+  let result = @compiler.type_check(source, "test.ts")
+  match result {
+    Ok(typed) => {
+      // Regular properties SHOULD be validated against index signatures
+      // This should have a TS2745 error because string property 'name' conflicts with string index signature
+      let has_expected_error = typed.diagnostics
+        .iter()
+        .any(fn(d) {
+          d.code == 2745 &&
+          d.message.contains("name") &&
+          d.message.contains("not assignable to")
+        })
+      if not(has_expected_error) {
+        fail(
+          "Regular properties SHOULD be validated against index signatures (this is a control test)",
+        )
+      }
+    }
+    Err(_) => () // Also acceptable - parse error
+  }
+}
