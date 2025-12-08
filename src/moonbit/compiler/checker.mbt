@@ -13508,47 +13508,101 @@ fn extract_iterable_element_type(
       match iterator_method_type {
         Some(Function(func)) => {
           // The iterator method returns an iterator
-          // First try recursion to handle TypeReference/Iterable types
-          let (elem_type_opt, checker) = extract_iterable_element_type(
-            checker,
-            func.return_type,
-          )
-          match elem_type_opt {
-            Some(elem_type) => (Some(elem_type), checker)
-            None => {
-              // Recursion failed, try to extract from next() method on the return type
-              match func.return_type {
-                Object(iter_obj) => {
-                  // Look for next() method on the iterator
-                  for entry in iter_obj.properties {
-                    let (prop_name, prop) = entry
-                    if prop_name == "next" {
-                      match prop.prop_type {
-                        Function(next_func) => {
-                          // next() returns { value: T, done: boolean }
-                          // Extract T from the 'value' property
-                          match next_func.return_type {
-                            Object(ret_obj) => {
-                              for entry in ret_obj.properties {
-                                let (val_name, val_prop) = entry
-                                if val_name == "value" {
-                                  return (Some(val_prop.prop_type), checker)
-                                }
-                              }
+          // Don't recursively call extract_iterable_element_type to avoid infinite loops
+          // (e.g., when [Symbol.iterator]() returns 'this')
+          // Instead, directly look for next() method on the return type
+          match func.return_type {
+            Object(iter_obj) => {
+              // Look for next() method on the iterator
+              for entry in iter_obj.properties {
+                let (prop_name, prop) = entry
+                if prop_name == "next" {
+                  match prop.prop_type {
+                    Function(next_func) => {
+                      // next() returns { value: T, done: boolean }
+                      // Extract T from the 'value' property
+                      match next_func.return_type {
+                        Object(ret_obj) => {
+                          for entry in ret_obj.properties {
+                            let (val_name, val_prop) = entry
+                            if val_name == "value" {
+                              return (Some(val_prop.prop_type), checker)
                             }
-                            _ => ()
                           }
                         }
                         _ => ()
                       }
-                      break
                     }
+                    _ => ()
                   }
-                  (None, checker)
+                  break
                 }
-                _ => (None, checker)
+              }
+              (None, checker)
+            }
+            TypeReference(tr) => {
+              // If return type is a TypeReference like "IterableIterator<T>",
+              // try to extract T from the type arguments
+              if (
+                  tr.name == "Generator" ||
+                  tr.name == "Iterable" ||
+                  tr.name == "Iterator" ||
+                  tr.name == "IterableIterator"
+                ) &&
+                tr.type_arguments.length() > 0 {
+                (Some(tr.type_arguments[0]), checker)
+              } else {
+                // For other TypeReferences (like custom class names), resolve and look for next()
+                match lookup_symbol(checker, tr.name) {
+                  Some(symbol) =>
+                    match get_symbol_type(checker, symbol) {
+                      (Some(resolved_type), c) => {
+                        // Get the instance type if it's a class constructor
+                        let instance_type = match resolved_type {
+                          Object(obj) =>
+                            if obj.construct_signatures.length() > 0 {
+                              obj.construct_signatures[0].return_type
+                            } else {
+                              resolved_type
+                            }
+                          _ => resolved_type
+                        }
+                        // Now look for next() on the instance type
+                        match instance_type {
+                          Object(iter_obj) => {
+                            for entry in iter_obj.properties {
+                              let (prop_name, prop) = entry
+                              if prop_name == "next" {
+                                match prop.prop_type {
+                                  Function(next_func) =>
+                                    match next_func.return_type {
+                                      Object(ret_obj) => {
+                                        for entry in ret_obj.properties {
+                                          let (val_name, val_prop) = entry
+                                          if val_name == "value" {
+                                            return (Some(val_prop.prop_type), c)
+                                          }
+                                        }
+                                      }
+                                      _ => ()
+                                    }
+                                  _ => ()
+                                }
+                                break
+                              }
+                            }
+                            (None, c)
+                          }
+                          _ => (None, c)
+                        }
+                      }
+                      (None, c) => (None, c)
+                    }
+                  None => (None, checker)
+                }
               }
             }
+            _ => (None, checker)
           }
         }
         // Handle case where the property type is already resolved to a TypeReference

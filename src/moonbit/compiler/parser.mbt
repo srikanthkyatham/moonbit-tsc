@@ -3324,11 +3324,7 @@ fn parse_class_member_with_decorators(
                     CloseBracket(_) => advance_parser(parser)
                     _ => parser
                   }
-                  let computed_name = match name_expr {
-                    Node::StringLiteral(lit) => lit.value
-                    Node::NumericLiteral(lit) => lit.value
-                    _ => "[computed]"
-                  }
+                  let computed_name = get_computed_property_name(name_expr)
                   match current_token(parser) {
                     OpenParen(_) => {
                       let parser = advance_parser(parser)
@@ -3523,11 +3519,7 @@ fn parse_class_member_with_decorators(
                     CloseBracket(_) => advance_parser(parser)
                     _ => parser
                   }
-                  let computed_name = match name_expr {
-                    Node::StringLiteral(lit) => lit.value
-                    Node::NumericLiteral(lit) => lit.value
-                    _ => "[computed]"
-                  }
+                  let computed_name = get_computed_property_name(name_expr)
                   match current_token(parser) {
                     OpenParen(_) => {
                       let parser = advance_parser(parser)
@@ -3985,11 +3977,7 @@ fn parse_class_member_with_decorators(
                 CloseBracket(_) => advance_parser(parser)
                 _ => parser
               }
-              let computed_name = match name_expr {
-                Node::StringLiteral(lit) => lit.value
-                Node::NumericLiteral(lit) => lit.value
-                _ => "[computed]"
-              }
+              let computed_name = get_computed_property_name(name_expr)
               match current_token(parser) {
                 OpenParen(_) => {
                   let parser = advance_parser(parser)
@@ -4157,11 +4145,7 @@ fn parse_class_member_with_decorators(
                 CloseBracket(_) => advance_parser(parser)
                 _ => parser
               }
-              let computed_name = match name_expr {
-                Node::StringLiteral(lit) => lit.value
-                Node::NumericLiteral(lit) => lit.value
-                _ => "[computed]"
-              }
+              let computed_name = get_computed_property_name(name_expr)
               match current_token(parser) {
                 OpenParen(_) => {
                   let parser = advance_parser(parser)
@@ -4947,12 +4931,9 @@ fn parse_class_member_with_decorators(
             CloseBracket(_) => advance_parser(parser)
             _ => parser
           }
-          // Get the computed name as string for now
-          let computed_name = match name_expr {
-            Node::StringLiteral(lit) => lit.value
-            Node::NumericLiteral(lit) => lit.value
-            _ => "[computed]"
-          }
+          // Get the computed name as string
+          // Handle special cases like Symbol.iterator
+          let computed_name = get_computed_property_name(name_expr)
           match current_token(parser) {
             // Computed method: ["name"]() { }
             OpenParen(_) => {
@@ -5245,11 +5226,7 @@ fn parse_class_member_with_modifiers(
                 CloseBracket(_) => advance_parser(parser)
                 _ => parser
               }
-              let computed_name = match name_expr {
-                Node::StringLiteral(lit) => lit.value
-                Node::NumericLiteral(lit) => lit.value
-                _ => "[computed]"
-              }
+              let computed_name = get_computed_property_name(name_expr)
               match current_token(parser) {
                 OpenParen(_) => {
                   let parser = advance_parser(parser)
@@ -5366,11 +5343,7 @@ fn parse_class_member_with_modifiers(
                 CloseBracket(_) => advance_parser(parser)
                 _ => parser
               }
-              let computed_name = match name_expr {
-                Node::StringLiteral(lit) => lit.value
-                Node::NumericLiteral(lit) => lit.value
-                _ => "[computed]"
-              }
+              let computed_name = get_computed_property_name(name_expr)
               match current_token(parser) {
                 OpenParen(_) => {
                   let parser = advance_parser(parser)
@@ -5519,11 +5492,7 @@ fn parse_class_member_with_modifiers(
             CloseBracket(_) => advance_parser(parser)
             _ => parser
           }
-          let computed_name = match name_expr {
-            Node::StringLiteral(lit) => lit.value
-            Node::NumericLiteral(lit) => lit.value
-            _ => "[computed]"
-          }
+          let computed_name = get_computed_property_name(name_expr)
           match current_token(parser) {
             // Computed method with modifiers
             OpenParen(_) => {
@@ -9744,6 +9713,30 @@ fn try_get_binding_target_with_reserved(
         Some((name, loc)) => Some((name, loc, true))
         None => None
       }
+  }
+}
+
+///|
+/// Get computed property name from expression
+/// Handles Symbol.iterator -> "__@iterator", Symbol.asyncIterator -> "__@asyncIterator", etc.
+fn get_computed_property_name(name_expr : Node) -> String {
+  match name_expr {
+    Node::StringLiteral(lit) => lit.value
+    Node::NumericLiteral(lit) => lit.value
+    Node::PropertyAccessExpression(pae) =>
+      // Handle Symbol.iterator, Symbol.asyncIterator, etc.
+      match pae.expression {
+        Node::Identifier(obj_id) if obj_id.name == "Symbol" =>
+          if pae.name == "iterator" {
+            "__@iterator"
+          } else if pae.name == "asyncIterator" {
+            "__@asyncIterator"
+          } else {
+            "[computed]"
+          }
+        _ => "[computed]"
+      }
+    _ => "[computed]"
   }
 }
 
