@@ -5427,14 +5427,7 @@ fn infer_method_type(
   let checker = c
 
   // Get return type
-  let (return_type, checker) = match method_decl.return_type {
-    Some(type_node) =>
-      match get_type_from_type_node(checker, type_node) {
-        (Some(t), c) => (t, c)
-        (None, c) => any_type(c)
-      }
-    None => any_type(checker)
-  }
+  let (return_type, checker) = resolve_type_annotation_or_any(checker, method_decl.return_type)
 
   // Check method body for errors (including await expressions)
   let checker = match method_decl.body {
@@ -5483,14 +5476,7 @@ fn infer_parameter_type(
   param : Parameter,
   symbol : Symbol,
 ) -> (Type, TypeChecker) {
-  let (param_type, checker) = match param.type_annotation {
-    Some(type_node) =>
-      match get_type_from_type_node(checker, type_node) {
-        (Some(t), c) => (t, c)
-        (None, c) => any_type(c)
-      }
-    None => any_type(checker)
-  }
+  let (param_type, checker) = resolve_type_annotation_or_any(checker, param.type_annotation)
 
   // Cache the type
   let new_symbol_types = checker.symbol_types
