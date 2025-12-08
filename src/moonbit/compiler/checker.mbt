@@ -4417,25 +4417,8 @@ fn get_string_constructor_type(checker : TypeChecker) -> (Type, TypeChecker) {
   let default_flags = TypeFlags::default()
   let info = TypeInfo::{ id: 0, flags: default_flags }
 
-  // String.fromCharCode
-  let from_char_code = PropertySignature::{
-    name: "fromCharCode",
-    prop_type: Type::Function(CheckerFunctionType::{
-      parameters: [
-        CheckerParameter::{
-          name: "codes",
-          param_type: Type::Number(info),
-          is_optional: false,
-          is_rest: true,
-        },
-      ],
-      return_type: Type::String(info),
-      info,
-    }),
-    is_optional: false,
-    is_readonly: false,
-  }
-  string_methods.set("fromCharCode", from_char_code)
+  // String.fromCharCode - rest parameter
+  string_methods.set("fromCharCode", make_rest_method("fromCharCode", "codes", TKNumber, TKString, info))
 
   // Create String instance type (the result of new String())
   let string_instance_type = Type::Object(ObjectType::{
@@ -4479,145 +4462,19 @@ fn get_symbol_constructor_type(checker : TypeChecker) -> (Type, TypeChecker) {
   let default_flags = TypeFlags::default()
   let info = TypeInfo::{ id: 0, flags: default_flags }
 
-  // Symbol.for
-  let for_method = PropertySignature::{
-    name: "for",
-    prop_type: Type::Function(CheckerFunctionType::{
-      parameters: [
-        CheckerParameter::{
-          name: "key",
-          param_type: Type::String(info),
-          is_optional: false,
-          is_rest: false,
-        },
-      ],
-      return_type: Type::Symbol(info),
-      info,
-    }),
-    is_optional: false,
-    is_readonly: false,
-  }
-  symbol_methods.set("for", for_method)
+  // Symbol.for - string -> symbol
+  symbol_methods.set("for", make_unary_method("for", "key", TKString, TKSymbol, info))
 
   // Well-known Symbol properties (ES2015+)
   // These are readonly properties that return unique symbol values
-
-  // Symbol.iterator
-  let iterator_prop = PropertySignature::{
-    name: "iterator",
-    prop_type: Type::Symbol(info),
-    is_optional: false,
-    is_readonly: true,
+  let symbol_props = [
+    "iterator", "asyncIterator", "hasInstance", "isConcatSpreadable",
+    "match", "matchAll", "replace", "search", "species", "split",
+    "toPrimitive", "toStringTag", "unscopables"
+  ]
+  for prop_name in symbol_props {
+    symbol_methods.set(prop_name, make_readonly_property(prop_name, Type::Symbol(info)))
   }
-  symbol_methods.set("iterator", iterator_prop)
-
-  // Symbol.asyncIterator (ES2018)
-  let async_iterator_prop = PropertySignature::{
-    name: "asyncIterator",
-    prop_type: Type::Symbol(info),
-    is_optional: false,
-    is_readonly: true,
-  }
-  symbol_methods.set("asyncIterator", async_iterator_prop)
-
-  // Symbol.hasInstance
-  let has_instance_prop = PropertySignature::{
-    name: "hasInstance",
-    prop_type: Type::Symbol(info),
-    is_optional: false,
-    is_readonly: true,
-  }
-  symbol_methods.set("hasInstance", has_instance_prop)
-
-  // Symbol.isConcatSpreadable
-  let is_concat_spreadable_prop = PropertySignature::{
-    name: "isConcatSpreadable",
-    prop_type: Type::Symbol(info),
-    is_optional: false,
-    is_readonly: true,
-  }
-  symbol_methods.set("isConcatSpreadable", is_concat_spreadable_prop)
-
-  // Symbol.match
-  let match_prop = PropertySignature::{
-    name: "match",
-    prop_type: Type::Symbol(info),
-    is_optional: false,
-    is_readonly: true,
-  }
-  symbol_methods.set("match", match_prop)
-
-  // Symbol.matchAll (ES2020)
-  let match_all_prop = PropertySignature::{
-    name: "matchAll",
-    prop_type: Type::Symbol(info),
-    is_optional: false,
-    is_readonly: true,
-  }
-  symbol_methods.set("matchAll", match_all_prop)
-
-  // Symbol.replace
-  let replace_prop = PropertySignature::{
-    name: "replace",
-    prop_type: Type::Symbol(info),
-    is_optional: false,
-    is_readonly: true,
-  }
-  symbol_methods.set("replace", replace_prop)
-
-  // Symbol.search
-  let search_prop = PropertySignature::{
-    name: "search",
-    prop_type: Type::Symbol(info),
-    is_optional: false,
-    is_readonly: true,
-  }
-  symbol_methods.set("search", search_prop)
-
-  // Symbol.species
-  let species_prop = PropertySignature::{
-    name: "species",
-    prop_type: Type::Symbol(info),
-    is_optional: false,
-    is_readonly: true,
-  }
-  symbol_methods.set("species", species_prop)
-
-  // Symbol.split
-  let split_prop = PropertySignature::{
-    name: "split",
-    prop_type: Type::Symbol(info),
-    is_optional: false,
-    is_readonly: true,
-  }
-  symbol_methods.set("split", split_prop)
-
-  // Symbol.toPrimitive
-  let to_primitive_prop = PropertySignature::{
-    name: "toPrimitive",
-    prop_type: Type::Symbol(info),
-    is_optional: false,
-    is_readonly: true,
-  }
-  symbol_methods.set("toPrimitive", to_primitive_prop)
-
-  // Symbol.toStringTag
-  let to_string_tag_prop = PropertySignature::{
-    name: "toStringTag",
-    prop_type: Type::Symbol(info),
-    is_optional: false,
-    is_readonly: true,
-  }
-  symbol_methods.set("toStringTag", to_string_tag_prop)
-
-  // Symbol.unscopables
-  let unscopables_prop = PropertySignature::{
-    name: "unscopables",
-    prop_type: Type::Symbol(info),
-    is_optional: false,
-    is_readonly: true,
-  }
-  symbol_methods.set("unscopables", unscopables_prop)
 
   // Check for user-defined SymbolConstructor interface augmentation
   let mut checker = checker
@@ -4664,18 +4521,9 @@ fn get_error_constructor_type(checker : TypeChecker) -> (Type, TypeChecker) {
 
   // Error instance type - returned when constructed
   let error_instance_properties : Map[String, PropertySignature] = Map::new()
-  error_instance_properties.set("message", PropertySignature::{
-    name: "message",
-    prop_type: Type::String(info),
-    is_optional: false,
-    is_readonly: false,
-  })
-  error_instance_properties.set("name", PropertySignature::{
-    name: "name",
-    prop_type: Type::String(info),
-    is_optional: false,
-    is_readonly: false,
-  })
+  error_instance_properties.set("message", make_simple_property("message", Type::String(info)))
+  error_instance_properties.set("name", make_simple_property("name", Type::String(info)))
+  // stack is optional
   error_instance_properties.set("stack", PropertySignature::{
     name: "stack",
     prop_type: Type::String(info),
@@ -4726,45 +4574,12 @@ fn get_array_constructor_type(checker : TypeChecker) -> (Type, TypeChecker) {
   let default_flags = TypeFlags::default()
   let info = TypeInfo::{ id: 0, flags: default_flags }
 
-  // Array.isArray
-  let is_array_method = PropertySignature::{
-    name: "isArray",
-    prop_type: Type::Function(CheckerFunctionType::{
-      parameters: [
-        CheckerParameter::{
-          name: "arg",
-          param_type: Type::Any(info),
-          is_optional: false,
-          is_rest: false,
-        },
-      ],
-      return_type: Type::Boolean(info),
-      info,
-    }),
-    is_optional: false,
-    is_readonly: false,
-  }
-  array_methods.set("isArray", is_array_method)
+  // Array.isArray - any -> boolean
+  array_methods.set("isArray", make_unary_method("isArray", "arg", TKAny, TKBoolean, info))
 
-  // Array.from
-  let from_method = PropertySignature::{
-    name: "from",
-    prop_type: Type::Function(CheckerFunctionType::{
-      parameters: [
-        CheckerParameter::{
-          name: "arrayLike",
-          param_type: Type::Any(info),
-          is_optional: false,
-          is_rest: false,
-        },
-      ],
-      return_type: Type::Any(info),
-      info,
-    }),
-    is_optional: false,
-    is_readonly: false,
-  }
-  array_methods.set("from", from_method)
+  // Array.from - arrayLike -> any
+  array_methods.set("from", make_unary_method("from", "arrayLike", TKAny, TKAny, info))
+
   let array_type = Type::Object(ObjectType::{
     properties: array_methods,
     call_signatures: [],
@@ -4784,91 +4599,32 @@ fn get_object_constructor_type(checker : TypeChecker) -> (Type, TypeChecker) {
   let default_flags = TypeFlags::default()
   let info = TypeInfo::{ id: 0, flags: default_flags }
 
-  // Object.keys
-  let keys_method = PropertySignature::{
-    name: "keys",
-    prop_type: Type::Function(CheckerFunctionType::{
-      parameters: [
-        CheckerParameter::{
-          name: "o",
-          param_type: Type::Any(info),
-          is_optional: false,
-          is_rest: false,
-        },
-      ],
-      return_type: Type::Any(info), // string[]
-      info,
-    }),
-    is_optional: false,
-    is_readonly: false,
+  // Object.keys, Object.values, Object.entries - all take any object and return any
+  let unary_object_methods = ["keys", "values", "entries"]
+  for method_name in unary_object_methods {
+    object_methods.set(method_name, make_unary_method(method_name, "o", TKAny, TKAny, info))
   }
-  object_methods.set("keys", keys_method)
 
-  // Object.values
-  let values_method = PropertySignature::{
-    name: "values",
-    prop_type: Type::Function(CheckerFunctionType::{
-      parameters: [
-        CheckerParameter::{
-          name: "o",
-          param_type: Type::Any(info),
-          is_optional: false,
-          is_rest: false,
-        },
-      ],
-      return_type: Type::Any(info),
-      info,
-    }),
+  // Object.assign - target + rest sources -> any
+  let assign_target = CheckerParameter::{
+    name: "target",
+    param_type: Type::Any(info),
     is_optional: false,
-    is_readonly: false,
+    is_rest: false,
   }
-  object_methods.set("values", values_method)
+  let assign_sources = CheckerParameter::{
+    name: "sources",
+    param_type: Type::Any(info),
+    is_optional: false,
+    is_rest: true,
+  }
+  object_methods.set("assign", make_method_property(
+    "assign",
+    [assign_target, assign_sources],
+    Type::Any(info),
+    info
+  ))
 
-  // Object.entries
-  let entries_method = PropertySignature::{
-    name: "entries",
-    prop_type: Type::Function(CheckerFunctionType::{
-      parameters: [
-        CheckerParameter::{
-          name: "o",
-          param_type: Type::Any(info),
-          is_optional: false,
-          is_rest: false,
-        },
-      ],
-      return_type: Type::Any(info),
-      info,
-    }),
-    is_optional: false,
-    is_readonly: false,
-  }
-  object_methods.set("entries", entries_method)
-
-  // Object.assign
-  let assign_method = PropertySignature::{
-    name: "assign",
-    prop_type: Type::Function(CheckerFunctionType::{
-      parameters: [
-        CheckerParameter::{
-          name: "target",
-          param_type: Type::Any(info),
-          is_optional: false,
-          is_rest: false,
-        },
-        CheckerParameter::{
-          name: "sources",
-          param_type: Type::Any(info),
-          is_optional: false,
-          is_rest: true,
-        },
-      ],
-      return_type: Type::Any(info),
-      info,
-    }),
-    is_optional: false,
-    is_readonly: false,
-  }
-  object_methods.set("assign", assign_method)
   let object_type = Type::Object(ObjectType::{
     properties: object_methods,
     call_signatures: [],
@@ -4888,65 +4644,13 @@ fn get_number_constructor_type(checker : TypeChecker) -> (Type, TypeChecker) {
   let default_flags = TypeFlags::default()
   let info = TypeInfo::{ id: 0, flags: default_flags }
 
-  // Number.isNaN
-  let is_nan_method = PropertySignature::{
-    name: "isNaN",
-    prop_type: Type::Function(CheckerFunctionType::{
-      parameters: [
-        CheckerParameter::{
-          name: "number",
-          param_type: Type::Any(info),
-          is_optional: false,
-          is_rest: false,
-        },
-      ],
-      return_type: Type::Boolean(info),
-      info,
-    }),
-    is_optional: false,
-    is_readonly: false,
-  }
-  number_methods.set("isNaN", is_nan_method)
+  // Number.isNaN, Number.isFinite - any -> boolean
+  number_methods.set("isNaN", make_unary_method("isNaN", "number", TKAny, TKBoolean, info))
+  number_methods.set("isFinite", make_unary_method("isFinite", "number", TKAny, TKBoolean, info))
 
-  // Number.isFinite
-  let is_finite_method = PropertySignature::{
-    name: "isFinite",
-    prop_type: Type::Function(CheckerFunctionType::{
-      parameters: [
-        CheckerParameter::{
-          name: "number",
-          param_type: Type::Any(info),
-          is_optional: false,
-          is_rest: false,
-        },
-      ],
-      return_type: Type::Boolean(info),
-      info,
-    }),
-    is_optional: false,
-    is_readonly: false,
-  }
-  number_methods.set("isFinite", is_finite_method)
+  // Number.parseInt - string -> number
+  number_methods.set("parseInt", make_unary_method("parseInt", "string", TKString, TKNumber, info))
 
-  // Number.parseInt
-  let parse_int_method = PropertySignature::{
-    name: "parseInt",
-    prop_type: Type::Function(CheckerFunctionType::{
-      parameters: [
-        CheckerParameter::{
-          name: "string",
-          param_type: Type::String(info),
-          is_optional: false,
-          is_rest: false,
-        },
-      ],
-      return_type: Type::Number(info),
-      info,
-    }),
-    is_optional: false,
-    is_readonly: false,
-  }
-  number_methods.set("parseInt", parse_int_method)
   let number_type = Type::Object(ObjectType::{
     properties: number_methods,
     call_signatures: [],
