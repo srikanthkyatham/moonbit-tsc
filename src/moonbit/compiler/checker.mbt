@@ -1097,14 +1097,7 @@ fn add_parameter_to_scope(checker : TypeChecker, param : Node) -> TypeChecker {
   match param {
     Parameter(p) => {
       // Get the parameter type from type annotation, or any if not specified
-      let (param_type, checker) = match p.type_annotation {
-        Some(type_node) =>
-          match get_type_from_type_node(checker, type_node) {
-            (Some(t), c) => (t, c)
-            (None, c) => any_type(c)
-          }
-        None => any_type(checker)
-      }
+      let (param_type, checker) = resolve_type_annotation_or_any(checker, p.type_annotation)
       // Handle parameter name (identifier or binding pattern)
       match p.name {
         Identifier(id) => add_local_variable(checker, id.name, param_type)
@@ -1321,6 +1314,32 @@ pub fn void_type(checker : TypeChecker) -> (Type, TypeChecker) {
 pub fn any_type(checker : TypeChecker) -> (Type, TypeChecker) {
   let (info, checker) = create_type_info(checker)
   (Any(info), checker)
+}
+
+///|
+/// Helper: Resolve type from type_node, fallback to any type
+/// Pattern A: Basic type resolution with any fallback
+fn resolve_type_or_any(
+  checker : TypeChecker,
+  type_node : Node
+) -> (Type, TypeChecker) {
+  match get_type_from_type_node(checker, type_node) {
+    (Some(t), c) => (t, c)
+    (None, c) => any_type(c)
+  }
+}
+
+///|
+/// Helper: Resolve type from optional type annotation, fallback to any
+/// Pattern B: Parameter/property type resolution
+fn resolve_type_annotation_or_any(
+  checker : TypeChecker,
+  type_annotation : Node?
+) -> (Type, TypeChecker) {
+  match type_annotation {
+    Some(type_node) => resolve_type_or_any(checker, type_node)
+    None => any_type(checker)
+  }
 }
 
 ///|
@@ -5043,19 +5062,12 @@ fn get_function_declaration_type(
 ) -> (Type, TypeChecker) {
   // Build parameter list
   let parameters : Array[CheckerParameter] = []
-  let mut checker = checker
+  let mut c = checker
   for param_node in func.parameters {
     match param_node {
       Parameter(p) => {
-        let (param_type, c) = match p.type_annotation {
-          Some(type_node) =>
-            match get_type_from_type_node(checker, type_node) {
-              (Some(t), c2) => (t, c2)
-              (None, c2) => any_type(c2)
-            }
-          None => any_type(checker)
-        }
-        checker = c
+        let (param_type, c2) = resolve_type_annotation_or_any(c, p.type_annotation)
+        c = c2
         parameters.push({
           name: get_parameter_name(p.name),
           param_type,
@@ -5066,6 +5078,7 @@ fn get_function_declaration_type(
       _ => ()
     }
   }
+  let checker = c
 
   // Get return type
   let (return_type, checker) = match func.return_type {
@@ -5097,19 +5110,12 @@ fn infer_function_declaration_type(
   // Single declaration - create simple Function type
   // Build parameter list
   let parameters : Array[CheckerParameter] = []
-  let mut checker = checker
+  let mut c = checker
   for param_node in func.parameters {
     match param_node {
       Parameter(p) => {
-        let (param_type, c) = match p.type_annotation {
-          Some(type_node) =>
-            match get_type_from_type_node(checker, type_node) {
-              (Some(t), c2) => (t, c2)
-              (None, c2) => any_type(c2)
-            }
-          None => any_type(checker)
-        }
-        checker = c
+        let (param_type, c2) = resolve_type_annotation_or_any(c, p.type_annotation)
+        c = c2
         parameters.push({
           name: get_parameter_name(p.name),
           param_type,
@@ -5120,6 +5126,7 @@ fn infer_function_declaration_type(
       _ => ()
     }
   }
+  let checker = c
 
   // Get return type
   let (return_type, checker) = match func.return_type {
@@ -17891,20 +17898,13 @@ fn get_method_checker_signature(
   method_decl : MethodDeclaration,
 ) -> (CheckerSignature, TypeChecker) {
   // Build parameters
-  let mut checker = checker
+  let mut c = checker
   let parameters : Array[CheckerParameter] = []
   for param in method_decl.parameters {
     match param {
       Parameter(p) => {
-        let (param_type, c) = match p.type_annotation {
-          Some(type_node) =>
-            match get_type_from_type_node(checker, type_node) {
-              (Some(t), c2) => (t, c2)
-              (None, c2) => any_type(c2)
-            }
-          None => any_type(checker)
-        }
-        checker = c
+        let (param_type, c2) = resolve_type_annotation_or_any(c, p.type_annotation)
+        c = c2
         parameters.push({
           name: get_parameter_name(p.name),
           param_type,
@@ -17915,6 +17915,7 @@ fn get_method_checker_signature(
       _ => ()
     }
   }
+  let checker = c
 
   // Get return type
   let (return_type, checker) = match method_decl.return_type {
@@ -17935,20 +17936,13 @@ fn get_method_signature_type(
   method_decl : MethodDeclaration,
 ) -> (Type, TypeChecker) {
   // Build parameters
-  let mut checker = checker
+  let mut c = checker
   let parameters : Array[CheckerParameter] = []
   for param in method_decl.parameters {
     match param {
       Parameter(p) => {
-        let (param_type, c) = match p.type_annotation {
-          Some(type_node) =>
-            match get_type_from_type_node(checker, type_node) {
-              (Some(t), c2) => (t, c2)
-              (None, c2) => any_type(c2)
-            }
-          None => any_type(checker)
-        }
-        checker = c
+        let (param_type, c2) = resolve_type_annotation_or_any(c, p.type_annotation)
+        c = c2
         parameters.push({
           name: get_parameter_name(p.name),
           param_type,
@@ -17959,6 +17953,7 @@ fn get_method_signature_type(
       _ => ()
     }
   }
+  let checker = c
 
   // Get return type
   let (return_type, checker) = match method_decl.return_type {
