@@ -11537,6 +11537,9 @@ fn is_assignable(source : Type, target : Type) -> Bool {
     // Type references - check by name (simplified)
     (TypeReference(ref1), TypeReference(ref2)) =>
       is_type_reference_assignable(ref1, ref2)
+    // Union to Union - check if all source members are assignable to target union
+    (Union(source_union), Union(target_union)) =>
+      is_union_to_union_assignable(source_union, target_union)
     // Union type assignability - source is assignable to union if assignable to any member
     (source, Union(union)) => is_assignable_to_union(source, union)
     // Union source is assignable to target if all members are assignable
@@ -11861,6 +11864,23 @@ fn is_tuple_assignable_to_array(
   // All tuple elements must be assignable to array element type
   for i = 0; i < tuple.element_types.length(); i = i + 1 {
     if !is_assignable(tuple.element_types[i].element_type, arr.element_type) {
+      return false
+    }
+  }
+  true
+}
+
+///|
+/// Check if union is assignable to another union
+/// A union is assignable to another union if all members of the source
+/// are assignable to at least one member of the target
+fn is_union_to_union_assignable(
+  source_union : CheckerUnionType,
+  target_union : CheckerUnionType,
+) -> Bool {
+  // Check if all source members are assignable to the target union
+  for i = 0; i < source_union.types.length(); i = i + 1 {
+    if not(is_assignable_to_union(source_union.types[i], target_union)) {
       return false
     }
   }

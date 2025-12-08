@@ -507,10 +507,8 @@ test "for-of with direct array - type assignment error comparison" {
 }
 
 ///|
-test "for-of with .values() - no error when types match (currently errors)" {
+test "for-of with .values() - no error when types match" {
   // When the variable type matches the iterator element type, no error
-  // NOTE: Currently has a TS2322 error due to union type self-assignment bug
-  // This is a separate issue in is_assignable() that needs to be fixed
   let source =
     #|var v: number | string;
     #|for (v of [0, ""].values()) { }
@@ -518,8 +516,8 @@ test "for-of with .values() - no error when types match (currently errors)" {
   let result = check_for_of(source)
   let diagnostics = get_diagnostics(result)
 
-  // Currently errors due to union self-assignment bug - known limitation
-  assert_true(has_error(diagnostics, 2322))
+  // Should not error - union to union assignment is now fixed
+  assert_false(has_error(diagnostics, 2322))
 }
 
 ///|
