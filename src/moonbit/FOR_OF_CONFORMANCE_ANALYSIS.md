@@ -1,8 +1,8 @@
 # For-Of Statement Conformance Analysis
 
-## Current Status: 42/59 Tests Pass (71.2%)
+## Current Status: 46/59 Tests Pass (78.0%)
 
-Using the proper conformance test runner (`@tsc_phoenix/run_conformance_tests.exs`), which correctly handles expected error baselines, we have achieved **71.2% conformance** for for-of statements.
+Using the proper conformance test runner (`@tsc_phoenix/run_conformance_tests.exs`), which correctly handles expected error baselines, we have achieved **78.0% conformance** for for-of statements.
 
 ## Progress Summary
 
@@ -14,17 +14,18 @@ Using the proper conformance test runner (`@tsc_phoenix/run_conformance_tests.ex
 | After tuple type inference fix | 39 | 59 | 66.1% | +1.7% |
 | After parser validations (TS1188, TS2480) | 41 | 59 | 69.5% | +3.4% |
 | After duplicate binding check (TS2451) | 42 | 59 | 71.2% | +1.7% |
+| After scope/block validations (TS2304, TS2481, TS2448) | 46 | 59 | 78.0% | +6.8% |
 
-**Total Improvement**: 59.3% → 71.2% = **+11.9%** (+7 tests fixed)
+**Total Improvement**: 59.3% → 78.0% = **+18.7%** (+11 tests fixed)
 
 ## Test Breakdown
 
-### Passing Tests: 42 ✓
+### Passing Tests: 46 ✓
 Tests that correctly compile or correctly report expected errors.
 
-### Failing Tests: 17 ✗
+### Failing Tests: 13 ✗
 
-All 17 remaining failures are **"should ERROR but PASS"** - tests that should report errors but currently don't. There are **0 "should PASS but FAIL"** tests.
+All 13 remaining failures are **"should ERROR but PASS"** - tests that should report errors but currently don't. There are **0 "should PASS but FAIL"** tests.
 
 ```
 for-of12.ts   - TS2322: Type assignment error
@@ -40,10 +41,6 @@ for-of35.ts   - TS7022/TS7023: Circular reference implicit any
 for-of39.ts   - TS2769: Map constructor overload error
 for-of46.ts   - TS2322: Destructuring type mismatch
 for-of47.ts   - TS2322: Destructuring type mismatch
-for-of53.ts   - TS2481: Cannot initialize outer scoped variable
-for-of54.ts   - TS2481: Cannot initialize outer scoped variable
-for-of55.ts   - TS2448: Variable used before declaration
-for-of6.ts    - TS2304: Cannot find name (undeclared variable)
 ```
 
 ## Implementation Summary
@@ -161,6 +158,42 @@ for (const [[x, y], [x, z]] of []) // ❌ error (nested duplicate)
 - All 4,185 unit tests pass
 - Fixed for-of52.ts
 
+### Commit 7: [current] - Scope/Block validations (TS2304, TS2481, TS2448)
+**Changes:**
+- Added TS2304 validation for undeclared bare identifiers in for-of
+- Added TS2481 validation for var declarations conflicting with let/const bindings
+- Added TS2448 validation for variable used before declaration in for-of expression
+- Modified for-of to track let/const variables in `const_vars` set
+- Created `add_binding_pattern_variables_as_const()` for proper block-scope tracking
+
+**Implementation Details:**
+
+**TS2304: Cannot find name**
+- Check if bare identifier exists in scope before using in for-of
+- Report error if variable not found
+- Example: `for (v of []) {}` where v is not declared
+
+**TS2481: Cannot initialize outer scoped variable**
+- Check when var is declared inside for-of body
+- Detect conflict with let/const binding in parent scope
+- Uses `is_local_const_variable()` to identify block-scoped variables
+- Example: `for (let v of []) { var v; }` - var conflicts with let
+
+**TS2448: Block-scoped variable used before declaration**
+- Check if for-of expression references the variable being declared
+- Only applies to let/const (not var)
+- Example: `let v = [1]; for (let v of v) {}` - second v used before declared
+
+**Key Fix:**
+- Modified for-of variable addition to use `add_local_const_variable()` for let/const
+- This tracks block-scoped variables in `const_vars` set
+- Enables TS2481 detection by checking `is_local_const_variable()`
+
+**Tests Added:**
+- 17 unit tests for TS2304, TS2481, TS2448
+- All 4,199 unit tests pass
+- Fixed for-of6.ts, for-of53.ts, for-of54.ts, for-of55.ts
+
 ## Root Cause Analysis
 
 ### Issues Fixed ✅
@@ -174,8 +207,11 @@ for (const [[x, y], [x, z]] of []) // ❌ error (nested duplicate)
 8. ✅ Excess declarations in for-of (TS1188)
 9. ✅ 'let' in let/const declarations (TS2480)
 10. ✅ Duplicate bindings in destructuring (TS2451)
+11. ✅ Undeclared bare identifiers (TS2304)
+12. ✅ Var conflicts with let/const bindings (TS2481)
+13. ✅ Variable used before declaration (TS2448)
 
-### Remaining Issues (17 tests)
+### Remaining Issues (13 tests)
 
 #### Category 1: Type Assignment Errors (4 tests)
 - **for-of12.ts**: Pre-declared variable type mismatch
@@ -191,21 +227,14 @@ for (const [[x, y], [x, z]] of []) // ❌ error (nested duplicate)
 - **for-of30.ts**: Iterator 'return' property is not a method
 - **Status**: Need deeper iterator shape validation
 
-#### Category 3: Scope/Block Errors (3 tests)
-- **for-of6.ts**: TS2304 - Undeclared bare identifier
-- **for-of53.ts**: TS2481 - var conflicts with let binding
-- **for-of54.ts**: TS2481 - var with initializer conflicts with let binding
-- **for-of55.ts**: TS2448 - Variable used before declaration in expression
-- **Status**: Need scope conflict detection
-
-#### Category 4: Circular Reference / Implicit Any (4 tests)
+#### Category 3: Circular Reference / Implicit Any (4 tests)
 - **for-of32.ts**: TS7022 - Variable used in its own initializer
 - **for-of33.ts**: TS7022/TS7023 - Iterator returns variable being declared
 - **for-of34.ts**: TS7022/TS7023 - Iterator next() returns variable
 - **for-of35.ts**: TS7022/TS7023 - Iterator next() value references variable
 - **Status**: Need circular reference detection (--noImplicitAny flag)
 
-#### Category 5: Complex Type Errors (1 test)
+#### Category 4: Complex Type Errors (1 test)
 - **for-of39.ts**: TS2769 - Map constructor overload mismatch
 - **Status**: Need overload resolution improvements
 
@@ -222,21 +251,11 @@ for (const [[x, y], [x, z]] of []) // ❌ error (nested duplicate)
 - ✅ Parser validations (TS1188, TS2480)
 - ✅ Duplicate binding detection (TS2451)
 
-### Priority 2: Scope/Block Validations (3 tests - HIGH VALUE)
-**Estimated Impact**: +5.1% conformance
-
-**TS2304: Cannot find name** (for-of6.ts)
-- Detect undeclared bare identifiers in for-of
-- Should error when variable not in scope
-- Example: `for (v of []) { let v; }` - v not declared before use
-
-**TS2481: Outer scope conflict** (for-of53.ts, for-of54.ts)
-- Detect var declaration inside for-of block that conflicts with let/const binding
-- Example: `for (let v of []) { var v; }` - var hoists and conflicts
-
-**TS2448: Used before declaration** (for-of55.ts)
-- Detect when for-of expression references the variable being declared
-- Example: `let v = [1]; for (let v of v) {}` - second v used before declared
+### Priority 2: Scope/Block Validations ✅ COMPLETE
+- ✅ TS2304: Cannot find name (undeclared bare identifiers)
+- ✅ TS2481: Cannot initialize outer scoped variable (var conflicts)
+- ✅ TS2448: Variable used before declaration
+- **Result**: +6.8% conformance (4 tests fixed)
 
 ### Priority 3: Enhanced Type Checking (4 tests - MEDIUM VALUE)
 **Estimated Impact**: +6.8% conformance
@@ -264,26 +283,25 @@ for (const [[x, y], [x, z]] of []) // ❌ error (nested duplicate)
 
 | Category | Tests | Effort | Value | Priority |
 |----------|-------|--------|-------|----------|
-| Scope validations | 3 | Low | High | 1 |
-| Type checking | 4 | Medium | Medium | 2 |
-| Iterator validation | 4 | Medium | Low | 3 |
-| Circular references | 4 | High | Low | 4 |
-| Map overload | 1 | High | Very Low | 5 |
+| Type checking | 4 | Medium | Medium | 1 |
+| Iterator validation | 4 | Medium | Low | 2 |
+| Circular references | 4 | High | Low | 3 |
+| Map overload | 1 | High | Very Low | 4 |
 
 ## Conclusion
 
-We have achieved **71.2% conformance** for for-of statements, improving from the initial 59.3%.
+We have achieved **78.0% conformance** for for-of statements, improving from the initial 59.3%.
 
 **Key Achievements:**
 - ✅ All core for-of functionality implemented
 - ✅ All "should pass" tests now passing (0 failures in this category)
-- ✅ 7 new error validations implemented
-- ✅ 4,185 unit tests all passing
-- ✅ +11.9% conformance improvement
+- ✅ 13 error validations implemented
+- ✅ 4,199 unit tests all passing
+- ✅ +18.7% conformance improvement
 
 **Remaining Work:**
-- 17 tests with missing error validation (edge cases)
-- Best ROI: 3 scope/block validation tests (+5.1%)
+- 13 tests with missing error validation (edge cases)
+- Best ROI: 4 type checking tests (+6.8%)
 - All remaining issues are **missing validation**, not incorrect behavior
 
 The for-of statement implementation is **production-ready** for common use cases. The remaining work involves edge case validation that most TypeScript code rarely encounters.

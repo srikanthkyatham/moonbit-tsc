@@ -866,6 +866,42 @@ fn add_binding_pattern_variables(
 }
 
 ///|
+/// Add variables from a binding pattern to scope as const (for let/const tracking)
+/// This tracks the variables in const_vars set for TS2481 error detection
+fn add_binding_pattern_variables_as_const(
+  checker : TypeChecker,
+  pattern : Node,
+  var_type : Type,
+) -> TypeChecker {
+  match pattern {
+    Identifier(id) => add_local_const_variable(checker, id.name, var_type)
+    ArrayBindingPattern(arr_pattern) => {
+      let mut c = checker
+      for i = 0; i < arr_pattern.elements.length(); i = i + 1 {
+        match arr_pattern.elements[i] {
+          Some(elem) => c = add_binding_pattern_variables_as_const(c, elem, var_type)
+          None => ()
+        }
+      }
+      c
+    }
+    ObjectBindingPattern(obj_pattern) => {
+      let mut c = checker
+      for i = 0; i < obj_pattern.properties.length(); i = i + 1 {
+        let prop = obj_pattern.properties[i]
+        c = add_binding_pattern_variables_as_const(c, prop.name, var_type)
+      }
+      c
+    }
+    BindingElement(elem) =>
+      add_binding_pattern_variables_as_const(checker, elem.name, var_type)
+    SpreadExpression(spread) =>
+      add_binding_pattern_variables_as_const(checker, spread.expression, var_type)
+    _ => checker
+  }
+}
+
+///|
 /// Check if a local variable is const
 fn is_local_const_variable(checker : TypeChecker, name : String) -> Bool {
   let scopes = checker.local_scopes
@@ -3066,6 +3102,30 @@ fn check_variable_statement(
   let is_exported = has_export_modifier(var_stmt.modifiers)
   for i = 0; i < var_stmt.declarations.length(); i = i + 1 {
     let decl = var_stmt.declarations[i]
+
+    // TS2481: Check if var declaration conflicts with let/const in parent scope
+    // This occurs when 'var' is declared in a nested block, but a let/const with the
+    // same name exists in a parent scope (e.g., for-of loop binding)
+    // We only check this for block-scoped variables (those in const_vars set)
+    if not(var_stmt.is_let) && not(var_stmt.is_const) {
+      match decl.name {
+        Identifier(id) => {
+          // Check if there's a block-scoped variable with this name in parent scope
+          // Only trigger error if the variable in parent scope is let/const (in const_vars)
+          // AND we're in a nested scope (not the function-level scope)
+          if checker.local_scopes.length() > 1 && is_local_const_variable(checker, id.name) {
+            checker = add_diagnostic_with_code(
+              checker,
+              "Cannot initialize outer scoped variable '\{id.name}' in the same scope as block scoped declaration '\{id.name}'.",
+              decl.location,
+              TS2481,
+            )
+          }
+        }
+        _ => ()
+      }
+    }
+
     checker = check_variable_declaration(checker, decl, var_stmt.is_const)
 
     // TS1155: 'const' declarations must be initialized
@@ -14714,6 +14774,33 @@ fn check_for_of_statement(
   // Check the left-hand side (TS2487)
   let checker = check_for_of_left_side(checker, for_of_stmt.initializer)
 
+  // Check for TS2448: Variable used before declaration
+  // If the for-of expression is an identifier that matches the variable being declared,
+  // report an error because the variable is used before it's declared
+  let checker = match for_of_stmt.initializer {
+    VariableStatement(var_stmt) =>
+      if var_stmt.declarations.length() > 0 {
+        let decl = var_stmt.declarations[0]
+        match (decl.name, for_of_stmt.expression) {
+          (Identifier(decl_id), Identifier(expr_id)) =>
+            if decl_id.name == expr_id.name && (var_stmt.is_let || var_stmt.is_const) {
+              add_diagnostic_with_code(
+                checker,
+                "Block-scoped variable '\{decl_id.name}' used before its declaration.",
+                get_node_location(for_of_stmt.expression),
+                TS2448,
+              )
+            } else {
+              checker
+            }
+          _ => checker
+        }
+      } else {
+        checker
+      }
+    _ => checker
+  }
+
   // Infer the type of the iterable expression
   let (iterable_type, checker) = infer_type(checker, for_of_stmt.expression)
 
@@ -14755,7 +14842,15 @@ fn add_for_of_variable_to_scope(
       if var_stmt.declarations.length() > 0 {
         let decl = var_stmt.declarations[0]
         match decl.name {
-          Identifier(id) => add_local_variable(checker, id.name, elem_type)
+          Identifier(id) => {
+            // Use add_local_const_variable for let/const to track block-scoped variables
+            // This is needed for TS2481 error detection (var conflicts with let/const)
+            if var_stmt.is_let || var_stmt.is_const {
+              add_local_const_variable(checker, id.name, elem_type)
+            } else {
+              add_local_variable(checker, id.name, elem_type)
+            }
+          }
           ArrayBindingPattern(_) | ObjectBindingPattern(_) => {
             // Check for duplicate bindings (TS2451) if let/const
             let checker = if var_stmt.is_let || var_stmt.is_const {
@@ -14764,7 +14859,12 @@ fn add_for_of_variable_to_scope(
               checker
             }
             // Handle destructuring patterns
-            add_binding_pattern_variables(checker, decl.name, elem_type)
+            // For let/const, we need to track binding names in const_vars for TS2481
+            if var_stmt.is_let || var_stmt.is_const {
+              add_binding_pattern_variables_as_const(checker, decl.name, elem_type)
+            } else {
+              add_binding_pattern_variables(checker, decl.name, elem_type)
+            }
           }
           _ => checker
         }
@@ -14773,22 +14873,32 @@ fn add_for_of_variable_to_scope(
       }
     Identifier(id) => {
       // Handle: for (item of arr) where item was previously declared
-      // Check if item is a const variable (TS2588)
-      let checker = if is_local_const_variable(checker, id.name) {
-        add_diagnostic_with_code(
-          checker,
-          "Cannot assign to '\{id.name}' because it is a constant.",
-          get_node_location(initializer),
-          TS2588,
-        )
-      } else {
-        checker
-      }
-
-      // Type check: ensure elem_type is assignable to variable's declared type
+      // First check if the variable exists in scope (TS2304)
       let var_type = lookup_local_variable(checker, id.name)
       match var_type {
+        None => {
+          // Variable not found - report TS2304
+          add_diagnostic_with_code(
+            checker,
+            "Cannot find name '\{id.name}'.",
+            get_node_location(initializer),
+            TS2304,
+          )
+        }
         Some(declared_type) => {
+          // Variable exists - check if it's const (TS2588)
+          let checker = if is_local_const_variable(checker, id.name) {
+            add_diagnostic_with_code(
+              checker,
+              "Cannot assign to '\{id.name}' because it is a constant.",
+              get_node_location(initializer),
+              TS2588,
+            )
+          } else {
+            checker
+          }
+
+          // Type check: ensure elem_type is assignable to variable's declared type
           if not(is_assignable(elem_type, declared_type)) {
             let elem_str = type_to_string(elem_type)
             let var_str = type_to_string(declared_type)
@@ -14803,7 +14913,6 @@ fn add_for_of_variable_to_scope(
             checker
           }
         }
-        None => checker
       }
     }
     // Handle: for ([a, b] of arr) or for ({x, y} of arr)

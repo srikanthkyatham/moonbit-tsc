@@ -260,3 +260,155 @@ test "for-of with complex nested pattern no duplicates - should pass" {
   let diags = check_for_of_errors(source)
   assert_false(has_error_code(diags, 2451))
 }
+
+// ============================================================================
+// TS2304: Cannot find name (undeclared variable)
+// ============================================================================
+
+///|
+test "for-of with bare identifier that doesn't exist - should error TS2304" {
+  let source =
+    #|for (v of [1, 2, 3]) {}
+  let diags = check_for_of_errors(source)
+  assert_true(has_error_code(diags, 2304))
+}
+
+///|
+test "for-of with bare identifier declared in body - should error TS2304" {
+  let source =
+    #|for (v of [0]) {
+    #|  let v;
+    #|}
+  let diags = check_for_of_errors(source)
+  assert_true(has_error_code(diags, 2304))
+}
+
+///|
+test "for-of with bare identifier pre-declared - should pass" {
+  let source =
+    #|let v: number;
+    #|for (v of [1, 2, 3]) {}
+  let diags = check_for_of_errors(source)
+  assert_false(has_error_code(diags, 2304))
+}
+
+///|
+test "for-of with let declaration - should not trigger TS2304" {
+  let source =
+    #|for (let v of [1, 2, 3]) {}
+  let diags = check_for_of_errors(source)
+  assert_false(has_error_code(diags, 2304))
+}
+
+// ============================================================================
+// TS2481: Cannot initialize outer scoped variable
+// ============================================================================
+
+///|
+test "for-of with var in body conflicting with let binding - should error TS2481" {
+  let source =
+    #|for (let v of []) {
+    #|  var v;
+    #|}
+  let diags = check_for_of_errors(source)
+  assert_true(has_error_code(diags, 2481))
+}
+
+///|
+test "for-of with var initializer in body conflicting with let - should error TS2481" {
+  let source =
+    #|for (let v of []) {
+    #|  var v = 0;
+    #|}
+  let diags = check_for_of_errors(source)
+  assert_true(has_error_code(diags, 2481))
+}
+
+///|
+test "for-of with var in body conflicting with const binding - should error TS2481" {
+  let source =
+    #|for (const v of []) {
+    #|  var v;
+    #|}
+  let diags = check_for_of_errors(source)
+  assert_true(has_error_code(diags, 2481))
+}
+
+///|
+test "for-of with let in body (no conflict) - should pass" {
+  let source =
+    #|for (let v of []) {
+    #|  let x;
+    #|}
+  let diags = check_for_of_errors(source)
+  assert_false(has_error_code(diags, 2481))
+}
+
+///|
+test "for-of with var binding (not nested) - should pass" {
+  let source =
+    #|for (var v of []) {
+    #|  var x;
+    #|}
+  let diags = check_for_of_errors(source)
+  assert_false(has_error_code(diags, 2481))
+}
+
+// ============================================================================
+// TS2448: Block-scoped variable used before its declaration
+// ============================================================================
+
+///|
+test "for-of where expression references the declared variable - should error TS2448" {
+  let source =
+    #|let v = [1];
+    #|for (let v of v) {
+    #|  v;
+    #|}
+  let diags = check_for_of_errors(source)
+  assert_true(has_error_code(diags, 2448))
+}
+
+///|
+test "for-of with const where expression references itself - should error TS2448" {
+  let source =
+    #|let arr = [1, 2];
+    #|for (const arr of arr) {
+    #|  console.log(arr);
+    #|}
+  let diags = check_for_of_errors(source)
+  assert_true(has_error_code(diags, 2448))
+}
+
+///|
+test "for-of with different names - should pass" {
+  let source =
+    #|let arr = [1];
+    #|for (let v of arr) {
+    #|  v;
+    #|}
+  let diags = check_for_of_errors(source)
+  assert_false(has_error_code(diags, 2448))
+}
+
+///|
+test "for-of with var where expression references itself - should pass (var allows this)" {
+  let source =
+    #|var v = [1];
+    #|for (var v of v) {
+    #|  v;
+    #|}
+  let diags = check_for_of_errors(source)
+  assert_false(has_error_code(diags, 2448))
+}
+
+///|
+test "for-of with destructuring - should not trigger TS2448 for different name" {
+  let source =
+    #|let v = [[1, 2]];
+    #|for (let [a, b] of v) {
+    #|  console.log(a, b);
+    #|}
+  let diags = check_for_of_errors(source)
+  assert_false(has_error_code(diags, 2448))
+}
