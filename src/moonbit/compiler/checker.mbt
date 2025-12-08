@@ -4624,6 +4624,9 @@ fn get_symbol_constructor_type(checker : TypeChecker) -> (Type, TypeChecker) {
   }
   symbol_methods.set("for", for_method)
 
+  // Well-known Symbol properties (ES2015+)
+  // These are readonly properties that return unique symbol values
+
   // Symbol.iterator
   let iterator_prop = PropertySignature::{
     name: "iterator",
@@ -4632,6 +4635,114 @@ fn get_symbol_constructor_type(checker : TypeChecker) -> (Type, TypeChecker) {
     is_readonly: true,
   }
   symbol_methods.set("iterator", iterator_prop)
+
+  // Symbol.asyncIterator (ES2018)
+  let async_iterator_prop = PropertySignature::{
+    name: "asyncIterator",
+    prop_type: Type::Symbol(info),
+    is_optional: false,
+    is_readonly: true,
+  }
+  symbol_methods.set("asyncIterator", async_iterator_prop)
+
+  // Symbol.hasInstance
+  let has_instance_prop = PropertySignature::{
+    name: "hasInstance",
+    prop_type: Type::Symbol(info),
+    is_optional: false,
+    is_readonly: true,
+  }
+  symbol_methods.set("hasInstance", has_instance_prop)
+
+  // Symbol.isConcatSpreadable
+  let is_concat_spreadable_prop = PropertySignature::{
+    name: "isConcatSpreadable",
+    prop_type: Type::Symbol(info),
+    is_optional: false,
+    is_readonly: true,
+  }
+  symbol_methods.set("isConcatSpreadable", is_concat_spreadable_prop)
+
+  // Symbol.match
+  let match_prop = PropertySignature::{
+    name: "match",
+    prop_type: Type::Symbol(info),
+    is_optional: false,
+    is_readonly: true,
+  }
+  symbol_methods.set("match", match_prop)
+
+  // Symbol.matchAll (ES2020)
+  let match_all_prop = PropertySignature::{
+    name: "matchAll",
+    prop_type: Type::Symbol(info),
+    is_optional: false,
+    is_readonly: true,
+  }
+  symbol_methods.set("matchAll", match_all_prop)
+
+  // Symbol.replace
+  let replace_prop = PropertySignature::{
+    name: "replace",
+    prop_type: Type::Symbol(info),
+    is_optional: false,
+    is_readonly: true,
+  }
+  symbol_methods.set("replace", replace_prop)
+
+  // Symbol.search
+  let search_prop = PropertySignature::{
+    name: "search",
+    prop_type: Type::Symbol(info),
+    is_optional: false,
+    is_readonly: true,
+  }
+  symbol_methods.set("search", search_prop)
+
+  // Symbol.species
+  let species_prop = PropertySignature::{
+    name: "species",
+    prop_type: Type::Symbol(info),
+    is_optional: false,
+    is_readonly: true,
+  }
+  symbol_methods.set("species", species_prop)
+
+  // Symbol.split
+  let split_prop = PropertySignature::{
+    name: "split",
+    prop_type: Type::Symbol(info),
+    is_optional: false,
+    is_readonly: true,
+  }
+  symbol_methods.set("split", split_prop)
+
+  // Symbol.toPrimitive
+  let to_primitive_prop = PropertySignature::{
+    name: "toPrimitive",
+    prop_type: Type::Symbol(info),
+    is_optional: false,
+    is_readonly: true,
+  }
+  symbol_methods.set("toPrimitive", to_primitive_prop)
+
+  // Symbol.toStringTag
+  let to_string_tag_prop = PropertySignature::{
+    name: "toStringTag",
+    prop_type: Type::Symbol(info),
+    is_optional: false,
+    is_readonly: true,
+  }
+  symbol_methods.set("toStringTag", to_string_tag_prop)
+
+  // Symbol.unscopables
+  let unscopables_prop = PropertySignature::{
+    name: "unscopables",
+    prop_type: Type::Symbol(info),
+    is_optional: false,
+    is_readonly: true,
+  }
+  symbol_methods.set("unscopables", unscopables_prop)
   let symbol_type = Type::Object(ObjectType::{
     properties: symbol_methods,
     call_signatures: [],
