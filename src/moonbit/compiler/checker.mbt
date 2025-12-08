@@ -9938,21 +9938,24 @@ fn infer_function_expression_type(
 
   // Now add parameters to local scope for body checking
   // We need to iterate the original parameters to handle binding patterns
+  let mut c = checker
   for param_node in fe.parameters {
     match param_node {
       Parameter(p) => {
-        let (param_type, checker) = resolve_type_annotation_or_any(checker, p.type_annotation)
+        let (param_type, c2) = resolve_type_annotation_or_any(c, p.type_annotation)
+        c = c2
         // Handle identifier or binding pattern
-        checker = match p.name {
-          Identifier(id) => add_local_variable(checker, id.name, param_type)
+        c = match p.name {
+          Identifier(id) => add_local_variable(c, id.name, param_type)
           ArrayBindingPattern(_) | ObjectBindingPattern(_) =>
-            add_binding_pattern_variables(checker, p.name, param_type)
-          _ => checker
+            add_binding_pattern_variables(c, p.name, param_type)
+          _ => c
         }
       }
       _ => ()
     }
   }
+  let checker = c
 
   // Track regular function context (for 'arguments' object availability)
   let checker = enter_regular_function(checker)
