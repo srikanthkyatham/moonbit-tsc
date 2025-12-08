@@ -10846,15 +10846,34 @@ fn infer_array_literal_type(
             // Only check iterability for spread sources (array construction), not targets
             // in_destructuring_pattern is set when we're on the left side of an assignment
             if not(checker.in_destructuring_pattern) {
-              // Check if type is iterable (array, string, or has Symbol.iterator)
+              // Check if type is iterable - use extract_iterable_element_type to determine if we can extract an element
               let is_iterable = match spread_type {
-                Array(_) => true
-                String(_) => true
-                TypeReference(ref_type) =>
-                  ref_type.name == "Array" || ref_type.name == "String"
-                _ => false
+                Array(_) | String(_) => true
+                _ => {
+                  // Try to extract element type - if successful, it's iterable
+                  let (elem_type_opt, c) = extract_iterable_element_type(
+                    checker,
+                    spread_type,
+                  )
+                  checker = c
+                  match elem_type_opt {
+                    Some(_) => true
+                    None => false
+                  }
+                }
               }
-              if not(is_iterable) {
+              // Error if not iterable (extract_iterable_element_type returned None)
+              // BUT be permissive for TypeReference/Union/Intersection like for-of
+              let should_error = if not(is_iterable) {
+                match spread_type {
+                  TypeReference(_) | Union(_) | Intersection(_) => false
+                  Any(_) => false
+                  _ => true // Error for all other non-iterable types (primitives, objects)
+                }
+              } else {
+                false
+              }
+              if should_error {
                 checker = add_diagnostic_with_code(
                   checker,
                   "Type is not an array type or a string type. Use a spread only on iterable types",
@@ -10870,6 +10889,18 @@ fn infer_array_literal_type(
                 let (info, c) = create_type_info(checker)
                 checker = c
                 element_types.push(String(info))
+              }
+              Object(_) | TypeReference(_) => {
+                // Try to extract element type from iterable
+                let (elem_type_opt, c) = extract_iterable_element_type(
+                  checker,
+                  spread_type,
+                )
+                checker = c
+                match elem_type_opt {
+                  Some(elem_type) => element_types.push(elem_type)
+                  None => element_types.push(spread_type)
+                }
               }
               _ => element_types.push(spread_type)
             }
@@ -13382,18 +13413,47 @@ fn extract_iterable_element_type(
         tr.type_arguments.length() > 0 {
         (Some(tr.type_arguments[0]), checker)
       } else {
-        (None, checker)
+        // Try to look up the class/interface and check if it has Symbol.iterator
+        // First try type_cache, then lookup_symbol
+        match checker.type_cache.get(tr.name) {
+          Some(resolved_type) =>
+            // Recursively check the resolved type
+            extract_iterable_element_type(checker, resolved_type)
+          None =>
+            // Look up symbol and get its type
+            match lookup_symbol(checker, tr.name) {
+              Some(symbol) =>
+                match get_symbol_type(checker, symbol) {
+                  (Some(class_type), c) =>
+                    // For class types, we need the instance type from the construct signature
+                    match class_type {
+                      Object(obj) =>
+                        if obj.construct_signatures.length() > 0 {
+                          // Get instance type and check if it has Symbol.iterator
+                          extract_iterable_element_type(
+                            c,
+                            obj.construct_signatures[0].return_type,
+                          )
+                        } else {
+                          // Not a class constructor, check the object itself
+                          extract_iterable_element_type(c, class_type)
+                        }
+                      _ => (None, c)
+                    }
+                  (None, c) => (None, c)
+                }
+              None => (None, checker)
+            }
+        }
       }
     Object(obj) => {
-      // Check if this object has a [Symbol.iterator]() method
+      // Check if it has [Symbol.iterator]() method
       // Symbol.iterator can be represented in different ways: "__@iterator", etc.
       let mut iterator_method_type : Type? = None
       for entry in obj.properties {
         let (prop_name, prop) = entry
-        // Check for various representations of Symbol.iterator
-        if prop_name.contains("iterator") ||
-          prop_name.contains("Iterator") ||
-          prop_name == "__@iterator" {
+        // Check for Symbol.iterator - it's stored as "__@iterator"
+        if prop_name == "__@iterator" {
           iterator_method_type = Some(prop.prop_type)
           break
         }
@@ -13402,13 +13462,49 @@ fn extract_iterable_element_type(
       // If we found the iterator method, extract its return type
       match iterator_method_type {
         Some(Function(func)) => {
-          // The iterator method returns an iterator/generator
-          // Extract the element type from the return type
-          let (elem_type, checker) = extract_iterable_element_type(
+          // The iterator method returns an iterator
+          // First try recursion to handle TypeReference/Iterable types
+          let (elem_type_opt, checker) = extract_iterable_element_type(
             checker,
             func.return_type,
           )
-          (elem_type, checker)
+          match elem_type_opt {
+            Some(elem_type) => (Some(elem_type), checker)
+            None => {
+              // Recursion failed, try to extract from next() method on the return type
+              match func.return_type {
+                Object(iter_obj) => {
+                  // Look for next() method on the iterator
+                  for entry in iter_obj.properties {
+                    let (prop_name, prop) = entry
+                    if prop_name == "next" {
+                      match prop.prop_type {
+                        Function(next_func) => {
+                          // next() returns { value: T, done: boolean }
+                          // Extract T from the 'value' property
+                          match next_func.return_type {
+                            Object(ret_obj) => {
+                              for entry in ret_obj.properties {
+                                let (val_name, val_prop) = entry
+                                if val_name == "value" {
+                                  return (Some(val_prop.prop_type), checker)
+                                }
+                              }
+                            }
+                            _ => ()
+                          }
+                        }
+                        _ => ()
+                      }
+                      break
+                    }
+                  }
+                  (None, checker)
+                }
+                _ => (None, checker)
+              }
+            }
+          }
         }
         // Handle case where the property type is already resolved to a TypeReference
         Some(TypeReference(tr)) =>
@@ -13424,7 +13520,34 @@ fn extract_iterable_element_type(
           } else {
             (None, checker)
           }
-        _ => (None, checker)
+        _ => {
+          // No Symbol.iterator found - check if this IS an iterator (has next() method)
+          // This handles edge cases where the object is directly used as an iterator
+          for entry in obj.properties {
+            let (prop_name, prop) = entry
+            if prop_name == "next" {
+              match prop.prop_type {
+                Function(next_func) => {
+                  // next() returns { value: T, done: boolean }
+                  match next_func.return_type {
+                    Object(ret_obj) => {
+                      for entry in ret_obj.properties {
+                        let (val_name, val_prop) = entry
+                        if val_name == "value" {
+                          return (Some(val_prop.prop_type), checker)
+                        }
+                      }
+                    }
+                    _ => ()
+                  }
+                }
+                _ => ()
+              }
+              break
+            }
+          }
+          (None, checker)
+        }
       }
     }
     _ => (None, checker)
