@@ -5081,14 +5081,7 @@ fn get_function_declaration_type(
   let checker = c
 
   // Get return type
-  let (return_type, checker) = match func.return_type {
-    Some(type_node) =>
-      match get_type_from_type_node(checker, type_node) {
-        (Some(t), c) => (t, c)
-        (None, c) => any_type(c)
-      }
-    None => any_type(checker)
-  }
+  let (return_type, checker) = resolve_type_annotation_or_any(checker, func.return_type)
   let (info, checker) = create_type_info(checker)
   let func_type = Type::Function({ parameters, return_type, info })
   (func_type, checker)
@@ -5129,14 +5122,7 @@ fn infer_function_declaration_type(
   let checker = c
 
   // Get return type
-  let (return_type, checker) = match func.return_type {
-    Some(type_node) =>
-      match get_type_from_type_node(checker, type_node) {
-        (Some(t), c) => (t, c)
-        (None, c) => any_type(c)
-      }
-    None => any_type(checker)
-  }
+  let (return_type, checker) = resolve_type_annotation_or_any(checker, func.return_type)
   let (info, checker) = create_type_info(checker)
   let func_type = Type::Function({ parameters, return_type, info })
 
@@ -5164,15 +5150,7 @@ fn infer_overloaded_function_type(
         for param_node in func.parameters {
           match param_node {
             Parameter(p) => {
-              let (param_type, c) = match p.type_annotation {
-                Some(type_node) =>
-                  match get_type_from_type_node(checker, type_node) {
-                    (Some(t), c2) => (t, c2)
-                    (None, c2) => any_type(c2)
-                  }
-                None => any_type(checker)
-              }
-              checker = c
+              let (param_type, checker) = resolve_type_annotation_or_any(checker, p.type_annotation)
               parameters.push({
                 name: get_parameter_name(p.name),
                 param_type,
@@ -5427,19 +5405,12 @@ fn infer_method_type(
 
   // Build parameter list and add parameters to local scope
   let parameters : Array[CheckerParameter] = []
-  let mut checker = checker
+  let mut c = checker
   for param_node in method_decl.parameters {
     match param_node {
       Parameter(p) => {
-        let (param_type, c) = match p.type_annotation {
-          Some(type_node) =>
-            match get_type_from_type_node(checker, type_node) {
-              (Some(t), c2) => (t, c2)
-              (None, c2) => any_type(c2)
-            }
-          None => any_type(checker)
-        }
-        checker = c
+        let (param_type, c2) = resolve_type_annotation_or_any(c, p.type_annotation)
+        c = c2
         let param_name = get_parameter_name(p.name)
         parameters.push({
           name: param_name,
@@ -5448,11 +5419,12 @@ fn infer_method_type(
           is_rest: p.is_rest,
         })
         // Add parameter to local scope for body checking
-        checker = add_local_variable(checker, param_name, param_type)
+        c = add_local_variable(c, param_name, param_type)
       }
       _ => ()
     }
   }
+  let checker = c
 
   // Get return type
   let (return_type, checker) = match method_decl.return_type {
@@ -7686,20 +7658,8 @@ fn get_interface_property_type(
         match interface_decl.members[i] {
           PropertyDeclaration(prop) =>
             if prop.name == prop_name {
-              match prop.type_annotation {
-                Some(type_node) =>
-                  match get_type_from_type_node(checker, type_node) {
-                    (Some(t), c) => return (Some(t), c)
-                    (None, c) => {
-                      let (any_t, c2) = any_type(c)
-                      return (Some(any_t), c2)
-                    }
-                  }
-                None => {
-                  let (any_t, c) = any_type(checker)
-                  return (Some(any_t), c)
-                }
-              }
+              let (prop_type, c) = resolve_type_annotation_or_any(checker, prop.type_annotation)
+              return (Some(prop_type), c)
             }
           MethodDeclaration(method_decl) =>
             if method_decl.name == prop_name {
@@ -9941,7 +9901,7 @@ fn infer_function_expression_type(
   }
 
   // Build a function type from the function expression and add parameters to local scope
-  let mut checker = checker
+  let mut c = checker
 
   // First, build the function type so we can add the function name binding
   // We need to do a preliminary pass to build the type before adding it to scope
@@ -9949,17 +9909,8 @@ fn infer_function_expression_type(
   for param_node in fe.parameters {
     match param_node {
       Parameter(p) => {
-        let (param_type, c) = match p.type_annotation {
-          Some(type_node) => {
-            let (type_opt, c) = get_type_from_type_node(checker, type_node)
-            match type_opt {
-              Some(t) => (t, c)
-              None => any_type(c)
-            }
-          }
-          None => any_type(checker)
-        }
-        checker = c
+        let (param_type, c2) = resolve_type_annotation_or_any(c, p.type_annotation)
+        c = c2
         let param_name = match p.name {
           Identifier(id) => id.name
           _ => ""
@@ -9974,6 +9925,7 @@ fn infer_function_expression_type(
       _ => ()
     }
   }
+  let checker = c
   let (preliminary_return_type, checker) = match fe.return_type {
     Some(type_node) => {
       let (type_opt, c) = get_type_from_type_node(checker, type_node)
@@ -9993,7 +9945,7 @@ fn infer_function_expression_type(
     return_type: preliminary_return_type,
     info: func_info,
   })
-  let mut checker = match fe.name {
+  let checker = match fe.name {
     Some(name) => add_local_variable(checker, name, func_type)
     None => checker
   }
@@ -10003,17 +9955,7 @@ fn infer_function_expression_type(
   for param_node in fe.parameters {
     match param_node {
       Parameter(p) => {
-        let (param_type, c) = match p.type_annotation {
-          Some(type_node) => {
-            let (type_opt, c) = get_type_from_type_node(checker, type_node)
-            match type_opt {
-              Some(t) => (t, c)
-              None => any_type(c)
-            }
-          }
-          None => any_type(checker)
-        }
-        checker = c
+        let (param_type, checker) = resolve_type_annotation_or_any(checker, p.type_annotation)
         // Handle identifier or binding pattern
         checker = match p.name {
           Identifier(id) => add_local_variable(checker, id.name, param_type)
@@ -10565,19 +10507,12 @@ fn infer_arrow_function_type(
 
   // Build parameter list and add parameters to local scope
   let parameters = []
-  let mut checker = checker
+  let mut c = checker
   for i = 0; i < arrow.parameters.length(); i = i + 1 {
     match arrow.parameters[i] {
       Parameter(param) => {
-        let (param_type, c) = match param.type_annotation {
-          Some(type_node) =>
-            match get_type_from_type_node(checker, type_node) {
-              (Some(t), c2) => (t, c2)
-              (None, c2) => any_type(c2)
-            }
-          None => any_type(checker)
-        }
-        checker = c
+        let (param_type, c2) = resolve_type_annotation_or_any(c, param.type_annotation)
+        c = c2
         parameters.push({
           name: get_parameter_name(param.name),
           param_type,
@@ -10585,16 +10520,17 @@ fn infer_arrow_function_type(
           is_rest: param.is_rest,
         })
         // Add parameter to local scope (handles identifiers and binding patterns)
-        checker = match param.name {
-          Identifier(id) => add_local_variable(checker, id.name, param_type)
+        c = match param.name {
+          Identifier(id) => add_local_variable(c, id.name, param_type)
           ArrayBindingPattern(_) | ObjectBindingPattern(_) =>
-            add_binding_pattern_variables(checker, param.name, param_type)
-          _ => checker
+            add_binding_pattern_variables(c, param.name, param_type)
+          _ => c
         }
       }
       _ => ()
     }
   }
+  let checker = c
 
   // Get return type and check body
   let (return_type, checker) = match arrow.return_type {
