@@ -392,21 +392,49 @@ fn parse_primary_type_with_readonly(
           advance_parser(parser),
         ),
       )
-    // typeof in type position: typeof variable
+    // typeof in type position: typeof variable or typeof A.B.C
     KeywordTypeOf(_) => {
       let parser = advance_parser(parser)
       // Handle identifiers and contextual keywords like 'yield' that can be variable names
       match try_get_identifier_name(current_token(parser)) {
         Some((id_name, id_loc)) => {
-          let parser = advance_parser(parser)
+          let mut parser = advance_parser(parser)
+          let mut result : Node = Node::Identifier(Identifier::{
+            name: id_name,
+            location: id_loc,
+          })
+          // Parse any following .identifier chains (for typeof Symbol.obs)
+          while true {
+            match current_token(parser) {
+              Dot(_) => {
+                parser = advance_parser(parser) // consume '.'
+                match current_token(parser) {
+                  Identifier(prop_name, prop_loc) => {
+                    parser = advance_parser(parser)
+                    let start_loc = get_node_location(result)
+                    result = Node::PropertyAccessExpression(
+                      PropertyAccessExpression::{
+                        expression: result,
+                        name: prop_name,
+                        location: SourceLocation::new(
+                          start_loc.file_path,
+                          start_loc.start,
+                          prop_loc.end,
+                        ),
+                      },
+                    )
+                  }
+                  _ => break
+                }
+              }
+              _ => break
+            }
+          }
           Ok(
             (
               Node::TypeOperator(TypeOperator::{
                 operator: TypeOperatorKind::TypeOf,
-                type_node: Node::Identifier(Identifier::{
-                  name: id_name,
-                  location: id_loc,
-                }),
+                type_node: result,
                 location: loc,
               }),
               parser,
@@ -552,21 +580,49 @@ fn parse_primary_type_with_readonly(
             )
         }
       } else if name == "typeof" {
-        // typeof in type position: typeof variable
+        // typeof in type position: typeof variable or typeof A.B.C
         let parser = advance_parser(parser)
         // Parse the expression/identifier being typeof'd
         // Handle identifiers and contextual keywords like 'yield' that can be variable names
         match try_get_identifier_name(current_token(parser)) {
           Some((id_name, id_loc)) => {
-            let parser = advance_parser(parser)
+            let mut parser = advance_parser(parser)
+            let mut result : Node = Node::Identifier(Identifier::{
+              name: id_name,
+              location: id_loc,
+            })
+            // Parse any following .identifier chains (for typeof Symbol.obs)
+            while true {
+              match current_token(parser) {
+                Dot(_) => {
+                  parser = advance_parser(parser) // consume '.'
+                  match current_token(parser) {
+                    Identifier(prop_name, prop_loc) => {
+                      parser = advance_parser(parser)
+                      let start_loc = get_node_location(result)
+                      result = Node::PropertyAccessExpression(
+                        PropertyAccessExpression::{
+                          expression: result,
+                          name: prop_name,
+                          location: SourceLocation::new(
+                            start_loc.file_path,
+                            start_loc.start,
+                            prop_loc.end,
+                          ),
+                        },
+                      )
+                    }
+                    _ => break
+                  }
+                }
+                _ => break
+              }
+            }
             Ok(
               (
                 Node::TypeOperator(TypeOperator::{
                   operator: TypeOperatorKind::TypeOf,
-                  type_node: Node::Identifier(Identifier::{
-                    name: id_name,
-                    location: id_loc,
-                  }),
+                  type_node: result,
                   location: loc,
                 }),
                 parser,
@@ -1403,8 +1459,49 @@ fn parse_primary_type_with_readonly(
                   }
                   _ => false
                 }
-                // Expect : or shorthand property
+                // Check for method signature, property type, or shorthand property
                 match current_token(parser) {
+                  // Method signature: name() : Type or name(params) : Type
+                  OpenParen(_) => {
+                    parser = advance_parser(parser)
+                    let (params, p) = parse_parameter_list(parser)
+                    parser = p
+                    // Expect : for return type
+                    match current_token(parser) {
+                      Colon(_) => {
+                        parser = advance_parser(parser)
+                        match parse_type(parser) {
+                          Ok((return_type, p)) => {
+                            members.push(
+                              Node::MethodDeclaration(MethodDeclaration::{
+                                name,
+                                parameters: params,
+                                return_type: Some(return_type),
+                                body: None,
+                                type_parameters: [],
+                                decorators: [],
+                                modifiers: [],
+                                is_optional,
+                                is_async: false,
+                                is_generator: false,
+                                location: member_loc,
+                              }),
+                            )
+                            parser = p
+                            // Optional comma or semicolon
+                            match current_token(parser) {
+                              Comma(_) | Semicolon(_) =>
+                                parser = advance_parser(parser)
+                              _ => ()
+                            }
+                          }
+                          Err(p) => return Err(p)
+                        }
+                      }
+                      _ => break
+                    }
+                  }
+                  // Property with type: name : Type
                   Colon(_) => {
                     parser = advance_parser(parser)
                     match parse_type(parser) {
