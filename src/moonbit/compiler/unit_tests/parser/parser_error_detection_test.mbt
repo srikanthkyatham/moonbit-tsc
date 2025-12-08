@@ -2036,7 +2036,9 @@ test "parser error detection - TS1186 rest element with initializer" {
   let source = "var a = [1, 2]; var [...x = a] = a;"
   let errors = parse_and_get_errors(source)
   assert_true(has_error_code(errors, 1186))
-  assert_true(has_error_message(errors, "rest element cannot have an initializer"))
+  assert_true(
+    has_error_message(errors, "rest element cannot have an initializer"),
+  )
 }
 
 ///|

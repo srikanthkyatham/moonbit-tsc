@@ -2070,9 +2070,7 @@ test "unit/checker/TS1186 - rest with initializer single statement" {
 /// Test: No TS1186 - Normal spread in array literal is valid
 test "unit/checker/no TS1186 - spread in array literal" {
   // Spread in array construction is valid
-  let result = parse_bind_check_errors(
-    "const a = [1, 2, 3]; const b = [...a];",
-  )
+  let result = parse_bind_check_errors("const a = [1, 2, 3]; const b = [...a];")
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(diagnostics) =>
@@ -2124,9 +2122,7 @@ test "unit/checker/TS2493 - destructuring tuple index out of bounds" {
   )
   match result {
     Ok(_) => assert_true(false) // Should have an error
-    Err(diagnostics) => {
-      assert_true(has_diagnostic_code(diagnostics, 2493))
-    }
+    Err(diagnostics) => assert_true(has_diagnostic_code(diagnostics, 2493))
   }
 }
 
@@ -2184,14 +2180,10 @@ test "unit/checker/no TS2493 - tuple with optional element" {
 /// Test: TS2493 - Multiple index out of bounds
 test "unit/checker/TS2493 - multiple indices out of bounds" {
   // Destructuring a tuple with multiple bindings exceeding length
-  let result = parse_bind_check_errors(
-    "const [a, b, c, d]: [number] = [1];",
-  )
+  let result = parse_bind_check_errors("const [a, b, c, d]: [number] = [1];")
   match result {
     Ok(_) => assert_true(false) // Should have errors
-    Err(diagnostics) => {
-      assert_true(has_diagnostic_code(diagnostics, 2493))
-    }
+    Err(diagnostics) => assert_true(has_diagnostic_code(diagnostics, 2493))
   }
 }
 
@@ -2302,9 +2294,7 @@ test "unit/checker/tuple type mismatch element" {
   )
   match result {
     Ok(_) => assert_true(false) // Should have an error
-    Err(diagnostics) => {
-      assert_true(has_diagnostic_code(diagnostics, 2322))
-    }
+    Err(diagnostics) => assert_true(has_diagnostic_code(diagnostics, 2322))
   }
 }
 
@@ -2312,12 +2302,12 @@ test "unit/checker/tuple type mismatch element" {
 /// Test: Tuple type mismatch - too few elements
 test "unit/checker/tuple type mismatch too few" {
   // Too few elements should cause error
-  let result = parse_bind_check_errors("const t: [number, string, boolean] = [1];")
+  let result = parse_bind_check_errors(
+    "const t: [number, string, boolean] = [1];",
+  )
   match result {
     Ok(_) => assert_true(false) // Should have an error
-    Err(diagnostics) => {
-      assert_true(has_diagnostic_code(diagnostics, 2322))
-    }
+    Err(diagnostics) => assert_true(has_diagnostic_code(diagnostics, 2322))
   }
 }
 
@@ -2358,9 +2348,7 @@ test "unit/checker/TS2460 - non-array type annotation" {
   let result = parse_bind_check_errors("var [a, b]: number = 123;")
   match result {
     Ok(_) => assert_true(false) // Should have an error
-    Err(diagnostics) => {
-      assert_true(has_diagnostic_code(diagnostics, 2460))
-    }
+    Err(diagnostics) => assert_true(has_diagnostic_code(diagnostics, 2460))
   }
 }
 
@@ -2432,9 +2420,7 @@ test "unit/checker/TS1163 - yield in arrow function" {
   )
   match result {
     Ok(_) => assert_true(false) // Should have an error
-    Err(diagnostics) => {
-      assert_true(has_diagnostic_code(diagnostics, 1163))
-    }
+    Err(diagnostics) => assert_true(has_diagnostic_code(diagnostics, 1163))
   }
 }
 
@@ -2480,9 +2466,7 @@ test "unit/checker/TS2488 - yield* with non-iterable class" {
 ///|
 /// Test: Valid yield* with string (iterable)
 test "unit/checker/valid yield* with string" {
-  let result = parse_bind_check_errors(
-    "function* g() { yield* \"hello\"; }",
-  )
+  let result = parse_bind_check_errors("function* g() { yield* \"hello\"; }")
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(_) => assert_true(false) // Should not have errors
@@ -2512,9 +2496,7 @@ test "unit/checker/TS2322 - generator with primitive return type" {
   let result = parse_bind_check_errors("function* g(): number { yield 1; }")
   match result {
     Ok(_) => assert_true(false) // Should have an error
-    Err(diagnostics) => {
-      assert_true(has_diagnostic_code(diagnostics, 2322))
-    }
+    Err(diagnostics) => assert_true(has_diagnostic_code(diagnostics, 2322))
   }
 }
 

@@ -1009,7 +1009,8 @@ fn extract_method_overload_signature(
   }
   let is_static = method_has_static_modifier(meth.modifiers)
   // Method is ambient if the class is ambient or the method itself has 'declare'
-  let is_ambient = class_is_ambient || overload_has_declare_modifier(meth.modifiers)
+  let is_ambient = class_is_ambient ||
+    overload_has_declare_modifier(meth.modifiers)
   {
     parameters,
     return_type: meth.return_type,

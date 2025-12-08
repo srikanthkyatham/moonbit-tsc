@@ -8355,7 +8355,8 @@ test "unit/generator/generator-method-in-class - generator method parses correct
   let result = check_source(source)
   match result {
     Ok(_) => () // Should succeed - generator method is valid
-    Err(_) => fail("Generator method in class should parse and type check correctly")
+    Err(_) =>
+      fail("Generator method in class should parse and type check correctly")
   }
 }
 
@@ -8406,12 +8407,11 @@ test "unit/generator/TS1221-declare-class-generator - generators not allowed in 
     #|}
   let result = check_source(source)
   match result {
-    Ok(tf) => {
+    Ok(tf) =>
       assert_true(
         has_error(tf.diagnostics, 1221),
         msg="Should report TS1221 for generator in declare class",
       )
-    }
     Err(diagnostics) =>
       assert_true(
         has_error(diagnostics, 1221),
@@ -8427,12 +8427,11 @@ test "unit/generator/TS1221-declare-function-generator - generators not allowed 
     #|declare function* gen(): any;
   let result = check_source(source)
   match result {
-    Ok(tf) => {
+    Ok(tf) =>
       assert_true(
         has_error(tf.diagnostics, 1221),
         msg="Should report TS1221 for generator in declare function",
       )
-    }
     Err(diagnostics) =>
       assert_true(
         has_error(diagnostics, 1221),
@@ -8450,12 +8449,11 @@ test "unit/generator/TS1221-method-without-body - generator method without body 
     #|}
   let result = check_source(source)
   match result {
-    Ok(tf) => {
+    Ok(tf) =>
       assert_true(
         has_error(tf.diagnostics, 1221),
         msg="Should report TS1221 for generator method signature in declare class",
       )
-    }
     Err(diagnostics) =>
       assert_true(
         has_error(diagnostics, 1221),

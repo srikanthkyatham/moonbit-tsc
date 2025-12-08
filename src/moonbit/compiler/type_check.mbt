@@ -22,7 +22,7 @@ pub fn type_check(source : String, file_path : String) -> CheckResult {
 pub fn type_check_with_options(
   source : String,
   file_path : String,
-  no_implicit_any~ : Bool = false,
+  no_implicit_any? : Bool = false,
 ) -> CheckResult {
   let tokens = scan_all_v2(source, file_path)
   match parse_source_file(tokens, file_path) {

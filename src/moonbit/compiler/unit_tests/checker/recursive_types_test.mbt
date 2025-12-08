@@ -578,15 +578,13 @@ test "unit/recursive/interface - infinitely expanding base types" {
     #|var b: B<string> = a;
   let result = parse_bind_check_recursive(source)
   match result {
-    Ok(typed) => {
+    Ok(typed) =>
       // If no errors, that's also acceptable (future improvement)
       assert_eq(typed.file_path, "test.ts")
-    }
-    Err(_) => {
+    Err(_) =>
       // Currently we produce an error for this advanced case
       // TODO: Implement infinite type structural comparison
       assert_true(true)
-    }
   }
 }
 

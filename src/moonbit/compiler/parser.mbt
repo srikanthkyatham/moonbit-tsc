@@ -1596,10 +1596,7 @@ fn parse_array_binding_pattern(
           Equals(eq_loc) => {
             // Report error but continue parsing for error recovery
             let parser = add_error_checked(
-              parser,
-              "A rest element cannot have an initializer.",
-              eq_loc,
-              1186,
+              parser, "A rest element cannot have an initializer.", eq_loc, 1186,
             )
             let parser = advance_parser(parser) // consume '='
             // Parse and discard the initializer expression for error recovery
@@ -9492,12 +9489,11 @@ fn try_get_identifier_name(token : Token) -> (String, SourceLocation)? {
 /// Used in object binding patterns where reserved keywords can be property names
 /// but require a colon (no shorthand allowed)
 /// Returns (name, location, is_reserved_keyword)
+
 ///|
 /// Try to get reserved keyword as a name (for error messages)
 /// Returns (name, location) if the token is a reserved keyword
-fn try_get_reserved_keyword(
-  token : Token,
-) -> (String, SourceLocation)? {
+fn try_get_reserved_keyword(token : Token) -> (String, SourceLocation)? {
   match token {
     KeywordWhile(loc) => Some(("while", loc))
     KeywordFor(loc) => Some(("for", loc))
@@ -9539,6 +9535,7 @@ fn try_get_reserved_keyword(
   }
 }
 
+///|
 fn try_get_property_name_with_reserved(
   token : Token,
 ) -> (String, SourceLocation, Bool)? {

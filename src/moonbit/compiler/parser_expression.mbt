@@ -2033,9 +2033,7 @@ fn parse_object_property(
                   Ok(
                     (
                       ObjectProperty::MethodDeclaration(
-                        prop_name,
-                        func_expr,
-                        start_loc,
+                        prop_name, func_expr, start_loc,
                       ),
                       parser,
                     ),
@@ -2051,9 +2049,7 @@ fn parse_object_property(
                   Ok(
                     (
                       ObjectProperty::PropertyAssignment(
-                        prop_name,
-                        value,
-                        start_loc,
+                        prop_name, value, start_loc,
                       ),
                       parser,
                     ),
@@ -2247,7 +2243,9 @@ fn parse_method_body(
         is_generator,
         location: start_loc,
       }
-      Ok((ObjectProperty::MethodDeclaration(name, func_expr, start_loc), parser))
+      Ok(
+        (ObjectProperty::MethodDeclaration(name, func_expr, start_loc), parser),
+      )
     }
     Err(parser) => Err(parser)
   }

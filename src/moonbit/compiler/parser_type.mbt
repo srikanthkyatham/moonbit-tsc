@@ -1286,8 +1286,7 @@ fn parse_primary_type_with_readonly(
                     )
                     // Optional comma or semicolon
                     match current_token(parser) {
-                      Semicolon(_) | Comma(_) =>
-                        parser = advance_parser(parser)
+                      Semicolon(_) | Comma(_) => parser = advance_parser(parser)
                       _ => ()
                     }
                   }
@@ -1419,19 +1418,16 @@ fn parse_primary_type_with_readonly(
 
       // Quick check: if it starts with ')', '...', or 'this', it's a function type
       match current_token(inner_parser) {
-        CloseParen(_) => {
+        CloseParen(_) =>
           // Empty parameter list - definitely a function type
           ()
-        }
-        DotDotDot(_) => {
+        DotDotDot(_) =>
           // Rest parameter - definitely a function type
           ()
-        }
-        KeywordThis(_) => {
+        KeywordThis(_) =>
           // 'this' parameter - definitely a function type
           ()
-        }
-        _ => {
+        _ =>
           // Try to parse as parenthesized type first
           match parse_type(inner_parser) {
             Ok((inner_type, p)) =>
@@ -1440,11 +1436,10 @@ fn parse_primary_type_with_readonly(
                   let after_paren = advance_parser(p)
                   // Check if this is followed by '=>' (function type) or something else (parenthesized type)
                   match current_token(after_paren) {
-                    Arrow(_) => {
+                    Arrow(_) =>
                       // This is actually a function type with a single parameter
                       // Fall through to function type parsing
                       ()
-                    }
                     _ =>
                       // This is a parenthesized type - return the inner type wrapped in ParenthesizedType
                       return Ok(
@@ -1462,7 +1457,6 @@ fn parse_primary_type_with_readonly(
               }
             Err(_) => () // Not a simple type, try as function type
           }
-        }
       }
 
       // Parse as function type: (param: type, ...) => returnType

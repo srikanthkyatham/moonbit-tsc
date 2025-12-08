@@ -446,8 +446,7 @@ fn parse_function_expression_body_with_generator(
           Ok(
             (
               make_function_expression(
-                name, params, return_type, body, is_async, is_generator,
-                start_loc,
+                name, params, return_type, body, is_async, is_generator, start_loc,
               ),
               parser,
             ),

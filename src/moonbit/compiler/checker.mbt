@@ -335,7 +335,7 @@ pub fn TypeChecker::new_with_options(
   global_scope : Scope?,
   no_unchecked_indexed_access : Bool,
   target : Target,
-  no_implicit_any~ : Bool = false,
+  no_implicit_any? : Bool = false,
 ) -> TypeChecker {
   {
     next_type_id: 0,
@@ -459,7 +459,7 @@ fn is_in_async_function(checker : TypeChecker) -> Bool {
 fn enter_generator_function(
   checker : TypeChecker,
   has_return_type : Bool,
-  yield_type~ : Type? = None,
+  yield_type? : Type? = None,
 ) -> (TypeChecker, Array[Type]) {
   let saved_yield_types = checker.collected_yield_types
   (
@@ -533,7 +533,7 @@ fn extract_yield_delegate_element_type(t : Type) -> Type {
     // Array types - element is the array element type
     Array(arr) => arr.element_type
     // TypeReference - check for known iterable types
-    Type::TypeReference(ref_type) => {
+    Type::TypeReference(ref_type) =>
       if ref_type.type_arguments.length() > 0 {
         // Array<T>, Set<T>, Map<K,V> (first arg), Generator<T>, Iterator<T>, Iterable<T>, IterableIterator<T>
         if ref_type.name == "Array" ||
@@ -543,7 +543,8 @@ fn extract_yield_delegate_element_type(t : Type) -> Type {
           ref_type.name == "Iterable" ||
           ref_type.name == "IterableIterator" {
           ref_type.type_arguments[0]
-        } else if ref_type.name == "Map" && ref_type.type_arguments.length() >= 2 {
+        } else if ref_type.name == "Map" &&
+          ref_type.type_arguments.length() >= 2 {
           // Map yields [K, V] tuples - just use any for now
           t
         } else {
@@ -552,18 +553,19 @@ fn extract_yield_delegate_element_type(t : Type) -> Type {
       } else {
         t
       }
-    }
     // Object types with Symbol.iterator - check for generator methods
-    Object(obj) => {
+    Object(obj) =>
       // Check if this object has call signatures (generator function type)
       if obj.call_signatures.length() > 0 {
         let sig = obj.call_signatures[0]
         // If the call signature returns a Generator/Iterator, extract its element type
         match sig.return_type {
           Type::TypeReference(ret_ref) =>
-            if (ret_ref.name == "Generator" ||
-              ret_ref.name == "Iterator" ||
-              ret_ref.name == "IterableIterator") &&
+            if (
+                ret_ref.name == "Generator" ||
+                ret_ref.name == "Iterator" ||
+                ret_ref.name == "IterableIterator"
+              ) &&
               ret_ref.type_arguments.length() > 0 {
               ret_ref.type_arguments[0]
             } else {
@@ -588,14 +590,16 @@ fn extract_yield_delegate_element_type(t : Type) -> Type {
 
         // If we found the iterator method, extract its return type's element type
         match iterator_method_type {
-          Some(Function(func)) => {
+          Some(Function(func)) =>
             // The iterator method returns an iterator/generator
             // Extract the element type from the return type
             match func.return_type {
               Type::TypeReference(ret_ref) =>
-                if (ret_ref.name == "Generator" ||
-                  ret_ref.name == "Iterator" ||
-                  ret_ref.name == "IterableIterator") &&
+                if (
+                    ret_ref.name == "Generator" ||
+                    ret_ref.name == "Iterator" ||
+                    ret_ref.name == "IterableIterator"
+                  ) &&
                   ret_ref.type_arguments.length() > 0 {
                   // Recursively extract in case it's nested
                   extract_yield_delegate_element_type(ret_ref.type_arguments[0])
@@ -604,12 +608,13 @@ fn extract_yield_delegate_element_type(t : Type) -> Type {
                 }
               _ => t
             }
-          }
           Some(Type::TypeReference(ret_ref)) =>
             // The property is already a TypeReference (shouldn't normally happen for methods)
-            if (ret_ref.name == "Generator" ||
-              ret_ref.name == "Iterator" ||
-              ret_ref.name == "IterableIterator") &&
+            if (
+                ret_ref.name == "Generator" ||
+                ret_ref.name == "Iterator" ||
+                ret_ref.name == "IterableIterator"
+              ) &&
               ret_ref.type_arguments.length() > 0 {
               ret_ref.type_arguments[0]
             } else {
@@ -618,7 +623,6 @@ fn extract_yield_delegate_element_type(t : Type) -> Type {
           _ => t
         }
       }
-    }
     _ => t
   }
 }
@@ -1001,7 +1005,7 @@ fn add_array_binding_elements_to_scope(
               )
             }
           }
-          None => {
+          None =>
             // Hole in pattern - still check if index is valid
             if i >= tuple_len {
               let tuple_str = type_to_string(arr_type)
@@ -1012,13 +1016,11 @@ fn add_array_binding_elements_to_scope(
                 TS2493,
               )
             }
-          }
         }
       }
     }
     _ => ()
   }
-
   for elem in arr_pat.elements {
     match elem {
       Some(element) =>
@@ -1966,7 +1968,7 @@ pub fn check_source_file_with_options(
   bound : BoundSourceFile,
   no_unchecked_indexed_access : Bool,
   target : Target,
-  no_implicit_any~ : Bool = false,
+  no_implicit_any? : Bool = false,
 ) -> CheckResult {
   let checker = TypeChecker::new_with_options(
     bound.file_path,
@@ -2009,7 +2011,7 @@ pub fn check_source_file_with_external_types(
   external_registry : ExternalTypeRegistry,
   no_unchecked_indexed_access : Bool,
   target : Target,
-  no_implicit_any~ : Bool = false,
+  no_implicit_any? : Bool = false,
 ) -> CheckResult {
   let checker = TypeChecker::new_with_options(
     bound.file_path,
@@ -2624,9 +2626,7 @@ fn check_module_declaration(
           let checker = push_local_scope(checker)
           // Add all locals to namespace_symbols so lookup_symbol can find them
           // Use direct map mutation (Map.set mutates in place)
-          locals.each(fn(name, sym) {
-            checker.namespace_symbols.set(name, sym)
-          })
+          locals.each(fn(name, sym) { checker.namespace_symbols.set(name, sym) })
           // Check the body with the namespace scope active
           let checker = match mod_decl.body {
             Some(BlockStatement(block)) =>
@@ -3407,7 +3407,6 @@ fn infer_tuple_from_array_literal(
       label: None,
     })
   }
-
   let (info, checker) = create_type_info(checker)
   (Tuple(CheckerTupleType::{ element_types, info }), checker)
 }
@@ -5709,7 +5708,14 @@ fn infer_method_type(
     let has_return_type = method_decl.return_type is Some(_)
     enter_generator_function(checker, has_return_type)
   } else {
-    ({ ..checker, generator_function_depth: 0, generator_has_return_type: false }, [])
+    (
+      {
+        ..checker,
+        generator_function_depth: 0,
+        generator_has_return_type: false,
+      },
+      [],
+    )
   }
 
   // Build parameter list and add parameters to local scope
@@ -5768,7 +5774,14 @@ fn infer_method_type(
   let (checker, _collected_yield_types) = if method_decl.is_generator {
     exit_generator_function(checker, saved_yield_types)
   } else {
-    ({ ..checker, generator_function_depth: saved_generator_depth, collected_yield_types: saved_collected_yield_types }, [])
+    (
+      {
+        ..checker,
+        generator_function_depth: saved_generator_depth,
+        collected_yield_types: saved_collected_yield_types,
+      },
+      [],
+    )
   }
 
   // Exit async function context if needed
@@ -7670,8 +7683,18 @@ fn lookup_property_in_type(
             let (fn_info, checker) = create_type_info(checker)
             let then_type = Type::Function({
               parameters: [
-                { name: "onfulfilled", param_type: any_t, is_optional: true, is_rest: false },
-                { name: "onrejected", param_type: any_t, is_optional: true, is_rest: false },
+                {
+                  name: "onfulfilled",
+                  param_type: any_t,
+                  is_optional: true,
+                  is_rest: false,
+                },
+                {
+                  name: "onrejected",
+                  param_type: any_t,
+                  is_optional: true,
+                  is_rest: false,
+                },
               ],
               return_type: then_return,
               info: fn_info,
@@ -7690,7 +7713,12 @@ fn lookup_property_in_type(
             let (fn_info, checker) = create_type_info(checker)
             let catch_type = Type::Function({
               parameters: [
-                { name: "onrejected", param_type: any_t, is_optional: true, is_rest: false },
+                {
+                  name: "onrejected",
+                  param_type: any_t,
+                  is_optional: true,
+                  is_rest: false,
+                },
               ],
               return_type: catch_return,
               info: fn_info,
@@ -7713,7 +7741,12 @@ fn lookup_property_in_type(
             let (fn_info, checker) = create_type_info(checker)
             let finally_type = Type::Function({
               parameters: [
-                { name: "onfinally", param_type: any_t, is_optional: true, is_rest: false },
+                {
+                  name: "onfinally",
+                  param_type: any_t,
+                  is_optional: true,
+                  is_rest: false,
+                },
               ],
               return_type: finally_return,
               info: fn_info,
@@ -8890,13 +8923,12 @@ fn infer_new_expression_type(
   // Check if the target has a construct signature (TS2747)
   // Skip check for class types and built-in constructors
   let builtin_constructors = [
-    "Array", "Object", "String", "Number", "Boolean", "Function", "Symbol",
-    "BigInt", "Date", "RegExp", "Error", "TypeError", "RangeError", "SyntaxError",
-    "ReferenceError", "EvalError", "URIError", "Map", "Set", "WeakMap", "WeakSet",
-    "Promise", "Proxy", "ArrayBuffer", "SharedArrayBuffer", "DataView",
-    "Int8Array", "Uint8Array", "Uint8ClampedArray", "Int16Array", "Uint16Array",
-    "Int32Array", "Uint32Array", "Float32Array", "Float64Array", "BigInt64Array",
-    "BigUint64Array",
+    "Array", "Object", "String", "Number", "Boolean", "Function", "Symbol", "BigInt",
+    "Date", "RegExp", "Error", "TypeError", "RangeError", "SyntaxError", "ReferenceError",
+    "EvalError", "URIError", "Map", "Set", "WeakMap", "WeakSet", "Promise", "Proxy",
+    "ArrayBuffer", "SharedArrayBuffer", "DataView", "Int8Array", "Uint8Array", "Uint8ClampedArray",
+    "Int16Array", "Uint16Array", "Int32Array", "Uint32Array", "Float32Array", "Float64Array",
+    "BigInt64Array", "BigUint64Array",
   ]
   let is_class_type = match new_expr.expression {
     Identifier(id) =>
@@ -9412,7 +9444,12 @@ fn infer_yield_expression_type(
       } else {
         // For yield*, we need to check the element type of the iterable
         // against the expected yield type
-        check_yield_delegate_type_compatibility(checker, expr_type, expr, ye.location)
+        check_yield_delegate_type_compatibility(
+          checker,
+          expr_type,
+          expr,
+          ye.location,
+        )
       }
 
       // TS2770: Check if yield operand type has a problematic 'then' member
@@ -9441,7 +9478,10 @@ fn infer_yield_expression_type(
       // We emit this error when the yield expression itself is being used (not just as a statement)
       // Only emit for simple yield, not for yield* (delegation)
       // Don't emit for statement-level yields (e.g., "yield 0;" where result isn't used)
-      let checker = if checker.no_implicit_any && not(checker.generator_has_return_type) && not(ye.is_delegate) && not(checker.in_expression_statement) {
+      let checker = if checker.no_implicit_any &&
+        not(checker.generator_has_return_type) &&
+        not(ye.is_delegate) &&
+        not(checker.in_expression_statement) {
         add_diagnostic_with_code(
           checker,
           "'yield' expression implicitly results in an 'any' type because its containing generator lacks a return-type annotation.",
@@ -9460,7 +9500,8 @@ fn infer_yield_expression_type(
       // TS7057: When noImplicitAny is enabled and the generator lacks a return type,
       // bare yield's result is also implicitly 'any'
       let (t, checker) = undefined_type(checker)
-      let checker = if checker.no_implicit_any && not(checker.generator_has_return_type) {
+      let checker = if checker.no_implicit_any &&
+        not(checker.generator_has_return_type) {
         add_diagnostic_with_code(
           checker,
           "'yield' expression implicitly results in an 'any' type because its containing generator lacks a return-type annotation.",
@@ -9562,9 +9603,7 @@ fn check_yield_type_compatibility(
       // Check if operand_type is assignable to expected_type
       // For TS2741, we check if operand is missing properties
       let (missing_prop_opt, checker) = find_missing_property_with_checker(
-        checker,
-        operand_type,
-        expected_type,
+        checker, operand_type, expected_type,
       )
       match missing_prop_opt {
         Some(missing_prop) => {
@@ -9607,9 +9646,7 @@ fn check_yield_delegate_type_compatibility(
         Some(elem_type) => {
           // Check if element type is compatible
           let (missing_prop_opt, checker) = find_missing_property_with_checker(
-            checker,
-            elem_type,
-            expected_type,
+            checker, elem_type, expected_type,
           )
           match missing_prop_opt {
             Some(missing_prop) => {
@@ -9648,12 +9685,10 @@ fn find_missing_property_with_checker(
 ) -> (String?, TypeChecker) {
   // First, try to resolve TypeReferences to their actual types (classes)
   let (resolved_source, checker) = resolve_type_for_property_check(
-    checker,
-    source,
+    checker, source,
   )
   let (resolved_target, checker) = resolve_type_for_property_check(
-    checker,
-    target,
+    checker, target,
   )
 
   // Now check for missing properties with resolved types
@@ -9692,8 +9727,7 @@ fn find_missing_property_with_checker(
                       if not(prop.is_optional) &&
                         not(
                           type_has_property_with_resolved(
-                            resolved_source,
-                            prop_name,
+                            resolved_source, prop_name,
                           ),
                         ) {
                         return (Some(prop_name), checker)
@@ -9712,15 +9746,17 @@ fn find_missing_property_with_checker(
             (None, checker) // Same type
           } else {
             // Different type names - look up and compare properties
-            match (
-              get_class_properties(checker, source_ref.name),
-              get_class_properties(checker, target_ref.name),
-            ) {
+            match
+              (
+                get_class_properties(checker, source_ref.name),
+                get_class_properties(checker, target_ref.name),
+              ) {
               (Some(source_props), Some(target_props)) => {
                 // Check if source has all required target properties
                 for prop_name in target_props.keys() {
                   let prop = target_props[prop_name]
-                  if not(prop.is_optional) && not(source_props.contains(prop_name)) {
+                  if not(prop.is_optional) &&
+                    not(source_props.contains(prop_name)) {
                     return (Some(prop_name), checker)
                   }
                 }
@@ -9742,7 +9778,7 @@ fn resolve_type_for_property_check(
   t : Type,
 ) -> (Type, TypeChecker) {
   match t {
-    TypeReference(type_ref) => {
+    TypeReference(type_ref) =>
       // Try to look up the class and get its instance type
       match lookup_symbol(checker, type_ref.name) {
         Some(symbol) =>
@@ -9750,7 +9786,8 @@ fn resolve_type_for_property_check(
             Class => {
               // Get the class's type and extract instance type from construct signature
               // Try cached type first, then infer if not cached
-              let (class_type, checker) = match get_symbol_type(checker, symbol) {
+              let (class_type, checker) = match
+                get_symbol_type(checker, symbol) {
                 (Some(ct), c) => (ct, c)
                 (None, c) => infer_symbol_type(c, symbol)
               }
@@ -9775,7 +9812,6 @@ fn resolve_type_for_property_check(
           }
         None => (t, checker)
       }
-    }
     _ => (t, checker)
   }
 }
@@ -9892,7 +9928,9 @@ fn check_yield_delegate_iterable(
     let type_str = type_to_string_for_error(operand_type, expr)
     add_diagnostic_with_code(
       checker,
-      "Type '" + type_str + "' must have a '[Symbol.iterator]()' method that returns an iterator.",
+      "Type '" +
+      type_str +
+      "' must have a '[Symbol.iterator]()' method that returns an iterator.",
       location,
       TS2488,
     )
@@ -9996,14 +10034,13 @@ fn has_iterator_property(obj : ObjectType) -> Bool {
 /// Convert a type to a string for error messages, using the expression for context
 fn type_to_string_for_error(t : Type, expr : Node) -> String {
   match t {
-    Function(_) => {
+    Function(_) =>
       // For function types, try to get more specific info
       // Check if this is a generator function reference
       match expr {
         Identifier(_) => "() => any"
         _ => "() => any"
       }
-    }
     Any(_) => "any"
     Unknown(_) => "unknown"
     Number(_) => "number"
@@ -10167,7 +10204,14 @@ fn infer_function_expression_type(
     let has_return_type = fe.return_type is Some(_)
     enter_generator_function(checker, has_return_type)
   } else {
-    ({ ..checker, generator_function_depth: 0, generator_has_return_type: false }, [])
+    (
+      {
+        ..checker,
+        generator_function_depth: 0,
+        generator_has_return_type: false,
+      },
+      [],
+    )
   }
 
   // Build a function type from the function expression and add parameters to local scope
@@ -10276,7 +10320,14 @@ fn infer_function_expression_type(
   let (checker, collected_yield_types) = if fe.is_generator {
     exit_generator_function(checker, saved_yield_types)
   } else {
-    ({ ..checker, generator_function_depth: saved_generator_depth, collected_yield_types: saved_collected_yield_types }, [])
+    (
+      {
+        ..checker,
+        generator_function_depth: saved_generator_depth,
+        collected_yield_types: saved_collected_yield_types,
+      },
+      [],
+    )
   }
 
   // Exit async function context if needed
@@ -10312,7 +10363,14 @@ fn infer_function_expression_type(
     })
     // Wrap in function type
     let (func_info, checker) = create_type_info(checker)
-    (Type::Function({ parameters: preliminary_params, return_type: generator_type, info: func_info }), checker)
+    (
+      Type::Function({
+        parameters: preliminary_params,
+        return_type: generator_type,
+        info: func_info,
+      }),
+      checker,
+    )
   } else {
     (func_type, checker)
   }
@@ -10676,7 +10734,11 @@ fn infer_arrow_function_type(
   // Arrow functions cannot be generators, so reset generator context
   // This ensures yield inside arrow functions triggers TS1163
   let saved_generator_depth = checker.generator_function_depth
-  let checker = { ..checker, generator_function_depth: 0, generator_has_return_type: false }
+  let checker = {
+    ..checker,
+    generator_function_depth: 0,
+    generator_has_return_type: false,
+  }
 
   // Build parameter list and add parameters to local scope
   let parameters = []
@@ -10945,7 +11007,8 @@ fn is_assignable(source : Type, target : Type) -> Bool {
       match source_obj.class_name {
         Some(class_name) =>
           // Class names match and no type arguments - compatible
-          class_name == target_ref.name && target_ref.type_arguments.length() == 0
+          class_name == target_ref.name &&
+          target_ref.type_arguments.length() == 0
         None => false
       }
     // Function types - check parameter and return types
@@ -11210,7 +11273,6 @@ fn is_tuple_assignable(
   // Check element-wise assignability
   for i = 0; i < target.element_types.length(); i = i + 1 {
     let target_elem = target.element_types[i]
-
     if target_elem.is_rest {
       // For rest element, all remaining source elements must be assignable
       // to the rest element's array element type
@@ -11220,19 +11282,22 @@ fn is_tuple_assignable(
       }
       // Check all remaining source elements
       for j = i; j < source.element_types.length(); j = j + 1 {
-        if not(is_assignable(source.element_types[j].element_type, rest_elem_type)) {
+        if not(
+            is_assignable(source.element_types[j].element_type, rest_elem_type),
+          ) {
           return false
         }
       }
       // Rest element handled all remaining, we're done
       return true
     }
-
     if i < source.element_types.length() {
-      if not(is_assignable(
-          source.element_types[i].element_type,
-          target_elem.element_type,
-        )) {
+      if not(
+          is_assignable(
+            source.element_types[i].element_type,
+            target_elem.element_type,
+          ),
+        ) {
         return false
       }
     } else if not(target_elem.is_optional) {
@@ -11824,7 +11889,6 @@ fn check_tuple_assignability_detailed(
   // Check element-wise assignability
   for i = 0; i < target.element_types.length(); i = i + 1 {
     let target_elem = target.element_types[i]
-
     if target_elem.is_rest {
       // For rest element, check all remaining source elements against the rest element's inner type
       let rest_elem_type = match target_elem.element_type {
@@ -11845,7 +11909,6 @@ fn check_tuple_assignability_detailed(
       // Rest element handled all remaining, we're done
       break
     }
-
     if i < source.element_types.length() {
       let elem_path = if path == "" { "[\{i}]" } else { "\{path}[\{i}]" }
       checker = check_assignment_detailed(
@@ -11945,17 +12008,15 @@ fn check_type_reference_assignability_detailed(
     // Resolve class types to their object types for structural comparison
     let source_obj_opt = resolve_class_to_object_type(checker, source.name)
     let target_obj_opt = resolve_class_to_object_type(checker, target.name)
-
     match (source_obj_opt, target_obj_opt) {
       (Some(source_obj), Some(target_obj)) =>
         // Check structural compatibility between resolved object types
         return check_object_assignability_detailed(
           checker, source_obj, target_obj, location, path,
         )
-      _ => {
+      _ =>
         // Can't resolve types - fall through to default handling
         ()
-      }
     }
   }
 
@@ -12652,7 +12713,9 @@ fn collect_yield_types_from_node(
           checker = c
           if ye.is_delegate {
             // yield*: extract element type from iterable
-            let (elem_type, c) = extract_iterable_element_type(checker, expr_type)
+            let (elem_type, c) = extract_iterable_element_type(
+              checker, expr_type,
+            )
             checker = c
             match elem_type {
               Some(et) => yield_types.push(et)
@@ -12675,9 +12738,13 @@ fn collect_yield_types_from_node(
       let (types, c) = collect_yield_types_from_node(checker, es.expression)
       (types, c)
     }
-    BlockStatement(b) => collect_yield_types_from_statements(checker, b.statements)
+    BlockStatement(b) =>
+      collect_yield_types_from_statements(checker, b.statements)
     IfStatement(is_node) => {
-      let (types1, c) = collect_yield_types_from_node(checker, is_node.then_statement)
+      let (types1, c) = collect_yield_types_from_node(
+        checker,
+        is_node.then_statement,
+      )
       checker = c
       for t in types1 {
         yield_types.push(t)
@@ -12695,7 +12762,8 @@ fn collect_yield_types_from_node(
       (yield_types, checker)
     }
     WhileStatement(ws) => collect_yield_types_from_node(checker, ws.statement)
-    DoWhileStatement(dws) => collect_yield_types_from_node(checker, dws.statement)
+    DoWhileStatement(dws) =>
+      collect_yield_types_from_node(checker, dws.statement)
     ForStatement(fs) => collect_yield_types_from_node(checker, fs.statement)
     ForInStatement(fis) => collect_yield_types_from_node(checker, fis.statement)
     ForOfStatement(fos) => collect_yield_types_from_node(checker, fos.statement)
@@ -12730,7 +12798,10 @@ fn collect_yield_types_from_node(
     LabeledStatement(ls) => collect_yield_types_from_node(checker, ls.statement)
     SwitchStatement(ss) => {
       for case_clause in ss.cases {
-        let (types, c) = collect_yield_types_from_statements(checker, case_clause.statements)
+        let (types, c) = collect_yield_types_from_statements(
+          checker,
+          case_clause.statements,
+        )
         checker = c
         for t in types {
           yield_types.push(t)
@@ -12770,7 +12841,7 @@ fn collect_yield_types_from_node(
       }
       (yield_types, checker)
     }
-    ReturnStatement(rs) => {
+    ReturnStatement(rs) =>
       match rs.expression {
         Some(expr) => {
           let (types, c) = collect_yield_types_from_node(checker, expr)
@@ -12778,7 +12849,6 @@ fn collect_yield_types_from_node(
         }
         None => (yield_types, checker)
       }
-    }
     VariableStatement(vs) => {
       for decl in vs.declarations {
         match decl.initializer {
@@ -12808,11 +12878,13 @@ fn extract_iterable_element_type(
     Type::Array(arr) => (Some(arr.element_type), checker)
     TypeReference(tr) =>
       // Handle Generator<T>, Iterable<T>, Iterator<T>, etc.
-      if (tr.name == "Generator" ||
-      tr.name == "Iterable" ||
-      tr.name == "Iterator" ||
-      tr.name == "IterableIterator") &&
-      tr.type_arguments.length() > 0 {
+      if (
+          tr.name == "Generator" ||
+          tr.name == "Iterable" ||
+          tr.name == "Iterator" ||
+          tr.name == "IterableIterator"
+        ) &&
+        tr.type_arguments.length() > 0 {
         (Some(tr.type_arguments[0]), checker)
       } else {
         (None, checker)
@@ -12844,18 +12916,19 @@ fn extract_iterable_element_type(
           (elem_type, checker)
         }
         // Handle case where the property type is already resolved to a TypeReference
-        Some(TypeReference(tr)) => {
+        Some(TypeReference(tr)) =>
           // This shouldn't normally happen for a method, but handle it
-          if (tr.name == "Generator" ||
-          tr.name == "Iterable" ||
-          tr.name == "Iterator" ||
-          tr.name == "IterableIterator") &&
-          tr.type_arguments.length() > 0 {
+          if (
+              tr.name == "Generator" ||
+              tr.name == "Iterable" ||
+              tr.name == "Iterator" ||
+              tr.name == "IterableIterator"
+            ) &&
+            tr.type_arguments.length() > 0 {
             (Some(tr.type_arguments[0]), checker)
           } else {
             (None, checker)
           }
-        }
         _ => (None, checker)
       }
     }
@@ -12878,15 +12951,14 @@ fn check_for_iterator_iterable_conflict_in_heritage(
       // Look up the interface symbol
       let mut checker = checker
       match lookup_symbol(checker, tr.type_name) {
-        Some(symbol) => {
+        Some(symbol) =>
           match symbol.kind {
-            Interface => {
+            Interface =>
               match symbol.value_declaration {
                 Some(InterfaceDeclaration(iface)) => {
                   // Check heritage clauses for Iterator and Iterable
                   let mut iterator_type_arg : Type? = None
                   let mut iterable_type_arg : Type? = None
-
                   for heritage in iface.heritage_clauses {
                     for type_node in heritage.types {
                       match type_node {
@@ -12894,10 +12966,11 @@ fn check_for_iterator_iterable_conflict_in_heritage(
                           // Check for Iterator<T>
                           if type_ref.type_name == "Iterator" &&
                             type_ref.type_arguments.length() > 0 {
-                            match get_type_from_type_node(
-                              checker,
-                              type_ref.type_arguments[0],
-                            ) {
+                            match
+                              get_type_from_type_node(
+                                checker,
+                                type_ref.type_arguments[0],
+                              ) {
                               (Some(arg_type), c) => {
                                 iterator_type_arg = Some(arg_type)
                                 checker = c
@@ -12908,10 +12981,11 @@ fn check_for_iterator_iterable_conflict_in_heritage(
                           // Check for Iterable<T>
                           if type_ref.type_name == "Iterable" &&
                             type_ref.type_arguments.length() > 0 {
-                            match get_type_from_type_node(
-                              checker,
-                              type_ref.type_arguments[0],
-                            ) {
+                            match
+                              get_type_from_type_node(
+                                checker,
+                                type_ref.type_arguments[0],
+                              ) {
                               (Some(arg_type), c) => {
                                 iterable_type_arg = Some(arg_type)
                                 checker = c
@@ -12927,7 +13001,7 @@ fn check_for_iterator_iterable_conflict_in_heritage(
 
                   // Check for conflict
                   match (iterator_type_arg, iterable_type_arg) {
-                    (Some(iter_type), Some(itbl_type)) => {
+                    (Some(iter_type), Some(itbl_type)) =>
                       if not(types_equal(iter_type, itbl_type)) {
                         // Report TS2322 error
                         let itbl_str = type_to_string(itbl_type)
@@ -12943,16 +13017,13 @@ fn check_for_iterator_iterable_conflict_in_heritage(
                       } else {
                         checker
                       }
-                    }
                     _ => checker
                   }
                 }
                 _ => checker
               }
-            }
             _ => checker
           }
-        }
         None => checker
       }
     }
@@ -12975,15 +13046,12 @@ fn check_generator_return_type_assignability(
   // Check for conflicting Iterator<T> and Iterable<U> in heritage clauses
   // This must be done BEFORE resolving because resolve_interface_type doesn't merge heritage
   let checker = check_for_iterator_iterable_conflict_in_heritage(
-    checker,
-    declared_return_type,
-    return_type_node,
+    checker, declared_return_type, return_type_node,
   )
 
   // Resolve the declared return type for assignability checking
   let (resolved_for_conflict_check, checker) = resolve_type_for_generator_check(
-    checker,
-    declared_return_type,
+    checker, declared_return_type,
   )
 
   // Determine the combined yield type
@@ -13028,7 +13096,10 @@ fn check_generator_return_type_assignability(
 
 ///|
 /// Create a Generator<T, TReturn, TNext> type
-fn create_generator_type(checker : TypeChecker, yield_type : Type) -> (Type, TypeChecker) {
+fn create_generator_type(
+  checker : TypeChecker,
+  yield_type : Type,
+) -> (Type, TypeChecker) {
   let (info, checker) = create_type_info(checker)
   let (any_t, checker) = any_type(checker)
   (
@@ -13069,10 +13140,11 @@ fn get_iterable_type_argument(
                         TypeReference(type_ref) =>
                           if type_ref.type_name == "Iterable" &&
                             type_ref.type_arguments.length() > 0 {
-                            match get_type_from_type_node(
-                              checker,
-                              type_ref.type_arguments[0],
-                            ) {
+                            match
+                              get_type_from_type_node(
+                                checker,
+                                type_ref.type_arguments[0],
+                              ) {
                               (Some(arg_type), c) => return (Some(arg_type), c)
                               (None, _) => ()
                             }
@@ -13120,10 +13192,11 @@ fn get_iterator_type_argument(
                         TypeReference(type_ref) =>
                           if type_ref.type_name == "Iterator" &&
                             type_ref.type_arguments.length() > 0 {
-                            match get_type_from_type_node(
-                              checker,
-                              type_ref.type_arguments[0],
-                            ) {
+                            match
+                              get_type_from_type_node(
+                                checker,
+                                type_ref.type_arguments[0],
+                              ) {
                               (Some(arg_type), c) => return (Some(arg_type), c)
                               (None, _) => ()
                             }
@@ -13172,18 +13245,19 @@ fn get_iterator_and_iterable_type_arguments(
           match symbol.kind {
             Interface =>
               match symbol.value_declaration {
-                Some(InterfaceDeclaration(iface)) => {
+                Some(InterfaceDeclaration(iface)) =>
                   // Check heritage clauses for Iterator<T> and Iterable<U>
                   for heritage in iface.heritage_clauses {
                     for type_node in heritage.types {
                       match type_node {
-                        TypeReference(type_ref) => {
+                        TypeReference(type_ref) =>
                           if type_ref.type_name == "Iterator" &&
                             type_ref.type_arguments.length() > 0 {
-                            match get_type_from_type_node(
-                              checker,
-                              type_ref.type_arguments[0],
-                            ) {
+                            match
+                              get_type_from_type_node(
+                                checker,
+                                type_ref.type_arguments[0],
+                              ) {
                               (Some(arg_type), c) => {
                                 iterator_arg = Some(arg_type)
                                 checker = c
@@ -13192,10 +13266,11 @@ fn get_iterator_and_iterable_type_arguments(
                             }
                           } else if type_ref.type_name == "Iterable" &&
                             type_ref.type_arguments.length() > 0 {
-                            match get_type_from_type_node(
-                              checker,
-                              type_ref.type_arguments[0],
-                            ) {
+                            match
+                              get_type_from_type_node(
+                                checker,
+                                type_ref.type_arguments[0],
+                              ) {
                               (Some(arg_type), c) => {
                                 iterable_arg = Some(arg_type)
                                 checker = c
@@ -13203,19 +13278,16 @@ fn get_iterator_and_iterable_type_arguments(
                               (None, _) => ()
                             }
                           }
-                        }
                         _ => ()
                       }
                     }
                   }
-                }
                 _ => ()
               }
             _ => ()
           }
         None => ()
       }
-
       (iterator_arg, iterable_arg, checker)
     }
     _ => (None, None, checker)
@@ -13235,13 +13307,12 @@ fn resolve_type_for_generator_check(
       match lookup_symbol(checker, tr.name) {
         Some(symbol) =>
           match symbol.kind {
-            Interface => {
+            Interface =>
               // Resolve interface to its object type
               match resolve_interface_type(checker, symbol) {
                 (Some(resolved), checker) => (resolved, checker)
                 (None, checker) => (t, checker)
               }
-            }
             _ => (t, checker)
           }
         None => (t, checker)
@@ -13270,7 +13341,9 @@ fn check_generator_type_assignability_v2(
       for entry in target_obj.properties {
         let (prop_name, target_prop) = entry
         // Check if this is a property Generator doesn't have
-        let is_generator_prop = generator_props.iter().any(fn(p) { p == prop_name })
+        let is_generator_prop = generator_props
+          .iter()
+          .any(fn(p) { p == prop_name })
         if not(is_generator_prop) && not(target_prop.is_optional) {
           // TS2741: Property is missing
           checker = add_diagnostic_with_code(
@@ -13291,11 +13364,7 @@ fn check_generator_type_assignability_v2(
         if has_yields && target_ref.type_arguments.length() > 0 {
           let expected_yield = target_ref.type_arguments[0]
           check_yield_type_vs_expected(
-            checker,
-            generator_type,
-            yield_type,
-            expected_yield,
-            original_target_str,
+            checker, generator_type, yield_type, expected_yield, original_target_str,
             location,
           )
         } else {
@@ -13333,11 +13402,7 @@ fn check_yield_type_vs_expected(
       // Use check_assignment_detailed which handles class inheritance
       let initial_error_count = checker.diagnostics.length()
       let checked = check_assignment_detailed(
-        checker,
-        yield_type,
-        expected_yield,
-        location,
-        "",
+        checker, yield_type, expected_yield, location, "",
       )
       // If there were new errors, we need to report the generator type error instead
       if checked.diagnostics.length() > initial_error_count {
@@ -13347,7 +13412,7 @@ fn check_yield_type_vs_expected(
           diagnostics.push(checked.diagnostics[i])
         }
         add_diagnostic_with_code(
-          { ..checked, diagnostics },
+          { ..checked, diagnostics, },
           "Type '\{type_to_string(generator_type)}' is not assignable to type '\{original_target_str}'.",
           location,
           TS2322,
@@ -13649,7 +13714,7 @@ fn check_function_declaration(
           }
         }
       }
-      None => {
+      None =>
         // TS7055: Generator function lacks return-type annotation
         // Only emit when noImplicitAny is enabled AND the function has bare yield statements
         // Generators that yield concrete values (yield 0) don't need this error
@@ -13669,7 +13734,6 @@ fn check_function_declaration(
         } else {
           checker
         }
-      }
     }
   } else {
     checker
@@ -13787,10 +13851,18 @@ fn check_function_declaration(
         extract_yield_type_from_return_type(checker, return_type_node)
       None => (None, checker)
     }
-    enter_generator_function(checker, has_return_type, yield_type=yield_type)
+    enter_generator_function(checker, has_return_type, yield_type~)
   } else {
     // Reset generator context - yield is not valid in non-generator functions
-    ({ ..checker, generator_function_depth: 0, generator_has_return_type: false, generator_yield_type: None }, [])
+    (
+      {
+        ..checker,
+        generator_function_depth: 0,
+        generator_has_return_type: false,
+        generator_yield_type: None,
+      },
+      [],
+    )
   }
 
   // Track regular function context (for 'arguments' object availability)
@@ -13814,7 +13886,14 @@ fn check_function_declaration(
     exit_generator_function(checker, saved_yield_types)
   } else {
     // Restore the saved generator context
-    ({ ..checker, generator_function_depth: saved_generator_depth, collected_yield_types: saved_collected_yield_types }, [])
+    (
+      {
+        ..checker,
+        generator_function_depth: saved_generator_depth,
+        collected_yield_types: saved_collected_yield_types,
+      },
+      [],
+    )
   }
 
   // Exit async function context
@@ -13862,10 +13941,7 @@ fn check_function_declaration(
         match get_type_from_type_node(checker, return_type_node) {
           (Some(declared_return), c) =>
             check_generator_return_type_assignability(
-              c,
-              func,
-              declared_return,
-              return_type_node,
+              c, func, declared_return, return_type_node,
             )
           (None, c) => c
         }
@@ -17181,7 +17257,8 @@ fn get_type_from_type_node(
                 let mut checker = checker
                 let resolved_args : Array[Type] = []
                 for i = 0; i < type_ref.type_arguments.length(); i = i + 1 {
-                  match get_type_from_type_node(checker, type_ref.type_arguments[i]) {
+                  match
+                    get_type_from_type_node(checker, type_ref.type_arguments[i]) {
                     (Some(arg_type), c) => {
                       resolved_args.push(arg_type)
                       checker = c
@@ -17549,7 +17626,8 @@ fn get_type_from_type_node(
         // Could be a bare type node, or a NamedTupleMember for labeled tuples
         let (elem_type, is_optional, is_rest, label) = match elem_node {
           NamedTupleMember(named) => {
-            let (t, c) = match get_type_from_type_node(checker, named.element_type) {
+            let (t, c) = match
+              get_type_from_type_node(checker, named.element_type) {
               (Some(t), c) => (t, c)
               (None, c) => any_type(c)
             }
@@ -17558,7 +17636,8 @@ fn get_type_from_type_node(
           }
           SpreadExpression(spread) => {
             // Rest element in tuple: ...T
-            let (t, c) = match get_type_from_type_node(checker, spread.expression) {
+            let (t, c) = match
+              get_type_from_type_node(checker, spread.expression) {
               (Some(t), c) => (t, c)
               (None, c) => any_type(c)
             }
@@ -17567,7 +17646,8 @@ fn get_type_from_type_node(
           }
           RestType(rest) => {
             // Rest type: ...T[]
-            let (t, c) = match get_type_from_type_node(checker, rest.element_type) {
+            let (t, c) = match
+              get_type_from_type_node(checker, rest.element_type) {
               (Some(t), c) => (t, c)
               (None, c) => any_type(c)
             }
@@ -17576,7 +17656,8 @@ fn get_type_from_type_node(
           }
           OptionalType(opt) => {
             // Optional element: T?
-            let (t, c) = match get_type_from_type_node(checker, opt.element_type) {
+            let (t, c) = match
+              get_type_from_type_node(checker, opt.element_type) {
               (Some(t), c) => (t, c)
               (None, c) => any_type(c)
             }
@@ -17752,9 +17833,9 @@ fn get_property_name(node : Node) -> String {
     Identifier(id) => id.name
     StringLiteral(s) => s.value
     // Handle Symbol.iterator as a special case
-    PropertyAccessExpression(pae) => {
+    PropertyAccessExpression(pae) =>
       match pae.expression {
-        Identifier(obj_id) if obj_id.name == "Symbol" => {
+        Identifier(obj_id) if obj_id.name == "Symbol" =>
           if pae.name == "iterator" {
             "__@iterator"
           } else if pae.name == "asyncIterator" {
@@ -17762,10 +17843,8 @@ fn get_property_name(node : Node) -> String {
           } else {
             ""
           }
-        }
         _ => ""
       }
-    }
     _ => ""
   }
 }

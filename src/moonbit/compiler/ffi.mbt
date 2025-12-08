@@ -127,7 +127,7 @@ fn extract_inline_options(source : String) -> TestOptions {
       break
     }
   }
-  { ..TestOptions::default(), no_implicit_any }
+  { ..TestOptions::default(), no_implicit_any, }
 }
 
 ///|

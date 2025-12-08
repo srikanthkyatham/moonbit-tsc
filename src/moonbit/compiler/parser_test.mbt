@@ -4002,9 +4002,7 @@ test "parse class expression with multiple decorators" {
       match source_file.statements[0] {
         VariableStatement(vs) =>
           match vs.declarations[0].initializer {
-            Some(ClassExpression(ce)) => {
-              assert_eq(ce.decorators.length(), 2)
-            }
+            Some(ClassExpression(ce)) => assert_eq(ce.decorators.length(), 2)
             _ => assert_true(false)
           }
         _ => assert_true(false)
@@ -5471,7 +5469,9 @@ test "parse type literal with function property empty params" {
 
 ///|
 test "parse type literal with multiple function properties" {
-  let tokens = tokens_from_source("type T = { foo: () => void; bar: (x: number) => string; };")
+  let tokens = tokens_from_source(
+    "type T = { foo: () => void; bar: (x: number) => string; };",
+  )
   let result = parse_source_file(tokens, "test.ts")
   match result {
     Ok(source_file) => {
@@ -5507,7 +5507,9 @@ test "parse function type with rest parameter" {
 
 ///|
 test "parse function type with this parameter" {
-  let tokens = tokens_from_source("type F = (this: { name: string }, x: number) => void;")
+  let tokens = tokens_from_source(
+    "type F = (this: { name: string }, x: number) => void;",
+  )
   let result = parse_source_file(tokens, "test.ts")
   match result {
     Ok(source_file) => {
@@ -5523,7 +5525,9 @@ test "parse function type with this parameter" {
 
 ///|
 test "parse object type with optional method with rest param" {
-  let tokens = tokens_from_source("const obj: { foo?: (...args: number[]) => void } = {};")
+  let tokens = tokens_from_source(
+    "const obj: { foo?: (...args: number[]) => void } = {};",
+  )
   let result = parse_source_file(tokens, "test.ts")
   match result {
     Ok(source_file) => {
@@ -5539,7 +5543,9 @@ test "parse object type with optional method with rest param" {
 
 ///|
 test "parse ReturnType-style conditional type" {
-  let tokens = tokens_from_source("type ReturnType<T> = T extends (...args: any[]) => infer R ? R : never;")
+  let tokens = tokens_from_source(
+    "type ReturnType<T> = T extends (...args: any[]) => infer R ? R : never;",
+  )
   let result = parse_source_file(tokens, "test.ts")
   match result {
     Ok(source_file) => {
@@ -5555,7 +5561,9 @@ test "parse ReturnType-style conditional type" {
 
 ///|
 test "parse Parameters-style conditional type" {
-  let tokens = tokens_from_source("type Parameters<T> = T extends (...args: infer P) => any ? P : never;")
+  let tokens = tokens_from_source(
+    "type Parameters<T> = T extends (...args: infer P) => any ? P : never;",
+  )
   let result = parse_source_file(tokens, "test.ts")
   match result {
     Ok(source_file) => {
@@ -5606,7 +5614,9 @@ test "parse union type with array at end in function parameter" {
 ///|
 test "parse union type with null array" {
   // Test for: function f(obj: [number, string] | null[]) {}
-  let tokens = tokens_from_source("function f(obj: [number, string] | null[]) {}")
+  let tokens = tokens_from_source(
+    "function f(obj: [number, string] | null[]) {}",
+  )
   let result = parse_source_file(tokens, "test.ts")
   match result {
     Ok(source_file) => {
@@ -5700,7 +5710,9 @@ test "parse constructor type signature" {
 ///|
 test "parse constructor type with parameters" {
   // Test for: type C2 = new (x: number, y: string) => object;
-  let tokens = tokens_from_source("type C2 = new (x: number, y: string) => object;")
+  let tokens = tokens_from_source(
+    "type C2 = new (x: number, y: string) => object;",
+  )
   let result = parse_source_file(tokens, "test.ts")
   match result {
     Ok(source_file) => {
@@ -5708,9 +5720,7 @@ test "parse constructor type with parameters" {
       match source_file.statements[0] {
         TypeAliasDeclaration(ta) =>
           match ta.type_node {
-            ConstructorType(ct) => {
-              assert_eq(ct.parameters.length(), 2)
-            }
+            ConstructorType(ct) => assert_eq(ct.parameters.length(), 2)
             _ => assert_true(false)
           }
         _ => assert_true(false)
@@ -5755,9 +5765,7 @@ test "parse constructor type with destructuring parameter" {
       match source_file.statements[0] {
         TypeAliasDeclaration(ta) =>
           match ta.type_node {
-            ConstructorType(ct) => {
-              assert_eq(ct.parameters.length(), 1)
-            }
+            ConstructorType(ct) => assert_eq(ct.parameters.length(), 1)
             _ => assert_true(false)
           }
         _ => assert_true(false)

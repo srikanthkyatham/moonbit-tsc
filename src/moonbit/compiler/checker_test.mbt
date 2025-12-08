@@ -2996,15 +2996,16 @@ test "check yield type compatibility - TS2741 error for incompatible types" {
     "class Foo { x: number } class Baz { z: number } function* g(): IterableIterator<Foo> { yield new Baz; }",
   )
   match result {
-    Ok(_) => {
+    Ok(_) =>
       // Should have errors, not Ok
       assert_true(false)
-    }
     Err(diagnostics) => {
       // Check for TS2741 error about missing property 'x'
-      let has_ts2741 = diagnostics.iter().any(fn(d) {
-        d.message.contains("Property") && d.message.contains("is missing")
-      })
+      let has_ts2741 = diagnostics
+        .iter()
+        .any(fn(d) {
+          d.message.contains("Property") && d.message.contains("is missing")
+        })
       assert_true(has_ts2741)
     }
   }
@@ -3019,9 +3020,12 @@ test "check yield type compatibility - subclass is compatible" {
   match result {
     Ok(typed) => {
       // Should have no errors - Bar is compatible with Foo
-      let type_errors = typed.diagnostics.iter().filter(fn(d) {
-        d.message.contains("Property") && d.message.contains("is missing")
-      }).collect()
+      let type_errors = typed.diagnostics
+        .iter()
+        .filter(fn(d) {
+          d.message.contains("Property") && d.message.contains("is missing")
+        })
+        .collect()
       assert_eq(type_errors.length(), 0)
     }
     Err(_) => assert_true(false)
@@ -3035,15 +3039,16 @@ test "check yield delegate type compatibility - TS2741 error for incompatible ar
     "class Foo { x: number } class Baz { z: number } function* g(): IterableIterator<Foo> { yield * [new Baz]; }",
   )
   match result {
-    Ok(_) => {
+    Ok(_) =>
       // Should have errors, not Ok
       assert_true(false)
-    }
     Err(diagnostics) => {
       // Check for TS2741 error about missing property 'x'
-      let has_ts2741 = diagnostics.iter().any(fn(d) {
-        d.message.contains("Property") && d.message.contains("is missing")
-      })
+      let has_ts2741 = diagnostics
+        .iter()
+        .any(fn(d) {
+          d.message.contains("Property") && d.message.contains("is missing")
+        })
       assert_true(has_ts2741)
     }
   }
@@ -3057,9 +3062,12 @@ test "check yield delegate type compatibility - subclass array is compatible" {
   )
   match result {
     Ok(typed) => {
-      let type_errors = typed.diagnostics.iter().filter(fn(d) {
-        d.message.contains("Property") && d.message.contains("is missing")
-      }).collect()
+      let type_errors = typed.diagnostics
+        .iter()
+        .filter(fn(d) {
+          d.message.contains("Property") && d.message.contains("is missing")
+        })
+        .collect()
       assert_eq(type_errors.length(), 0)
     }
     Err(_) => assert_true(false)
