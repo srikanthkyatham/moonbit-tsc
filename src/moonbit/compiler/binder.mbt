@@ -820,11 +820,13 @@ fn bind_binding_pattern_internal(
       }
 
       // For var declarations in nested scopes, hoist to function scope
-      if hoist_to_function_scope && not(is_const) {
+      // IMPORTANT: Return the updated binder from declare_symbol functions
+      let updated_binder = if hoist_to_function_scope && not(is_const) {
         declare_symbol_in_function_scope(binder, id.name, symbol)
       } else {
         declare_symbol(binder, id.name, symbol)
       }
+      updated_binder
     }
     ArrayBindingPattern(array_pattern) => {
       let mut binder = binder

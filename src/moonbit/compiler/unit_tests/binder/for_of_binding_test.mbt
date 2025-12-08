@@ -85,10 +85,42 @@ test "for-of with const declaration" {
 }
 
 ///|
-test "for-of with array destructuring" {
-  // Array destructuring in for-of loop variable
+test "for-of with array destructuring - var" {
+  // Array destructuring in for-of loop variable with var
   let source =
     #|for (var [a, b] of [[1, 2], [3, 4]]) {
+    #|  console.log(a, b);
+    #|}
+  let result = parse_and_bind_for_of(source)
+  match result {
+    Ok(bound) => {
+      assert_eq(bound.diagnostics.length(), 0)
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "for-of with array destructuring - const" {
+  // Array destructuring in for-of loop variable with const
+  let source =
+    #|for (const [a, b] of [[1, 2], [3, 4]]) {
+    #|  console.log(a, b);
+    #|}
+  let result = parse_and_bind_for_of(source)
+  match result {
+    Ok(bound) => {
+      assert_eq(bound.diagnostics.length(), 0)
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "for-of with array destructuring - let" {
+  // Array destructuring in for-of loop variable with let
+  let source =
+    #|for (let [a, b] of [[1, 2], [3, 4]]) {
     #|  console.log(a, b);
     #|}
   let result = parse_and_bind_for_of(source)
