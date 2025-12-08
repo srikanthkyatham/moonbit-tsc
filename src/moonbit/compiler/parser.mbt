@@ -5849,95 +5849,238 @@ fn parse_interface_declaration(
               ),
             )
           }
-          // Index signature: [key: string]: value
+          // Index signature or computed property: [key: string]: value OR [expr]: value
           OpenBracket(_) => {
             let bracket_loc = current_token(parser).location()
             parser = advance_parser(parser)
-            // Parse index parameter name
-            let index_name = match current_token(parser) {
-              Identifier(n, _) => {
-                parser = advance_parser(parser)
-                n
+
+            // Check if this is an index signature or computed property
+            // Index signature: [identifier: Type]: ValueType
+            // Computed property: [expression]: Type or [expression](): ReturnType
+            let is_index_signature = match current_token(parser) {
+              Identifier(_, _) => {
+                // Peek ahead to see if there's a colon after the identifier
+                let next_parser = advance_parser(parser)
+                match current_token(next_parser) {
+                  Colon(_) => true // [id: Type] pattern - index signature
+                  _ => false // [id] pattern - computed property with identifier
+                }
               }
-              _ =>
-                return Err(
-                  add_error_with_code(
-                    parser,
-                    "Identifier expected",
-                    current_token(parser).location(),
-                    IdentifierExpected,
-                  ),
-                )
+              _ => false // [other expression] - computed property
             }
-            // Expect colon
-            match current_token(parser) {
-              Colon(_) => parser = advance_parser(parser)
-              _ =>
-                return Err(
-                  add_error_with_code(
-                    parser,
-                    ExpectedColon.to_message(),
-                    current_token(parser).location(),
-                    ExpectedColon,
-                  ),
-                )
-            }
-            // Parse index type (string or number)
-            let index_type = match parse_type(parser) {
-              Ok((t, p)) => {
-                parser = p
-                t
+            if is_index_signature {
+              // Traditional index signature: [key: string]: value
+              let index_name = match current_token(parser) {
+                Identifier(n, _) => {
+                  parser = advance_parser(parser)
+                  n
+                }
+                _ =>
+                  return Err(
+                    add_error_with_code(
+                      parser,
+                      "Identifier expected",
+                      current_token(parser).location(),
+                      IdentifierExpected,
+                    ),
+                  )
               }
-              Err(p) => return Err(p)
-            }
-            // Expect closing bracket
-            match current_token(parser) {
-              CloseBracket(_) => parser = advance_parser(parser)
-              _ =>
-                return Err(
-                  add_error_with_code(
-                    parser,
-                    ExpectedCloseBracket.to_message(),
-                    current_token(parser).location(),
-                    ExpectedCloseBracket,
-                  ),
-                )
-            }
-            // Expect colon for value type
-            match current_token(parser) {
-              Colon(_) => parser = advance_parser(parser)
-              _ =>
-                return Err(
-                  add_error_with_code(
-                    parser,
-                    ExpectedColon.to_message(),
-                    current_token(parser).location(),
-                    ExpectedColon,
-                  ),
-                )
-            }
-            // Parse value type
-            let value_type = match parse_type(parser) {
-              Ok((t, p)) => {
-                parser = p
-                t
+              // Expect colon
+              match current_token(parser) {
+                Colon(_) => parser = advance_parser(parser)
+                _ =>
+                  return Err(
+                    add_error_with_code(
+                      parser,
+                      ExpectedColon.to_message(),
+                      current_token(parser).location(),
+                      ExpectedColon,
+                    ),
+                  )
               }
-              Err(p) => return Err(p)
-            }
-            // Create index signature
-            members.push(
-              Node::IndexSignatureDeclaration(IndexSignatureDeclaration::{
-                parameter_name: index_name,
-                parameter_type: index_type,
-                return_type: value_type,
-                is_readonly: false,
-                location: bracket_loc,
-              }),
-            )
-            // Optional semicolon or comma
-            match current_token(parser) {
-              Semicolon(_) | Comma(_) => parser = advance_parser(parser)
-              _ => ()
+              // Parse index type (string or number)
+              let index_type = match parse_type(parser) {
+                Ok((t, p)) => {
+                  parser = p
+                  t
+                }
+                Err(p) => return Err(p)
+              }
+              // Expect closing bracket
+              match current_token(parser) {
+                CloseBracket(_) => parser = advance_parser(parser)
+                _ =>
+                  return Err(
+                    add_error_with_code(
+                      parser,
+                      ExpectedCloseBracket.to_message(),
+                      current_token(parser).location(),
+                      ExpectedCloseBracket,
+                    ),
+                  )
+              }
+              // Expect colon for value type
+              match current_token(parser) {
+                Colon(_) => parser = advance_parser(parser)
+                _ =>
+                  return Err(
+                    add_error_with_code(
+                      parser,
+                      ExpectedColon.to_message(),
+                      current_token(parser).location(),
+                      ExpectedColon,
+                    ),
+                  )
+              }
+              // Parse value type
+              let value_type = match parse_type(parser) {
+                Ok((t, p)) => {
+                  parser = p
+                  t
+                }
+                Err(p) => return Err(p)
+              }
+              // Create index signature
+              members.push(
+                Node::IndexSignatureDeclaration(IndexSignatureDeclaration::{
+                  parameter_name: index_name,
+                  parameter_type: index_type,
+                  return_type: value_type,
+                  is_readonly: false,
+                  location: bracket_loc,
+                }),
+              )
+              // Optional semicolon or comma
+              match current_token(parser) {
+                Semicolon(_) | Comma(_) => parser = advance_parser(parser)
+                _ => ()
+              }
+            } else {
+              // Computed property: [expression]: Type or [expression](): ReturnType
+              // Parse the computed property name expression
+              let (_computed_name, p) = match
+                parse_assignment_expression(parser) {
+                Ok((expr, p)) => (expr, p)
+                Err(p) => return Err(p)
+              }
+              parser = p
+
+              // Expect closing bracket
+              match current_token(parser) {
+                CloseBracket(_) => parser = advance_parser(parser)
+                _ =>
+                  return Err(
+                    add_error_with_code(
+                      parser,
+                      ExpectedCloseBracket.to_message(),
+                      current_token(parser).location(),
+                      ExpectedCloseBracket,
+                    ),
+                  )
+              }
+
+              // Check for optional marker (?)
+              let is_optional = match current_token(parser) {
+                Question(_) => {
+                  parser = advance_parser(parser)
+                  true
+                }
+                _ => false
+              }
+
+              // Check if it's a method (has parentheses) or property (has colon)
+              match current_token(parser) {
+                OpenParen(_) => {
+                  // Computed method signature: [expr](params): returnType
+                  parser = advance_parser(parser)
+
+                  // Parse parameters
+                  let (params, p) = parse_parameter_list(parser)
+                  parser = p
+
+                  // Parse return type
+                  let return_type = match current_token(parser) {
+                    Colon(_) => {
+                      parser = advance_parser(parser)
+                      match parse_type(parser) {
+                        Ok((t, p)) => {
+                          parser = p
+                          Some(t)
+                        }
+                        Err(_) => None
+                      }
+                    }
+                    _ => None
+                  }
+
+                  // Create method declaration with computed name
+                  // We'll use a special marker for computed names
+                  let method_name = "[computed]"
+                  members.push(
+                    Node::MethodDeclaration(MethodDeclaration::{
+                      name: method_name,
+                      type_parameters: [],
+                      parameters: params,
+                      return_type,
+                      body: None,
+                      decorators: [],
+                      modifiers: [],
+                      is_async: false,
+                      is_generator: false,
+                      is_optional,
+                      location: bracket_loc,
+                    }),
+                  )
+
+                  // Optional semicolon or comma
+                  match current_token(parser) {
+                    Semicolon(_) | Comma(_) => parser = advance_parser(parser)
+                    _ => ()
+                  }
+                }
+                Colon(_) => {
+                  // Computed property signature: [expr]: type
+                  parser = advance_parser(parser)
+
+                  // Parse property type
+                  match parse_type(parser) {
+                    Ok((prop_type, p)) => {
+                      parser = p
+
+                      // Create property declaration with computed name
+                      let prop_name = "[computed]"
+                      members.push(
+                        Node::PropertyDeclaration(PropertyDeclaration::{
+                          name: prop_name,
+                          type_annotation: Some(prop_type),
+                          initializer: None,
+                          is_optional,
+                          decorators: [],
+                          modifiers: [],
+                          location: bracket_loc,
+                        }),
+                      )
+
+                      // Optional semicolon or comma
+                      match current_token(parser) {
+                        Semicolon(_) | Comma(_) =>
+                          parser = advance_parser(parser)
+                        _ => ()
+                      }
+                    }
+                    Err(p) => return Err(p)
+                  }
+                }
+                _ =>
+                  return Err(
+                    add_error_with_code(
+                      parser,
+                      ExpectedColon.to_message(),
+                      current_token(parser).location(),
+                      ExpectedColon,
+                    ),
+                  )
+              }
             }
           }
           // Readonly modifier
