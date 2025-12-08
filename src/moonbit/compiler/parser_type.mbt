@@ -412,17 +412,15 @@ fn parse_primary_type_with_readonly(
                   Identifier(prop_name, prop_loc) => {
                     parser = advance_parser(parser)
                     let start_loc = get_node_location(result)
-                    result = Node::PropertyAccessExpression(
-                      PropertyAccessExpression::{
-                        expression: result,
-                        name: prop_name,
-                        location: SourceLocation::new(
-                          start_loc.file_path,
-                          start_loc.start,
-                          prop_loc.end,
-                        ),
-                      },
-                    )
+                    result = Node::PropertyAccessExpression(PropertyAccessExpression::{
+                      expression: result,
+                      name: prop_name,
+                      location: SourceLocation::new(
+                        start_loc.file_path,
+                        start_loc.start,
+                        prop_loc.end,
+                      ),
+                    })
                   }
                   _ => break
                 }
@@ -600,17 +598,15 @@ fn parse_primary_type_with_readonly(
                     Identifier(prop_name, prop_loc) => {
                       parser = advance_parser(parser)
                       let start_loc = get_node_location(result)
-                      result = Node::PropertyAccessExpression(
-                        PropertyAccessExpression::{
-                          expression: result,
-                          name: prop_name,
-                          location: SourceLocation::new(
-                            start_loc.file_path,
-                            start_loc.start,
-                            prop_loc.end,
-                          ),
-                        },
-                      )
+                      result = Node::PropertyAccessExpression(PropertyAccessExpression::{
+                        expression: result,
+                        name: prop_name,
+                        location: SourceLocation::new(
+                          start_loc.file_path,
+                          start_loc.start,
+                          prop_loc.end,
+                        ),
+                      })
                     }
                     _ => break
                   }

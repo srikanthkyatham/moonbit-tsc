@@ -30,7 +30,6 @@ test "parse function declaration with name 'from'" {
   let source = "function from() {}"
   let tokens = tokens_from_source(source)
   let result = @compiler.parse_source_file(tokens, "test.ts")
-
   match result {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
@@ -51,7 +50,6 @@ test "parse function declaration with name 'from' and type parameters" {
   let source = "function from<T>() {}"
   let tokens = tokens_from_source(source)
   let result = @compiler.parse_source_file(tokens, "test.ts")
-
   match result {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
@@ -73,7 +71,6 @@ test "parse function declaration with name 'from' and parameters" {
   let source = "function from(x: number): string { return 'hello'; }"
   let tokens = tokens_from_source(source)
   let result = @compiler.parse_source_file(tokens, "test.ts")
-
   match result {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
@@ -100,7 +97,6 @@ test "parse function declaration with name 'as'" {
   let source = "function as() {}"
   let tokens = tokens_from_source(source)
   let result = @compiler.parse_source_file(tokens, "test.ts")
-
   match result {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
@@ -116,7 +112,6 @@ test "parse function declaration with name 'as' and type parameters" {
   let source = "function as<T, U>(x: T): U { return x as any as U; }"
   let tokens = tokens_from_source(source)
   let result = @compiler.parse_source_file(tokens, "test.ts")
-
   match result {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
@@ -142,7 +137,6 @@ test "parse function declaration with name 'of'" {
   let source = "function of() {}"
   let tokens = tokens_from_source(source)
   let result = @compiler.parse_source_file(tokens, "test.ts")
-
   match result {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
@@ -158,7 +152,6 @@ test "parse function declaration with name 'of' and rest parameters" {
   let source = "function of<T>(...items: T[]): T[] { return items; }"
   let tokens = tokens_from_source(source)
   let result = @compiler.parse_source_file(tokens, "test.ts")
-
   match result {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
@@ -185,7 +178,6 @@ test "parse function declaration with name 'await'" {
   let source = "function await() {}"
   let tokens = tokens_from_source(source)
   let result = @compiler.parse_source_file(tokens, "test.ts")
-
   match result {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
@@ -201,7 +193,6 @@ test "parse async function declaration with name 'await'" {
   let source = "async function await() {}"
   let tokens = tokens_from_source(source)
   let result = @compiler.parse_source_file(tokens, "test.ts")
-
   match result {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
@@ -227,7 +218,6 @@ test "parse function declaration with name 'yield'" {
   let source = "function yield() {}"
   let tokens = tokens_from_source(source)
   let result = @compiler.parse_source_file(tokens, "test.ts")
-
   match result {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
@@ -243,7 +233,6 @@ test "parse generator function declaration with name 'yield'" {
   let source = "function* yield() {}"
   let tokens = tokens_from_source(source)
   let result = @compiler.parse_source_file(tokens, "test.ts")
-
   match result {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
@@ -269,7 +258,6 @@ test "parse function declaration with name 'declare'" {
   let source = "function declare() {}"
   let tokens = tokens_from_source(source)
   let result = @compiler.parse_source_file(tokens, "test.ts")
-
   match result {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
@@ -285,7 +273,6 @@ test "parse function declaration with name 'async'" {
   let source = "function async() {}"
   let tokens = tokens_from_source(source)
   let result = @compiler.parse_source_file(tokens, "test.ts")
-
   match result {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
@@ -301,7 +288,6 @@ test "parse function declaration with name 'using'" {
   let source = "function using() {}"
   let tokens = tokens_from_source(source)
   let result = @compiler.parse_source_file(tokens, "test.ts")
-
   match result {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
@@ -317,7 +303,6 @@ test "parse function declaration with name 'type'" {
   let source = "function type() {}"
   let tokens = tokens_from_source(source)
   let result = @compiler.parse_source_file(tokens, "test.ts")
-
   match result {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
@@ -333,7 +318,6 @@ test "parse function declaration with name 'readonly'" {
   let source = "function readonly() {}"
   let tokens = tokens_from_source(source)
   let result = @compiler.parse_source_file(tokens, "test.ts")
-
   match result {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
@@ -353,15 +337,12 @@ test "parse multiple function declarations with contextual keyword names" {
   let source = "function from() {}\nfunction as() {}\nfunction of() {}"
   let tokens = tokens_from_source(source)
   let result = @compiler.parse_source_file(tokens, "test.ts")
-
   match result {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 3)
-
       let name1 = get_function_name(source_file.statements[0])
       let name2 = get_function_name(source_file.statements[1])
       let name3 = get_function_name(source_file.statements[2])
-
       assert_eq(name1, Some("from"))
       assert_eq(name2, Some("as"))
       assert_eq(name3, Some("of"))
@@ -379,7 +360,6 @@ test "parse function with contextual keyword name after type alias" {
   let source = "type A = { x: number }\nfunction from() {}"
   let tokens = tokens_from_source(source)
   let result = @compiler.parse_source_file(tokens, "test.ts")
-
   match result {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 2)
@@ -403,7 +383,6 @@ test "parse function with contextual keyword name and generic params after type 
   let source = "type InteropObservable<T> = { subscribe(): void }\nfunction from<T>(obs: InteropObservable<T>) {}"
   let tokens = tokens_from_source(source)
   let result = @compiler.parse_source_file(tokens, "test.ts")
-
   match result {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 2)
@@ -432,7 +411,6 @@ test "parse function declaration with regular name" {
   let source = "function myFunction() {}"
   let tokens = tokens_from_source(source)
   let result = @compiler.parse_source_file(tokens, "test.ts")
-
   match result {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
@@ -448,7 +426,6 @@ test "parse function declaration with regular name and complex signature" {
   let source = "function processData<T, U>(input: T, mapper: (x: T) => U): U[] { return []; }"
   let tokens = tokens_from_source(source)
   let result = @compiler.parse_source_file(tokens, "test.ts")
-
   match result {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
@@ -471,7 +448,6 @@ test "parse anonymous function expression" {
   let source = "const f = function() {}"
   let tokens = tokens_from_source(source)
   let result = @compiler.parse_source_file(tokens, "test.ts")
-
   match result {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)

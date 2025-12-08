@@ -665,8 +665,18 @@ fn add_local_variable(
   let scopes = checker.local_scopes
   if scopes.length() > 0 {
     scopes[scopes.length() - 1].variables.set(name, var_type)
+    { ..checker, local_scopes: scopes }
+  } else {
+    // At global scope - look up the symbol and set its type
+    match lookup_symbol(checker, name) {
+      Some(symbol) => {
+        let new_symbol_types = checker.symbol_types
+        new_symbol_types.set(symbol.id, var_type)
+        { ..checker, symbol_types: new_symbol_types }
+      }
+      None => checker // Symbol not found, nothing to do
+    }
   }
-  { ..checker, local_scopes: scopes }
 }
 
 ///|
@@ -681,8 +691,18 @@ fn add_local_const_variable(
     let scope = scopes[scopes.length() - 1]
     scope.variables.set(name, var_type)
     scope.const_vars.insert(name)
+    { ..checker, local_scopes: scopes }
+  } else {
+    // At global scope - look up the symbol and set its type
+    match lookup_symbol(checker, name) {
+      Some(symbol) => {
+        let new_symbol_types = checker.symbol_types
+        new_symbol_types.set(symbol.id, var_type)
+        { ..checker, symbol_types: new_symbol_types }
+      }
+      None => checker // Symbol not found, nothing to do
+    }
   }
-  { ..checker, local_scopes: scopes }
 }
 
 ///|
@@ -4743,6 +4763,32 @@ fn get_symbol_constructor_type(checker : TypeChecker) -> (Type, TypeChecker) {
     is_readonly: true,
   }
   symbol_methods.set("unscopables", unscopables_prop)
+
+  // Check for user-defined SymbolConstructor interface augmentation
+  let mut checker = checker
+  match lookup_symbol(checker, "SymbolConstructor") {
+    Some(symbol) =>
+      match symbol.kind {
+        Interface =>
+          // Merge properties from the user-defined interface
+          match resolve_interface_type(checker, symbol) {
+            (Some(Object(user_obj)), c) => {
+              checker = c
+              // Add user-defined properties to symbol_methods
+              for entry in user_obj.properties {
+                let (key, value) = entry
+                // Don't overwrite built-in properties
+                if not(symbol_methods.contains(key)) {
+                  symbol_methods.set(key, value)
+                }
+              }
+            }
+            (_, c) => checker = c
+          }
+        _ => ()
+      }
+    None => ()
+  }
   let symbol_type = Type::Object(ObjectType::{
     properties: symbol_methods,
     call_signatures: [],
@@ -18327,7 +18373,7 @@ fn resolve_interface_type(
           construct_signatures,
           index_signatures,
           info,
-          class_name: None,
+          class_name: Some(interface_symbol.name),
         }),
       )
     }
