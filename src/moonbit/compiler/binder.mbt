@@ -1033,7 +1033,9 @@ fn bind_module_declaration(
     let binder = push_container(binder, ContainerKind::Module)
 
     // Bind module body if present
+    // If the body is a BlockStatement, bind its statements directly to avoid creating an extra scope
     let binder = match mod_decl.body {
+      Some(BlockStatement(block)) => bind_statements(binder, block.statements)
       Some(body) => bind_statement(binder, body)
       None => binder
     }

@@ -390,6 +390,52 @@ fn next_type_id(checker : TypeChecker) -> (Int, TypeChecker) {
 }
 
 ///|
+/// Apply global augmentations to the checker's global scope
+/// This merges declarations from `declare global { }` blocks into the global scope
+fn apply_global_augmentations_to_checker(
+  checker : TypeChecker,
+  augmentations : Array[GlobalAugmentation],
+) -> TypeChecker {
+  match checker.global_scope {
+    Some(global_scope) => {
+      // Create a new global scope with augmented symbols
+      let new_symbols = global_scope.symbols
+      // Merge all augmentation declarations into the global scope
+      for aug in augmentations {
+        aug.declarations.each(fn(name, symbol) {
+          // Add or merge the symbol into the global scope
+          match new_symbols.get(name) {
+            Some(existing_symbol) =>
+              // If symbol already exists, we need to merge them
+              // For interfaces, this means merging members
+              if existing_symbol.kind == Interface && symbol.kind == Interface {
+                // Merge interface declarations
+                let merged_decls = existing_symbol.declarations
+                merged_decls.append(symbol.declarations)
+                let merged_symbol = {
+                  ..existing_symbol,
+                  declarations: merged_decls,
+                }
+                new_symbols.set(name, merged_symbol)
+              } else {
+                // For other symbols, keep the existing one
+                // (this matches TypeScript's behavior)
+                ()
+              }
+            None =>
+              // No existing symbol, add the new one
+              new_symbols.set(name, symbol)
+          }
+        })
+      }
+      let new_global_scope = { ..global_scope, symbols: new_symbols }
+      { ..checker, global_scope: Some(new_global_scope) }
+    }
+    None => checker
+  }
+}
+
+///|
 /// Push a new local scope onto the scope stack
 fn push_local_scope(checker : TypeChecker) -> TypeChecker {
   let scopes = checker.local_scopes
@@ -1990,13 +2036,23 @@ pub fn check_source_file_with_options(
   target : Target,
   no_implicit_any? : Bool = false,
 ) -> CheckResult {
-  let checker = TypeChecker::new_with_options(
+  let mut checker = TypeChecker::new_with_options(
     bound.file_path,
     Some(bound.global_scope),
     no_unchecked_indexed_access,
     target,
     no_implicit_any~,
   )
+
+  // Apply global augmentations to the global scope
+  // This handles `declare global { interface SymbolConstructor { ... } }` blocks
+  if bound.global_augmentations.length() > 0 {
+    checker = apply_global_augmentations_to_checker(
+      checker,
+      bound.global_augmentations,
+    )
+  }
+
   // Push a top-level scope for the source file so local variables are tracked
   let checker = push_local_scope(checker)
   let checker = check_statements(checker, bound.statements)
@@ -2033,13 +2089,22 @@ pub fn check_source_file_with_external_types(
   target : Target,
   no_implicit_any? : Bool = false,
 ) -> CheckResult {
-  let checker = TypeChecker::new_with_options(
+  let mut checker = TypeChecker::new_with_options(
     bound.file_path,
     Some(bound.global_scope),
     no_unchecked_indexed_access,
     target,
     no_implicit_any~,
   )
+
+  // Apply global augmentations to the global scope
+  // This handles `declare global { interface SymbolConstructor { ... } }` blocks
+  if bound.global_augmentations.length() > 0 {
+    checker = apply_global_augmentations_to_checker(
+      checker,
+      bound.global_augmentations,
+    )
+  }
 
   // Build import map from module_info.imports
   let import_map = build_import_map(
