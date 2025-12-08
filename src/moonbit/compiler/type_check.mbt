@@ -17,6 +17,26 @@ pub fn type_check(source : String, file_path : String) -> CheckResult {
 }
 
 ///|
+/// Type check TypeScript source code with additional options
+/// Returns a TypedFile on success or diagnostics on failure
+pub fn type_check_with_options(
+  source : String,
+  file_path : String,
+  no_implicit_any~ : Bool = false,
+) -> CheckResult {
+  let tokens = scan_all_v2(source, file_path)
+  match parse_source_file(tokens, file_path) {
+    Ok(source_file) =>
+      match bind_source_file(source_file) {
+        Ok(bound) =>
+          check_source_file_with_options(bound, false, ES2015, no_implicit_any~)
+        Err(diagnostics) => Err(diagnostics)
+      }
+    Err(diagnostics) => Err(diagnostics)
+  }
+}
+
+///|
 /// Type check TypeScript source code and return all diagnostics
 /// (including warnings) even on success
 pub fn type_check_with_all_diagnostics(

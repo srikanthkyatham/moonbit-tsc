@@ -481,3 +481,205 @@ test "Iterator/Iterable conflict - empty generator" {
       )
   }
 }
+
+// ============================================================================
+// noImplicitAny Tests - TS7057, TS7034, TS7005
+// ============================================================================
+
+///|
+test "TS7057: yield without generator return type and noImplicitAny" {
+  let source =
+    #|function* f() {
+    #|    var o
+    #|    while (true) {
+    #|        o = yield o
+    #|    }
+    #|}
+  let result = @compiler.type_check_with_options(
+    source,
+    "test.ts",
+    no_implicit_any=true,
+  )
+  match result {
+    Ok(typed) => {
+      let has_ts7057 = typed.diagnostics.any(
+        fn(d) { d.code == 7057 && d.message.contains("yield") },
+      )
+      if not(has_ts7057) {
+        fail("Expected TS7057 error for yield without return type annotation")
+      }
+    }
+    Err(_) => ()
+  }
+}
+
+///|
+test "TS7057: should not error when generator has return type" {
+  let source =
+    #|function* f(): Iterator<any> {
+    #|    var o
+    #|    while (true) {
+    #|        o = yield o
+    #|    }
+    #|}
+  let result = @compiler.type_check_with_options(
+    source,
+    "test.ts",
+    no_implicit_any=true,
+  )
+  match result {
+    Ok(typed) => {
+      let has_ts7057 = typed.diagnostics.any(fn(d) { d.code == 7057 })
+      if has_ts7057 {
+        fail(
+          "Should not emit TS7057 when generator has explicit return type",
+        )
+      }
+    }
+    Err(_) => ()
+  }
+}
+
+///|
+test "TS7034: variable with implicit any[] type" {
+  let source =
+    #|function* g() {
+    #|    var o = []
+    #|    yield o[0]
+    #|}
+  let result = @compiler.type_check_with_options(
+    source,
+    "test.ts",
+    no_implicit_any=true,
+  )
+  match result {
+    Ok(typed) => {
+      let has_ts7034 = typed.diagnostics.any(
+        fn(d) { d.code == 7034 && d.message.contains("any[]") },
+      )
+      if not(has_ts7034) {
+        fail("Expected TS7034 error for variable with implicit any[]")
+      }
+    }
+    Err(_) => ()
+  }
+}
+
+///|
+test "TS7005: reference to variable with implicit any[] type" {
+  let source =
+    #|function* g() {
+    #|    var o = []
+    #|    yield* o
+    #|}
+  let result = @compiler.type_check_with_options(
+    source,
+    "test.ts",
+    no_implicit_any=true,
+  )
+  match result {
+    Ok(typed) => {
+      let has_ts7005 = typed.diagnostics.any(
+        fn(d) { d.code == 7005 && d.message.contains("any[]") },
+      )
+      if not(has_ts7005) {
+        fail("Expected TS7005 error for reference to variable with any[]")
+      }
+    }
+    Err(_) => ()
+  }
+}
+
+///|
+test "noImplicitAny disabled: no TS7057/TS7034/TS7005 errors" {
+  let source =
+    #|function* f() {
+    #|    var o = []
+    #|    while (true) {
+    #|        o = yield* o
+    #|    }
+    #|}
+  let result = @compiler.type_check_with_options(
+    source,
+    "test.ts",
+    no_implicit_any=false,
+  )
+  match result {
+    Ok(typed) => {
+      let has_implicit_any_errors = typed.diagnostics.any(
+        fn(d) { d.code == 7057 || d.code == 7034 || d.code == 7005 },
+      )
+      if has_implicit_any_errors {
+        fail(
+          "Should not emit implicit any errors when noImplicitAny is false",
+        )
+      }
+    }
+    Err(_) => ()
+  }
+}
+
+///|
+test "TS7057: bare yield without generator return type" {
+  let source =
+    #|function* f() {
+    #|    yield
+    #|}
+  let result = @compiler.type_check_with_options(
+    source,
+    "test.ts",
+    no_implicit_any=true,
+  )
+  match result {
+    Ok(typed) => {
+      let has_ts7057 = typed.diagnostics.any(fn(d) { d.code == 7057 })
+      if not(has_ts7057) {
+        fail("Expected TS7057 error for bare yield without return type")
+      }
+    }
+    Err(_) => ()
+  }
+}
+
+///|
+test "yieldExpressionInControlFlow conformance test" {
+  let source =
+    #|// bug25149.js
+    #|function* f() {
+    #|    var o
+    #|    while (true) {
+    #|        o = yield o
+    #|    }
+    #|}
+    #|
+    #|// alsoFails.ts
+    #|function* g() {
+    #|    var o = []
+    #|    while (true) {
+    #|        o = yield* o
+    #|    }
+    #|}
+  let result = @compiler.type_check_with_options(
+    source,
+    "test.ts",
+    no_implicit_any=true,
+  )
+  match result {
+    Ok(typed) => {
+      // Should have exactly 3 errors: TS7057, TS7034, TS7005
+      let ts7057_count = typed.diagnostics.filter(fn(d) { d.code == 7057 }).length()
+      let ts7034_count = typed.diagnostics.filter(fn(d) { d.code == 7034 }).length()
+      let ts7005_count = typed.diagnostics.filter(fn(d) { d.code == 7005 }).length()
+      if ts7057_count != 1 {
+        fail("Expected exactly 1 TS7057 error, got \{ts7057_count}")
+      }
+      if ts7034_count != 1 {
+        fail("Expected exactly 1 TS7034 error, got \{ts7034_count}")
+      }
+      if ts7005_count != 1 {
+        fail("Expected exactly 1 TS7005 error, got \{ts7005_count}")
+      }
+    }
+    Err(_) => ()
+  }
+}

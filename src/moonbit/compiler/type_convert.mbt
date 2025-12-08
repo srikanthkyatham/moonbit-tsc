@@ -661,6 +661,7 @@ fn TypeChecker::create_type_info(self : TypeChecker) -> (TypeInfo, TypeChecker) 
     namespace_symbols: self.namespace_symbols,
     in_destructuring_pattern: self.in_destructuring_pattern,
     no_implicit_any: self.no_implicit_any,
+    implicit_any_array_vars: self.implicit_any_array_vars,
     generator_yield_type: self.generator_yield_type,
     collected_yield_types: self.collected_yield_types,
   }

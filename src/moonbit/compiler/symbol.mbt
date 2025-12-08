@@ -721,7 +721,9 @@ pub enum DiagnosticCode {
   // ============================================================================
   // Unreachable Code & Implicit Any (7000-7099)
   // ============================================================================
+  TS7005 // Variable '{0}' implicitly has an '{1}' type
   TS7027 // Unreachable code detected
+  TS7034 // Variable '{0}' implicitly has type '{1}' in some locations where its type cannot be determined
   TS7055 // '{0}', which lacks return-type annotation, implicitly has an 'any' yield type
   TS7057 // 'yield' expression implicitly results in an 'any' type because its containing generator lacks a return-type annotation
 } derive(Show, Eq)
@@ -1043,7 +1045,9 @@ pub fn DiagnosticCode::to_int(self : DiagnosticCode) -> Int {
     TS4094 => 4094
     TS4097 => 4097
     // Unreachable Code & Implicit Any (7000-7099)
+    TS7005 => 7005
     TS7027 => 7027
+    TS7034 => 7034
     TS7055 => 7055
     TS7057 => 7057
     // Shorthand property and enum errors (18xxx)
@@ -1367,7 +1371,9 @@ pub fn DiagnosticCode::from_int(code : Int) -> DiagnosticCode? {
     4094 => Some(TS4094)
     4097 => Some(TS4097)
     // Unreachable Code & Implicit Any (7000-7099)
+    7005 => Some(TS7005)
     7027 => Some(TS7027)
+    7034 => Some(TS7034)
     7055 => Some(TS7055)
     7057 => Some(TS7057)
     _ => None

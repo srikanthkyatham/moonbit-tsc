@@ -295,6 +295,7 @@ pub struct TypeChecker {
   namespace_symbols : Map[String, Symbol] // Symbols from current namespace for TS2432 enum merging checks
   in_destructuring_pattern : Bool // Tracks if we're inferring type of a destructuring pattern (left side of assignment)
   no_implicit_any : Bool // Error on expressions and declarations with an implied 'any' type
+  implicit_any_array_vars : @hashset.HashSet[String] // Variables with implicit any[] type (for TS7005)
 } derive(Show)
 
 ///|
@@ -375,6 +376,7 @@ pub fn TypeChecker::new_with_options(
     namespace_symbols: Map::new(),
     in_destructuring_pattern: false,
     no_implicit_any,
+    implicit_any_array_vars: @hashset.new(),
   }
 }
 
@@ -3171,6 +3173,34 @@ fn check_variable_declaration(
       }
   }
 
+  // TS7034: Check for implicit any[] type in variable declaration
+  // This occurs when a variable is initialized to [] without type annotation
+  let checker = if checker.no_implicit_any && declared_type.is_empty() {
+    match var_type {
+      Array(arr_type) =>
+        match arr_type.element_type {
+          Any(_) =>
+            match decl.name {
+              Identifier(id) => {
+                // Track this variable for TS7005 (when it's referenced)
+                checker.implicit_any_array_vars.add(id.name)
+                add_diagnostic_with_code(
+                  checker,
+                  "Variable '\{id.name}' implicitly has type 'any[]' in some locations where its type cannot be determined.",
+                  decl.location,
+                  TS7034,
+                )
+              }
+              _ => checker
+            }
+          _ => checker
+        }
+      _ => checker
+    }
+  } else {
+    checker
+  }
+
   // Get the variable name and add to local scope
   // Use add_local_const_variable for const declarations to track const-ness
   let checker = match decl.name {
@@ -3499,6 +3529,21 @@ fn infer_identifier_type(
       return any_type(checker)
     }
     None => ()
+  }
+
+  // TS7005: Check for variable with implicit any[] type being referenced
+  // Don't emit for assignment targets (left side of = in destructuring patterns)
+  let checker = if checker.no_implicit_any &&
+    checker.implicit_any_array_vars.contains(id.name) &&
+    not(checker.in_destructuring_pattern) {
+    add_diagnostic_with_code(
+      checker,
+      "Variable '\{id.name}' implicitly has an 'any[]' type.",
+      id.location,
+      TS7005,
+    )
+  } else {
+    checker
   }
 
   // First check for narrowed type (from type guards in if statements)
@@ -9382,16 +9427,39 @@ fn infer_yield_expression_type(
       // For plain yield, we collect the expression type
       let checker = collect_yield_type(checker, expr_type, ye.is_delegate)
 
+      // TS7057: When noImplicitAny is enabled and the generator lacks a return type,
+      // the yield expression's result (TNext) is implicitly 'any'
+      // We emit this error when the yield expression itself is being used (not just as a statement)
+      // Only emit for simple yield, not for yield* (delegation)
+      let checker = if checker.no_implicit_any && not(checker.generator_has_return_type) && not(ye.is_delegate) {
+        add_diagnostic_with_code(
+          checker,
+          "'yield' expression implicitly results in an 'any' type because its containing generator lacks a return-type annotation.",
+          ye.location,
+          TS7057,
+        )
+      } else {
+        checker
+      }
+
       // For yield*, should iterate over the expression
       // For plain yield, return the expression type
       (expr_type, checker)
     }
     None => {
-      // Note: TS7057 ('yield' expression implicitly results in an 'any' type) is only
-      // emitted when the result of yield is actually used (e.g., yield yield;).
-      // For bare yield; statements, only TS7055 on the function is emitted.
-      // We don't emit here because we need parent context to know if result is used.
+      // TS7057: When noImplicitAny is enabled and the generator lacks a return type,
+      // bare yield's result is also implicitly 'any'
       let (t, checker) = undefined_type(checker)
+      let checker = if checker.no_implicit_any && not(checker.generator_has_return_type) {
+        add_diagnostic_with_code(
+          checker,
+          "'yield' expression implicitly results in an 'any' type because its containing generator lacks a return-type annotation.",
+          ye.location,
+          TS7057,
+        )
+      } else {
+        checker
+      }
       // Collect undefined as a yield type for bare yield
       let checker = collect_yield_type(checker, t, false)
       (t, checker)
