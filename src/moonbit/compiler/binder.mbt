@@ -2170,8 +2170,11 @@ fn declare_symbol(binder : Binder, name : String, symbol : Symbol) -> Binder {
         } else {
           binder
         }
-      } else {
         // Duplicate declaration - add diagnostic
+        // Skip duplicate check for computed properties (runtime-determined names)
+      } else if name == "[computed]" {
+        binder
+      } else {
         // TS2484: Use specific error for export conflicts
         let is_export_conflict = (
             existing_symbol.kind == SymbolKind::ExportValue ||
@@ -2632,6 +2635,9 @@ pub fn merge_global_declarations(
         Some(existing) =>
           if can_merge_symbols(existing, symbol) {
             global_symbols.set(name, merge_symbols(existing, symbol))
+          } else if name == "[computed]" {
+            // Skip duplicate check for computed properties (runtime-determined names)
+            ()
           } else {
             // Can't merge - report duplicate
             diagnostics.push(

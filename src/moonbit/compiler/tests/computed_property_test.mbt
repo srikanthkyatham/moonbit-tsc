@@ -275,3 +275,116 @@ test "readonly index signature still works" {
     Err(_) => fail("Readonly index signature should still work")
   }
 }
+
+// ============================================================================
+// Duplicate Computed Properties Should Not Error
+// Tests that multiple computed properties don't trigger duplicate identifier errors
+// ============================================================================
+
+///|
+test "multiple computed properties in class - no duplicate error" {
+  let source =
+    #|class C {
+    #|    static [Symbol.iterator] = 0;
+    #|    static [Symbol.isConcatSpreadable]() { }
+    #|    static get [Symbol.toPrimitive]() { return ""; }
+    #|    static set [Symbol.toPrimitive](x) { }
+    #|}
+  let result = @compiler.type_check(source, "test.ts")
+  match result {
+    Ok(typed) => {
+      // Should not have TS2300 duplicate identifier errors
+      let has_duplicate_error = typed.diagnostics
+        .iter()
+        .any(fn(d) {
+          d.code == 2300 && d.message.contains("Duplicate identifier")
+        })
+      if has_duplicate_error {
+        fail("Should not report duplicate identifier for computed properties")
+      }
+    }
+    Err(_) => fail("Multiple computed properties in class should parse")
+  }
+}
+
+///|
+test "multiple getters with computed names - no duplicate error" {
+  let source =
+    #|class C {
+    #|    get [Symbol.hasInstance]() {
+    #|        return "";
+    #|    }
+    #|    get [Symbol.toPrimitive]() {
+    #|        return "";
+    #|    }
+    #|}
+  let result = @compiler.type_check(source, "test.ts")
+  match result {
+    Ok(typed) => {
+      // Should not have TS2300 duplicate identifier errors
+      let has_duplicate_error = typed.diagnostics
+        .iter()
+        .any(fn(d) {
+          d.code == 2300 && d.message.contains("Duplicate identifier")
+        })
+      if has_duplicate_error {
+        fail("Should not report duplicate identifier for computed getters")
+      }
+    }
+    Err(_) => fail("Multiple getters with computed names should parse")
+  }
+}
+
+///|
+test "computed property and method with same Symbol - allowed" {
+  let source =
+    #|class C {
+    #|    [Symbol.iterator] = 0;
+    #|    [Symbol.iterator]() { return null; }
+    #|}
+  let result = @compiler.type_check(source, "test.ts")
+  match result {
+    Ok(typed) => {
+      // Should not have TS2300 duplicate identifier errors
+      // Note: TypeScript allows both property and method with same computed name
+      let has_duplicate_error = typed.diagnostics
+        .iter()
+        .any(fn(d) {
+          d.code == 2300 && d.message.contains("Duplicate identifier")
+        })
+      if has_duplicate_error {
+        fail(
+          "Should not report duplicate identifier for computed property and method",
+        )
+      }
+    }
+    Err(_) => fail("Computed property and method with same Symbol should parse")
+  }
+}
+
+///|
+test "multiple computed properties in interface - no duplicate error" {
+  let source =
+    #|interface I {
+    #|    [Symbol.iterator]: any;
+    #|    [Symbol.toPrimitive](): string;
+    #|    [Symbol.toStringTag]: string;
+    #|}
+  let result = @compiler.type_check(source, "test.ts")
+  match result {
+    Ok(typed) => {
+      // Should not have TS2300 duplicate identifier errors
+      let has_duplicate_error = typed.diagnostics
+        .iter()
+        .any(fn(d) {
+          d.code == 2300 && d.message.contains("Duplicate identifier")
+        })
+      if has_duplicate_error {
+        fail(
+          "Should not report duplicate identifier for computed properties in interface",
+        )
+      }
+    }
+    Err(_) => fail("Multiple computed properties in interface should parse")
+  }
+}
