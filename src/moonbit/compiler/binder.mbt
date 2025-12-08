@@ -2297,6 +2297,19 @@ pub fn is_top_level(binder : Binder) -> Bool {
 }
 
 ///|
+/// Format symbol name for error messages
+/// Converts internal names like "__@iterator" back to "[Symbol.iterator]" for display
+fn format_symbol_name_for_error(name : String) -> String {
+  if name == "__@iterator" {
+    "[Symbol.iterator]"
+  } else if name == "__@asyncIterator" {
+    "[Symbol.asyncIterator]"
+  } else {
+    name
+  }
+}
+
+///|
 /// Declare a symbol in the current scope
 ///|
 /// Declare a symbol in the function scope (for var hoisting)
@@ -2335,8 +2348,9 @@ fn declare_symbol_in_function_scope(
               }
             } else {
               // Duplicate declaration error
+              let display_name = format_symbol_name_for_error(name)
               let diagnostic = Diagnostic::error(
-                "Duplicate identifier '\{name}'.",
+                "Duplicate identifier '\{display_name}'.",
                 get_symbol_location(symbol),
                 2300,
               )
@@ -2497,13 +2511,14 @@ fn declare_symbol(binder : Binder, name : String, symbol : Symbol) -> Binder {
             symbol.kind == SymbolKind::ExportValue ||
             symbol.kind == SymbolKind::ExportType
           )
+        let display_name = format_symbol_name_for_error(name)
         let (message, code) = if is_export_conflict {
           (
-            "Export declaration conflicts with exported declaration of '\{name}'.",
+            "Export declaration conflicts with exported declaration of '\{display_name}'.",
             2484,
           )
         } else {
-          ("Duplicate identifier '" + name + "'", 2300)
+          ("Duplicate identifier '" + display_name + "'", 2300)
         }
         let diagnostic = Diagnostic::error(
           message,
@@ -2953,9 +2968,10 @@ pub fn merge_global_declarations(
             ()
           } else {
             // Can't merge - report duplicate
+            let display_name = format_symbol_name_for_error(name)
             diagnostics.push(
               Diagnostic::error(
-                "Duplicate identifier '" + name + "'",
+                "Duplicate identifier '" + display_name + "'",
                 get_symbol_location(symbol),
                 2300,
               ),
