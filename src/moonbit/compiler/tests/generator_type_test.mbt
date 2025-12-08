@@ -379,7 +379,7 @@ test "Iterator/Iterable conflict - different types should error" {
   match result {
     Err(diagnostics) => {
       // Should have TS2322 error about type incompatibility
-      let has_ts2322 = diagnostics.any(
+      let has_ts2322 = diagnostics.iter().any(
         fn(d) { d.message.contains("not assignable") },
       )
       if not(has_ts2322) {
@@ -420,7 +420,7 @@ test "Iterator/Iterable conflict - complex types" {
   let result = @compiler.type_check(source, "test.ts")
   match result {
     Err(diagnostics) => {
-      let has_error = diagnostics.any(
+      let has_error = diagnostics.iter().any(
         fn(d) { d.message.contains("not assignable") },
       )
       if not(has_error) {
@@ -442,7 +442,7 @@ test "Iterator/Iterable conflict - function types" {
   let result = @compiler.type_check(source, "test.ts")
   match result {
     Err(diagnostics) => {
-      let has_error = diagnostics.any(
+      let has_error = diagnostics.iter().any(
         fn(d) { d.message.contains("not assignable") },
       )
       if not(has_error) {
@@ -468,7 +468,7 @@ test "Iterator/Iterable conflict - empty generator" {
   let result = @compiler.type_check(source, "test.ts")
   match result {
     Err(diagnostics) => {
-      let has_error = diagnostics.any(
+      let has_error = diagnostics.iter().any(
         fn(d) { d.message.contains("not assignable") },
       )
       if not(has_error) {
@@ -502,7 +502,7 @@ test "TS7057: yield without generator return type and noImplicitAny" {
   )
   match result {
     Ok(typed) => {
-      let has_ts7057 = typed.diagnostics.any(
+      let has_ts7057 = typed.diagnostics.iter().any(
         fn(d) { d.code == 7057 && d.message.contains("yield") },
       )
       if not(has_ts7057) {
@@ -529,7 +529,7 @@ test "TS7057: should not error when generator has return type" {
   )
   match result {
     Ok(typed) => {
-      let has_ts7057 = typed.diagnostics.any(fn(d) { d.code == 7057 })
+      let has_ts7057 = typed.diagnostics.iter().any(fn(d) { d.code == 7057 })
       if has_ts7057 {
         fail(
           "Should not emit TS7057 when generator has explicit return type",
@@ -554,7 +554,7 @@ test "TS7034: variable with implicit any[] type" {
   )
   match result {
     Ok(typed) => {
-      let has_ts7034 = typed.diagnostics.any(
+      let has_ts7034 = typed.diagnostics.iter().any(
         fn(d) { d.code == 7034 && d.message.contains("any[]") },
       )
       if not(has_ts7034) {
@@ -579,7 +579,7 @@ test "TS7005: reference to variable with implicit any[] type" {
   )
   match result {
     Ok(typed) => {
-      let has_ts7005 = typed.diagnostics.any(
+      let has_ts7005 = typed.diagnostics.iter().any(
         fn(d) { d.code == 7005 && d.message.contains("any[]") },
       )
       if not(has_ts7005) {
@@ -606,7 +606,7 @@ test "noImplicitAny disabled: no TS7057/TS7034/TS7005 errors" {
   )
   match result {
     Ok(typed) => {
-      let has_implicit_any_errors = typed.diagnostics.any(
+      let has_implicit_any_errors = typed.diagnostics.iter().any(
         fn(d) { d.code == 7057 || d.code == 7034 || d.code == 7005 },
       )
       if has_implicit_any_errors {
@@ -632,7 +632,7 @@ test "TS7057: bare yield without generator return type" {
   )
   match result {
     Ok(typed) => {
-      let has_ts7057 = typed.diagnostics.any(fn(d) { d.code == 7057 })
+      let has_ts7057 = typed.diagnostics.iter().any(fn(d) { d.code == 7057 })
       if not(has_ts7057) {
         fail("Expected TS7057 error for bare yield without return type")
       }
@@ -678,6 +678,212 @@ test "yieldExpressionInControlFlow conformance test" {
       }
       if ts7005_count != 1 {
         fail("Expected exactly 1 TS7005 error, got \{ts7005_count}")
+      }
+    }
+    Err(_) => ()
+  }
+}
+
+// ============================================================================
+// Statement-Level Yield Tests (TS7057 should not emit for unused yield results)
+// ============================================================================
+
+///|
+test "TS7057: statement-level yield should not emit error" {
+  // This is the generatorTypeCheck49.ts case - yield 0 as a statement
+  let source =
+    #|function* g() {
+    #|    yield 0;
+    #|}
+  let result = @compiler.type_check_with_options(
+    source,
+    "test.ts",
+    no_implicit_any=true,
+  )
+  match result {
+    Ok(typed) => {
+      let has_ts7057 = typed.diagnostics.iter().any(fn(d) { d.code == 7057 })
+      if has_ts7057 {
+        fail("TS7057 should not emit for statement-level yield")
+      }
+    }
+    Err(_) => fail("Expected code to compile without errors")
+  }
+}
+
+///|
+test "TS7057: nested statement-level yield should not emit error" {
+  // This is the generatorTypeCheck51.ts case - nested generator with statement-level yield
+  let source =
+    #|function* g() {
+    #|    function* h() {
+    #|        yield 0;
+    #|    }
+    #|}
+  let result = @compiler.type_check_with_options(
+    source,
+    "test.ts",
+    no_implicit_any=true,
+  )
+  match result {
+    Ok(typed) => {
+      let has_ts7057 = typed.diagnostics.iter().any(fn(d) { d.code == 7057 })
+      if has_ts7057 {
+        fail("TS7057 should not emit for statement-level yield in nested generator")
+      }
+    }
+    Err(_) => fail("Expected code to compile without errors")
+  }
+}
+
+///|
+test "TS7057: yield in assignment should emit error" {
+  // Yield used in assignment - result is used, should emit TS7057
+  let source =
+    #|function* f() {
+    #|    var o
+    #|    o = yield o;
+    #|}
+  let result = @compiler.type_check_with_options(
+    source,
+    "test.ts",
+    no_implicit_any=true,
+  )
+  match result {
+    Ok(typed) => {
+      let has_ts7057 = typed.diagnostics.iter().any(
+        fn(d) { d.code == 7057 && d.message.contains("yield") },
+      )
+      if not(has_ts7057) {
+        fail("Expected TS7057 for yield used in assignment")
+      }
+    }
+    Err(_) => ()
+  }
+}
+
+///|
+test "TS7057: yield in return should emit error" {
+  // Yield used in return statement - result is used, should emit TS7057
+  let source =
+    #|function* f() {
+    #|    return yield 0;
+    #|}
+  let result = @compiler.type_check_with_options(
+    source,
+    "test.ts",
+    no_implicit_any=true,
+  )
+  match result {
+    Ok(typed) => {
+      let has_ts7057 = typed.diagnostics.iter().any(
+        fn(d) { d.code == 7057 && d.message.contains("yield") },
+      )
+      if not(has_ts7057) {
+        fail("Expected TS7057 for yield used in return")
+      }
+    }
+    Err(_) => ()
+  }
+}
+
+///|
+test "TS7057: yield in binary expression should emit error" {
+  // Yield used in expression - result is used, should emit TS7057
+  let source =
+    #|function* f() {
+    #|    const x = (yield 0) + 1;
+    #|}
+  let result = @compiler.type_check_with_options(
+    source,
+    "test.ts",
+    no_implicit_any=true,
+  )
+  match result {
+    Ok(typed) => {
+      let has_ts7057 = typed.diagnostics.iter().any(
+        fn(d) { d.code == 7057 && d.message.contains("yield") },
+      )
+      if not(has_ts7057) {
+        fail("Expected TS7057 for yield used in binary expression")
+      }
+    }
+    Err(_) => ()
+  }
+}
+
+///|
+test "TS7057: multiple yields with mixed usage" {
+  // Test that flag is properly reset between statements
+  let source =
+    #|function* f() {
+    #|    yield 0;        // statement-level, no error
+    #|    const x = yield 1;  // used in expression, should error
+    #|    yield 2;        // statement-level, no error
+    #|}
+  let result = @compiler.type_check_with_options(
+    source,
+    "test.ts",
+    no_implicit_any=true,
+  )
+  match result {
+    Ok(typed) => {
+      // Should have exactly 1 TS7057 error for the yield in assignment
+      let ts7057_count = typed.diagnostics.filter(fn(d) { d.code == 7057 }).length()
+      if ts7057_count != 1 {
+        fail("Expected exactly 1 TS7057 error, got \{ts7057_count}")
+      }
+    }
+    Err(_) => ()
+  }
+}
+
+///|
+test "TS7057: yield in conditional should emit error" {
+  // Yield used in conditional expression - result is used
+  let source =
+    #|function* f() {
+    #|    if (yield 0) {
+    #|        console.log("test");
+    #|    }
+    #|}
+  let result = @compiler.type_check_with_options(
+    source,
+    "test.ts",
+    no_implicit_any=true,
+  )
+  match result {
+    Ok(typed) => {
+      let has_ts7057 = typed.diagnostics.iter().any(
+        fn(d) { d.code == 7057 && d.message.contains("yield") },
+      )
+      if not(has_ts7057) {
+        fail("Expected TS7057 for yield used in conditional")
+      }
+    }
+    Err(_) => ()
+  }
+}
+
+///|
+test "TS7057: yield in function call should emit error" {
+  // Yield used as function argument - result is used
+  let source =
+    #|function* f() {
+    #|    console.log(yield 0);
+    #|}
+  let result = @compiler.type_check_with_options(
+    source,
+    "test.ts",
+    no_implicit_any=true,
+  )
+  match result {
+    Ok(typed) => {
+      let has_ts7057 = typed.diagnostics.iter().any(
+        fn(d) { d.code == 7057 && d.message.contains("yield") },
+      )
+      if not(has_ts7057) {
+        fail("Expected TS7057 for yield used in function call")
       }
     }
     Err(_) => ()

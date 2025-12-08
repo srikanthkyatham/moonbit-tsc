@@ -294,6 +294,7 @@ pub struct TypeChecker {
   import_map : Map[String, (String, String)] // Map from local name -> (module_specifier, original_name)
   namespace_symbols : Map[String, Symbol] // Symbols from current namespace for TS2432 enum merging checks
   in_destructuring_pattern : Bool // Tracks if we're inferring type of a destructuring pattern (left side of assignment)
+  in_expression_statement : Bool // Tracks if we're in an expression statement (yield result not used)
   no_implicit_any : Bool // Error on expressions and declarations with an implied 'any' type
   implicit_any_array_vars : @hashset.HashSet[String] // Variables with implicit any[] type (for TS7005)
 } derive(Show)
@@ -375,6 +376,7 @@ pub fn TypeChecker::new_with_options(
     import_map: Map::new(),
     namespace_symbols: Map::new(),
     in_destructuring_pattern: false,
+    in_expression_statement: false,
     no_implicit_any,
     implicit_any_array_vars: @hashset.new(),
   }
@@ -3231,8 +3233,15 @@ fn check_expression_statement(
   checker : TypeChecker,
   expr_stmt : ExpressionStatement,
 ) -> TypeChecker {
+  // Set flag only if the expression is directly a YieldExpression
+  // This indicates the yield result is not used (statement-level yield)
+  let checker = match expr_stmt.expression {
+    YieldExpression(_) => { ..checker, in_expression_statement: true }
+    _ => checker
+  }
   let (_, checker) = infer_type(checker, expr_stmt.expression)
-  checker
+  // Reset flag after checking expression
+  { ..checker, in_expression_statement: false }
 }
 
 ///|
@@ -9431,7 +9440,8 @@ fn infer_yield_expression_type(
       // the yield expression's result (TNext) is implicitly 'any'
       // We emit this error when the yield expression itself is being used (not just as a statement)
       // Only emit for simple yield, not for yield* (delegation)
-      let checker = if checker.no_implicit_any && not(checker.generator_has_return_type) && not(ye.is_delegate) {
+      // Don't emit for statement-level yields (e.g., "yield 0;" where result isn't used)
+      let checker = if checker.no_implicit_any && not(checker.generator_has_return_type) && not(ye.is_delegate) && not(checker.in_expression_statement) {
         add_diagnostic_with_code(
           checker,
           "'yield' expression implicitly results in an 'any' type because its containing generator lacks a return-type annotation.",
