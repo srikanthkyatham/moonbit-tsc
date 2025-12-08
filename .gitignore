@@ -13,3 +13,5 @@ CMakeUserPresets.json
 .claude/
 
 zig_coordinator/
+
+DUPLICATION_ANALYSIS.md

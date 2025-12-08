@@ -8261,12 +8261,31 @@ fn lookup_property_in_type(
       }
       (None, checker)
     }
-    Array(_) =>
+    Array(arr) =>
       // Handle built-in array properties
       match prop_name {
         "length" => {
           let (num_type, checker) = number_type(checker)
           (Some(num_type), checker)
+        }
+        "values" => {
+          // Array.prototype.values() returns IterableIterator<T>
+          // where T is the element type of the array
+          let (info, checker) = create_type_info(checker)
+          let iter_type = Type::TypeReference({
+            name: "IterableIterator",
+            type_arguments: [arr.element_type],
+            info,
+          })
+
+          // Return a function type: () => IterableIterator<T>
+          let (fn_info, checker) = create_type_info(checker)
+          let values_fn = Type::Function({
+            parameters: [],
+            return_type: iter_type,
+            info: fn_info,
+          })
+          (Some(values_fn), checker)
         }
         _ => (None, checker)
       }
@@ -15074,11 +15093,37 @@ fn get_for_of_element_type(
           // For complex types (Object, TypeReference, etc.), fall back to 'any'
           // to avoid false positives when Symbol.iterator might be present but
           // not yet resolved in the type system
-          let should_error = match iterable_type {
-            Number(_) | Boolean(_) | Null(_) | Undefined(_) | Void(_) => true
-            Object(_) | TypeReference(_) | Union(_) | Intersection(_) => false
-            Any(_) => false // any is always iterable
-            _ => false // Default: don't error for complex types
+
+          // Special case: Check if this is an Object with next() but no [Symbol.iterator]()
+          // This is a direct iterator being used incorrectly (TS2488)
+          // IMPORTANT: Only check this if extract_iterable_element_type returned None
+          // (meaning [Symbol.iterator]() was not found or didn't work)
+          let is_direct_iterator = match iterable_type {
+            Object(obj) => {
+              let mut has_next = false
+              for entry in obj.properties {
+                let (prop_name, _) = entry
+                if prop_name == "next" {
+                  has_next = true
+                  break
+                }
+              }
+              // It's a direct iterator if it has next() but we couldn't extract
+              // the iterable element type (meaning no working [Symbol.iterator]())
+              has_next
+            }
+            _ => false
+          }
+
+          let should_error = if is_direct_iterator {
+            true // Error: has next() but no [Symbol.iterator]()
+          } else {
+            match iterable_type {
+              Number(_) | Boolean(_) | Null(_) | Undefined(_) | Void(_) => true
+              Object(_) | TypeReference(_) | Union(_) | Intersection(_) => false
+              Any(_) => false // any is always iterable
+              _ => false // Default: don't error for complex types
+            }
           }
 
           let checker = if should_error {
