@@ -1701,7 +1701,19 @@ fn parse_primary_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
           advance_parser(parser),
         ),
       )
-    _ => Err(add_error(parser, "Unexpected token", token.location()))
+    // Allow any contextual keyword as an identifier in expression position
+    // This covers from, as, of, await, yield, and other contextual keywords
+    _ =>
+      match try_get_identifier_name(token) {
+        Some((name, loc)) =>
+          Ok(
+            (
+              Node::Identifier(Identifier::{ name, location: loc }),
+              advance_parser(parser),
+            ),
+          )
+        None => Err(add_error(parser, "Unexpected token", token.location()))
+      }
   }
 }
 

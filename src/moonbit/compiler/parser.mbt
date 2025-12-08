@@ -2306,30 +2306,14 @@ fn parse_function_declaration(
   }
 
   // Function name (optional for function expressions and export default)
-  // Keywords like 'declare' can be used as function names
-  let (name, parser) = match current_token(parser) {
-    Identifier(id_name, loc) =>
+  // Use try_get_identifier_name to allow all contextual keywords as function names
+  let (name, parser) = match try_get_identifier_name(current_token(parser)) {
+    Some((id_name, loc)) =>
       (
         Some(Node::Identifier(Identifier::{ name: id_name, location: loc })),
         advance_parser(parser),
       )
-    // Contextual keywords that can be used as function names
-    KeywordDeclare(loc) =>
-      (
-        Some(Node::Identifier(Identifier::{ name: "declare", location: loc })),
-        advance_parser(parser),
-      )
-    KeywordAsync(loc) =>
-      (
-        Some(Node::Identifier(Identifier::{ name: "async", location: loc })),
-        advance_parser(parser),
-      )
-    KeywordUsing(loc) =>
-      (
-        Some(Node::Identifier(Identifier::{ name: "using", location: loc })),
-        advance_parser(parser),
-      )
-    _ => (None, parser) // Anonymous function - no error, name is optional
+    None => (None, parser) // Anonymous function - no error, name is optional
   }
 
   // Type parameters
