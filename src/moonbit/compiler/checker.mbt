@@ -6052,6 +6052,7 @@ fn infer_class_declaration_type(
         let (method_type, c) = infer_method_type(checker, method_decl)
         checker = c
         let is_static = has_modifier(method_decl.modifiers, Modifier::Static)
+        // The method name might be "__@iterator" for Symbol.iterator
         let prop_sig = PropertySignature::{
           name: method_decl.name,
           prop_type: method_type,
@@ -13486,13 +13487,18 @@ fn extract_iterable_element_type(
         }
       }
     Object(obj) => {
-      // Check if it has [Symbol.iterator]() method
-      // Symbol.iterator can be represented in different ways: "__@iterator", etc.
+      // If this is a class instance (has class_name), we should have the methods in properties already
+      // But let's check for [Symbol.iterator]() method
+      // Symbol.iterator can be represented in different ways: "__@iterator", "[Symbol.iterator]", etc.
       let mut iterator_method_type : Type? = None
       for entry in obj.properties {
         let (prop_name, prop) = entry
-        // Check for Symbol.iterator - it's stored as "__@iterator"
-        if prop_name == "__@iterator" {
+        // Check for Symbol.iterator - stored as "__@iterator" by get_property_name()
+        // Also check for other possible representations
+        if prop_name == "__@iterator" ||
+          prop_name == "[Symbol.iterator]" ||
+          prop_name.contains("iterator") ||
+          prop_name.contains("Iterator") {
           iterator_method_type = Some(prop.prop_type)
           break
         }
