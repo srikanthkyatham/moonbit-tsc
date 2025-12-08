@@ -4206,70 +4206,14 @@ fn get_console_type(checker : TypeChecker) -> (Type, TypeChecker) {
   let default_flags = TypeFlags::default()
   let void_info = TypeInfo::{ id: 0, flags: default_flags }
 
-  // Console methods accept any number of any type arguments via rest parameter
-  let rest_param = CheckerParameter::{
-    name: "data",
-    param_type: Type::Any(void_info),
-    is_optional: false,
-    is_rest: true,
-  }
+  // All console methods accept any number of any type arguments via rest parameter
+  // and return void
+  console_methods.set("log", make_rest_method("log", "data", TKAny, TKVoid, void_info))
+  console_methods.set("warn", make_rest_method("warn", "data", TKAny, TKVoid, void_info))
+  console_methods.set("error", make_rest_method("error", "data", TKAny, TKVoid, void_info))
+  console_methods.set("info", make_rest_method("info", "data", TKAny, TKVoid, void_info))
+  console_methods.set("debug", make_rest_method("debug", "data", TKAny, TKVoid, void_info))
 
-  // Add common console methods (all accept any args and return void)
-  let log_method = PropertySignature::{
-    name: "log",
-    prop_type: Type::Function(CheckerFunctionType::{
-      parameters: [rest_param],
-      return_type: Type::Void(void_info),
-      info: void_info,
-    }),
-    is_optional: false,
-    is_readonly: false,
-  }
-  console_methods.set("log", log_method)
-  let warn_method = PropertySignature::{
-    name: "warn",
-    prop_type: Type::Function(CheckerFunctionType::{
-      parameters: [rest_param],
-      return_type: Type::Void(void_info),
-      info: void_info,
-    }),
-    is_optional: false,
-    is_readonly: false,
-  }
-  console_methods.set("warn", warn_method)
-  let error_method = PropertySignature::{
-    name: "error",
-    prop_type: Type::Function(CheckerFunctionType::{
-      parameters: [rest_param],
-      return_type: Type::Void(void_info),
-      info: void_info,
-    }),
-    is_optional: false,
-    is_readonly: false,
-  }
-  console_methods.set("error", error_method)
-  let info_method = PropertySignature::{
-    name: "info",
-    prop_type: Type::Function(CheckerFunctionType::{
-      parameters: [rest_param],
-      return_type: Type::Void(void_info),
-      info: void_info,
-    }),
-    is_optional: false,
-    is_readonly: false,
-  }
-  console_methods.set("info", info_method)
-  let debug_method = PropertySignature::{
-    name: "debug",
-    prop_type: Type::Function(CheckerFunctionType::{
-      parameters: [rest_param],
-      return_type: Type::Void(void_info),
-      info: void_info,
-    }),
-    is_optional: false,
-    is_readonly: false,
-  }
-  console_methods.set("debug", debug_method)
   let console_type = Type::Object(ObjectType::{
     properties: console_methods,
     call_signatures: [],
@@ -4289,45 +4233,12 @@ fn get_json_type(checker : TypeChecker) -> (Type, TypeChecker) {
   let default_flags = TypeFlags::default()
   let info = TypeInfo::{ id: 0, flags: default_flags }
 
-  // JSON.parse
-  let parse_method = PropertySignature::{
-    name: "parse",
-    prop_type: Type::Function(CheckerFunctionType::{
-      parameters: [
-        CheckerParameter::{
-          name: "text",
-          param_type: Type::String(info),
-          is_optional: false,
-          is_rest: false,
-        },
-      ],
-      return_type: Type::Any(info),
-      info,
-    }),
-    is_optional: false,
-    is_readonly: false,
-  }
-  json_methods.set("parse", parse_method)
+  // JSON.parse - takes string, returns any
+  json_methods.set("parse", make_unary_method("parse", "text", TKString, TKAny, info))
 
-  // JSON.stringify
-  let stringify_method = PropertySignature::{
-    name: "stringify",
-    prop_type: Type::Function(CheckerFunctionType::{
-      parameters: [
-        CheckerParameter::{
-          name: "value",
-          param_type: Type::Any(info),
-          is_optional: false,
-          is_rest: false,
-        },
-      ],
-      return_type: Type::String(info),
-      info,
-    }),
-    is_optional: false,
-    is_readonly: false,
-  }
-  json_methods.set("stringify", stringify_method)
+  // JSON.stringify - takes any, returns string
+  json_methods.set("stringify", make_unary_method("stringify", "value", TKAny, TKString, info))
+
   let json_type = Type::Object(ObjectType::{
     properties: json_methods,
     call_signatures: [],
