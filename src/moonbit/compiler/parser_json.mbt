@@ -223,26 +223,30 @@ fn parse_json_object(parser : Parser) -> Result[(Node, Parser), Parser] {
         match current_token(parser) {
           Comma(_) => {
             parser = advance_parser(parser)
-            // Check for trailing comma (not allowed in strict JSON)
-            if matches_close_brace(current_token(parser)) {
-              let loc = current_token(parser).location()
-              let parser = add_error_with_code(
-                parser,
-                JSONTrailingComma.to_message(),
-                loc,
-                JSONTrailingComma,
-              )
-              // Continue anyway to be lenient
-              let parser = advance_parser(parser)
-              return Ok(
-                (
-                  Node::ObjectLiteralExpression(ObjectLiteralExpression::{
-                    properties,
-                    location: start_loc,
-                  }),
-                  parser,
-                ),
-              )
+            // Check for trailing comma using helper
+            match handle_trailing_comma(
+              parser,
+              matches_close_brace,
+              TrailingCommaMode::Error(ParserErrorCode::JSONTrailingComma),
+            ) {
+              Ok((true, p)) => {
+                // Trailing comma detected, close object
+                parser = advance_parser(p)
+                return Ok(
+                  (
+                    Node::ObjectLiteralExpression(ObjectLiteralExpression::{
+                      properties,
+                      location: start_loc,
+                    }),
+                    parser,
+                  ),
+                )
+              }
+              Ok((false, p)) => {
+                // No trailing comma, continue loop
+                parser = p
+              }
+              Err(p) => return Err(p)
             }
           }
           CloseBrace(_) => {
@@ -334,26 +338,30 @@ fn parse_json_array(parser : Parser) -> Result[(Node, Parser), Parser] {
     match current_token(parser) {
       Comma(_) => {
         parser = advance_parser(parser)
-        // Check for trailing comma (not allowed in strict JSON)
-        if matches_close_bracket(current_token(parser)) {
-          let loc = current_token(parser).location()
-          let parser = add_error_with_code(
-            parser,
-            JSONTrailingComma.to_message(),
-            loc,
-            JSONTrailingComma,
-          )
-          // Continue anyway to be lenient
-          let parser = advance_parser(parser)
-          return Ok(
-            (
-              Node::ArrayLiteralExpression(ArrayLiteralExpression::{
-                elements,
-                location: start_loc,
-              }),
-              parser,
-            ),
-          )
+        // Check for trailing comma using helper
+        match handle_trailing_comma(
+          parser,
+          matches_close_bracket,
+          TrailingCommaMode::Error(ParserErrorCode::JSONTrailingComma),
+        ) {
+          Ok((true, p)) => {
+            // Trailing comma detected, close array
+            parser = advance_parser(p)
+            return Ok(
+              (
+                Node::ArrayLiteralExpression(ArrayLiteralExpression::{
+                  elements,
+                  location: start_loc,
+                }),
+                parser,
+              ),
+            )
+          }
+          Ok((false, p)) => {
+            // No trailing comma, continue loop
+            parser = p
+          }
+          Err(p) => return Err(p)
         }
       }
       CloseBracket(_) => {

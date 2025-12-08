@@ -15,3 +15,4 @@ CMakeUserPresets.json
 zig_coordinator/
 
 DUPLICATION_ANALYSIS.md
+parser_duplication_analysis.md
