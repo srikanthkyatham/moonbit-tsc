@@ -10625,6 +10625,28 @@ fn infer_array_literal_type(
   (Array({ element_type: elem_union, info }), checker)
 }
 
+///| Check if a type is valid for computed property names (TS2464)
+///| Valid types: string, number, symbol, any
+fn is_valid_computed_property_type(t : Type) -> Bool {
+  match t {
+    String(_) | Number(_) | Symbol(_) | Any(_) => true
+    Union(u) =>
+      // For unions, all constituent types must be valid
+      u.types.iter().all(fn(typ) { is_valid_computed_property_type(typ) })
+    _ => false
+  }
+}
+
+///| Check if a type is a simple literal type or unique symbol for class property names (TS1166)
+///| Valid types: string literals, number literals, unique symbols
+///| Note: For now, we accept all symbol types. Full unique symbol checking can be added later.
+fn is_valid_class_property_computed_name_type(t : Type) -> Bool {
+  match t {
+    StringLiteral(_) | NumberLiteral(_) | Symbol(_) => true
+    _ => false
+  }
+}
+
 ///|
 /// Infer object literal type
 fn infer_object_literal_type(
@@ -10645,11 +10667,22 @@ fn infer_object_literal_type(
         })
         checker = c
       }
-      ComputedPropertyAssignment(name_expr, value, _) => {
+      ComputedPropertyAssignment(name_expr, value, loc) => {
         // For computed properties, try to get the property name from string/identifier
         let key = get_property_name(name_expr)
         let key = if key == "" { "[computed]" } else { key }
-        let (_, c) = infer_type(checker, name_expr)
+        let (name_type, c) = infer_type(checker, name_expr)
+        // TS2464: Check if computed property name type is valid
+        let c = if not(is_valid_computed_property_type(name_type)) {
+          add_diagnostic_with_code(
+            c,
+            "A computed property name must be of type 'string', 'number', 'symbol', or 'any'.",
+            loc,
+            TS2464,
+          )
+        } else {
+          c
+        }
         let (prop_type, c) = infer_type(c, value)
         properties.set(key, {
           name: key,
@@ -10790,11 +10823,22 @@ fn infer_object_literal_type(
         }
         checker = c
       }
-      ComputedMethodDeclaration(name_expr, func_expr, _) => {
+      ComputedMethodDeclaration(name_expr, func_expr, loc) => {
         // Computed method: { [expr]() { ... } }
         let key = get_property_name(name_expr)
         let key = if key == "" { "[computed]" } else { key }
-        let (_, c) = infer_type(checker, name_expr)
+        let (name_type, c) = infer_type(checker, name_expr)
+        // TS2464: Check if computed property name type is valid
+        let c = if not(is_valid_computed_property_type(name_type)) {
+          add_diagnostic_with_code(
+            c,
+            "A computed property name must be of type 'string', 'number', 'symbol', or 'any'.",
+            loc,
+            TS2464,
+          )
+        } else {
+          c
+        }
         let (method_type, c) = infer_function_expression_type(c, func_expr)
         properties.set(key, {
           name: key,
@@ -10804,11 +10848,22 @@ fn infer_object_literal_type(
         })
         checker = c
       }
-      ComputedGetAccessor(name_expr, func_expr, _) => {
+      ComputedGetAccessor(name_expr, func_expr, loc) => {
         // Computed getter: { get [expr]() { ... } }
         let key = get_property_name(name_expr)
         let key = if key == "" { "[computed]" } else { key }
-        let (_, c) = infer_type(checker, name_expr)
+        let (name_type, c) = infer_type(checker, name_expr)
+        // TS2464: Check if computed property name type is valid
+        let c = if not(is_valid_computed_property_type(name_type)) {
+          add_diagnostic_with_code(
+            c,
+            "A computed property name must be of type 'string', 'number', 'symbol', or 'any'.",
+            loc,
+            TS2464,
+          )
+        } else {
+          c
+        }
         let (getter_type, c) = infer_function_expression_type(c, func_expr)
         let prop_type = match getter_type {
           Function(func_type) => func_type.return_type
@@ -10822,11 +10877,22 @@ fn infer_object_literal_type(
         })
         checker = c
       }
-      ComputedSetAccessor(name_expr, func_expr, _) => {
+      ComputedSetAccessor(name_expr, func_expr, loc) => {
         // Computed setter: { set [expr](value) { ... } }
         let key = get_property_name(name_expr)
         let key = if key == "" { "[computed]" } else { key }
-        let (_, c) = infer_type(checker, name_expr)
+        let (name_type, c) = infer_type(checker, name_expr)
+        // TS2464: Check if computed property name type is valid
+        let c = if not(is_valid_computed_property_type(name_type)) {
+          add_diagnostic_with_code(
+            c,
+            "A computed property name must be of type 'string', 'number', 'symbol', or 'any'.",
+            loc,
+            TS2464,
+          )
+        } else {
+          c
+        }
         let (setter_type, c) = infer_function_expression_type(c, func_expr)
         let prop_type = match setter_type {
           Function(func_type) =>

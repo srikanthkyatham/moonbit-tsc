@@ -597,3 +597,174 @@ test "Regular property SHOULD be checked against index signature" {
     Err(_) => () // Also acceptable - parse error
   }
 }
+
+// ============================================================================
+// TS2464: Computed Property Name Type Validation
+// Tests that computed property names must be of type 'string', 'number', 'symbol', or 'any'
+// ============================================================================
+
+///|
+test "TS2464: Computed property with typeof Symbol should error" {
+  let source =
+    #|var s = Symbol;
+    #|var x = {
+    #|    [s]: 0
+    #|};
+  let result = @compiler.type_check(source, "test.ts")
+  match result {
+    Ok(typed) => {
+      let has_ts2464 = typed.diagnostics
+        .iter()
+        .any(fn(d) {
+          d.code == 2464 &&
+          d.message.contains(
+            "A computed property name must be of type 'string', 'number', 'symbol', or 'any'",
+          )
+        })
+      if not(has_ts2464) {
+        fail("Should report TS2464 for computed property with typeof Symbol")
+      }
+    }
+    Err(_) => () // Also acceptable
+  }
+}
+
+///|
+test "TS2464: Computed method with typeof Symbol should error" {
+  let source =
+    #|var s = Symbol;
+    #|var x = {
+    #|    [s]() { }
+    #|};
+  let result = @compiler.type_check(source, "test.ts")
+  match result {
+    Ok(typed) => {
+      let has_ts2464 = typed.diagnostics
+        .iter()
+        .any(fn(d) {
+          d.code == 2464 &&
+          d.message.contains(
+            "A computed property name must be of type 'string', 'number', 'symbol', or 'any'",
+          )
+        })
+      if not(has_ts2464) {
+        fail("Should report TS2464 for computed method with typeof Symbol")
+      }
+    }
+    Err(_) => () // Also acceptable
+  }
+}
+
+///|
+test "TS2464: Computed getter with typeof Symbol should error" {
+  let source =
+    #|var s = Symbol;
+    #|var x = {
+    #|    get [s]() { return 0; }
+    #|};
+  let result = @compiler.type_check(source, "test.ts")
+  match result {
+    Ok(typed) => {
+      let has_ts2464 = typed.diagnostics
+        .iter()
+        .any(fn(d) {
+          d.code == 2464 &&
+          d.message.contains(
+            "A computed property name must be of type 'string', 'number', 'symbol', or 'any'",
+          )
+        })
+      if not(has_ts2464) {
+        fail("Should report TS2464 for computed getter with typeof Symbol")
+      }
+    }
+    Err(_) => () // Also acceptable
+  }
+}
+
+///|
+test "TS2464: Computed setter with typeof Symbol should error" {
+  let source =
+    #|var s = Symbol;
+    #|var x = {
+    #|    set [s](v) { }
+    #|};
+  let result = @compiler.type_check(source, "test.ts")
+  match result {
+    Ok(typed) => {
+      let has_ts2464 = typed.diagnostics
+        .iter()
+        .any(fn(d) {
+          d.code == 2464 &&
+          d.message.contains(
+            "A computed property name must be of type 'string', 'number', 'symbol', or 'any'",
+          )
+        })
+      if not(has_ts2464) {
+        fail("Should report TS2464 for computed setter with typeof Symbol")
+      }
+    }
+    Err(_) => () // Also acceptable
+  }
+}
+
+///|
+test "TS2464: Computed property with Symbol.iterator (valid) should pass" {
+  let source =
+    #|var x = {
+    #|    [Symbol.iterator]: 0
+    #|};
+  let result = @compiler.type_check(source, "test.ts")
+  match result {
+    Ok(typed) => {
+      let has_ts2464 = typed.diagnostics
+        .iter()
+        .any(fn(d) { d.code == 2464 })
+      if has_ts2464 {
+        fail(
+          "Should NOT report TS2464 for computed property with Symbol.iterator (symbol type)",
+        )
+      }
+    }
+    Err(_) => fail("Computed property with Symbol.iterator should parse")
+  }
+}
+
+///|
+test "TS2464: Computed property with string literal (valid) should pass" {
+  let source =
+    #|var x = {
+    #|    ["key"]: 0
+    #|};
+  let result = @compiler.type_check(source, "test.ts")
+  match result {
+    Ok(typed) => {
+      let has_ts2464 = typed.diagnostics
+        .iter()
+        .any(fn(d) { d.code == 2464 })
+      if has_ts2464 {
+        fail("Should NOT report TS2464 for computed property with string literal")
+      }
+    }
+    Err(_) => fail("Computed property with string literal should parse")
+  }
+}
+
+///|
+test "TS2464: Computed property with number literal (valid) should pass" {
+  let source =
+    #|var x = {
+    #|    [42]: 0
+    #|};
+  let result = @compiler.type_check(source, "test.ts")
+  match result {
+    Ok(typed) => {
+      let has_ts2464 = typed.diagnostics
+        .iter()
+        .any(fn(d) { d.code == 2464 })
+      if has_ts2464 {
+        fail("Should NOT report TS2464 for computed property with number literal")
+      }
+    }
+    Err(_) => fail("Computed property with number literal should parse")
+  }
+}
