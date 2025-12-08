@@ -3392,6 +3392,15 @@ fn infer_type_with_context(
       // Array literal with tuple type annotation - infer as tuple
       (ArrayLiteralExpression(arr), Some(Tuple(tuple_type))) =>
         infer_tuple_from_array_literal(checker, arr, tuple_type)
+      // Array literal with array-of-tuples type annotation (for const too)
+      // e.g., const array: [number, string][] = [[0, "hello"]]
+      (ArrayLiteralExpression(arr), Some(Array(arr_type))) =>
+        match arr_type.element_type {
+          Tuple(tuple_type) =>
+            // Infer as array of tuples with contextual typing for each element
+            infer_array_with_tuple_elements(checker, arr, tuple_type)
+          _ => infer_type(checker, expr)
+        }
       // For other cases, fall back to regular inference
       _ => infer_type(checker, expr)
     }
@@ -3401,6 +3410,15 @@ fn infer_type_with_context(
       // Array literal with tuple type annotation - infer as tuple (for var/let too)
       (ArrayLiteralExpression(arr), Some(Tuple(tuple_type))) =>
         infer_tuple_from_array_literal(checker, arr, tuple_type)
+      // Array literal with array-of-tuples type annotation
+      // e.g., var array: [number, string][] = [[0, "hello"]]
+      (ArrayLiteralExpression(arr), Some(Array(arr_type))) =>
+        match arr_type.element_type {
+          Tuple(tuple_type) =>
+            // Infer as array of tuples with contextual typing for each element
+            infer_array_with_tuple_elements(checker, arr, tuple_type)
+          _ => infer_type(checker, expr)
+        }
       _ => infer_type(checker, expr)
     }
   }
@@ -3494,6 +3512,57 @@ fn infer_tuple_from_array_literal(
   }
   let (info, checker) = create_type_info(checker)
   (Tuple(CheckerTupleType::{ element_types, info }), checker)
+}
+
+///|
+/// Infer array literal as array of tuples with contextual typing
+/// Used when: var array: [number, string][] = [[0, "hello"]]
+fn infer_array_with_tuple_elements(
+  checker : TypeChecker,
+  arr : ArrayLiteralExpression,
+  tuple_type : CheckerTupleType,
+) -> (Type, TypeChecker) {
+  let mut checker = checker
+  let inferred_elements = []
+
+  // Infer each element with the tuple type as context
+  for i = 0; i < arr.elements.length(); i = i + 1 {
+    match arr.elements[i] {
+      Some(elem_node) => {
+        // Each element should be inferred as a tuple with the contextual type
+        match elem_node {
+          ArrayLiteralExpression(inner_arr) => {
+            // Infer this inner array as a tuple
+            let (elem_type, c) = infer_tuple_from_array_literal(
+              checker, inner_arr, tuple_type,
+            )
+            checker = c
+            inferred_elements.push(elem_type)
+          }
+          _ => {
+            // Non-array element - infer normally
+            let (elem_type, c) = infer_type(checker, elem_node)
+            checker = c
+            inferred_elements.push(elem_type)
+          }
+        }
+      }
+      None => {
+        // Hole in array - use undefined
+        let (t, c) = undefined_type(checker)
+        checker = c
+        inferred_elements.push(t)
+      }
+    }
+  }
+
+  // Create an array type where the element type is the tuple type
+  let (info, checker) = create_type_info(checker)
+  let array_type = Array(CheckerArrayType::{
+    element_type: Tuple(tuple_type),
+    info,
+  })
+  (array_type, checker)
 }
 
 ///|
