@@ -4258,302 +4258,26 @@ fn get_math_type(checker : TypeChecker) -> (Type, TypeChecker) {
   let default_flags = TypeFlags::default()
   let info = TypeInfo::{ id: 0, flags: default_flags }
 
-  // Math.abs
-  let abs_method = PropertySignature::{
-    name: "abs",
-    prop_type: Type::Function(CheckerFunctionType::{
-      parameters: [
-        CheckerParameter::{
-          name: "x",
-          param_type: Type::Number(info),
-          is_optional: false,
-          is_rest: false,
-        },
-      ],
-      return_type: Type::Number(info),
-      info,
-    }),
-    is_optional: false,
-    is_readonly: false,
+  // Unary math methods (number -> number)
+  let unary_methods = ["abs", "floor", "ceil", "sqrt", "sin", "cos", "tan", "round", "log", "exp"]
+  for method_name in unary_methods {
+    math_methods.set(method_name, make_unary_method(method_name, "x", TKNumber, TKNumber, info))
   }
-  math_methods.set("abs", abs_method)
 
-  // Math.floor
-  let floor_method = PropertySignature::{
-    name: "floor",
-    prop_type: Type::Function(CheckerFunctionType::{
-      parameters: [
-        CheckerParameter::{
-          name: "x",
-          param_type: Type::Number(info),
-          is_optional: false,
-          is_rest: false,
-        },
-      ],
-      return_type: Type::Number(info),
-      info,
-    }),
-    is_optional: false,
-    is_readonly: false,
-  }
-  math_methods.set("floor", floor_method)
+  // Nullary methods
+  math_methods.set("random", make_nullary_method("random", TKNumber, info))
 
-  // Math.ceil
-  let ceil_method = PropertySignature::{
-    name: "ceil",
-    prop_type: Type::Function(CheckerFunctionType::{
-      parameters: [
-        CheckerParameter::{
-          name: "x",
-          param_type: Type::Number(info),
-          is_optional: false,
-          is_rest: false,
-        },
-      ],
-      return_type: Type::Number(info),
-      info,
-    }),
-    is_optional: false,
-    is_readonly: false,
-  }
-  math_methods.set("ceil", ceil_method)
+  // Rest parameter methods
+  math_methods.set("max", make_rest_method("max", "values", TKNumber, TKNumber, info))
+  math_methods.set("min", make_rest_method("min", "values", TKNumber, TKNumber, info))
 
-  // Math.random
-  let random_method = PropertySignature::{
-    name: "random",
-    prop_type: Type::Function(CheckerFunctionType::{
-      parameters: [],
-      return_type: Type::Number(info),
-      info,
-    }),
-    is_optional: false,
-    is_readonly: false,
-  }
-  math_methods.set("random", random_method)
+  // Binary method
+  math_methods.set("pow", make_binary_method("pow", "base", TKNumber, "exponent", TKNumber, TKNumber, info))
 
-  // Math.sqrt
-  let sqrt_method = PropertySignature::{
-    name: "sqrt",
-    prop_type: Type::Function(CheckerFunctionType::{
-      parameters: [
-        CheckerParameter::{
-          name: "x",
-          param_type: Type::Number(info),
-          is_optional: false,
-          is_rest: false,
-        },
-      ],
-      return_type: Type::Number(info),
-      info,
-    }),
-    is_optional: false,
-    is_readonly: false,
-  }
-  math_methods.set("sqrt", sqrt_method)
+  // Constants
+  math_methods.set("PI", make_readonly_property("PI", Type::Number(info)))
+  math_methods.set("E", make_readonly_property("E", Type::Number(info)))
 
-  // Math.PI
-  let pi_prop = PropertySignature::{
-    name: "PI",
-    prop_type: Type::Number(info),
-    is_optional: false,
-    is_readonly: true,
-  }
-  math_methods.set("PI", pi_prop)
-
-  // Math.sin
-  let sin_method = PropertySignature::{
-    name: "sin",
-    prop_type: Type::Function(CheckerFunctionType::{
-      parameters: [
-        CheckerParameter::{
-          name: "x",
-          param_type: Type::Number(info),
-          is_optional: false,
-          is_rest: false,
-        },
-      ],
-      return_type: Type::Number(info),
-      info,
-    }),
-    is_optional: false,
-    is_readonly: false,
-  }
-  math_methods.set("sin", sin_method)
-
-  // Math.cos
-  let cos_method = PropertySignature::{
-    name: "cos",
-    prop_type: Type::Function(CheckerFunctionType::{
-      parameters: [
-        CheckerParameter::{
-          name: "x",
-          param_type: Type::Number(info),
-          is_optional: false,
-          is_rest: false,
-        },
-      ],
-      return_type: Type::Number(info),
-      info,
-    }),
-    is_optional: false,
-    is_readonly: false,
-  }
-  math_methods.set("cos", cos_method)
-
-  // Math.tan
-  let tan_method = PropertySignature::{
-    name: "tan",
-    prop_type: Type::Function(CheckerFunctionType::{
-      parameters: [
-        CheckerParameter::{
-          name: "x",
-          param_type: Type::Number(info),
-          is_optional: false,
-          is_rest: false,
-        },
-      ],
-      return_type: Type::Number(info),
-      info,
-    }),
-    is_optional: false,
-    is_readonly: false,
-  }
-  math_methods.set("tan", tan_method)
-
-  // Math.max (rest parameter)
-  let max_method = PropertySignature::{
-    name: "max",
-    prop_type: Type::Function(CheckerFunctionType::{
-      parameters: [
-        CheckerParameter::{
-          name: "values",
-          param_type: Type::Number(info),
-          is_optional: false,
-          is_rest: true,
-        },
-      ],
-      return_type: Type::Number(info),
-      info,
-    }),
-    is_optional: false,
-    is_readonly: false,
-  }
-  math_methods.set("max", max_method)
-
-  // Math.min (rest parameter)
-  let min_method = PropertySignature::{
-    name: "min",
-    prop_type: Type::Function(CheckerFunctionType::{
-      parameters: [
-        CheckerParameter::{
-          name: "values",
-          param_type: Type::Number(info),
-          is_optional: false,
-          is_rest: true,
-        },
-      ],
-      return_type: Type::Number(info),
-      info,
-    }),
-    is_optional: false,
-    is_readonly: false,
-  }
-  math_methods.set("min", min_method)
-
-  // Math.pow
-  let pow_method = PropertySignature::{
-    name: "pow",
-    prop_type: Type::Function(CheckerFunctionType::{
-      parameters: [
-        CheckerParameter::{
-          name: "base",
-          param_type: Type::Number(info),
-          is_optional: false,
-          is_rest: false,
-        },
-        CheckerParameter::{
-          name: "exponent",
-          param_type: Type::Number(info),
-          is_optional: false,
-          is_rest: false,
-        },
-      ],
-      return_type: Type::Number(info),
-      info,
-    }),
-    is_optional: false,
-    is_readonly: false,
-  }
-  math_methods.set("pow", pow_method)
-
-  // Math.round
-  let round_method = PropertySignature::{
-    name: "round",
-    prop_type: Type::Function(CheckerFunctionType::{
-      parameters: [
-        CheckerParameter::{
-          name: "x",
-          param_type: Type::Number(info),
-          is_optional: false,
-          is_rest: false,
-        },
-      ],
-      return_type: Type::Number(info),
-      info,
-    }),
-    is_optional: false,
-    is_readonly: false,
-  }
-  math_methods.set("round", round_method)
-
-  // Math.log
-  let log_method = PropertySignature::{
-    name: "log",
-    prop_type: Type::Function(CheckerFunctionType::{
-      parameters: [
-        CheckerParameter::{
-          name: "x",
-          param_type: Type::Number(info),
-          is_optional: false,
-          is_rest: false,
-        },
-      ],
-      return_type: Type::Number(info),
-      info,
-    }),
-    is_optional: false,
-    is_readonly: false,
-  }
-  math_methods.set("log", log_method)
-
-  // Math.exp
-  let exp_method = PropertySignature::{
-    name: "exp",
-    prop_type: Type::Function(CheckerFunctionType::{
-      parameters: [
-        CheckerParameter::{
-          name: "x",
-          param_type: Type::Number(info),
-          is_optional: false,
-          is_rest: false,
-        },
-      ],
-      return_type: Type::Number(info),
-      info,
-    }),
-    is_optional: false,
-    is_readonly: false,
-  }
-  math_methods.set("exp", exp_method)
-
-  // Math.E
-  let e_prop = PropertySignature::{
-    name: "E",
-    prop_type: Type::Number(info),
-    is_optional: false,
-    is_readonly: true,
-  }
-  math_methods.set("E", e_prop)
   let math_type = Type::Object(ObjectType::{
     properties: math_methods,
     call_signatures: [],
@@ -4573,65 +4297,48 @@ fn get_promise_type(checker : TypeChecker) -> (Type, TypeChecker) {
   let default_flags = TypeFlags::default()
   let info = TypeInfo::{ id: 0, flags: default_flags }
 
-  // Promise.resolve
-  let resolve_method = PropertySignature::{
-    name: "resolve",
-    prop_type: Type::Function(CheckerFunctionType::{
-      parameters: [
-        CheckerParameter::{
-          name: "value",
-          param_type: Type::Any(info),
-          is_optional: true,
-          is_rest: false,
-        },
-      ],
-      return_type: Type::Any(info), // Returns Promise<T>
-      info,
-    }),
-    is_optional: false,
-    is_readonly: false,
+  // Promise.resolve - optional parameter
+  let resolve_param = CheckerParameter::{
+    name: "value",
+    param_type: Type::Any(info),
+    is_optional: true,
+    is_rest: false,
   }
-  promise_methods.set("resolve", resolve_method)
+  promise_methods.set("resolve", make_method_property(
+    "resolve",
+    [resolve_param],
+    Type::Any(info),
+    info
+  ))
 
-  // Promise.reject
-  let reject_method = PropertySignature::{
-    name: "reject",
-    prop_type: Type::Function(CheckerFunctionType::{
-      parameters: [
-        CheckerParameter::{
-          name: "reason",
-          param_type: Type::Any(info),
-          is_optional: true,
-          is_rest: false,
-        },
-      ],
-      return_type: Type::Any(info), // Returns Promise<never>
-      info,
-    }),
-    is_optional: false,
-    is_readonly: false,
+  // Promise.reject - optional parameter
+  let reject_param = CheckerParameter::{
+    name: "reason",
+    param_type: Type::Any(info),
+    is_optional: true,
+    is_rest: false,
   }
-  promise_methods.set("reject", reject_method)
+  promise_methods.set("reject", make_method_property(
+    "reject",
+    [reject_param],
+    Type::Any(info),
+    info
+  ))
 
-  // Promise.all
-  let all_method = PropertySignature::{
-    name: "all",
-    prop_type: Type::Function(CheckerFunctionType::{
-      parameters: [
-        CheckerParameter::{
-          name: "values",
-          param_type: Type::Any(info),
-          is_optional: false,
-          is_rest: false,
-        },
-      ],
-      return_type: Type::Any(info),
-      info,
-    }),
+  // Promise.all - required parameter
+  let all_param = CheckerParameter::{
+    name: "values",
+    param_type: Type::Any(info),
     is_optional: false,
-    is_readonly: false,
+    is_rest: false,
   }
-  promise_methods.set("all", all_method)
+  promise_methods.set("all", make_method_property(
+    "all",
+    [all_param],
+    Type::Any(info),
+    info
+  ))
+
   let promise_type = Type::Object(ObjectType::{
     properties: promise_methods,
     call_signatures: [],
@@ -4651,52 +4358,17 @@ fn get_date_type(checker : TypeChecker) -> (Type, TypeChecker) {
   let default_flags = TypeFlags::default()
   let info = TypeInfo::{ id: 0, flags: default_flags }
 
-  // Date.now
-  let now_method = PropertySignature::{
-    name: "now",
-    prop_type: Type::Function(CheckerFunctionType::{
-      parameters: [],
-      return_type: Type::Number(info),
-      info,
-    }),
-    is_optional: false,
-    is_readonly: false,
-  }
-  date_methods.set("now", now_method)
+  // Date.now - returns number
+  date_methods.set("now", make_nullary_method("now", TKNumber, info))
 
-  // Date.parse
-  let parse_method = PropertySignature::{
-    name: "parse",
-    prop_type: Type::Function(CheckerFunctionType::{
-      parameters: [
-        CheckerParameter::{
-          name: "s",
-          param_type: Type::String(info),
-          is_optional: false,
-          is_rest: false,
-        },
-      ],
-      return_type: Type::Number(info),
-      info,
-    }),
-    is_optional: false,
-    is_readonly: false,
-  }
-  date_methods.set("parse", parse_method)
+  // Date.parse - string -> number
+  date_methods.set("parse", make_unary_method("parse", "s", TKString, TKNumber, info))
 
   // Create Date instance type with methods like getTime, getFullYear, etc.
   let (instance_id, checker) = next_type_id(checker)
   let instance_methods : Map[String, PropertySignature] = Map::new()
-  instance_methods.set("getTime", PropertySignature::{
-    name: "getTime",
-    prop_type: Type::Function(CheckerFunctionType::{
-      parameters: [],
-      return_type: Type::Number(info),
-      info,
-    }),
-    is_optional: false,
-    is_readonly: false,
-  })
+  instance_methods.set("getTime", make_nullary_method("getTime", TKNumber, info))
+
   let date_instance_type = Type::Object(ObjectType::{
     properties: instance_methods,
     call_signatures: [],
@@ -5310,31 +4982,14 @@ fn get_map_constructor_type(checker : TypeChecker) -> (Type, TypeChecker) {
   let default_flags = TypeFlags::default()
   let info = TypeInfo::{ id: 0, flags: default_flags }
 
-  // Map.groupBy - static method
-  let group_by_method = PropertySignature::{
-    name: "groupBy",
-    prop_type: Type::Function(CheckerFunctionType::{
-      parameters: [
-        CheckerParameter::{
-          name: "items",
-          param_type: Type::Any(info),
-          is_optional: false,
-          is_rest: false,
-        },
-        CheckerParameter::{
-          name: "keySelector",
-          param_type: Type::Any(info),
-          is_optional: false,
-          is_rest: false,
-        },
-      ],
-      return_type: Type::Any(info),
-      info,
-    }),
-    is_optional: false,
-    is_readonly: false,
-  }
-  map_methods.set("groupBy", group_by_method)
+  // Map.groupBy - static method with two parameters
+  map_methods.set("groupBy", make_binary_method(
+    "groupBy",
+    "items", TKAny,
+    "keySelector", TKAny,
+    TKAny,
+    info
+  ))
 
   // Map instance type (returned by new Map())
   let (instance_id, checker) = next_type_id(checker)
