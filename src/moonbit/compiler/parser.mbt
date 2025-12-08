@@ -8749,6 +8749,54 @@ fn parse_for_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
     KeywordOf(_) => {
       // for-of loop
       let parser = advance_parser(parser)
+
+      // TS1188: Validate that only a single variable declaration is allowed
+      let parser = match initializer {
+        Some(Node::VariableStatement(var_stmt)) => {
+          if var_stmt.declarations.length() > 1 {
+            let diagnostics = parser.diagnostics
+            diagnostics.push(Diagnostic::{
+              message: "Only a single variable declaration is allowed in a 'for...of' statement.",
+              location: var_stmt.location,
+              category: DiagnosticCategory::Error,
+              code: 1188,
+            })
+            Parser::{ ..parser, diagnostics }
+          } else {
+            parser
+          }
+        }
+        _ => parser
+      }
+
+      // TS2480: Validate that 'let' is not used as variable name in let/const declarations
+      let parser = match initializer {
+        Some(Node::VariableStatement(var_stmt)) => {
+          if (var_stmt.is_let || var_stmt.is_const) && var_stmt.declarations.length() > 0 {
+            match var_stmt.declarations[0].name {
+              Node::Identifier(id) => {
+                if id.name == "let" {
+                  let diagnostics = parser.diagnostics
+                  diagnostics.push(Diagnostic::{
+                    message: "'let' is not allowed to be used as a name in 'let' or 'const' declarations.",
+                    location: id.location,
+                    category: DiagnosticCategory::Error,
+                    code: 2480,
+                  })
+                  Parser::{ ..parser, diagnostics }
+                } else {
+                  parser
+                }
+              }
+              _ => parser
+            }
+          } else {
+            parser
+          }
+        }
+        _ => parser
+      }
+
       let (expression, parser) = match parse_expression(parser) {
         Ok((expr, p)) => (expr, p)
         Err(p) =>

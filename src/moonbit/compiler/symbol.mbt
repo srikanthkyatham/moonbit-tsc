@@ -344,6 +344,7 @@ pub enum DiagnosticCode {
   TS1182 // A destructuring declaration must have an initializer
   TS1186 // A rest element cannot have an initializer
   TS1187 // A parameter property may not be declared using a binding pattern
+  TS1188 // Only a single variable declaration is allowed in a 'for...of' statement
   TS1221 // Generators are not allowed in an ambient context
   TS1308 // 'await' expressions are only allowed within async functions and at the top levels of modules
   TS1357 // An enum member name must be followed by a ',', '=', or '}'
@@ -467,6 +468,8 @@ pub enum DiagnosticCode {
   TS2476 // A const enum member can only be accessed using a string literal
   TS2477 // 'const' enum member initializer was evaluated to a non-finite value
   TS2478 // 'const' enum member initializer was evaluated to disallowed value 'NaN'
+  TS2480 // '{0}' is not allowed to be used as a name in '{1}' or 'const' declarations
+  TS2481 // Cannot initialize outer scoped variable '{0}' in the same scope as block scoped declaration '{1}'
   TS18004 // No value exists in scope for the shorthand property '{0}'. Either declare one or provide an initializer
   TS18033 // Type '{0}' is not assignable to type 'number' as required for computed enum member values
 
@@ -743,6 +746,7 @@ pub fn DiagnosticCode::to_int(self : DiagnosticCode) -> Int {
     TS1182 => 1182
     TS1186 => 1186
     TS1187 => 1187
+    TS1188 => 1188
     TS1221 => 1221
     TS1308 => 1308
     TS1357 => 1357
@@ -845,6 +849,8 @@ pub fn DiagnosticCode::to_int(self : DiagnosticCode) -> Int {
     TS2476 => 2476
     TS2477 => 2477
     TS2478 => 2478
+    TS2480 => 2480
+    TS2481 => 2481
     // Export & Module Errors (2484-2502)
     TS2484 => 2484
     TS2487 => 2487
@@ -1071,6 +1077,7 @@ pub fn DiagnosticCode::from_int(code : Int) -> DiagnosticCode? {
     1182 => Some(TS1182)
     1186 => Some(TS1186)
     1187 => Some(TS1187)
+    1188 => Some(TS1188)
     1221 => Some(TS1221)
     1308 => Some(TS1308)
     1357 => Some(TS1357)
@@ -1169,6 +1176,8 @@ pub fn DiagnosticCode::from_int(code : Int) -> DiagnosticCode? {
     2476 => Some(TS2476)
     2477 => Some(TS2477)
     2478 => Some(TS2478)
+    2480 => Some(TS2480)
+    2481 => Some(TS2481)
     // Shorthand property and enum errors (18xxx)
     18004 => Some(TS18004)
     18033 => Some(TS18033)
