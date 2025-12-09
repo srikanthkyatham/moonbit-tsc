@@ -10171,6 +10171,117 @@ fn infer_array_literal_type(
               // Check if type is iterable - use extract_iterable_element_type to determine if we can extract an element
               let is_iterable = match spread_type {
                 Array(_) | String(_) => true
+                Object(obj) => {
+                  // Check if it's an interface with Symbol.iterator
+                  match obj.class_name {
+                    Some(name) =>
+                      match lookup_symbol(checker, name) {
+                        Some(symbol) =>
+                          if symbol.kind == Interface {
+                            // Interface - check if it declares Symbol.iterator
+                            let mut has_iterator = false
+                            for entry in obj.properties {
+                              let (prop_name, _) = entry
+                              if prop_name == "__@iterator" || prop_name == "[Symbol.iterator]" {
+                                has_iterator = true
+                                break
+                              }
+                            }
+                            has_iterator
+                          } else {
+                            // Not an interface - try extract
+                            let (elem_type_opt, c) = extract_iterable_element_type(
+                              checker,
+                              spread_type,
+                              None,
+                            )
+                            checker = c
+                            match elem_type_opt {
+                              Some(_) => true
+                              None => false
+                            }
+                          }
+                        None => {
+                          // Symbol not found - try extract
+                          let (elem_type_opt, c) = extract_iterable_element_type(
+                            checker,
+                            spread_type,
+                            None,
+                          )
+                          checker = c
+                          match elem_type_opt {
+                            Some(_) => true
+                            None => false
+                          }
+                        }
+                      }
+                    None => {
+                      // Anonymous object - try extract
+                      let (elem_type_opt, c) = extract_iterable_element_type(
+                        checker,
+                        spread_type,
+                        None,
+                      )
+                      checker = c
+                      match elem_type_opt {
+                        Some(_) => true
+                        None => false
+                      }
+                    }
+                  }
+                }
+                TypeReference(tr) => {
+                  // For TypeReference, check if it resolves to an interface with Symbol.iterator
+                  match lookup_symbol(checker, tr.name) {
+                    Some(symbol) =>
+                      if symbol.kind == Interface {
+                        // Interface - check if it declares Symbol.iterator
+                        match get_symbol_type(checker, symbol) {
+                          (Some(resolved_type), _) =>
+                            match resolved_type {
+                              Object(obj) => {
+                                let mut has_iterator = false
+                                for entry in obj.properties {
+                                  let (prop_name, _) = entry
+                                  if prop_name == "__@iterator" || prop_name == "[Symbol.iterator]" {
+                                    has_iterator = true
+                                    break
+                                  }
+                                }
+                                has_iterator
+                              }
+                              _ => false
+                            }
+                          _ => false
+                        }
+                      } else {
+                        // Not an interface - try extract
+                        let (elem_type_opt, c) = extract_iterable_element_type(
+                          checker,
+                          spread_type,
+                          None,
+                        )
+                        checker = c
+                        match elem_type_opt {
+                          Some(_) => true
+                          None => false
+                        }
+                      }
+                    None => {
+                      // Symbol not found - try extract
+                      let (elem_type_opt, c) = extract_iterable_element_type(
+                        checker,
+                        spread_type,
+                        None,
+                      )
+                      checker = c
+                      match elem_type_opt {
+                        Some(_) => true
+                        None => false
+                      }
+                    }
+                  }
+                }
                 _ => {
                   // Try to extract element type - if successful, it's iterable
                   let (elem_type_opt, c) = extract_iterable_element_type(
