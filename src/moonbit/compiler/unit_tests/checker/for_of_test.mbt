@@ -1234,3 +1234,131 @@ test "for-of - anonymous object with next() but no Symbol.iterator should error"
   // Should report TS2488 for object literals without Symbol.iterator
   assert_true(has_error(diagnostics, 2488))
 }
+
+// ============================================================================
+// PropertyAccessExpression and ElementAccessExpression Type Checking Tests
+// ============================================================================
+
+///|
+test "PropertyAccessExpression - type mismatch in for-of (TS2322)" {
+  let source =
+    #|var obj = { x: 0 };
+    #|for (obj.x of ['a', 'b', 'c']) {
+    #|}
+
+  let result = check_for_of(source)
+  let diagnostics = get_diagnostics(result)
+
+  // Should have TS2322 error: Type 'string' is not assignable to type 'number'
+  assert_true(has_error(diagnostics, 2322))
+}
+
+///|
+test "PropertyAccessExpression - type match in for-of" {
+  let source =
+    #|var obj = { x: 0 };
+    #|for (obj.x of [1, 2, 3]) {
+    #|}
+
+  let result = check_for_of(source)
+
+  // Should have no errors - number[] element is assignable to number property
+  assert_eq(error_count(result), 0)
+}
+
+///|
+test "PropertyAccessExpression - string to number type mismatch" {
+  let source =
+    #|var obj = { value: "hello" };
+    #|for (obj.value of [1, 2, 3]) {
+    #|}
+
+  let result = check_for_of(source)
+  let diagnostics = get_diagnostics(result)
+
+  // Should have TS2322 error: Type 'number' is not assignable to type 'string'
+  assert_true(has_error(diagnostics, 2322))
+}
+
+///|
+test "PropertyAccessExpression - boolean to number type mismatch" {
+  let source =
+    #|var obj = { flag: true };
+    #|for (obj.flag of [1, 2, 3]) {
+    #|}
+
+  let result = check_for_of(source)
+  let diagnostics = get_diagnostics(result)
+
+  // Should have TS2322 error: Type 'number' is not assignable to type 'boolean'
+  assert_true(has_error(diagnostics, 2322))
+}
+
+///|
+test "PropertyAccessExpression - with explicit type annotation" {
+  let source =
+    #|var obj: { x: number } = { x: 0 };
+    #|for (obj.x of ['a', 'b']) {
+    #|}
+
+  let result = check_for_of(source)
+  let diagnostics = get_diagnostics(result)
+
+  // Should have TS2322 error: Type 'string' is not assignable to type 'number'
+  assert_true(has_error(diagnostics, 2322))
+}
+
+///|
+test "PropertyAccessExpression - union type element causes error" {
+  let source =
+    #|var obj = { x: 0 };
+    #|for (obj.x of [1, "two", 3]) {
+    #|}
+
+  let result = check_for_of(source)
+  let diagnostics = get_diagnostics(result)
+
+  // Should have TS2322 error: Type 'string | number' is not assignable to type 'number'
+  assert_true(has_error(diagnostics, 2322))
+}
+
+///|
+test "ElementAccessExpression - type mismatch in for-of (TS2322)" {
+  let source =
+    #|var arr: number[] = [0];
+    #|for (arr[0] of ['a', 'b', 'c']) {
+    #|}
+
+  let result = check_for_of(source)
+  let diagnostics = get_diagnostics(result)
+
+  // Should have TS2322 error: Type 'string' is not assignable to type 'number'
+  assert_true(has_error(diagnostics, 2322))
+}
+
+///|
+test "ElementAccessExpression - type match in for-of" {
+  let source =
+    #|var arr: number[] = [0];
+    #|for (arr[0] of [1, 2, 3]) {
+    #|}
+
+  let result = check_for_of(source)
+
+  // Should have no errors - number[] element is assignable to number array element
+  assert_eq(error_count(result), 0)
+}
+
+///|
+test "PropertyAccessExpression - nested property type mismatch" {
+  let source =
+    #|var obj = { nested: { value: "hello" } };
+    #|for (obj.nested.value of [1, 2, 3]) {
+    #|}
+
+  let result = check_for_of(source)
+  let diagnostics = get_diagnostics(result)
+
+  // Should have TS2322 error: Type 'number' is not assignable to type 'string'
+  assert_true(has_error(diagnostics, 2322))
+}

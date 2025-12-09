@@ -14926,6 +14926,46 @@ fn add_for_of_variable_to_scope(
         }
       }
     }
+    // Handle: for (obj.prop of arr) - property access assignment
+    PropertyAccessExpression(prop_access) => {
+      // Infer the type of the property access to know what type it expects
+      let (prop_type, checker) = infer_type(checker, PropertyAccessExpression(prop_access))
+
+      // TS2322: Type check the element type against the property type
+      if not(is_assignable(elem_type, prop_type)) {
+        let elem_str = type_to_string(elem_type)
+        let prop_str = type_to_string(prop_type)
+        let msg = "Type '\{elem_str}' is not assignable to type '\{prop_str}'."
+        add_diagnostic_with_code(
+          checker,
+          msg,
+          get_node_location(initializer),
+          TS2322,
+        )
+      } else {
+        checker
+      }
+    }
+    // Handle: for (obj["prop"] of arr) - element access assignment
+    ElementAccessExpression(elem_access) => {
+      // Infer the type of the element access to know what type it expects
+      let (access_type, checker) = infer_type(checker, ElementAccessExpression(elem_access))
+
+      // TS2322: Type check the element type against the accessed element type
+      if not(is_assignable(elem_type, access_type)) {
+        let elem_str = type_to_string(elem_type)
+        let access_str = type_to_string(access_type)
+        let msg = "Type '\{elem_str}' is not assignable to type '\{access_str}'."
+        add_diagnostic_with_code(
+          checker,
+          msg,
+          get_node_location(initializer),
+          TS2322,
+        )
+      } else {
+        checker
+      }
+    }
     // Handle: for ([a, b] of arr) or for ({x, y} of arr)
     // Bare destructuring pattern (without var/let/const)
     // Variables should already be declared
