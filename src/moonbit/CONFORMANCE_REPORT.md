@@ -5,23 +5,23 @@
 | Metric | Value |
 |--------|-------|
 | Total Tests | 5,652 |
-| Passed | 3,789 |
-| Failed | 1,863 |
-| **Pass Rate** | **67.0%** |
+| Passed | 3,793 |
+| Failed | 1,859 |
+| **Pass Rate** | **67.1%** |
 
 *Last updated: December 9, 2025*
 
 ## Recent Fixes
 
 ### Current Status (December 9, 2025 - Latest Run)
-- **Pass rate: 67.0% (3,789/5,652 tests)** - up from 66.8% (+0.2%, +11 tests)
+- **Pass rate: 67.1% (3,793/5,652 tests)** - up from 67.0% (+0.1%, +4 tests)
 - **Zero crashes** - All 5,652 conformance tests complete successfully without crashes
 - **Failure breakdown**:
-  - Should PASS but failed: 1,010 tests
+  - Should PASS but failed: 1,008 tests (down from 1,010, -2)
     - Parse errors: 250 (most in types directory - 106 tests)
     - Type errors: 232 (type assignability, name resolution, property access)
-    - Other: 528 (duplicate identifiers, missing implementations, CLI option errors)
-  - Should ERROR but passed: 853 tests (missing error detection)
+    - Other: 526 (down from 528, -2) (duplicate identifiers, missing implementations, CLI option errors)
+  - Should ERROR but passed: 851 tests (down from 853, -2) (missing error detection)
 - **Top parse error patterns**:
   - Unexpected token: 133 cases
   - '}' expected: 35 cases

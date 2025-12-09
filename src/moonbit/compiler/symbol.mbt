@@ -726,6 +726,8 @@ pub enum DiagnosticCode {
   // Unreachable Code & Implicit Any (7000-7099)
   // ============================================================================
   TS7005 // Variable '{0}' implicitly has an '{1}' type
+  TS7022 // '{0}' implicitly has type 'any' because it does not have a type annotation and is referenced directly or indirectly in its own initializer
+  TS7023 // '{0}' implicitly has return type 'any' because it does not have a return type annotation and is referenced directly or indirectly in one of its return expressions
   TS7027 // Unreachable code detected
   TS7034 // Variable '{0}' implicitly has type '{1}' in some locations where its type cannot be determined
   TS7055 // '{0}', which lacks return-type annotation, implicitly has an 'any' yield type
@@ -1054,6 +1056,8 @@ pub fn DiagnosticCode::to_int(self : DiagnosticCode) -> Int {
     TS4097 => 4097
     // Unreachable Code & Implicit Any (7000-7099)
     TS7005 => 7005
+    TS7022 => 7022
+    TS7023 => 7023
     TS7027 => 7027
     TS7034 => 7034
     TS7055 => 7055
@@ -1383,6 +1387,8 @@ pub fn DiagnosticCode::from_int(code : Int) -> DiagnosticCode? {
     4097 => Some(TS4097)
     // Unreachable Code & Implicit Any (7000-7099)
     7005 => Some(TS7005)
+    7022 => Some(TS7022)
+    7023 => Some(TS7023)
     7027 => Some(TS7027)
     7034 => Some(TS7034)
     7055 => Some(TS7055)

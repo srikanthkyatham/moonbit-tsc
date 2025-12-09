@@ -298,6 +298,7 @@ pub struct TypeChecker {
   in_expression_statement : Bool // Tracks if we're in an expression statement (yield result not used)
   no_implicit_any : Bool // Error on expressions and declarations with an implied 'any' type
   implicit_any_array_vars : @hashset.HashSet[String] // Variables with implicit any[] type (for TS7005)
+  inferring_variables : @hashset.HashSet[String] // Variables currently being inferred (for TS7022 circular reference detection)
 } derive(Show)
 
 ///|
@@ -381,6 +382,7 @@ pub fn TypeChecker::new_with_options(
     in_expression_statement: false,
     no_implicit_any,
     implicit_any_array_vars: @hashset.new(),
+    inferring_variables: @hashset.new(),
   }
 }
 
@@ -3750,6 +3752,13 @@ fn infer_type(checker : TypeChecker, expr : Node) -> (Type, TypeChecker) {
       // Check for undefined identifier
       if id.name == "undefined" {
         undefined_type(checker)
+      } else if checker.no_implicit_any && checker.inferring_variables.contains(
+        id.name,
+      ) {
+        // TS7022: Variable is referenced in its own initializer
+        let msg = "'\{id.name}' implicitly has type 'any' because it does not have a type annotation and is referenced directly or indirectly in its own initializer."
+        let checker = add_diagnostic_with_code(checker, msg, id.location, TS7022)
+        any_type(checker)
       } else {
         infer_identifier_type(checker, id)
       }
@@ -14548,8 +14557,38 @@ fn check_for_of_statement(
     _ => checker
   }
 
+  // Track variable being inferred for circular reference detection (TS7022)
+  // Extract variable name(s) being declared and add to inferring_variables set
+  let (checker, var_names) = match for_of_stmt.initializer {
+    VariableStatement(var_stmt) =>
+      if var_stmt.declarations.length() > 0 && checker.no_implicit_any {
+        let decl = var_stmt.declarations[0]
+        let names : Array[String] = []
+        collect_binding_names(decl.name, names)
+        let new_set = checker.inferring_variables.copy()
+        for name in names {
+          new_set.insert(name)
+        }
+        ({ ..checker, inferring_variables: new_set }, names)
+      } else {
+        (checker, [])
+      }
+    _ => (checker, [])
+  }
+
   // Infer the type of the iterable expression
   let (iterable_type, checker) = infer_type(checker, for_of_stmt.expression)
+
+  // Remove variables from inferring_variables set
+  let checker = if var_names.length() > 0 {
+    let new_set = checker.inferring_variables.copy()
+    for name in var_names {
+      new_set.remove(name)
+    }
+    { ..checker, inferring_variables: new_set }
+  } else {
+    checker
+  }
 
   // Push scope for loop variable
   let checker = push_local_scope(checker)

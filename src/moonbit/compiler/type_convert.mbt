@@ -663,6 +663,7 @@ fn TypeChecker::create_type_info(self : TypeChecker) -> (TypeInfo, TypeChecker) 
     in_expression_statement: self.in_expression_statement,
     no_implicit_any: self.no_implicit_any,
     implicit_any_array_vars: self.implicit_any_array_vars,
+    inferring_variables: self.inferring_variables,
     generator_yield_type: self.generator_yield_type,
     collected_yield_types: self.collected_yield_types,
     collected_return_types: self.collected_return_types,
