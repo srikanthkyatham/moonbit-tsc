@@ -10176,13 +10176,14 @@ fn infer_array_literal_type(
                   match obj.class_name {
                     Some(name) =>
                       match lookup_symbol(checker, name) {
-                        Some(symbol) =>
+                        Some(symbol) => {
                           if symbol.kind == Interface {
                             // Interface - check if it declares Symbol.iterator
                             let mut has_iterator = false
                             for entry in obj.properties {
                               let (prop_name, _) = entry
-                              if prop_name == "__@iterator" || prop_name == "[Symbol.iterator]" {
+                              // Computed properties like [Symbol.iterator] are stored as '[computed]'
+                              if prop_name == "__@iterator" || prop_name == "[Symbol.iterator]" || prop_name == "[computed]" {
                                 has_iterator = true
                                 break
                               }
@@ -10201,6 +10202,7 @@ fn infer_array_literal_type(
                               None => false
                             }
                           }
+                        }
                         None => {
                           // Symbol not found - try extract
                           let (elem_type_opt, c) = extract_iterable_element_type(
@@ -10243,7 +10245,8 @@ fn infer_array_literal_type(
                                 let mut has_iterator = false
                                 for entry in obj.properties {
                                   let (prop_name, _) = entry
-                                  if prop_name == "__@iterator" || prop_name == "[Symbol.iterator]" {
+                                  // Computed properties like [Symbol.iterator] are stored as '[computed]'
+                                  if prop_name == "__@iterator" || prop_name == "[Symbol.iterator]" || prop_name == "[computed]" {
                                     has_iterator = true
                                     break
                                   }
