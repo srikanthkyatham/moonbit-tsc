@@ -14759,7 +14759,109 @@ fn add_for_of_variable_to_scope(
             }
             checker
           }
-          ArrayBindingPattern(_) | ObjectBindingPattern(_) => {
+          ArrayBindingPattern(_) => {
+            // TS2461: Validate that element type is an array type for array destructuring
+            // Note: Tuples are valid for array destructuring
+            let checker = match elem_type {
+              Array(_) | Tuple(_) => checker
+              Union(u) => {
+                // Check if all union members are arrays or tuples
+                let all_arrays = {
+                  let mut result = true
+                  for t in u.types {
+                    match t {
+                      Array(_) | Tuple(_) => ()
+                      _ => {
+                        result = false
+                        break
+                      }
+                    }
+                  }
+                  result
+                }
+                if all_arrays {
+                  checker
+                } else {
+                  add_diagnostic_with_code(
+                    checker,
+                    "Type '\{type_to_string(elem_type)}' is not an array type.",
+                    decl.location,
+                    TS2461,
+                  )
+                }
+              }
+              _ =>
+                add_diagnostic_with_code(
+                  checker,
+                  "Type '\{type_to_string(elem_type)}' is not an array type.",
+                  decl.location,
+                  TS2461,
+                )
+            }
+            // Check for duplicate bindings (TS2451) if let/const
+            let checker = if var_stmt.is_let || var_stmt.is_const {
+              check_duplicate_bindings(checker, decl.name)
+            } else {
+              checker
+            }
+            // Handle destructuring patterns
+            // For let/const, we need to track binding names in const_vars for TS2481
+            let checker = if var_stmt.is_let || var_stmt.is_const {
+              add_binding_pattern_variables_as_const(checker, decl.name, elem_type)
+            } else {
+              add_binding_pattern_variables(checker, decl.name, elem_type)
+            }
+            checker
+          }
+          ObjectBindingPattern(obj_pattern) => {
+            // TS2339: Validate that properties exist on element type for object destructuring
+            let checker = match elem_type {
+              Object(obj_type) => {
+                // Check each property in the destructuring pattern
+                let mut checker = checker
+                for i = 0; i < obj_pattern.properties.length(); i = i + 1 {
+                  let elem = obj_pattern.properties[i]
+                  // property_name is the source property being destructured
+                  // For { x }, property_name == "x"
+                  // For { x: a }, property_name == "x" and name is Identifier("a")
+                  let prop_name = elem.property_name
+                  if prop_name.length() > 0 {
+                    // Check if property exists on the object type
+                    match obj_type.properties.get(prop_name) {
+                      Some(_) => ()
+                      None => {
+                        checker = add_diagnostic_with_code(
+                          checker,
+                          "Property '\{prop_name}' does not exist on type '\{type_to_string(elem_type)}'.",
+                          elem.location,
+                          TS2339,
+                        )
+                      }
+                    }
+                  }
+                }
+                checker
+              }
+              Number | String | Boolean | Null | Undefined | Void => {
+                // For primitive types, report TS2339 for all properties in destructuring
+                let mut checker = checker
+                for i = 0; i < obj_pattern.properties.length(); i = i + 1 {
+                  let elem = obj_pattern.properties[i]
+                  let prop_name = elem.property_name
+                  if prop_name.length() > 0 {
+                    checker = add_diagnostic_with_code(
+                      checker,
+                      "Property '\{prop_name}' does not exist on type '\{type_to_string(elem_type)}'.",
+                      elem.location,
+                      TS2339,
+                    )
+                  }
+                }
+                checker
+              }
+              Union(_) => checker // TODO: Check union members
+              _ => checker // For other types (Any, Unknown, etc.)
+            }
             // Check for duplicate bindings (TS2451) if let/const
             let checker = if var_stmt.is_let || var_stmt.is_const {
               check_duplicate_bindings(checker, decl.name)
