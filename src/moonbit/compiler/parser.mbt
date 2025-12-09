@@ -3913,6 +3913,91 @@ fn parse_class_member_with_decorators(
             _ => parse_class_members_aux(parser, acc)
           }
         }
+        // Static reserved word 'return' used as property/method name
+        KeywordReturn(loc) => {
+          let name = "return"
+          let parser = advance_parser(parser)
+          match current_token(parser) {
+            // Static method using reserved word as name
+            OpenParen(_) => {
+              let parser = advance_parser(parser)
+              let (parameters, parser) = parse_parameter_list(parser)
+              let (return_type, parser) = match current_token(parser) {
+                Colon(_) => {
+                  let parser = advance_parser(parser)
+                  match parse_type(parser) {
+                    Ok((ty, p)) => (Some(ty), p)
+                    Err(p) => (None, p)
+                  }
+                }
+                _ => (None, parser)
+              }
+              let (body, parser) = match current_token(parser) {
+                OpenBrace(_) =>
+                  match parse_function_body(parser) {
+                    Ok((b, p)) => (Some(b), p)
+                    Err(p) => (None, p)
+                  }
+                _ => (None, parser)
+              }
+              acc.push(
+                Node::MethodDeclaration(MethodDeclaration::{
+                  name,
+                  type_parameters: [],
+                  parameters,
+                  return_type,
+                  body,
+                  decorators,
+                  modifiers: [Modifier::Static],
+                  is_async: false,
+                  is_generator: false,
+                  is_optional: false,
+                  location: loc,
+                }),
+              )
+              parse_class_members_aux(parser, acc)
+            }
+            // Static property using reserved word as name
+            _ => {
+              let (type_annotation, parser) = match current_token(parser) {
+                Colon(_) => {
+                  let parser = advance_parser(parser)
+                  match parse_type(parser) {
+                    Ok((ty, p)) => (Some(ty), p)
+                    Err(p) => (None, p)
+                  }
+                }
+                _ => (None, parser)
+              }
+              let (initializer, parser) = match current_token(parser) {
+                Equals(_) => {
+                  let parser = advance_parser(parser)
+                  match parse_assignment_expression(parser) {
+                    Ok((expr, p)) => (Some(expr), p)
+                    Err(p) => (None, p)
+                  }
+                }
+                _ => (None, parser)
+              }
+              acc.push(
+                Node::PropertyDeclaration(PropertyDeclaration::{
+                  name,
+                  type_annotation,
+                  initializer,
+                  is_optional: false,
+                  decorators,
+                  modifiers: [Modifier::Static],
+                  location: loc,
+                }),
+              )
+              let parser = match current_token(parser) {
+                Semicolon(_) => advance_parser(parser)
+                _ => parser
+              }
+              parse_class_members_aux(parser, acc)
+            }
+          }
+        }
         _ => parse_class_members_aux(parser, acc)
       }
     }
@@ -4411,6 +4496,92 @@ fn parse_class_member_with_decorators(
     // Reserved word 'interface' used as property/method name (e.g., interface() { })
     KeywordInterface(loc) => {
       let name = "interface"
+      let parser = advance_parser(parser)
+      match current_token(parser) {
+        // Method using reserved word as name
+        OpenParen(_) => {
+          let parser = advance_parser(parser)
+          let (parameters, parser) = parse_parameter_list(parser)
+          let (return_type, parser) = match current_token(parser) {
+            Colon(_) => {
+              let parser = advance_parser(parser)
+              match parse_type(parser) {
+                Ok((ty, p)) => (Some(ty), p)
+                Err(p) => (None, p)
+              }
+            }
+            _ => (None, parser)
+          }
+          let (body, parser) = match current_token(parser) {
+            OpenBrace(_) =>
+              match parse_function_body(parser) {
+                Ok((b, p)) => (Some(b), p)
+                Err(p) => (None, p)
+              }
+            _ => (None, parser)
+          }
+          acc.push(
+            Node::MethodDeclaration(MethodDeclaration::{
+              name,
+              type_parameters: [],
+              parameters,
+              return_type,
+              body,
+              decorators,
+              modifiers: [],
+              is_async: false,
+              is_generator: false,
+              is_optional: false,
+              location: loc,
+            }),
+          )
+          parse_class_members_aux(parser, acc)
+        }
+        // Property using reserved word as name
+        _ => {
+          let (type_annotation, parser) = match current_token(parser) {
+            Colon(_) => {
+              let parser = advance_parser(parser)
+              match parse_type(parser) {
+                Ok((ty, p)) => (Some(ty), p)
+                Err(p) => (None, p)
+              }
+            }
+            _ => (None, parser)
+          }
+          let (initializer, parser) = match current_token(parser) {
+            Equals(_) => {
+              let parser = advance_parser(parser)
+              match parse_assignment_expression(parser) {
+                Ok((expr, p)) => (Some(expr), p)
+                Err(p) => (None, p)
+              }
+            }
+            _ => (None, parser)
+          }
+          let parser = match current_token(parser) {
+            Semicolon(_) => advance_parser(parser)
+            _ => parser
+          }
+          acc.push(
+            Node::PropertyDeclaration(PropertyDeclaration::{
+              name,
+              type_annotation,
+              initializer,
+              is_optional: false,
+              decorators,
+              modifiers: [],
+              location: loc,
+            }),
+          )
+          parse_class_members_aux(parser, acc)
+        }
+      }
+    }
+
+    // Reserved word 'return' used as property/method name (e.g., return() { } or return = 0)
+    KeywordReturn(loc) => {
+      let name = "return"
       let parser = advance_parser(parser)
       match current_token(parser) {
         // Method using reserved word as name

@@ -1040,3 +1040,86 @@ test "for-of - iterator return property as method should pass" {
   // Should not have any errors - return is properly a method
   assert_true(diagnostics.length() == 0)
 }
+
+// TS2767: The 'return' property of an iterator must be a method
+test "for-of - TS2767: class with 'return' property (not method) should error" {
+  let source =
+    #|class MyStringIterator {
+    #|    next() {
+    #|        return { done: false, value: "" };
+    #|    }
+    #|    return = 0;
+    #|    [Symbol.iterator]() {
+    #|        return this;
+    #|    }
+    #|}
+    #|
+    #|for (var v of new MyStringIterator) { }
+
+  let result = check_for_of(source)
+  let diagnostics = get_diagnostics(result)
+
+  assert_true(has_error(diagnostics, 2767))
+}
+
+test "for-of - TS2767: class with 'return' method should not error" {
+  let source =
+    #|class MyStringIterator {
+    #|    next() {
+    #|        return { done: false, value: "" };
+    #|    }
+    #|    return() {
+    #|        return { done: true, value: undefined };
+    #|    }
+    #|    [Symbol.iterator]() {
+    #|        return this;
+    #|    }
+    #|}
+    #|
+    #|for (var v of new MyStringIterator) { }
+
+  let result = check_for_of(source)
+  let diagnostics = get_diagnostics(result)
+
+  assert_true(not(has_error(diagnostics, 2767)))
+}
+
+test "for-of - TS2767: static 'return' property should not affect iterator validation" {
+  let source =
+    #|class MyStringIterator {
+    #|    next() {
+    #|        return { done: false, value: "" };
+    #|    }
+    #|    static return = 0;
+    #|    [Symbol.iterator]() {
+    #|        return this;
+    #|    }
+    #|}
+    #|
+    #|for (var v of new MyStringIterator) { }
+
+  let result = check_for_of(source)
+  let diagnostics = get_diagnostics(result)
+
+  // Static property doesn't affect instance iterator validation
+  assert_true(not(has_error(diagnostics, 2767)))
+}
+
+test "for-of - TS2767: class without 'return' property should not error" {
+  let source =
+    #|class MyStringIterator {
+    #|    next() {
+    #|        return { done: false, value: "" };
+    #|    }
+    #|    [Symbol.iterator]() {
+    #|        return this;
+    #|    }
+    #|}
+    #|
+    #|for (var v of new MyStringIterator) { }
+
+  let result = check_for_of(source)
+  let diagnostics = get_diagnostics(result)
+
+  assert_true(not(has_error(diagnostics, 2767)))
+}
