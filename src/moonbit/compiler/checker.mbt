@@ -12791,10 +12791,7 @@ fn extract_iterable_element_type(
         let (prop_name, prop) = entry
         // Check for Symbol.iterator - stored as "__@iterator" by get_property_name()
         // Also check for other possible representations
-        if prop_name == "__@iterator" ||
-          prop_name == "[Symbol.iterator]" ||
-          prop_name.contains("iterator") ||
-          prop_name.contains("Iterator") {
+        if prop_name == "__@iterator" || prop_name == "[Symbol.iterator]" {
           iterator_method_type = Some(prop.prop_type)
           break
         }
@@ -12826,8 +12823,19 @@ fn extract_iterable_element_type(
                             }
                           }
                         }
+                        Any(_) => {
+                          // If next() returns 'any', treat as valid iterator
+                          // The element type will be 'any'
+                          let (any_t, c) = any_type(checker)
+                          return (Some(any_t), c)
+                        }
                         _ => ()
                       }
+                    }
+                    Any(_) => {
+                      // If next is of type 'any' (e.g., next: any), treat as valid iterator
+                      let (any_t, c) = any_type(checker)
+                      return (Some(any_t), c)
                     }
                     _ => ()
                   }
@@ -12880,8 +12888,18 @@ fn extract_iterable_element_type(
                                           }
                                         }
                                       }
+                                      Any(_) => {
+                                        // If next() returns 'any', treat as valid iterator
+                                        let (any_t, c2) = any_type(c)
+                                        return (Some(any_t), c2)
+                                      }
                                       _ => ()
                                     }
+                                  Any(_) => {
+                                    // If next is of type 'any' (e.g., next: any), treat as valid iterator
+                                    let (any_t, c2) = any_type(c)
+                                    return (Some(any_t), c2)
+                                  }
                                   _ => ()
                                 }
                                 break
