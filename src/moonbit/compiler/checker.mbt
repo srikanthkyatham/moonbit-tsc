@@ -12995,7 +12995,9 @@ fn extract_iterable_element_type(
               (None, checker)
             }
             Any(_) => {
-              // Symbol.iterator returns 'any', treat as valid iterator returning 'any' elements
+              // Symbol.iterator returns 'any' - this is usually from unannotated functions
+              // In strict mode, we should still validate that it has a next() method
+              // But for now, treat as valid iterator returning 'any' elements
               let (any_t, c) = any_type(checker)
               (Some(any_t), c)
             }
