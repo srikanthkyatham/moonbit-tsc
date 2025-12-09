@@ -366,6 +366,13 @@ test "for-of multiple loops with same var name" {
     #|  console.log(x);
     #|}
   let result = check_for_of(source)
+  let diagnostics = get_diagnostics(result)
+  if diagnostics.length() > 0 {
+    println("DEBUG: Diagnostics found:")
+    for diag in diagnostics {
+      println("  Code \{diag.code}: \{diag.message}")
+    }
+  }
   assert_eq(error_count(result), 0)
 }
 

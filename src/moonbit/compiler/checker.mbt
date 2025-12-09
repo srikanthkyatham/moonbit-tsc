@@ -304,8 +304,10 @@ pub struct TypeChecker {
 ///|
 /// Local scope for tracking variable types in function bodies
 pub struct LocalScope {
-  variables : Map[String, Type] // Variable name -> Type
+  variables : Map[String, Type] // Variable name -> Type (block-scoped: let/const)
+  function_vars : Map[String, Type] // Function-scoped variables (var declarations)
   const_vars : @hashset.HashSet[String] // Set of const variable names
+  is_function_scope : Bool // True if this is a function scope (for var hoisting)
 } derive(Show)
 
 ///|
@@ -440,10 +442,28 @@ fn apply_global_augmentations_to_checker(
 }
 
 ///|
-/// Push a new local scope onto the scope stack
+/// Push a new local scope onto the scope stack (for blocks, not functions)
 fn push_local_scope(checker : TypeChecker) -> TypeChecker {
   let scopes = checker.local_scopes
-  scopes.push(LocalScope::{ variables: Map::new(), const_vars: @hashset.new() })
+  scopes.push(LocalScope::{
+    variables: Map::new(),
+    function_vars: Map::new(),
+    const_vars: @hashset.new(),
+    is_function_scope: false,
+  })
+  { ..checker, local_scopes: scopes }
+}
+
+///|
+/// Push a new function scope onto the scope stack (for var hoisting)
+fn push_function_scope(checker : TypeChecker) -> TypeChecker {
+  let scopes = checker.local_scopes
+  scopes.push(LocalScope::{
+    variables: Map::new(),
+    function_vars: Map::new(),
+    const_vars: @hashset.new(),
+    is_function_scope: true,
+  })
   { ..checker, local_scopes: scopes }
 }
 
@@ -706,7 +726,8 @@ fn is_in_regular_function(checker : TypeChecker) -> Bool {
 }
 
 ///|
-/// Add a variable to the current local scope
+/// Add a variable to the current local scope (for parameters, let, const)
+/// This adds to the block scope, not the function scope
 fn add_local_variable(
   checker : TypeChecker,
   name : String,
@@ -715,6 +736,67 @@ fn add_local_variable(
   let scopes = checker.local_scopes
   if scopes.length() > 0 {
     scopes[scopes.length() - 1].variables.set(name, var_type)
+    { ..checker, local_scopes: scopes }
+  } else {
+    // At global scope - look up the symbol and set its type
+    match lookup_symbol(checker, name) {
+      Some(symbol) => {
+        let new_symbol_types = checker.symbol_types
+        new_symbol_types.set(symbol.id, var_type)
+        { ..checker, symbol_types: new_symbol_types }
+      }
+      None => checker // Symbol not found, nothing to do
+    }
+  }
+}
+
+///|
+/// Add a var declaration to the function scope (var hoisting)
+/// This finds the nearest function scope and adds the variable there
+/// Also checks TS2403: Subsequent variable declarations must have the same type
+fn add_var_to_function_scope(
+  checker : TypeChecker,
+  name : String,
+  var_type : Type,
+  location : SourceLocation,
+) -> TypeChecker {
+  let scopes = checker.local_scopes
+  if scopes.length() > 0 {
+    // Find the nearest function scope for var hoisting
+    let mut function_scope_index = -1
+    for i = scopes.length() - 1; i >= 0; i = i - 1 {
+      if scopes[i].is_function_scope {
+        function_scope_index = i
+        break
+      }
+    }
+
+    // Check TS2403: if var already exists in function scope, types must match
+    let mut checker = checker
+    if function_scope_index >= 0 {
+      match scopes[function_scope_index].function_vars.get(name) {
+        Some(existing_type) => {
+          // Check if types are equal
+          if not(types_equal(existing_type, var_type)) {
+            checker = add_diagnostic_with_code(
+              checker,
+              "Subsequent variable declarations must have the same type.  Variable '\{name}' must be of type '\{type_to_string(existing_type)}', but here has type '\{type_to_string(var_type)}'.",
+              checker.current_location,
+              TS2403,
+            )
+          }
+        }
+        None => ()
+      }
+    }
+
+    // Add to function scope if found, otherwise to current scope
+    if function_scope_index >= 0 {
+      scopes[function_scope_index].function_vars.set(name, var_type)
+    } else {
+      // No function scope, add to current scope (for top-level var)
+      scopes[scopes.length() - 1].function_vars.set(name, var_type)
+    }
     { ..checker, local_scopes: scopes }
   } else {
     // At global scope - look up the symbol and set its type
@@ -1073,9 +1155,16 @@ fn hoist_var_decl_binding(
 /// Look up a variable type in local scopes (innermost first)
 fn lookup_local_variable(checker : TypeChecker, name : String) -> Type? {
   // Search from innermost scope to outermost
+  // Check both block-scoped (variables) and function-scoped (function_vars)
   let scopes = checker.local_scopes
   for i = scopes.length() - 1; i >= 0; i = i - 1 {
+    // Check block-scoped variables first (let/const)
     match scopes[i].variables.get(name) {
+      Some(t) => return Some(t)
+      None => ()
+    }
+    // Then check function-scoped variables (var)
+    match scopes[i].function_vars.get(name) {
       Some(t) => return Some(t)
       None => ()
     }
@@ -2151,6 +2240,28 @@ fn types_equal(a : Type, b : Type) -> Bool {
     (StringLiteral(v1, _), StringLiteral(v2, _)) => v1 == v2
     (BooleanLiteral(v1, _), BooleanLiteral(v2, _)) => v1 == v2
     (TypeReference(r1), TypeReference(r2)) => r1.name == r2.name
+    (Union(u1), Union(u2)) => {
+      // Check if unions have the same member types
+      if u1.types.length() != u2.types.length() {
+        return false
+      }
+      // For now, just check if all types in u1 exist in u2
+      // A more robust implementation would sort and compare
+      for t1 in u1.types {
+        let mut found = false
+        for t2 in u2.types {
+          if types_equal(t1, t2) {
+            found = true
+            break
+          }
+        }
+        if not(found) {
+          return false
+        }
+      }
+      true
+    }
+    (Array(a1), Array(a2)) => types_equal(a1.element_type, a2.element_type)
     _ => false
   }
 }
@@ -2191,7 +2302,7 @@ pub fn check_source_file_with_options(
   }
 
   // Push a top-level scope for the source file so local variables are tracked
-  let checker = push_local_scope(checker)
+  let checker = push_function_scope(checker)
   let checker = check_statements(checker, bound.statements)
   // Pop the top-level scope
   let checker = pop_local_scope(checker)
@@ -2258,7 +2369,7 @@ pub fn check_source_file_with_external_types(
   }
 
   // Push a top-level scope for the source file so local variables are tracked
-  let checker = push_local_scope(checker)
+  let checker = push_function_scope(checker)
   let checker = check_statements(checker, bound.statements)
   // Pop the top-level scope
   let checker = pop_local_scope(checker)
@@ -3149,7 +3260,9 @@ fn check_variable_statement(
       }
     }
 
-    checker = check_variable_declaration(checker, decl, var_stmt.is_const)
+    // Pass is_var flag: true if not let and not const
+    let is_var = not(var_stmt.is_let) && not(var_stmt.is_const)
+    checker = check_variable_declaration(checker, decl, var_stmt.is_const, is_var)
 
     // TS1155: 'const' declarations must be initialized
     // Only check if NOT ambient declaration (declare const x: T is allowed)
@@ -3341,6 +3454,7 @@ fn check_variable_declaration(
   checker : TypeChecker,
   decl : VariableDeclaration,
   is_const : Bool,
+  is_var : Bool,
 ) -> TypeChecker {
   // Check for TS2748: variable referencing itself in initializer (temporal dead zone)
   let checker = check_variable_self_reference(checker, decl)
@@ -3451,10 +3565,14 @@ fn check_variable_declaration(
 
   // Get the variable name and add to local scope
   // Use add_local_const_variable for const declarations to track const-ness
+  // Use add_var_to_function_scope for var declarations (var hoisting)
+  // Use add_local_variable for let declarations (block-scoped)
   let checker = match decl.name {
     Identifier(id) =>
       if is_const {
         add_local_const_variable(checker, id.name, var_type)
+      } else if is_var {
+        add_var_to_function_scope(checker, id.name, var_type, decl.location)
       } else {
         add_local_variable(checker, id.name, var_type)
       }
@@ -5448,7 +5566,7 @@ fn infer_method_type(
   method_decl : MethodDeclaration,
 ) -> (Type, TypeChecker) {
   // Push a local scope for method body checking
-  let checker = push_local_scope(checker)
+  let checker = push_function_scope(checker)
 
   // Track async function context for TS2465
   let checker = if method_decl.is_async {
@@ -9964,7 +10082,7 @@ fn infer_function_expression_type(
   fe : FunctionExpression,
 ) -> (Type, TypeChecker) {
   // Push a local scope for function body checking
-  let checker = push_local_scope(checker)
+  let checker = push_function_scope(checker)
 
   // Track async function context for TS2465
   let checker = if fe.is_async {
@@ -10723,7 +10841,7 @@ fn infer_arrow_function_type(
   arrow : ArrowFunction,
 ) -> (Type, TypeChecker) {
   // Push a new local scope for the arrow function
-  let checker = push_local_scope(checker)
+  let checker = push_function_scope(checker)
 
   // Enter arrow function context (for arguments check)
   let checker = enter_arrow_function(checker)
@@ -13988,7 +14106,7 @@ fn check_function_declaration(
   let checker = clear_narrowed_types(checker)
 
   // Push a new local scope for the function
-  let checker = push_local_scope(checker)
+  let checker = push_function_scope(checker)
 
   // Check type parameter names for reserved keywords (TS2368)
   let checker = check_type_parameter_names(checker, func.type_parameters)
@@ -14631,11 +14749,13 @@ fn add_for_of_variable_to_scope(
         match decl.name {
           Identifier(id) => {
             // Use add_local_const_variable for let/const to track block-scoped variables
+            // Use add_var_to_function_scope for var (function-scoped, hoisted)
             // This is needed for TS2481 error detection (var conflicts with let/const)
             let checker = if var_stmt.is_let || var_stmt.is_const {
               add_local_const_variable(checker, id.name, elem_type)
             } else {
-              add_local_variable(checker, id.name, elem_type)
+              // var declaration in for-of - hoist to function scope
+              add_var_to_function_scope(checker, id.name, elem_type, decl.location)
             }
             checker
           }
@@ -15424,7 +15544,7 @@ fn check_class_declaration(
         match ctor.body {
           Some(body) => {
             // Push local scope for constructor
-            let checker = push_local_scope(checker)
+            let checker = push_function_scope(checker)
             // Set in_constructor flag and track super call status for TS2337/TS17009
             let checker = {
               ..checker,
@@ -15477,7 +15597,7 @@ fn check_class_declaration(
         match method_dec.body {
           Some(body) => {
             // Push local scope for method
-            let checker = push_local_scope(checker)
+            let checker = push_function_scope(checker)
             // Check for TS2369: parameter property only in constructor
             let checker = check_method_parameter_properties(
               checker,
