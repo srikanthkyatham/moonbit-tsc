@@ -556,10 +556,10 @@ test "class with next() but no Symbol.iterator - TS2488 (for-of14)" {
 }
 
 ///|
-test "class with Symbol.iterator - currently errors (TS2488)" {
-  // Objects with [Symbol.iterator]() are properly iterable
-  // NOTE: Currently errors with TS2488 due to class instance Symbol.iterator extraction limitation
-  // This is a known limitation documented in iterator_test.mbt
+test "class with Symbol.iterator - now works correctly" {
+  // FIXED: Objects with [Symbol.iterator]() are now properly iterable
+  // Previously errored with TS2488 due to class instance Symbol.iterator extraction limitation
+  // Fixed by implementing return type inference for methods without explicit types
   let source =
     #|class MyIterator {
     #|    [Symbol.iterator]() {
@@ -572,10 +572,8 @@ test "class with Symbol.iterator - currently errors (TS2488)" {
     #|for (const v of new MyIterator) { }
 
   let result = check_for_of(source)
-  let diagnostics = get_diagnostics(result)
-
-  // Currently errors - known limitation with class instance Symbol.iterator extraction
-  assert_true(has_error(diagnostics, 2488))
+  // Now compiles successfully
+  assert_eq(error_count(result), 0)
 }
 
 ///|

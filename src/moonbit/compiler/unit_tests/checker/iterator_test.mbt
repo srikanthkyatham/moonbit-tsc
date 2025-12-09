@@ -43,9 +43,9 @@ test "interface with Symbol.iterator - for-of loop" {
 // ============================================================================
 
 ///|
-test "class with Symbol.iterator - spread operator (currently errors)" {
-  // NOTE: This currently errors because spread operator doesn't extract Symbol.iterator from Object types
-  // This is a known limitation - TypeScript's behavior is complex here
+test "class with Symbol.iterator - spread operator now works" {
+  // FIXED: This now works after Symbol.iterator regression fixes
+  // Previously errored because return types weren't properly inferred
   let source =
     #|class SymbolIterator {
     #|  next() {
@@ -63,16 +63,15 @@ test "class with Symbol.iterator - spread operator (currently errors)" {
     #|var array = [...new SymbolIterator];
 
   let result = check_for_of(source)
-  let diagnostics = get_diagnostics(result)
-  // Currently errors with TS2548 - this is a known limitation
-  assert_true(has_error(diagnostics, 2548))
+  // Now compiles successfully
+  assert_eq(error_count(result), 0)
 }
 
 ///|
-test "class with Symbol.iterator - for-of loop (currently errors)" {
-  // NOTE: Currently errors with TS2488 due to class instance Symbol.iterator extraction limitation
-  // This is a known limitation - extract_iterable_element_type doesn't properly find
-  // Symbol.iterator on class instances (Object types)
+test "class with Symbol.iterator - for-of loop now works" {
+  // FIXED: This now works after Symbol.iterator regression fixes
+  // Previously errored with TS2488 because return types weren't properly inferred
+  // and the instance type had empty properties
   let source =
     #|class SymbolIterator {
     #|  next() {
@@ -92,8 +91,8 @@ test "class with Symbol.iterator - for-of loop (currently errors)" {
     #|}
 
   let result = check_for_of(source)
-  // Currently has 1 error (TS2488) - known limitation
-  assert_eq(error_count(result), 1)
+  // Now compiles successfully
+  assert_eq(error_count(result), 0)
 }
 
 ///|
@@ -229,8 +228,9 @@ test "method with .values() returning iterator" {
 // ============================================================================
 
 ///|
-test "class with multiple methods including Symbol.iterator (currently errors)" {
-  // NOTE: Same limitation as above - spread doesn't extract Symbol.iterator from Object types
+test "class with multiple methods including Symbol.iterator now works" {
+  // FIXED: This now works after Symbol.iterator regression fixes
+  // Previously errored because spread operator couldn't extract Symbol.iterator from Object types
   let source =
     #|class MultiMethodIterator {
     #|  value: number = 0;
@@ -251,9 +251,8 @@ test "class with multiple methods including Symbol.iterator (currently errors)" 
     #|const arr = [...new MultiMethodIterator];
 
   let result = check_for_of(source)
-  let diagnostics = get_diagnostics(result)
-  // Currently errors with TS2548 - known limitation
-  assert_true(has_error(diagnostics, 2548))
+  // Now compiles successfully
+  assert_eq(error_count(result), 0)
 }
 
 // ============================================================================

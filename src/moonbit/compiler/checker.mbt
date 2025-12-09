@@ -5272,6 +5272,22 @@ fn infer_class_declaration_type(
       }
     }
   }
+
+  // Create a forward reference instance type and set it as current_this_type
+  // This allows method inference to use the class type when detecting 'return this'
+  let class_name_str = symbol.name
+  let (instance_info_temp, checker) = create_type_info(checker)
+  let temp_instance_type = Type::Object(ObjectType::{
+    properties: Map::new(), // Empty for now, will be filled after methods are inferred
+    call_signatures: [],
+    construct_signatures: [],
+    index_signatures: [],
+    info: instance_info_temp,
+    class_name: Some(class_name_str),
+  })
+  let prev_this_type = checker.current_this_type
+  let mut checker = { ..checker, current_this_type: Some(temp_instance_type) }
+
   for class_member in class_decl.members {
     match class_member {
       PropertyDeclaration(prop) => {
@@ -5324,13 +5340,14 @@ fn infer_class_declaration_type(
     }
   }
 
+  // Restore previous this_type
+  checker = { ..checker, current_this_type: prev_this_type }
+
   // Unmark symbol as being resolved
   let resolving = checker.resolving_symbols
   resolving.remove(symbol.id)
   checker = { ..checker, resolving_symbols: resolving }
 
-  // Get class name from symbol for tracking instance types
-  let class_name_str = symbol.name
 
   // Create instance type (used when instantiating with 'new')
   let (instance_info, checker) = create_type_info(checker)
@@ -5341,6 +5358,51 @@ fn infer_class_declaration_type(
     index_signatures: [],
     info: instance_info,
     class_name: Some(class_name_str), // Track which class this instance came from
+  })
+
+  // Post-process method return types: replace temp_instance_type with actual instance_type
+  // This fixes methods that 'return this' - they were set to the empty temp type during inference
+  let updated_properties : Map[String, PropertySignature] = Map::new()
+  for entry in instance_properties.iter() {
+    let (prop_name, prop_sig) = entry
+    match prop_sig.prop_type {
+      Type::Function(func) => {
+        // Check if return type matches temp_instance_type (by info id)
+        let updated_return_type = match func.return_type {
+          Type::Object(ret_obj) => {
+            if ret_obj.info.id == instance_info_temp.id {
+              // This is the temp type - replace with actual instance_type
+              instance_type
+            } else {
+              func.return_type
+            }
+          }
+          _ => func.return_type
+        }
+        let updated_func = CheckerFunctionType::{
+          parameters: func.parameters,
+          return_type: updated_return_type,
+          info: func.info
+        }
+        updated_properties.set(prop_name, { ..prop_sig, prop_type: Type::Function(updated_func) })
+      }
+      _ => {
+        updated_properties.set(prop_name, prop_sig)
+      }
+    }
+  }
+
+  // Replace instance_properties with updated version
+  let instance_properties = updated_properties
+
+  // Recreate instance_type with updated properties
+  let instance_type = Type::Object(ObjectType::{
+    properties: instance_properties,
+    call_signatures: [],
+    construct_signatures: [],
+    index_signatures: [],
+    info: instance_info,
+    class_name: Some(class_name_str),
   })
 
   // Create construct signature for 'new Class()'
@@ -5427,7 +5489,39 @@ fn infer_method_type(
   let checker = c
 
   // Get return type
-  let (return_type, checker) = resolve_type_annotation_or_any(checker, method_decl.return_type)
+  // If no explicit return type, infer from return statement
+  let (return_type, checker) = match method_decl.return_type {
+    Some(_) => resolve_type_annotation_or_any(checker, method_decl.return_type)
+    None => {
+      // No explicit return type - try to infer from body
+      match method_decl.body {
+        Some(BlockStatement(block)) =>
+          if block.statements.length() > 0 {
+            match block.statements[block.statements.length() - 1] {
+              ReturnStatement(ret) =>
+                match ret.expression {
+                  Some(ThisExpression(_)) => {
+                    // Method returns 'this' - use current class type as return type
+                    match checker.current_this_type {
+                      Some(this_type) => (this_type, checker)
+                      None => any_type(checker)
+                    }
+                  }
+                  Some(expr) => {
+                    // Infer type from return expression
+                    infer_type(checker, expr)
+                  }
+                  None => any_type(checker)
+                }
+              _ => any_type(checker)
+            }
+          } else {
+            any_type(checker)
+          }
+        _ => any_type(checker)
+      }
+    }
+  }
 
   // Check method body for errors (including await expressions)
   let checker = match method_decl.body {
@@ -14367,6 +14461,7 @@ fn get_for_of_element_type(
         checker,
         iterable_type,
       )
+
       match elem_type_opt {
         Some(elem_type) => (elem_type, checker)
         None => {
