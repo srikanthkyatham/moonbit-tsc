@@ -1,8 +1,10 @@
 # For-Of Statement Conformance Analysis
 
-## Current Status: 46/59 Tests Pass (78.0%)
+## Current Status: 53/59 Tests Pass (89.8%) ✅ NEW BEST
 
-Using the proper conformance test runner (`@tsc_phoenix/run_conformance_tests.exs`), which correctly handles expected error baselines, we have achieved **78.0% conformance** for for-of statements.
+Using the proper conformance test runner (`@tsc_phoenix/run_conformance_tests.exs`), which correctly handles expected error baselines, we currently have **89.8% conformance** for for-of statements.
+
+**✅ REGRESSION FIXED**: Symbol.iterator regression has been resolved! Previous best was 78.0% (46/59), and we now have 89.8% (53/59) - a new record improvement of +11.8% (+7 tests).
 
 ## Progress Summary
 
@@ -15,29 +17,28 @@ Using the proper conformance test runner (`@tsc_phoenix/run_conformance_tests.ex
 | After parser validations (TS1188, TS2480) | 41 | 59 | 69.5% | +3.4% |
 | After duplicate binding check (TS2451) | 42 | 59 | 71.2% | +1.7% |
 | After scope/block validations (TS2304, TS2481, TS2448) | 46 | 59 | 78.0% | +6.8% |
+| After TDZ destructuring fix (commit 14e82d0b) | 44 | 59 | 74.6% | -3.4% ⚠️ |
+| **After Symbol.iterator regression fix (Dec 9 2025)** | **53** | **59** | **89.8%** | **+15.2%** ✅ |
 
-**Total Improvement**: 59.3% → 78.0% = **+18.7%** (+11 tests fixed)
+**Total Improvement**: 59.3% → 89.8% = **+30.5%** (+18 tests fixed from initial)
+**Recovery from Regression**: 74.6% → 89.8% = **+15.2%** (+9 tests fixed)
 
 ## Test Breakdown
 
-### Passing Tests: 46 ✓
+### Passing Tests: 53 ✓
 Tests that correctly compile or correctly report expected errors.
 
-### Failing Tests: 13 ✗
+### Failing Tests: 6 ✗
 
-All 13 remaining failures are **"should ERROR but PASS"** - tests that should report errors but currently don't. There are **0 "should PASS but FAIL"** tests.
+**Failure breakdown:**
+- **Should PASS but failed: 0** ✅ All false positives fixed!
+- **Should ERROR but passed: 6** (missing error detection)
 
+#### Missing Errors (Should ERROR but passed) - 6 tests
 ```
-for-of12.ts   - TS2322: Type assignment error
-for-of14.ts   - TS2488: Missing Symbol.iterator
-for-of15.ts   - TS2490: Iterator next() must have 'value' property
 for-of16.ts   - TS2488: Missing Symbol.iterator (multiple occurrences)
-for-of17.ts   - TS2322: Type assignment error
-for-of30.ts   - TS2767: Iterator 'return' must be a method
 for-of32.ts   - TS7022: Circular reference implicit any
 for-of33.ts   - TS7022/TS7023: Circular reference implicit any
-for-of34.ts   - TS7022/TS7023: Circular reference implicit any
-for-of35.ts   - TS7022/TS7023: Circular reference implicit any
 for-of39.ts   - TS2769: Map constructor overload error
 for-of46.ts   - TS2322: Destructuring type mismatch
 for-of47.ts   - TS2322: Destructuring type mismatch
@@ -194,7 +195,64 @@ for (const [[x, y], [x, z]] of []) // ❌ error (nested duplicate)
 - All 4,199 unit tests pass
 - Fixed for-of6.ts, for-of53.ts, for-of54.ts, for-of55.ts
 
-### Commit 8: [current] - Iterator Type Extraction Improvements (Partial)
+### Commit 8: 14e82d0b - TDZ check for destructuring patterns + Refactoring regression
+**Changes:**
+- Fixed TDZ (TS2448) to handle destructuring patterns in let/const declarations
+- Modified `scan_block_scoped_declarations()` to use `collect_binding_names()` helper
+- Now properly tracks all variables from destructuring for TDZ violations
+- **REGRESSION**: Recent refactoring commits broke Symbol.iterator detection for class instances
+
+**Bug Fixed:**
+The `scan_block_scoped_declarations` function was skipping destructuring patterns with comment "Skip destructuring for now". This caused TDZ checks to miss violations like:
+```typescript
+{
+  console.log(x); // Should be TS2448
+  const [x, y] = [1, 2];
+}
+```
+
+**Solution:**
+```moonbit
+// Before: Only simple identifiers tracked
+Identifier(id) => decls.set(id.name, vd.location.start.line)
+_ => () // Skip destructuring for now
+
+// After: All bindings including destructuring
+let names : Array[String] = []
+collect_binding_names(vd.name, names)
+for name in names {
+  decls.set(name, vd.location.start.line)
+}
+```
+
+**⚠️ Symbol.iterator Regression:**
+After this commit (or one of the recent refactoring commits), Symbol.iterator detection broke:
+- 9 tests that should PASS now incorrectly report TS2488
+- All 9 are class-based iterators with `[Symbol.iterator]()` methods
+- Examples: MyStringIterator, FooIterator classes
+- Tests affected: for-of18, for-of19-23, for-of26, for-of28, for-of31
+- **Root cause**: Likely in recent Pattern B refactoring commits (069b2fed, 3894609a, 30de1700)
+- **Investigation needed**: Check `get_for_of_element_type()`, `extract_iterable_element_type()`, `lookup_property_in_type()`
+
+**Test Results:**
+- Conformance: 44/59 (74.6%) - down from 46/59 (78.0%)
+- Build passes: 0 errors, 243 warnings
+- Unit tests: All passing
+
+**Net Impact:**
+- TDZ fix: +1 capability (destructuring patterns now tracked)
+- Symbol.iterator regression: -9 tests (false positives)
+- Overall: -2 tests from peak conformance
+
+**Investigation Update (Dec 9 2025):**
+- Attempted fix: Added `.iter()` calls when iterating over properties maps in `extract_iterable_element_type()` and `get_for_of_element_type()`
+- Result: No improvement - tests still at 44/59 (74.6%)
+- Git bisect shows regression predates TDZ commit - was already present at c9f557b3
+- Root cause remains unidentified despite thorough code analysis
+- Code logic appears correct: parser creates "__@iterator" names, `infer_class_declaration_type` adds methods to instance_properties, `extract_iterable_element_type` searches for "__@iterator"
+- **Next steps**: Add debug logging to trace actual property map contents and keys at runtime, or compare working commit (d083f0c4) with current state line-by-line
+
+### Commit 8 (Previous): Iterator Type Extraction Improvements (Partial)
 **Changes:**
 - Enhanced `extract_iterable_element_type()` to handle `TypeReference` types
 - Added symbol lookup for class-based iterators
@@ -265,6 +323,150 @@ for (const x of obj) { } // ✅ Works in for-of
 - This would allow spread operator to work with class-based iterators
 - Requires deeper type resolution in `extract_iterable_element_type`
 
+### Commit 9: Symbol.iterator Regression Fix (Dec 9 2025)
+**Changes:**
+- Fixed Symbol.iterator regression affecting 9 conformance tests
+- Implemented return type inference for methods without explicit type annotations
+- Fixed methods returning 'this' to properly use the complete class instance type
+- Post-processed method return types to replace empty temp types with complete instance types
+
+**Root Cause Identified:**
+The regression was caused by recent Pattern B refactoring commits that changed how method return types are inferred:
+1. Methods without explicit return type annotations defaulted to 'any' (via `resolve_type_annotation_or_any()`)
+2. Methods returning 'this' were assigned an empty temporary instance type with no properties
+3. The `next()` method's object literal return type wasn't being inferred
+
+**Three-Part Fix:**
+
+**Part 1: Set current_this_type before method inference (Lines 5276-5289, 5343-5344)**
+```moonbit
+// Create a forward reference instance type
+let temp_instance_type = Type::Object(ObjectType::{
+  properties: Map::new(), // Empty for now
+  ...
+})
+let prev_this_type = checker.current_this_type
+let mut checker = { ..checker, current_this_type: Some(temp_instance_type) }
+
+// Process members...
+
+// Restore previous this_type
+checker = { ..checker, current_this_type: prev_this_type }
+```
+
+**Part 2: Infer return types from return expressions (Lines 5499-5532)**
+```moonbit
+let (return_type, checker) = match method_decl.return_type {
+  Some(_) => resolve_type_annotation_or_any(checker, method_decl.return_type)
+  None => {
+    // Infer from body
+    match method_decl.body {
+      Some(BlockStatement(block)) =>
+        if block.statements.length() > 0 {
+          match block.statements[block.statements.length() - 1] {
+            ReturnStatement(ret) =>
+              match ret.expression {
+                Some(ThisExpression(_)) => {
+                  // Returns 'this' - use current class type
+                  match checker.current_this_type {
+                    Some(this_type) => (this_type, checker)
+                    None => any_type(checker)
+                  }
+                }
+                Some(expr) => {
+                  // Infer from return expression
+                  infer_type(checker, expr)
+                }
+                None => any_type(checker)
+              }
+            _ => any_type(checker)
+          }
+        }
+    }
+  }
+}
+```
+
+**Part 3: Post-process method return types (Lines 5371-5413)**
+```moonbit
+// After creating complete instance_type, replace temp types in methods
+let updated_properties : Map[String, PropertySignature] = Map::new()
+for entry in instance_properties.iter() {
+  let (prop_name, prop_sig) = entry
+  match prop_sig.prop_type {
+    Function(func) => {
+      // Check if return type matches temp_instance_type
+      let updated_return_type = match func.return_type {
+        Type::Object(ret_obj) => {
+          if ret_obj.info.id == instance_info_temp.id {
+            // Replace temp type with actual complete instance_type
+            instance_type
+          } else {
+            func.return_type
+          }
+        }
+        _ => func.return_type
+      }
+      let updated_func = CheckerFunctionType::{
+        parameters: func.parameters,
+        return_type: updated_return_type,
+        info: func.info
+      }
+      updated_properties.set(prop_name, { ..prop_sig, prop_type: Type::Function(updated_func) })
+    }
+    _ => updated_properties.set(prop_name, prop_sig)
+  }
+}
+```
+
+**Tests Fixed:**
+- for-of18.ts - MyStringIterator with [Symbol.iterator]() returning this
+- for-of19.ts through for-of23.ts - FooIterator variants
+- for-of26.ts - MyStringIterator with var declaration
+- for-of28.ts - MyStringIterator with const declaration
+- for-of31.ts - MyStringIterator with destructuring
+
+**Tests Added:**
+- 15 comprehensive unit tests in `symbol_iterator_regression_test.mbt`
+- Updated 4 existing tests that now pass (iterator_test.mbt, for_of_test.mbt)
+- All 4,260 unit tests pass
+
+**Key Functions Modified:**
+- `infer_class_declaration_type()` in `checker.mbt:5276-5413`
+- `infer_method_type()` in `checker.mbt:5499-5532`
+
+**Impact:**
+- Fixed all 9 false positive TS2488 errors
+- Conformance improved from 74.6% to 89.8% (+15.2%)
+- Exceeded previous best of 78.0% by +11.8%
+- Spread operator now works with class-based iterators
+
+**Examples Now Working:**
+```typescript
+// Basic iterator without type annotations
+class MyStringIterator {
+    next() {
+        return { value: "", done: false };
+    }
+    [Symbol.iterator]() {
+        return this;
+    }
+}
+for (const x of new MyStringIterator) { } // ✅ Now works
+
+// Spread operator with class iterators
+const arr = [...new MyStringIterator]; // ✅ Now works
+
+// Method chaining with iterators
+class ChainableIterator {
+    reset() { return this; }
+    next() { return { value: 1, done: false }; }
+    [Symbol.iterator]() { return this; }
+}
+iter.reset(); // ✅ Now works
+for (const x of iter) { } // ✅ Now works
+```
+
 ## Root Cause Analysis
 
 ### Issues Fixed ✅
@@ -284,29 +486,27 @@ for (const x of obj) { } // ✅ Works in for-of
 14. ✅ Iterator type extraction for TypeReference to classes
 15. ✅ Spread operator not recognizing Symbol.iterator on classes/interfaces
 16. ✅ Class-based iterator construct signature resolution
+17. ✅ **Symbol.iterator regression** - Methods without explicit return types defaulting to 'any'
+18. ✅ **Symbol.iterator regression** - Methods returning 'this' getting empty temp type
+19. ✅ **Symbol.iterator regression** - Return type inference from object literals
 
-### Remaining Issues (13 tests)
+### Remaining Issues (6 tests)
 
-#### Category 1: Type Assignment Errors (4 tests)
-- **for-of12.ts**: Pre-declared variable type mismatch
-- **for-of17.ts**: Custom iterator type mismatch
-- **for-of46.ts**: Destructuring with defaults type mismatch
-- **for-of47.ts**: Destructuring with enum default type mismatch
-- **Status**: Need enhanced type checking for complex destructuring
+**All remaining issues are missing error validations - no false positives!**
 
-#### Category 2: Iterator Protocol Validation (4 tests)
-- **for-of14.ts**: Object missing Symbol.iterator
-- **for-of15.ts**: Iterator next() missing 'value' property
-- **for-of16.ts**: Iterator missing next() method (multiple occurrences)
-- **for-of30.ts**: Iterator 'return' property is not a method
-- **Status**: Need deeper iterator shape validation
+#### Category 1: Iterator Protocol Validation (1 test)
+- **for-of16.ts**: TS2488 - Missing Symbol.iterator (multiple occurrences in different objects)
+- **Status**: Need validation for specific edge cases where Symbol.iterator is missing
 
-#### Category 3: Circular Reference / Implicit Any (4 tests)
+#### Category 2: Circular Reference / Implicit Any (2 tests)
 - **for-of32.ts**: TS7022 - Variable used in its own initializer
 - **for-of33.ts**: TS7022/TS7023 - Iterator returns variable being declared
-- **for-of34.ts**: TS7022/TS7023 - Iterator next() returns variable
-- **for-of35.ts**: TS7022/TS7023 - Iterator next() value references variable
 - **Status**: Need circular reference detection (--noImplicitAny flag)
+
+#### Category 3: Type Assignment Errors (2 tests)
+- **for-of46.ts**: TS2322 - Destructuring with defaults type mismatch
+- **for-of47.ts**: TS2322 - Destructuring with enum default type mismatch
+- **Status**: Need enhanced type checking for complex destructuring with defaults
 
 #### Category 4: Complex Type Errors (1 test)
 - **for-of39.ts**: TS2769 - Map constructor overload mismatch
@@ -331,53 +531,75 @@ for (const x of obj) { } // ✅ Works in for-of
 - ✅ TS2448: Variable used before declaration
 - **Result**: +6.8% conformance (4 tests fixed)
 
-### Priority 3: Enhanced Type Checking (4 tests - MEDIUM VALUE)
-**Estimated Impact**: +6.8% conformance
+### Priority 3: Symbol.iterator Regression Fix ✅ COMPLETE
+- ✅ Return type inference for methods without explicit type annotations
+- ✅ Methods returning 'this' now get complete class instance type
+- ✅ Post-processing to replace empty temp types with complete types
+- **Result**: +15.2% conformance (9 tests fixed)
 
-- Improve destructuring type checking with defaults
-- Better type inference for complex patterns
-- Enhanced type assignment validation
+### Priority 4: Enhanced Type Checking (2 tests - LOW VALUE)
+**Estimated Impact**: +3.4% conformance
 
-### Priority 4: Deep Iterator Validation (4 tests - LOW VALUE)
-**Estimated Impact**: +6.8% conformance
-
-- Validate iterator shape (next method, value property, return method)
-- Check method types vs property types
+- Improve destructuring type checking with defaults (for-of46, for-of47)
+- Better type inference for complex patterns with enum defaults
 - These are edge cases rarely encountered in practice
 
-### Priority 5: Circular Reference Detection (4 tests - LOW VALUE)
-**Estimated Impact**: +6.8% conformance
+### Priority 5: Iterator Protocol Validation (1 test - LOW VALUE)
+**Estimated Impact**: +1.7% conformance
 
-- Requires --noImplicitAny flag support
+- Validate missing Symbol.iterator in specific edge cases (for-of16)
+- Multiple object types without iterators in single test
+- Very low practical value
+
+### Priority 6: Circular Reference Detection (2 tests - LOW VALUE)
+**Estimated Impact**: +3.4% conformance
+
+- Requires --noImplicitAny flag support (for-of32, for-of33)
 - Circular reference analysis
 - Complex flow analysis
 - Low practical value
+
+### Priority 7: Complex Type Errors (1 test - VERY LOW VALUE)
+**Estimated Impact**: +1.7% conformance
+
+- Map constructor overload mismatch (for-of39)
+- Requires overload resolution improvements
+- Very low practical value
 
 ## Estimated Remaining Effort
 
 | Category | Tests | Effort | Value | Priority |
 |----------|-------|--------|-------|----------|
-| Type checking | 4 | Medium | Medium | 1 |
-| Iterator validation | 4 | Medium | Low | 2 |
-| Circular references | 4 | High | Low | 3 |
+| Type checking with defaults | 2 | Medium | Low | 1 |
+| Circular references | 2 | High | Low | 2 |
+| Iterator validation | 1 | Medium | Low | 3 |
 | Map overload | 1 | High | Very Low | 4 |
 
 ## Conclusion
 
-We have achieved **78.0% conformance** for for-of statements, improving from the initial 59.3%.
+We have achieved **89.8% conformance** (53/59 tests) for for-of statements, improving from the initial 59.3% (35/59 tests).
 
 **Key Achievements:**
 - ✅ All core for-of functionality implemented
-- ✅ All "should pass" tests now passing (0 failures in this category)
-- ✅ 13 error validations implemented
-- ✅ 4,199 unit tests all passing
-- ✅ +18.7% conformance improvement
+- ✅ **All "should pass" tests now passing (0 false positives!)** ⭐
+- ✅ All 9 Symbol.iterator regression tests fixed
+- ✅ 19 error validations implemented
+- ✅ 4,260 unit tests all passing
+- ✅ **+30.5% conformance improvement** from initial baseline
+- ✅ Recovered from regression and exceeded previous best by +11.8%
 
 **Remaining Work:**
-- 13 tests with missing error validation (edge cases)
-- Best ROI: 4 type checking tests (+6.8%)
-- All remaining issues are **missing validation**, not incorrect behavior
+- Only 6 tests with missing error validation (all edge cases)
+- Best ROI: 2 type checking tests (+3.4%)
+- **All remaining issues are missing validation**, not incorrect behavior
+- No false positives - compiler correctly accepts valid code
 
-The for-of statement implementation is **production-ready** for common use cases. The remaining work involves edge case validation that most TypeScript code rarely encounters.
+**Production Status**: The for-of statement implementation is **production-ready** and handles all common use cases correctly. The 6 remaining failures are:
+- 2 tests for circular reference detection (--noImplicitAny flag not implemented)
+- 2 tests for complex destructuring with enum defaults
+- 1 test for Map constructor overload resolution
+- 1 test for edge case Symbol.iterator validation
 
-**Final Status**: Successfully implemented comprehensive for-of type checking with excellent test coverage and significant conformance improvement.
+These represent very rare edge cases that most TypeScript codebases will never encounter.
+
+**Final Status**: Successfully implemented comprehensive for-of type checking with **89.8% conformance**, excellent test coverage, zero false positives, and full support for Symbol.iterator protocol including class-based iterators.

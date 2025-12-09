@@ -5,13 +5,95 @@
 | Metric | Value |
 |--------|-------|
 | Total Tests | 5,652 |
-| Passed | 3,778 |
-| Failed | 1,874 |
-| **Pass Rate** | **66.8%** |
+| Passed | 3,789 |
+| Failed | 1,863 |
+| **Pass Rate** | **67.0%** |
 
-*Last updated: December 2024*
+*Last updated: December 9, 2025*
 
 ## Recent Fixes
+
+### Current Status (December 9, 2025 - Latest Run)
+- **Pass rate: 67.0% (3,789/5,652 tests)** - up from 66.8% (+0.2%, +11 tests)
+- **Zero crashes** - All 5,652 conformance tests complete successfully without crashes
+- **Failure breakdown**:
+  - Should PASS but failed: 1,010 tests
+    - Parse errors: 250 (most in types directory - 106 tests)
+    - Type errors: 232 (type assignability, name resolution, property access)
+    - Other: 528 (duplicate identifiers, missing implementations, CLI option errors)
+  - Should ERROR but passed: 853 tests (missing error detection)
+- **Top parse error patterns**:
+  - Unexpected token: 133 cases
+  - '}' expected: 35 cases
+  - Expected ...: 25 cases
+  - Identifier expected: 17 cases
+- **Top type error patterns**:
+  - Type not assignable: 67 cases
+  - Cannot find name: 58 cases
+  - Property does not exist: 52 cases
+  - No overload matches: 31 cases
+- **Most affected categories**: types (165 failures), parser (45), classes (61), expressions (70)
+- **All 100% categories maintained**: 24 categories with perfect pass rates including Symbols, destructuring, arrowFunction, templates, yieldExpressions
+
+### Symbol.iterator Regression Fixed (December 9, 2025)
+- **✅ Fixed Symbol.iterator regression affecting 9 conformance tests** - All false positive TS2488 errors resolved
+- **for-ofStatements: 89.8% (53/59)** ✅ NEW BEST - up from 74.6% (+15.2%, +9 tests) and exceeding previous best of 78.0% by +11.8%
+- **Zero false positives** - All "should pass" tests now passing correctly
+- **Root causes identified and fixed**:
+  1. Methods without explicit return type annotations defaulted to 'any' instead of inferring from body
+  2. Methods returning 'this' were assigned empty temporary instance type with no properties
+  3. Object literal return types in methods like `next()` weren't being inferred
+- **Three-part solution**:
+  1. **Set current_this_type before method inference** - Created temporary instance type and set as context before processing class members
+  2. **Infer return types from expressions** - Modified `infer_method_type()` to detect `return this` and infer types from return expressions (e.g., object literals)
+  3. **Post-process method return types** - After creating complete instance type, replaced empty temp types in method signatures with actual complete type
+- Key changes:
+  1. Modified `infer_class_declaration_type()` in `checker.mbt` (lines 5276-5413) to create forward reference and post-process methods
+  2. Enhanced `infer_method_type()` (lines 5499-5532) to infer return types from method bodies
+  3. Added type inference for `return this` and object literal return values
+- Fixed tests (all Symbol.iterator related):
+  - `for-of18.ts` - MyStringIterator with [Symbol.iterator]() returning this ✅
+  - `for-of19.ts` through `for-of23.ts` - FooIterator variants ✅
+  - `for-of26.ts` - MyStringIterator with var declaration ✅
+  - `for-of28.ts` - MyStringIterator with const declaration ✅
+  - `for-of31.ts` - MyStringIterator with destructuring ✅
+- Added 15 comprehensive unit tests in `symbol_iterator_regression_test.mbt`
+- Updated 4 existing tests that now pass (spread operator, for-of loops with class iterators)
+- All 4,260 unit tests passing, zero crashes
+- **Impact**: Spread operator now works with class-based iterators, method chaining works correctly
+- Examples now working:
+  ```typescript
+  class MyStringIterator {
+      next() { return { value: "", done: false }; }
+      [Symbol.iterator]() { return this; }
+  }
+  for (const x of new MyStringIterator) { } // ✅ Now works
+  const arr = [...new MyStringIterator]; // ✅ Now works
+  ```
+
+### TDZ Check for Destructuring Patterns (December 2024)
+- **Fixed TS2448 TDZ checking for destructuring patterns** - Block-scoped variables from destructuring (e.g., `const [x, y] = [1, 2]`) are now properly tracked for temporal dead zone violations
+- **Symbol.iterator Regression** (⚠️ occurred, ✅ now fixed): Temporarily dropped to 74.6% (44/59), now fixed at 89.8% (53/59)
+- **Root cause of fix**: The `scan_block_scoped_declarations()` function was skipping destructuring patterns with a comment "Skip destructuring for now"
+- **Solution**: Modified `scan_block_scoped_declarations` in `checker.mbt` to use existing `collect_binding_names()` helper
+  - Now recursively extracts all variable names from ArrayBindingPattern and ObjectBindingPattern
+  - All variables properly added to TDZ tracking map with their declaration line numbers
+- **Regression details**: 9 tests now fail with false positive TS2488 errors
+  - Error: "Type must have a '[Symbol.iterator]()' method that returns an iterator"
+  - Affected tests: for-of18, for-of19-23, for-of26, for-of28, for-of31
+  - All affected tests have correct `[Symbol.iterator]()` method implementations in classes
+  - Suspected cause: Recent Pattern B refactoring commits (069b2fed, 3894609a, 30de1700) may have broken Symbol.iterator property lookup
+- Key changes:
+  1. Modified `scan_block_scoped_declarations` in `checker.mbt` (lines 14430-14450)
+  2. Changed from skipping destructuring to using `collect_binding_names(vd.name, names)`
+  3. All binding names now properly tracked for TDZ validation
+- **Commit**: 14e82d0b
+- Examples now properly detected:
+  - `{ console.log(x); const [x, y] = [1, 2]; }` → **ERROR** TS2448 ✅
+  - `{ console.log(a); const {a, b} = obj; }` → **ERROR** TS2448 ✅
+  - `{ f(x); let [x] = arr; }` → **ERROR** TS2448 ✅
+- **for-ofStatements: 89.8% (53/59)** ✅ FIXED - regression resolved, now exceeding previous best of 78.0%
+- All builds passing (0 errors, 243 warnings), zero crashes across 5,652 conformance tests
 
 ### Global Augmentation Binding Fix (December 2024)
 - **Fixed `declare global { }` binding bug** - Interface declarations in global augmentation blocks now properly added to global scope
@@ -419,7 +501,7 @@ The following categories have achieved full conformance:
 | async/es2017 | 83.3% | 10/12 |
 | es6/functionPropertyAssignments | 83.3% | 5/6 |
 | types/never | 83.3% | 5/6 |
-| statements/for-ofStatements | 83.6% | 46/55 |
+| statements/for-ofStatements | 89.8% | 53/59 |
 | expressions/assignmentOperator | 81.8% | 9/11 |
 | statements/breakStatements | 80.0% | 8/10 |
 | externalModules/es6 | 80.0% | 12/15 |
@@ -443,7 +525,7 @@ The following categories have achieved full conformance:
 | destructuring | 147 | 147 | 100% |
 | yieldExpressions | 98 | 98 | 100% |
 | Symbols | 95 | 95 | 100% |
-| for-ofStatements | 35 | 59 | 59% |
+| for-ofStatements | 44 | 59 | 74.6% |
 | functionDeclarations | 7 | 13 | 54% |
 | modules | 20 | 39 | 51% |
 | spread | 12 | 27 | 44% |

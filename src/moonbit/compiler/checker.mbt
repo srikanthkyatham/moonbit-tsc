@@ -10176,6 +10176,7 @@ fn infer_array_literal_type(
                   let (elem_type_opt, c) = extract_iterable_element_type(
                     checker,
                     spread_type,
+                    None,
                   )
                   checker = c
                   match elem_type_opt {
@@ -10217,6 +10218,7 @@ fn infer_array_literal_type(
                 let (elem_type_opt, c) = extract_iterable_element_type(
                   checker,
                   spread_type,
+                  None,
                 )
                 checker = c
                 match elem_type_opt {
@@ -12576,7 +12578,9 @@ fn collect_yield_types_from_node(
           if ye.is_delegate {
             // yield*: extract element type from iterable
             let (elem_type, c) = extract_iterable_element_type(
-              checker, expr_type,
+              checker,
+              expr_type,
+              None,
             )
             checker = c
             match elem_type {
@@ -12732,9 +12736,11 @@ fn collect_yield_types_from_node(
 
 ///|
 /// Extract the element type from an Iterable type
+/// If expr_location_opt is provided, will validate iterator properties (TS2767)
 fn extract_iterable_element_type(
   checker : TypeChecker,
   iter_type : Type,
+  expr_location_opt : SourceLocation?,
 ) -> (Type?, TypeChecker) {
   match iter_type {
     Type::Array(arr) => (Some(arr.element_type), checker)
@@ -12754,7 +12760,7 @@ fn extract_iterable_element_type(
         match checker.type_cache.get(tr.name) {
           Some(resolved_type) =>
             // Recursively check the resolved type
-            extract_iterable_element_type(checker, resolved_type)
+            extract_iterable_element_type(checker, resolved_type, expr_location_opt)
           None =>
             // Look up symbol and get its type
             match lookup_symbol(checker, tr.name) {
@@ -12769,10 +12775,11 @@ fn extract_iterable_element_type(
                           extract_iterable_element_type(
                             c,
                             obj.construct_signatures[0].return_type,
+                            expr_location_opt,
                           )
                         } else {
                           // Not a class constructor, check the object itself
-                          extract_iterable_element_type(c, class_type)
+                          extract_iterable_element_type(c, class_type, expr_location_opt)
                         }
                       _ => (None, c)
                     }
@@ -12806,6 +12813,35 @@ fn extract_iterable_element_type(
           // Instead, directly look for next() method on the return type
           match func.return_type {
             Object(iter_obj) => {
+              // First, validate iterator properties (TS2767) if location provided
+              // Check if 'return' property exists and is not a method
+              let mut checker = checker
+              match expr_location_opt {
+                Some(expr_location) => {
+                  for entry in iter_obj.properties {
+                    let (prop_name, prop) = entry
+                    if prop_name == "return" {
+                      match prop.prop_type {
+                        Function(_) => ()  // OK - return is a method
+                        _ => {
+                          // Error: return property is not a method
+                          // Note: We store this in checker but continue processing
+                          // to extract the element type
+                          checker = add_diagnostic_with_code(
+                            checker,
+                            "The 'return' property of an iterator must be a method.",
+                            expr_location,
+                            TS2767,
+                          )
+                        }
+                      }
+                      break
+                    }
+                  }
+                }
+                None => ()  // Skip validation if no location provided
+              }
+
               // Look for next() method on the iterator
               for entry in iter_obj.properties {
                 let (prop_name, prop) = entry
@@ -12879,6 +12915,35 @@ fn extract_iterable_element_type(
                         // Now look for next() on the instance type
                         match instance_type {
                           Object(iter_obj) => {
+                            // Validate iterator properties (TS2767) if location provided
+                            // Check if 'return' property exists and is not a method
+                            let checker_after_validation = match expr_location_opt {
+                              Some(expr_location) => {
+                                let mut checker_tmp = c
+                                for entry in iter_obj.properties {
+                                  let (prop_name, prop) = entry
+                                  if prop_name == "return" {
+                                    match prop.prop_type {
+                                      Function(_) => ()  // OK - return is a method
+                                      _ => {
+                                        // Error: return property is not a method
+                                        checker_tmp = add_diagnostic_with_code(
+                                          checker_tmp,
+                                          "The 'return' property of an iterator must be a method.",
+                                          expr_location,
+                                          TS2767,
+                                        )
+                                      }
+                                    }
+                                    break
+                                  }
+                                }
+                                checker_tmp
+                              }
+                              None => c  // Skip validation if no location provided
+                            }
+
+                            // Look for next() method
                             for entry in iter_obj.properties {
                               let (prop_name, prop) = entry
                               if prop_name == "next" {
@@ -12889,20 +12954,20 @@ fn extract_iterable_element_type(
                                         for entry in ret_obj.properties {
                                           let (val_name, val_prop) = entry
                                           if val_name == "value" {
-                                            return (Some(val_prop.prop_type), c)
+                                            return (Some(val_prop.prop_type), checker_after_validation)
                                           }
                                         }
                                       }
                                       Any(_) => {
                                         // If next() returns 'any', treat as valid iterator
-                                        let (any_t, c2) = any_type(c)
+                                        let (any_t, c2) = any_type(checker_after_validation)
                                         return (Some(any_t), c2)
                                       }
                                       _ => ()
                                     }
                                   Any(_) => {
                                     // If next is of type 'any' (e.g., next: any), treat as valid iterator
-                                    let (any_t, c2) = any_type(c)
+                                    let (any_t, c2) = any_type(checker_after_validation)
                                     return (Some(any_t), c2)
                                   }
                                   _ => ()
@@ -12910,7 +12975,7 @@ fn extract_iterable_element_type(
                                 break
                               }
                             }
-                            (None, c)
+                            (None, checker_after_validation)
                           }
                           _ => (None, c)
                         }
@@ -14471,45 +14536,6 @@ fn add_for_of_variable_to_scope(
 }
 
 ///|
-/// Validate that an iterator's 'return' property (if present) is a method
-/// Reports TS2767 if the 'return' property exists but is not a function
-fn validate_iterator_return_property(
-  checker : TypeChecker,
-  iterable_type : Type,
-  expr_location : SourceLocation,
-) -> TypeChecker {
-  // Helper function to check if an object has an invalid 'return' property
-  fn check_return_property(checker : TypeChecker, obj : ObjectType, expr_location : SourceLocation) -> TypeChecker {
-    for entry in obj.properties {
-      let (prop_name, prop) = entry
-      if prop_name == "return" {
-        // Found 'return' property - check if it's a function
-        match prop.prop_type {
-          Function(_) => return checker  // OK - return is a method
-          _ => {
-            // Error: return property is not a method
-            return add_diagnostic_with_code(
-              checker,
-              "The 'return' property of an iterator must be a method.",
-              expr_location,
-              TS2767,
-            )
-          }
-        }
-      }
-    }
-    checker
-  }
-
-  // When [Symbol.iterator]() returns 'this', the iterable IS the iterator
-  // So we check the iterable_type directly first
-  match iterable_type {
-    Object(obj) => check_return_property(checker, obj, expr_location)
-    _ => checker
-  }
-}
-
-///|
 /// Get the element type of an iterable for for-of loops
 /// Validates iterator protocol and reports appropriate errors:
 /// - TS2488: Type must have '[Symbol.iterator]()' method that returns an iterator
@@ -14527,19 +14553,11 @@ fn get_for_of_element_type(
       let (elem_type_opt, checker) = extract_iterable_element_type(
         checker,
         iterable_type,
+        Some(expr_location),
       )
 
       match elem_type_opt {
-        Some(elem_type) => {
-          // Successfully extracted element type, now validate iterator properties
-          // Check TS2767: iterator's 'return' property must be a method
-          let checker = validate_iterator_return_property(
-            checker,
-            iterable_type,
-            expr_location,
-          )
-          (elem_type, checker)
-        }
+        Some(elem_type) => (elem_type, checker)
         None => {
           // Could not extract element type - check if we should report error
           // Only report TS2488 for obviously non-iterable types (primitives)
