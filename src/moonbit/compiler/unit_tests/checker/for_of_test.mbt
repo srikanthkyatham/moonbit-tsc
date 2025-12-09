@@ -125,8 +125,9 @@ test "for-of with custom object - should not error" {
     #|  console.log(x);
     #|}
   let result = check_for_of(source)
+  let diagnostics = get_diagnostics(result)
   // Should not report TS2488 for complex types
-  assert_false(has_error(get_diagnostics(result), 2488))
+  assert_false(has_error(diagnostics, 2488))
 }
 
 // ============================================================================

@@ -14430,7 +14430,8 @@ fn check_for_of_statement(
   let checker = check_statement(checker, for_of_stmt.statement)
 
   // Pop the loop scope
-  pop_local_scope(checker)
+  let checker = pop_local_scope(checker)
+  checker
 }
 
 ///|
@@ -14456,11 +14457,12 @@ fn add_for_of_variable_to_scope(
           Identifier(id) => {
             // Use add_local_const_variable for let/const to track block-scoped variables
             // This is needed for TS2481 error detection (var conflicts with let/const)
-            if var_stmt.is_let || var_stmt.is_const {
+            let checker = if var_stmt.is_let || var_stmt.is_const {
               add_local_const_variable(checker, id.name, elem_type)
             } else {
               add_local_variable(checker, id.name, elem_type)
             }
+            checker
           }
           ArrayBindingPattern(_) | ObjectBindingPattern(_) => {
             // Check for duplicate bindings (TS2451) if let/const
@@ -14471,11 +14473,12 @@ fn add_for_of_variable_to_scope(
             }
             // Handle destructuring patterns
             // For let/const, we need to track binding names in const_vars for TS2481
-            if var_stmt.is_let || var_stmt.is_const {
+            let checker = if var_stmt.is_let || var_stmt.is_const {
               add_binding_pattern_variables_as_const(checker, decl.name, elem_type)
             } else {
               add_binding_pattern_variables(checker, decl.name, elem_type)
             }
+            checker
           }
           _ => checker
         }
