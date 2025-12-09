@@ -13009,31 +13009,10 @@ fn extract_iterable_element_type(
           (Some(any_t), c)
         }
         _ => {
-          // No Symbol.iterator found - check if this IS an iterator (has next() method)
-          // This handles edge cases where the object is directly used as an iterator
-          for entry in obj.properties {
-            let (prop_name, prop) = entry
-            if prop_name == "next" {
-              match prop.prop_type {
-                Function(next_func) => {
-                  // next() returns { value: T, done: boolean }
-                  match next_func.return_type {
-                    Object(ret_obj) => {
-                      for entry in ret_obj.properties {
-                        let (val_name, val_prop) = entry
-                        if val_name == "value" {
-                          return (Some(val_prop.prop_type), checker)
-                        }
-                      }
-                    }
-                    _ => ()
-                  }
-                }
-                _ => ()
-              }
-              break
-            }
-          }
+          // No Symbol.iterator found
+          // NOTE: Objects with next() but no Symbol.iterator are NOT iterable for for-of loops.
+          // For-of requires [Symbol.iterator](). The caller (get_for_of_element_type) will
+          // check for this specific case and report TS2488 if appropriate.
           (None, checker)
         }
       }
@@ -14574,18 +14553,84 @@ fn get_for_of_element_type(
           // (meaning [Symbol.iterator]() was not found or didn't work)
           let is_direct_iterator = match iterable_type {
             Object(obj) => {
-              let mut has_next = false
-              for entry in obj.properties {
-                let (prop_name, _) = entry
-                if prop_name == "next" {
-                  has_next = true
-                  break
+              // Check if it's a named type, and if so, whether it's an interface or class
+              match obj.class_name {
+                Some(name) =>
+                  match lookup_symbol(checker, name) {
+                    Some(symbol) =>
+                      match symbol.kind {
+                        Interface => false // Interface - don't check, might have Symbol.iterator at runtime
+                        Class | _ => {
+                          // Class or other type - check for next() method
+                          let mut has_next = false
+                          for entry in obj.properties {
+                            let (prop_name, _) = entry
+                            if prop_name == "next" {
+                              has_next = true
+                              break
+                            }
+                          }
+                          has_next
+                        }
+                      }
+                    None => {
+                      // Symbol not found - check for next() to be safe
+                      let mut has_next = false
+                      for entry in obj.properties {
+                        let (prop_name, _) = entry
+                        if prop_name == "next" {
+                          has_next = true
+                          break
+                        }
+                      }
+                      has_next
+                    }
+                  }
+                None => {
+                  // No name - it's an anonymous object literal
+                  // Check if it looks like a direct iterator (has next() but no Symbol.iterator)
+                  let mut has_next = false
+                  for entry in obj.properties {
+                    let (prop_name, _) = entry
+                    if prop_name == "next" {
+                      has_next = true
+                      break
+                    }
+                  }
+                  has_next
                 }
               }
-              // It's a direct iterator if it has next() but we couldn't extract
-              // the iterable element type (meaning no working [Symbol.iterator]())
-              has_next
             }
+            TypeReference(tr) =>
+              // For TypeReference, only check classes (not interfaces)
+              match lookup_symbol(checker, tr.name) {
+                Some(symbol) =>
+                  match symbol.kind {
+                    Interface => false // Interface - don't check
+                    Class | _ => {
+                      // Class or other type - check for next() method
+                      match get_symbol_type(checker, symbol) {
+                        (Some(resolved_type), _) =>
+                          match resolved_type {
+                            Object(obj) => {
+                              let mut has_next = false
+                              for entry in obj.properties {
+                                let (prop_name, _) = entry
+                                if prop_name == "next" {
+                                  has_next = true
+                                  break
+                                }
+                              }
+                              has_next
+                            }
+                            _ => false
+                          }
+                        _ => false
+                      }
+                    }
+                  }
+                _ => false
+              }
             _ => false
           }
 
@@ -14593,16 +14638,84 @@ fn get_for_of_element_type(
           // If it does, failing to extract element type is an error
           let has_symbol_iterator = match iterable_type {
             Object(obj) => {
-              let mut found = false
-              for entry in obj.properties {
-                let (prop_name, _) = entry
-                if prop_name == "__@iterator" || prop_name == "[Symbol.iterator]" {
-                  found = true
-                  break
+              // Check if it's a named type, and if so, whether it's an interface or class
+              match obj.class_name {
+                Some(name) =>
+                  match lookup_symbol(checker, name) {
+                    Some(symbol) =>
+                      match symbol.kind {
+                        Interface => false // Interface - don't check
+                        Class | _ => {
+                          // Class or other type - check for Symbol.iterator
+                          let mut found = false
+                          for entry in obj.properties {
+                            let (prop_name, _) = entry
+                            if prop_name == "__@iterator" || prop_name == "[Symbol.iterator]" {
+                              found = true
+                              break
+                            }
+                          }
+                          found
+                        }
+                      }
+                    None => {
+                      // Symbol not found - check for Symbol.iterator to be safe
+                      let mut found = false
+                      for entry in obj.properties {
+                        let (prop_name, _) = entry
+                        if prop_name == "__@iterator" || prop_name == "[Symbol.iterator]" {
+                          found = true
+                          break
+                        }
+                      }
+                      found
+                    }
+                  }
+                None => {
+                  // No name - it's an anonymous object literal
+                  // Check if it has Symbol.iterator
+                  let mut found = false
+                  for entry in obj.properties {
+                    let (prop_name, _) = entry
+                    if prop_name == "__@iterator" || prop_name == "[Symbol.iterator]" {
+                      found = true
+                      break
+                    }
+                  }
+                  found
                 }
               }
-              found
             }
+            TypeReference(tr) =>
+              // For TypeReference, only check classes (not interfaces)
+              match lookup_symbol(checker, tr.name) {
+                Some(symbol) =>
+                  match symbol.kind {
+                    Interface => false // Interface - don't check
+                    Class | _ => {
+                      // Class or other type - check for Symbol.iterator
+                      match get_symbol_type(checker, symbol) {
+                        (Some(resolved_type), _) =>
+                          match resolved_type {
+                            Object(obj) => {
+                              let mut found = false
+                              for entry in obj.properties {
+                                let (prop_name, _) = entry
+                                if prop_name == "__@iterator" || prop_name == "[Symbol.iterator]" {
+                                  found = true
+                                  break
+                                }
+                              }
+                              found
+                            }
+                            _ => false
+                          }
+                        _ => false
+                      }
+                    }
+                  }
+                _ => false
+              }
             _ => false
           }
 
