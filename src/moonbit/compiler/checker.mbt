@@ -281,6 +281,7 @@ pub struct TypeChecker {
   generator_has_return_type : Bool // Tracks if current generator has a return type annotation
   generator_yield_type : Type? // Expected yield type from generator return type annotation (e.g., Foo from IterableIterator<Foo>)
   collected_yield_types : Array[Type] // Collected yield types during generator body checking (for type inference)
+  collected_return_types : Array[Type] // Collected return types during function body checking (for type inference)
   block_scoped_decls : Map[String, Int] // Variable name -> declaration line (for TS2448 TDZ check)
   uninitialized_vars : Map[String, Int] // Variable name -> declaration line (for TS2454 definite assignment)
   in_static_context : Bool // Tracks if we're in a static property initializer (for TS2334)
@@ -359,6 +360,7 @@ pub fn TypeChecker::new_with_options(
     generator_has_return_type: false,
     generator_yield_type: None,
     collected_yield_types: [],
+    collected_return_types: [],
     block_scoped_decls: Map::new(),
     uninitialized_vars: Map::new(),
     in_static_context: false,
@@ -9980,6 +9982,11 @@ fn infer_function_expression_type(
     )
   }
 
+  // Save and reset collected return types for return type inference
+  // Each function has its own set of collected return types
+  let saved_collected_return_types = checker.collected_return_types
+  let checker = { ..checker, collected_return_types: [] }
+
   // Build a function type from the function expression and add parameters to local scope
   let mut c = checker
 
@@ -10087,6 +10094,11 @@ fn infer_function_expression_type(
   // Pop the local scope
   let checker = pop_local_scope(checker)
 
+  // Collect return types for type inference
+  let collected_return_types = checker.collected_return_types
+  // Restore the outer function's collected return types
+  let checker = { ..checker, collected_return_types: saved_collected_return_types }
+
   // For generator functions, create a Generator type if no explicit return type
   // The Generator type is inferred from collected yield types
   let (final_type, checker) = if fe.is_generator && fe.return_type is None {
@@ -10118,6 +10130,25 @@ fn infer_function_expression_type(
       Type::Function({
         parameters: preliminary_params,
         return_type: generator_type,
+        info: func_info,
+      }),
+      checker,
+    )
+  } else if fe.return_type is None && not(collected_return_types.is_empty()) {
+    // Non-generator function without explicit return type - infer from collected return types
+    let (inferred_return_type, checker) = if collected_return_types.length() == 1 {
+      (collected_return_types[0], checker)
+    } else {
+      // Create union of all return types
+      let (info, checker) = create_type_info(checker)
+      (Union({ types: collected_return_types, info }), checker)
+    }
+    // Create a new function type with inferred return type
+    let (func_info, checker) = create_type_info(checker)
+    (
+      Type::Function({
+        parameters: preliminary_params,
+        return_type: inferred_return_type,
         info: func_info,
       }),
       checker,
@@ -14175,10 +14206,20 @@ fn check_return_statement(
 ) -> TypeChecker {
   match ret.expression {
     Some(expr) => {
-      let (_, checker) = infer_type(checker, expr)
-      checker
+      let (return_type, checker) = infer_type(checker, expr)
+      // Collect return type for type inference in unannotated functions
+      let collected = checker.collected_return_types.copy()
+      collected.push(return_type)
+      { ..checker, collected_return_types: collected }
     }
-    None => checker
+    None => {
+      // Return with no expression is equivalent to return undefined
+      // Collect void type for type inference
+      let (void_type, checker) = void_type(checker)
+      let collected = checker.collected_return_types.copy()
+      collected.push(void_type)
+      { ..checker, collected_return_types: collected }
+    }
   }
 }
 

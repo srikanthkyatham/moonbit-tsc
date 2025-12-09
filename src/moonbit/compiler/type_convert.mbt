@@ -665,6 +665,7 @@ fn TypeChecker::create_type_info(self : TypeChecker) -> (TypeInfo, TypeChecker) 
     implicit_any_array_vars: self.implicit_any_array_vars,
     generator_yield_type: self.generator_yield_type,
     collected_yield_types: self.collected_yield_types,
+    collected_return_types: self.collected_return_types,
   }
   (info, new_checker)
 }
