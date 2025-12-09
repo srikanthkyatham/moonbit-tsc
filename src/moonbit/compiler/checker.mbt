@@ -14435,9 +14435,11 @@ fn scan_block_scoped_declarations(statements : Array[Node]) -> Map[String, Int] 
         // Check if this is let or const (block-scoped)
         if vs.is_let || vs.is_const {
           for vd in vs.declarations {
-            match vd.name {
-              Identifier(id) => decls.set(id.name, vd.location.start.line)
-              _ => () // Skip destructuring for now
+            // Collect all binding names (handles both identifiers and destructuring)
+            let names : Array[String] = []
+            collect_binding_names(vd.name, names)
+            for name in names {
+              decls.set(name, vd.location.start.line)
             }
           }
         }
