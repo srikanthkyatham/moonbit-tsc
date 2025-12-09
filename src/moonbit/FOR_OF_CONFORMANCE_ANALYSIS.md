@@ -1,10 +1,10 @@
 # For-Of Statement Conformance Analysis
 
-## Current Status: 53/59 Tests Pass (89.8%) ✅ NEW BEST
+## Current Status: 52/59 Tests Pass (88.1%) ✅ NEAR BEST
 
-Using the proper conformance test runner (`@tsc_phoenix/run_conformance_tests.exs`), which correctly handles expected error baselines, we currently have **89.8% conformance** for for-of statements.
+Using the proper conformance test runner (`@tsc_phoenix/run_conformance_tests.exs`), which correctly handles expected error baselines, we currently have **88.1% conformance** for for-of statements.
 
-**✅ REGRESSION FIXED**: Symbol.iterator regression has been resolved! Previous best was 78.0% (46/59), and we now have 89.8% (53/59) - a new record improvement of +11.8% (+7 tests).
+**✅ SYMBOL.ITERATOR FIXED + ✅ RETURN TYPE INFERENCE IMPLEMENTED**: Symbol.iterator regression has been resolved AND full return type inference for unannotated functions has been implemented! Previous best was 78.0% (46/59), peak was 89.8% (53/59), now at 88.1% (52/59).
 
 ## Progress Summary
 
@@ -18,31 +18,36 @@ Using the proper conformance test runner (`@tsc_phoenix/run_conformance_tests.ex
 | After duplicate binding check (TS2451) | 42 | 59 | 71.2% | +1.7% |
 | After scope/block validations (TS2304, TS2481, TS2448) | 46 | 59 | 78.0% | +6.8% |
 | After TDZ destructuring fix (commit 14e82d0b) | 44 | 59 | 74.6% | -3.4% ⚠️ |
-| **After Symbol.iterator regression fix (Dec 9 2025)** | **53** | **59** | **89.8%** | **+15.2%** ✅ |
+| After Symbol.iterator regression fix (Dec 9 2025) | 53 | 59 | 89.8% | +15.2% ✅ |
+| **After return type inference (commits 0344a47e, ad44bed8)** | **52** | **59** | **88.1%** | **-1.7%** ⚠️ |
 
-**Total Improvement**: 59.3% → 89.8% = **+30.5%** (+18 tests fixed from initial)
-**Recovery from Regression**: 74.6% → 89.8% = **+15.2%** (+9 tests fixed)
+**Total Improvement**: 59.3% → 88.1% = **+28.8%** (+17 tests fixed from initial)
+**Peak Performance**: 89.8% (53/59) - achieved after Symbol.iterator fix
+**Current Trade-off**: Return type inference fixed test 869 (+1) but exposed 2 circular reference tests (-2), net -1 test
 
 ## Test Breakdown
 
-### Passing Tests: 53 ✓
+### Passing Tests: 52 ✓
 Tests that correctly compile or correctly report expected errors.
 
-### Failing Tests: 6 ✗
+### Failing Tests: 7 ✗
 
 **Failure breakdown:**
 - **Should PASS but failed: 0** ✅ All false positives fixed!
-- **Should ERROR but passed: 6** (missing error detection)
+- **Should ERROR but passed: 7** (missing error detection)
 
-#### Missing Errors (Should ERROR but passed) - 6 tests
+#### Missing Errors (Should ERROR but passed) - 7 tests
 ```
-for-of16.ts   - TS2488: Missing Symbol.iterator (multiple occurrences)
 for-of32.ts   - TS7022: Circular reference implicit any
 for-of33.ts   - TS7022/TS7023: Circular reference implicit any
+for-of34.ts   - TS7022/TS7023: Circular reference implicit any (NEW - exposed by return type inference)
+for-of35.ts   - TS7022/TS7023: Circular reference implicit any (NEW - exposed by return type inference)
 for-of39.ts   - TS2769: Map constructor overload error
 for-of46.ts   - TS2322: Destructuring type mismatch
 for-of47.ts   - TS2322: Destructuring type mismatch
 ```
+
+**Note**: for-of16.ts (TS2488 - missing Symbol.iterator) was FIXED by return type inference! ✅
 
 ## Implementation Summary
 
@@ -467,6 +472,118 @@ iter.reset(); // ✅ Now works
 for (const x of iter) { } // ✅ Now works
 ```
 
+### Commit 10: Return Type Inference for Unannotated Functions (Dec 9 2025)
+**Changes:**
+- Implemented full return type inference for functions without explicit return type annotations
+- Added `collected_return_types` field to TypeChecker struct
+- Modified `check_return_statement()` to collect return types during function body checking
+- Updated `infer_function_expression_type()` to infer return types when no annotation present
+- Creates union types for functions with multiple return types
+- Handles void returns (return with no expression)
+
+**Commits:**
+- `0344a47e` - feat: implement return type inference for unannotated functions
+- `ad44bed8` - test: add comprehensive tests for return type inference
+- `684fc36c` - fix: spread operator now recognizes interfaces with Symbol.iterator
+- `14b52c5d` - docs: clarify limitation for Any return types in iterators
+
+**Implementation Details:**
+
+**Return Type Inference Algorithm:**
+1. When entering a function expression:
+   - Save outer function's `collected_return_types`
+   - Reset `collected_return_types` to `[]`
+2. During function body checking:
+   - `check_return_statement()` collects each return expression's type
+   - Return with no expression adds void type
+3. After function body checking:
+   - Retrieve collected_return_types
+   - Restore outer function's collected_return_types
+4. Infer return type:
+   - No explicit annotation + 1 return type → use that type
+   - No explicit annotation + multiple types → create union type
+   - No explicit annotation + no returns → default to 'any'
+   - Explicit annotation → use annotation (existing behavior)
+
+**Key Functions Modified:**
+- `check_return_statement()` in `checker.mbt:14172-14195`
+- `infer_function_expression_type()` in `checker.mbt:9985-10162`
+- TypeChecker struct in `checker.mbt:284`
+- `create_type_info()` in `type_convert.mbt:668`
+
+**Tests Fixed:**
+- ✅ for-of16.ts - Objects with methods returning empty objects now properly inferred
+- ✅ Unit test 869 - Symbol.iterator returning empty object now correctly typed as `{}`
+
+**Tests Added:**
+- 22 comprehensive unit tests in `return_type_inference_test.mbt`
+- All 4,312 unit tests passing
+
+**Side Effect - New Failing Tests:**
+- ⚠️ for-of34.ts - Now passes incorrectly (should error with TS7022/TS7023)
+- ⚠️ for-of35.ts - Now passes incorrectly (should error with TS7022/TS7023)
+
+**Explanation of Side Effect:**
+These tests contain circular references where `next()` returns a value that references the for-of loop variable being declared:
+```typescript
+class MyStringIterator {
+    next() {
+        return v;  // 'v' is the for-of loop variable
+    }
+    [Symbol.iterator]() { return this; }
+}
+for (var v of new MyStringIterator) { }
+```
+
+**Before return type inference:**
+- `next()` defaulted to return type `any`
+- With `--noImplicitAny` flag, this triggers TS7022/TS7023 errors
+
+**After return type inference:**
+- `next()` infers return type from `return v` expression
+- The inferred type is used, so no implicit 'any' error
+- However, we don't detect that it's a circular reference
+- Test incorrectly passes (missing error detection)
+
+**Trade-off:**
+- Fixed: +1 test (for-of16)
+- Broken: +2 tests (for-of34, for-of35)
+- Net: -1 test (-1.7% conformance)
+- But: Return type inference is a valuable feature with broader benefits
+
+**Impact:**
+- Conformance: 89.8% → 88.1% (-1.7%)
+- Overall improvement from initial: +28.8% (52/59 vs 35/59)
+- 100% of unit tests passing (4,312/4,312)
+- Spread operator now works with interfaces declaring Symbol.iterator
+
+**Examples Now Working:**
+```typescript
+// Empty object return type properly inferred
+function getIterator() {
+    return {};  // Inferred as '{}' not 'any'
+}
+
+// Union types from multiple returns
+function getValue(flag: boolean) {
+    if (flag) return 42;
+    else return "hello";
+}  // Return type: number | string
+
+// Symbol.iterator with inferred return type
+var obj = {
+    [Symbol.iterator]() {
+        return {};  // Properly inferred as '{}'
+    }
+};
+for (var v of obj) { }  // ✅ Now correctly reports TS2488 (no next())
+```
+
+**Future Work:**
+- Implement circular reference detection for --noImplicitAny flag
+- Would fix for-of34 and for-of35
+- Requires flow analysis to detect when return expressions reference variables being initialized
+
 ## Root Cause Analysis
 
 ### Issues Fixed ✅
@@ -490,27 +607,30 @@ for (const x of iter) { } // ✅ Now works
 18. ✅ **Symbol.iterator regression** - Methods returning 'this' getting empty temp type
 19. ✅ **Symbol.iterator regression** - Return type inference from object literals
 
-### Remaining Issues (6 tests)
+### Remaining Issues (7 tests)
 
 **All remaining issues are missing error validations - no false positives!**
 
-#### Category 1: Iterator Protocol Validation (1 test)
-- **for-of16.ts**: TS2488 - Missing Symbol.iterator (multiple occurrences in different objects)
-- **Status**: Need validation for specific edge cases where Symbol.iterator is missing
-
-#### Category 2: Circular Reference / Implicit Any (2 tests)
+#### Category 1: Circular Reference / Implicit Any (4 tests) ⚠️ INCREASED
 - **for-of32.ts**: TS7022 - Variable used in its own initializer
 - **for-of33.ts**: TS7022/TS7023 - Iterator returns variable being declared
-- **Status**: Need circular reference detection (--noImplicitAny flag)
+- **for-of34.ts**: TS7022/TS7023 - next() returns for-of variable (NEW - exposed by return type inference)
+- **for-of35.ts**: TS7022/TS7023 - next() returns for-of variable in object (NEW - exposed by return type inference)
+- **Status**: Need circular reference detection (--noImplicitAny flag support)
+- **Note**: for-of34 and for-of35 now pass incorrectly because return type inference infers the type instead of defaulting to 'any'
 
-#### Category 3: Type Assignment Errors (2 tests)
+#### Category 2: Type Assignment Errors (2 tests)
 - **for-of46.ts**: TS2322 - Destructuring with defaults type mismatch
 - **for-of47.ts**: TS2322 - Destructuring with enum default type mismatch
 - **Status**: Need enhanced type checking for complex destructuring with defaults
 
-#### Category 4: Complex Type Errors (1 test)
+#### Category 3: Complex Type Errors (1 test)
 - **for-of39.ts**: TS2769 - Map constructor overload mismatch
 - **Status**: Need overload resolution improvements
+
+#### Category 4: Iterator Protocol Validation ✅ FIXED!
+- **for-of16.ts**: ~~TS2488 - Missing Symbol.iterator~~ **FIXED by return type inference!**
+- **Status**: No longer failing - return type inference now properly types empty object returns
 
 ## Recommendations
 
@@ -537,27 +657,27 @@ for (const x of iter) { } // ✅ Now works
 - ✅ Post-processing to replace empty temp types with complete types
 - **Result**: +15.2% conformance (9 tests fixed)
 
-### Priority 4: Enhanced Type Checking (2 tests - LOW VALUE)
+### Priority 4: Return Type Inference ✅ COMPLETE
+- ✅ Implemented return type inference for unannotated functions
+- ✅ Fixed for-of16 test (empty object return types)
+- ✅ Added 22 comprehensive unit tests
+- **Result**: +1.7% from for-of16, but -3.4% from for-of34/35 exposure, net -1.7% conformance
+
+### Priority 5: Enhanced Type Checking (2 tests - LOW VALUE)
 **Estimated Impact**: +3.4% conformance
 
 - Improve destructuring type checking with defaults (for-of46, for-of47)
 - Better type inference for complex patterns with enum defaults
 - These are edge cases rarely encountered in practice
 
-### Priority 5: Iterator Protocol Validation (1 test - LOW VALUE)
-**Estimated Impact**: +1.7% conformance
+### Priority 6: Circular Reference Detection (4 tests - MEDIUM VALUE)
+**Estimated Impact**: +6.8% conformance (INCREASED from +3.4%)
 
-- Validate missing Symbol.iterator in specific edge cases (for-of16)
-- Multiple object types without iterators in single test
-- Very low practical value
-
-### Priority 6: Circular Reference Detection (2 tests - LOW VALUE)
-**Estimated Impact**: +3.4% conformance
-
-- Requires --noImplicitAny flag support (for-of32, for-of33)
-- Circular reference analysis
-- Complex flow analysis
-- Low practical value
+- Requires --noImplicitAny flag support (for-of32, for-of33, for-of34, for-of35)
+- Circular reference analysis to detect when return expressions reference variables being initialized
+- Flow analysis to track variable usage before declaration
+- **Note**: for-of34 and for-of35 were exposed by return type inference feature
+- Medium practical value - would complete the --noImplicitAny implementation
 
 ### Priority 7: Complex Type Errors (1 test - VERY LOW VALUE)
 **Estimated Impact**: +1.7% conformance
@@ -570,36 +690,45 @@ for (const x of iter) { } // ✅ Now works
 
 | Category | Tests | Effort | Value | Priority |
 |----------|-------|--------|-------|----------|
-| Type checking with defaults | 2 | Medium | Low | 1 |
-| Circular references | 2 | High | Low | 2 |
-| Iterator validation | 1 | Medium | Low | 3 |
-| Map overload | 1 | High | Very Low | 4 |
+| Circular references | 4 | High | Medium | 1 |
+| Type checking with defaults | 2 | Medium | Low | 2 |
+| Map overload | 1 | High | Very Low | 3 |
 
 ## Conclusion
 
-We have achieved **89.8% conformance** (53/59 tests) for for-of statements, improving from the initial 59.3% (35/59 tests).
+We have achieved **88.1% conformance** (52/59 tests) for for-of statements, improving from the initial 59.3% (35/59 tests).
 
 **Key Achievements:**
 - ✅ All core for-of functionality implemented
 - ✅ **All "should pass" tests now passing (0 false positives!)** ⭐
 - ✅ All 9 Symbol.iterator regression tests fixed
+- ✅ **Full return type inference for unannotated functions** (NEW!)
 - ✅ 19 error validations implemented
-- ✅ 4,260 unit tests all passing
-- ✅ **+30.5% conformance improvement** from initial baseline
-- ✅ Recovered from regression and exceeded previous best by +11.8%
+- ✅ **4,312 unit tests all passing** (was 4,260)
+- ✅ **+28.8% conformance improvement** from initial baseline
+- ✅ Recovered from regression and nearly reached peak of 89.8%
+
+**Return Type Inference Trade-off:**
+- **Peak**: 89.8% (53/59) - achieved after Symbol.iterator fix
+- **Current**: 88.1% (52/59) - after return type inference implementation
+- **Net Impact**: -1 test (-1.7%)
+  - Fixed: for-of16 (empty object returns now properly typed)
+  - Exposed: for-of34, for-of35 (circular references no longer trigger implicit 'any')
+- **Value**: Return type inference is a major language feature with broad applicability beyond for-of
 
 **Remaining Work:**
-- Only 6 tests with missing error validation (all edge cases)
-- Best ROI: 2 type checking tests (+3.4%)
+- Only 7 tests with missing error validation (all edge cases)
+- 4 tests require --noImplicitAny flag support (circular reference detection)
+- 2 tests require enhanced destructuring type checking
+- 1 test requires Map overload resolution
 - **All remaining issues are missing validation**, not incorrect behavior
 - No false positives - compiler correctly accepts valid code
 
-**Production Status**: The for-of statement implementation is **production-ready** and handles all common use cases correctly. The 6 remaining failures are:
-- 2 tests for circular reference detection (--noImplicitAny flag not implemented)
+**Production Status**: The for-of statement implementation is **production-ready** and handles all common use cases correctly. The 7 remaining failures are:
+- 4 tests for circular reference detection (--noImplicitAny flag not fully implemented)
 - 2 tests for complex destructuring with enum defaults
 - 1 test for Map constructor overload resolution
-- 1 test for edge case Symbol.iterator validation
 
 These represent very rare edge cases that most TypeScript codebases will never encounter.
 
-**Final Status**: Successfully implemented comprehensive for-of type checking with **89.8% conformance**, excellent test coverage, zero false positives, and full support for Symbol.iterator protocol including class-based iterators.
+**Final Status**: Successfully implemented comprehensive for-of type checking with **88.1% conformance**, excellent test coverage (4,312 unit tests passing), zero false positives, full return type inference for unannotated functions, and complete support for Symbol.iterator protocol including class-based iterators.
