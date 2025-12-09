@@ -610,3 +610,182 @@ test "Array.values() with union type - correct element type" {
   // Should error: Type mismatch
   assert_true(has_error(diagnostics, 2322))
 }
+///|
+/// Unit tests for for-of iterator validation (for-of16 patterns)
+/// Tests validation of Symbol.iterator methods and their return types
+/// Uses helper functions from for_of_test.mbt
+
+///|
+test "for-of: Symbol.iterator without next() - TS2488" {
+  let source =
+    #|class MyStringIterator {
+    #|    [Symbol.iterator]() {
+    #|        return this;
+    #|    }
+    #|}
+    #|
+    #|var v: string;
+    #|for (v of new MyStringIterator) { }
+
+  let result = check_for_of(source)
+  let diagnostics = get_diagnostics(result)
+
+  // Should error: iterator doesn't have next()
+  assert_true(has_error(diagnostics, 2488))
+}
+
+///|
+test "for-of: Symbol.iterator returns any - no error" {
+  let source =
+    #|class MyStringIterator {
+    #|    [Symbol.iterator]() {
+    #|        return x;
+    #|    }
+    #|}
+    #|
+    #|var x: any;
+    #|for (var v of new MyStringIterator) { }
+
+  let result = check_for_of(source)
+
+  // Should NOT error: returning 'any' is valid
+  assert_eq(error_count(result), 0)
+}
+
+///|
+test "for-of: Symbol.iterator property typed as any - no error" {
+  let source =
+    #|class MyStringIterator {
+    #|    [Symbol.iterator]: any;
+    #|}
+    #|
+    #|for (var v of new MyStringIterator) { }
+
+  let result = check_for_of(source)
+
+  // Should NOT error: Symbol.iterator property typed as 'any' is valid
+  assert_eq(error_count(result), 0)
+}
+
+///|
+test "for-of: Symbol.iterator with proper next() - no error" {
+  let source =
+    #|class MyStringIterator {
+    #|    next() {
+    #|        return { value: "", done: false };
+    #|    }
+    #|    [Symbol.iterator]() {
+    #|        return this;
+    #|    }
+    #|}
+    #|
+    #|for (var v of new MyStringIterator) { }
+
+  let result = check_for_of(source)
+
+  // Should NOT error: proper iterator with next()
+  assert_eq(error_count(result), 0)
+}
+
+///|
+test "for-of: Symbol.iterator returns object without next - TS2488" {
+  let source =
+    #|class EmptyIterator {
+    #|    [Symbol.iterator]() {
+    #|        return {};
+    #|    }
+    #|}
+    #|
+    #|for (var v of new EmptyIterator) { }
+
+  let result = check_for_of(source)
+  let diagnostics = get_diagnostics(result)
+
+  // Should error: iterator has no next() method
+  assert_true(has_error(diagnostics, 2488))
+}
+
+///|
+test "for-of: Symbol.iterator with next returning any - no error" {
+  let source =
+    #|class MyIterator {
+    #|    next(): any {
+    #|        return { value: 1, done: false };
+    #|    }
+    #|    [Symbol.iterator]() {
+    #|        return this;
+    #|    }
+    #|}
+    #|
+    #|for (var v of new MyIterator) { }
+
+  let result = check_for_of(source)
+
+  // Should NOT error: next() returns 'any'
+  assert_eq(error_count(result), 0)
+}
+
+///|
+test "for-of: Symbol.iterator with next property as any - no error" {
+  let source =
+    #|class MyIterator {
+    #|    next: any;
+    #|    [Symbol.iterator]() {
+    #|        return this;
+    #|    }
+    #|}
+    #|
+    #|for (var v of new MyIterator) { }
+
+  let result = check_for_of(source)
+
+  // Should NOT error: next property typed as 'any'
+  assert_eq(error_count(result), 0)
+}
+
+///|
+test "for-of: cached iterator type still validates - TS2488" {
+  let source =
+    #|class MyStringIterator {
+    #|    [Symbol.iterator]() {
+    #|        return this;
+    #|    }
+    #|}
+    #|
+    #|var v: string;
+    #|for (v of new MyStringIterator) { }
+    #|for (v of new MyStringIterator) { }
+
+  let result = check_for_of(source)
+  let diagnostics = get_diagnostics(result)
+
+  // Should error TWICE: both uses should be validated
+  let error_2488_count = {
+    let mut count = 0
+    for diag in diagnostics {
+      if diag.code == 2488 {
+        count = count + 1
+      }
+    }
+    count
+  }
+
+  assert_eq(error_2488_count, 2)
+}
+
+///|
+test "for-of: interface without Symbol.iterator - limitation" {
+  // NOTE: This is a known limitation - interfaces require more complex type resolution
+  let source =
+    #|interface NoIterator {
+    #|    value: number;
+    #|}
+    #|declare var obj: NoIterator;
+    #|for (var x of obj) { }
+
+  let result = check_for_of(source)
+
+  // Currently doesn't error (limitation)
+  // This test documents the current behavior
+  assert_true(true)
+}

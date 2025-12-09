@@ -12844,6 +12844,11 @@ fn extract_iterable_element_type(
               }
               (None, checker)
             }
+            Any(_) => {
+              // Symbol.iterator returns 'any', treat as valid iterator returning 'any' elements
+              let (any_t, c) = any_type(checker)
+              (Some(any_t), c)
+            }
             TypeReference(tr) => {
               // If return type is a TypeReference like "IterableIterator<T>",
               // try to extract T from the type arguments
@@ -12933,6 +12938,11 @@ fn extract_iterable_element_type(
           } else {
             (None, checker)
           }
+        Some(Any(_)) => {
+          // Symbol.iterator property is typed as 'any', treat as valid
+          let (any_t, c) = any_type(checker)
+          (Some(any_t), c)
+        }
         _ => {
           // No Symbol.iterator found - check if this IS an iterator (has next() method)
           // This handles edge cases where the object is directly used as an iterator
@@ -14461,6 +14471,45 @@ fn add_for_of_variable_to_scope(
 }
 
 ///|
+/// Validate that an iterator's 'return' property (if present) is a method
+/// Reports TS2767 if the 'return' property exists but is not a function
+fn validate_iterator_return_property(
+  checker : TypeChecker,
+  iterable_type : Type,
+  expr_location : SourceLocation,
+) -> TypeChecker {
+  // Helper function to check if an object has an invalid 'return' property
+  fn check_return_property(checker : TypeChecker, obj : ObjectType, expr_location : SourceLocation) -> TypeChecker {
+    for entry in obj.properties {
+      let (prop_name, prop) = entry
+      if prop_name == "return" {
+        // Found 'return' property - check if it's a function
+        match prop.prop_type {
+          Function(_) => return checker  // OK - return is a method
+          _ => {
+            // Error: return property is not a method
+            return add_diagnostic_with_code(
+              checker,
+              "The 'return' property of an iterator must be a method.",
+              expr_location,
+              TS2767,
+            )
+          }
+        }
+      }
+    }
+    checker
+  }
+
+  // When [Symbol.iterator]() returns 'this', the iterable IS the iterator
+  // So we check the iterable_type directly first
+  match iterable_type {
+    Object(obj) => check_return_property(checker, obj, expr_location)
+    _ => checker
+  }
+}
+
+///|
 /// Get the element type of an iterable for for-of loops
 /// Validates iterator protocol and reports appropriate errors:
 /// - TS2488: Type must have '[Symbol.iterator]()' method that returns an iterator
@@ -14481,7 +14530,16 @@ fn get_for_of_element_type(
       )
 
       match elem_type_opt {
-        Some(elem_type) => (elem_type, checker)
+        Some(elem_type) => {
+          // Successfully extracted element type, now validate iterator properties
+          // Check TS2767: iterator's 'return' property must be a method
+          let checker = validate_iterator_return_property(
+            checker,
+            iterable_type,
+            expr_location,
+          )
+          (elem_type, checker)
+        }
         None => {
           // Could not extract element type - check if we should report error
           // Only report TS2488 for obviously non-iterable types (primitives)
@@ -14510,8 +14568,29 @@ fn get_for_of_element_type(
             _ => false
           }
 
+          // Check if the object has Symbol.iterator property
+          // If it does, failing to extract element type is an error
+          let has_symbol_iterator = match iterable_type {
+            Object(obj) => {
+              let mut found = false
+              for entry in obj.properties {
+                let (prop_name, _) = entry
+                if prop_name == "__@iterator" || prop_name == "[Symbol.iterator]" {
+                  found = true
+                  break
+                }
+              }
+              found
+            }
+            _ => false
+          }
+
           let should_error = if is_direct_iterator {
             true // Error: has next() but no [Symbol.iterator]()
+          } else if has_symbol_iterator {
+            // Has Symbol.iterator but couldn't extract element type
+            // This means the iterator is invalid (no next() method)
+            true
           } else {
             match iterable_type {
               Number(_) | Boolean(_) | Null(_) | Undefined(_) | Void(_) => true
