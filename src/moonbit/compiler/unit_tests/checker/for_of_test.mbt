@@ -1124,3 +1124,106 @@ test "for-of - TS2767: class without 'return' property should not error" {
 
   assert_true(not(has_error(diagnostics, 2767)))
 }
+
+// ============================================================================
+// Interface/Class Distinction Tests (Added for bug fixes)
+// ============================================================================
+
+test "for-of - interface without Symbol.iterator should not error" {
+  // Interfaces are given lenient checking - they might have Symbol.iterator at runtime
+  let source =
+    #|interface PlainInterface {
+    #|  value: number;
+    #|}
+    #|
+    #|declare var obj: PlainInterface;
+    #|for (const x of obj) {
+    #|  console.log(x);
+    #|}
+
+  let result = check_for_of(source)
+  let diagnostics = get_diagnostics(result)
+
+  // Should not report TS2488 for interfaces
+  assert_false(has_error(diagnostics, 2488))
+}
+
+test "for-of - interface with next() but no Symbol.iterator should not error" {
+  // Interfaces with next() method should not error - lenient checking
+  let source =
+    #|interface IteratorLike {
+    #|  next(): { value: string, done: boolean };
+    #|}
+    #|
+    #|declare var obj: IteratorLike;
+    #|for (const x of obj) {
+    #|  console.log(x);
+    #|}
+
+  let result = check_for_of(source)
+  let diagnostics = get_diagnostics(result)
+
+  // Should not report TS2488 for interfaces
+  assert_false(has_error(diagnostics, 2488))
+}
+
+test "for-of - class with next() but no Symbol.iterator should error" {
+  // Classes require explicit Symbol.iterator
+  let source =
+    #|class IteratorLike {
+    #|  next() {
+    #|    return { value: "", done: false };
+    #|  }
+    #|}
+    #|
+    #|for (const x of new IteratorLike) {
+    #|  console.log(x);
+    #|}
+
+  let result = check_for_of(source)
+  let diagnostics = get_diagnostics(result)
+
+  // Should report TS2488 for classes without Symbol.iterator
+  assert_true(has_error(diagnostics, 2488))
+}
+
+test "for-of - TypeReference to interface should not error" {
+  // Type aliases to interfaces should also be lenient
+  let source =
+    #|interface MyInterface {
+    #|  value: string;
+    #|}
+    #|
+    #|type AliasType = MyInterface;
+    #|
+    #|declare var obj: AliasType;
+    #|for (const x of obj) {
+    #|  console.log(x);
+    #|}
+
+  let result = check_for_of(source)
+  let diagnostics = get_diagnostics(result)
+
+  // Should not report TS2488 for type aliases to interfaces
+  assert_false(has_error(diagnostics, 2488))
+}
+
+test "for-of - anonymous object with next() but no Symbol.iterator should error" {
+  // Anonymous objects (object literals) are strict
+  let source =
+    #|const obj = {
+    #|  next() {
+    #|    return { value: "", done: false };
+    #|  }
+    #|};
+    #|
+    #|for (const x of obj) {
+    #|  console.log(x);
+    #|}
+
+  let result = check_for_of(source)
+  let diagnostics = get_diagnostics(result)
+
+  // Should report TS2488 for object literals without Symbol.iterator
+  assert_true(has_error(diagnostics, 2488))
+}
