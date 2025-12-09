@@ -7408,10 +7408,7 @@ fn parse_import_declaration(parser : Parser) -> Result[(Node, Parser), Parser] {
   // Expect 'from' keyword
   let parser = match current_token(parser) {
     KeywordFrom(_) => advance_parser(parser)
-    _ =>
-      return Err(
-        add_error(parser, "Unexpected token", current_token(parser).location()),
-      )
+    _ => return Err(add_unexpected_token_error(parser))
   }
 
   // Parse module specifier (string literal)
@@ -8981,10 +8978,7 @@ fn parse_do_while_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
   // Expect 'while'
   let parser = match current_token(parser) {
     KeywordWhile(_) => advance_parser(parser)
-    _ =>
-      return Err(
-        add_error(parser, "Unexpected token", current_token(parser).location()),
-      )
+    _ => return Err(add_unexpected_token_error(parser))
   }
 
   // Expect '('
@@ -9285,9 +9279,7 @@ fn parse_try_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
 
   // Must have either catch or finally
   if catch_clause is None && finally_block is None {
-    return Err(
-      add_error(parser, "Unexpected token", current_token(parser).location()),
-    )
+    return Err(add_unexpected_token_error(parser))
   }
   let end_loc = match finally_block {
     Some(block) => get_location(block)

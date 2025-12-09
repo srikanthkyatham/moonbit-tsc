@@ -121,7 +121,7 @@ fn parse_jsx_element_or_fragment(
     Identifier(_, _) =>
       // Element: <tag>...</tag> or <tag />
       parse_jsx_element(parser, start_loc)
-    _ => Err(add_error(parser, "Unexpected token", start_loc))
+    _ => Err(add_unexpected_token_error_at(parser, start_loc))
   }
 }
 
@@ -188,7 +188,7 @@ fn parse_jsx_element(
         Err(p) => Err(p)
       }
     }
-    _ => Err(add_error(parser, "Unexpected token", start_loc))
+    _ => Err(add_unexpected_token_error_at(parser, start_loc))
   }
 }
 
@@ -589,7 +589,7 @@ fn parse_jsx_closing_element(
   // Expect >
   let parser = match current_token(parser) {
     GreaterThan(_) => advance_parser(parser)
-    _ => return Err(add_error(parser, "Unexpected token", start_loc))
+    _ => return Err(add_unexpected_token_error_at(parser, start_loc))
   }
   let end_loc = current_token(parser).location()
   Ok(
@@ -626,7 +626,7 @@ fn parse_jsx_fragment(
   // Already consumed <, expect >
   let parser = match current_token(parser) {
     GreaterThan(_) => advance_parser(parser)
-    _ => return Err(add_error(parser, "Unexpected token", start_loc))
+    _ => return Err(add_unexpected_token_error_at(parser, start_loc))
   }
   let opening_loc = start_loc
 
@@ -648,7 +648,7 @@ fn parse_jsx_fragment(
   }
   let parser = match current_token(parser) {
     GreaterThan(_) => advance_parser(parser)
-    _ => return Err(add_error(parser, "Unexpected token", start_loc))
+    _ => return Err(add_unexpected_token_error_at(parser, start_loc))
   }
   let closing_loc = current_token(parser).location()
   Ok(

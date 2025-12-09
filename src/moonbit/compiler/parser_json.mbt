@@ -20,8 +20,7 @@ pub fn parse_json(
     Ok((node, parser)) =>
       // Check for trailing content
       if not(is_at_end(parser)) {
-        let loc = current_token(parser).location()
-        let parser = add_error(parser, "Unexpected token", loc)
+        let parser = add_unexpected_token_error(parser)
         Err(parser.diagnostics)
       } else if parser.diagnostics.length() > 0 {
         Err(parser.diagnostics)
@@ -167,6 +166,16 @@ fn parse_json_value(parser : Parser) -> Result[(Node, Parser), Parser] {
 
 ///|
 /// Parse a JSON object: { "key": value, ... }
+///
+/// This is simpler than TypeScript object parsing because:
+/// - Only string literal property names (no identifiers, numbers, or computed)
+/// - No shorthand properties: { x } is not valid JSON
+/// - No methods, getters, or setters
+/// - No spread properties: { ...obj } is not valid JSON
+/// - Strict trailing comma rules (error on trailing comma)
+/// - Only PropertyAssignment variant (no other ObjectProperty types)
+///
+/// See docs/parser_duplication_analysis.md for comparison with parse_object_literal
 fn parse_json_object(parser : Parser) -> Result[(Node, Parser), Parser] {
   let start_loc = current_token(parser).location()
   let parser = advance_parser(parser) // Skip {
@@ -261,10 +270,7 @@ fn parse_json_object(parser : Parser) -> Result[(Node, Parser), Parser] {
               ),
             )
           }
-          _ => {
-            let loc = current_token(parser).location()
-            return Err(add_error(parser, "Unexpected token", loc))
-          }
+          _ => return Err(add_unexpected_token_error(parser))
         }
       }
       CloseBrace(_) => {
@@ -305,6 +311,14 @@ fn parse_json_object(parser : Parser) -> Result[(Node, Parser), Parser] {
 
 ///|
 /// Parse a JSON array: [ value, ... ]
+///
+/// This is simpler than TypeScript array parsing because:
+/// - No elision (holes): JSON doesn't allow [1,,3]
+/// - No spread operator: JSON doesn't support [...arr]
+/// - Strict trailing comma rules (error on trailing comma)
+/// - Only assignment expressions as elements (no spread)
+///
+/// See docs/parser_duplication_analysis.md for comparison with parse_array_literal
 fn parse_json_array(parser : Parser) -> Result[(Node, Parser), Parser] {
   let start_loc = current_token(parser).location()
   let parser = advance_parser(parser) // Skip [
@@ -376,10 +390,7 @@ fn parse_json_array(parser : Parser) -> Result[(Node, Parser), Parser] {
           ),
         )
       }
-      _ => {
-        let loc = current_token(parser).location()
-        return Err(add_error(parser, "Unexpected token", loc))
-      }
+      _ => return Err(add_unexpected_token_error(parser))
     }
   }
   Err(

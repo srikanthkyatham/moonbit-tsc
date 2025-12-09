@@ -1712,13 +1712,22 @@ fn parse_primary_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
               advance_parser(parser),
             ),
           )
-        None => Err(add_error(parser, "Unexpected token", token.location()))
+        None => Err(add_unexpected_token_error_at(parser, token.location()))
       }
   }
 }
 
 ///|
-/// Parse array literal
+/// Parse array literal (TypeScript/JavaScript)
+///
+/// Supports full TypeScript array syntax:
+/// - Elision (holes): [1, , 3] creates sparse array with undefined at index 1
+/// - Spread operator: [...arr, 4, 5]
+/// - Trailing commas allowed (lenient, no error)
+/// - Complex expressions as elements
+///
+/// Differs from JSON array parsing (see parser_json.mbt:parse_json_array)
+/// See docs/parser_duplication_analysis.md for comparison
 fn parse_array_literal(parser : Parser) -> Result[(Node, Parser), Parser] {
   let start_loc = current_token(parser).location()
   let parser = advance_parser(parser) // Skip '['
@@ -1781,7 +1790,20 @@ fn parse_array_literal(parser : Parser) -> Result[(Node, Parser), Parser] {
 }
 
 ///|
-/// Parse object literal
+/// Parse object literal (TypeScript/JavaScript)
+///
+/// Supports full TypeScript object syntax:
+/// - Multiple property name types: identifiers, strings, numbers, computed [expr]
+/// - Shorthand properties: { x } equivalent to { x: x }
+/// - Methods: { foo() {} }
+/// - Getters and setters: { get x() {}, set x(v) {} }
+/// - Spread properties: { ...obj }
+/// - Generator methods: { *gen() {} }
+/// - Trailing commas allowed (lenient, no error)
+/// - Reserved keywords as property names: { while: 1 }
+///
+/// Differs from JSON object parsing (see parser_json.mbt:parse_json_object)
+/// See docs/parser_duplication_analysis.md for comparison
 fn parse_object_literal(parser : Parser) -> Result[(Node, Parser), Parser] {
   let start_loc = current_token(parser).location()
   let parser = advance_parser(parser) // Skip '{'
