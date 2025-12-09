@@ -702,10 +702,10 @@ fn continue_postfix_expression(
       // Element access
       OpenBracket(_) => {
         let start_loc = get_location(left)
-        match parse_bracketed_expression(parser) {
-          Ok((index, next_parser)) => {
+        match parse_element_access(parser, left, start_loc) {
+          Ok((node, next_parser)) => {
             parser = next_parser
-            left = make_element_access(left, index, start_loc)
+            left = node
           }
           Err(p) => return Err(p)
         }
@@ -716,14 +716,10 @@ fn continue_postfix_expression(
         parser = advance_parser(parser)
         match current_token(parser) {
           OpenBracket(_) =>
-            match parse_bracketed_expression(parser) {
-              Ok((index, next_parser)) => {
+            match parse_optional_element_access(parser, left, start_loc) {
+              Ok((node, next_parser)) => {
                 parser = next_parser
-                left = Node::OptionalChain(OptionalChain::{
-                  expression: left,
-                  chain: OptionalChainKind::Element(index),
-                  location: start_loc,
-                })
+                left = node
               }
               Err(p) => return Err(p)
             }
@@ -848,10 +844,10 @@ fn parse_member_expression_for_new(
       // Element access
       OpenBracket(_) => {
         let start_loc = get_location(left)
-        match parse_bracketed_expression(parser) {
-          Ok((index, next_parser)) => {
+        match parse_element_access(parser, left, start_loc) {
+          Ok((node, next_parser)) => {
             parser = next_parser
-            left = make_element_access(left, index, start_loc)
+            left = node
           }
           Err(p) => return Err(p)
         }
@@ -1048,14 +1044,10 @@ fn parse_postfix_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
         match current_token(parser) {
           // Optional element access: obj?.[index]
           OpenBracket(_) =>
-            match parse_bracketed_expression(parser) {
-              Ok((index, next_parser)) => {
+            match parse_optional_element_access(parser, left, start_loc) {
+              Ok((node, next_parser)) => {
                 parser = next_parser
-                left = Node::OptionalChain(OptionalChain::{
-                  expression: left,
-                  chain: OptionalChainKind::Element(index),
-                  location: start_loc,
-                })
+                left = node
               }
               Err(p) => return Err(p)
             }
@@ -1089,10 +1081,10 @@ fn parse_postfix_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
       // Element access
       OpenBracket(_) => {
         let start_loc = get_location(left)
-        match parse_bracketed_expression(parser) {
-          Ok((index, next_parser)) => {
+        match parse_element_access(parser, left, start_loc) {
+          Ok((node, next_parser)) => {
             parser = next_parser
-            left = make_element_access(left, index, start_loc)
+            left = node
           }
           Err(p) => return Err(p)
         }
@@ -1860,30 +1852,12 @@ fn parse_object_property(
       let parser = advance_parser(parser) // consume *
       match current_token(parser) {
         // Generator method with computed name: *[expr]() { }
-        OpenBracket(_) => {
-          let parser = advance_parser(parser) // consume [
-          match parse_assignment_expression(parser) {
+        OpenBracket(_) =>
+          match parse_computed_property_name(parser) {
             Ok((name_expr, parser)) =>
-              match current_token(parser) {
-                CloseBracket(_) => {
-                  let parser = advance_parser(parser) // consume ]
-                  parse_computed_method_body(
-                    parser, name_expr, start_loc, false, true,
-                  )
-                }
-                _ =>
-                  Err(
-                    add_error_with_code(
-                      parser,
-                      ExpectedCloseBracket.to_message(),
-                      current_token(parser).location(),
-                      ExpectedCloseBracket,
-                    ),
-                  )
-              }
+              parse_computed_method_body(parser, name_expr, start_loc, false, true)
             Err(parser) => Err(parser)
           }
-        }
         // Generator method with identifier name: *name() { }
         _ =>
           match try_get_property_name_with_reserved(current_token(parser)) {
@@ -1905,57 +1879,42 @@ fn parse_object_property(
     }
     OpenBracket(_) => {
       // Computed property: [expression]: value or [expression]() { }
-      let parser = advance_parser(parser) // consume [
-      match parse_assignment_expression(parser) {
+      match parse_computed_property_name(parser) {
         Ok((name_expr, parser)) =>
           match current_token(parser) {
-            CloseBracket(_) => {
-              let parser = advance_parser(parser) // consume ]
-              match current_token(parser) {
-                // Computed method: [expr]() { }
-                OpenParen(_) =>
-                  parse_computed_method_body(
-                    parser, name_expr, start_loc, false, false,
-                  )
-                // Computed property with type parameters: [expr]<T>() { }
-                LessThan(_) =>
-                  parse_computed_method_body(
-                    parser, name_expr, start_loc, false, false,
-                  )
-                // Computed property assignment: [expr]: value
-                Colon(_) => {
-                  let parser = advance_parser(parser) // consume :
-                  match parse_assignment_expression(parser) {
-                    Ok((value, parser)) =>
-                      Ok(
-                        (
-                          ObjectProperty::ComputedPropertyAssignment(
-                            name_expr, value, start_loc,
-                          ),
-                          parser,
-                        ),
-                      )
-                    Err(parser) => Err(parser)
-                  }
-                }
-                _ =>
-                  Err(
-                    add_error_with_code(
+            // Computed method: [expr]() { }
+            OpenParen(_) =>
+              parse_computed_method_body(
+                parser, name_expr, start_loc, false, false,
+              )
+            // Computed property with type parameters: [expr]<T>() { }
+            LessThan(_) =>
+              parse_computed_method_body(
+                parser, name_expr, start_loc, false, false,
+              )
+            // Computed property assignment: [expr]: value
+            Colon(_) => {
+              let parser = advance_parser(parser) // consume :
+              match parse_assignment_expression(parser) {
+                Ok((value, parser)) =>
+                  Ok(
+                    (
+                      ObjectProperty::ComputedPropertyAssignment(
+                        name_expr, value, start_loc,
+                      ),
                       parser,
-                      ExpectedColon.to_message(),
-                      current_token(parser).location(),
-                      ExpectedColon,
                     ),
                   )
+                Err(parser) => Err(parser)
               }
             }
             _ =>
               Err(
                 add_error_with_code(
                   parser,
-                  ExpectedCloseBracket.to_message(),
+                  ExpectedColon.to_message(),
                   current_token(parser).location(),
-                  ExpectedCloseBracket,
+                  ExpectedColon,
                 ),
               )
           }
@@ -1980,28 +1939,12 @@ fn parse_object_property(
     Identifier("get", _) => {
       let parser = advance_parser(parser) // consume 'get'
       match current_token(parser) {
-        OpenBracket(_) => {
-          let parser = advance_parser(parser) // consume [
-          match parse_assignment_expression(parser) {
+        OpenBracket(_) =>
+          match parse_computed_property_name(parser) {
             Ok((name_expr, parser)) =>
-              match current_token(parser) {
-                CloseBracket(_) => {
-                  let parser = advance_parser(parser) // consume ]
-                  parse_computed_getter_body(parser, name_expr, start_loc)
-                }
-                _ =>
-                  Err(
-                    add_error_with_code(
-                      parser,
-                      ExpectedCloseBracket.to_message(),
-                      current_token(parser).location(),
-                      ExpectedCloseBracket,
-                    ),
-                  )
-              }
+              parse_computed_getter_body(parser, name_expr, start_loc)
             Err(parser) => Err(parser)
           }
-        }
         // Regular getter: get name() { } - or 'get' as property name
         _ => parse_get_or_set_or_property(parser, "get", start_loc)
       }
@@ -2010,28 +1953,12 @@ fn parse_object_property(
     Identifier("set", _) => {
       let parser = advance_parser(parser) // consume 'set'
       match current_token(parser) {
-        OpenBracket(_) => {
-          let parser = advance_parser(parser) // consume [
-          match parse_assignment_expression(parser) {
+        OpenBracket(_) =>
+          match parse_computed_property_name(parser) {
             Ok((name_expr, parser)) =>
-              match current_token(parser) {
-                CloseBracket(_) => {
-                  let parser = advance_parser(parser) // consume ]
-                  parse_computed_setter_body(parser, name_expr, start_loc)
-                }
-                _ =>
-                  Err(
-                    add_error_with_code(
-                      parser,
-                      ExpectedCloseBracket.to_message(),
-                      current_token(parser).location(),
-                      ExpectedCloseBracket,
-                    ),
-                  )
-              }
+              parse_computed_setter_body(parser, name_expr, start_loc)
             Err(parser) => Err(parser)
           }
-        }
         // Regular setter: set name(value) { } - or 'set' as property name
         _ => parse_get_or_set_or_property(parser, "set", start_loc)
       }

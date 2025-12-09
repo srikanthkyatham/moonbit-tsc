@@ -131,3 +131,127 @@ pub fn expect_closing_delimiter(
     }
   }
 }
+
+///|
+/// Parse a computed property name: [expression]
+/// Handles the common pattern of parsing `[expr]` for computed properties,
+/// including proper error handling for missing closing bracket.
+///
+/// This extracts duplication from 4 locations in parser_expression.mbt:
+/// - Generator method with computed name: *[expr]() {}
+/// - Computed property: [expression]: value or [expression]() {}
+/// - Getter with computed property: get [expr]() {}
+/// - Setter with computed property: set [expr](value) {}
+///
+/// Usage:
+/// ```moonbit
+/// OpenBracket(_) => {
+///   match parse_computed_property_name(parser) {
+///     Ok((name_expr, parser)) => {
+///       // Handle the parsed name expression
+///       ...
+///     }
+///     Err(parser) => Err(parser)
+///   }
+/// }
+/// ```
+pub fn parse_computed_property_name(
+  parser : Parser,
+) -> Result[(Node, Parser), Parser] {
+  let parser = advance_parser(parser) // consume [
+  match parse_assignment_expression(parser) {
+    Ok((name_expr, parser)) =>
+      match current_token(parser) {
+        CloseBracket(_) => Ok((name_expr, advance_parser(parser)))
+        _ =>
+          Err(
+            add_error_with_code(
+              parser,
+              ExpectedCloseBracket.to_message(),
+              current_token(parser).location(),
+              ExpectedCloseBracket,
+            ),
+          )
+      }
+    Err(parser) => Err(parser)
+  }
+}
+
+///|
+/// Parse element access using parse_bracketed_expression and update the left node.
+/// Handles the common pattern of parsing `[index]` for element access expressions.
+///
+/// This extracts duplication from 5 locations in parser_expression.mbt where
+/// the pattern is:
+/// ```moonbit
+/// match parse_bracketed_expression(parser) {
+///   Ok((index, next_parser)) => {
+///     parser = next_parser
+///     left = make_element_access(left, index, start_loc)
+///   }
+///   Err(p) => return Err(p)
+/// }
+/// ```
+///
+/// Usage:
+/// ```moonbit
+/// OpenBracket(_) => {
+///   let start_loc = get_location(left)
+///   match parse_element_access(parser, left, start_loc) {
+///     Ok((node, parser)) => {
+///       left = node
+///       parser = parser
+///     }
+///     Err(p) => return Err(p)
+///   }
+/// }
+/// ```
+pub fn parse_element_access(
+  parser : Parser,
+  object : Node,
+  start_loc : SourceLocation,
+) -> Result[(Node, Parser), Parser] {
+  match parse_bracketed_expression(parser) {
+    Ok((index, next_parser)) =>
+      Ok((make_element_access(object, index, start_loc), next_parser))
+    Err(p) => Err(p)
+  }
+}
+
+///|
+/// Parse optional chaining element access: obj?.[index]
+/// Similar to parse_element_access but creates an OptionalChain node instead.
+///
+/// This extracts duplication from 2 locations in parser_expression.mbt.
+///
+/// Usage:
+/// ```moonbit
+/// OpenBracket(_) =>
+///   match parse_optional_element_access(parser, left, start_loc) {
+///     Ok((node, parser)) => {
+///       left = node
+///       parser = parser
+///     }
+///     Err(p) => return Err(p)
+///   }
+/// ```
+pub fn parse_optional_element_access(
+  parser : Parser,
+  object : Node,
+  start_loc : SourceLocation,
+) -> Result[(Node, Parser), Parser] {
+  match parse_bracketed_expression(parser) {
+    Ok((index, next_parser)) =>
+      Ok(
+        (
+          Node::OptionalChain(OptionalChain::{
+            expression: object,
+            chain: OptionalChainKind::Element(index),
+            location: start_loc,
+          }),
+          next_parser,
+        ),
+      )
+    Err(p) => Err(p)
+  }
+}
