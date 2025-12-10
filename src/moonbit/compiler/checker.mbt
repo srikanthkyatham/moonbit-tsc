@@ -14848,31 +14848,30 @@ fn check_for_of_statement(
   // Check the left-hand side (TS2487)
   let checker = check_for_of_left_side(checker, for_of_stmt.initializer)
 
-  // Check for TS2448: Variable used before declaration
-  // If the for-of expression is an identifier that matches the variable being declared,
-  // report an error because the variable is used before it's declared
-  let checker = match for_of_stmt.initializer {
+  // TS2448: Temporal Dead Zone check for for-of loops with let/const
+  // Before checking the iterable expression, add declared variables to block_scoped_decls
+  // with a sentinel line number (999999) so that any reference triggers TS2448
+  // This handles cases like: for (let v of [v]) where v is used in the iterable expression
+  let (checker, old_block_decls) = match for_of_stmt.initializer {
     VariableStatement(var_stmt) =>
-      if var_stmt.declarations.length() > 0 {
+      if (var_stmt.is_let || var_stmt.is_const) && var_stmt.declarations.length() > 0 {
         let decl = var_stmt.declarations[0]
-        match (decl.name, for_of_stmt.expression) {
-          (Identifier(decl_id), Identifier(expr_id)) =>
-            if decl_id.name == expr_id.name && (var_stmt.is_let || var_stmt.is_const) {
-              add_diagnostic_with_code(
-                checker,
-                "Block-scoped variable '\{decl_id.name}' used before its declaration.",
-                get_node_location(for_of_stmt.expression),
-                TS2448,
-              )
-            } else {
-              checker
-            }
-          _ => checker
+        let names : Array[String] = []
+        collect_binding_names(decl.name, names)
+
+        // Save old block_scoped_decls and add new declarations
+        let old_decls = checker.block_scoped_decls
+        let new_decls = old_decls.copy()
+        // Use a very high line number (999999) as sentinel to ensure any usage is flagged
+        for name in names {
+          new_decls.set(name, 999999)
         }
+
+        ({ ..checker, block_scoped_decls: new_decls }, Some(old_decls))
       } else {
-        checker
+        (checker, None)
       }
-    _ => checker
+    _ => (checker, None)
   }
 
   // Track variable being inferred for circular reference detection (TS7022)
@@ -14895,7 +14894,14 @@ fn check_for_of_statement(
   }
 
   // Infer the type of the iterable expression
+  // Any reference to TDZ variables will be caught by identifier checking (line ~4032)
   let (iterable_type, checker) = infer_type(checker, for_of_stmt.expression)
+
+  // Restore old block_scoped_decls after checking expression
+  let checker = match old_block_decls {
+    Some(old_decls) => { ..checker, block_scoped_decls: old_decls }
+    None => checker
+  }
 
   // Remove variables from inferring_variables set
   let checker = if var_names.length() > 0 {
