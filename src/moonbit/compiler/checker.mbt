@@ -954,6 +954,82 @@ fn add_binding_pattern_variables(
 }
 
 ///|
+/// Validate that a node is a valid destructuring target
+/// Returns true if valid, false if it's a literal or other invalid expression
+fn is_valid_destructuring_target(node : Node) -> Bool {
+  match node {
+    // Valid targets
+    Identifier(_) => true
+    ArrayBindingPattern(_) => true
+    ObjectBindingPattern(_) => true
+    BindingElement(_) => true
+    SpreadExpression(_) => true
+    PropertyAccessExpression(_) => true
+    ElementAccessExpression(_) => true
+    // Invalid targets: literals and other expressions
+    StringLiteral(_) => false
+    NumericLiteral(_) => false
+    BooleanLiteral(_) => false
+    NullLiteral(_) => false
+    // Other expressions are also invalid
+    _ => false
+  }
+}
+
+///|
+/// Validate destructuring pattern elements and report TS2364 for invalid targets
+fn validate_destructuring_elements(
+  checker : TypeChecker,
+  pattern : Node,
+) -> TypeChecker {
+  match pattern {
+    ArrayBindingPattern(arr_pattern) => {
+      let mut c = checker
+      for i = 0; i < arr_pattern.elements.length(); i = i + 1 {
+        match arr_pattern.elements[i] {
+          Some(elem) => {
+            if not(is_valid_destructuring_target(elem)) {
+              c = add_diagnostic_with_code(
+                c,
+                "The left-hand side of an assignment expression must be a variable or a property access.",
+                get_node_location(elem),
+                TS2364,
+              )
+            } else {
+              // Recursively validate nested patterns
+              c = validate_destructuring_elements(c, elem)
+            }
+          }
+          None => ()
+        }
+      }
+      c
+    }
+    ObjectBindingPattern(obj_pattern) => {
+      let mut c = checker
+      for i = 0; i < obj_pattern.properties.length(); i = i + 1 {
+        let prop = obj_pattern.properties[i]
+        // Validate the binding name (right side of {x: name} or just name in {name})
+        if not(is_valid_destructuring_target(prop.name)) {
+          c = add_diagnostic_with_code(
+            c,
+            "The left-hand side of an assignment expression must be a variable or a property access.",
+            get_node_location(prop.name),
+            TS2364,
+          )
+        } else {
+          // Recursively validate nested patterns
+          c = validate_destructuring_elements(c, prop.name)
+        }
+      }
+      c
+    }
+    BindingElement(elem) => validate_destructuring_elements(checker, elem.name)
+    _ => checker
+  }
+}
+
+///|
 /// Add variables from a binding pattern to scope as const (for let/const tracking)
 /// This tracks the variables in const_vars set for TS2481 error detection
 fn add_binding_pattern_variables_as_const(
@@ -14884,6 +14960,9 @@ fn add_for_of_variable_to_scope(
             checker
           }
           ArrayBindingPattern(_) => {
+            // TS2364: Validate that all elements are valid destructuring targets
+            let checker = validate_destructuring_elements(checker, decl.name)
+
             // TS2461: Validate that element type is an array type for array destructuring
             // Note: Tuples are valid for array destructuring
             let checker = match elem_type {
@@ -14938,6 +15017,9 @@ fn add_for_of_variable_to_scope(
             checker
           }
           ObjectBindingPattern(obj_pattern) => {
+            // TS2364: Validate that all elements are valid destructuring targets
+            let checker = validate_destructuring_elements(checker, decl.name)
+
             // TS2339: Validate that properties exist on element type for object destructuring
             let checker = match elem_type {
               Object(obj_type) => {
@@ -15128,8 +15210,64 @@ fn add_for_of_variable_to_scope(
     // Handle: for ([a, b] of arr) or for ({x, y} of arr)
     // Bare destructuring pattern (without var/let/const)
     // Variables should already be declared
-    ArrayBindingPattern(_) | ObjectBindingPattern(_) | ArrayLiteralExpression(_) | ObjectLiteralExpression(_) =>
-      checker
+    ArrayBindingPattern(arr_pattern) => {
+      // TS2364: Validate that all elements are valid destructuring targets
+      validate_destructuring_elements(checker, ArrayBindingPattern(arr_pattern))
+    }
+    ObjectBindingPattern(obj_pattern) => {
+      // TS2364: Validate that all elements are valid destructuring targets
+      validate_destructuring_elements(checker, ObjectBindingPattern(obj_pattern))
+    }
+    ArrayLiteralExpression(arr_lit) => {
+      // TS2364: Validate that all elements are valid destructuring targets
+      // ArrayLiteralExpression is used for bare array destructuring: for ([a, b] of arr)
+      let mut c = checker
+      for i = 0; i < arr_lit.elements.length(); i = i + 1 {
+        match arr_lit.elements[i] {
+          Some(elem) => {
+            if not(is_valid_destructuring_target(elem)) {
+              c = add_diagnostic_with_code(
+                c,
+                "The left-hand side of an assignment expression must be a variable or a property access.",
+                get_node_location(elem),
+                TS2364,
+              )
+            } else {
+              // Recursively validate nested patterns
+              match elem {
+                ArrayLiteralExpression(_) | ObjectLiteralExpression(_) =>
+                  c = add_for_of_variable_to_scope(c, elem, elem_type, expr_location)
+                _ => ()
+              }
+            }
+          }
+          None => ()
+        }
+      }
+      c
+    }
+    ObjectLiteralExpression(obj_lit) => {
+      // TS2364: Validate that all properties are valid destructuring targets
+      // ObjectLiteralExpression is used for bare object destructuring: for ({x, y} of arr)
+      let mut c = checker
+      for i = 0; i < obj_lit.properties.length(); i = i + 1 {
+        match obj_lit.properties[i] {
+          PropertyAssignment(_prop_name, value, _loc) => {
+            if not(is_valid_destructuring_target(value)) {
+              c = add_diagnostic_with_code(
+                c,
+                "The left-hand side of an assignment expression must be a variable or a property access.",
+                get_node_location(value),
+                TS2364,
+              )
+            }
+          }
+          ShorthandProperty(_name, _loc) => () // Shorthand is always valid (it's an identifier)
+          _ => ()
+        }
+      }
+      c
+    }
     _ => checker
   }
 }
