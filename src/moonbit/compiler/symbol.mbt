@@ -496,6 +496,7 @@ pub enum DiagnosticCode {
   TS2516 // Abstract methods can only appear within an abstract class
   TS2517 // A non-abstract class member cannot be declared abstract
   TS2520 // 'abstract' modifier can only appear on a class, method, or property declaration
+  TS2523 // 'yield' expressions cannot be used in a parameter initializer
 
   // ============================================================================
   // Null Safety Errors (2527-2542)
@@ -871,6 +872,7 @@ pub fn DiagnosticCode::to_int(self : DiagnosticCode) -> Int {
     TS2516 => 2516
     TS2517 => 2517
     TS2520 => 2520
+    TS2523 => 2523
     // Null Safety Errors (2527-2542)
     TS2527 => 2527
     TS2528 => 2528
@@ -1203,6 +1205,7 @@ pub fn DiagnosticCode::from_int(code : Int) -> DiagnosticCode? {
     2516 => Some(TS2516)
     2517 => Some(TS2517)
     2520 => Some(TS2520)
+    2523 => Some(TS2523)
     // Null Safety Errors (2527-2542)
     2527 => Some(TS2527)
     2528 => Some(TS2528)

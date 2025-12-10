@@ -14292,6 +14292,20 @@ fn check_function_declaration(
   // Check for TS2372: parameter cannot reference itself
   let checker = check_parameter_self_reference(checker, func.parameters)
 
+  // Check for TS1359: 'yield' is a reserved word in generator parameters
+  let checker = if func.is_generator {
+    check_generator_parameter_names(checker, func.parameters)
+  } else {
+    checker
+  }
+
+  // Check for TS2523: 'yield' expressions in parameter initializers
+  let checker = if func.is_generator {
+    check_yield_in_parameter_initializers(checker, func.parameters)
+  } else {
+    checker
+  }
+
   // Clear any narrowed types from outer scope before entering function body
   let saved_narrowed_types = checker.narrowed_types
   let checker = clear_narrowed_types(checker)
@@ -18046,9 +18060,15 @@ fn expression_contains_identifier(expr : Node, name : String) -> Bool {
       false
     }
     YieldExpression(ye) =>
-      match ye.expression {
-        Some(e) => expression_contains_identifier(e, name)
-        None => false
+      // Special case: if looking for "yield" and this is a bare yield expression,
+      // it's a self-reference (e.g., function f(yield = yield) {})
+      if name == "yield" {
+        true
+      } else {
+        match ye.expression {
+          Some(e) => expression_contains_identifier(e, name)
+          None => false
+        }
       }
     _ => false
   }
@@ -18089,6 +18109,123 @@ fn check_parameter_self_reference(
     }
   }
   checker
+}
+
+///|
+/// Check generator parameter names for TS1359 ('yield' is reserved in generators)
+fn check_generator_parameter_names(
+  checker : TypeChecker,
+  parameters : Array[Node],
+) -> TypeChecker {
+  let mut checker = checker
+  for param_node in parameters {
+    match param_node {
+      Parameter(p) => {
+        let param_name = match p.name {
+          Identifier(id) => id.name
+          _ => ""
+        }
+        if param_name == "yield" {
+          checker = add_diagnostic_with_code(
+            checker,
+            "Identifier expected. 'yield' is a reserved word that cannot be used here.",
+            p.location,
+            DiagnosticCode::TS1359,
+          )
+        }
+      }
+      _ => ()
+    }
+  }
+  checker
+}
+
+///|
+/// Check parameter initializers for TS2523 ('yield' expressions cannot be used)
+fn check_yield_in_parameter_initializers(
+  checker : TypeChecker,
+  parameters : Array[Node],
+) -> TypeChecker {
+  let mut checker = checker
+  for param_node in parameters {
+    match param_node {
+      Parameter(p) =>
+        match p.initializer {
+          Some(init) => {
+            if contains_yield_expression(init) {
+              checker = add_diagnostic_with_code(
+                checker,
+                "'yield' expressions cannot be used in a parameter initializer.",
+                get_node_location(init),
+                DiagnosticCode::TS2523,
+              )
+            }
+          }
+          None => ()
+        }
+      _ => ()
+    }
+  }
+  checker
+}
+
+///|
+/// Check if an expression contains a yield expression
+fn contains_yield_expression(expr : Node) -> Bool {
+  match expr {
+    YieldExpression(_) => true
+    BinaryExpression(bin) =>
+      contains_yield_expression(bin.left) || contains_yield_expression(bin.right)
+    ParenthesizedExpression(paren) =>
+      contains_yield_expression(paren.expression)
+    UnaryExpression(unary) =>
+      contains_yield_expression(unary.operand)
+    ConditionalExpression(cond) =>
+      contains_yield_expression(cond.condition) ||
+      contains_yield_expression(cond.when_true) ||
+      contains_yield_expression(cond.when_false)
+    CallExpression(call) => {
+      if contains_yield_expression(call.expression) {
+        return true
+      }
+      for arg in call.arguments {
+        if contains_yield_expression(arg) {
+          return true
+        }
+      }
+      false
+    }
+    PropertyAccessExpression(prop) =>
+      contains_yield_expression(prop.expression)
+    ElementAccessExpression(elem) =>
+      contains_yield_expression(elem.expression) ||
+      contains_yield_expression(elem.argument_expression)
+    ArrayLiteralExpression(arr) => {
+      for elem_opt in arr.elements {
+        match elem_opt {
+          Some(elem) =>
+            if contains_yield_expression(elem) {
+              return true
+            }
+          None => ()
+        }
+      }
+      false
+    }
+    ObjectLiteralExpression(obj) => {
+      for prop in obj.properties {
+        match prop {
+          PropertyAssignment(_, value_node, _) =>
+            if contains_yield_expression(value_node) {
+              return true
+            }
+          _ => ()
+        }
+      }
+      false
+    }
+    _ => false
+  }
 }
 
 ///|
