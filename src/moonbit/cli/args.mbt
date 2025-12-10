@@ -300,31 +300,7 @@ pub fn get_effective_declaration(options : CLIOptions) -> Bool {
 /// Get effective module kind from CLI options (with default)
 pub fn get_effective_module_kind(options : CLIOptions) -> @compiler.ModuleKind {
   match options.module_system {
-    Some(module_str) => parse_module_kind(module_str)
+    Some(module_str) => @compiler.parse_module_kind(module_str)
     None => @compiler.ESModule // Default to ESModule
-  }
-}
-
-///|
-/// Parse module string to ModuleKind enum
-fn parse_module_kind(module_str : String) -> @compiler.ModuleKind {
-  // Convert to lowercase manually since lowercase() doesn't exist
-  let lower = to_lowercase(module_str)
-  if lower == "commonjs" {
-    @compiler.CommonJS
-  } else {
-    // Default to ESModule for es2015, es6, esnext, etc.
-    @compiler.ESModule
-  }
-}
-
-///|
-/// Convert string to lowercase (simple ASCII lowercase)
-fn to_lowercase(s : String) -> String {
-  // Simple comparison - check if it's one of the common values
-  if s == "CommonJS" || s == "commonjs" {
-    "commonjs"
-  } else {
-    s // Return as-is for ES module variants
   }
 }

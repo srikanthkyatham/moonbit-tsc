@@ -86,6 +86,18 @@ pub fn parse_target(target_str : String) -> Target {
 }
 
 ///|
+/// Parse module kind string to ModuleKind enum
+pub fn parse_module_kind(module_str : String) -> ModuleKind {
+  match module_str.to_lower() {
+    "commonjs" => CommonJS
+    "amd" => AMD
+    "umd" => UMD
+    "es2015" | "es6" | "es2020" | "es2022" | "esnext" => ESModule
+    _ => ESModule // Default
+  }
+}
+
+///|
 /// Compilation result containing all outputs
 pub struct CompileResult {
   success : Bool
@@ -901,11 +913,7 @@ fn apply_test_options(
   let mut opts = base_options
   match test_options.module_kind {
     Some(mk) => {
-      let module_kind = match mk.to_lower() {
-        "commonjs" | "commonjs" => CommonJS
-        _ => ESModule
-      }
-      opts = { ..opts, module_kind, }
+      opts = { ..opts, module_kind: parse_module_kind(mk) }
     }
     None => ()
   }

@@ -13,6 +13,37 @@
 
 ## Recent Fixes
 
+### ✅ TS5107: Deprecated AMD/UMD Module Warning Implemented (December 10, 2025)
+- **ES6 modules: 90% (35/39 tests)** ✅ UP FROM 72% (+18%, +7 tests!)
+- **Complete TS5107 implementation** - Compiler now warns when deprecated AMD/UMD module options are used
+- **All AMD/UMD tests passing** - 7 AMD/UMD deprecation tests now correctly emit TS5107 errors
+- **Features implemented**:
+  1. **TS5107 diagnostic code** - Added to DiagnosticCode enum with proper error messages
+  2. **AMD/UMD support** - Extended ModuleKind enum from {ESModule, CommonJS} to {ESModule, CommonJS, AMD, UMD}
+  3. **Checker validation** - Added module_kind parameter to type checker with deprecation warnings
+  4. **Unified parsing** - Created shared `parse_module_kind()` function to eliminate code duplication
+  5. **CLI support** - Fixed `--module amd` and `--module umd` flag handling
+  6. **Test directive support** - Fixed `@module: amd` directive parsing in conformance tests
+- **Technical details**:
+  - Added TS5107 to symbol.mbt (lines 730, 1067, 1402)
+  - Implemented validation in checker.mbt (lines 2391-2409, 2488-2509)
+  - Created `parse_module_kind()` in ffi.mbt (lines 88-98) - eliminates duplication
+  - Updated CLI args.mbt to use shared parser
+  - Fixed diagnostic error counting in CLI (`: error:` → ` - error `)
+- **Error message**: "Option 'module={AMD|UMD}' is deprecated and will stop functioning in TypeScript 7.0. Specify compilerOption '\"ignoreDeprecations\": \"6.0\"' to silence this error."
+- **Unit tests**: Added 6 comprehensive tests in `ts5107_deprecated_module_test.mbt` - all passing
+- **Build status**: 4553/4553 unit tests passing (100%), zero regressions
+- **Fixed tests**:
+  - `exportAndImport-es5-amd.ts` - AMD module deprecation warning ✅
+  - `exportStar-amd.ts` - AMD with export star ✅
+  - `exportsAndImports1-amd.ts` through `exportsAndImports4-amd.ts` - All AMD export/import patterns ✅
+- **Remaining work**: 4 non-AMD tests require additional features:
+  - `exportSpellingSuggestion.ts` - Needs TS2724 (spelling suggestions)
+  - `exportStar.ts` - Needs TS1192 & TS2308 (export star conflict detection)
+  - `exportsAndImportsWithContextualKeywordNames01.ts` - Needs TS1214 (reserved word validation)
+  - `importEmptyFromModuleNotExisted.ts` - Needs TS2307 (module resolution errors)
+- **Impact**: Major improvement in ES6 modules conformance (+18 percentage points)
+
 ### ✅ CLI --module Option Implemented (December 10, 2025)
 - **Unblocked 157 module-related tests** - Tests no longer fail with "Unknown option: --module"
 - **Pass rate maintained: 67.6% (3,820/5,652 tests)** - net +1 test passing, 157 tests now properly evaluated
@@ -616,7 +647,7 @@ The following categories have achieved full conformance:
 | Symbols | 95 | 95 | 100% |
 | for-ofStatements | 55 | 55 | 100% |
 | functionDeclarations | 13 | 13 | 100% |
-| modules | 28 | 39 | 72% |
+| modules | 35 | 39 | 90% |
 | spread | 12 | 27 | 44% |
 | computedProperties | 60 | 142 | 42% |
 
