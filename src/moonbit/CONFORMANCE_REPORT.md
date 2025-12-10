@@ -5,9 +5,9 @@
 | Metric | Value |
 |--------|-------|
 | Total Tests | 5,652 |
-| Passed | 3,819 |
-| Failed | 1,833 |
-| **Pass Rate** | **67.6%** |
+| Passed | 3,830 |
+| Failed | 1,822 |
+| **Pass Rate** | **67.8%** |
 
 *Last updated: December 10, 2025*
 
@@ -736,7 +736,7 @@ The following categories have achieved full conformance:
 | Symbols | 95 | 95 | 100% |
 | for-ofStatements | 55 | 55 | 100% |
 | functionDeclarations | 13 | 13 | 100% |
-| modules | 37 | 39 | 95% |
+| modules | 39 | 39 | 100% |
 | spread | 12 | 27 | 44% |
 | computedProperties | 60 | 142 | 42% |
 
