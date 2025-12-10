@@ -6612,8 +6612,19 @@ fn infer_call_expression_type(
         // be permissive and return any without error
         any_type(checker)
     }
+  } else if signatures.length() == 1 {
+    // Single signature (not an overload) - use direct argument checking for better error messages
+    // This gives TS2345 errors for argument type mismatches instead of generic TS2769
+    let sig = signatures[0]
+    let (info, checker) = create_type_info(checker)
+    let func = CheckerFunctionType::{
+      parameters: sig.parameters,
+      return_type: sig.return_type,
+      info,
+    }
+    check_function_call_args(checker, func, arg_types, call.location)
   } else {
-    // Resolve which overload matches
+    // Multiple signatures - resolve which overload matches
     match resolve_call_overload(checker, signatures, arg_types) {
       Some((return_type, c)) => (return_type, c)
       None => {
