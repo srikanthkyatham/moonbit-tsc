@@ -58,7 +58,7 @@
   - Property does not exist: 52 cases
   - No overload matches: 31 cases
 - **Most affected categories**: types (165 failures), parser (45), classes (61), expressions (70)
-- **All 100% categories maintained**: 24 categories with perfect pass rates including Symbols, destructuring, arrowFunction, templates, yieldExpressions
+- **All 100% categories maintained**: 25 categories with perfect pass rates including Symbols, destructuring, arrowFunction, templates, yieldExpressions, for-ofStatements
 
 ### Symbol.iterator Regression Fixed (December 9, 2025)
 - **✅ Fixed Symbol.iterator regression affecting 9 conformance tests** - All false positive TS2488 errors resolved
@@ -550,7 +550,7 @@ The following categories have achieved full conformance:
 | destructuring | 147 | 147 | 100% |
 | yieldExpressions | 98 | 98 | 100% |
 | Symbols | 95 | 95 | 100% |
-| for-ofStatements | 44 | 59 | 74.6% |
+| for-ofStatements | 55 | 55 | 100% |
 | functionDeclarations | 7 | 13 | 54% |
 | modules | 20 | 39 | 51% |
 | spread | 12 | 27 | 44% |
