@@ -2383,6 +2383,11 @@ pub fn check_source_file_with_options(
 
   // Push a top-level scope for the source file so local variables are tracked
   let checker = push_function_scope(checker)
+
+  // Scan for block-scoped declarations at module level (for TS2448 TDZ check)
+  let module_decls = scan_block_scoped_declarations(bound.statements)
+  let checker = { ..checker, block_scoped_decls: module_decls }
+
   let checker = check_statements(checker, bound.statements)
   // Pop the top-level scope
   let checker = pop_local_scope(checker)
@@ -2450,6 +2455,11 @@ pub fn check_source_file_with_external_types(
 
   // Push a top-level scope for the source file so local variables are tracked
   let checker = push_function_scope(checker)
+
+  // Scan for block-scoped declarations at module level (for TS2448 TDZ check)
+  let module_decls = scan_block_scoped_declarations(bound.statements)
+  let checker = { ..checker, block_scoped_decls: module_decls }
+
   let checker = check_statements(checker, bound.statements)
   // Pop the top-level scope
   let checker = pop_local_scope(checker)
@@ -3012,6 +3022,12 @@ fn check_statement(checker : TypeChecker, node : Node) -> TypeChecker {
     ImportDeclaration(import_decl) =>
       check_import_declaration(checker, import_decl)
     ExportDeclaration(_) => checker // Exports checked separately
+    ExportAssignment(ea) => {
+      // Check the expression being exported (e.g., export default x)
+      // This will trigger TDZ (TS2448) and definite assignment (TS2454) checks
+      let (_, checker) = infer_type(checker, ea.expression)
+      checker
+    }
     TryStatement(try_stmt) => check_try_statement(checker, try_stmt)
     ThrowStatement(throw_stmt) => check_throw_statement(checker, throw_stmt)
     SwitchStatement(switch_stmt) => check_switch_statement(checker, switch_stmt)
@@ -4032,32 +4048,72 @@ fn infer_identifier_type(
   }
 
   // TS2448: Check for block-scoped variable used before declaration (TDZ)
+  // TS2454: Check for variable used before being assigned
+  // Note: Both errors can be reported for the same identifier (e.g., const before declaration)
+  let mut checker = checker
+  let mut has_tdz_or_uninitialized_error = false
+
   match checker.block_scoped_decls.get(id.name) {
     Some(decl_line) =>
       if id.location.start.line < decl_line {
-        let checker = add_diagnostic_with_code(
+        checker = add_diagnostic_with_code(
           checker,
           "Block-scoped variable '\{id.name}' used before its declaration.",
           id.location,
           TS2448,
         )
-        return any_type(checker)
+        has_tdz_or_uninitialized_error = true
       }
     None => ()
   }
 
-  // TS2454: Check for variable used before being assigned
-  match checker.uninitialized_vars.get(id.name) {
-    Some(_) => {
-      let checker = add_diagnostic_with_code(
-        checker,
-        "Variable '\{id.name}' is used before being assigned.",
-        id.location,
-        TS2454,
-      )
-      return any_type(checker)
-    }
-    None => ()
+  // For block-scoped variables (const/let) used before declaration, also report TS2454
+  // This handles cases like: export default x; const x = 'x';
+  // where x is used before being assigned, even though it will be initialized
+  match checker.block_scoped_decls.get(id.name) {
+    Some(decl_line) =>
+      if id.location.start.line < decl_line {
+        // Already reported TS2448 above, now also report TS2454 for completeness
+        checker = add_diagnostic_with_code(
+          checker,
+          "Variable '\{id.name}' is used before being assigned.",
+          id.location,
+          TS2454,
+        )
+        has_tdz_or_uninitialized_error = true
+      } else {
+        // After declaration line - check if variable is in uninitialized set
+        match checker.uninitialized_vars.get(id.name) {
+          Some(_) => {
+            checker = add_diagnostic_with_code(
+              checker,
+              "Variable '\{id.name}' is used before being assigned.",
+              id.location,
+              TS2454,
+            )
+            has_tdz_or_uninitialized_error = true
+          }
+          None => ()
+        }
+      }
+    None =>
+      // Not a block-scoped variable - check uninitialized_vars for type-annotated vars without initializers
+      match checker.uninitialized_vars.get(id.name) {
+        Some(_) => {
+          checker = add_diagnostic_with_code(
+            checker,
+            "Variable '\{id.name}' is used before being assigned.",
+            id.location,
+            TS2454,
+          )
+          has_tdz_or_uninitialized_error = true
+        }
+        None => ()
+      }
+  }
+
+  if has_tdz_or_uninitialized_error {
+    return any_type(checker)
   }
 
   // TS7005: Check for variable with implicit any[] type being referenced
