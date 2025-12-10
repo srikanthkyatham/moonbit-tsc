@@ -41,11 +41,12 @@ defmodule TSC.Coordinator do
     start_time = System.monotonic_time(:millisecond)
 
     # Filter to changed files if incremental
-    files_to_check = if incremental do
-      filter_changed_files(files)
-    else
-      files
-    end
+    files_to_check =
+      if incremental do
+        filter_changed_files(files)
+      else
+        files
+      end
 
     Metrics.emit_project_check_start(length(files_to_check))
 
@@ -54,13 +55,14 @@ defmodule TSC.Coordinator do
     build_dependency_graph(files_to_check, concurrency)
 
     # Phase 2: Get affected files if incremental
-    all_affected = if incremental and length(files_to_check) < length(files) do
-      affected = DependencyGraph.get_affected_files(files_to_check)
-      Logger.info("#{length(affected)} additional files affected by changes")
-      Enum.uniq(files_to_check ++ affected)
-    else
-      files_to_check
-    end
+    all_affected =
+      if incremental and length(files_to_check) < length(files) do
+        affected = DependencyGraph.get_affected_files(files_to_check)
+        Logger.info("#{length(affected)} additional files affected by changes")
+        Enum.uniq(files_to_check ++ affected)
+      else
+        files_to_check
+      end
 
     # Phase 3: Compute topological levels
     levels = DependencyGraph.topological_levels(all_affected)
@@ -148,6 +150,7 @@ defmodule TSC.Coordinator do
 
       {:error, :circular_dependency} ->
         Logger.error("Circular dependency detected in project references")
+
         %{
           success: false,
           error: :circular_dependency,
@@ -157,6 +160,7 @@ defmodule TSC.Coordinator do
 
       {:error, reason} ->
         Logger.error("Failed to build project graph: #{inspect(reason)}")
+
         %{
           success: false,
           error: reason,
@@ -187,34 +191,43 @@ defmodule TSC.Coordinator do
     Metrics.emit_project_check_start(length(files))
 
     # Optionally build dependency graph and order files
-    {ordered_files, graph_stats, node_modules_files} = if use_dependency_order do
-      {nm_files, _} = build_dependency_graph_fast(files, concurrency)
-      levels = DependencyGraph.topological_levels(files)
-      ordered = List.flatten(levels)
-      stats = DependencyGraph.stats()
-      Logger.info("Dependency graph: #{stats.files} files, #{stats.edges} edges, #{length(levels)} levels")
-      Logger.info("Found #{length(nm_files)} node_modules dependencies")
-      {ordered, Map.put(stats, :levels, length(levels)), nm_files}
-    else
-      {files, nil, []}
-    end
+    {ordered_files, graph_stats, node_modules_files} =
+      if use_dependency_order do
+        {nm_files, _} = build_dependency_graph_fast(files, concurrency)
+        levels = DependencyGraph.topological_levels(files)
+        ordered = List.flatten(levels)
+        stats = DependencyGraph.stats()
+
+        Logger.info(
+          "Dependency graph: #{stats.files} files, #{stats.edges} edges, #{length(levels)} levels"
+        )
+
+        Logger.info("Found #{length(nm_files)} node_modules dependencies")
+        {ordered, Map.put(stats, :levels, length(levels)), nm_files}
+      else
+        {files, nil, []}
+      end
 
     # First compile node_modules dependencies to populate type cache
     # Recursively discover and compile transitive node_modules dependencies
-    _nm_result = if length(node_modules_files) > 0 do
-      Logger.info("Compiling #{length(node_modules_files)} initial node_modules files...")
+    _nm_result =
+      if length(node_modules_files) > 0 do
+        Logger.info("Compiling #{length(node_modules_files)} initial node_modules files...")
 
-      # Recursively discover transitive dependencies in node_modules
-      all_nm_files = discover_transitive_node_modules(node_modules_files, concurrency)
-      Logger.info("Total node_modules files after transitive discovery: #{length(all_nm_files)}")
+        # Recursively discover transitive dependencies in node_modules
+        all_nm_files = discover_transitive_node_modules(node_modules_files, concurrency)
 
-      # Sort node_modules files in dependency order and compile
-      # First pass: compile leaf modules (no dependencies)
-      # Then compile modules that depend on them, etc.
-      compile_node_modules_in_order(all_nm_files, concurrency)
-    else
-      {:ok, %{}}
-    end
+        Logger.info(
+          "Total node_modules files after transitive discovery: #{length(all_nm_files)}"
+        )
+
+        # Sort node_modules files in dependency order and compile
+        # First pass: compile leaf modules (no dependencies)
+        # Then compile modules that depend on them, etc.
+        compile_node_modules_in_order(all_nm_files, concurrency)
+      else
+        {:ok, %{}}
+      end
 
     # Now compile project files with cached types from node_modules
     result = PoolSupervisor.check_files(ordered_files, %{use_cached_types: true})
@@ -247,12 +260,14 @@ defmodule TSC.Coordinator do
         )
 
         # Store errors in ETS for persistence (convert structs to maps)
-        diagnostics_as_maps = Enum.map(data.diagnostics, fn
-          %TSC.Diagnostic{} = d -> TSC.Diagnostic.to_map(d)
-          %{__struct__: _} = d -> Map.from_struct(d)
-          d when is_map(d) -> d
-          _ -> %{}
-        end)
+        diagnostics_as_maps =
+          Enum.map(data.diagnostics, fn
+            %TSC.Diagnostic{} = d -> TSC.Diagnostic.to_map(d)
+            %{__struct__: _} = d -> Map.from_struct(d)
+            d when is_map(d) -> d
+            _ -> %{}
+          end)
+
         ErrorStore.put_from_files(files, diagnostics_as_maps)
 
         # Broadcast results to LiveView subscribers
@@ -285,16 +300,18 @@ defmodule TSC.Coordinator do
     Metrics.emit_file_check_start(file)
 
     # Get imported types from cache (merge with any provided)
-    imported_types = Map.merge(
-      get_imported_types_for_file(file),
-      Keyword.fetch!(opts, :imported_types)
-    )
+    imported_types =
+      Map.merge(
+        get_imported_types_for_file(file),
+        Keyword.fetch!(opts, :imported_types)
+      )
 
     # Read file content
-    content = case Keyword.fetch!(opts, :content) do
-      nil -> File.read!(file)
-      c -> c
-    end
+    content =
+      case Keyword.fetch!(opts, :content) do
+        nil -> File.read!(file)
+        c -> c
+      end
 
     # Check with worker
     request = %{
@@ -420,7 +437,27 @@ defmodule TSC.Coordinator do
     end)
   end
 
-  defp check_level(files, concurrency) do
+  # Maximum files per chunk for batch processing
+  @max_files_per_chunk 10
+
+  defp check_level(files, _concurrency) do
+    pool_size = PoolSupervisor.pool_size()
+
+    cond do
+      # If we have very few files, use single-file approach
+      length(files) <= 5 ->
+        check_level_single_files(files)
+
+      # For any significant number of files, use chunked approach
+      true ->
+        check_level_chunked(files, pool_size)
+    end
+  end
+
+  # Single-file approach for very few files
+  defp check_level_single_files(files) do
+    Logger.debug("Checking #{length(files)} files using single-file approach")
+
     files
     |> Task.async_stream(
       fn file ->
@@ -429,7 +466,7 @@ defmodule TSC.Coordinator do
           {:error, _} -> []
         end
       end,
-      max_concurrency: concurrency,
+      max_concurrency: 4,
       timeout: 60_000
     )
     |> Enum.flat_map(fn
@@ -437,6 +474,122 @@ defmodule TSC.Coordinator do
       {:exit, _} -> []
     end)
   end
+
+  # Chunked approach with max 10 files per chunk
+  defp check_level_chunked(files, pool_size) do
+    # Create chunks of max 10 files each
+    chunks = Enum.chunk_every(files, @max_files_per_chunk)
+    num_chunks = length(chunks)
+    total_files = length(files)
+
+    Logger.info(
+      "Checking #{total_files} files in #{num_chunks} chunks (max #{@max_files_per_chunk} files/chunk) using #{pool_size} workers"
+    )
+
+    # Create progress tracker
+    {:ok, progress_pid} = Agent.start_link(fn -> 0 end)
+
+    # Process chunks in parallel, distributing across available workers
+    results =
+      chunks
+      |> Enum.with_index(1)
+      |> Task.async_stream(
+        fn {chunk, chunk_idx} ->
+          worker_id = get_assigned_worker(chunk_idx, pool_size)
+
+          Logger.debug(
+            "Chunk #{chunk_idx}/#{num_chunks} (#{length(chunk)} files) → Worker #{worker_id}"
+          )
+
+          # Each chunk goes to a worker via CLI batch call
+          result =
+            case PoolSupervisor.check_files(chunk, %{use_cached_types: true}) do
+              {:ok, result} ->
+                result.diagnostics
+
+              {:error, reason} ->
+                Logger.warning("Chunk #{chunk_idx} failed: #{inspect(reason)}, retrying...")
+                retry_chunk(chunk, 1)
+            end
+
+          # Update and broadcast progress
+          completed =
+            Agent.get_and_update(progress_pid, fn count ->
+              new_count = count + 1
+              {new_count, new_count}
+            end)
+
+          if rem(completed, 10) == 0 or completed == num_chunks do
+            progress = Float.round(completed / num_chunks * 100, 1)
+            Logger.info("Progress: #{completed}/#{num_chunks} chunks (#{progress}%)")
+
+            # Broadcast progress to LiveView
+            Phoenix.PubSub.broadcast(
+              TscPhoenix.PubSub,
+              "compiler:progress",
+              {:chunk_complete,
+               %{
+                 completed: completed,
+                 total: num_chunks,
+                 progress: progress,
+                 files_checked: completed * @max_files_per_chunk
+               }}
+            )
+          end
+
+          result
+        end,
+        # Allow some queuing for load balancing
+        max_concurrency: pool_size * 2,
+        # 2 minutes per chunk
+        timeout: 120_000,
+        # Don't need to maintain order
+        ordered: false
+      )
+      |> Enum.flat_map(fn
+        {:ok, diags} ->
+          diags
+
+        {:exit, reason} ->
+          Logger.warning("Chunk crashed: #{inspect(reason)}")
+          []
+      end)
+
+    Agent.stop(progress_pid)
+    results
+  end
+
+  # Assign chunks to workers in round-robin fashion
+  defp get_assigned_worker(chunk_idx, pool_size) do
+    rem(chunk_idx - 1, pool_size) + 1
+  end
+
+  # Retry logic for failed chunks with exponential backoff
+  defp retry_chunk(chunk, attempt) when attempt <= 3 do
+    Logger.info("Retrying chunk (attempt #{attempt}/3) with #{length(chunk)} files...")
+
+    case PoolSupervisor.check_files(chunk, %{use_cached_types: true}) do
+      {:ok, result} ->
+        Logger.info("Chunk retry #{attempt} succeeded")
+        result.diagnostics
+
+      {:error, reason} when attempt < 3 ->
+        backoff_ms = attempt * 1000
+
+        Logger.warning(
+          "Chunk retry #{attempt} failed: #{inspect(reason)}, waiting #{backoff_ms}ms before retry"
+        )
+
+        :timer.sleep(backoff_ms)
+        retry_chunk(chunk, attempt + 1)
+
+      {:error, reason} ->
+        Logger.error("Chunk failed after 3 attempts: #{inspect(reason)}")
+        []
+    end
+  end
+
+  defp retry_chunk(_chunk, _attempt), do: []
 
   defp get_imported_types_for_file(file) do
     deps = DependencyGraph.get_dependencies(file)
@@ -562,7 +715,10 @@ defmodule TSC.Coordinator do
 
     if length(ready) == 0 and length(not_ready) > 0 do
       # Circular dependency or missing deps - just compile what's left
-      Logger.warning("Possible circular dependency in node_modules, compiling remaining #{length(not_ready)} files")
+      Logger.warning(
+        "Possible circular dependency in node_modules, compiling remaining #{length(not_ready)} files"
+      )
+
       PoolSupervisor.check_files(not_ready, %{use_cached_types: true})
     else
       # Compile ready files
@@ -597,6 +753,7 @@ defmodule TSC.Coordinator do
                 if resolved && String.contains?(resolved, "node_modules") do
                   :ets.insert(node_modules_files, {resolved, true})
                 end
+
                 resolved
               end)
               |> Enum.reject(&is_nil/1)
@@ -615,9 +772,11 @@ defmodule TSC.Coordinator do
                     if resolved && String.contains?(resolved, "node_modules") do
                       :ets.insert(node_modules_files, {resolved, true})
                     end
+
                     resolved
                   end)
                   |> Enum.reject(&is_nil/1)
+
                 {file, dependencies}
 
               {:error, _} ->

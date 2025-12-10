@@ -6588,14 +6588,54 @@ fn infer_call_expression_type(
   // Spread arguments must either have tuple types or be passed to rest parameters
   let mut checker = checker
   if not(signatures.is_empty()) && arg_is_spread.length() > 0 {
-    // Check if any signature accepts the spread arguments
+    // For each signature, check if spreads are valid
+    // A spread is valid if:
+    // 1. It's a tuple type, OR
+    // 2. It maps to a rest parameter (not a required parameter)
+
     let has_valid_signature = signatures.iter().any(fn(sig) {
-      // A signature is valid for spreads if it has a rest parameter
-      sig.parameters.length() > 0 &&
+      // Count required parameters (non-optional, non-rest)
+      let mut num_required = 0
+      for param in sig.parameters {
+        if not(param.is_optional) && not(param.is_rest) {
+          num_required = num_required + 1
+        }
+      }
+
+      // Check if function has a rest parameter
+      let has_rest = sig.parameters.length() > 0 &&
         sig.parameters[sig.parameters.length() - 1].is_rest
+
+      // If there are no required params, spreads can go directly to rest param
+      if num_required == 0 && has_rest {
+        return true
+      }
+
+      // Check each spread argument
+      let mut all_spreads_valid = true
+      for i = 0; i < arg_is_spread.length(); i = i + 1 {
+        if arg_is_spread[i] {
+          // Check if this spread is a tuple type
+          let is_tuple = match arg_spread_types[i] {
+            Some(Tuple(_)) => true
+            _ => false
+          }
+
+          // Spread is in position i
+          // It's valid if: it's a tuple, OR it maps to the rest parameter
+          // It maps to rest parameter if i >= num_required and has_rest
+          let maps_to_rest = i >= num_required && has_rest
+
+          if not(is_tuple) && not(maps_to_rest) {
+            all_spreads_valid = false
+            break
+          }
+        }
+      }
+      all_spreads_valid
     })
 
-    // If no signature accepts spreads, check each spread argument
+    // If no signature accepts spreads, report error
     if not(has_valid_signature) {
       for i = 0; i < arg_is_spread.length(); i = i + 1 {
         if arg_is_spread[i] {
@@ -6605,7 +6645,7 @@ fn infer_call_expression_type(
             _ => false
           }
 
-          // Only error if it's not a tuple and not passed to a rest parameter
+          // Only error if it's not a tuple
           if not(is_tuple) {
             // Extract location from the spread expression
             let spread_loc = match call.arguments[i] {

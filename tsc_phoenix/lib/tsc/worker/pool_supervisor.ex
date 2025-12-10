@@ -51,7 +51,7 @@ defmodule TSC.Worker.PoolSupervisor do
   """
   @spec pool_size() :: pos_integer()
   def pool_size do
-    Application.get_env(:tsc_phoenix, :worker_pool_size, 4)
+    Application.get_env(:tsc_phoenix, :worker_pool_size, System.schedulers_online())
   end
 
   @doc """
