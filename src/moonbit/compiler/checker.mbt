@@ -17687,6 +17687,23 @@ fn is_const_enum_initializer(expr : Node) -> Bool {
 }
 
 ///|
+/// Check if a word is a reserved word in strict mode
+/// These are identifiers that are valid in non-strict mode but become reserved in strict mode
+/// Note: Keywords like 'interface', 'class', etc. are handled by the parser and never reach here
+fn is_strict_mode_reserved_word(word : String) -> Bool {
+  word == "arguments" ||
+  word == "eval" ||
+  word == "yield" ||
+  word == "let" ||
+  word == "static" ||
+  word == "implements" ||
+  word == "package" ||
+  word == "private" ||
+  word == "protected" ||
+  word == "public"
+}
+
+///|
 /// Check import declaration for TS2691 (import path cannot end with extension)
 fn check_import_declaration(
   checker : TypeChecker,
@@ -17736,7 +17753,7 @@ fn check_import_declaration(
   // In single-file compilation, we can't resolve external modules, so emit an error
   // Relative paths start with './' or '../'
   let is_relative = module_spec.has_prefix("./") || module_spec.has_prefix("../")
-  if not(is_relative) {
+  let mut checker = if not(is_relative) {
     // External module - in single-file compilation context, we can't resolve these
     add_diagnostic_with_code(
       checker,
@@ -17746,6 +17763,41 @@ fn check_import_declaration(
     )
   } else {
     checker
+  }
+
+  // TS1214: Check for reserved words in strict mode
+  // Modules are automatically in strict mode
+  match import_decl.import_clause {
+    Some(clause) =>
+      match clause.named_bindings {
+        Some(NamedImports(specifiers, _)) => {
+          for spec in specifiers {
+            if is_strict_mode_reserved_word(spec.name) {
+              checker = add_diagnostic_with_code(
+                checker,
+                "Identifier expected. '\{spec.name}' is a reserved word in strict mode. Modules are automatically in strict mode.",
+                spec.location,
+                TS1214,
+              )
+            }
+          }
+          checker
+        }
+        Some(NamespaceImport(name, location)) => {
+          if is_strict_mode_reserved_word(name) {
+            add_diagnostic_with_code(
+              checker,
+              "Identifier expected. '\{name}' is a reserved word in strict mode. Modules are automatically in strict mode.",
+              location,
+              TS1214,
+            )
+          } else {
+            checker
+          }
+        }
+        None => checker
+      }
+    None => checker
   }
 }
 

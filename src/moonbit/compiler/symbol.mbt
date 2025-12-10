@@ -346,6 +346,7 @@ pub enum DiagnosticCode {
   TS1186 // A rest element cannot have an initializer
   TS1187 // A parameter property may not be declared using a binding pattern
   TS1188 // Only a single variable declaration is allowed in a 'for...of' statement
+  TS1214 // Identifier expected. '{0}' is a reserved word in strict mode. Modules are automatically in strict mode
   TS1221 // Generators are not allowed in an ambient context
   TS1308 // 'await' expressions are only allowed within async functions and at the top levels of modules
   TS1357 // An enum member name must be followed by a ',', '=', or '}'
@@ -757,6 +758,7 @@ pub fn DiagnosticCode::to_int(self : DiagnosticCode) -> Int {
     TS1186 => 1186
     TS1187 => 1187
     TS1188 => 1188
+    TS1214 => 1214
     TS1221 => 1221
     TS1308 => 1308
     TS1357 => 1357
@@ -1094,6 +1096,7 @@ pub fn DiagnosticCode::from_int(code : Int) -> DiagnosticCode? {
     1186 => Some(TS1186)
     1187 => Some(TS1187)
     1188 => Some(TS1188)
+    1214 => Some(TS1214)
     1221 => Some(TS1221)
     1308 => Some(TS1308)
     1357 => Some(TS1357)
