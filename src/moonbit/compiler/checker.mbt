@@ -282,6 +282,7 @@ pub struct TypeChecker {
   generator_yield_type : Type? // Expected yield type from generator return type annotation (e.g., Foo from IterableIterator<Foo>)
   collected_yield_types : Array[Type] // Collected yield types during generator body checking (for type inference)
   collected_return_types : Array[Type] // Collected return types during function body checking (for type inference)
+  checked_function_bodies : Map[String, Bool] // Function names whose bodies were checked during type inference
   block_scoped_decls : Map[String, Int] // Variable name -> declaration line (for TS2448 TDZ check)
   uninitialized_vars : Map[String, Int] // Variable name -> declaration line (for TS2454 definite assignment)
   in_static_context : Bool // Tracks if we're in a static property initializer (for TS2334)
@@ -364,6 +365,7 @@ pub fn TypeChecker::new_with_options(
     generator_yield_type: None,
     collected_yield_types: [],
     collected_return_types: [],
+    checked_function_bodies: Map::new(),
     block_scoped_decls: Map::new(),
     uninitialized_vars: Map::new(),
     in_static_context: false,
@@ -5269,31 +5271,86 @@ fn infer_function_declaration_type(
   let checker = c
 
   // Get return type
-  // If no explicit return type, try to infer from function body
+  // For function declarations without explicit return types, we check the body
+  // during type inference (similar to function expressions) to collect return types
+  // NOTE: Skip this for generators - they have their own type inference in check_function_declaration
   let (return_type, checker) = match func.return_type {
     Some(_) => resolve_type_annotation_or_any(checker, func.return_type)
-    None => {
-      // No explicit return type - try to infer from body
-      // Only infer from simple expressions that don't require scope (object literals, primitives)
-      match func.body {
-        Some(BlockStatement(block)) =>
-          if block.statements.length() > 0 {
-            match block.statements[block.statements.length() - 1] {
-              ReturnStatement(ret) =>
-                match ret.expression {
-                  Some(ObjectLiteralExpression(_)) | Some(ArrayLiteralExpression(_)) |
-                  Some(StringLiteral(_)) | Some(NumericLiteral(_)) | Some(BooleanLiteral(_)) => {
-                    // Safe to infer - these don't require scope
-                    infer_type(checker, ret.expression.unwrap())
-                  }
-                  _ => any_type(checker) // For other expressions, use 'any' to avoid scope issues
+    None =>
+      // No explicit return type - check the body to collect return types
+      // Skip for generator functions - they use yield types, not return types
+      if func.is_generator {
+        any_type(checker)
+      } else {
+        match func.body {
+          Some(body) => {
+          // Push a function scope for type checking the body
+          let checker = push_function_scope(checker)
+
+          // Add parameters to local scope so they're available during body checking
+          let mut c = checker
+          for param_node in func.parameters {
+            match param_node {
+              Parameter(p) => {
+                let (param_type, c2) = resolve_type_annotation_or_any(c, p.type_annotation)
+                c = c2
+                // Handle identifier or binding pattern
+                c = match p.name {
+                  Identifier(id) => add_local_variable(c, id.name, param_type)
+                  ArrayBindingPattern(_) | ObjectBindingPattern(_) =>
+                    add_binding_pattern_variables(c, p.name, param_type)
+                  _ => c
                 }
-              _ => any_type(checker)
+              }
+              _ => ()
             }
-          } else {
-            any_type(checker)
           }
-        _ => any_type(checker)
+          let checker = c
+
+          // Save and reset collected return types (each function has its own set)
+          let saved_collected_return_types = checker.collected_return_types
+          let checker = { ..checker, collected_return_types: [] }
+
+          // Hoist var declarations to function scope
+          let checker = hoist_var_declarations(checker, body)
+
+          // Check the function body to collect return types
+          let checker = check_statement(checker, body)
+
+          // Get the collected return types
+          let collected_return_types = checker.collected_return_types
+
+          // Restore saved collected return types
+          let checker = { ..checker, collected_return_types: saved_collected_return_types }
+
+          // Pop the function scope
+          let checker = pop_local_scope(checker)
+
+          // Mark this function as having its body already checked during inference
+          // This prevents double-checking in check_function_declaration
+          let checker = match func.name {
+            Some(Identifier(id)) => {
+              let checked_bodies = checker.checked_function_bodies
+              checked_bodies.set(id.name, true)
+              { ..checker, checked_function_bodies: checked_bodies }
+            }
+            _ => checker
+          }
+
+          // Infer return type from collected return types
+          if collected_return_types.is_empty() {
+            // No return statements - returns 'any' (or could be void)
+            any_type(checker)
+          } else if collected_return_types.length() == 1 {
+            // Single return type
+            (collected_return_types[0], checker)
+          } else {
+            // Multiple return types - create union
+            let (info, checker) = create_type_info(checker)
+            (Union({ types: collected_return_types, info }), checker)
+          }
+        }
+        None => any_type(checker)
       }
     }
   }
@@ -14278,17 +14335,33 @@ fn check_function_declaration(
   // Track regular function context (for 'arguments' object availability)
   let checker = enter_regular_function(checker)
 
+  // Check if body was already checked during type inference
+  // This happens for function declarations without explicit return types
+  let body_already_checked = match func.name {
+    Some(Identifier(id)) => checker.checked_function_bodies.get(id.name) is Some(_)
+    _ => false
+  }
+
   // Hoist var declarations to the function scope before checking body
-  // This ensures self-references like `var x = yield \`${ x }\`` work correctly
-  let checker = match func.body {
-    Some(body) => hoist_var_declarations(checker, body)
-    None => checker
+  // Skip if body was already checked during type inference
+  let checker = if not(body_already_checked) {
+    match func.body {
+      Some(body) => hoist_var_declarations(checker, body)
+      None => checker
+    }
+  } else {
+    checker
   }
 
   // Check function body
-  let checker = match func.body {
-    Some(body) => check_statement(checker, body)
-    None => checker
+  // Skip if body was already checked during type inference
+  let checker = if not(body_already_checked) {
+    match func.body {
+      Some(body) => check_statement(checker, body)
+      None => checker
+    }
+  } else {
+    checker
   }
 
   // Exit generator function context or restore saved depth
