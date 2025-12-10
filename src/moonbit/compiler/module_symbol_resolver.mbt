@@ -529,6 +529,51 @@ pub fn create_file_not_module_diagnostic(
 }
 
 ///|
+/// Find closest matching export name using Levenshtein distance
+/// Returns None if no good suggestion found (distance > 3 or > 50% of name length)
+pub fn find_closest_export(
+  target : String,
+  available_exports : @hashset.HashSet[String],
+) -> String? {
+  let mut best_match : String? = None
+  let mut best_distance = 999999
+  let target_len = target.length()
+  let max_distance = if target_len / 2 < 3 { target_len / 2 } else { 3 }
+
+  for export_name in available_exports.iter() {
+    let distance = levenshtein_distance(target, export_name)
+    if distance <= max_distance && distance < best_distance {
+      best_distance = distance
+      best_match = Some(export_name)
+    }
+  }
+
+  best_match
+}
+
+///|
+/// Create diagnostic for module has no exported member with spelling suggestion (TS2724)
+pub fn create_export_not_found_with_suggestion_diagnostic(
+  export_name : String,
+  module_path : String,
+  suggestion : String,
+  location : SourceLocation,
+) -> Diagnostic {
+  Diagnostic::{
+    category: DiagnosticCategory::Error,
+    code: 2724, // TS2724: Module has no exported member with suggestion
+    message: "Module '" +
+    module_path +
+    "' has no exported member named '" +
+    export_name +
+    "'. Did you mean '" +
+    suggestion +
+    "'?",
+    location,
+  }
+}
+
+///|
 /// Create diagnostic for module has no exported member with location (TS2305)
 pub fn create_export_not_found_diagnostic_with_location(
   export_name : String,

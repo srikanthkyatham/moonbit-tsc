@@ -17870,14 +17870,28 @@ pub fn validate_import_resolution(
                     None => specifier.name
                   }
                   if not(module_exports.exports.contains(import_name)) {
-                    // TS2305: Module has no exported member
-                    diagnostics.push(
-                      create_export_not_found_diagnostic_with_location(
-                        import_name,
-                        module_spec,
-                        specifier.location,
-                      ),
-                    )
+                    // Try to find a close match for spelling suggestion
+                    match find_closest_export(import_name, module_exports.exports) {
+                      Some(suggestion) =>
+                        // TS2724: Module has no exported member with suggestion
+                        diagnostics.push(
+                          create_export_not_found_with_suggestion_diagnostic(
+                            import_name,
+                            module_spec,
+                            suggestion,
+                            specifier.location,
+                          ),
+                        )
+                      None =>
+                        // TS2305: Module has no exported member (no good suggestion)
+                        diagnostics.push(
+                          create_export_not_found_diagnostic_with_location(
+                            import_name,
+                            module_spec,
+                            specifier.location,
+                          ),
+                        )
+                    }
                   }
                 }
               Some(NamespaceImport(_, _)) =>

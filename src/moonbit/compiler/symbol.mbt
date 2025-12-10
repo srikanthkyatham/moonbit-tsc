@@ -617,6 +617,7 @@ pub enum DiagnosticCode {
   TS2718 // 'super' must be called before accessing a property of 'super' in the constructor of a derived class
   TS2722 // Cannot invoke an object which is possibly 'undefined'
   TS2723 // Cannot invoke an object which is possibly 'null' or 'undefined'
+  TS2724 // '{0}' has no exported member named '{1}'. Did you mean '{2}'?
   TS2729 // Property '{0}' is used before its initialization
   TS2730 // 'infer' declarations are only permitted in the 'extends' clause of a conditional type
   TS2733 // Property '{0}' was also declared here
@@ -973,6 +974,7 @@ pub fn DiagnosticCode::to_int(self : DiagnosticCode) -> Int {
     TS2718 => 2718
     TS2722 => 2722
     TS2723 => 2723
+    TS2724 => 2724
     TS2729 => 2729
     TS2730 => 2730
     TS2733 => 2733
@@ -1309,6 +1311,7 @@ pub fn DiagnosticCode::from_int(code : Int) -> DiagnosticCode? {
     2718 => Some(TS2718)
     2722 => Some(TS2722)
     2723 => Some(TS2723)
+    2724 => Some(TS2724)
     2729 => Some(TS2729)
     2730 => Some(TS2730)
     2733 => Some(TS2733)

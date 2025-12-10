@@ -881,7 +881,25 @@ pub fn compile_multi_file_test(
   }
 
   // Second pass: compile each file with the registry
+  let parsed_files : Map[String, SourceFile] = Map::new()
+  let bound_files : Map[String, BoundSourceFile] = Map::new()
+
   for file in multi_test.files {
+    // Parse the file for import validation later
+    let tokens = scan_all_v2(file.content, file.filename)
+    match parse_source_file(tokens, file.filename) {
+      Ok(source_file) => {
+        parsed_files.set(file.filename, source_file)
+        // Also bind the file
+        match bind_source_file(source_file) {
+          Ok(bound) => bound_files.set(file.filename, bound)
+          Err(_) => ()
+        }
+      }
+      Err(_) => ()
+    }
+
+    // Compile with type checking
     let result = compile_source_with_external_types(
       file.content,
       file.filename,
@@ -890,6 +908,43 @@ pub fn compile_multi_file_test(
     )
     for diag in result.diagnostics {
       all_diagnostics.push(diag)
+    }
+  }
+
+  // Third pass: validate imports across files (TS2724, TS2305, TS1192, etc.)
+  let module_registry : Map[String, ResolvedModuleExports] = Map::new()
+  for entry in bound_files.iter() {
+    let (file_path, bound_file) = entry
+    let resolved = ResolvedModuleExports::from_bound_file(bound_file, file_path)
+    // Register with the full file path
+    module_registry.set(file_path, resolved)
+
+    // Also register with common variations:
+    // "./filename.ts" -> filename.ts
+    // "./filename" -> filename.ts (without extension)
+    if file_path.has_suffix(".ts") {
+      // Add "./filename.ts" version
+      module_registry.set("./" + file_path, resolved)
+      // Add "./filename" version (without .ts)
+      let name_without_ext = file_path.substring(end=file_path.length() - 3)
+      module_registry.set("./" + name_without_ext, resolved)
+    } else {
+      module_registry.set("./" + file_path, resolved)
+    }
+  }
+
+  for entry in parsed_files.iter() {
+    let (_, source_file) = entry
+    for stmt in source_file.statements {
+      match stmt {
+        Node::ImportDeclaration(import_decl) => {
+          let import_diags = validate_import_resolution(import_decl, module_registry)
+          for d in import_diags {
+            all_diagnostics.push(d)
+          }
+        }
+        _ => ()
+      }
     }
   }
 
