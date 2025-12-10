@@ -9571,14 +9571,19 @@ fn infer_yield_expression_type(
         checker
       }
 
-      // For yield*, should iterate over the expression
-      // For plain yield, return the expression type
-      (expr_type, checker)
+      // A yield expression evaluates to the value passed to next() (TNext parameter)
+      // For generators without explicit return type annotation, TNext defaults to 'any'
+      // Note: expr_type is what we're YIELDING, not what the expression evaluates to
+      let (result_type, checker) = any_type(checker)
+      (result_type, checker)
     }
     None => {
       // TS7057: When noImplicitAny is enabled and the generator lacks a return type,
       // bare yield's result is also implicitly 'any'
-      let (t, checker) = undefined_type(checker)
+      // Collect undefined as the YIELDED type for bare yield
+      let (undefined_t, checker) = undefined_type(checker)
+      let checker = collect_yield_type(checker, undefined_t, false)
+
       let checker = if checker.no_implicit_any &&
         not(checker.generator_has_return_type) {
         add_diagnostic_with_code(
@@ -9590,9 +9595,11 @@ fn infer_yield_expression_type(
       } else {
         checker
       }
-      // Collect undefined as a yield type for bare yield
-      let checker = collect_yield_type(checker, t, false)
-      (t, checker)
+
+      // A bare yield expression also evaluates to the value passed to next() (TNext)
+      // For generators without explicit return type annotation, TNext defaults to 'any'
+      let (result_type, checker) = any_type(checker)
+      (result_type, checker)
     }
   }
 }
