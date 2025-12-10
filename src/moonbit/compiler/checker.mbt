@@ -15283,6 +15283,7 @@ fn add_for_of_variable_to_scope(
 /// Validates iterator protocol and reports appropriate errors:
 /// - TS2488: Type must have '[Symbol.iterator]()' method that returns an iterator
 /// - TS2569: Type is not an array type or a string type
+/// - TS2461: For unions, all members must be iterable types
 fn get_for_of_element_type(
   checker : TypeChecker,
   iterable_type : Type,
@@ -15291,6 +15292,58 @@ fn get_for_of_element_type(
   match iterable_type {
     Array(arr) => (arr.element_type, checker)
     String(_) => string_type(checker) // Iterating string produces strings
+    Union(u) => {
+      // TS2461: For unions, ALL members must be iterable
+      // Check each union member - if any is not iterable (not Array/String), report error
+      let mut non_iterable_type : Type? = None
+      for member_type in u.types {
+        match member_type {
+          Array(_) | String(_) => () // These are iterable
+          _ => {
+            // Found a non-iterable member
+            non_iterable_type = Some(member_type)
+            break
+          }
+        }
+      }
+
+      match non_iterable_type {
+        Some(bad_type) => {
+          // Report TS2461 for the non-iterable member
+          let checker = add_diagnostic_with_code(
+            checker,
+            "Type '\{type_to_string(bad_type)}' is not an array type.",
+            expr_location,
+            TS2461,
+          )
+          let (any_t, checker) = any_type(checker)
+          (any_t, checker)
+        }
+        None => {
+          // All members are iterable - create union of their element types
+          let element_types : Array[Type] = []
+          let mut checker = checker
+          for member_type in u.types {
+            match member_type {
+              Array(arr) => element_types.push(arr.element_type)
+              String(_) => {
+                let (str_type, new_checker) = string_type(checker)
+                checker = new_checker
+                element_types.push(str_type)
+              }
+              _ => () // Shouldn't happen since we checked above
+            }
+          }
+          // Return union of element types
+          if element_types.length() == 1 {
+            (element_types[0], checker)
+          } else {
+            let (info, checker) = create_type_info(checker)
+            (Union(CheckerUnionType::{ types: element_types, info }), checker)
+          }
+        }
+      }
+    }
     _ => {
       // Try to extract element type using iterator protocol
       let (elem_type_opt, checker) = extract_iterable_element_type(
