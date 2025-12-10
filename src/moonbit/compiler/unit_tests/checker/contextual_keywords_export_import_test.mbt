@@ -128,3 +128,92 @@ test "import { type as } - type import with contextual keyword name" {
   let has_parse_error = diagnostics.iter().any(fn(d) { d.code == 1005 })
   assert_false(has_parse_error)
 }
+
+test "import { default as d } - reserved keyword 'default' as property name" {
+  let source =
+    #|import { default as d } from "./module";
+
+  let result = check_source(source)
+  let diagnostics = get_diagnostics(result)
+
+  // Should parse without errors (no TS1005 '}' expected)
+  let has_parse_error = diagnostics.iter().any(fn(d) { d.code == 1005 })
+  assert_false(has_parse_error)
+}
+
+test "import { default as x, other } - default keyword with other imports" {
+  let source =
+    #|import { default as x, other } from "./module";
+
+  let result = check_source(source)
+  let diagnostics = get_diagnostics(result)
+
+  // Should parse without errors
+  let has_parse_error = diagnostics.iter().any(fn(d) { d.code == 1005 })
+  assert_false(has_parse_error)
+}
+
+test "export { default } - reserved keyword 'default' as export name" {
+  let source =
+    #|let default = 100;
+    #|export { default };
+
+  let result = check_source(source)
+  let diagnostics = get_diagnostics(result)
+
+  // Should parse without errors
+  let has_parse_error = diagnostics.iter().any(fn(d) { d.code == 1005 })
+  assert_false(has_parse_error)
+}
+
+test "export { default as exported } - default keyword with alias" {
+  let source =
+    #|let default = 100;
+    #|export { default as exported };
+
+  let result = check_source(source)
+  let diagnostics = get_diagnostics(result)
+
+  // Should parse without errors
+  let has_parse_error = diagnostics.iter().any(fn(d) { d.code == 1005 })
+  assert_false(has_parse_error)
+}
+
+test "export { default, other } - default keyword with other exports" {
+  let source =
+    #|let default = 100;
+    #|let other = 200;
+    #|export { default, other };
+
+  let result = check_source(source)
+  let diagnostics = get_diagnostics(result)
+
+  // Should parse without errors
+  let has_parse_error = diagnostics.iter().any(fn(d) { d.code == 1005 })
+  assert_false(has_parse_error)
+}
+
+test "export { as as default } - contextual keyword renamed to default" {
+  let source =
+    #|let as = 100;
+    #|export { as as default };
+
+  let result = check_source(source)
+  let diagnostics = get_diagnostics(result)
+
+  // Should parse without errors
+  let has_parse_error = diagnostics.iter().any(fn(d) { d.code == 1005 })
+  assert_false(has_parse_error)
+}
+
+test "import { default as from, from as to } - mixing default and contextual keywords" {
+  let source =
+    #|import { default as from, from as to } from "./module";
+
+  let result = check_source(source)
+  let diagnostics = get_diagnostics(result)
+
+  // Should parse without errors
+  let has_parse_error = diagnostics.iter().any(fn(d) { d.code == 1005 })
+  assert_false(has_parse_error)
+}
