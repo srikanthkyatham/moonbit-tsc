@@ -6467,6 +6467,32 @@ fn infer_unary_expression_type(
 }
 
 ///|
+/// Extract element type from a spread expression
+/// Returns the element type and updated checker
+fn extract_spread_element_type(
+  checker : TypeChecker,
+  spread_expr : Node,
+) -> (Type, TypeChecker) {
+  let (spread_type, checker) = infer_type(checker, spread_expr)
+  // Try to extract element type from the spread
+  match spread_type {
+    Array(arr_type) => (arr_type.element_type, checker)
+    _ => {
+      // Try to extract from iterable
+      let (elem_type_opt, checker) = extract_iterable_element_type(
+        checker,
+        spread_type,
+        None,
+      )
+      match elem_type_opt {
+        Some(elem_type) => (elem_type, checker)
+        None => (spread_type, checker) // Can't extract element type, use the spread type itself
+      }
+    }
+  }
+}
+
+///|
 /// Infer call expression type with signature matching
 fn infer_call_expression_type(
   checker : TypeChecker,
@@ -6519,10 +6545,23 @@ fn infer_call_expression_type(
   // So 'this' in super(this) should raise TS17009
   let mut checker = checker
   let arg_types : Array[Type] = []
+  let arg_is_spread : Array[Bool] = []
   for i = 0; i < call.arguments.length(); i = i + 1 {
-    let (arg_type, c) = infer_type(checker, call.arguments[i])
-    arg_types.push(arg_type)
-    checker = c
+    match call.arguments[i] {
+      SpreadExpression(spread) => {
+        // For spread arguments, extract the element type
+        let (elem_type, c) = extract_spread_element_type(checker, spread.expression)
+        arg_types.push(elem_type)
+        arg_is_spread.push(true)
+        checker = c
+      }
+      _ => {
+        let (arg_type, c) = infer_type(checker, call.arguments[i])
+        arg_types.push(arg_type)
+        arg_is_spread.push(false)
+        checker = c
+      }
+    }
   }
 
   // Now mark super as called AFTER arguments have been checked
@@ -6627,15 +6666,62 @@ fn check_function_call_args(
   }
 
   // Check each argument type
-  for i = 0; i < arg_types.length() && i < func.parameters.length(); i = i + 1 {
-    let param = func.parameters[i]
-    if not(is_assignable(arg_types[i], param.param_type)) {
-      checker = add_diagnostic_with_code(
-        checker,
-        "Argument of type '\{type_to_string(arg_types[i])}' is not assignable to parameter '\{param.name}' of type '\{type_to_string(param.param_type)}'",
-        location,
-        TS2345,
-      )
+  for i = 0; i < arg_types.length(); i = i + 1 {
+    if i < func.parameters.length() {
+      let param = func.parameters[i]
+      // For rest parameters, extract element type from array type
+      if param.is_rest {
+        match param.param_type {
+          Array(arr_type) => {
+            // Rest parameter - check argument against element type
+            if not(is_assignable(arg_types[i], arr_type.element_type)) {
+              checker = add_diagnostic_with_code(
+                checker,
+                "Argument of type '\{type_to_string(arg_types[i])}' is not assignable to parameter of type '\{type_to_string(arr_type.element_type)}'.",
+                location,
+                TS2345,
+              )
+            }
+          }
+          _ => {
+            // Rest parameter with non-array type (shouldn't happen, but handle it)
+            if not(is_assignable(arg_types[i], param.param_type)) {
+              checker = add_diagnostic_with_code(
+                checker,
+                "Argument of type '\{type_to_string(arg_types[i])}' is not assignable to parameter '\{param.name}' of type '\{type_to_string(param.param_type)}'",
+                location,
+                TS2345,
+              )
+            }
+          }
+        }
+      } else {
+        // Regular parameter
+        if not(is_assignable(arg_types[i], param.param_type)) {
+          checker = add_diagnostic_with_code(
+            checker,
+            "Argument of type '\{type_to_string(arg_types[i])}' is not assignable to parameter '\{param.name}' of type '\{type_to_string(param.param_type)}'",
+            location,
+            TS2345,
+          )
+        }
+      }
+    } else if has_rest {
+      // Arguments beyond parameter count, but there's a rest parameter
+      let rest_param = func.parameters[func.parameters.length() - 1]
+      match rest_param.param_type {
+        Array(arr_type) => {
+          if not(is_assignable(arg_types[i], arr_type.element_type)) {
+            checker = add_diagnostic_with_code(
+              checker,
+              "Argument of type '\{type_to_string(arg_types[i])}' is not assignable to parameter of type '\{type_to_string(arr_type.element_type)}'.",
+              location,
+              TS2345,
+            )
+          }
+        }
+        _ => () // Rest parameter with non-array type - already handled by count check
+      }
     }
   }
   (func.return_type, checker)
