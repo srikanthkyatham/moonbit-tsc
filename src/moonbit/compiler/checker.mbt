@@ -14966,7 +14966,7 @@ fn add_for_of_variable_to_scope(
                 }
                 checker
               }
-              Number | String | Boolean | Null | Undefined | Void => {
+              Number(_) | String(_) | Boolean(_) | Null(_) | Undefined(_) | Void(_) => {
                 // For primitive types, report TS2339 for all properties in destructuring
                 let mut checker = checker
                 for i = 0; i < obj_pattern.properties.length(); i = i + 1 {
@@ -14983,7 +14983,42 @@ fn add_for_of_variable_to_scope(
                 }
                 checker
               }
-              Union(_) => checker // TODO: Check union members
+              Union(u) => {
+                // Check if all union members are primitives
+                let all_primitives = {
+                  let mut result = true
+                  for t in u.types {
+                    match t {
+                      Number(_) | String(_) | Boolean(_) | Null(_) | Undefined(_) | Void(_) => ()
+                      _ => {
+                        result = false
+                        break
+                      }
+                    }
+                  }
+                  result
+                }
+                if all_primitives {
+                  // All union members are primitives - report TS2339 for all properties
+                  let mut checker = checker
+                  for i = 0; i < obj_pattern.properties.length(); i = i + 1 {
+                    let elem = obj_pattern.properties[i]
+                    let prop_name = elem.property_name
+                    if prop_name.length() > 0 {
+                      checker = add_diagnostic_with_code(
+                        checker,
+                        "Property '\{prop_name}' does not exist on type '\{type_to_string(elem_type)}'.",
+                        elem.location,
+                        TS2339,
+                      )
+                    }
+                  }
+                  checker
+                } else {
+                  // Mixed types or objects - skip validation for now
+                  checker
+                }
+              }
               _ => checker // For other types (Any, Unknown, etc.)
             }
             // Check for duplicate bindings (TS2451) if let/const
