@@ -616,7 +616,7 @@ The following categories have achieved full conformance:
 | Symbols | 95 | 95 | 100% |
 | for-ofStatements | 55 | 55 | 100% |
 | functionDeclarations | 13 | 13 | 100% |
-| modules | 24 | 39 | 62% |
+| modules | 28 | 39 | 72% |
 | spread | 12 | 27 | 44% |
 | computedProperties | 60 | 142 | 42% |
 

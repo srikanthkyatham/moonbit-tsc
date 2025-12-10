@@ -301,6 +301,7 @@ pub struct TypeChecker {
   no_implicit_any : Bool // Error on expressions and declarations with an implied 'any' type
   implicit_any_array_vars : @hashset.HashSet[String] // Variables with implicit any[] type (for TS7005)
   inferring_variables : @hashset.HashSet[String] // Variables currently being inferred (for TS7022 circular reference detection)
+  default_export_locations : Array[SourceLocation] // Track all default export locations for TS2528
 } derive(Show)
 
 ///|
@@ -389,6 +390,7 @@ pub fn TypeChecker::new_with_options(
     no_implicit_any,
     implicit_any_array_vars: @hashset.new(),
     inferring_variables: @hashset.new(),
+    default_export_locations: [],
   }
 }
 
@@ -2982,6 +2984,30 @@ fn check_unused_ts_expect_error_directives(
 }
 
 ///|
+/// Helper function to track default exports and report TS2528 if there are duplicates
+fn track_default_export(
+  checker : TypeChecker,
+  location : SourceLocation,
+) -> TypeChecker {
+  if checker.default_export_locations.length() > 0 {
+    // Report TS2528: A module cannot have multiple default exports
+    let diagnostics = checker.diagnostics
+    diagnostics.push(Diagnostic::{
+      code: 2528,
+      category: DiagnosticCategory::Error,
+      message: "A module cannot have multiple default exports.",
+      location,
+    })
+    let default_export_locations = checker.default_export_locations
+    default_export_locations.push(location)
+    { ..checker, diagnostics, default_export_locations }
+  } else {
+    // First default export, track its location
+    { ..checker, default_export_locations: [location] }
+  }
+}
+
+///|
 /// Check an array of statements
 fn check_statements(
   checker : TypeChecker,
@@ -3004,7 +3030,21 @@ fn check_statement(checker : TypeChecker, node : Node) -> TypeChecker {
     VariableStatement(var_stmt) => check_variable_statement(checker, var_stmt)
     ExpressionStatement(expr_stmt) =>
       check_expression_statement(checker, expr_stmt)
-    FunctionDeclaration(func) => check_function_declaration(checker, func)
+    FunctionDeclaration(func) => {
+      // Check for default export modifier (TS2528)
+      // Only track implementations (with body), not overload signatures
+      let has_default = func.modifiers.iter().any(fn(m) { m == Default })
+      let has_body = match func.body {
+        Some(_) => true
+        None => false
+      }
+      let checker = if has_default && has_body {
+        track_default_export(checker, func.location)
+      } else {
+        checker
+      }
+      check_function_declaration(checker, func)
+    }
     ReturnStatement(ret) => check_return_statement(checker, ret)
     IfStatement(if_stmt) => check_if_statement(checker, if_stmt)
     WhileStatement(while_stmt) => check_while_statement(checker, while_stmt)
@@ -3013,7 +3053,15 @@ fn check_statement(checker : TypeChecker, node : Node) -> TypeChecker {
     ForInStatement(for_in_stmt) => check_for_in_statement(checker, for_in_stmt)
     ForOfStatement(for_of_stmt) => check_for_of_statement(checker, for_of_stmt)
     BlockStatement(block) => check_block_statement(checker, block)
-    ClassDeclaration(class_decl) => check_class_declaration(checker, class_decl)
+    ClassDeclaration(class_decl) => {
+      // Check for default export modifier (TS2528)
+      let checker = if class_decl.modifiers.iter().any(fn(m) { m == Default }) {
+        track_default_export(checker, class_decl.location)
+      } else {
+        checker
+      }
+      check_class_declaration(checker, class_decl)
+    }
     InterfaceDeclaration(iface_decl) =>
       check_interface_declaration(checker, iface_decl)
     EnumDeclaration(enum_decl) => check_enum_declaration(checker, enum_decl)
@@ -3023,6 +3071,13 @@ fn check_statement(checker : TypeChecker, node : Node) -> TypeChecker {
       check_import_declaration(checker, import_decl)
     ExportDeclaration(_) => checker // Exports checked separately
     ExportAssignment(ea) => {
+      // Check for multiple default exports (TS2528)
+      // This handles 'export default <expression>'
+      let checker = if not(ea.is_export_equals) {
+        track_default_export(checker, ea.location)
+      } else {
+        checker
+      }
       // Check the expression being exported (e.g., export default x)
       // This will trigger TDZ (TS2448) and definite assignment (TS2454) checks
       let (_, checker) = infer_type(checker, ea.expression)
