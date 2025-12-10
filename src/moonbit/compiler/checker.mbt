@@ -15353,7 +15353,32 @@ fn get_for_of_element_type(
       )
 
       match elem_type_opt {
-        Some(elem_type) => (elem_type, checker)
+        Some(elem_type) => {
+          // TS2802: In ES5, custom iterables (non-Array, non-String) cannot be used
+          // If extract_iterable_element_type succeeded, it found Symbol.iterator
+          // But in ES5 target, only built-in iterables (Array, String) are allowed
+          if checker.target == ES5 {
+            // Report TS2802 for custom iterables in ES5
+            let type_name = match iterable_type {
+              Object(obj) =>
+                match obj.class_name {
+                  Some(name) => name
+                  None => "object"
+                }
+              TypeReference(tr) => tr.name
+              _ => type_to_string(iterable_type)
+            }
+            let checker = add_diagnostic_with_code(
+              checker,
+              "Type '\{type_name}' can only be iterated through when using the '--downlevelIteration' flag or with a '--target' of 'es2015' or higher.",
+              expr_location,
+              TS2802,
+            )
+            (elem_type, checker)
+          } else {
+            (elem_type, checker)
+          }
+        }
         None => {
           // Could not extract element type - check if we should report error
           // Only report TS2488 for obviously non-iterable types (primitives)
