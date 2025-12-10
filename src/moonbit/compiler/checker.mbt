@@ -2355,7 +2355,7 @@ fn types_equal(a : Type, b : Type) -> Bool {
 ///|
 /// Check a bound source file
 pub fn check_source_file(bound : BoundSourceFile) -> CheckResult {
-  check_source_file_with_options(bound, false, Target::ESNext)
+  check_source_file_with_options(bound, false, Target::ESNext, module_kind=ESModule)
 }
 
 ///|
@@ -2365,6 +2365,7 @@ pub fn check_source_file_with_options(
   no_unchecked_indexed_access : Bool,
   target : Target,
   no_implicit_any? : Bool = false,
+  module_kind? : ModuleKind = ESModule,
 ) -> CheckResult {
   let mut checker = TypeChecker::new_with_options(
     bound.file_path,
@@ -2385,6 +2386,30 @@ pub fn check_source_file_with_options(
 
   // Push a top-level scope for the source file so local variables are tracked
   let checker = push_function_scope(checker)
+
+  // Check for deprecated module options (TS5107)
+  let checker = match module_kind {
+    AMD | UMD => {
+      let module_str = match module_kind {
+        AMD => "AMD"
+        UMD => "UMD"
+        _ => ""
+      }
+      let diagnostics = checker.diagnostics
+      diagnostics.push(Diagnostic::{
+        code: 5107,
+        category: DiagnosticCategory::Error,
+        message: "Option 'module=\{module_str}' is deprecated and will stop functioning in TypeScript 7.0. Specify compilerOption '\"ignoreDeprecations\": \"6.0\"' to silence this error.",
+        location: SourceLocation::new(
+          bound.file_path,
+          Position::{ line: 1, column: 1, offset: 0 },
+          Position::{ line: 1, column: 1, offset: 0 },
+        ),
+      })
+      { ..checker, diagnostics }
+    }
+    _ => checker
+  }
 
   // Scan for block-scoped declarations at module level (for TS2448 TDZ check)
   let module_decls = scan_block_scoped_declarations(bound.statements)
@@ -2423,6 +2448,7 @@ pub fn check_source_file_with_external_types(
   no_unchecked_indexed_access : Bool,
   target : Target,
   no_implicit_any? : Bool = false,
+  module_kind? : ModuleKind = ESModule,
 ) -> CheckResult {
   let mut checker = TypeChecker::new_with_options(
     bound.file_path,
@@ -2457,6 +2483,30 @@ pub fn check_source_file_with_external_types(
 
   // Push a top-level scope for the source file so local variables are tracked
   let checker = push_function_scope(checker)
+
+  // Check for deprecated module options (TS5107)
+  let checker = match module_kind {
+    AMD | UMD => {
+      let module_str = match module_kind {
+        AMD => "AMD"
+        UMD => "UMD"
+        _ => ""
+      }
+      let diagnostics = checker.diagnostics
+      diagnostics.push(Diagnostic::{
+        code: 5107,
+        category: DiagnosticCategory::Error,
+        message: "Option 'module=\{module_str}' is deprecated and will stop functioning in TypeScript 7.0. Specify compilerOption '\"ignoreDeprecations\": \"6.0\"' to silence this error.",
+        location: SourceLocation::new(
+          bound.file_path,
+          Position::{ line: 1, column: 1, offset: 0 },
+          Position::{ line: 1, column: 1, offset: 0 },
+        ),
+      })
+      { ..checker, diagnostics }
+    }
+    _ => checker
+  }
 
   // Scan for block-scoped declarations at module level (for TS2448 TDZ check)
   let module_decls = scan_block_scoped_declarations(bound.statements)

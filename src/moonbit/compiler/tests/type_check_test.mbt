@@ -204,18 +204,41 @@ test "type_check type alias" {
 }
 
 // ============================================================================
-// Integration Test: Type check small.ts file from disk
+// Integration Test: Type check a more complex TypeScript file
 // ============================================================================
 
 ///|
-async test "type_check small.ts file from disk" {
-  // Read the TypeScript file from disk
-  let source = @fs.read_file("test_memory_files/small.ts").text()
-  println(source)
-  let result = @compiler.type_check(source, "small.ts")
+test "type_check complex TypeScript file" {
+  // Inline TypeScript source instead of reading from disk
+  let source =
+    #|// Complex TypeScript file
+    #|interface Person {
+    #|  name: string;
+    #|  age: number;
+    #|}
+    #|
+    #|class Employee implements Person {
+    #|  name: string;
+    #|  age: number;
+    #|  salary: number;
+    #|
+    #|  constructor(name: string, age: number, salary: number) {
+    #|    this.name = name;
+    #|    this.age = age;
+    #|    this.salary = salary;
+    #|  }
+    #|}
+    #|
+    #|function createEmployee(name: string, age: number): Employee {
+    #|  return new Employee(name, age, 50000);
+    #|}
+    #|
+    #|const emp = createEmployee("Alice", 30);
+
+  let result = @compiler.type_check(source, "complex.ts")
   match result {
     Ok(typed) => {
-      assert_eq(typed.file_path, "small.ts")
+      assert_eq(typed.file_path, "complex.ts")
       // Verify that we have type information for the file
       assert_true(typed.statements.length() > 0)
     }
@@ -224,7 +247,7 @@ async test "type_check small.ts file from disk" {
       for i = 0; i < diagnostics.length(); i = i + 1 {
         println(@compiler.format_diagnostic(diagnostics[i]))
       }
-      fail("Expected successful type check for small.ts")
+      fail("Expected successful type check for complex.ts")
     }
   }
 }

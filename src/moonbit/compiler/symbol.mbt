@@ -725,6 +725,11 @@ pub enum DiagnosticCode {
   TS4097 // A 'set' accessor must have exactly one parameter
 
   // ============================================================================
+  // Compiler Options & Deprecation Warnings (5000-5999)
+  // ============================================================================
+  TS5107 // Option 'module={0}' is deprecated and will stop functioning in TypeScript 7.0
+
+  // ============================================================================
   // Unreachable Code & Implicit Any (7000-7099)
   // ============================================================================
   TS7005 // Variable '{0}' implicitly has an '{1}' type
@@ -1058,6 +1063,8 @@ pub fn DiagnosticCode::to_int(self : DiagnosticCode) -> Int {
     TS4092 => 4092
     TS4094 => 4094
     TS4097 => 4097
+    // Compiler Options & Deprecation Warnings (5000-5999)
+    TS5107 => 5107
     // Unreachable Code & Implicit Any (7000-7099)
     TS7005 => 7005
     TS7022 => 7022
@@ -1391,6 +1398,8 @@ pub fn DiagnosticCode::from_int(code : Int) -> DiagnosticCode? {
     4092 => Some(TS4092)
     4094 => Some(TS4094)
     4097 => Some(TS4097)
+    // Compiler Options & Deprecation Warnings (5000-5999)
+    5107 => Some(TS5107)
     // Unreachable Code & Implicit Any (7000-7099)
     7005 => Some(TS7005)
     7022 => Some(TS7022)

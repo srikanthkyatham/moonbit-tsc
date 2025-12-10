@@ -9,6 +9,8 @@
 pub(all) enum ModuleKind {
   ESModule // ES2015+ import/export (default)
   CommonJS // Node.js require/module.exports
+  AMD // Asynchronous Module Definition (deprecated)
+  UMD // Universal Module Definition (deprecated)
 } derive(Show, Eq)
 
 ///|
@@ -188,6 +190,7 @@ pub fn compile_source(
             options.no_unchecked_indexed_access,
             options.target,
             no_implicit_any=options.no_implicit_any,
+            module_kind=options.module_kind,
           )
 
           // Collect type errors but continue compilation
@@ -436,6 +439,7 @@ pub fn compile_source_with_external_types(
             options.no_unchecked_indexed_access,
             options.target,
             no_implicit_any=options.no_implicit_any,
+            module_kind=options.module_kind,
           )
 
           // Collect type errors but continue compilation
