@@ -3880,7 +3880,7 @@ fn infer_type_with_context(
           Tuple(tuple_type) =>
             // Infer as array of tuples with contextual typing for each element
             infer_array_with_tuple_elements(checker, arr, tuple_type)
-          _ => infer_type(checker, expr)
+          _ => infer_array_literal_type(checker, arr, Some(arr_type.element_type))
         }
       // For other cases, fall back to regular inference
       _ => infer_type(checker, expr)
@@ -3898,7 +3898,7 @@ fn infer_type_with_context(
           Tuple(tuple_type) =>
             // Infer as array of tuples with contextual typing for each element
             infer_array_with_tuple_elements(checker, arr, tuple_type)
-          _ => infer_type(checker, expr)
+          _ => infer_array_literal_type(checker, arr, Some(arr_type.element_type))
         }
       _ => infer_type(checker, expr)
     }
@@ -4088,7 +4088,7 @@ fn infer_type(checker : TypeChecker, expr : Node) -> (Type, TypeChecker) {
     CallExpression(call) => infer_call_expression_type(checker, call)
     PropertyAccessExpression(prop) => infer_property_access_type(checker, prop)
     ElementAccessExpression(elem) => infer_element_access_type(checker, elem)
-    ArrayLiteralExpression(arr) => infer_array_literal_type(checker, arr)
+    ArrayLiteralExpression(arr) => infer_array_literal_type(checker, arr, None)
     ObjectLiteralExpression(obj) => infer_object_literal_type(checker, obj)
     ArrowFunction(arrow) => infer_arrow_function_type(checker, arrow)
     ConditionalExpression(cond) => infer_conditional_type(checker, cond)
@@ -4891,9 +4891,25 @@ fn get_symbol_constructor_type(checker : TypeChecker) -> (Type, TypeChecker) {
       }
     None => ()
   }
+  // Call signature: Symbol(description?: string | number) => symbol
+  // Symbol can be called (but not constructed with new)
+  let (symbol_return_type, checker) = symbol_type(checker)
+  let call_sig = CheckerSignature::{
+    parameters: [
+      CheckerParameter::{
+        name: "description",
+        param_type: Type::Any(info),  // Accepts string, number, or any
+        is_optional: true,
+        is_rest: false,
+      },
+    ],
+    return_type: symbol_return_type,
+    type_parameters: [],
+  }
+
   let symbol_type = Type::Object(ObjectType::{
     properties: symbol_methods,
-    call_signatures: [],
+    call_signatures: [call_sig],
     construct_signatures: [],
     index_signatures: [],
     info: TypeInfo::{ id, flags: default_flags },
@@ -10653,6 +10669,7 @@ fn infer_function_expression_type(
 fn infer_array_literal_type(
   checker : TypeChecker,
   arr : ArrayLiteralExpression,
+  contextual_element_type : Type?,
 ) -> (Type, TypeChecker) {
   // TS1186: Check for rest elements with initializers at the start
   // This needs to be checked before we infer types to catch syntax errors
@@ -10839,7 +10856,22 @@ fn infer_array_literal_type(
             }
             // For arrays, extract element type
             match spread_type {
-              Array(arr_type) => element_types.push(arr_type.element_type)
+              Array(arr_type) => {
+                element_types.push(arr_type.element_type)
+                // TS2322: Check if spread element type is assignable to contextual type
+                match contextual_element_type {
+                  Some(expected) =>
+                    if not(is_assignable(arr_type.element_type, expected)) {
+                      checker = add_diagnostic_with_code(
+                        checker,
+                        "Type '\{type_to_string(arr_type.element_type)}' is not assignable to type '\{type_to_string(expected)}'.",
+                        spread.location,
+                        TS2322,
+                      )
+                    }
+                  None => ()
+                }
+              }
               String(_) => {
                 let (info, c) = create_type_info(checker)
                 checker = c
@@ -10854,7 +10886,22 @@ fn infer_array_literal_type(
                 )
                 checker = c
                 match elem_type_opt {
-                  Some(elem_type) => element_types.push(elem_type)
+                  Some(elem_type) => {
+                    element_types.push(elem_type)
+                    // TS2322: Check if spread element type is assignable to contextual type
+                    match contextual_element_type {
+                      Some(expected) =>
+                        if not(is_assignable(elem_type, expected)) {
+                          checker = add_diagnostic_with_code(
+                            checker,
+                            "Type '\{type_to_string(elem_type)}' is not assignable to type '\{type_to_string(expected)}'.",
+                            spread.location,
+                            TS2322,
+                          )
+                        }
+                      None => ()
+                    }
+                  }
                   None => element_types.push(spread_type)
                 }
               }
