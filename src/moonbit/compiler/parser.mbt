@@ -7527,12 +7527,13 @@ fn parse_import_declaration(parser : Parser) -> Result[(Node, Parser), Parser] {
       match current_token(parser) {
         KeywordAs(_) => {
           let parser = advance_parser(parser)
-          match current_token(parser) {
-            Identifier(name, loc) => {
+          // Try to get identifier or contextual keyword for namespace binding
+          match try_get_identifier_name(current_token(parser)) {
+            Some((name, loc)) => {
               let parser = advance_parser(parser)
               (Some(NamedImports::NamespaceImport(name, loc)), parser)
             }
-            _ =>
+            None =>
               return Err(
                 add_error_with_code(
                   parser,
@@ -7652,15 +7653,17 @@ fn parse_import_specifiers_aux(
     // Check for inline type import: { type Foo }
     KeywordType(_) => {
       let parser = advance_parser(parser) // consume 'type'
-      match current_token(parser) {
-        Identifier(name, loc) => {
+      // Try to get identifier or contextual keyword for type import
+      match try_get_identifier_name(current_token(parser)) {
+        Some((name, loc)) => {
           let parser = advance_parser(parser)
           // Check for 'as' renaming
           match current_token(parser) {
             KeywordAs(_) => {
               let parser = advance_parser(parser)
-              match current_token(parser) {
-                Identifier(local_name, _) => {
+              // Try to get identifier or contextual keyword for local binding
+              match try_get_identifier_name(current_token(parser)) {
+                Some((local_name, _)) => {
                   let parser = advance_parser(parser)
                   acc.push(ImportSpecifier::{
                     property_name: Some(name),
@@ -7675,7 +7678,7 @@ fn parse_import_specifiers_aux(
                     _ => (acc, parser)
                   }
                 }
-                _ => (acc, parser) // Error, but continue
+                None => (acc, parser) // Error, but continue
               }
             }
             _ => {
@@ -7695,7 +7698,7 @@ fn parse_import_specifiers_aux(
             }
           }
         }
-        _ => (acc, parser) // Error, but continue
+        None => (acc, parser) // Error, but continue
       }
     }
     Identifier(name, loc) => {
@@ -7704,8 +7707,9 @@ fn parse_import_specifiers_aux(
       match current_token(parser) {
         KeywordAs(_) => {
           let parser = advance_parser(parser)
-          match current_token(parser) {
-            Identifier(local_name, _) => {
+          // Try to get identifier or contextual keyword for local binding
+          match try_get_identifier_name(current_token(parser)) {
+            Some((local_name, _)) => {
               let parser = advance_parser(parser)
               acc.push(ImportSpecifier::{
                 property_name: Some(name),
@@ -7720,7 +7724,7 @@ fn parse_import_specifiers_aux(
                 _ => (acc, parser)
               }
             }
-            _ => (acc, parser) // Error, but continue
+            None => (acc, parser) // Error, but continue
           }
         }
         _ => {
@@ -7739,7 +7743,54 @@ fn parse_import_specifiers_aux(
         }
       }
     }
-    _ => (acc, parser)
+    // Handle contextual keywords as property names (e.g., import { as })
+    _ =>
+      match try_get_identifier_name(current_token(parser)) {
+        Some((name, loc)) => {
+          let parser = advance_parser(parser)
+          // Check for 'as' renaming
+          match current_token(parser) {
+            KeywordAs(_) => {
+              let parser = advance_parser(parser)
+              // Try to get identifier or contextual keyword for local binding
+              match try_get_identifier_name(current_token(parser)) {
+                Some((local_name, _)) => {
+                  let parser = advance_parser(parser)
+                  acc.push(ImportSpecifier::{
+                    property_name: Some(name),
+                    name: local_name,
+                    is_type_only: false,
+                    location: loc,
+                  })
+                  // Check for comma
+                  match current_token(parser) {
+                    Comma(_) =>
+                      parse_import_specifiers_aux(advance_parser(parser), acc)
+                    _ => (acc, parser)
+                  }
+                }
+                None => (acc, parser) // Error, but continue
+              }
+            }
+            _ => {
+              // No renaming
+              acc.push(ImportSpecifier::{
+                property_name: None,
+                name,
+                is_type_only: false,
+                location: loc,
+              })
+              // Check for comma
+              match current_token(parser) {
+                Comma(_) =>
+                  parse_import_specifiers_aux(advance_parser(parser), acc)
+                _ => (acc, parser)
+              }
+            }
+          }
+        }
+        None => (acc, parser) // Not a valid token, return
+      }
   }
 }
 
@@ -8516,6 +8567,15 @@ fn add_declare_modifier(node : Node) -> Node {
 }
 
 ///|
+/// Try to get an export name from current token (identifier, contextual keyword, or reserved keyword)
+fn try_get_export_name(token : Token) -> (String, SourceLocation)? {
+  match try_get_identifier_name(token) {
+    Some(result) => Some(result)
+    None => try_get_reserved_keyword(token)
+  }
+}
+
+///|
 /// Helper: Parse export specifiers { a, b as c, d }
 fn parse_export_specifiers(parser : Parser) -> (Array[ExportSpecifier], Parser) {
   parse_export_specifiers_aux(parser, [])
@@ -8532,15 +8592,17 @@ fn parse_export_specifiers_aux(
     // Check for inline type export: { type Foo }
     KeywordType(_) => {
       let parser = advance_parser(parser) // consume 'type'
-      match current_token(parser) {
-        Identifier(name, loc) => {
+      // Try to get identifier or contextual keyword for type export
+      match try_get_identifier_name(current_token(parser)) {
+        Some((name, loc)) => {
           let parser = advance_parser(parser)
           // Check for 'as' renaming
           match current_token(parser) {
             KeywordAs(_) => {
               let parser = advance_parser(parser)
-              match current_token(parser) {
-                Identifier(export_name, _) => {
+              // Try to get identifier, contextual keyword, or reserved keyword for export alias
+              match try_get_export_name(current_token(parser)) {
+                Some((export_name, _)) => {
                   let parser = advance_parser(parser)
                   acc.push(ExportSpecifier::{
                     property_name: Some(name),
@@ -8555,7 +8617,7 @@ fn parse_export_specifiers_aux(
                     _ => (acc, parser)
                   }
                 }
-                _ => (acc, parser) // Error, but continue
+                None => (acc, parser) // Error, but continue
               }
             }
             _ => {
@@ -8575,7 +8637,7 @@ fn parse_export_specifiers_aux(
             }
           }
         }
-        _ => (acc, parser) // Error, but continue
+        None => (acc, parser) // Error, but continue
       }
     }
     Identifier(name, loc) => {
@@ -8584,8 +8646,9 @@ fn parse_export_specifiers_aux(
       match current_token(parser) {
         KeywordAs(_) => {
           let parser = advance_parser(parser)
-          match current_token(parser) {
-            Identifier(export_name, _) => {
+          // Try to get identifier, contextual keyword, or reserved keyword for export alias
+          match try_get_export_name(current_token(parser)) {
+            Some((export_name, _)) => {
               let parser = advance_parser(parser)
               acc.push(ExportSpecifier::{
                 property_name: Some(name),
@@ -8600,7 +8663,7 @@ fn parse_export_specifiers_aux(
                 _ => (acc, parser)
               }
             }
-            _ => (acc, parser) // Error, but continue
+            None => (acc, parser) // Error, but continue
           }
         }
         _ => {
@@ -8619,7 +8682,54 @@ fn parse_export_specifiers_aux(
         }
       }
     }
-    _ => (acc, parser)
+    // Handle contextual keywords as property names (e.g., export { as })
+    _ =>
+      match try_get_identifier_name(current_token(parser)) {
+        Some((name, loc)) => {
+          let parser = advance_parser(parser)
+          // Check for 'as' renaming
+          match current_token(parser) {
+            KeywordAs(_) => {
+              let parser = advance_parser(parser)
+              // Try to get identifier, contextual keyword, or reserved keyword for export alias
+              match try_get_export_name(current_token(parser)) {
+                Some((export_name, _)) => {
+                  let parser = advance_parser(parser)
+                  acc.push(ExportSpecifier::{
+                    property_name: Some(name),
+                    name: export_name,
+                    is_type_only: false,
+                    location: loc,
+                  })
+                  // Check for comma
+                  match current_token(parser) {
+                    Comma(_) =>
+                      parse_export_specifiers_aux(advance_parser(parser), acc)
+                    _ => (acc, parser)
+                  }
+                }
+                None => (acc, parser) // Error, but continue
+              }
+            }
+            _ => {
+              // No renaming
+              acc.push(ExportSpecifier::{
+                property_name: None,
+                name,
+                is_type_only: false,
+                location: loc,
+              })
+              // Check for comma
+              match current_token(parser) {
+                Comma(_) =>
+                  parse_export_specifiers_aux(advance_parser(parser), acc)
+                _ => (acc, parser)
+              }
+            }
+          }
+        }
+        None => (acc, parser) // Not a valid token, return
+      }
   }
 }
 

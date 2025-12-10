@@ -490,6 +490,9 @@ fn print_help() -> Unit {
   println(
     "  --target <target>       ECMAScript target (es5, es2015, esnext, etc.)",
   )
+  println(
+    "  --module <module>       Module system (commonjs, es2015, esnext, etc.)",
+  )
   println("  --outDir <dir>          Output directory")
   println("  --sourceMap             Generate external source map files")
   println("  --inlineSourceMap       Embed source maps in JavaScript files")
@@ -664,9 +667,10 @@ fn build_coordinator_options(
   options : CLIOptions,
 ) -> @coordinator.CoordinatorOptions {
   let source_map_mode = get_effective_source_map(options)
+  let module_kind = get_effective_module_kind(options)
   @coordinator.CoordinatorOptions::{
     target: get_effective_cli_target(options),
-    module_kind: @compiler.ESModule, // Default to ESModule for CLI
+    module_kind,
     source_map: source_map_mode != SourceMapMode::None,
     inline_source_map: source_map_mode == SourceMapMode::Inline,
     inline_sources: false, // Default to false for CLI

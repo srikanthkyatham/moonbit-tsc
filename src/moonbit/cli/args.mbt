@@ -26,6 +26,7 @@ pub(all) enum Command {
 /// CLI options for compilation
 pub(all) struct CLIOptions {
   target : String?
+  module_system : String? // Module system: commonjs, es2015, esnext, etc.
   out_dir : String?
   source_map_mode : SourceMapMode?
   declaration : Bool?
@@ -48,6 +49,7 @@ pub(all) struct CLIOptions {
 pub fn CLIOptions::default() -> CLIOptions {
   {
     target: None,
+    module_system: None,
     out_dir: None,
     source_map_mode: None,
     declaration: None,
@@ -74,6 +76,7 @@ pub fn parse_args(args : Array[String]) -> Result[Command, String] {
   }
   let files : Array[String] = []
   let mut target : String? = None
+  let mut module_system : String? = None
   let mut out_dir : String? = None
   let mut source_map_mode : SourceMapMode? = None
   let mut declaration : Bool? = None
@@ -114,6 +117,7 @@ pub fn parse_args(args : Array[String]) -> Result[Command, String] {
       // Skip remaining args and return build command
       let options : CLIOptions = {
         target: None,
+        module_system: None,
         out_dir: None,
         source_map_mode: None,
         declaration: None,
@@ -159,6 +163,12 @@ pub fn parse_args(args : Array[String]) -> Result[Command, String] {
         return Err("--target requires a value")
       }
       target = Some(args[i])
+    } else if arg == "--module" {
+      i = i + 1
+      if i >= args.length() {
+        return Err("--module requires a value")
+      }
+      module_system = Some(args[i])
     } else if arg == "--outDir" {
       i = i + 1
       if i >= args.length() {
@@ -228,6 +238,7 @@ pub fn parse_args(args : Array[String]) -> Result[Command, String] {
   }
   let options : CLIOptions = {
     target,
+    module_system,
     out_dir,
     source_map_mode,
     declaration,
@@ -283,4 +294,37 @@ pub fn get_effective_source_map(options : CLIOptions) -> SourceMapMode {
 /// Get effective declaration setting from CLI options
 pub fn get_effective_declaration(options : CLIOptions) -> Bool {
   options.declaration.unwrap_or(false)
+}
+
+///|
+/// Get effective module kind from CLI options (with default)
+pub fn get_effective_module_kind(options : CLIOptions) -> @compiler.ModuleKind {
+  match options.module_system {
+    Some(module_str) => parse_module_kind(module_str)
+    None => @compiler.ESModule // Default to ESModule
+  }
+}
+
+///|
+/// Parse module string to ModuleKind enum
+fn parse_module_kind(module_str : String) -> @compiler.ModuleKind {
+  // Convert to lowercase manually since lowercase() doesn't exist
+  let lower = to_lowercase(module_str)
+  if lower == "commonjs" {
+    @compiler.CommonJS
+  } else {
+    // Default to ESModule for es2015, es6, esnext, etc.
+    @compiler.ESModule
+  }
+}
+
+///|
+/// Convert string to lowercase (simple ASCII lowercase)
+fn to_lowercase(s : String) -> String {
+  // Simple comparison - check if it's one of the common values
+  if s == "CommonJS" || s == "commonjs" {
+    "commonjs"
+  } else {
+    s // Return as-is for ES module variants
+  }
 }
