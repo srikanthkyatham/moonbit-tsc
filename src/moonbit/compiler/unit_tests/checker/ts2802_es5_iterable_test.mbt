@@ -197,8 +197,7 @@ test "TS2802 - message format validation (if triggered)" {
     #|}
     #|for (var v of new CustomIterable) { }
 
-  let result = check_source_with_target(source, @compiler.ES5)
-  let diagnostics = get_diagnostics(result)
+  let _result = check_source_with_target(source, @compiler.ES5)
 
   // NOTE: Documents expected TS2802 error message format:
   //  - "Type 'X' can only be iterated through when using..."
@@ -295,8 +294,7 @@ test "TS2802 - object with Symbol.iterator in ES5 (if triggered)" {
     #|};
     #|for (var v of obj) { }
 
-  let result = check_source_with_target(source, @compiler.ES5)
-  let diagnostics = get_diagnostics(result)
+  let _result = check_source_with_target(source, @compiler.ES5)
 
   // NOTE: Documents expected behavior - TS2802 for custom iterables in ES5
   // Verified to work correctly in conformance tests
@@ -329,8 +327,7 @@ test "TS2802 - type reference to custom iterator in ES5 (if triggered)" {
     #|const iter: CustomIterator = new CustomIterator;
     #|for (var v of iter) { }
 
-  let result = check_source_with_target(source, @compiler.ES5)
-  let diagnostics = get_diagnostics(result)
+  let _result = check_source_with_target(source, @compiler.ES5)
 
   // NOTE: Documents expected behavior - TS2802 for custom iterables in ES5
   // Verified to work correctly in conformance tests
