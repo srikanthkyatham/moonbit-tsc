@@ -5223,11 +5223,29 @@ fn infer_function_declaration_type(
   func : FunctionDeclaration,
   symbol : Symbol,
 ) -> (Type, TypeChecker) {
+  // Check if already cached
+  match checker.symbol_types.get(symbol.id) {
+    Some(cached_type) => return (cached_type, checker)
+    None => ()
+  }
+
   // Check if this is an overloaded function (multiple declarations)
   if symbol.declarations.length() > 1 {
     // Create an Object type with multiple call signatures
     return infer_overloaded_function_type(checker, symbol)
   }
+
+  // Check for circular reference (function calling itself in return expression)
+  if checker.resolving_symbols.get(symbol.id) is Some(_) {
+    // Circular reference detected - return 'any' type to prevent infinite recursion
+    // This allows recursive functions like: function f() { return f(); }
+    return any_type(checker)
+  }
+
+  // Mark symbol as being resolved
+  let resolving = checker.resolving_symbols
+  resolving.set(symbol.id, true)
+  let checker = { ..checker, resolving_symbols: resolving }
 
   // Single declaration - create simple Function type
   // Build parameter list
@@ -5251,7 +5269,40 @@ fn infer_function_declaration_type(
   let checker = c
 
   // Get return type
-  let (return_type, checker) = resolve_type_annotation_or_any(checker, func.return_type)
+  // If no explicit return type, try to infer from function body
+  let (return_type, checker) = match func.return_type {
+    Some(_) => resolve_type_annotation_or_any(checker, func.return_type)
+    None => {
+      // No explicit return type - try to infer from body
+      // Only infer from simple expressions that don't require scope (object literals, primitives)
+      match func.body {
+        Some(BlockStatement(block)) =>
+          if block.statements.length() > 0 {
+            match block.statements[block.statements.length() - 1] {
+              ReturnStatement(ret) =>
+                match ret.expression {
+                  Some(ObjectLiteralExpression(_)) | Some(ArrayLiteralExpression(_)) |
+                  Some(StringLiteral(_)) | Some(NumericLiteral(_)) | Some(BooleanLiteral(_)) => {
+                    // Safe to infer - these don't require scope
+                    infer_type(checker, ret.expression.unwrap())
+                  }
+                  _ => any_type(checker) // For other expressions, use 'any' to avoid scope issues
+                }
+              _ => any_type(checker)
+            }
+          } else {
+            any_type(checker)
+          }
+        _ => any_type(checker)
+      }
+    }
+  }
+
+  // Unmark symbol (no longer resolving)
+  let resolving_cleared = checker.resolving_symbols
+  resolving_cleared.remove(symbol.id)
+  let checker = { ..checker, resolving_symbols: resolving_cleared }
+
   let (info, checker) = create_type_info(checker)
   let func_type = Type::Function({ parameters, return_type, info })
 
