@@ -17711,7 +17711,7 @@ fn check_import_declaration(
     module_spec.has_suffix(".tsx") ||
     module_spec.has_suffix(".js") ||
     module_spec.has_suffix(".jsx")
-  if has_prohibited_extension {
+  let checker = if has_prohibited_extension {
     // Determine which extension was used
     let ext = if module_spec.has_suffix(".tsx") {
       ".tsx"
@@ -17727,6 +17727,22 @@ fn check_import_declaration(
       "An import path cannot end with a '\{ext}' extension. Consider importing '\{remove_extension(module_spec)}' instead.",
       import_decl.location,
       TS2691,
+    )
+  } else {
+    checker
+  }
+
+  // TS2307: Cannot find module (for external/non-relative modules in single-file context)
+  // In single-file compilation, we can't resolve external modules, so emit an error
+  // Relative paths start with './' or '../'
+  let is_relative = module_spec.has_prefix("./") || module_spec.has_prefix("../")
+  if not(is_relative) {
+    // External module - in single-file compilation context, we can't resolve these
+    add_diagnostic_with_code(
+      checker,
+      "Cannot find module '\{module_spec}' or its corresponding type declarations.",
+      import_decl.location,
+      TS2307,
     )
   } else {
     checker
