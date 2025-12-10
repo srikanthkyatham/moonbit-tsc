@@ -359,6 +359,7 @@ pub enum DiagnosticCode {
   TS2305 // Module '{0}' has no exported member '{1}'
   TS2306 // File '{0}' is not a module
   TS2307 // Cannot find module '{0}'
+  TS2308 // Module '{0}' has already exported a member named '{1}'. Consider explicitly re-exporting to resolve the ambiguity
   TS2314 // Generic type '{0}' requires {1} type argument(s)
   TS2315 // Type '{0}' is not generic
   TS2318 // Cannot find global type '{0}'
@@ -769,6 +770,7 @@ pub fn DiagnosticCode::to_int(self : DiagnosticCode) -> Int {
     TS2305 => 2305
     TS2306 => 2306
     TS2307 => 2307
+    TS2308 => 2308
     TS2314 => 2314
     TS2315 => 2315
     TS2318 => 2318
@@ -1108,6 +1110,7 @@ pub fn DiagnosticCode::from_int(code : Int) -> DiagnosticCode? {
     2305 => Some(TS2305)
     2306 => Some(TS2306)
     2307 => Some(TS2307)
+    2308 => Some(TS2308)
     2314 => Some(TS2314)
     2315 => Some(TS2315)
     2318 => Some(TS2318)

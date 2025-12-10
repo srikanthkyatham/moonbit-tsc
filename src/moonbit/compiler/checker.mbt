@@ -17910,6 +17910,81 @@ pub fn validate_import_resolution(
 }
 
 ///|
+/// Detect export star conflicts and return diagnostics
+pub fn detect_export_star_conflicts(
+  parsed_files : Map[String, SourceFile],
+  module_registry : Map[String, ResolvedModuleExports],
+) -> Array[Diagnostic] {
+  let diagnostics : Array[Diagnostic] = []
+
+  // For each module, check for export * conflicts
+  for entry in parsed_files.iter() {
+    let (_, source_file) = entry
+
+    // Find all export * statements
+    let export_stars : Array[(String, SourceLocation)] = []  // (module_spec, location)
+    for stmt in source_file.statements {
+      match stmt {
+        Node::ExportDeclaration(ed) => {
+          match ed.export_clause {
+            None => {
+              // This is export * from 'module'
+              match ed.module_specifier {
+                Some(spec) => export_stars.push((spec, ed.location))
+                None => ()
+              }
+            }
+            _ => ()
+          }
+        }
+        _ => ()
+      }
+    }
+
+    // If we have multiple export *, check for conflicts
+    if export_stars.length() > 1 {
+      let exported_names : Map[String, String] = Map::new()  // name -> first module that exported it
+
+      for i = 0; i < export_stars.length(); i = i + 1 {
+        let (module_spec, location) = export_stars[i]
+        // Get exports from this module
+        match module_registry.get(module_spec) {
+          Some(module_exports) => {
+            // Check each export from this module
+            for export_name in module_exports.exports.iter() {
+              match exported_names.get(export_name) {
+                Some(first_module) => {
+                  // Conflict! This name was already exported by another export *
+                  diagnostics.push(
+                    Diagnostic::{
+                      category: DiagnosticCategory::Error,
+                      code: 2308,
+                      message: "Module '" +
+                      first_module +
+                      "' has already exported a member named '" +
+                      export_name +
+                      "'. Consider explicitly re-exporting to resolve the ambiguity.",
+                      location,
+                    },
+                  )
+                }
+                None => {
+                  // First time seeing this export
+                  exported_names.set(export_name, module_spec)
+                }
+              }
+            }
+          }
+          None => ()
+        }
+      }
+    }
+  }
+
+  diagnostics
+}
+
+///|
 /// Create module exports from a bound source file
 pub fn ResolvedModuleExports::from_bound_file(
   bound_file : BoundSourceFile,

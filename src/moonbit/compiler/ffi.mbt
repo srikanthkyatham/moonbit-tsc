@@ -948,6 +948,12 @@ pub fn compile_multi_file_test(
     }
   }
 
+  // Fourth pass: detect export star conflicts (TS2308)
+  let export_star_diags = detect_export_star_conflicts(parsed_files, module_registry)
+  for d in export_star_diags {
+    all_diagnostics.push(d)
+  }
+
   // Return combined result
   {
     success: true,
