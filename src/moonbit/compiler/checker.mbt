@@ -277,6 +277,7 @@ pub struct TypeChecker {
   async_function_depth : Int // Tracks nesting depth in async functions (> 0 means inside async)
   generator_function_depth : Int // Tracks nesting depth in generator functions (> 0 means inside generator)
   regular_function_depth : Int // Tracks nesting depth in regular functions (> 0 means inside regular function)
+  iteration_depth : Int // Tracks nesting depth in iteration statements (> 0 means inside loop)
   innermost_function_is_arrow : Bool // True if the innermost containing function is an arrow function
   generator_has_return_type : Bool // Tracks if current generator has a return type annotation
   generator_yield_type : Type? // Expected yield type from generator return type annotation (e.g., Foo from IterableIterator<Foo>)
@@ -360,6 +361,7 @@ pub fn TypeChecker::new_with_options(
     async_function_depth: 0,
     generator_function_depth: 0,
     regular_function_depth: 0,
+    iteration_depth: 0,
     innermost_function_is_arrow: false,
     generator_has_return_type: false,
     generator_yield_type: None,
@@ -3014,7 +3016,8 @@ fn check_statement(checker : TypeChecker, node : Node) -> TypeChecker {
     ThrowStatement(throw_stmt) => check_throw_statement(checker, throw_stmt)
     SwitchStatement(switch_stmt) => check_switch_statement(checker, switch_stmt)
     BreakStatement(_) => checker
-    ContinueStatement(_) => checker
+    ContinueStatement(cont_stmt) =>
+      check_continue_statement(checker, cont_stmt)
     ModuleDeclaration(mod_decl) => check_module_declaration(checker, mod_decl)
     _ => checker // Other statements
   }
@@ -10384,10 +10387,15 @@ fn infer_function_expression_type(
   let checker = hoist_var_declarations(checker, fe.body)
 
   // Check function body for errors (including await expressions)
+  // Reset iteration_depth when entering function (continue/break cannot cross function boundaries)
+  let saved_iteration_depth = checker.iteration_depth
+  let checker = { ..checker, iteration_depth: 0 }
   let checker = match fe.body {
     BlockStatement(block) => check_block_statement(checker, block)
     _ => checker
   }
+  // Restore iteration_depth after checking function body
+  let checker = { ..checker, iteration_depth: saved_iteration_depth }
 
   // Exit regular function context
   let checker = exit_regular_function(checker)
@@ -11080,6 +11088,10 @@ fn infer_arrow_function_type(
   }
   let checker = c
 
+  // Reset iteration_depth when entering arrow function (continue/break cannot cross function boundaries)
+  let saved_iteration_depth = checker.iteration_depth
+  let checker = { ..checker, iteration_depth: 0 }
+
   // Get return type and check body
   let (return_type, checker) = match arrow.return_type {
     Some(type_node) => {
@@ -11108,6 +11120,9 @@ fn infer_arrow_function_type(
         _ => infer_type(checker, arrow.body)
       }
   }
+
+  // Restore iteration_depth after checking arrow function body
+  let checker = { ..checker, iteration_depth: saved_iteration_depth }
 
   // Exit async function context if needed
   let checker = if arrow.is_async {
@@ -14453,10 +14468,15 @@ fn check_function_declaration(
   // Check function body
   // Skip if body was already checked during type inference
   let checker = if not(body_already_checked) {
-    match func.body {
+    // Reset iteration_depth when entering function (continue/break cannot cross function boundaries)
+    let saved_iteration_depth = checker.iteration_depth
+    let checker = { ..checker, iteration_depth: 0 }
+    let checker = match func.body {
       Some(body) => check_statement(checker, body)
       None => checker
     }
+    // Restore iteration_depth after checking function body
+    { ..checker, iteration_depth: saved_iteration_depth }
   } else {
     checker
   }
@@ -14679,7 +14699,10 @@ fn check_while_statement(
   while_stmt : WhileStatement,
 ) -> TypeChecker {
   let (_, checker) = infer_type(checker, while_stmt.condition)
-  check_statement(checker, while_stmt.statement)
+  // Check body (increment iteration_depth while checking loop body)
+  let checker = { ..checker, iteration_depth: checker.iteration_depth + 1 }
+  let checker = check_statement(checker, while_stmt.statement)
+  { ..checker, iteration_depth: checker.iteration_depth - 1 }
 }
 
 ///|
@@ -14688,7 +14711,10 @@ fn check_do_while_statement(
   checker : TypeChecker,
   do_while : DoWhileStatement,
 ) -> TypeChecker {
+  // Check body (increment iteration_depth while checking loop body)
+  let checker = { ..checker, iteration_depth: checker.iteration_depth + 1 }
   let checker = check_statement(checker, do_while.statement)
+  let checker = { ..checker, iteration_depth: checker.iteration_depth - 1 }
   let (_, checker) = infer_type(checker, do_while.condition)
   checker
 }
@@ -14728,8 +14754,10 @@ fn check_for_statement(
     None => checker
   }
 
-  // Check body
-  check_statement(checker, for_stmt.statement)
+  // Check body (increment iteration_depth while checking loop body)
+  let checker = { ..checker, iteration_depth: checker.iteration_depth + 1 }
+  let checker = check_statement(checker, for_stmt.statement)
+  { ..checker, iteration_depth: checker.iteration_depth - 1 }
 }
 
 ///|
@@ -14789,8 +14817,10 @@ fn check_for_in_statement(
   // Add the loop variable to scope - for-in keys are always strings
   let checker = add_for_in_variable_to_scope(checker, for_in_stmt.initializer)
 
-  // Check the body statement
+  // Check the body statement (increment iteration_depth while checking loop body)
+  let checker = { ..checker, iteration_depth: checker.iteration_depth + 1 }
   let checker = check_statement(checker, for_in_stmt.statement)
+  let checker = { ..checker, iteration_depth: checker.iteration_depth - 1 }
 
   // Pop the loop scope
   pop_local_scope(checker)
@@ -14946,8 +14976,10 @@ fn check_for_of_statement(
     get_node_location(for_of_stmt.expression),
   )
 
-  // Check the body statement
+  // Check the body statement (increment iteration_depth while checking loop body)
+  let checker = { ..checker, iteration_depth: checker.iteration_depth + 1 }
   let checker = check_statement(checker, for_of_stmt.statement)
+  let checker = { ..checker, iteration_depth: checker.iteration_depth - 1 }
 
   // Pop the loop scope
   let checker = pop_local_scope(checker)
@@ -17840,6 +17872,26 @@ fn check_throw_statement(
 ) -> TypeChecker {
   let (_, checker) = infer_type(checker, throw_stmt.expression)
   checker
+}
+
+///|
+/// Check continue statement
+/// A continue statement can only appear within an iteration statement (for, while, do-while, for-in, for-of)
+fn check_continue_statement(
+  checker : TypeChecker,
+  cont_stmt : ContinueStatement,
+) -> TypeChecker {
+  // Check if we're inside an iteration statement
+  if checker.iteration_depth == 0 {
+    add_diagnostic_with_code(
+      checker,
+      "A 'continue' statement can only be used within an enclosing iteration statement.",
+      cont_stmt.location,
+      DiagnosticCode::TS1104,
+    )
+  } else {
+    checker
+  }
 }
 
 ///|

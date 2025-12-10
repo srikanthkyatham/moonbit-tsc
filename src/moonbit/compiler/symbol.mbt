@@ -336,6 +336,7 @@ pub enum DiagnosticCode {
   // Syntax Errors (1xxx)
   // ============================================================================
   TS1005 // '{0}' expected
+  TS1104 // A 'continue' statement can only be used within an enclosing iteration statement
   TS1109 // Expression expected
   TS1155 // 'const' declarations must be initialized
   TS1160 // Unterminated template literal
@@ -741,6 +742,7 @@ pub fn DiagnosticCode::to_int(self : DiagnosticCode) -> Int {
   match self {
     // Syntax Errors (1xxx)
     TS1005 => 1005
+    TS1104 => 1104
     TS1109 => 1109
     TS1155 => 1155
     TS1160 => 1160
@@ -1076,6 +1078,7 @@ pub fn DiagnosticCode::from_int(code : Int) -> DiagnosticCode? {
   match code {
     // Syntax Errors (1xxx)
     1005 => Some(TS1005)
+    1104 => Some(TS1104)
     1109 => Some(TS1109)
     1155 => Some(TS1155)
     1160 => Some(TS1160)
