@@ -6546,9 +6546,15 @@ fn infer_call_expression_type(
   let mut checker = checker
   let arg_types : Array[Type] = []
   let arg_is_spread : Array[Bool] = []
+  let arg_spread_types : Array[Type?] = []  // Track actual spread types (for tuple checking)
   for i = 0; i < call.arguments.length(); i = i + 1 {
     match call.arguments[i] {
       SpreadExpression(spread) => {
+        // Infer the type of the spread expression
+        let (spread_type, c) = infer_type(checker, spread.expression)
+        checker = c
+        arg_spread_types.push(Some(spread_type))
+
         // For spread arguments, extract the element type
         let (elem_type, c) = extract_spread_element_type(checker, spread.expression)
         arg_types.push(elem_type)
@@ -6559,6 +6565,7 @@ fn infer_call_expression_type(
         let (arg_type, c) = infer_type(checker, call.arguments[i])
         arg_types.push(arg_type)
         arg_is_spread.push(false)
+        arg_spread_types.push(None)
         checker = c
       }
     }
@@ -6576,6 +6583,48 @@ fn infer_call_expression_type(
 
   // Get call signatures from function type
   let signatures = get_call_signatures(func_type)
+
+  // TS2556: Validate spread arguments
+  // Spread arguments must either have tuple types or be passed to rest parameters
+  let mut checker = checker
+  if not(signatures.is_empty()) && arg_is_spread.length() > 0 {
+    // Check if any signature accepts the spread arguments
+    let has_valid_signature = signatures.iter().any(fn(sig) {
+      // A signature is valid for spreads if it has a rest parameter
+      sig.parameters.length() > 0 &&
+        sig.parameters[sig.parameters.length() - 1].is_rest
+    })
+
+    // If no signature accepts spreads, check each spread argument
+    if not(has_valid_signature) {
+      for i = 0; i < arg_is_spread.length(); i = i + 1 {
+        if arg_is_spread[i] {
+          // Check if this spread is a tuple type
+          let is_tuple = match arg_spread_types[i] {
+            Some(Tuple(_)) => true
+            _ => false
+          }
+
+          // Only error if it's not a tuple and not passed to a rest parameter
+          if not(is_tuple) {
+            // Extract location from the spread expression
+            let spread_loc = match call.arguments[i] {
+              SpreadExpression(s) => s.location
+              _ => call.location  // Fallback, shouldn't happen
+            }
+            checker = add_diagnostic_with_code(
+              checker,
+              "A spread argument must either have a tuple type or be passed to a rest parameter.",
+              spread_loc,
+              TS2556,
+            )
+            break  // Only report once
+          }
+        }
+      }
+    }
+  }
+
   if signatures.is_empty() {
     // Try to infer from Function type directly
     match func_type {
@@ -6612,9 +6661,9 @@ fn infer_call_expression_type(
         // be permissive and return any without error
         any_type(checker)
     }
-  } else if signatures.length() == 1 {
-    // Single signature (not an overload) - use direct argument checking for better error messages
-    // This gives TS2345 errors for argument type mismatches instead of generic TS2769
+  } else if signatures.length() == 1 && arg_is_spread.iter().any(fn(is_spread) { is_spread }) {
+    // Single signature with spread arguments - use direct argument checking for better error messages
+    // This gives TS2345 errors for spread argument type mismatches instead of generic TS2769
     let sig = signatures[0]
     let (info, checker) = create_type_info(checker)
     let func = CheckerFunctionType::{
