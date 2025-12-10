@@ -18013,6 +18013,43 @@ fn expression_contains_identifier(expr : Node, name : String) -> Bool {
     ElementAccessExpression(elem) =>
       expression_contains_identifier(elem.expression, name) ||
       expression_contains_identifier(elem.argument_expression, name)
+    // Note: ArrowFunction creates a new scope, so identifiers inside it
+    // don't count as references in the outer parameter initializer context
+    // Example: function f(x = (y => x)(5)) { } is VALID - x inside arrow
+    // refers to outer scope, not the parameter being initialized
+    ArrayLiteralExpression(arr) => {
+      for elem_opt in arr.elements {
+        match elem_opt {
+          Some(elem) =>
+            if expression_contains_identifier(elem, name) {
+              return true
+            }
+          None => ()
+        }
+      }
+      false
+    }
+    ObjectLiteralExpression(obj) => {
+      for prop in obj.properties {
+        match prop {
+          PropertyAssignment(_, value_node, _) =>
+            if expression_contains_identifier(value_node, name) {
+              return true
+            }
+          ShorthandProperty(prop_name, _) =>
+            if prop_name == name {
+              return true
+            }
+          _ => ()
+        }
+      }
+      false
+    }
+    YieldExpression(ye) =>
+      match ye.expression {
+        Some(e) => expression_contains_identifier(e, name)
+        None => false
+      }
     _ => false
   }
 }
@@ -18034,14 +18071,16 @@ fn check_parameter_self_reference(
               Identifier(id) => id.name
               _ => ""
             }
-            if param_name != "" &&
-              expression_contains_identifier(init, param_name) {
-              checker = add_diagnostic_with_code(
-                checker,
-                "Parameter '\{param_name}' cannot reference itself.",
-                p.location,
-                DiagnosticCode::TS2372,
-              )
+            if param_name != "" {
+              let contains = expression_contains_identifier(init, param_name)
+              if contains {
+                checker = add_diagnostic_with_code(
+                  checker,
+                  "Parameter '\{param_name}' cannot reference itself.",
+                  p.location,
+                  DiagnosticCode::TS2372,
+                )
+              }
             }
           }
           None => ()
