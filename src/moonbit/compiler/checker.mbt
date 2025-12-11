@@ -302,6 +302,7 @@ pub struct TypeChecker {
   implicit_any_array_vars : @hashset.HashSet[String] // Variables with implicit any[] type (for TS7005)
   inferring_variables : @hashset.HashSet[String] // Variables currently being inferred (for TS7022 circular reference detection)
   default_export_locations : Array[SourceLocation] // Track all default export locations for TS2528
+  import_helpers : Bool // @importHelpers compiler directive - affects TS2807 validation
 } derive(Show)
 
 ///|
@@ -391,6 +392,7 @@ pub fn TypeChecker::new_with_options(
     implicit_any_array_vars: @hashset.new(),
     inferring_variables: @hashset.new(),
     default_export_locations: [],
+    import_helpers: false, // Default to false, can be set later from compiler directives
   }
 }
 
@@ -2478,10 +2480,12 @@ pub fn check_source_file_with_external_types(
   )
 
   // Store external registry and import map in checker for type resolution
+  // Also set import_helpers from compiler directives
   let checker = {
     ..checker,
     external_registry: Some(external_registry),
     import_map,
+    import_helpers: bound.compiler_directives.import_helpers,
   }
 
   // Push a top-level scope for the source file so local variables are tracked
@@ -8659,6 +8663,83 @@ fn lookup_property_in_type(
           })
           (Some(values_fn), checker)
         }
+        "concat" => {
+          // Array.prototype.concat has two overloads:
+          // 1. concat(...items: ConcatArray<T>[]): T[]
+          // 2. concat(...items: (T | ConcatArray<T>)[]): T[]
+          //
+          // ConcatArray<T> is an interface with length, [n: number]: T, slice, join
+          // For type checking purposes, we model it as a TypeReference
+          let element_type = arr.element_type
+          let (concat_array_info, checker) = create_type_info(checker)
+          let concat_array_type = Type::TypeReference({
+            name: "ConcatArray",
+            type_arguments: [element_type],
+            info: concat_array_info,
+          })
+
+          // Create return type: T[]
+          let (return_info, checker) = create_type_info(checker)
+          let return_type = Type::Array({
+            element_type,
+            info: return_info,
+          })
+
+          // Overload 1: concat(...items: ConcatArray<T>[]): T[]
+          let (items_arr_info1, checker) = create_type_info(checker)
+          let items_param_type1 = Type::Array({
+            element_type: concat_array_type,
+            info: items_arr_info1,
+          })
+          let sig1 = CheckerSignature::{
+            parameters: [
+              CheckerParameter::{
+                name: "items",
+                param_type: items_param_type1,
+                is_optional: false,
+                is_rest: true,
+              },
+            ],
+            return_type,
+            type_parameters: [],
+          }
+
+          // Overload 2: concat(...items: (T | ConcatArray<T>)[]): T[]
+          let (union_info, checker) = create_type_info(checker)
+          let union_type = Type::Union({
+            types: [element_type, concat_array_type],
+            info: union_info,
+          })
+          let (items_arr_info2, checker) = create_type_info(checker)
+          let items_param_type2 = Type::Array({
+            element_type: union_type,
+            info: items_arr_info2,
+          })
+          let sig2 = CheckerSignature::{
+            parameters: [
+              CheckerParameter::{
+                name: "items",
+                param_type: items_param_type2,
+                is_optional: false,
+                is_rest: true,
+              },
+            ],
+            return_type,
+            type_parameters: [],
+          }
+
+          // Return an Object type with call signatures for the overloads
+          let (obj_info, checker) = create_type_info(checker)
+          let concat_fn = Type::Object({
+            properties: Map::new(),
+            call_signatures: [sig1, sig2],
+            construct_signatures: [],
+            index_signatures: [],
+            info: obj_info,
+            class_name: None,
+          })
+          (Some(concat_fn), checker)
+        }
         _ => (None, checker)
       }
     String(_) =>
@@ -11457,6 +11538,44 @@ fn infer_array_literal_type(
                   TS2548,
                 )
               }
+
+              // TS2807: Check import helper compatibility when @importHelpers is enabled
+              // Spread operators require __spreadArray(to, from, pack) with 3 parameters
+              // If tslib has old 2-parameter version, emit TS2807
+              if checker.import_helpers {
+                match checker.external_registry {
+                  Some(registry) => {
+                    // Resolve "tslib" to actual module path (e.g., "tslib.d.ts")
+                    let tslib_path = registry.resolve_module("tslib")
+                    // Look up __spreadArray export
+                    match registry.lookup_export(tslib_path, "__spreadArray") {
+                      Some(export_info) => {
+                        // Check parameter count
+                        let param_count = match export_info.ty {
+                          TFunction(func_type) => {
+                            // Count regular params (rest param is separate)
+                            func_type.params.length()
+                          }
+                          _ => -1 // Not a function type, skip validation
+                        }
+                        // __spreadArray requires 3 parameters: (to, from, pack)
+                        // Old tslib has only 2: (to, from)
+                        if param_count == 2 {
+                          let message = "This syntax requires an imported helper named '__spreadArray' with 3 parameters, which is not compatible with the one in '\{tslib_path}'. Consider upgrading your version of '\{tslib_path}'."
+                          checker = add_diagnostic_with_code(
+                            checker,
+                            message,
+                            spread.location,
+                            TS2807,
+                          )
+                        }
+                      }
+                      None => () // __spreadArray not found, skip validation
+                    }
+                  }
+                  None => () // No external registry, skip validation
+                }
+              }
             }
             // For arrays, extract element type
             match spread_type {
@@ -12319,6 +12438,15 @@ fn is_assignable(source : Type, target : Type) -> Bool {
     // Array types
     (Array(source_arr), Array(target_arr)) =>
       is_assignable(source_arr.element_type, target_arr.element_type)
+    // Array to ConcatArray<T> - array element type must be assignable to T
+    (Array(source_arr), TypeReference(target_ref)) =>
+      if target_ref.name == "ConcatArray" &&
+        target_ref.type_arguments.length() == 1 {
+        // Array<S> is assignable to ConcatArray<T> if S is assignable to T
+        is_assignable(source_arr.element_type, target_ref.type_arguments[0])
+      } else {
+        false
+      }
     // String/Array primitives to Object - check if object only requires length property
     (String(_), Object(target_obj)) => has_only_length_property(target_obj)
     (Array(_), Object(target_obj)) => has_only_length_property(target_obj)

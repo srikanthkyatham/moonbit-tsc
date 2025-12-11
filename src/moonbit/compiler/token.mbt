@@ -9,6 +9,7 @@ pub enum CommentDirectiveKind {
   TsNocheck // @ts-nocheck
   TsCheck // @ts-check
   TripleSlashRef // /// <reference ... />
+  CompilerDirective // @importHelpers, @target, @filename, @noEmit, etc.
 } derive(Show, Eq)
 
 ///|

@@ -921,14 +921,365 @@ fn synchronize_to_expression_end(parser : Parser) -> Parser {
 }
 
 ///|
+/// Split source code by @filename directives into virtual files
+/// Returns None if no @filename directives found
+pub fn split_by_filename_directives(source : String) -> TestVirtualFileSet? {
+  let lines = source.split("\n").collect()
+  let mut current_filename : String? = None
+  let mut current_content = StringBuilder::new()
+  let mut current_start_line = 1
+  let global_directives = CompilerDirectives::default()
+  let virtual_files : Array[TestVirtualFile] = []
+
+  for i = 0; i < lines.length(); i = i + 1 {
+    let line = lines[i].to_string()
+    let line_num = i + 1
+
+    // Check for @filename directive
+    if line.contains("@filename:") || line.contains("@filename :") {
+      // Save previous file if it exists
+      match current_filename {
+        Some(filename) => {
+          virtual_files.push(TestVirtualFile::{
+            filename,
+            content: current_content.to_string(),
+            start_line: current_start_line,
+          })
+          current_content = StringBuilder::new()
+        }
+        None => ()
+      }
+
+      // Extract new filename
+      let parts = line.split(":").collect()
+      if parts.length() >= 2 {
+        let filename_part = parts[1].to_string()
+        let trimmed = trim_whitespace(filename_part)
+        current_filename = Some(trimmed)
+        current_start_line = line_num + 1
+      }
+    } else {
+      // Regular line - add to current file
+      match current_filename {
+        Some(_) => {
+          current_content.write_string(line)
+          current_content.write_char('\n')
+        }
+        None => () // Skip lines before first @filename
+      }
+    }
+  }
+
+  // Save last file
+  match current_filename {
+    Some(filename) => {
+      virtual_files.push(TestVirtualFile::{
+        filename,
+        content: current_content.to_string(),
+        start_line: current_start_line,
+      })
+    }
+    None => ()
+  }
+
+  // Return TestVirtualFileSet if we found any files
+  if virtual_files.length() > 0 {
+    Some(TestVirtualFileSet::{ files: virtual_files, global_directives })
+  } else {
+    None
+  }
+}
+
+///|
+/// Parsed virtual file result
+pub struct ParsedVirtualFile {
+  filename : String
+  source_file : SourceFile
+} derive(Show)
+
+///|
+/// Multi-file parse result
+pub struct MultiFileParseResult {
+  files : Array[ParsedVirtualFile]
+  parse_errors : Array[(String, Array[Diagnostic])]  // (filename, diagnostics)
+} derive(Show)
+
+///|
+/// Function signature info for emit helper validation
+pub struct FunctionSignatureInfo {
+  name : String
+  param_count : Int
+  module_path : String
+} derive(Show)
+
+///|
+/// Helper signature registry for TS2807 validation
+pub struct HelperSignatureRegistry {
+  signatures : Map[String, FunctionSignatureInfo]  // "module:function" -> info
+} derive(Show)
+
+///|
+/// Create empty helper signature registry
+pub fn HelperSignatureRegistry::new() -> HelperSignatureRegistry {
+  { signatures: Map::new() }
+}
+
+///|
+/// Add a function signature to the registry
+pub fn HelperSignatureRegistry::add(
+  self : HelperSignatureRegistry,
+  module_path : String,
+  function_name : String,
+  param_count : Int,
+) -> Unit {
+  let key = module_path + ":" + function_name
+  self.signatures.set(
+    key,
+    FunctionSignatureInfo::{ name: function_name, param_count, module_path },
+  )
+}
+
+///|
+/// Look up a function signature
+pub fn HelperSignatureRegistry::lookup(
+  self : HelperSignatureRegistry,
+  module_path : String,
+  function_name : String,
+) -> FunctionSignatureInfo? {
+  let key = module_path + ":" + function_name
+  self.signatures.get(key)
+}
+
+///|
+/// Parse all virtual files from a TestVirtualFileSet
+/// Returns parsed SourceFiles for each virtual file
+pub fn parse_virtual_files(
+  virtual_file_set : TestVirtualFileSet
+) -> MultiFileParseResult {
+  let parsed_files : Array[ParsedVirtualFile] = []
+  let parse_errors : Array[(String, Array[Diagnostic])] = []
+
+  for vfile in virtual_file_set.files {
+    // Tokenize the virtual file
+    let tokens = scan_all_v2(vfile.content, vfile.filename)
+
+    // Parse into SourceFile
+    match parse_source_file(tokens, vfile.filename) {
+      Ok(source_file) => {
+        parsed_files.push(ParsedVirtualFile::{
+          filename: vfile.filename,
+          source_file,
+        })
+      }
+      Err(diagnostics) => {
+        parse_errors.push((vfile.filename, diagnostics))
+      }
+    }
+  }
+
+  MultiFileParseResult::{ files: parsed_files, parse_errors }
+}
+
+///|
+/// Extract function parameter count from a function declaration/expression
+fn get_function_param_count(func : Node) -> Int {
+  match func {
+    FunctionDeclaration(decl) => decl.parameters.length()
+    FunctionExpression(expr) => expr.parameters.length()
+    ArrowFunction(arrow) => arrow.parameters.length()
+    _ => 0
+  }
+}
+
+///|
+/// Extract exported functions from statements (for .d.ts files)
+/// Returns Map of export name -> parameter count
+fn extract_exported_functions(statements : Array[Node]) -> Map[String, Int] {
+  let exports = Map::new()
+
+  for stmt in statements {
+    match stmt {
+      // export function foo(...) { } - has Export modifier
+      FunctionDeclaration(func) => {
+        // Check if function has Export modifier
+        let mut is_exported = false
+        for modifier in func.modifiers {
+          if modifier == Export {
+            is_exported = true
+            break
+          }
+        }
+
+        if is_exported {
+          // Extract function name from Identifier node
+          match func.name {
+            Some(Identifier(id)) => {
+              exports.set(id.name, func.parameters.length())
+            }
+            _ => ()
+          }
+        }
+      }
+      _ => ()
+    }
+  }
+
+  exports
+}
+
+///|
+/// Build helper signature registry from parsed virtual files
+/// This extracts function signatures for emit helper validation (TS2807)
+pub fn build_helper_signatures(
+  parse_result : MultiFileParseResult
+) -> HelperSignatureRegistry {
+  let helper_registry = HelperSignatureRegistry::new()
+
+  for parsed_file in parse_result.files {
+    // Bind to get the AST
+    match bind_source_file(parsed_file.source_file) {
+      Ok(bound) => {
+        // Extract exported functions
+        let exported_functions = extract_exported_functions(bound.statements)
+
+        // Add each function to the helper registry
+        exported_functions.iter().each(fn(entry) {
+          let (name, param_count) = entry
+          helper_registry.add(parsed_file.filename, name, param_count)
+        })
+      }
+      Err(_) => {
+        // Skip files that fail to bind
+        ()
+      }
+    }
+  }
+
+  helper_registry
+}
+
+///|
+/// Build ExternalTypeRegistry from parsed virtual files
+/// This binds each file and extracts exported types for cross-file type checking
+pub fn build_registry_from_virtual_files(
+  parse_result : MultiFileParseResult
+) -> ExternalTypeRegistry {
+  let registry = ExternalTypeRegistry::new()
+
+  // Bind each parsed file and register its exports
+  for parsed_file in parse_result.files {
+    // Bind the source file to get symbols
+    match bind_source_file(parsed_file.source_file) {
+      Ok(bound) => {
+        // Create ModuleTypes for this file
+        let module_types = ModuleTypes::empty(parsed_file.filename)
+
+        // Extract exported functions from the AST and add to ModuleTypes
+        // This creates simple function types based on parameter counts
+        let exported_funcs = extract_exported_functions(bound.statements)
+        exported_funcs.iter().each(fn(entry) {
+          let (func_name, param_count) = entry
+          // Create a simple function type: (any, any, ...) => any
+          let params : Array[ParamInfoV2] = []
+          for _i = 0; _i < param_count; _i = _i + 1 {
+            params.push(ParamInfoV2::{
+              name: "p\{_i}",
+              ty: TAny,
+              optional: false,
+              is_rest: false,
+            })
+          }
+          let func_type = FunctionTypeV2::{
+            type_params: [],
+            params,
+            rest_param: None,
+            return_type: TAny,
+            type_predicate: None,
+            this_type: None,
+          }
+          let export_info = ExternalTypeInfo::{
+            ty: TFunction(func_type),
+            is_type_only: false,
+            original_name: func_name,
+          }
+          module_types.add_export(func_name, export_info)
+        })
+
+        // Register this module in the registry
+        registry.register_module(parsed_file.filename, module_types)
+
+        // Register common module mappings for tslib
+        if parsed_file.filename == "tslib.d.ts" {
+          registry.register_mapping("tslib", "tslib.d.ts")
+        }
+      }
+      Err(_) => {
+        // Skip files that fail to bind
+        ()
+      }
+    }
+  }
+
+  registry
+}
+
+///|
+/// Parse compiler directives from comment tokens
+/// Format: @directive: value or @directive (boolean)
+fn parse_compiler_directives(
+  tokens : Array[(String, SourceLocation)]
+) -> CompilerDirectives {
+  let mut import_helpers = false
+  let mut target : String? = None
+  let mut filename : String? = None
+  let mut no_emit = false
+  let mut isolated_modules = false
+  let mut no_types_and_symbols = false
+
+  for i = 0; i < tokens.length(); i = i + 1 {
+    let (content, _loc) = tokens[i]
+    // Check if content contains ":"
+    let has_colon = content.iter().any(fn(c) { c == ':' })
+    if has_colon {
+      // Split on ":" and collect into array
+      let parts = content.split(":").collect()
+      if parts.length() >= 2 {
+        // Convert StringView to String and trim whitespace
+        let directive_name = trim_whitespace(parts[0].to_string())
+        let directive_value = trim_whitespace(parts[1].to_string())
+        match directive_name {
+          "importHelpers" => import_helpers = directive_value == "true"
+          "target" => target = Some(directive_value)
+          "filename" => filename = Some(directive_value)
+          "noEmit" => no_emit = directive_value == "true"
+          "isolatedModules" => isolated_modules = directive_value == "true"
+          "noTypesAndSymbols" => no_types_and_symbols = directive_value == "true"
+          _ => () // Unknown directive, ignore
+        }
+      }
+    }
+  }
+
+  CompilerDirectives::{
+    import_helpers,
+    target,
+    filename,
+    no_emit,
+    isolated_modules,
+    no_types_and_symbols,
+  }
+}
+
+///|
 /// Parse a complete source file
 pub fn parse_source_file(
   tokens : Array[Token],
   file_path : String,
 ) -> ParseResult[SourceFile] {
-  // Extract triple-slash directive tokens, hashbang, ts-expect-error directives, and filter out comment tokens
+  // Extract triple-slash directive tokens, hashbang, ts-expect-error directives, compiler directives, and filter out comment tokens
   let directive_tokens : Array[(String, SourceLocation)] = []
   let ts_expect_error_directives : Array[SourceLocation] = []
+  let compiler_directive_tokens : Array[(String, SourceLocation)] = []
   let scanner_errors : Array[Diagnostic] = []
   let filtered_tokens : Array[Token] = []
   let mut hashbang : String? = None
@@ -941,6 +1292,9 @@ pub fn parse_source_file(
       CommentDirective(TsExpectError, _, loc) =>
         // Track @ts-expect-error directives for TS2578 checking
         ts_expect_error_directives.push(loc)
+      CommentDirective(CompilerDirective, content, loc) =>
+        // Track compiler directives (@importHelpers, @filename, @target, etc.)
+        compiler_directive_tokens.push((content, loc))
       CommentDirective(_, _, _) => () // Skip other comment directives (@ts-ignore, @ts-nocheck, etc.)
       JSDocComment(_, _) => () // Skip JSDoc comments - handled separately
       ScanError(message, code, loc) =>
@@ -958,6 +1312,8 @@ pub fn parse_source_file(
   }
   let (statements, parser) = parse_statements(parser)
   let eof_token = current_token(parser)
+  // Parse compiler directives
+  let compiler_directives = parse_compiler_directives(compiler_directive_tokens)
   // Combine scanner errors with parser diagnostics
   let all_diagnostics = scanner_errors.copy()
   for d in parser.diagnostics {
@@ -974,6 +1330,7 @@ pub fn parse_source_file(
       directive_tokens,
       hashbang,
       ts_expect_error_directives,
+      compiler_directives,
     })
   }
 }

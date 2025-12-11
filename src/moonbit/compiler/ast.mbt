@@ -135,6 +135,45 @@ pub enum Node {
 } derive(Show)
 
 ///|
+/// Compiler directives parsed from comments (// @directive: value)
+pub struct CompilerDirectives {
+  import_helpers : Bool // @importHelpers: true
+  target : String? // @target: es5, es2015, etc.
+  filename : String? // @filename: main.ts
+  no_emit : Bool // @noEmit: true
+  isolated_modules : Bool // @isolatedModules: true
+  no_types_and_symbols : Bool // @noTypesAndSymbols: true
+} derive(Show)
+
+///|
+/// Default compiler directives (all false/none)
+pub fn CompilerDirectives::default() -> CompilerDirectives {
+  {
+    import_helpers: false,
+    target: None,
+    filename: None,
+    no_emit: false,
+    isolated_modules: false,
+    no_types_and_symbols: false,
+  }
+}
+
+///|
+/// Virtual file segment (for multi-file tests with @filename directives)
+pub struct TestVirtualFile {
+  filename : String // The filename from @filename directive
+  content : String // The source code for this file
+  start_line : Int // Starting line in original source
+} derive(Show)
+
+///|
+/// Collection of virtual files from a test with @filename directives
+pub struct TestVirtualFileSet {
+  files : Array[TestVirtualFile] // All virtual files
+  global_directives : CompilerDirectives // Directives that apply to all files
+} derive(Show)
+
+///|
 /// Source file - root of AST
 pub struct SourceFile {
   file_path : String
@@ -147,6 +186,8 @@ pub struct SourceFile {
   hashbang : String?
   /// @ts-expect-error directives with their locations (line number where directive appears)
   ts_expect_error_directives : Array[SourceLocation]
+  /// Compiler directives from comments (// @importHelpers, @filename, @target, etc.)
+  compiler_directives : CompilerDirectives
 } derive(Show)
 
 ///|

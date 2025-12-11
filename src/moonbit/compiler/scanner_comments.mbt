@@ -97,7 +97,7 @@ fn is_jsdoc_start_v2(code : StringView) -> Bool {
 }
 
 ///|
-/// Check if code starts with a comment directive (// @ts-* or /// <reference)
+/// Check if code starts with a comment directive (// @ts-* or /// <reference or // @compileroption)
 fn is_comment_directive_start_v2(code : StringView) -> Bool {
   match code {
     // Triple-slash reference directive: /// <reference or /// <amd-
@@ -106,6 +106,9 @@ fn is_comment_directive_start_v2(code : StringView) -> Bool {
     // @ts-* directives: // @ts-ignore, // @ts-expect-error, etc.
     [.. "// @ts-", ..] => true
     [.. "//@ts-", ..] => true
+    // Compiler directives: // @importHelpers, // @filename, // @target, etc.
+    [.. "// @", ..] => true
+    [.. "//@", ..] => true
     _ => false
   }
 }
@@ -204,7 +207,7 @@ fn scan_comment_directive_v2(
     _ => ()
   }
 
-  // Handle // @ts-* directives
+  // Handle // @ts-* directives and compiler directives
   let (directive_kind, rest) = loop code {
     [.. "// @ts-ignore", .. rest] => {
       state.col += 13
@@ -246,13 +249,24 @@ fn scan_comment_directive_v2(
       state.offset += 11
       (TsCheck, rest)
     }
-    _ => {
+    // Compiler directives: @importHelpers, @filename, @target, @noEmit, etc.
+    [.. "// @", .. rest] => {
+      state.col += 4
+      state.offset += 4
+      (CompilerDirective, rest)
+    }
+    [.. "//@", .. rest] => {
+      state.col += 3
+      state.offset += 3
+      (CompilerDirective, rest)
+    }
+    remaining => {
       // Default fallback - skip // and treat as unknown directive
       state.col += 2
       state.offset += 2
-      match code {
+      match remaining {
         [.. "//", .. rest] => (TsIgnore, rest)
-        _ => (TsIgnore, code)
+        _ as rest => (TsIgnore, rest)
       }
     }
   }
@@ -375,6 +389,15 @@ fn skip_whitespace_with_special_comments_v2(
       (rest, Some(token))
     }
     [.. "//@ts-", ..] as current => {
+      let (token, rest) = scan_comment_directive_v2(current, state, file_path)
+      (rest, Some(token))
+    }
+    // Check for compiler directives: @importHelpers, @filename, @target, etc.
+    [.. "// @", ..] as current => {
+      let (token, rest) = scan_comment_directive_v2(current, state, file_path)
+      (rest, Some(token))
+    }
+    [.. "//@", ..] as current => {
       let (token, rest) = scan_comment_directive_v2(current, state, file_path)
       (rest, Some(token))
     }

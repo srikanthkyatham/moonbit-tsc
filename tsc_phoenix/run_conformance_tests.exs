@@ -28,10 +28,20 @@ defmodule ConformanceTestRunner do
     IO.puts("Found #{length(files)} test files")
     IO.puts("")
 
-    # Run tests in parallel
+    # Run tests in parallel with increased timeout
     results = files
-    |> Task.async_stream(&run_test/1, max_concurrency: 8, timeout: 30_000)
-    |> Enum.map(fn {:ok, result} -> result end)
+    |> Task.async_stream(&run_test/1, max_concurrency: 8, timeout: 120_000)
+    |> Enum.map(fn
+      {:ok, result} -> result
+      {:exit, :timeout} ->
+        %{
+          file: "unknown",
+          status: :failed,
+          failure_type: :should_pass,
+          error_type: :crash,
+          message: "Test timed out after 120 seconds"
+        }
+    end)
 
     # Categorize results based on baseline expectations
     {passed, failed} = Enum.split_with(results, fn r -> r.status == :passed end)

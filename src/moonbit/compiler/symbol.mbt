@@ -675,7 +675,7 @@ pub enum DiagnosticCode {
   TS2803 // Cannot assign to private method '{0}'. Private methods are not writable
   TS2804 // Expected {0} type arguments, but got {1}
   TS2806 // Type 'void' is not a valid type for a destructuring assignment target
-  TS2807 // An optional element cannot follow a rest element
+  TS2807 // This syntax requires an imported helper named '{0}' with {1} parameters, which is not compatible with the one in '{2}'. Consider upgrading your version of '{2}'.
   TS2808 // A required element cannot follow an optional element
   TS2809 // Index signature must have a type annotation
   TS2810 // Property '{0}' can only be assigned to by using 'this' access within the class body
@@ -1600,6 +1600,7 @@ pub struct BoundSourceFile {
   global_augmentations : Array[GlobalAugmentation] // Global augmentations (declare global { })
   triple_slash_directives : Array[TripleSlashDirective] // Triple-slash directives (/// <reference ...>)
   ts_expect_error_directives : Array[SourceLocation] // @ts-expect-error directive locations for TS2578 checking
+  compiler_directives : CompilerDirectives // Compiler directives (@importHelpers, @target, etc.)
 } derive(Show)
 
 ///|
@@ -2161,7 +2162,7 @@ pub fn parse_triple_slash_directive(
 
 ///|
 /// Trim whitespace from start and end of string
-fn trim_whitespace(s : String) -> String {
+pub fn trim_whitespace(s : String) -> String {
   if s.length() == 0 {
     return ""
   }

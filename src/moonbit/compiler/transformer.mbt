@@ -331,6 +331,7 @@ pub fn transform(node : Node, ctx : TransformerContext) -> Node {
         directive_tokens: sf.directive_tokens,
         hashbang: sf.hashbang,
         ts_expect_error_directives: sf.ts_expect_error_directives,
+        compiler_directives: sf.compiler_directives,
       })
     }
 

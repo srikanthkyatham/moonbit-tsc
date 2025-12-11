@@ -324,6 +324,7 @@ pub fn compile_source_file(
     directive_tokens: sf.directive_tokens,
     hashbang: sf.hashbang,
     ts_expect_error_directives: sf.ts_expect_error_directives,
+    compiler_directives: sf.compiler_directives,
   })
   // Transform and emit
   let transformed = transform(sf_node, ctx)
