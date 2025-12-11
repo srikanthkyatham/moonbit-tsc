@@ -18,7 +18,7 @@ test "overload/TS2391 - missing implementation for non-ambient overloads" {
   let tokens = @compiler.scan_all_v2(source, "test.ts")
   match @compiler.parse_source_file(tokens, "test.ts") {
     Ok(source_file) => {
-      let overloads_map = @compiler.collect_overloads(source_file.statements)
+      let overloads_map = @compiler.collect_overloads(source_file.statements, false)
       match overloads_map.get("foo") {
         Some(overloads) => {
           let result = @compiler.validate_overloads(overloads)
@@ -41,7 +41,7 @@ test "overload/TS2391 - ambient overloads don't require implementation" {
   let tokens = @compiler.scan_all_v2(source, "test.ts")
   match @compiler.parse_source_file(tokens, "test.ts") {
     Ok(source_file) => {
-      let overloads_map = @compiler.collect_overloads(source_file.statements)
+      let overloads_map = @compiler.collect_overloads(source_file.statements, false)
       match overloads_map.get("foo") {
         Some(overloads) => {
           let result = @compiler.validate_overloads(overloads)
@@ -66,7 +66,7 @@ test "overload/TS2391 - valid overloads with implementation" {
   let tokens = @compiler.scan_all_v2(source, "test.ts")
   match @compiler.parse_source_file(tokens, "test.ts") {
     Ok(source_file) => {
-      let overloads_map = @compiler.collect_overloads(source_file.statements)
+      let overloads_map = @compiler.collect_overloads(source_file.statements, false)
       match overloads_map.get("foo") {
         Some(overloads) => {
           let result = @compiler.validate_overloads(overloads)
@@ -94,7 +94,7 @@ test "overload/TS2383 - mixed ambient and non-ambient overloads" {
   let tokens = @compiler.scan_all_v2(source, "test.ts")
   match @compiler.parse_source_file(tokens, "test.ts") {
     Ok(source_file) => {
-      let overloads_map = @compiler.collect_overloads(source_file.statements)
+      let overloads_map = @compiler.collect_overloads(source_file.statements, false)
       match overloads_map.get("foo") {
         Some(overloads) => {
           let result = @compiler.validate_overloads(overloads)
@@ -119,7 +119,7 @@ test "overload/TS2383 - all ambient is valid" {
   let tokens = @compiler.scan_all_v2(source, "test.ts")
   match @compiler.parse_source_file(tokens, "test.ts") {
     Ok(source_file) => {
-      let overloads_map = @compiler.collect_overloads(source_file.statements)
+      let overloads_map = @compiler.collect_overloads(source_file.statements, false)
       match overloads_map.get("foo") {
         Some(overloads) => {
           let result = @compiler.validate_overloads(overloads)
@@ -147,7 +147,7 @@ test "overload/TS2383 - all non-ambient with impl is valid" {
   let tokens = @compiler.scan_all_v2(source, "test.ts")
   match @compiler.parse_source_file(tokens, "test.ts") {
     Ok(source_file) => {
-      let overloads_map = @compiler.collect_overloads(source_file.statements)
+      let overloads_map = @compiler.collect_overloads(source_file.statements, false)
       match overloads_map.get("foo") {
         Some(overloads) => {
           let result = @compiler.validate_overloads(overloads)
@@ -178,7 +178,7 @@ test "overload/TS2394 - implementation requires more params than overload" {
   let tokens = @compiler.scan_all_v2(source, "test.ts")
   match @compiler.parse_source_file(tokens, "test.ts") {
     Ok(source_file) => {
-      let overloads_map = @compiler.collect_overloads(source_file.statements)
+      let overloads_map = @compiler.collect_overloads(source_file.statements, false)
       match overloads_map.get("foo") {
         Some(overloads) => {
           let result = @compiler.validate_overloads(overloads)
@@ -205,7 +205,7 @@ test "overload/TS2394 - implementation with optional params is valid" {
   let tokens = @compiler.scan_all_v2(source, "test.ts")
   match @compiler.parse_source_file(tokens, "test.ts") {
     Ok(source_file) => {
-      let overloads_map = @compiler.collect_overloads(source_file.statements)
+      let overloads_map = @compiler.collect_overloads(source_file.statements, false)
       match overloads_map.get("foo") {
         Some(overloads) => {
           let result = @compiler.validate_overloads(overloads)
@@ -229,7 +229,7 @@ test "overload/TS2394 - overload has more params than implementation" {
   let tokens = @compiler.scan_all_v2(source, "test.ts")
   match @compiler.parse_source_file(tokens, "test.ts") {
     Ok(source_file) => {
-      let overloads_map = @compiler.collect_overloads(source_file.statements)
+      let overloads_map = @compiler.collect_overloads(source_file.statements, false)
       match overloads_map.get("foo") {
         Some(overloads) => {
           let result = @compiler.validate_overloads(overloads)
@@ -256,7 +256,7 @@ test "overload/TS2394 - rest parameter in implementation handles more params" {
   let tokens = @compiler.scan_all_v2(source, "test.ts")
   match @compiler.parse_source_file(tokens, "test.ts") {
     Ok(source_file) => {
-      let overloads_map = @compiler.collect_overloads(source_file.statements)
+      let overloads_map = @compiler.collect_overloads(source_file.statements, false)
       match overloads_map.get("foo") {
         Some(overloads) => {
           let result = @compiler.validate_overloads(overloads)
@@ -285,7 +285,7 @@ test "overload/valid - simple two-overload function" {
   let tokens = @compiler.scan_all_v2(source, "test.ts")
   match @compiler.parse_source_file(tokens, "test.ts") {
     Ok(source_file) => {
-      let overloads_map = @compiler.collect_overloads(source_file.statements)
+      let overloads_map = @compiler.collect_overloads(source_file.statements, false)
       match overloads_map.get("greet") {
         Some(overloads) => {
           let result = @compiler.validate_overloads(overloads)
@@ -310,7 +310,7 @@ test "overload/valid - multiple overloads with different arities" {
   let tokens = @compiler.scan_all_v2(source, "test.ts")
   match @compiler.parse_source_file(tokens, "test.ts") {
     Ok(source_file) => {
-      let overloads_map = @compiler.collect_overloads(source_file.statements)
+      let overloads_map = @compiler.collect_overloads(source_file.statements, false)
       match overloads_map.get("create") {
         Some(overloads) => {
           let result = @compiler.validate_overloads(overloads)
@@ -338,7 +338,7 @@ test "overload/collection - collects multiple signatures" {
   let tokens = @compiler.scan_all_v2(source, "test.ts")
   match @compiler.parse_source_file(tokens, "test.ts") {
     Ok(source_file) => {
-      let overloads_map = @compiler.collect_overloads(source_file.statements)
+      let overloads_map = @compiler.collect_overloads(source_file.statements, false)
       match overloads_map.get("foo") {
         Some(overloads) => {
           assert_eq(overloads.signatures.length(), 2)
@@ -362,7 +362,7 @@ test "overload/collection - separate functions are separate" {
   let tokens = @compiler.scan_all_v2(source, "test.ts")
   match @compiler.parse_source_file(tokens, "test.ts") {
     Ok(source_file) => {
-      let overloads_map = @compiler.collect_overloads(source_file.statements)
+      let overloads_map = @compiler.collect_overloads(source_file.statements, false)
       assert_true(overloads_map.get("foo") is Some(_))
       assert_true(overloads_map.get("bar") is Some(_))
     }
@@ -379,7 +379,7 @@ test "overload/collection - single function no overloads" {
   let tokens = @compiler.scan_all_v2(source, "test.ts")
   match @compiler.parse_source_file(tokens, "test.ts") {
     Ok(source_file) => {
-      let overloads_map = @compiler.collect_overloads(source_file.statements)
+      let overloads_map = @compiler.collect_overloads(source_file.statements, false)
       match overloads_map.get("foo") {
         Some(overloads) => {
           // Only implementation, no signatures
@@ -400,7 +400,7 @@ test "overload/collection - only signature no implementation" {
   let tokens = @compiler.scan_all_v2(source, "test.ts")
   match @compiler.parse_source_file(tokens, "test.ts") {
     Ok(source_file) => {
-      let overloads_map = @compiler.collect_overloads(source_file.statements)
+      let overloads_map = @compiler.collect_overloads(source_file.statements, false)
       match overloads_map.get("foo") {
         Some(overloads) => {
           assert_eq(overloads.signatures.length(), 1)
@@ -422,7 +422,7 @@ test "overload/collection - function overloads properties" {
   let tokens = @compiler.scan_all_v2(source, "test.ts")
   match @compiler.parse_source_file(tokens, "test.ts") {
     Ok(source_file) => {
-      let overloads_map = @compiler.collect_overloads(source_file.statements)
+      let overloads_map = @compiler.collect_overloads(source_file.statements, false)
       match overloads_map.get("foo") {
         Some(overloads) => {
           assert_eq(overloads.name, "foo")
