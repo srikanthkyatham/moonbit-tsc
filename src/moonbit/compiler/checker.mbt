@@ -5452,12 +5452,99 @@ fn infer_from_initializer(
 }
 
 ///|
+/// Convert AST type parameters to checker type parameters
+fn process_type_parameters(
+  checker : TypeChecker,
+  type_params : Array[TypeParameter],
+) -> (Array[CheckerTypeParameter], TypeChecker) {
+  let type_parameters : Array[CheckerTypeParameter] = []
+  let mut c = checker
+
+  for tp in type_params {
+    // Get constraint type if present
+    let (constraint, c2) = match tp.constraint {
+      Some(constraint_node) =>
+        match get_type_from_type_node(c, constraint_node) {
+          (Some(t), checker) => (Some(t), checker)
+          (None, checker) => (None, checker)
+        }
+      None => (None, c)
+    }
+    c = c2
+
+    // Get default type if present (note: field is called 'default' not 'default_type')
+    let (default_type, c2) = match tp.default {
+      Some(default_node) =>
+        match get_type_from_type_node(c, default_node) {
+          (Some(t), checker) => (Some(t), checker)
+          (None, checker) => (None, checker)
+        }
+      None => (None, c)
+    }
+    c = c2
+
+    type_parameters.push({
+      name: tp.name,
+      constraint,
+      default_type,
+    })
+  }
+
+  (type_parameters, c)
+}
+
+///|
+/// Create a function type with optional type parameters
+/// Generic functions (with type parameters) are represented as Object types with call signatures
+/// Non-generic functions are simple Function types
+fn create_function_type_with_params(
+  checker : TypeChecker,
+  parameters : Array[CheckerParameter],
+  return_type : Type,
+  type_parameters : Array[CheckerTypeParameter],
+) -> (Type, TypeChecker) {
+  if type_parameters.length() > 0 {
+    // Generic function: create Object type with call signature
+    let (info, checker) = create_type_info(checker)
+    let call_signature : CheckerSignature = { parameters, return_type, type_parameters }
+    let func_type = Type::Object({
+      properties: Map::new(),
+      call_signatures: [call_signature],
+      construct_signatures: [],
+      index_signatures: [],
+      info,
+      class_name: None,
+    })
+    (func_type, checker)
+  } else {
+    // Non-generic function: use simple Function type
+    let (info, checker) = create_type_info(checker)
+    let func_type = Type::Function({ parameters, return_type, info })
+    (func_type, checker)
+  }
+}
+
+///|
 /// Get type of a function declaration (for hoisting, without caching to symbol)
 fn get_function_declaration_type(
   checker : TypeChecker,
   func : FunctionDeclaration,
 ) -> (Type, TypeChecker) {
-  // Build parameter list
+  // FIX: Process type parameters FIRST before resolving parameter types
+  // This ensures type parameter references (like T in T[]) can be resolved
+  let (type_parameters, checker) = process_type_parameters(checker, func.type_parameters)
+
+  // Add type parameters to type_cache so they can be referenced in parameter types
+  let mut checker = checker
+  let saved_type_cache = checker.type_cache.copy() // Save original cache
+  for tp in type_parameters {
+    let (info, c) = create_type_info(checker)
+    checker = c
+    let type_ref = Type::TypeReference({ name: tp.name, type_arguments: [], info })
+    checker.type_cache.set(tp.name, type_ref)
+  }
+
+  // Build parameter list - now type parameter references will resolve correctly
   let parameters : Array[CheckerParameter] = []
   let mut c = checker
   for param_node in func.parameters {
@@ -5479,9 +5566,11 @@ fn get_function_declaration_type(
 
   // Get return type
   let (return_type, checker) = resolve_type_annotation_or_any(checker, func.return_type)
-  let (info, checker) = create_type_info(checker)
-  let func_type = Type::Function({ parameters, return_type, info })
-  (func_type, checker)
+
+  // Restore original type_cache (remove type parameters from cache)
+  let checker = { ..checker, type_cache: saved_type_cache }
+
+  create_function_type_with_params(checker, parameters, return_type, type_parameters)
 }
 
 ///|
@@ -5515,8 +5604,22 @@ fn infer_function_declaration_type(
   resolving.set(symbol.id, true)
   let checker = { ..checker, resolving_symbols: resolving }
 
+  // FIX: Process type parameters FIRST before resolving parameter types
+  // This ensures type parameter references (like T in T[]) can be resolved
+  let (type_parameters, checker) = process_type_parameters(checker, func.type_parameters)
+
+  // Add type parameters to type_cache so they can be referenced in parameter types
+  let mut checker = checker
+  let saved_type_cache = checker.type_cache.copy() // Save original cache
+  for tp in type_parameters {
+    let (info, c) = create_type_info(checker)
+    checker = c
+    let type_ref = Type::TypeReference({ name: tp.name, type_arguments: [], info })
+    checker.type_cache.set(tp.name, type_ref)
+  }
+
   // Single declaration - create simple Function type
-  // Build parameter list
+  // Build parameter list - now type parameter references will resolve correctly
   let parameters : Array[CheckerParameter] = []
   let mut c = checker
   for param_node in func.parameters {
@@ -5626,8 +5729,11 @@ fn infer_function_declaration_type(
   resolving_cleared.remove(symbol.id)
   let checker = { ..checker, resolving_symbols: resolving_cleared }
 
-  let (info, checker) = create_type_info(checker)
-  let func_type = Type::Function({ parameters, return_type, info })
+  // Create function type with the type parameters we processed earlier
+  let (func_type, checker) = create_function_type_with_params(checker, parameters, return_type, type_parameters)
+
+  // Restore original type_cache (remove type parameters from cache)
+  let checker = { ..checker, type_cache: saved_type_cache }
 
   // Cache the type
   let new_symbol_types = checker.symbol_types
@@ -5725,7 +5831,11 @@ fn infer_class_declaration_type(
   // Mark symbol as being resolved
   let resolving = checker.resolving_symbols
   resolving.set(symbol.id, true)
-  let mut checker = { ..checker, resolving_symbols: resolving }
+  let checker = { ..checker, resolving_symbols: resolving }
+
+  // Process class type parameters early so they're available for member type resolution
+  let (class_type_parameters, c) = process_type_parameters(checker, class_decl.type_parameters)
+  let mut checker = c
 
   // Build object type for the class - separating static and instance properties
   // Static properties go on the class constructor type (for X.staticProp)
@@ -5909,10 +6019,51 @@ fn infer_class_declaration_type(
   })
 
   // Create construct signature for 'new Class()'
+  // Extract constructor parameters if constructor exists
+  // IMPORTANT: Add type parameters to type_cache BEFORE resolving constructor parameter types
+  // This ensures type references like T[] resolve correctly in constructor(...s: T[])
+  let constructor_parameters : Array[CheckerParameter] = []
+  let mut c = checker
+  let saved_type_cache = c.type_cache.copy()
+  for tp in class_type_parameters {
+    let (info, c2) = create_type_info(c)
+    c = c2
+    let type_ref = Type::TypeReference({ name: tp.name, type_arguments: [], info })
+    c.type_cache.set(tp.name, type_ref)
+  }
+
+  for class_member in class_decl.members {
+    match class_member {
+      ConstructorDeclaration(ctor) => {
+        for param_node in ctor.parameters {
+          match param_node {
+            Parameter(p) => {
+              let (param_type, c2) = resolve_type_annotation_or_any(c, p.type_annotation)
+              c = c2
+              constructor_parameters.push({
+                name: get_parameter_name(p.name),
+                param_type,
+                is_optional: p.is_optional,
+                is_rest: p.is_rest,
+              })
+            }
+            _ => ()
+          }
+        }
+      }
+      _ => ()
+    }
+  }
+
+  // Restore original type_cache
+  c = { ..c, type_cache: saved_type_cache }
+  let checker = c
+
   let construct_sig = CheckerSignature::{
-    parameters: [], // TODO: extract constructor parameters
+    parameters: constructor_parameters,
     return_type: instance_type,
-    type_parameters: [],
+    // Constructors inherit the class's type parameters
+    type_parameters: class_type_parameters,
   }
 
   // Create class constructor type (the type of the class name as a value)
@@ -6560,16 +6711,18 @@ fn infer_call_expression_type(
   for i = 0; i < call.arguments.length(); i = i + 1 {
     match call.arguments[i] {
       SpreadExpression(spread) => {
-        // Infer the type of the spread expression
-        let (spread_type, c) = infer_type(checker, spread.expression)
-        checker = c
-        arg_spread_types.push(Some(spread_type))
-
         // For spread arguments, extract the element type
         let (elem_type, c) = extract_spread_element_type(checker, spread.expression)
+        checker = c
         arg_types.push(elem_type)
         arg_is_spread.push(true)
+
+        // Create an array type from the element type for type inference
+        // This ensures iterators like SymbolIterator are represented as symbol[] for inference
+        let (info, c) = create_type_info(checker)
         checker = c
+        let array_type = Type::Array({ element_type: elem_type, info })
+        arg_spread_types.push(Some(array_type))
       }
       _ => {
         let (arg_type, c) = infer_type(checker, call.arguments[i])
@@ -6592,7 +6745,9 @@ fn infer_call_expression_type(
   }
 
   // Get call signatures from function type
+  println("DEBUG: func_type = \{type_to_string(func_type)}")
   let signatures = get_call_signatures(func_type)
+  println("DEBUG: Got \{signatures.length()} signatures")
 
   // TS2556: Validate spread arguments
   // Spread arguments must either have tuple types or be passed to rest parameters
@@ -6711,9 +6866,11 @@ fn infer_call_expression_type(
         // be permissive and return any without error
         any_type(checker)
     }
-  } else if signatures.length() == 1 && arg_is_spread.iter().any(fn(is_spread) { is_spread }) {
-    // Single signature with spread arguments - use direct argument checking for better error messages
+  } else if signatures.length() == 1 && arg_is_spread.iter().any(fn(is_spread) { is_spread }) &&
+    signatures[0].type_parameters.is_empty() {
+    // Single non-generic signature with spread arguments - use direct argument checking for better error messages
     // This gives TS2345 errors for spread argument type mismatches instead of generic TS2769
+    // Note: Generic signatures (with type parameters) need to go through overload resolution for type inference
     let sig = signatures[0]
     let (info, checker) = create_type_info(checker)
     let func = CheckerFunctionType::{
@@ -6724,7 +6881,14 @@ fn infer_call_expression_type(
     check_function_call_args(checker, func, arg_types, call.location)
   } else {
     // Multiple signatures - resolve which overload matches
-    match resolve_call_overload(checker, signatures, arg_types) {
+    match resolve_call_overload(
+      checker,
+      signatures,
+      arg_types,
+      arg_is_spread,
+      arg_spread_types,
+      call.location,
+    ) {
       Some((return_type, c)) => (return_type, c)
       None => {
         // No overload matches - add diagnostic and return error type
@@ -6852,6 +7016,7 @@ fn format_arg_types(arg_types : Array[Type]) -> String {
 fn get_call_signatures(t : Type) -> Array[CheckerSignature] {
   match t {
     Type::Function(func) => {
+      println("DEBUG: get_call_signatures - Function type (no type params)")
       let result : Array[CheckerSignature] = []
       result.push({
         parameters: func.parameters,
@@ -6860,7 +7025,13 @@ fn get_call_signatures(t : Type) -> Array[CheckerSignature] {
       })
       result
     }
-    Type::Object(obj) => obj.call_signatures
+    Type::Object(obj) => {
+      println("DEBUG: get_call_signatures - Object type with \{obj.call_signatures.length()} signatures")
+      for sig in obj.call_signatures {
+        println("DEBUG:   Signature has \{sig.type_parameters.length()} type params")
+      }
+      obj.call_signatures
+    }
     Union(union) => {
       // Collect signatures from union members
       let result : Array[CheckerSignature] = []
@@ -6882,10 +7053,20 @@ fn resolve_call_overload(
   checker : TypeChecker,
   signatures : Array[CheckerSignature],
   arg_types : Array[Type],
+  arg_is_spread : Array[Bool],
+  arg_spread_types : Array[Type?],
+  location : SourceLocation,
 ) -> (Type, TypeChecker)? {
   // Try each signature in order
   for sig in signatures {
-    match try_signature(checker, sig, arg_types) {
+    match try_signature(
+      checker,
+      sig,
+      arg_types,
+      arg_is_spread,
+      arg_spread_types,
+      location,
+    ) {
       Some((return_type, c)) => return Some((return_type, c))
       None => continue
     }
@@ -6899,6 +7080,9 @@ fn try_signature(
   checker : TypeChecker,
   signature : CheckerSignature,
   arg_types : Array[Type],
+  arg_is_spread : Array[Bool],
+  arg_spread_types : Array[Type?],
+  location : SourceLocation,
 ) -> (Type, TypeChecker)? {
   // Check argument count
   let min_params = count_required_params(signature.parameters)
@@ -6916,14 +7100,20 @@ fn try_signature(
     0 {
     // Infer type arguments from actual arguments
     let param_types : Array[Type] = []
+    let param_is_rest : Array[Bool] = []
     for param in signature.parameters {
       param_types.push(param.param_type)
+      param_is_rest.push(param.is_rest)
     }
     let (inferred_type_args, checker) = infer_type_arguments(
       checker,
       signature.type_parameters,
       param_types,
+      param_is_rest,
       arg_types,
+      arg_is_spread,
+      arg_spread_types,
+      location,
     )
     // Check type arguments against constraints (returns false if any constraint violated)
     let (checker, constraints_satisfied) = check_type_arguments_strict(
@@ -7289,8 +7479,13 @@ fn infer_type_arguments(
   checker : TypeChecker,
   type_params : Array[CheckerTypeParameter],
   param_types : Array[Type],
+  param_is_rest : Array[Bool],  // NEW: Which parameters are rest params
   arg_types : Array[Type],
+  arg_is_spread : Array[Bool],  // NEW: Which arguments are spreads
+  arg_spread_types : Array[Type?],  // NEW: Original spread types before element extraction
+  location : SourceLocation,
 ) -> (Array[Type], TypeChecker) {
+  println("DEBUG: infer_type_arguments called with \{type_params.length()} type params, \{arg_types.length()} args")
   // Build inference context - maps type param names to candidate types
   let inferences : Map[String, Array[Type]] = Map::new()
   for param in type_params {
@@ -7298,20 +7493,87 @@ fn infer_type_arguments(
   }
 
   // Collect inferences from argument positions
-  for i = 0; i < param_types.length() && i < arg_types.length(); i = i + 1 {
-    infer_from_types(arg_types[i], param_types[i], inferences)
+  // Handle spread-to-rest-param inference specially
+  for i = 0; i < arg_types.length(); i = i + 1 {
+    println("DEBUG: Processing arg \{i} of \{arg_types.length()}")
+    // Determine which parameter this argument maps to
+    let param_idx = if i < param_types.length() { i } else { param_types.length() - 1 }
+    if param_idx < 0 {
+      println("DEBUG: param_idx < 0, skipping")
+      continue
+    }
+
+    let param_type = param_types[param_idx]
+    let param_is_rest_param = param_is_rest.get(param_idx).or(false)
+    let arg_is_spread_arg = arg_is_spread.get(i).or(false)
+    println("DEBUG: arg[\{i}] type=\{type_to_string(arg_types[i])}, param[\{param_idx}] type=\{type_to_string(param_type)}, rest=\{param_is_rest_param}, spread=\{arg_is_spread_arg}")
+
+    // Special case: spread argument to rest parameter
+    // Example: foo(...arr) where arr: number[] and param is ...s: T[]
+    // Should infer T = number (not T = number[])
+    if arg_is_spread_arg && param_is_rest_param {
+      println("DEBUG: Spread to rest - using spread type")
+      // Use the original spread type (e.g., number[]) instead of extracted element type
+      match arg_spread_types.get(i) {
+        Some(Some(spread_type)) => {
+          println("DEBUG: Inferring from spread type \{type_to_string(spread_type)} to param type \{type_to_string(param_type)}")
+          // Infer from array type to rest parameter's array type
+          // e.g., number[] to T[] should infer T = number
+          infer_from_types(spread_type, param_type, inferences)
+        }
+        _ => {
+          println("DEBUG: No spread type, using extracted arg type")
+          // Fallback to regular inference
+          infer_from_types(arg_types[i], param_type, inferences)
+        }
+      }
+    } else {
+      println("DEBUG: Regular inference from arg type to param type")
+      // Regular inference: use extracted argument type
+      infer_from_types(arg_types[i], param_type, inferences)
+    }
   }
   let mut checker = checker
 
   // Resolve inferences
   let result : Array[Type] = []
   for param in type_params {
+    println("DEBUG: Resolving type param '\{param.name}'")
     match inferences.get(param.name) {
-      Some(candidates) =>
+      Some(candidates) => {
+        println("DEBUG: Found candidates array with \{candidates.length()} items")
         if not(candidates.is_empty()) {
-          // Use first candidate (could use best common type)
+          // DEBUG: Log candidates
+          println("DEBUG: Type param '\{param.name}' has \{candidates.length()} candidates")
+          for i = 0; i < candidates.length(); i = i + 1 {
+            println("  [\{i}]: \{type_to_string(candidates[i])}")
+          }
+          // Check if all candidates are compatible
+          if candidates.length() > 1 {
+            // Check if all candidates are assignable to each other
+            let mut all_compatible = true
+            for i = 1; i < candidates.length(); i = i + 1 {
+              // Check if candidate[i] is assignable to candidate[0]
+              // and vice versa (they should unify)
+              if not(is_assignable(candidates[i], candidates[0])) &&
+                not(is_assignable(candidates[0], candidates[i])) {
+                // Types are incompatible - generate TS2345 error
+                checker = add_diagnostic_with_code(
+                  checker,
+                  "Argument of type '\{type_to_string(candidates[i])}' is not assignable to parameter of type '\{type_to_string(candidates[0])}'.",
+                  location,
+                  TS2345,
+                )
+                println("DEBUG: Added TS2345 diagnostic, total diagnostics: \{checker.diagnostics.length()}")
+                all_compatible = false
+                break  // Report first incompatibility
+              }
+            }
+          }
+          // Use first candidate (could use best common type in the future)
           result.push(candidates[0])
         } else {
+          println("DEBUG: No candidates for '\{param.name}', using default/constraint/any")
           // Use constraint or default
           match param.default_type {
             Some(default_t) => result.push(default_t)
@@ -7326,13 +7588,16 @@ fn infer_type_arguments(
               }
           }
         }
+      }
       None => {
+        println("DEBUG: No inference entry for '\{param.name}'")
         let (t, c) = any_type(checker)
         result.push(t)
         checker = c
       }
     }
   }
+  println("DEBUG: infer_type_arguments returning with \{checker.diagnostics.length()} diagnostics")
   (result, checker)
 }
 
@@ -9364,13 +9629,36 @@ fn infer_new_expression_type(
     _ => checker
   }
 
-  // Check arguments if present
+  // Infer argument types with proper spread handling
   let mut checker = checker
+  let arg_types : Array[Type] = []
+  let arg_is_spread : Array[Bool] = []
+  let arg_spread_types : Array[Type?] = []
   match new_expr.arguments {
     Some(args) =>
       for i = 0; i < args.length(); i = i + 1 {
-        let (_, c) = infer_type(checker, args[i])
-        checker = c
+        match args[i] {
+          SpreadExpression(spread) => {
+            // For spread arguments, extract the element type
+            let (elem_type, c) = extract_spread_element_type(checker, spread.expression)
+            checker = c
+            arg_types.push(elem_type)
+            arg_is_spread.push(true)
+
+            // Create an array type from the element type for type inference
+            let (info, c) = create_type_info(checker)
+            checker = c
+            let array_type = Type::Array({ element_type: elem_type, info })
+            arg_spread_types.push(Some(array_type))
+          }
+          _ => {
+            let (arg_type, c) = infer_type(checker, args[i])
+            arg_types.push(arg_type)
+            arg_is_spread.push(false)
+            arg_spread_types.push(None)
+            checker = c
+          }
+        }
       }
     None => ()
   }
@@ -9450,19 +9738,51 @@ fn infer_new_expression_type(
     checker
   }
 
-  // Return the constructed instance type from the construct signature
-  // For a class constructor, we need to get the return type of the construct signature
-  let result_type = match expr_type {
-    Object(obj_type) =>
-      if obj_type.construct_signatures.length() > 0 {
-        // Return the instance type from the first construct signature
-        obj_type.construct_signatures[0].return_type
-      } else {
-        expr_type
-      }
-    _ => expr_type
+  // Get construct signatures and perform type checking
+  let signatures = match expr_type {
+    Object(obj_type) => obj_type.construct_signatures
+    _ => []
   }
-  (result_type, checker)
+
+  // If there are construct signatures and arguments, perform type checking
+  if signatures.length() > 0 && arg_types.length() > 0 {
+    // Check if any signature has type parameters (generic constructor)
+    let has_type_params = signatures.iter().any(fn(sig) { sig.type_parameters.length() > 0 })
+
+    if has_type_params || signatures.length() > 1 {
+      // Generic or overloaded constructor - use overload resolution for type inference
+      match resolve_call_overload(
+        checker,
+        signatures,
+        arg_types,
+        arg_is_spread,
+        arg_spread_types,
+        get_node_location(NewExpression(new_expr)),
+      ) {
+        Some((return_type, c)) => (return_type, c)
+        None => {
+          // No overload matches - add diagnostic and return error type
+          let checker = add_diagnostic_with_code(
+            checker,
+            "No overload matches this call. Arguments: (\{format_arg_types(arg_types)})",
+            get_node_location(NewExpression(new_expr)),
+            TS2769,
+          )
+          let (err_t, checker) = error_type(checker)
+          (err_t, checker)
+        }
+      }
+    } else {
+      // Single non-generic constructor - return instance type
+      (signatures[0].return_type, checker)
+    }
+  } else if signatures.length() > 0 {
+    // No arguments - return instance type from first signature
+    (signatures[0].return_type, checker)
+  } else {
+    // No construct signatures - return the type itself
+    (expr_type, checker)
+  }
 }
 
 ///|
@@ -19224,7 +19544,18 @@ fn get_type_from_type_node(
     }
     TypeReference(type_ref) =>
       // Look up type reference
-      match type_ref.type_name {
+      // Check type_cache first for type parameters
+      {
+        println("DEBUG: get_type_from_type_node - TypeReference name='\{type_ref.type_name}'")
+        match checker.type_cache.get(type_ref.type_name) {
+          Some(cached_type) => {
+            println("DEBUG: Found '\{type_ref.type_name}' in type_cache")
+            (Some(cached_type), checker)
+          }
+          None => {
+            println("DEBUG: '\{type_ref.type_name}' not in type_cache")
+            // Continue with normal type resolution
+            match type_ref.type_name {
         "number" => {
           let (t, c) = number_type(checker)
           (Some(t), c)
@@ -19355,6 +19686,9 @@ fn get_type_from_type_node(
                 (None, checker)
               }
           }
+            }
+          }
+        }
       }
     ArrayType(array_type) =>
       // Handle array types
@@ -20130,6 +20464,10 @@ fn resolve_interface_type(
   // Get the interface declaration from the symbol
   let result = match interface_symbol.value_declaration {
     Some(InterfaceDeclaration(interface_decl)) => {
+      // Process interface type parameters first so they can be referenced in member types
+      let (interface_type_parameters, c) = process_type_parameters(checker, interface_decl.type_parameters)
+      let mut checker = c
+
       // Build property map from interface members
       let properties : Map[String, PropertySignature] = Map::new()
       let index_signatures : Array[IndexSignature] = []
@@ -20198,7 +20536,8 @@ fn resolve_interface_type(
             let func_sig : CheckerSignature = {
               parameters,
               return_type,
-              type_parameters: [],
+              // Constructors and call signatures inherit the interface's type parameters
+              type_parameters: interface_type_parameters,
             }
             // Check if this is a construct signature (name "new") or call signature (name "")
             if meth.name == "new" {
