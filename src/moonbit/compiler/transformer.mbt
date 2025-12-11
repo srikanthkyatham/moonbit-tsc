@@ -644,6 +644,7 @@ fn transform_class_declaration(
     transformed_members.push(
       Node::PropertyDeclaration(PropertyDeclaration::{
         name,
+        computed_name_expr: None,
         type_annotation: None, // Type is removed in JS output
         initializer: None, // Will be assigned in constructor
         is_optional: false,
@@ -727,6 +728,7 @@ fn transform_class_expression(
     transformed_members.push(
       Node::PropertyDeclaration(PropertyDeclaration::{
         name,
+        computed_name_expr: None,
         type_annotation: None, // Type is removed in JS output
         initializer: None, // Will be assigned in constructor
         is_optional: false,
@@ -2278,6 +2280,7 @@ fn transform_property_declaration(
   let preserve_type = pd.decorators.length() > 0
   PropertyDeclaration({
     name: pd.name,
+    computed_name_expr: pd.computed_name_expr,
     type_annotation: if preserve_type {
       pd.type_annotation
     } else {

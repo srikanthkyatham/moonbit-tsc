@@ -1095,6 +1095,7 @@ pub fn DiagnosticCode::from_int(code : Int) -> DiagnosticCode? {
     1109 => Some(TS1109)
     1155 => Some(TS1155)
     1160 => Some(TS1160)
+    1166 => Some(TS1166)
     1163 => Some(TS1163)
     1182 => Some(TS1182)
     1186 => Some(TS1186)

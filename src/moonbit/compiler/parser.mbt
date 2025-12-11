@@ -3830,6 +3830,7 @@ fn parse_class_member_with_decorators(
                   acc.push(
                     Node::PropertyDeclaration(PropertyDeclaration::{
                       name,
+                      computed_name_expr: None,
                       type_annotation,
                       initializer,
                       is_optional: false,
@@ -3872,6 +3873,7 @@ fn parse_class_member_with_decorators(
               acc.push(
                 Node::PropertyDeclaration(PropertyDeclaration::{
                   name,
+                  computed_name_expr: None,
                   type_annotation,
                   initializer,
                   is_optional: false,
@@ -4062,6 +4064,7 @@ fn parse_class_member_with_decorators(
                   acc.push(
                     Node::PropertyDeclaration(PropertyDeclaration::{
                       name,
+                      computed_name_expr: None,
                       type_annotation,
                       initializer,
                       is_optional: false,
@@ -4104,6 +4107,7 @@ fn parse_class_member_with_decorators(
               acc.push(
                 Node::PropertyDeclaration(PropertyDeclaration::{
                   name,
+                  computed_name_expr: None,
                   type_annotation,
                   initializer,
                   is_optional: false,
@@ -4232,6 +4236,7 @@ fn parse_class_member_with_decorators(
               acc.push(
                 Node::PropertyDeclaration(PropertyDeclaration::{
                   name,
+                  computed_name_expr: None,
                   type_annotation,
                   initializer,
                   is_optional: false,
@@ -4364,6 +4369,7 @@ fn parse_class_member_with_decorators(
               acc.push(
                 Node::PropertyDeclaration(PropertyDeclaration::{
                   name,
+                  computed_name_expr: None,
                   type_annotation,
                   initializer,
                   is_optional: false,
@@ -4948,6 +4954,7 @@ fn parse_class_member_with_decorators(
           acc.push(
             Node::PropertyDeclaration(PropertyDeclaration::{
               name,
+              computed_name_expr: None,
               type_annotation,
               initializer,
               is_optional: false,
@@ -5034,6 +5041,7 @@ fn parse_class_member_with_decorators(
           acc.push(
             Node::PropertyDeclaration(PropertyDeclaration::{
               name,
+              computed_name_expr: None,
               type_annotation,
               initializer,
               is_optional: false,
@@ -5120,6 +5128,7 @@ fn parse_class_member_with_decorators(
           acc.push(
             Node::PropertyDeclaration(PropertyDeclaration::{
               name,
+              computed_name_expr: None,
               type_annotation,
               initializer,
               is_optional: false,
@@ -5206,6 +5215,7 @@ fn parse_class_member_with_decorators(
           acc.push(
             Node::PropertyDeclaration(PropertyDeclaration::{
               name,
+              computed_name_expr: None,
               type_annotation,
               initializer,
               is_optional: false,
@@ -5403,6 +5413,7 @@ fn parse_class_member_with_decorators(
           acc.push(
             Node::PropertyDeclaration(PropertyDeclaration::{
               name,
+              computed_name_expr: None,
               type_annotation,
               initializer,
               is_optional: false,
@@ -5560,6 +5571,7 @@ fn parse_class_member_with_decorators(
               acc.push(
                 Node::PropertyDeclaration(PropertyDeclaration::{
                   name: computed_name,
+                  computed_name_expr: Some(name_expr), // Preserve for TS1166 validation
                   type_annotation,
                   initializer,
                   is_optional: false,
@@ -5656,6 +5668,7 @@ fn parse_class_member_with_decorators(
           acc.push(
             Node::PropertyDeclaration(PropertyDeclaration::{
               name,
+              computed_name_expr: None,
               type_annotation,
               initializer,
               is_optional: false,
@@ -6122,6 +6135,7 @@ fn parse_class_member_with_modifiers(
               acc.push(
                 Node::PropertyDeclaration(PropertyDeclaration::{
                   name: computed_name,
+                  computed_name_expr: None,
                   type_annotation,
                   initializer,
                   is_optional: false,
@@ -6268,6 +6282,7 @@ fn parse_class_member_with_modifiers(
           acc.push(
             Node::PropertyDeclaration(PropertyDeclaration::{
               name,
+              computed_name_expr: None,
               type_annotation,
               initializer,
               is_optional: false,
@@ -6558,6 +6573,7 @@ fn parse_interface_declaration(
                       members.push(
                         Node::PropertyDeclaration(PropertyDeclaration::{
                           name: prop_name,
+                          computed_name_expr: None,
                           type_annotation: Some(prop_type),
                           initializer: None,
                           is_optional,
@@ -6707,6 +6723,7 @@ fn parse_interface_declaration(
                         members.push(
                           Node::PropertyDeclaration(PropertyDeclaration::{
                             name: prop_name,
+                            computed_name_expr: None,
                             type_annotation: Some(prop_type),
                             initializer: None,
                             is_optional,
@@ -6931,6 +6948,7 @@ fn parse_interface_declaration(
                     members.push(
                       Node::PropertyDeclaration(PropertyDeclaration::{
                         name: prop_name,
+                        computed_name_expr: None,
                         type_annotation: Some(prop_type),
                         initializer: None,
                         is_optional,
@@ -7017,6 +7035,7 @@ fn parse_interface_declaration(
                 members.push(
                   Node::PropertyDeclaration(PropertyDeclaration::{
                     name: prop_name,
+                    computed_name_expr: None,
                     type_annotation: Some(
                       Node::TypeReference(TypeReference::{
                         type_name: prop_name,
@@ -7135,6 +7154,7 @@ fn parse_interface_declaration(
                     members.push(
                       Node::PropertyDeclaration(PropertyDeclaration::{
                         name: "...",
+                        computed_name_expr: None,
                         type_annotation: Some(
                           Node::TypeReference(TypeReference::{
                             type_name: name,
@@ -7166,6 +7186,7 @@ fn parse_interface_declaration(
                     members.push(
                       Node::PropertyDeclaration(PropertyDeclaration::{
                         name: "...",
+                        computed_name_expr: None,
                         type_annotation: Some(spread_type),
                         initializer: None,
                         is_optional: false,

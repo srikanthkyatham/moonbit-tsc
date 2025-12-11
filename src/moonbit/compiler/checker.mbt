@@ -5921,6 +5921,33 @@ fn infer_class_declaration_type(
             }
         }
         checker = c
+
+        // TS1166: Validate computed property names in class declarations
+        // A computed property name in a class property declaration must have a simple literal type or a 'unique symbol' type
+        let checker = match prop.computed_name_expr {
+          Some(name_expr) => {
+            // First check if the expression itself is a literal (0, "hello", `template`)
+            // This handles cases where type inference widens literals to general types
+            if is_literal_expression(name_expr) {
+              checker // Literal expressions are always valid
+            } else {
+              // Not a literal expression - check if the inferred type is valid
+              let (name_type, c) = infer_type(checker, name_expr)
+              if not(is_valid_class_property_computed_name_type(name_type)) {
+                add_diagnostic_with_code(
+                  c,
+                  "A computed property name in a class property declaration must have a simple literal type or a 'unique symbol' type.",
+                  prop.location,
+                  TS1166,
+                )
+              } else {
+                c
+              }
+            }
+          }
+          None => checker
+        }
+
         // Check if property has readonly modifier
         let has_readonly = has_modifier(prop.modifiers, Modifier::Readonly)
         let is_static = has_modifier(prop.modifiers, Modifier::Static)
@@ -11662,6 +11689,19 @@ fn is_valid_computed_property_type(t : Type) -> Bool {
     Union(u) =>
       // For unions, all constituent types must be valid
       u.types.iter().all(fn(typ) { is_valid_computed_property_type(typ) })
+    _ => false
+  }
+}
+
+///| Check if an expression is a literal or simple literal expression for TS1166
+///| Valid expressions: number literals, string literals, template literals without substitutions
+fn is_literal_expression(expr : Node) -> Bool {
+  match expr {
+    NumericLiteral(_) | StringLiteral(_) => true
+    TemplateExpression(t) =>
+      // Template literal without substitutions is valid (e.g., `hello`)
+      // Template with substitutions is not (e.g., `hello ${x}`)
+      t.template_spans.is_empty()
     _ => false
   }
 }
@@ -18162,6 +18202,31 @@ fn build_class_type_for_this(
             }
         }
         checker = c
+
+        // TS1166: Validate computed property names in class declarations
+        let checker = match prop.computed_name_expr {
+          Some(name_expr) => {
+            // First check if the expression itself is a literal
+            if is_literal_expression(name_expr) {
+              checker // Literal expressions are always valid
+            } else {
+              // Not a literal expression - check if the inferred type is valid
+              let (name_type, c) = infer_type(checker, name_expr)
+              if not(is_valid_class_property_computed_name_type(name_type)) {
+                add_diagnostic_with_code(
+                  c,
+                  "A computed property name in a class property declaration must have a simple literal type or a 'unique symbol' type.",
+                  prop.location,
+                  TS1166,
+                )
+              } else {
+                c
+              }
+            }
+          }
+          None => checker
+        }
+
         let has_readonly = has_modifier(prop.modifiers, Modifier::Readonly)
         properties.set(prop.name, {
           name: prop.name,

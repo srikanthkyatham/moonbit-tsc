@@ -1136,6 +1136,7 @@ pub struct Parameter {
 /// Class members
 pub struct PropertyDeclaration {
   name : String
+  computed_name_expr : Node? // For TS1166 validation - the expression inside [expr]
   type_annotation : Node?
   initializer : Node?
   is_optional : Bool
