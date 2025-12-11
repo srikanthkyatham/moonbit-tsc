@@ -6976,7 +6976,8 @@ fn check_function_call_args(
         match param.param_type {
           Array(arr_type) => {
             // Rest parameter - check argument against element type
-            if not(is_assignable(arg_types[i], arr_type.element_type)) {
+            let assignable = is_assignable(arg_types[i], arr_type.element_type)
+            if not(assignable) {
               checker = add_diagnostic_with_code(
                 checker,
                 "Argument of type '\{type_to_string(arg_types[i])}' is not assignable to parameter of type '\{type_to_string(arr_type.element_type)}'.",
@@ -7013,7 +7014,8 @@ fn check_function_call_args(
       let rest_param = func.parameters[func.parameters.length() - 1]
       match rest_param.param_type {
         Array(arr_type) => {
-          if not(is_assignable(arg_types[i], arr_type.element_type)) {
+          let assignable = is_assignable(arg_types[i], arr_type.element_type)
+          if not(assignable) {
             checker = add_diagnostic_with_code(
               checker,
               "Argument of type '\{type_to_string(arg_types[i])}' is not assignable to parameter of type '\{type_to_string(arr_type.element_type)}'.",
@@ -7210,7 +7212,8 @@ fn try_signature(
     } else {
       param.param_type
     }
-    if not(is_assignable(arg_types[i], expected_type)) {
+    let assignable = is_assignable(arg_types[i], expected_type)
+    if not(assignable) {
       return None
     }
   }
@@ -20416,6 +20419,10 @@ fn get_type_from_type_node(
       let (info, checker) = create_type_info(checker)
       (Some(Tuple(CheckerTupleType::{ element_types, info })), checker)
     }
+    ParenthesizedType(paren_type) =>
+      // Unwrap parenthesized types: (T) -> T
+      // This handles cases like (number | string)[] where the element type is parenthesized
+      get_type_from_type_node(checker, paren_type.type_node)
     _ => (None, checker)
   }
 }

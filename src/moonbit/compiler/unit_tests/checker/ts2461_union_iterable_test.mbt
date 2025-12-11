@@ -259,7 +259,7 @@ test "TS2461 - Three-way union with one non-iterable" {
 }
 
 ///|
-test "Union with function type - not validated" {
+test "Union with function type - correctly validated" {
   let source =
     #|var union: string | (() => void);
     #|for (var v of union) { }
@@ -267,10 +267,10 @@ test "Union with function type - not validated" {
   let result = check_source(source)
   let diagnostics = get_diagnostics(result)
 
-  // NOTE: Function types are complex and don't trigger our simple Array/String check
-  // Current implementation doesn't catch this as non-iterable
+  // After ParenthesizedType fix, we now correctly detect that function types are not iterable
+  // This matches official TypeScript behavior: TS2461: Type '() => void' is not an array type
   let ts2461_errors = diagnostics.iter().filter(fn(d) { d.code == 2461 }).to_array()
-  assert_eq(ts2461_errors.length(), 0)
+  assert_eq(ts2461_errors.length(), 1)
 }
 
 ///|
