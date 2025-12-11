@@ -6713,18 +6713,44 @@ fn infer_call_expression_type(
   for i = 0; i < call.arguments.length(); i = i + 1 {
     match call.arguments[i] {
       SpreadExpression(spread) => {
-        // For spread arguments, extract the element type
-        let (elem_type, c) = extract_spread_element_type(checker, spread.expression)
+        // Get the original spread type first (for tuple checking)
+        let (spread_type, c) = infer_type(checker, spread.expression)
         checker = c
-        arg_types.push(elem_type)
-        arg_is_spread.push(true)
 
-        // Create an array type from the element type for type inference
-        // This ensures iterators like SymbolIterator are represented as symbol[] for inference
-        let (info, c) = create_type_info(checker)
-        checker = c
-        let array_type = Type::Array({ element_type: elem_type, info })
-        arg_spread_types.push(Some(array_type))
+        // For tuple types, expand into individual elements
+        // For other types, extract the element type
+        match spread_type {
+          Tuple(tuple_type) => {
+            // Expand tuple elements into individual arguments
+            for elem in tuple_type.element_types {
+              arg_types.push(elem.element_type)
+              arg_is_spread.push(true)
+              arg_spread_types.push(Some(spread_type))
+            }
+          }
+          Array(arr_type) => {
+            // Array spread: use element type
+            arg_types.push(arr_type.element_type)
+            arg_is_spread.push(true)
+            arg_spread_types.push(Some(spread_type))
+          }
+          _ => {
+            // Try to extract from iterable
+            let (elem_type_opt, c) = extract_iterable_element_type(
+              checker,
+              spread_type,
+              None,
+            )
+            checker = c
+            let elem_type = match elem_type_opt {
+              Some(et) => et
+              None => spread_type // Can't extract element type, use the spread type itself
+            }
+            arg_types.push(elem_type)
+            arg_is_spread.push(true)
+            arg_spread_types.push(Some(spread_type))
+          }
+        }
       }
       _ => {
         let (arg_type, c) = infer_type(checker, call.arguments[i])
@@ -7165,9 +7191,22 @@ fn try_signature(
       effective_params.length() - 1
     }
     let param = effective_params[param_idx]
-    // For rest parameters, check against the element type of the array
+    // For rest parameters, check against the element type of the array or tuple element
     let expected_type = if param.is_rest {
-      get_array_element_type(param.param_type)
+      // Calculate the index within the rest parameter
+      let rest_idx = i - (effective_params.length() - 1)
+      match param.param_type {
+        Tuple(tuple_type) => {
+          // For tuple rest params, use the corresponding tuple element
+          if rest_idx < tuple_type.element_types.length() {
+            tuple_type.element_types[rest_idx].element_type
+          } else {
+            // Beyond tuple length - shouldn't happen with proper validation
+            param.param_type
+          }
+        }
+        _ => get_array_element_type(param.param_type)
+      }
     } else {
       param.param_type
     }
@@ -7488,6 +7527,7 @@ fn infer_type_arguments(
   location : SourceLocation,
 ) -> (Array[Type], TypeChecker) {
   println("DEBUG: infer_type_arguments called with \{type_params.length()} type params, \{arg_types.length()} args")
+  let mut checker = checker
   // Build inference context - maps type param names to candidate types
   let inferences : Map[String, Array[Type]] = Map::new()
   for param in type_params {
@@ -7521,21 +7561,20 @@ fn infer_type_arguments(
           println("DEBUG: Inferring from spread type \{type_to_string(spread_type)} to param type \{type_to_string(param_type)}")
           // Infer from array type to rest parameter's array type
           // e.g., number[] to T[] should infer T = number
-          infer_from_types(spread_type, param_type, inferences)
+          checker = infer_from_types(checker, spread_type, param_type, inferences)
         }
         _ => {
           println("DEBUG: No spread type, using extracted arg type")
           // Fallback to regular inference
-          infer_from_types(arg_types[i], param_type, inferences)
+          checker = infer_from_types(checker, arg_types[i], param_type, inferences)
         }
       }
     } else {
       println("DEBUG: Regular inference from arg type to param type")
       // Regular inference: use extracted argument type
-      infer_from_types(arg_types[i], param_type, inferences)
+      checker = infer_from_types(checker, arg_types[i], param_type, inferences)
     }
   }
-  let mut checker = checker
 
   // Resolve inferences
   let result : Array[Type] = []
@@ -7550,9 +7589,34 @@ fn infer_type_arguments(
           for i = 0; i < candidates.length(); i = i + 1 {
             println("  [\{i}]: \{type_to_string(candidates[i])}")
           }
-          // Check if all candidates are compatible
-          if candidates.length() > 1 {
-            // Check if all candidates are assignable to each other
+          // Check if type parameter has array constraint (like T extends any[])
+          // If so, and we have multiple candidates, create a tuple type
+          let should_create_tuple = match param.constraint {
+            Some(Array(_)) => candidates.length() > 1
+            _ => false
+          }
+
+          if should_create_tuple {
+            // Create tuple type from all candidates
+            println("DEBUG: Creating tuple type from \{candidates.length()} candidates")
+            let tuple_elements : Array[TupleElement] = []
+            for candidate in candidates {
+              tuple_elements.push(TupleElement::{
+                element_type: candidate,
+                is_optional: false,
+                is_rest: false,
+                label: None,
+              })
+            }
+            let (info, c) = create_type_info(checker)
+            checker = c
+            let tuple_type = Type::Tuple(CheckerTupleType::{
+              element_types: tuple_elements,
+              info,
+            })
+            result.push(tuple_type)
+          } else if candidates.length() > 1 {
+            // Check if all candidates are compatible
             let mut all_compatible = true
             for i = 1; i < candidates.length(); i = i + 1 {
               // Check if candidate[i] is assignable to candidate[0]
@@ -7571,9 +7635,12 @@ fn infer_type_arguments(
                 break  // Report first incompatibility
               }
             }
+            // Use first candidate (could use best common type in the future)
+            result.push(candidates[0])
+          } else {
+            // Single candidate
+            result.push(candidates[0])
           }
-          // Use first candidate (could use best common type in the future)
-          result.push(candidates[0])
         } else {
           println("DEBUG: No candidates for '\{param.name}', using default/constraint/any")
           // Use constraint or default
@@ -7606,10 +7673,12 @@ fn infer_type_arguments(
 ///|
 /// Infer type parameter from source to target type
 fn infer_from_types(
+  checker : TypeChecker,
   source : Type,
   target : Type,
   inferences : Map[String, Array[Type]],
-) -> Unit {
+) -> TypeChecker {
+  let mut checker = checker
   match target {
     TypeReference(type_ref) =>
       // Check if target is a type parameter we're inferring
@@ -7623,7 +7692,8 @@ fn infer_from_types(
                   i < type_ref.type_arguments.length() &&
                  i < source_ref.type_arguments.length()
                   i = i + 1 {
-                infer_from_types(
+                checker = infer_from_types(
+                  checker,
                   source_ref.type_arguments[i],
                   type_ref.type_arguments[i],
                   inferences,
@@ -7635,18 +7705,29 @@ fn infer_from_types(
     Type::Array(arr) =>
       match source {
         Type::Array(source_arr) =>
-          infer_from_types(
+          checker = infer_from_types(
+            checker,
             source_arr.element_type,
             arr.element_type,
             inferences,
           )
-        _ => ()
+        _ => {
+          // Try to extract element type from iterable source
+          let (elem_type_opt, c) = extract_iterable_element_type(checker, source, None)
+          checker = c
+          match elem_type_opt {
+            Some(elem_type) =>
+              checker = infer_from_types(checker, elem_type, arr.element_type, inferences)
+            None => ()
+          }
+        }
       }
     Type::Function(func) =>
       match source {
         Type::Function(source_func) => {
           // Infer from return type
-          infer_from_types(
+          checker = infer_from_types(
+            checker,
             source_func.return_type,
             func.return_type,
             inferences,
@@ -7656,7 +7737,8 @@ fn infer_from_types(
               i < func.parameters.length() &&
              i < source_func.parameters.length()
               i = i + 1 {
-            infer_from_types(
+            checker = infer_from_types(
+              checker,
               func.parameters[i].param_type,
               source_func.parameters[i].param_type,
               inferences,
@@ -7667,6 +7749,7 @@ fn infer_from_types(
       }
     _ => ()
   }
+  checker
 }
 
 // ============================================================================
@@ -12154,6 +12237,24 @@ fn infer_conditional_type(
 
 ///|
 /// Check if source type is assignable to target type
+///|
+/// Check if an object type only requires a length property (for string/array assignability)
+fn has_only_length_property(obj : ObjectType) -> Bool {
+  // Check if object has exactly one property named "length" of type number
+  if obj.properties.length() == 1 {
+    match obj.properties.get("length") {
+      Some(prop) =>
+        match prop.prop_type {
+          Number(_) => true
+          _ => false
+        }
+      None => false
+    }
+  } else {
+    false
+  }
+}
+
 fn is_assignable(source : Type, target : Type) -> Bool {
   match (source, target) {
     // Any type is assignable to/from anything
@@ -12215,6 +12316,9 @@ fn is_assignable(source : Type, target : Type) -> Bool {
     // Array types
     (Array(source_arr), Array(target_arr)) =>
       is_assignable(source_arr.element_type, target_arr.element_type)
+    // String/Array primitives to Object - check if object only requires length property
+    (String(_), Object(target_obj)) => has_only_length_property(target_obj)
+    (Array(_), Object(target_obj)) => has_only_length_property(target_obj)
     // Object types - structural typing
     (Object(source_obj), Object(target_obj)) =>
       is_object_assignable(source_obj, target_obj)
@@ -12245,6 +12349,19 @@ fn is_assignable(source : Type, target : Type) -> Bool {
     // Array is assignable to tuple if length matches and elements are compatible
     (Array(source_arr), Tuple(target_tuple)) =>
       is_array_assignable_to_tuple(source_arr, target_tuple)
+    // String literal assignable to keyof T if it's a key of T
+    (StringLiteral(key, _), IndexAccess(ia)) =>
+      if ia.is_keyof {
+        // Check if the string literal is a property of the object type
+        match ia.object_type {
+          Object(obj) => obj.properties.contains(key)
+          _ => false
+        }
+      } else {
+        false
+      }
+    // String type assignable to keyof T (any key is possible)
+    (String(_), IndexAccess(ia)) => ia.is_keyof
     // Index access types - need resolution
     (IndexAccess(ia1), IndexAccess(ia2)) =>
       is_assignable(ia1.object_type, ia2.object_type) &&

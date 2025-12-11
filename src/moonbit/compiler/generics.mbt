@@ -749,6 +749,18 @@ fn is_subtype_of_with_ctx(
         result
       }
 
+    // Tuple to array - all tuple elements must be subtypes of array element type
+    (TTuple(src_elems), TArray(tgt_elem)) => {
+      let mut result = true
+      for src_elem in src_elems {
+        if not(is_subtype_of_with_ctx(src_elem.ty, tgt_elem, ctx)) {
+          result = false
+          break
+        }
+      }
+      result
+    }
+
     // Default - not a subtype
     _ => false
   }
@@ -1246,6 +1258,23 @@ fn try_match_overload(
               suggestions: [],
             })
           }
+        TTuple(tuple_elems) => {
+          // For tuple rest parameters, validate against corresponding element
+          let rest_idx = i - instantiated.params.length()
+          if rest_idx < tuple_elems.length() {
+            let elem = tuple_elems[rest_idx]
+            if not(is_assignable_to(arg_ty, elem.ty)) {
+              errors.push(TypeMismatchError::{
+                path: PParameter(PRoot, i, rest.name),
+                expected: elem.ty,
+                actual: arg_ty,
+                reason: ParamTypeMismatch(i, rest.name),
+                children: [],
+                suggestions: [],
+              })
+            }
+          }
+        }
         _ => ()
       }
     }
