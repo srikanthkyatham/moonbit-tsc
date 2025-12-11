@@ -765,6 +765,7 @@ fn add_var_to_function_scope(
   name : String,
   var_type : Type,
   location : SourceLocation,
+  has_initializer : Bool,
 ) -> TypeChecker {
   let scopes = checker.local_scopes
   if scopes.length() > 0 {
@@ -778,8 +779,10 @@ fn add_var_to_function_scope(
     }
 
     // Check TS2403: if var already exists in function scope, types must match
+    // BUT: TypeScript allows a redeclaration without initializer as a type annotation
+    // Example: var b = value; var b: Type;  <-- second is just type annotation, allowed
     let mut checker = checker
-    if function_scope_index >= 0 {
+    if function_scope_index >= 0 && has_initializer {
       match scopes[function_scope_index].function_vars.get(name) {
         Some(existing_type) => {
           // Check if types are equal
@@ -3769,12 +3772,19 @@ fn check_variable_declaration(
   // Use add_local_const_variable for const declarations to track const-ness
   // Use add_var_to_function_scope for var declarations (var hoisting)
   // Use add_local_variable for let declarations (block-scoped)
+  let has_initializer = decl.initializer is Some(_)
   let checker = match decl.name {
     Identifier(id) =>
       if is_const {
         add_local_const_variable(checker, id.name, var_type)
       } else if is_var {
-        add_var_to_function_scope(checker, id.name, var_type, decl.location)
+        add_var_to_function_scope(
+          checker,
+          id.name,
+          var_type,
+          decl.location,
+          has_initializer,
+        )
       } else {
         add_local_variable(checker, id.name, var_type)
       }
@@ -15408,7 +15418,14 @@ fn add_for_of_variable_to_scope(
               add_local_const_variable(checker, id.name, elem_type)
             } else {
               // var declaration in for-of - hoist to function scope
-              add_var_to_function_scope(checker, id.name, elem_type, decl.location)
+              // for-of always has an implicit initializer (the iterator value)
+              add_var_to_function_scope(
+                checker,
+                id.name,
+                elem_type,
+                decl.location,
+                true,
+              )
             }
             checker
           }
