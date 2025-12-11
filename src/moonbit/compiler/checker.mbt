@@ -11559,9 +11559,24 @@ fn infer_object_literal_type(
         match spread_type {
           Object(obj_type) => {
             // Merge properties from spread object
+            // For class instances, only spread instance properties (not methods)
+            let is_class_instance = match obj_type.class_name {
+              Some(_) => true
+              None => false
+            }
+
             for entry in obj_type.properties {
               let (prop_name, prop_info) = entry
-              properties.set(prop_name, prop_info)
+              // Skip methods when spreading class instances
+              let is_method = match prop_info.prop_type {
+                Function(_) => true
+                _ => false
+              }
+              let should_skip = is_class_instance && is_method
+
+              if not(should_skip) {
+                properties.set(prop_name, prop_info)
+              }
             }
             // Add to spread_types for intersection
             spread_types.push(spread_type)
@@ -11598,15 +11613,42 @@ fn infer_object_literal_type(
             // Try to resolve the type reference first
             let mut is_type_param = false
             match lookup_symbol(checker, type_ref.name) {
-              Some(symbol) =>
-                match get_symbol_type(checker, symbol) {
-                  (Some(resolved_type), _) =>
+              Some(symbol) => {
+                let result = get_symbol_type(checker, symbol)
+                match result {
+                  (Some(resolved_type), _) => {
                     match resolved_type {
-                      Object(obj_type) =>
-                        for entry in obj_type.properties {
-                          let (prop_name, prop_info) = entry
-                          properties.set(prop_name, prop_info)
+                      Object(obj_type) => {
+                        // If this is a class constructor (has construct signatures), extract instance type
+                        let actual_obj_type = if obj_type.construct_signatures.length() > 0 {
+                          match obj_type.construct_signatures[0].return_type {
+                            Object(instance_obj) => instance_obj
+                            _ => obj_type
+                          }
+                        } else {
+                          obj_type
                         }
+
+                        // For class instances, only spread instance properties (not methods)
+                        let is_class_instance = match actual_obj_type.class_name {
+                          Some(_) => true
+                          None => false
+                        }
+
+                        for entry in actual_obj_type.properties {
+                          let (prop_name, prop_info) = entry
+                          // Skip methods when spreading class instances
+                          let is_method = match prop_info.prop_type {
+                            Function(_) => true
+                            _ => false
+                          }
+                          let should_skip = is_class_instance && is_method
+
+                          if not(should_skip) {
+                            properties.set(prop_name, prop_info)
+                          }
+                        }
+                      }
                       _ =>
                         // Resolved to non-object type
                         checker = add_diagnostic_with_code(
@@ -11616,12 +11658,14 @@ fn infer_object_literal_type(
                           TS2762,
                         )
                     }
+                  }
                   (None, _) => {
                     // Could not resolve - might be a type parameter
                     // Type parameters are allowed in spread (they might be constrained to objects)
                     is_type_param = true
                   }
                 }
+              }
               None => {
                 // Could not find symbol - might be a type parameter
                 is_type_param = true
