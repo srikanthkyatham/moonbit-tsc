@@ -6358,16 +6358,18 @@ fn infer_binary_expression_type(
     }
     // in operator: any in any -> boolean
     In => boolean_type(checker)
-    // Logical operators: boolean op boolean -> boolean
+    // Logical operators: a && b -> Union(a, b) or a || b -> Union(a, b)
+    // In TypeScript, a && b returns b if a is truthy, otherwise a
+    // Similarly, a || b returns a if a is truthy, otherwise b
     LogicalAnd | LogicalOr => {
-      let checker = check_boolean_operands(
-        checker,
-        left_type,
-        right_type,
-        bin_expr.operator,
-        get_node_location(BinaryExpression(bin_expr)),
-      )
-      boolean_type(checker)
+      // Create a union type of left and right types
+      // This allows conditional spreads like `condition && { prop }` to work
+      let (info, checker) = create_type_info(checker)
+      let union_type = Type::Union(CheckerUnionType::{
+        types: [left_type, right_type],
+        info,
+      })
+      (union_type, checker)
     }
     // Assignment operators: return the type of the right-hand side
     Assign
@@ -11477,6 +11479,7 @@ fn infer_object_literal_type(
 ) -> (Type, TypeChecker) {
   let mut checker = checker
   let properties = Map::new()
+  let spread_types : Array[Type] = [] // Track types being spread (for intersection)
   for i = 0; i < obj.properties.length(); i = i + 1 {
     match obj.properties[i] {
       PropertyAssignment(name, value, _) => {
@@ -11554,24 +11557,81 @@ fn infer_object_literal_type(
         checker = c
         // Check if spread type is an object type
         match spread_type {
-          Object(obj_type) =>
+          Object(obj_type) => {
             // Merge properties from spread object
             for entry in obj_type.properties {
               let (prop_name, prop_info) = entry
               properties.set(prop_name, prop_info)
             }
-          Any(_) | Unknown(_) => () // Allow spreading any/unknown
-          Intersection(_) => () // Allow spreading intersections (may contain objects)
-          Union(_) => () // Allow spreading unions (may contain objects)
-          TypeReference(_) =>
-            // TS2762: Spread types may only be created from object types
-            // Type parameter T might not be an object type
-            checker = add_diagnostic_with_code(
-              checker,
-              "Spread types may only be created from object types",
-              loc,
-              TS2762,
-            )
+            // Add to spread_types for intersection
+            spread_types.push(spread_type)
+          }
+          Any(_) | Unknown(_) => {
+            // Allow spreading any/unknown
+            spread_types.push(spread_type)
+          }
+          Intersection(_) => {
+            // Allow spreading intersections (may contain objects)
+            spread_types.push(spread_type)
+          }
+          Union(union_type) => {
+            // Union types (e.g., from `condition && obj`) - extract object types
+            // Properties from union spreads become optional
+            for type_option in union_type.types {
+              match type_option {
+                Object(obj_type) =>
+                  for entry in obj_type.properties {
+                    let (prop_name, prop_info) = entry
+                    // Make properties optional since they may not exist at runtime
+                    properties.set(prop_name, { ..prop_info, is_optional: true })
+                  }
+                _ => () // Skip non-object types in union
+              }
+            }
+            spread_types.push(spread_type)
+          }
+          Function(_) => {
+            // Functions spread to empty object (no properties)
+            spread_types.push(spread_type)
+          }
+          TypeReference(type_ref) => {
+            // Try to resolve the type reference first
+            let mut is_type_param = false
+            match lookup_symbol(checker, type_ref.name) {
+              Some(symbol) =>
+                match get_symbol_type(checker, symbol) {
+                  (Some(resolved_type), _) =>
+                    match resolved_type {
+                      Object(obj_type) =>
+                        for entry in obj_type.properties {
+                          let (prop_name, prop_info) = entry
+                          properties.set(prop_name, prop_info)
+                        }
+                      _ =>
+                        // Resolved to non-object type
+                        checker = add_diagnostic_with_code(
+                          checker,
+                          "Spread types may only be created from object types",
+                          loc,
+                          TS2762,
+                        )
+                    }
+                  (None, _) => {
+                    // Could not resolve - might be a type parameter
+                    // Type parameters are allowed in spread (they might be constrained to objects)
+                    is_type_param = true
+                  }
+                }
+              None => {
+                // Could not find symbol - might be a type parameter
+                is_type_param = true
+              }
+            }
+            // Add TypeReference to spread_types (for intersection with type parameters)
+            if is_type_param {
+              spread_types.push(spread_type)
+            }
+          }
           _ =>
             // TS2762: Spread types may only be created from object types
             checker = add_diagnostic_with_code(
@@ -11744,17 +11804,80 @@ fn infer_object_literal_type(
     }
   }
   let (info, checker) = create_type_info(checker)
-  (
-    Object({
-      properties,
-      call_signatures: [],
-      construct_signatures: [],
-      index_signatures: [],
-      info,
-      class_name: None,
-    }),
-    checker,
-  )
+
+  // If there are spread types, check if we can merge them or need an intersection
+  if spread_types.length() > 0 {
+    // Check if all spread types are concrete Object types (can be merged)
+    // or if there are type parameters (need intersection)
+    let mut has_type_param = false
+    for spread_type in spread_types {
+      match spread_type {
+        TypeReference(_) => has_type_param = true
+        _ => ()
+      }
+    }
+
+    if has_type_param {
+      // Has type parameters - create intersection type
+      // First add all spread types
+      let all_types : Array[Type] = []
+      for spread_type in spread_types {
+        all_types.push(spread_type)
+      }
+
+      // Then add literal properties if any
+      let checker = if properties.length() > 0 {
+        let (obj_info, c) = create_type_info(checker)
+        let obj = Type::Object({
+          properties,
+          call_signatures: [],
+          construct_signatures: [],
+          index_signatures: [],
+          info: obj_info,
+          class_name: None,
+        })
+        all_types.push(obj)
+        c
+      } else {
+        checker
+      }
+
+      // Return intersection type
+      if all_types.length() == 1 {
+        (all_types[0], checker)
+      } else {
+        (Type::Intersection({ types: all_types, info }), checker)
+      }
+    } else {
+      // All concrete types - merge properties into single object
+      // Properties from spreads were already added to `properties` map
+      // during SpreadAssignment handling, so just return the object
+      (
+        Type::Object({
+          properties,
+          call_signatures: [],
+          construct_signatures: [],
+          index_signatures: [],
+          info,
+          class_name: None,
+        }),
+        checker,
+      )
+    }
+  } else {
+    // No spreads, return regular object type
+    (
+      Type::Object({
+        properties,
+        call_signatures: [],
+        construct_signatures: [],
+        index_signatures: [],
+        info,
+        class_name: None,
+      }),
+      checker,
+    )
+  }
 }
 
 ///|
@@ -12288,13 +12411,58 @@ fn is_intersection_assignable_to(
   intersection : CheckerIntersectionType,
   target : Type,
 ) -> Bool {
-  // At least one member must be assignable to target
-  for i = 0; i < intersection.types.length(); i = i + 1 {
-    if is_assignable(intersection.types[i], target) {
-      return true
+  // For intersection types, merge all object types to check assignability
+  // An intersection A & B represents a type with properties from both A and B
+
+  // If target is an object type, check if intersection has all required properties
+  match target {
+    Object(target_obj) => {
+      // Collect all properties from intersection members
+      let merged_props = Map::new()
+      for member_type in intersection.types {
+        match member_type {
+          Object(obj_type) =>
+            for entry in obj_type.properties {
+              let (prop_name, prop_info) = entry
+              // Later properties override earlier ones (right-to-left precedence)
+              merged_props.set(prop_name, prop_info)
+            }
+          TypeReference(_) =>
+            // Type parameters might have properties we don't know about
+            // For now, assume they're compatible (this is optimistic)
+            ()
+          _ => ()
+        }
+      }
+
+      // Check if all required target properties exist in merged properties
+      for entry in target_obj.properties {
+        let (target_prop_name, target_prop_info) = entry
+        match merged_props.get(target_prop_name) {
+          Some(source_prop_info) =>
+            // Check if property types are assignable
+            if not(is_assignable(source_prop_info.prop_type, target_prop_info.prop_type)) {
+              return false
+            }
+          None =>
+            // Missing required property
+            if not(target_prop_info.is_optional) {
+              return false
+            }
+        }
+      }
+      true
+    }
+    _ => {
+      // For non-object targets, check if at least one member is assignable
+      for member_type in intersection.types {
+        if is_assignable(member_type, target) {
+          return true
+        }
+      }
+      false
     }
   }
-  false
 }
 
 ///|
