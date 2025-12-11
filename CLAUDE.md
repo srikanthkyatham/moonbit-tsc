@@ -2,3 +2,4 @@
 
 - use moon build --target native
 - always write unit tests for the changes
+- Follow DRY principle where possible  dont duplicate code, use function to gather the common code where possible

@@ -11655,10 +11655,10 @@ fn infer_array_literal_type(
 }
 
 ///| Check if a type is valid for computed property names (TS2464)
-///| Valid types: string, number, symbol, any
+///| Valid types: string, number, symbol, any, template literals
 fn is_valid_computed_property_type(t : Type) -> Bool {
   match t {
-    String(_) | Number(_) | Symbol(_) | Any(_) => true
+    String(_) | Number(_) | Symbol(_) | Any(_) | TemplateLiteral(_) => true
     Union(u) =>
       // For unions, all constituent types must be valid
       u.types.iter().all(fn(typ) { is_valid_computed_property_type(typ) })

@@ -1120,6 +1120,31 @@ fn extract_exported_functions(statements : Array[Node]) -> Map[String, Int] {
           }
         }
       }
+
+      // declare module "foo" { function bar(...) } - ambient module with exports
+      ModuleDeclaration(mod_decl) =>
+        if mod_decl.is_ambient {
+          // For ambient modules (declare module "foo"), all functions are implicitly exported
+          match mod_decl.body {
+            Some(BlockStatement(block)) => {
+              // Recursively extract functions from module body
+              for inner_stmt in block.statements {
+                match inner_stmt {
+                  FunctionDeclaration(func) =>
+                    match func.name {
+                      Some(Identifier(id)) => {
+                        exports.set(id.name, func.parameters.length())
+                      }
+                      _ => ()
+                    }
+                  _ => ()
+                }
+              }
+            }
+            _ => ()
+          }
+        }
+
       _ => ()
     }
   }

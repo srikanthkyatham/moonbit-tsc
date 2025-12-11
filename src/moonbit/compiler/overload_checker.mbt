@@ -74,8 +74,10 @@ pub fn FunctionOverloads::set_implementation(
 ///|
 /// Collect function overloads from a list of statements
 /// Groups consecutive function declarations with the same name
+/// is_ambient_file: true if processing a .d.ts file (all functions without bodies are ambient)
 pub fn collect_overloads(
   statements : Array[Node],
+  is_ambient_file : Bool,
 ) -> Map[String, FunctionOverloads] {
   let overloads : Map[String, FunctionOverloads] = Map::new()
   for stmt in statements {
@@ -92,7 +94,7 @@ pub fn collect_overloads(
             match func.body {
               None => {
                 // This is an overload signature
-                let sig = extract_overload_signature(func)
+                let sig = extract_overload_signature(func, is_ambient_file)
                 let _ = existing.add_signature(sig)
                 overloads.set(name, existing)
               }
@@ -105,6 +107,44 @@ pub fn collect_overloads(
           }
           _ => ()
         }
+
+      // Handle module declarations - if ambient, functions inside are also ambient
+      ModuleDeclaration(mod_decl) =>
+        match mod_decl.body {
+          Some(BlockStatement(block)) => {
+            // If this is an ambient module (declare module "foo"), functions inside are ambient
+            let module_is_ambient = is_ambient_file || mod_decl.is_ambient
+            let module_overloads = collect_overloads(
+              block.statements,
+              module_is_ambient,
+            )
+            // Merge module overloads into main overloads map
+            module_overloads.each(fn(name, module_func_overloads) {
+              match overloads.get(name) {
+                Some(existing) => {
+                  // Merge signatures and implementation
+                  for sig in module_func_overloads.signatures {
+                    let _ = existing.add_signature(sig)
+                  }
+                  match module_func_overloads.implementation {
+                    Some(impl_) =>
+                      match module_func_overloads.implementation_location {
+                        Some(loc) => {
+                          let updated = existing.set_implementation(impl_, loc)
+                          overloads.set(name, updated)
+                        }
+                        None => ()
+                      }
+                    None => overloads.set(name, existing)
+                  }
+                }
+                None => overloads.set(name, module_func_overloads)
+              }
+            })
+          }
+          _ => ()
+        }
+
       _ => ()
     }
   }
@@ -113,7 +153,11 @@ pub fn collect_overloads(
 
 ///|
 /// Extract overload signature from function declaration
-fn extract_overload_signature(func : FunctionDeclaration) -> OverloadSignature {
+/// is_ambient_file: true if processing a .d.ts file (all functions without bodies are ambient)
+fn extract_overload_signature(
+  func : FunctionDeclaration,
+  is_ambient_file : Bool,
+) -> OverloadSignature {
   let parameters : Array[OverloadParameter] = []
   for param_node in func.parameters {
     match param_node {
@@ -127,7 +171,10 @@ fn extract_overload_signature(func : FunctionDeclaration) -> OverloadSignature {
       _ => ()
     }
   }
-  let is_ambient = overload_has_declare_modifier(func.modifiers)
+  // Function is ambient if:
+  // 1. It has a 'declare' modifier, OR
+  // 2. We're in a .d.ts file (is_ambient_file = true)
+  let is_ambient = overload_has_declare_modifier(func.modifiers) || is_ambient_file
   {
     parameters,
     return_type: func.return_type,
@@ -742,7 +789,9 @@ pub fn check_statement_overloads(
   statements : Array[Node],
   checker : TypeChecker,
 ) -> TypeChecker {
-  let overloads_map = collect_overloads(statements)
+  // Check if this is a .d.ts file - functions without bodies are ambient in .d.ts
+  let is_ambient_file = checker.file_path.ends_with(".d.ts")
+  let overloads_map = collect_overloads(statements, is_ambient_file)
   let checker = checker
   overloads_map.each(fn(_name, overloads) {
     let result = validate_overloads(overloads)
