@@ -2307,6 +2307,7 @@ fn transform_method_declaration(
   let preserve_types = md.decorators.length() > 0
   MethodDeclaration({
     name: md.name,
+    computed_name_expr: md.computed_name_expr,
     type_parameters: [], // Remove type parameters
     parameters: if preserve_types {
       transform_parameters_preserve_types(md.parameters, ctx)
@@ -2377,6 +2378,7 @@ fn transform_get_accessor(ga : GetAccessor, ctx : TransformerContext) -> Node {
   let preserve_type = ga.decorators.length() > 0
   GetAccessor({
     name: ga.name,
+    computed_name_expr: ga.computed_name_expr,
     return_type: if preserve_type {
       ga.return_type
     } else {
@@ -2422,6 +2424,7 @@ fn transform_set_accessor(sa : SetAccessor, ctx : TransformerContext) -> Node {
   }
   SetAccessor({
     name: sa.name,
+    computed_name_expr: sa.computed_name_expr,
     parameter: transformed_param,
     body: match sa.body {
       Some(b) => Some(transform(b, ctx))

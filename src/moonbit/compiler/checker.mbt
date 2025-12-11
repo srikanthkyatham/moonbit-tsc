@@ -5966,6 +5966,27 @@ fn infer_class_declaration_type(
       MethodDeclaration(method_decl) => {
         let (method_type, c) = infer_method_type(checker, method_decl)
         checker = c
+
+        // TS2464: Validate computed property names in class method declarations
+        // A computed property name must be of type 'string', 'number', 'symbol', or 'any'
+        checker = match method_decl.computed_name_expr {
+          Some(name_expr) => {
+            let (name_type, c) = infer_type(checker, name_expr)
+            let c = if not(is_valid_computed_property_type(name_type)) {
+              add_diagnostic_with_code(
+                c,
+                "A computed property name must be of type 'string', 'number', 'symbol', or 'any'.",
+                method_decl.location,
+                TS2464,
+              )
+            } else {
+              c
+            }
+            c
+          }
+          None => checker
+        }
+
         let is_static = has_modifier(method_decl.modifiers, Modifier::Static)
         // The method name might be "__@iterator" for Symbol.iterator
         let prop_sig = PropertySignature::{
@@ -5978,6 +5999,92 @@ fn infer_class_declaration_type(
           static_properties.set(method_decl.name, prop_sig)
         } else {
           instance_properties.set(method_decl.name, prop_sig)
+        }
+      }
+      GetAccessor(getter) => {
+        // TS2464: Validate computed property names in class getter declarations
+        checker = match getter.computed_name_expr {
+          Some(name_expr) => {
+            let (name_type, c) = infer_type(checker, name_expr)
+            let c = if not(is_valid_computed_property_type(name_type)) {
+              add_diagnostic_with_code(
+                c,
+                "A computed property name must be of type 'string', 'number', 'symbol', or 'any'.",
+                getter.location,
+                TS2464,
+              )
+            } else {
+              c
+            }
+            c
+          }
+          None => checker
+        }
+
+        // Infer getter return type
+        let (getter_return_type, checker) = match getter.return_type {
+          Some(_) => resolve_type_annotation_or_any(checker, getter.return_type)
+          None => any_type(checker)
+        }
+
+        let is_static = has_modifier(getter.modifiers, Modifier::Static)
+        let prop_sig = PropertySignature::{
+          name: getter.name,
+          prop_type: getter_return_type,
+          is_optional: false,
+          is_readonly: true, // Getters are read-only unless there's also a setter
+        }
+        if is_static {
+          static_properties.set(getter.name, prop_sig)
+        } else {
+          instance_properties.set(getter.name, prop_sig)
+        }
+      }
+      SetAccessor(setter) => {
+        // TS2464: Validate computed property names in class setter declarations
+        checker = match setter.computed_name_expr {
+          Some(name_expr) => {
+            let (name_type, c) = infer_type(checker, name_expr)
+            let c = if not(is_valid_computed_property_type(name_type)) {
+              add_diagnostic_with_code(
+                c,
+                "A computed property name must be of type 'string', 'number', 'symbol', or 'any'.",
+                setter.location,
+                TS2464,
+              )
+            } else {
+              c
+            }
+            c
+          }
+          None => checker
+        }
+
+        // Infer setter parameter type
+        let (setter_param_type, checker) = match setter.parameter {
+          Parameter(p) => resolve_type_annotation_or_any(checker, p.type_annotation)
+          _ => any_type(checker)
+        }
+
+        let is_static = has_modifier(setter.modifiers, Modifier::Static)
+        // Check if property already exists (from a getter)
+        let prop_map = if is_static { static_properties } else { instance_properties }
+        match prop_map.get(setter.name) {
+          Some(_) => () // Setter adds to existing getter, keep the getter's type and readonly status
+          None => {
+            // No getter, create new property signature
+            let prop_sig = PropertySignature::{
+              name: setter.name,
+              prop_type: setter_param_type,
+              is_optional: false,
+              is_readonly: false,
+            }
+            if is_static {
+              static_properties.set(setter.name, prop_sig)
+            } else {
+              instance_properties.set(setter.name, prop_sig)
+            }
+          }
         }
       }
       _ => ()
@@ -18238,12 +18345,77 @@ fn build_class_type_for_this(
       MethodDeclaration(method_decl) => {
         let (method_type, c) = infer_method_type(checker, method_decl)
         checker = c
+
+        // TS2464: Validate computed property names in class method declarations
+        // A computed property name must be of type 'string', 'number', 'symbol', or 'any'
+        checker = match method_decl.computed_name_expr {
+          Some(name_expr) => {
+            let (name_type, c) = infer_type(checker, name_expr)
+            let c = if not(is_valid_computed_property_type(name_type)) {
+              add_diagnostic_with_code(
+                c,
+                "A computed property name must be of type 'string', 'number', 'symbol', or 'any'.",
+                method_decl.location,
+                TS2464,
+              )
+            } else {
+              c
+            }
+            c
+          }
+          None => checker
+        }
+
         properties.set(method_decl.name, {
           name: method_decl.name,
           prop_type: method_type,
           is_optional: false,
           is_readonly: false,
         })
+      }
+      GetAccessor(getter) => {
+        // TS2464: Validate computed property names in class getter declarations
+        checker = match getter.computed_name_expr {
+          Some(name_expr) => {
+            let (name_type, c) = infer_type(checker, name_expr)
+            let c = if not(is_valid_computed_property_type(name_type)) {
+              add_diagnostic_with_code(
+                c,
+                "A computed property name must be of type 'string', 'number', 'symbol', or 'any'.",
+                getter.location,
+                TS2464,
+              )
+            } else {
+              c
+            }
+            c
+          }
+          None => checker
+        }
+        // Note: Getter/setter types are not added to the simple class_type built here
+        // They are only used for 'this' context, and getters/setters don't affect that
+      }
+      SetAccessor(setter) => {
+        // TS2464: Validate computed property names in class setter declarations
+        checker = match setter.computed_name_expr {
+          Some(name_expr) => {
+            let (name_type, c) = infer_type(checker, name_expr)
+            let c = if not(is_valid_computed_property_type(name_type)) {
+              add_diagnostic_with_code(
+                c,
+                "A computed property name must be of type 'string', 'number', 'symbol', or 'any'.",
+                setter.location,
+                TS2464,
+              )
+            } else {
+              c
+            }
+            c
+          }
+          None => checker
+        }
+        // Note: Getter/setter types are not added to the simple class_type built here
+        // They are only used for 'this' context, and getters/setters don't affect that
       }
       _ => ()
     }

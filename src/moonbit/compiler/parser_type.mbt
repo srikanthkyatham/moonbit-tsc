@@ -1186,6 +1186,7 @@ fn parse_primary_type_with_readonly(
                         members.push(
                           Node::MethodDeclaration(MethodDeclaration::{
                             name: "new",
+                            computed_name_expr: None,
                             parameters: params,
                             return_type: Some(return_type),
                             body: None,
@@ -1471,6 +1472,7 @@ fn parse_primary_type_with_readonly(
                             members.push(
                               Node::MethodDeclaration(MethodDeclaration::{
                                 name,
+                                computed_name_expr: None,
                                 parameters: params,
                                 return_type: Some(return_type),
                                 body: None,

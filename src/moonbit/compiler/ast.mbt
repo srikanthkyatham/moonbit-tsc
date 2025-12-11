@@ -1157,6 +1157,7 @@ pub struct IndexSignatureDeclaration {
 ///|
 pub struct MethodDeclaration {
   name : String
+  computed_name_expr : Node? // For TS2464 validation - the expression inside [expr]
   type_parameters : Array[TypeParameter]
   parameters : Array[Node]
   return_type : Node?
@@ -1180,6 +1181,7 @@ pub struct ConstructorDeclaration {
 ///|
 pub struct GetAccessor {
   name : String
+  computed_name_expr : Node? // For TS2464 validation - the expression inside [expr]
   return_type : Node?
   body : Node?
   decorators : Array[Node]
@@ -1190,6 +1192,7 @@ pub struct GetAccessor {
 ///|
 pub struct SetAccessor {
   name : String
+  computed_name_expr : Node? // For TS2464 validation - the expression inside [expr]
   parameter : Node
   body : Node?
   decorators : Array[Node]

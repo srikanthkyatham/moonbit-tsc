@@ -3742,6 +3742,7 @@ fn parse_class_member_with_decorators(
                       acc.push(
                         Node::GetAccessor(GetAccessor::{
                           name: computed_name,
+                          computed_name_expr: Some(name_expr), // Preserve for TS2464 validation
                           return_type,
                           body,
                           decorators,
@@ -3795,6 +3796,7 @@ fn parse_class_member_with_decorators(
                   acc.push(
                     Node::GetAccessor(GetAccessor::{
                       name,
+                      computed_name_expr: None,
                       return_type,
                       body,
                       decorators,
@@ -3958,6 +3960,7 @@ fn parse_class_member_with_decorators(
                       acc.push(
                         Node::SetAccessor(SetAccessor::{
                           name: computed_name,
+                          computed_name_expr: Some(name_expr), // Preserve for TS2464 validation
                           parameter,
                           body,
                           decorators,
@@ -4029,6 +4032,7 @@ fn parse_class_member_with_decorators(
                   acc.push(
                     Node::SetAccessor(SetAccessor::{
                       name,
+                      computed_name_expr: None,
                       parameter,
                       body,
                       decorators,
@@ -4153,6 +4157,7 @@ fn parse_class_member_with_decorators(
               acc.push(
                 Node::MethodDeclaration(MethodDeclaration::{
                   name,
+                  computed_name_expr: None,
                   type_parameters: [],
                   parameters,
                   return_type,
@@ -4197,6 +4202,7 @@ fn parse_class_member_with_decorators(
               acc.push(
                 Node::MethodDeclaration(MethodDeclaration::{
                   name,
+                  computed_name_expr: None,
                   type_parameters,
                   parameters,
                   return_type,
@@ -4330,6 +4336,7 @@ fn parse_class_member_with_decorators(
               acc.push(
                 Node::MethodDeclaration(MethodDeclaration::{
                   name,
+                  computed_name_expr: None,
                   type_parameters: [],
                   parameters,
                   return_type,
@@ -4486,6 +4493,7 @@ fn parse_class_member_with_decorators(
                   acc.push(
                     Node::GetAccessor(GetAccessor::{
                       name: computed_name,
+                      computed_name_expr: Some(name_expr), // Preserve for TS2464 validation
                       return_type,
                       body,
                       decorators,
@@ -4542,6 +4550,7 @@ fn parse_class_member_with_decorators(
               acc.push(
                 Node::GetAccessor(GetAccessor::{
                   name,
+                  computed_name_expr: None,
                   return_type,
                   body,
                   decorators,
@@ -4581,6 +4590,7 @@ fn parse_class_member_with_decorators(
                   acc.push(
                     Node::MethodDeclaration(MethodDeclaration::{
                       name,
+                      computed_name_expr: None,
                       type_parameters: [],
                       parameters,
                       return_type,
@@ -4672,6 +4682,7 @@ fn parse_class_member_with_decorators(
                   acc.push(
                     Node::SetAccessor(SetAccessor::{
                       name: computed_name,
+                      computed_name_expr: Some(name_expr), // Preserve for TS2464 validation
                       parameter,
                       body,
                       decorators,
@@ -4748,6 +4759,7 @@ fn parse_class_member_with_decorators(
               acc.push(
                 Node::SetAccessor(SetAccessor::{
                   name,
+                  computed_name_expr: None,
                   parameter,
                   body,
                   decorators,
@@ -4911,6 +4923,7 @@ fn parse_class_member_with_decorators(
           acc.push(
             Node::MethodDeclaration(MethodDeclaration::{
               name,
+              computed_name_expr: None,
               type_parameters: [],
               parameters,
               return_type,
@@ -4998,6 +5011,7 @@ fn parse_class_member_with_decorators(
           acc.push(
             Node::MethodDeclaration(MethodDeclaration::{
               name,
+              computed_name_expr: None,
               type_parameters: [],
               parameters,
               return_type,
@@ -5085,6 +5099,7 @@ fn parse_class_member_with_decorators(
           acc.push(
             Node::MethodDeclaration(MethodDeclaration::{
               name,
+              computed_name_expr: None,
               type_parameters: [],
               parameters,
               return_type,
@@ -5172,6 +5187,7 @@ fn parse_class_member_with_decorators(
           acc.push(
             Node::MethodDeclaration(MethodDeclaration::{
               name,
+              computed_name_expr: None,
               type_parameters: [],
               parameters,
               return_type,
@@ -5270,6 +5286,7 @@ fn parse_class_member_with_decorators(
           acc.push(
             Node::MethodDeclaration(MethodDeclaration::{
               name,
+              computed_name_expr: None,
               type_parameters,
               parameters,
               return_type,
@@ -5319,6 +5336,7 @@ fn parse_class_member_with_decorators(
           acc.push(
             Node::MethodDeclaration(MethodDeclaration::{
               name,
+              computed_name_expr: None,
               type_parameters: [],
               parameters,
               return_type,
@@ -5364,6 +5382,7 @@ fn parse_class_member_with_decorators(
           acc.push(
             Node::MethodDeclaration(MethodDeclaration::{
               name,
+              computed_name_expr: None,
               type_parameters,
               parameters,
               return_type,
@@ -5525,6 +5544,7 @@ fn parse_class_member_with_decorators(
               acc.push(
                 Node::MethodDeclaration(MethodDeclaration::{
                   name: computed_name,
+                  computed_name_expr: Some(name_expr), // Preserve for TS2464 validation
                   type_parameters: [],
                   parameters,
                   return_type,
@@ -5619,6 +5639,7 @@ fn parse_class_member_with_decorators(
           acc.push(
             Node::MethodDeclaration(MethodDeclaration::{
               name,
+              computed_name_expr: None,
               type_parameters: [],
               parameters,
               return_type,
@@ -5828,6 +5849,7 @@ fn parse_class_member_with_modifiers(
                   acc.push(
                     Node::GetAccessor(GetAccessor::{
                       name: computed_name,
+                      computed_name_expr: Some(name_expr), // Preserve for TS2464 validation
                       return_type,
                       body,
                       decorators,
@@ -5881,6 +5903,7 @@ fn parse_class_member_with_modifiers(
               acc.push(
                 Node::GetAccessor(GetAccessor::{
                   name,
+                  computed_name_expr: None,
                   return_type,
                   body,
                   decorators,
@@ -5963,6 +5986,7 @@ fn parse_class_member_with_modifiers(
                   acc.push(
                     Node::SetAccessor(SetAccessor::{
                       name: computed_name,
+                      computed_name_expr: Some(name_expr), // Preserve for TS2464 validation
                       parameter,
                       body,
                       decorators,
@@ -6034,6 +6058,7 @@ fn parse_class_member_with_modifiers(
               acc.push(
                 Node::SetAccessor(SetAccessor::{
                   name,
+                  computed_name_expr: None,
                   parameter,
                   body,
                   decorators,
@@ -6092,6 +6117,7 @@ fn parse_class_member_with_modifiers(
               acc.push(
                 Node::MethodDeclaration(MethodDeclaration::{
                   name: computed_name,
+                  computed_name_expr: Some(name_expr), // Preserve for TS2464 validation
                   type_parameters: [],
                   parameters,
                   return_type,
@@ -6192,6 +6218,7 @@ fn parse_class_member_with_modifiers(
           acc.push(
             Node::MethodDeclaration(MethodDeclaration::{
               name,
+              computed_name_expr: None,
               type_parameters,
               parameters,
               return_type,
@@ -6239,6 +6266,7 @@ fn parse_class_member_with_modifiers(
           acc.push(
             Node::MethodDeclaration(MethodDeclaration::{
               name,
+              computed_name_expr: None,
               type_parameters: [],
               parameters,
               return_type,
@@ -6540,6 +6568,7 @@ fn parse_interface_declaration(
                   members.push(
                     Node::MethodDeclaration(MethodDeclaration::{
                       name: method_name,
+                      computed_name_expr: None,
                       type_parameters: [],
                       parameters: params,
                       return_type,
@@ -6791,6 +6820,7 @@ fn parse_interface_declaration(
             members.push(
               Node::MethodDeclaration(MethodDeclaration::{
                 name: "",
+                computed_name_expr: None,
                 type_parameters: [],
                 parameters: params,
                 return_type,
@@ -6845,6 +6875,7 @@ fn parse_interface_declaration(
                 members.push(
                   Node::MethodDeclaration(MethodDeclaration::{
                     name: "new",
+                    computed_name_expr: None,
                     type_parameters: type_params,
                     parameters: params,
                     return_type,
@@ -6916,6 +6947,7 @@ fn parse_interface_declaration(
                 members.push(
                   Node::MethodDeclaration(MethodDeclaration::{
                     name: prop_name,
+                    computed_name_expr: None,
                     type_parameters: [],
                     parameters: params,
                     return_type,
@@ -6998,6 +7030,7 @@ fn parse_interface_declaration(
                     members.push(
                       Node::MethodDeclaration(MethodDeclaration::{
                         name: prop_name,
+                        computed_name_expr: None,
                         type_parameters: type_params,
                         parameters: params,
                         return_type,
@@ -7100,6 +7133,7 @@ fn parse_interface_declaration(
                 members.push(
                   Node::MethodDeclaration(MethodDeclaration::{
                     name: "",
+                    computed_name_expr: None,
                     type_parameters: type_params,
                     parameters: params,
                     return_type,
