@@ -790,12 +790,7 @@ fn add_var_to_function_scope(
       match scopes[function_scope_index].function_vars.get(name) {
         Some(existing_type) => {
           // Check if types are equal
-          // Skip the check if existing_type is Any - this happens during hoisting where all vars start as 'any'
-          let existing_is_any = match existing_type {
-            Any(_) => true
-            _ => false
-          }
-          if not(existing_is_any) && not(types_equal(existing_type, var_type)) {
+          if not(types_equal(existing_type, var_type)) {
             checker = add_diagnostic_with_code(
               checker,
               "Subsequent variable declarations must have the same type.  Variable '\{name}' must be of type '\{type_to_string(existing_type)}', but here has type '\{type_to_string(var_type)}'.",
@@ -1213,36 +1208,6 @@ fn hoist_var_declarations(checker : TypeChecker, stmt : Node) -> TypeChecker {
 }
 
 ///|
-/// Add a variable to function_vars during hoisting (simple version without type checking)
-fn add_to_function_vars_for_hoisting(
-  checker : TypeChecker,
-  name : String,
-  var_type : Type,
-) -> TypeChecker {
-  let scopes = checker.local_scopes
-  if scopes.length() > 0 {
-    // Find the nearest function scope for var hoisting
-    let mut function_scope_index = -1
-    for i = scopes.length() - 1; i >= 0; i = i - 1 {
-      if scopes[i].is_function_scope {
-        function_scope_index = i
-        break
-      }
-    }
-    // Add to function scope if found
-    if function_scope_index >= 0 {
-      scopes[function_scope_index].function_vars.set(name, var_type)
-    } else {
-      // No function scope, add to current scope
-      scopes[scopes.length() - 1].function_vars.set(name, var_type)
-    }
-    { ..checker, local_scopes: scopes }
-  } else {
-    checker
-  }
-}
-
-///|
 /// Add a var binding to the current local scope during hoisting
 fn hoist_var_decl_binding(
   checker : TypeChecker,
@@ -1250,7 +1215,7 @@ fn hoist_var_decl_binding(
   var_type : Type,
 ) -> TypeChecker {
   match name {
-    Identifier(id) => add_to_function_vars_for_hoisting(checker, id.name, var_type)
+    Identifier(id) => add_local_variable(checker, id.name, var_type)
     ArrayBindingPattern(pattern) => {
       let mut checker = checker
       for elem in pattern.elements {
@@ -1280,15 +1245,16 @@ fn hoist_var_decl_binding(
 fn lookup_local_variable(checker : TypeChecker, name : String) -> Type? {
   // Search from innermost scope to outermost
   // Check both block-scoped (variables) and function-scoped (function_vars)
+  // IMPORTANT: Check function_vars first to get the checked type, not the hoisted placeholder
   let scopes = checker.local_scopes
   for i = scopes.length() - 1; i >= 0; i = i - 1 {
-    // Check block-scoped variables first (let/const)
-    match scopes[i].variables.get(name) {
+    // Check function-scoped variables first (var) - these have the actual checked types
+    match scopes[i].function_vars.get(name) {
       Some(t) => return Some(t)
       None => ()
     }
-    // Then check function-scoped variables (var)
-    match scopes[i].function_vars.get(name) {
+    // Then check block-scoped variables (let/const)
+    match scopes[i].variables.get(name) {
       Some(t) => return Some(t)
       None => ()
     }

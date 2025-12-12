@@ -191,17 +191,7 @@ test "Multiple generic functions should each preserve their type params" {
 // ============================================================================
 // TS2464 validation for generic type parameters in computed properties
 // ============================================================================
-
-///|
-/// Helper function to check if a specific diagnostic code exists
-fn has_diagnostic_code(diagnostics : Array[@compiler.Diagnostic], code : Int) -> Bool {
-  for diag in diagnostics {
-    if diag.code == code {
-      return true
-    }
-  }
-  false
-}
+// Note: uses has_diagnostic_code() helper from checker_error_test.mbt
 
 test "TS2464: Unconstrained type parameter in computed property" {
   let source =
