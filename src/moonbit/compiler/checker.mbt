@@ -5998,6 +5998,23 @@ fn infer_class_declaration_type(
           None => checker
         }
 
+        // TS2466: Validate 'super' in computed property names
+        let checker = match prop.computed_name_expr {
+          Some(name_expr) => {
+            if contains_super_expression(name_expr) {
+              add_diagnostic_with_code(
+                checker,
+                "'super' cannot be referenced in a computed property name.",
+                get_location(name_expr),
+                TS2466,
+              )
+            } else {
+              checker
+            }
+          }
+          None => checker
+        }
+
         // TS1166: Validate computed property names in class declarations
         // A computed property name in a class property declaration must have a simple literal type or a 'unique symbol' type
         let checker = match prop.computed_name_expr {
@@ -6052,6 +6069,23 @@ fn infer_class_declaration_type(
                 "'this' cannot be referenced in a computed property name.",
                 get_location(name_expr),
                 TS2465,
+              )
+            } else {
+              checker
+            }
+          }
+          None => checker
+        }
+
+        // TS2466: Validate 'super' in computed property names
+        checker = match method_decl.computed_name_expr {
+          Some(name_expr) => {
+            if contains_super_expression(name_expr) {
+              add_diagnostic_with_code(
+                checker,
+                "'super' cannot be referenced in a computed property name.",
+                get_location(name_expr),
+                TS2466,
               )
             } else {
               checker
@@ -18609,6 +18643,23 @@ fn build_class_type_for_this(
           None => checker
         }
 
+        // TS2466: Validate 'super' in computed property names
+        let checker = match prop.computed_name_expr {
+          Some(name_expr) => {
+            if contains_super_expression(name_expr) {
+              add_diagnostic_with_code(
+                checker,
+                "'super' cannot be referenced in a computed property name.",
+                get_location(name_expr),
+                TS2466,
+              )
+            } else {
+              checker
+            }
+          }
+          None => checker
+        }
+
         // TS1166: Validate computed property names in class declarations
         let checker = match prop.computed_name_expr {
           Some(name_expr) => {
@@ -18654,6 +18705,23 @@ fn build_class_type_for_this(
                 "'this' cannot be referenced in a computed property name.",
                 get_location(name_expr),
                 TS2465,
+              )
+            } else {
+              checker
+            }
+          }
+          None => checker
+        }
+
+        // TS2466: Validate 'super' in computed property names
+        checker = match method_decl.computed_name_expr {
+          Some(name_expr) => {
+            if contains_super_expression(name_expr) {
+              add_diagnostic_with_code(
+                checker,
+                "'super' cannot be referenced in a computed property name.",
+                get_location(name_expr),
+                TS2466,
               )
             } else {
               checker
@@ -20267,6 +20335,69 @@ fn contains_this_expression(expr : Node) -> Bool {
             }
           ComputedPropertyAssignment(key_node, value_node, _) =>
             if contains_this_expression(key_node) || contains_this_expression(value_node) {
+              return true
+            }
+          _ => ()
+        }
+      }
+      false
+    }
+    _ => false
+  }
+}
+
+///|
+/// Check if an expression contains 'super' keyword (for TS2466 validation)
+fn contains_super_expression(expr : Node) -> Bool {
+  match expr {
+    SuperExpression(_) => true
+    BinaryExpression(bin) =>
+      contains_super_expression(bin.left) || contains_super_expression(bin.right)
+    ParenthesizedExpression(paren) =>
+      contains_super_expression(paren.expression)
+    UnaryExpression(unary) =>
+      contains_super_expression(unary.operand)
+    ConditionalExpression(cond) =>
+      contains_super_expression(cond.condition) ||
+      contains_super_expression(cond.when_true) ||
+      contains_super_expression(cond.when_false)
+    CallExpression(call) => {
+      if contains_super_expression(call.expression) {
+        return true
+      }
+      for arg in call.arguments {
+        if contains_super_expression(arg) {
+          return true
+        }
+      }
+      false
+    }
+    PropertyAccessExpression(prop) =>
+      contains_super_expression(prop.expression)
+    ElementAccessExpression(elem) =>
+      contains_super_expression(elem.expression) ||
+      contains_super_expression(elem.argument_expression)
+    ArrayLiteralExpression(arr) => {
+      for elem_opt in arr.elements {
+        match elem_opt {
+          Some(elem) =>
+            if contains_super_expression(elem) {
+              return true
+            }
+          None => ()
+        }
+      }
+      false
+    }
+    ObjectLiteralExpression(obj) => {
+      for prop in obj.properties {
+        match prop {
+          PropertyAssignment(_, value_node, _) =>
+            if contains_super_expression(value_node) {
+              return true
+            }
+          ComputedPropertyAssignment(key_node, value_node, _) =>
+            if contains_super_expression(key_node) || contains_super_expression(value_node) {
               return true
             }
           _ => ()

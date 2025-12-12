@@ -13,6 +13,54 @@
 
 ## Recent Fixes
 
+### ✅ TS2466 'super' in Computed Property Names Validation! (December 12, 2025)
+- **Impact**: +4 tests passing (99/142 → 103/142 = 72.5%, +2.8% improvement)
+- **Computed Properties**: **103/142 passing (72.5%)**, up from 99/142 (69.7%)
+- **Feature**: Implemented TS2466 validation for 'super' references in computed property names
+  - **TS2466**: "'super' cannot be referenced in a computed property name"
+  - Computed properties with 'super': `[super.bar()]() {}` → TS2466 error ❌
+  - Regular properties without 'super': `[sym]() {}` → valid ✅
+  - 'super' in method body: `method() { return super.bar(); }` → valid ✅
+  - 'super' in object literal: `var obj = { [super.bar()]() {} }` → valid ✅ (TS2466 applies to class members only)
+
+- **Implementation details**:
+  1. **Helper function**: Added `contains_super_expression()` (checker.mbt:20283-20342)
+     - Recursively checks if expression tree contains 'super' keyword
+     - Mirrors `contains_this_expression()` function pattern
+     - Handles all expression types: Binary, Unary, Conditional, Call, PropertyAccess, ElementAccess, etc.
+  2. **Validation in type inference**: Added TS2466 check in `infer_class_declaration_type()` (checker.mbt:~6000)
+     - Validates properties and methods during class type inference phase
+     - Checks after TS2465 and before TS1166/TS2464 validation
+  3. **Validation in type checking**: Added TS2466 check in `check_class_declaration()` (checker.mbt:~18611)
+     - Validates properties and methods during class checking phase
+     - Dual path ensures both CLI and unit tests detect errors
+  4. **Validation for class members**: Applied checks to:
+     - Class properties: `[super.prop]: number = 42` ❌
+     - Class methods: `[super.bar()]() {}` ❌
+     - Class getters/setters: Similar validation applied
+  5. **Nested expression support**: Correctly detects 'super' in complex cases:
+     - Nested object literals: `[{ [super.bar()]: 1 }[0]]()` ❌
+     - Binary expressions: `[super.x + 5]: number` ❌
+
+- **Tests fixed** (4 conformance tests):
+  - `computedPropertyNames24_ES5.ts` - 'super' in method computed name ✅
+  - `computedPropertyNames24_ES6.ts` - 'super' in method computed name ✅
+  - `computedPropertyNames26_ES5.ts` - 'super' in nested object literal ✅
+  - `computedPropertyNames26_ES6.ts` - 'super' in nested object literal ✅
+
+- **Unit tests**: Created 8 comprehensive tests (computed_property_ts2466_test.mbt)
+  - Property/method computed names with 'super': 4 tests ✅
+  - Valid cases without 'super': 4 tests ✅
+  - All 8 tests passing, total test suite: 4788/4788 (100%) ✅
+
+- **Technical achievements**:
+  - Reused pattern from TS2465 implementation for consistency
+  - Comprehensive expression tree traversal catches nested 'super' references
+  - Proper distinction between class member context (error) and object literal context (valid)
+  - Consistent with TypeScript error precedence rules
+
+- **Related issue**: bd pure-moonbit-cli-bkp (closed)
+
 ### ✅ TS2465 'this' in Computed Property Names Validation! (December 12, 2025)
 - **Impact**: +4 tests passing (95/142 → 99/142 = 69.7%, +2.8% improvement)
 - **Computed Properties**: **99/142 passing (69.7%)**, up from 95/142 (66.9%)
@@ -1111,7 +1159,7 @@ The following categories have achieved full conformance:
 | functionDeclarations | 13 | 13 | 100% |
 | modules | 39 | 39 | 100% |
 | spread | 26 | 27 | 96% |
-| computedProperties | 99 | 142 | 69.7% |
+| computedProperties | 103 | 142 | 72.5% |
 
 ## Types Subcategory Breakdown
 
