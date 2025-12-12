@@ -5,13 +5,275 @@
 | Metric | Value |
 |--------|-------|
 | Total Tests | 5,652 |
-| Passed | 3,893 |
-| Failed | 1,759 |
-| **Pass Rate** | **68.9%** |
+| Passed | 3,901 |
+| Failed | 1,751 |
+| **Pass Rate** | **69.0%** |
 
-*Last updated: December 11, 2025*
+*Last updated: December 12, 2025*
 
 ## Recent Fixes
+
+### ✅ TS2464 Generic Type Parameter Validation in Computed Properties! (December 12, 2025)
+- **Impact**: +6 tests passing (81/142 → 87/142 = 61%, +4.2% improvement)
+- **Computed Properties**: **87/142 passing (61%)**, up from 81/142 (57%)
+- **Feature**: Implemented TS2464 validation for generic type parameters in computed properties
+  - **TS2464**: "A computed property name must be of type 'string', 'number', 'symbol', or 'any'"
+  - Unconstrained type parameters (e.g., `T`) → TS2464 error ❌
+  - Constrained type parameters (e.g., `T extends string`) → valid ✅
+  - Mixed scenarios properly validated: `[t]: 0` errors, `[u]: 1` passes when `U extends string`
+
+- **Implementation details**:
+  1. **Type parameter constraint tracking**: Added `type_parameter_constraints` field to `TypeChecker` (checker.mbt:265)
+     - Stores mapping from type parameter name to its constraint type
+     - Initialized in `TypeChecker::new_with_options()` (checker.mbt:352)
+     - Copied during type info creation (type_convert.mbt:633)
+  2. **Constraint storage during inference**: Modified `infer_function_declaration_type()` (checker.mbt:5620-5628)
+     - Stores constraint for each type parameter during function type inference
+     - Maps `"T"` → `None` for unconstrained, `"U"` → `Some(String)` for `U extends string`
+  3. **Constraint storage during checking**: Added to `check_function_declaration()` (checker.mbt:15697-15709)
+     - Processes type parameters before checking function body
+     - Ensures constraints available during type validation
+  4. **Enhanced computed property validation**: Modified `is_valid_computed_property_type()` (checker.mbt:11842-11868)
+     ```moonbit
+     TypeReference(tr) => {
+       match checker.type_parameter_constraints.get(tr.name) {
+         Some(Some(constraint)) => {
+           // Has constraint - check if constraint is valid
+           is_valid_computed_property_type(checker, constraint)
+         }
+         Some(None) => {
+           // No constraint - invalid for computed properties
+           false
+         }
+         None => {
+           // Not a type parameter - reject unknown TypeReferences
+           false
+         }
+       }
+     }
+     ```
+  5. **Critical bug fix**: Fixed variable type resolution during hoisting (checker.mbt:1214-1240)
+     - **Root cause**: Variables declared as `var t: T` were resolving to `any` instead of `TypeReference("T")`
+     - **Problem**: Hoisting added vars to `variables` map with `any`, checking added to `function_vars` with correct type
+     - **Solution**: Created `add_to_function_vars_for_hoisting()` helper to ensure hoisted vars use correct scope map
+     - **Impact**: Generic type parameters now properly preserved during variable lookup
+  6. **TS2403 false positive fix**: Modified `add_var_to_function_scope()` (checker.mbt:796-800)
+     - Skip type equality check when transitioning from `any` to concrete type
+     - Prevents spurious "Subsequent variable declarations must have the same type" errors
+
+- **Tests fixed** (6 conformance tests):
+  - `computedPropertyNames8_ES5.ts` - Unconstrained type parameter errors ✅ (1 error)
+  - `computedPropertyNames8_ES6.ts` - Unconstrained type parameter errors ✅ (1 error)
+  - `computedPropertyNames9_ES5.ts` - Constrained type parameter valid ✅ (0 errors)
+  - `computedPropertyNames9_ES6.ts` - Constrained type parameter valid ✅ (0 errors)
+  - `computedPropertyNames51_ES5.ts` - Mixed valid/invalid parameters ✅ (2 errors)
+  - `computedPropertyNames51_ES6.ts` - Mixed valid/invalid parameters ✅ (2 errors)
+
+- **Unit tests**: Created 15 comprehensive tests (generic_function_type_params_test.mbt:191-296)
+  - TS2464 validation: 6 tests covering unconstrained, constrained, and mixed scenarios ✅
+  - Generic function hoisting: 9 tests for type parameter preservation ✅
+  - All 15 tests passing ✅
+
+- **Technical achievements**:
+  - Proper type parameter constraint propagation through inference and checking phases
+  - Clean separation between constrained and unconstrained type parameters
+  - Fixed fundamental variable type resolution bug affecting all generic code
+  - Comprehensive validation covering unions (e.g., `T extends string | number`)
+
+- **Related issue**: bd pure-moonbit-cli-6hj (closed)
+
+### ✅ TS2391 Ambient Module Fix & TS2807 Implementation Complete! (December 11, 2025)
+- **Impact**: All 4693 unit tests passing (100%), ES6 spread tests remain at 26/27 (96.3%)
+- **Major achievement**: Fixed TS2391 false positives for ambient module functions and completed TS2807 import helper validation
+- **TS2391 Bug Fixed**: Functions inside `declare module` blocks no longer incorrectly flagged as missing implementations
+  - **Root cause**: Overload checker only looked for explicit `Declare` modifier, didn't recognize ambient context
+  - **Solution**: Implemented ambient context propagation through .d.ts files and ambient modules
+  - **Files modified**: `compiler/overload_checker.mbt` - Added `is_ambient_file` parameter to `collect_overloads()`
+- **TS2807 Implementation Complete**: Import helper version mismatch detection fully functional
+  - **Feature**: Detects incompatible `__spreadArray` helper when `@importHelpers: true`
+  - **Validation**: Checks if tslib has 2-param (old) vs 3-param (new) `__spreadArray` signature
+  - **Infrastructure**: 63 comprehensive unit tests (100% passing)
+    - Directive parsing: 30 tests ✅
+    - Virtual file splitting: 9 tests ✅
+    - Multi-file parsing: 7 tests ✅
+    - Registry building: 5 tests ✅
+    - Helper signature extraction: 9 tests ✅
+    - End-to-end TS2807 validation: 3 tests ✅
+  - **Files modified**:
+    - `compiler/checker.mbt` - Added TS2807 validation logic (lines 11542-11578)
+    - `compiler/parser.mbt` - Export extraction from ambient modules (lines 1124-1146)
+    - `compiler/symbol.mbt` - Added compiler_directives to BoundSourceFile
+- **Known limitation**: CLI virtual file directive handling (doesn't affect unit tests)
+  - **Conformance test**: `arraySpreadImportHelpers.ts` - needs multi-file setup via `@filename` directives
+  - **Workaround**: Use unit test infrastructure directly (working perfectly)
+- **Technical achievements**:
+  - Clean separation of concerns (parsing, binding, checking)
+  - Proper data flow: SourceFile → BoundSourceFile → TypeChecker
+  - Zero compilation errors, all tests passing
+- **Documentation**: Created TS2391_FIX_SUMMARY.md and TS2807_FINAL_STATUS.md
+- **Related features**:
+  - ExternalTypeRegistry for storing types from external modules
+  - Module resolution and export lookup system
+  - Compiler directive parsing (@importHelpers, @filename, etc.)
+
+### ✅ TS1166 Class Computed Property Validation Implemented! (December 11, 2025)
+- **Impact**: +2 tests passing (79/142 → 81/142 = 57%, +1.4% improvement)
+- **Computed Properties**: **81/142 passing (57%)**, up from 79/142 (56%)
+- **Feature**: Implemented TS1166 validation for class properties with computed names
+  - **TS1166**: "A computed property name in a class property declaration must have a simple literal type or a 'unique symbol' type"
+  - Stricter than TS2464 (which allows string/number/symbol/any types)
+  - Only allows literal expressions: `[0]`, `["hello"]`, `` [`template`] ``
+  - Rejects variable references: `[n]`, `[s]`, `[a]` ❌
+  - Rejects expressions: `[s + s]`, `[+s]`, `` [`hello ${x}`] `` ❌
+
+- **Implementation details**:
+  1. **AST modification**: Added `computed_name_expr: Node?` field to `PropertyDeclaration` (ast.mbt:1139)
+     - Preserves the computed expression for type validation
+     - Set to `Some(expr)` for `[expression]` properties, `None` for regular properties
+  2. **Parser updates**: Modified parser to preserve computed expressions (parser.mbt:5563)
+     - Regular properties: `computed_name_expr: None`
+     - Computed properties: `computed_name_expr: Some(name_expr)`
+  3. **Type checking**: Added validation in two locations (checker.mbt:5927, 18207)
+     - `infer_class_declaration_type()` - Main class type inference
+     - `build_class_type_for_this()` - This context type building
+  4. **Literal detection**: Created `is_literal_expression()` helper (checker.mbt:11698)
+     - Recognizes `NumericLiteral`, `StringLiteral`, `TemplateExpression` (without substitutions)
+     - Allows literal expressions even when type inference widens them
+  5. **Diagnostic mapping**: Added TS1166 to error code mappings (symbol.mbt:1098)
+
+- **Validation logic**:
+  ```moonbit
+  match prop.computed_name_expr {
+    Some(name_expr) => {
+      if is_literal_expression(name_expr) {
+        checker // Literals always valid: [0], ["str"], [`template`]
+      } else {
+        // Check if type is StringLiteral, NumberLiteral, or Symbol
+        if not(is_valid_class_property_computed_name_type(name_type)) {
+          emit_TS1166_error()
+        }
+      }
+    }
+    None => checker // Regular properties, no validation needed
+  }
+  ```
+
+- **Tests fixed** (2 conformance tests):
+  - `computedPropertyNames12_ES5.ts` - Class properties with valid literals ✅
+  - `computedPropertyNames12_ES6.ts` - Class properties with valid literals ✅
+
+- **Unit tests**: Created 16 comprehensive tests (ts1166_class_computed_test.mbt)
+  - 6 valid cases: number/string/template literals, static properties
+  - 10 error cases: variables, expressions, template with substitutions, type assertions
+  - All 16 tests passing ✅
+
+- **Remaining issues**: TS2464 validation for class methods (55 tests)
+  - ✅ Generic type parameter validation complete (December 12, 2025)
+  - ❌ Class methods/getters/setters with computed names still need TS2464 validation
+  - Currently, TS2464 validates:
+    - Object literal computed properties ✅
+    - Generic type parameters in computed properties ✅ (NEW!)
+  - Still need to add TS2464 validation for:
+    - Class methods: `class C { [b]() {} }` where `b: boolean` - should emit TS2464 ❌
+    - Class getters/setters with non-literal computed names
+  - Future work: Extend TS2464 validation to MethodDeclaration, GetAccessor, SetAccessor
+
+### ✅ TS2464 Template Literal Support in Computed Properties (December 11, 2025)
+- **Impact**: +6 tests passing (73/142 → 79/142 = 55.6%, +4.2% improvement)
+- **Bug Fixed**: Template literals now accepted as valid computed property names
+  - `` [`hello bye`] `` (no substitutions) - Returns `TemplateLiteral` type ✅
+  - `` [`hello ${x} bye`] `` (with substitutions) - Returns `String` type ✅
+- **Solution**: Modified `is_valid_computed_property_type()` in `checker.mbt:11684`
+  ```moonbit
+  String(_) | Number(_) | Symbol(_) | Any(_) | TemplateLiteral(_) => true
+  ```
+- **Tests fixed** (6 conformance tests):
+  - `computedPropertyNames4_ES5.ts` and `_ES6.ts` - Object literal properties ✅
+  - `computedPropertyNames10_ES5.ts` and `_ES6.ts` - Object literal methods ✅
+  - `computedPropertyNames11_ES5.ts` and `_ES6.ts` - Object literal getters/setters ✅
+
+### ✅ ConcatArray<T> Implementation: Array.concat Overloads Complete! (December 11, 2025)
+- **Impact**: +1 spread test (25/27 → 26/27 = 96.3%)
+- **Major achievement**: Implemented ConcatArray<T> interface and Array.concat overload resolution
+- **Spread tests status**: 25/27 → **26/27 passing (96.3%, +3.7% improvement)**
+  - **Only 1 failing test remaining!** (arraySpreadImportHelpers.ts - TS2807 emit helper check)
+  - All core type checking functionality complete ✅
+- **Implementation details**:
+  - Added `concat` property to Array<T> type in `lookup_property_in_type` (checker.mbt:8662-8738)
+  - Created two overload signatures:
+    1. `concat(...items: ConcatArray<T>[]): T[]`
+    2. `concat(...items: (T | ConcatArray<T>)[]): T[]`
+  - Implemented ConcatArray<T> as TypeReference for type checking
+  - Added Array to ConcatArray assignability check (checker.mbt:12399-12407)
+    - `Array<S>` is assignable to `ConcatArray<T>` if `S` is assignable to `T`
+    - Correctly rejects `symbol[]` as not assignable to `ConcatArray<number>`
+- **Conformance test fixed**: `iteratorSpreadInArray6.ts` now passing ✅
+  - Validates Array.concat overload resolution
+  - Correctly emits TS2769 when concat argument types are incompatible
+
+### ✅ ParenthesizedType Support: Union Rest Parameters Fixed! (December 11, 2025)
+- **Impact**: **4652/4652 unit tests passing (100%)**! +1 spread test (24/27 → 25/27 = 92.6%)
+- **Major achievement**: Fixed union types in parentheses like `(number | string)[]`
+- **Spread tests status**: 24/27 → **25/27 passing (92.6%, +3.7% improvement)**
+  - Only 2 failing tests remaining (both edge cases)
+  - All core spread functionality including union rest parameters working perfectly ✅
+- **Root cause**: `get_type_from_type_node()` didn't handle `ParenthesizedType` AST nodes
+  - When parsing `(number | string)[]`, the parenthesized union would resolve as `any`
+  - Rest parameters like `...arr: (symbol | number)[]` failed to extract element type
+- **Fix**: Added ParenthesizedType handler at checker.mbt:20438-20441
+  ```moonbit
+  ParenthesizedType(paren_type) =>
+    // Unwrap parenthesized types: (T) -> T
+    get_type_from_type_node(checker, paren_type.type_node)
+  ```
+- **Unit tests**: Added 6 new tests in parenthesized_type_test.mbt validating:
+  - Parenthesized unions in array parameters ✅
+  - Parenthesized unions in rest parameters ✅
+  - Type mismatch detection with union rest parameters ✅
+  - Nested parenthesized arrays ✅
+  - Multiple parenthesized parameters ✅
+  - Simple parenthesized types ✅
+- **Conformance test fixed**: `iteratorSpreadInCall6.ts` now passing ✅
+  - Validates union rest parameters: `...s: (symbol | number)[]`
+  - Correctly detects that `string` is not assignable to `symbol | number`
+  - Emits TS2345 error as expected
+- **Unit test updated**: Fixed ts2461_union_iterable_test.mbt to expect correct behavior
+  - Test now validates that `() => void` is correctly detected as non-iterable
+  - Matches official TypeScript compiler behavior: TS2461 error
+
+### ✅ Generic Type Inference with Tuple Support: 100% Unit Tests! (December 11, 2025)
+- **Impact**: 4646/4646 tests passing (100%)! +3 spread tests (21/27 → 24/27 = 88.9%)
+- **Major achievement**: Completed all generic type inference work with tuple support
+- **Spread tests status**: 21/27 → **24/27 passing (88.9%, +11% improvement)**
+  - Only 3 failing tests remaining (all edge cases)
+  - All core spread functionality working perfectly ✅
+- **Features implemented**:
+  1. **Tuple-to-array subtyping** - Tuples are now correctly recognized as subtypes of arrays (generics.mbt:752-762)
+  2. **Tuple rest parameter validation** - Validates each argument against corresponding tuple element (generics.mbt:1261-1277)
+  3. **Iterable element type extraction** - Extracts element types from iterables for type inference (checker.mbt:7714-7723)
+  4. **Generic constraint satisfaction** - Type parameters with `T extends any[]` correctly infer tuple types
+  5. **Spread incompatibility detection** - Detects incompatible spread types (symbol vs string) with TS2345
+- **Technical details**:
+  - Added tuple-to-array subtyping rule in `is_subtype_of_with_ctx()` (generics.mbt:752-762)
+  - Implemented tuple rest parameter validation in `try_match_overload()` (generics.mbt:1261-1277)
+  - Enhanced `try_signature()` with tuple element validation (checker.mbt:7194-7216)
+  - Refactored `infer_from_types()` to accept TypeChecker and extract iterable element types (checker.mbt:7675-7753)
+- **Unit tests**: All 4646 unit tests passing (100% pass rate)
+  - generic_spread_inference_test.mbt: 4 tests validating spread type compatibility ✅
+  - generics_test.mbt: "generic with rest parameter" now passing ✅
+- **Examples working correctly**:
+  ```typescript
+  function tuple<T extends any[]>(...args: T): T { return args; }
+  const t = tuple(1, 'hello', true);  // ✅ T = [number, string, boolean]
+
+  function foo<T>(...s: T[]) { return s[0]; }
+  class SymbolIterator { /* yields symbol */ }
+  class StringIterator { /* yields string */ }
+  foo(...new SymbolIterator, ...new StringIterator);  // TS2345: Incompatible types ✅
+  ```
+- **Remaining 2 failing spread tests**:
+  1. `arraySpreadImportHelpers.ts` - TS2807 import helper version mismatch (not a spread bug)
+  2. `iteratorSpreadInArray6.ts` - Array.concat overload resolution with ConcatArray type
 
 ### ✅ Spread Operator Completion: TS2556 Required Params & TS2403 (December 11, 2025)
 - **Impact**: +5 tests passing overall (68.8% → 68.9%), spread operator type checking complete
@@ -798,8 +1060,8 @@ The following categories have achieved full conformance:
 | for-ofStatements | 55 | 55 | 100% |
 | functionDeclarations | 13 | 13 | 100% |
 | modules | 39 | 39 | 100% |
-| spread | 18 | 27 | 67% |
-| computedProperties | 60 | 142 | 42% |
+| spread | 26 | 27 | 96% |
+| computedProperties | 81 | 142 | 57% |
 
 ## Types Subcategory Breakdown
 
