@@ -18039,14 +18039,6 @@ fn check_class_index_signature_compatibility(
   checker : TypeChecker,
   class_decl : ClassDeclaration,
 ) -> TypeChecker {
-  // DEBUG: Always add an error to verify this is being called
-  let checker = add_diagnostic_with_code(
-    checker,
-    "[DEBUG] TS2411 check ENTRY - class has \{class_decl.members.length()} members",
-    class_decl.location,
-    TS2411,
-  )
-
   // Extract index signatures from class members
   let string_index : Ref[IndexSignature?] = { val: None }
   let number_index : Ref[IndexSignature?] = { val: None }
@@ -18054,17 +18046,15 @@ fn check_class_index_signature_compatibility(
   for mem in class_decl.members {
     match mem {
       IndexSignatureDeclaration(idx_sig) => {
-        // DEBUG: Found index signature
-        let checker = add_diagnostic_with_code(
+        // Resolve the parameter type (string or number) and return type
+        let (param_type, c) = resolve_type_annotation_or_any(
           checker,
-          "[DEBUG] Found IndexSignatureDeclaration",
-          class_decl.location,
-          TS2411,
+          Some(idx_sig.parameter_type),
         )
-
-        // Infer the parameter type (string or number)
-        let (param_type, c) = infer_type(checker, idx_sig.parameter_type)
-        let (return_type, c) = infer_type(c, idx_sig.return_type)
+        let (return_type, c) = resolve_type_annotation_or_any(
+          c,
+          Some(idx_sig.return_type),
+        )
 
         match param_type {
           String(_) =>
@@ -18092,14 +18082,6 @@ fn check_class_index_signature_compatibility(
   if string_index.val is None && number_index.val is None {
     return checker
   }
-
-  // DEBUG: Test if this code is being executed
-  let checker = add_diagnostic_with_code(
-    checker,
-    "[DEBUG] TS2411 validation is running - found index signature",
-    class_decl.location,
-    TS2411,
-  )
 
   // Check each member against index signatures
   let mut checker = checker
@@ -18145,7 +18127,7 @@ fn check_property_against_index_sig(
 ) -> TypeChecker {
   // Get property type
   let (prop_type, checker) = match prop.type_annotation {
-    Some(type_node) => infer_type(checker, type_node)
+    Some(_) => resolve_type_annotation_or_any(checker, prop.type_annotation)
     None =>
       match prop.initializer {
         Some(init) => infer_type(checker, init)
@@ -18153,28 +18135,12 @@ fn check_property_against_index_sig(
       }
   }
 
-  // DEBUG
-  let prop_type_str = type_to_string(prop_type)
-  let checker = add_diagnostic_with_code(
-    checker,
-    "[DEBUG] Checking property '\{prop_name}' with type '\{prop_type_str}'",
-    prop.location,
-    TS2411,
-  )
-
   // Check against string index signature (all properties match string index)
   match string_index {
     Some(sig) => {
-      let index_type_str = type_to_string(sig.return_type)
-      let assignable = is_assignable(prop_type, sig.return_type)
-      let checker = add_diagnostic_with_code(
-        checker,
-        "[DEBUG] is_assignable(\{prop_type_str}, \{index_type_str}) = \{assignable}",
-        prop.location,
-        TS2411,
-      )
-
-      if not(assignable) {
+      if not(is_assignable(prop_type, sig.return_type)) {
+        let prop_type_str = type_to_string(prop_type)
+        let index_type_str = type_to_string(sig.return_type)
         return add_diagnostic_with_code(
           checker,
           "Property '" +
@@ -18187,12 +18153,12 @@ fn check_property_against_index_sig(
           prop.location,
           TS2411,
         )
-      } else {
-        checker
       }
     }
-    None => checker
+    None => ()
   }
+
+  checker
 }
 
 ///|
@@ -18241,7 +18207,7 @@ fn check_getter_against_index_sig(
 
   // Get getter return type
   let (getter_type, checker) = match getter.return_type {
-    Some(type_node) => infer_type(checker, type_node)
+    Some(_) => resolve_type_annotation_or_any(checker, getter.return_type)
     None =>
       // Infer from body if available
       match getter.body {

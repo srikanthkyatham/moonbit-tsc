@@ -1,4 +1,35 @@
-test "TS2411: Property type not assignable to index signature - getter" {
+// Unit tests for TS2411: Property type not assignable to index signature
+
+test "TS2411: Property with incompatible type should error" {
+  let source =
+    #|class C {
+    #|    [s: string]: number;
+    #|    x: number;
+    #|    y: string;
+    #|}
+
+  let result = parse_bind_check_errors(source)
+
+  match result {
+    Err(diagnostics) => {
+      let has_ts2411 = diagnostics.iter().any(fn(d) { d.code == 2411 })
+      if has_ts2411 {
+        println("✓ TS2411: Property with incompatible type correctly errors")
+        assert_true(true)
+      } else {
+        println("Expected TS2411 error but got:")
+        diagnostics.iter().each(fn(d) { println("  - TS\{d.code}: \{d.message}") })
+        assert_false(true)
+      }
+    }
+    Ok(_) => {
+      println("Expected TS2411 error but got no errors")
+      assert_false(true)
+    }
+  }
+}
+
+test "TS2411: Getter with incompatible return type should error" {
   let source =
     #|class Foo { x }
     #|class Foo2 { x; y }
@@ -14,7 +45,7 @@ test "TS2411: Property type not assignable to index signature - getter" {
     Err(diagnostics) => {
       let has_ts2411 = diagnostics.iter().any(fn(d) { d.code == 2411 })
       if has_ts2411 {
-        println("✓ Correctly detected TS2411 for getter return type")
+        println("✓ TS2411: Getter with incompatible return type correctly errors")
         assert_true(true)
       } else {
         println("Expected TS2411 error but got:")
@@ -23,13 +54,13 @@ test "TS2411: Property type not assignable to index signature - getter" {
       }
     }
     Ok(_) => {
-      println("Expected TS2411 error for getter but got no errors")
+      println("Expected TS2411 error but got no errors")
       assert_false(true)
     }
   }
 }
 
-test "TS2411: Property type not assignable to index signature - computed getter" {
+test "TS2411: Computed getter with incompatible return type should error" {
   let source =
     #|class Foo { x }
     #|class Foo2 { x; y }
@@ -45,7 +76,7 @@ test "TS2411: Property type not assignable to index signature - computed getter"
     Err(diagnostics) => {
       let has_ts2411 = diagnostics.iter().any(fn(d) { d.code == 2411 })
       if has_ts2411 {
-        println("✓ Correctly detected TS2411 for computed getter")
+        println("✓ TS2411: Computed getter with incompatible type correctly errors")
         assert_true(true)
       } else {
         println("Expected TS2411 error but got:")
@@ -54,13 +85,42 @@ test "TS2411: Property type not assignable to index signature - computed getter"
       }
     }
     Ok(_) => {
-      println("Expected TS2411 error for computed getter but got no errors")
+      println("Expected TS2411 error but got no errors")
       assert_false(true)
     }
   }
 }
 
-test "TS2411: Property assignable to index signature - should pass" {
+test "TS2411: Compatible property types should pass" {
+  let source =
+    #|class C {
+    #|    [s: string]: number;
+    #|    x: number;
+    #|    y: number;
+    #|}
+
+  let result = parse_bind_check_errors(source)
+
+  match result {
+    Ok(_) => {
+      println("✓ TS2411: Compatible property types correctly pass")
+      assert_true(true)
+    }
+    Err(diagnostics) => {
+      let has_ts2411 = diagnostics.iter().any(fn(d) { d.code == 2411 })
+      if has_ts2411 {
+        println("Should not have TS2411 error when types are compatible:")
+        diagnostics.iter().each(fn(d) { println("  - TS\{d.code}: \{d.message}") })
+        assert_false(true)
+      } else {
+        println("✓ TS2411: No false positive")
+        assert_true(true)
+      }
+    }
+  }
+}
+
+test "TS2411: Compatible getter should pass" {
   let source =
     #|class Foo { x; y }
     #|
@@ -73,18 +133,45 @@ test "TS2411: Property assignable to index signature - should pass" {
 
   match result {
     Ok(_) => {
-      println("✓ Correctly allowed assignable property type")
+      println("✓ TS2411: Compatible getter correctly passes")
       assert_true(true)
     }
     Err(diagnostics) => {
       let has_ts2411 = diagnostics.iter().any(fn(d) { d.code == 2411 })
       if has_ts2411 {
-        println("Should not have TS2411 error when types match:")
+        println("Should not have TS2411 error when getter type is compatible:")
         diagnostics.iter().each(fn(d) { println("  - TS\{d.code}: \{d.message}") })
         assert_false(true)
       } else {
-        // Other errors are ok, just not TS2411
-        println("✓ No TS2411 error")
+        println("✓ TS2411: No false positive for getter")
+        assert_true(true)
+      }
+    }
+  }
+}
+
+test "TS2411: No index signature should not validate" {
+  let source =
+    #|class C {
+    #|    x: number;
+    #|    y: string;
+    #|}
+
+  let result = parse_bind_check_errors(source)
+
+  match result {
+    Ok(_) => {
+      println("✓ TS2411: No validation when no index signature")
+      assert_true(true)
+    }
+    Err(diagnostics) => {
+      let has_ts2411 = diagnostics.iter().any(fn(d) { d.code == 2411 })
+      if has_ts2411 {
+        println("Should not validate without index signature:")
+        diagnostics.iter().each(fn(d) { println("  - TS\{d.code}: \{d.message}") })
+        assert_false(true)
+      } else {
+        println("✓ TS2411: No false positive without index signature")
         assert_true(true)
       }
     }
