@@ -1061,7 +1061,7 @@ The following categories have achieved full conformance:
 | functionDeclarations | 13 | 13 | 100% |
 | modules | 39 | 39 | 100% |
 | spread | 26 | 27 | 96% |
-| computedProperties | 81 | 142 | 57% |
+| computedProperties | 87 | 142 | 61% |
 
 ## Types Subcategory Breakdown
 
