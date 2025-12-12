@@ -2461,6 +2461,7 @@ pub fn check_source_file_with_external_types(
   target : Target,
   no_implicit_any? : Bool = false,
   module_kind? : ModuleKind = ESModule,
+  import_helpers? : Bool = false,
 ) -> CheckResult {
   let mut checker = TypeChecker::new_with_options(
     bound.file_path,
@@ -2487,12 +2488,18 @@ pub fn check_source_file_with_external_types(
   )
 
   // Store external registry and import map in checker for type resolution
-  // Also set import_helpers from compiler directives
+  // Set import_helpers from compiler directives OR compile options
+  // File-level directives take precedence, but fall back to compile options
+  let import_helpers_flag = if bound.compiler_directives.import_helpers {
+    true
+  } else {
+    import_helpers // Use the parameter from compile options
+  }
   let checker = {
     ..checker,
     external_registry: Some(external_registry),
     import_map,
-    import_helpers: bound.compiler_directives.import_helpers,
+    import_helpers: import_helpers_flag,
   }
 
   // Push a top-level scope for the source file so local variables are tracked

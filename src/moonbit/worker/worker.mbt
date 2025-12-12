@@ -54,6 +54,7 @@ fn process_request(json_str : String) -> @protocol.CompileResponse {
     verbatim_module_syntax: false,
     no_emit: request.no_emit,
     es_module_interop: request.es_module_interop,
+    import_helpers: false,
     no_implicit_any: false,
     strict_null_checks: false,
     no_implicit_this: false,

@@ -417,6 +417,7 @@ fn compile_single(
     verbatim_module_syntax: false,
     no_emit: options.no_emit,
     es_module_interop: options.es_module_interop,
+    import_helpers: false,
     no_implicit_any: options.no_implicit_any,
     strict_null_checks: false,
     no_implicit_this: false,

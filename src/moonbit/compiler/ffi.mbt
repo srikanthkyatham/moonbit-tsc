@@ -30,6 +30,7 @@ pub(all) struct CompileOptions {
   verbatim_module_syntax : Bool // Requires type-only imports/exports to use explicit type syntax
   no_emit : Bool // Only run type checking, don't emit JavaScript or declaration files
   es_module_interop : Bool // Emit helpers for CommonJS/ES module interoperability
+  import_helpers : Bool // @importHelpers - use imported helpers from tslib
   no_implicit_any : Bool // Error on expressions and declarations with an implied 'any' type
   strict_null_checks : Bool // Enable strict null checks
   no_implicit_this : Bool // Error on 'this' expressions with an implied 'any' type
@@ -58,6 +59,7 @@ pub fn CompileOptions::default() -> CompileOptions {
     verbatim_module_syntax: false,
     no_emit: false,
     es_module_interop: false,
+    import_helpers: false,
     no_implicit_any: false,
     strict_null_checks: false,
     no_implicit_this: false,
@@ -452,6 +454,7 @@ pub fn compile_source_with_external_types(
             options.target,
             no_implicit_any=options.no_implicit_any,
             module_kind=options.module_kind,
+            import_helpers=options.import_helpers,
           )
 
           // Collect type errors but continue compilation
@@ -616,6 +619,7 @@ pub(all) struct TestOptions {
   strict : Bool
   no_emit : Bool
   no_implicit_any : Bool // @noImplicitAny: true
+  import_helpers : Bool // @importHelpers: true
   lib : Array[String] // Library files to include
 } derive(Show)
 
@@ -635,6 +639,7 @@ pub fn TestOptions::default() -> TestOptions {
     strict: false,
     no_emit: false,
     no_implicit_any: false,
+    import_helpers: false,
     lib: [],
   }
 }
@@ -765,6 +770,9 @@ pub fn split_multi_file_test(
       } else if directive.has_prefix("noImplicitAny:") {
         let no_implicit_any_val = ffi_trim(ffi_substring_from(directive, 14))
         options = { ..options, no_implicit_any: no_implicit_any_val == "true" }
+      } else if directive.has_prefix("importHelpers:") {
+        let import_helpers_val = ffi_trim(ffi_substring_from(directive, 14))
+        options = { ..options, import_helpers: import_helpers_val == "true" }
       }
       // Skip other directives (don't add to content)
     } else {
@@ -866,38 +874,51 @@ pub fn compile_multi_file_test(
     return compile_source(source, base_path, effective_options)
   }
 
-  // Build external type registry from all files first
-  // This allows cross-file type checking
-  let registry = ExternalTypeRegistry::new()
+  // First pass: parse all files
+  let parsed_result_files : Array[ParsedVirtualFile] = []
+  let parse_errors : Array[(String, Array[Diagnostic])] = []
+
+  for file in multi_test.files {
+    let tokens = scan_all_v2(file.content, file.filename)
+    match parse_source_file(tokens, file.filename) {
+      Ok(source_file) => {
+        parsed_result_files.push(ParsedVirtualFile::{
+          filename: file.filename,
+          source_file,
+        })
+      }
+      Err(diagnostics) => {
+        parse_errors.push((file.filename, diagnostics))
+      }
+    }
+  }
+
+  // Build multi-file parse result
+  let parse_result = MultiFileParseResult::{
+    files: parsed_result_files,
+    parse_errors,
+  }
+
+  // Build external type registry from parsed files
+  // This properly handles ambient module declarations (declare module "foo")
+  let registry = build_registry_from_virtual_files(parse_result)
   let all_diagnostics : Array[Diagnostic] = []
 
-  // First pass: parse and extract types from all files
-  for file in multi_test.files {
-    match extract_module_types_from_source(file.content, file.filename) {
-      Some(module_types) =>
-        registry.register_module(file.filename, module_types)
-      None => ()
+  // Build maps for later use
+  let parsed_files : Map[String, SourceFile] = Map::new()
+  let bound_files : Map[String, BoundSourceFile] = Map::new()
+
+  for parsed_file in parse_result.files {
+    parsed_files.set(parsed_file.filename, parsed_file.source_file)
+    // Also bind the file
+    match bind_source_file(parsed_file.source_file) {
+      Ok(bound) => bound_files.set(parsed_file.filename, bound)
+      Err(_) => ()
     }
   }
 
   // Second pass: compile each file with the registry
-  let parsed_files : Map[String, SourceFile] = Map::new()
-  let bound_files : Map[String, BoundSourceFile] = Map::new()
-
   for file in multi_test.files {
-    // Parse the file for import validation later
-    let tokens = scan_all_v2(file.content, file.filename)
-    match parse_source_file(tokens, file.filename) {
-      Ok(source_file) => {
-        parsed_files.set(file.filename, source_file)
-        // Also bind the file
-        match bind_source_file(source_file) {
-          Ok(bound) => bound_files.set(file.filename, bound)
-          Err(_) => ()
-        }
-      }
-      Err(_) => ()
-    }
 
     // Compile with type checking
     let result = compile_source_with_external_types(
@@ -993,6 +1014,9 @@ fn apply_test_options(
   }
   if test_options.no_implicit_any {
     opts = { ..opts, no_implicit_any: true }
+  }
+  if test_options.import_helpers {
+    opts = { ..opts, import_helpers: true }
   }
   opts
 }
