@@ -13,6 +13,46 @@
 
 ## Recent Fixes
 
+### ✅ Fixed TS2411 Setter & Number Index Validation! (December 12, 2025)
+- **Impact**: +4 tests passing (123/142 → 127/142 = 89.4%, +2.8% improvement)
+- **Computed Properties**: **127/142 passing (89.4%)**, up from 123/142 (86.6%)
+- **Feature**: Extended TS2411 validation to setters and number index signatures
+  - **TS2411**: "Property type not assignable to index signature type"
+  - **Setter validation**: Setters now validated against index signatures
+  - **Number index validation**: Numeric properties validated against `[n: number]` index signatures
+  - **Inheritance**: All three member types (property, getter, setter) now validated in inheritance scenarios
+
+- **Implementation details**:
+  1. **Setter validation** (checker.mbt:18469-18551):
+     - Created `check_setter_against_index_sig()` function similar to getter validation
+     - Extracts parameter type from `Parameter` node
+     - Validates parameter type against string index signature
+     - Validates parameter type against number index signature (for numeric setters)
+     - Proper error formatting: `'["propname"]'` for computed setters
+  2. **Number index signature validation** (checker.mbt):
+     - **Properties** (lines 18371-18433): Added number index checking after string index check
+     - **Getters** (lines 18546-18602): Added number index checking for numeric getters
+     - **Setters** (lines 18688-18744): Added number index checking for numeric setters
+     - Logic: NumericLiteral properties check against number index; expressions check if number index exists
+  3. **Inheritance integration** (checker.mbt:18061-18163):
+     - Added `SetAccessor(setter) =>` cases to all three validation loops:
+       - CASE 1: Current class members vs current class index signatures
+       - CASE 2: Base class members vs current class index signatures
+       - CASE 3: Current class members vs base class index signatures
+
+- **Tests fixed** (4 conformance tests):
+  - `computedPropertyNames45_ES5.ts` - setter validation in inheritance ✅
+  - `computedPropertyNames45_ES6.ts` - setter validation in inheritance ✅
+  - `computedPropertyNames39_ES5.ts` - number index signature validation ✅
+  - `computedPropertyNames39_ES6.ts` - number index signature validation ✅
+
+- **Remaining failures** (15 tests):
+  - TS2466 super in computed property (2 tests): `super()` in computed property names
+  - TS2873 always falsy expression (4 tests): `["" || 0]` expression validation
+  - TS1049 setter parameter count (2 tests): Setter must have exactly one parameter
+  - TS2300 duplicate identifier (2 tests): Duplicate property names
+  - TS2464 computed property type (5 tests): Computed property name must be string/number/symbol/any
+
 ### ✅ Fixed TS2411 Computed Property Validation! (December 12, 2025)
 - **Impact**: +4 tests passing (119/142 → 123/142 = 86.6%, +2.8% improvement)
 - **Computed Properties**: **123/142 passing (86.6%)**, up from 119/142 (83.8%)

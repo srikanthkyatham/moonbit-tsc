@@ -557,3 +557,453 @@ test "TS2411: Computed property and getter combined" {
     }
   }
 }
+// ============================================================================
+// SETTER VALIDATION TESTS
+// ============================================================================
+
+test "TS2411: Setter with incompatible type should error" {
+  let source =
+    #|class Foo { x }
+    #|class Foo2 { x; y }
+    #|
+    #|class C {
+    #|    [s: string]: Foo2;
+    #|    set prop(p: Foo) { }
+    #|}
+
+  let result = parse_bind_check_errors(source)
+  match result {
+    Err(diagnostics) => {
+      let has_ts2411 = diagnostics.iter().any(fn(d) { d.code == 2411 })
+      if has_ts2411 {
+        println("✓ TS2411: Setter with incompatible type correctly errors")
+        assert_true(true)
+      } else {
+        println("Expected TS2411 error but got:")
+        diagnostics.iter().each(fn(d) { println("  - TS\{d.code}: \{d.message}") })
+        assert_false(true)
+      }
+    }
+    Ok(_) => {
+      println("Expected TS2411 error but got no errors")
+      assert_false(true)
+    }
+  }
+}
+
+test "TS2411: Setter with compatible type should pass" {
+  let source =
+    #|class Foo { x }
+    #|class Foo2 { x; y }
+    #|
+    #|class C {
+    #|    [s: string]: Foo2;
+    #|    set prop(p: Foo2) { }
+    #|}
+
+  let result = parse_bind_check_errors(source)
+  match result {
+    Err(diagnostics) => {
+      let has_ts2411 = diagnostics.iter().any(fn(d) { d.code == 2411 })
+      if has_ts2411 {
+        println("Expected setter to pass but got TS2411:")
+        diagnostics.iter().each(fn(d) { println("  - TS\{d.code}: \{d.message}") })
+        assert_false(true)
+      } else {
+        println("✓ TS2411: Setter with compatible type correctly passes (other errors ok)")
+        assert_true(true)
+      }
+    }
+    Ok(_) => {
+      println("✓ TS2411: Setter with compatible type correctly passes")
+      assert_true(true)
+    }
+  }
+}
+
+test "TS2411: Static setter should not be validated" {
+  let source =
+    #|class Foo { x }
+    #|class Foo2 { x; y }
+    #|
+    #|class C {
+    #|    [s: string]: Foo2;
+    #|    static set prop(p: Foo) { }
+    #|}
+
+  let result = parse_bind_check_errors(source)
+  match result {
+    Err(diagnostics) => {
+      let has_ts2411 = diagnostics.iter().any(fn(d) { d.code == 2411 })
+      if has_ts2411 {
+        println("Static setter should not be validated but got TS2411:")
+        diagnostics.iter().each(fn(d) { println("  - TS\{d.code}: \{d.message}") })
+        assert_false(true)
+      } else {
+        println("✓ TS2411: Static setter correctly skipped (other errors ok)")
+        assert_true(true)
+      }
+    }
+    Ok(_) => {
+      println("✓ TS2411: Static setter correctly skipped")
+      assert_true(true)
+    }
+  }
+}
+
+test "TS2411: Computed setter with string literal should error" {
+  let source =
+    #|class Foo { x }
+    #|class Foo2 { x; y }
+    #|
+    #|class C {
+    #|    [s: string]: Foo2;
+    #|    set ["prop"](p: Foo) { }
+    #|}
+
+  let result = parse_bind_check_errors(source)
+  match result {
+    Err(diagnostics) => {
+      let has_ts2411 = diagnostics.iter().any(fn(d) { d.code == 2411 })
+      if has_ts2411 {
+        println("✓ TS2411: Computed setter with string literal correctly errors")
+        assert_true(true)
+      } else {
+        println("Expected TS2411 error but got:")
+        diagnostics.iter().each(fn(d) { println("  - TS\{d.code}: \{d.message}") })
+        assert_false(true)
+      }
+    }
+    Ok(_) => {
+      println("Expected TS2411 error but got no errors")
+      assert_false(true)
+    }
+  }
+}
+
+test "TS2411: Static computed setter should not be validated" {
+  let source =
+    #|class Foo { x }
+    #|class Foo2 { x; y }
+    #|
+    #|class C {
+    #|    [s: string]: Foo2;
+    #|    static set ["prop"](p: Foo) { }
+    #|}
+
+  let result = parse_bind_check_errors(source)
+  match result {
+    Err(diagnostics) => {
+      let has_ts2411 = diagnostics.iter().any(fn(d) { d.code == 2411 })
+      if has_ts2411 {
+        println("Static computed setter should not be validated but got TS2411:")
+        diagnostics.iter().each(fn(d) { println("  - TS\{d.code}: \{d.message}") })
+        assert_false(true)
+      } else {
+        println("✓ TS2411: Static computed setter correctly skipped")
+        assert_true(true)
+      }
+    }
+    Ok(_) => {
+      println("✓ TS2411: Static computed setter correctly skipped")
+      assert_true(true)
+    }
+  }
+}
+
+// ============================================================================
+// NUMBER INDEX SIGNATURE TESTS
+// ============================================================================
+
+test "TS2411: Property with numeric literal and number index should error" {
+  let source =
+    #|class Foo { x }
+    #|class Foo2 { x; y }
+    #|
+    #|class C {
+    #|    [n: number]: Foo2;
+    #|    [42]: Foo;
+    #|}
+
+  let result = parse_bind_check_errors(source)
+  match result {
+    Err(diagnostics) => {
+      let has_ts2411 = diagnostics.iter().any(fn(d) { d.code == 2411 })
+      if has_ts2411 {
+        println("✓ TS2411: Numeric property correctly errors with number index")
+        assert_true(true)
+      } else {
+        println("Expected TS2411 error but got:")
+        diagnostics.iter().each(fn(d) { println("  - TS\{d.code}: \{d.message}") })
+        assert_false(true)
+      }
+    }
+    Ok(_) => {
+      println("Expected TS2411 error but got no errors")
+      assert_false(true)
+    }
+  }
+}
+
+test "TS2411: Property with numeric literal and compatible number index should pass" {
+  let source =
+    #|class Foo { x }
+    #|class Foo2 { x; y }
+    #|
+    #|class C {
+    #|    [n: number]: Foo2;
+    #|    [42]: Foo2;
+    #|}
+
+  let result = parse_bind_check_errors(source)
+  match result {
+    Err(diagnostics) => {
+      let has_ts2411 = diagnostics.iter().any(fn(d) { d.code == 2411 })
+      if has_ts2411 {
+        println("Expected numeric property to pass but got TS2411:")
+        diagnostics.iter().each(fn(d) { println("  - TS\{d.code}: \{d.message}") })
+        assert_false(true)
+      } else {
+        println("✓ TS2411: Numeric property with compatible type correctly passes")
+        assert_true(true)
+      }
+    }
+    Ok(_) => {
+      println("✓ TS2411: Numeric property with compatible type correctly passes")
+      assert_true(true)
+    }
+  }
+}
+
+test "TS2411: Getter with numeric expression and number index should error" {
+  let source =
+    #|class Foo { x }
+    #|class Foo2 { x; y }
+    #|
+    #|class C {
+    #|    [n: number]: Foo2;
+    #|    get [1 << 6]() { return new Foo }
+    #|}
+
+  let result = parse_bind_check_errors(source)
+  match result {
+    Err(diagnostics) => {
+      let has_ts2411 = diagnostics.iter().any(fn(d) { d.code == 2411 })
+      if has_ts2411 {
+        println("✓ TS2411: Numeric getter correctly errors with number index")
+        assert_true(true)
+      } else {
+        println("Expected TS2411 error but got:")
+        diagnostics.iter().each(fn(d) { println("  - TS\{d.code}: \{d.message}") })
+        assert_false(true)
+      }
+    }
+    Ok(_) => {
+      println("Expected TS2411 error but got no errors")
+      assert_false(true)
+    }
+  }
+}
+
+test "TS2411: Setter with numeric literal and number index should error" {
+  let source =
+    #|class Foo { x }
+    #|class Foo2 { x; y }
+    #|
+    #|class C {
+    #|    [n: number]: Foo2;
+    #|    set [42](p: Foo) { }
+    #|}
+
+  let result = parse_bind_check_errors(source)
+  match result {
+    Err(diagnostics) => {
+      let has_ts2411 = diagnostics.iter().any(fn(d) { d.code == 2411 })
+      if has_ts2411 {
+        println("✓ TS2411: Numeric setter correctly errors with number index")
+        assert_true(true)
+      } else {
+        println("Expected TS2411 error but got:")
+        diagnostics.iter().each(fn(d) { println("  - TS\{d.code}: \{d.message}") })
+        assert_false(true)
+      }
+    }
+    Ok(_) => {
+      println("Expected TS2411 error but got no errors")
+      assert_false(true)
+    }
+  }
+}
+
+test "TS2411: Setter with numeric literal and compatible number index should pass" {
+  let source =
+    #|class Foo { x }
+    #|class Foo2 { x; y }
+    #|
+    #|class C {
+    #|    [n: number]: Foo2;
+    #|    set [42](p: Foo2) { }
+    #|}
+
+  let result = parse_bind_check_errors(source)
+  match result {
+    Err(diagnostics) => {
+      let has_ts2411 = diagnostics.iter().any(fn(d) { d.code == 2411 })
+      if has_ts2411 {
+        println("Expected numeric setter to pass but got TS2411:")
+        diagnostics.iter().each(fn(d) { println("  - TS\{d.code}: \{d.message}") })
+        assert_false(true)
+      } else {
+        println("✓ TS2411: Numeric setter with compatible type correctly passes")
+        assert_true(true)
+      }
+    }
+    Ok(_) => {
+      println("✓ TS2411: Numeric setter with compatible type correctly passes")
+      assert_true(true)
+    }
+  }
+}
+
+// ============================================================================
+// INHERITANCE WITH SETTER TESTS
+// ============================================================================
+
+test "TS2411: Derived class setter vs base class string index should error" {
+  let source =
+    #|class Foo { x }
+    #|class Foo2 { x; y }
+    #|
+    #|class C {
+    #|    [s: string]: Foo2;
+    #|}
+    #|
+    #|class D extends C {
+    #|    set ["prop"](p: Foo) { }
+    #|}
+
+  let result = parse_bind_check_errors(source)
+  match result {
+    Err(diagnostics) => {
+      let has_ts2411 = diagnostics.iter().any(fn(d) { d.code == 2411 })
+      if has_ts2411 {
+        println("✓ TS2411: Derived setter vs base index correctly errors")
+        assert_true(true)
+      } else {
+        println("Expected TS2411 error but got:")
+        diagnostics.iter().each(fn(d) { println("  - TS\{d.code}: \{d.message}") })
+        assert_false(true)
+      }
+    }
+    Ok(_) => {
+      println("Expected TS2411 error but got no errors")
+      assert_false(true)
+    }
+  }
+}
+
+test "TS2411: Base class setter vs derived class string index should error" {
+  let source =
+    #|class Foo { x }
+    #|class Foo2 { x; y }
+    #|
+    #|class C {
+    #|    set ["prop"](p: Foo) { }
+    #|}
+    #|
+    #|class D extends C {
+    #|    [s: string]: Foo2;
+    #|}
+
+  let result = parse_bind_check_errors(source)
+  match result {
+    Err(diagnostics) => {
+      let has_ts2411 = diagnostics.iter().any(fn(d) { d.code == 2411 })
+      if has_ts2411 {
+        println("✓ TS2411: Base setter vs derived index correctly errors")
+        assert_true(true)
+      } else {
+        println("Expected TS2411 error but got:")
+        diagnostics.iter().each(fn(d) { println("  - TS\{d.code}: \{d.message}") })
+        assert_false(true)
+      }
+    }
+    Ok(_) => {
+      println("Expected TS2411 error but got no errors")
+      assert_false(true)
+    }
+  }
+}
+
+test "TS2411: Multiple setters and getters with mixed compatibility" {
+  let source =
+    #|class Foo { x }
+    #|class Foo2 { x; y }
+    #|
+    #|class C {
+    #|    [s: string]: Foo2;
+    #|    get ["get1"]() { return new Foo }
+    #|    set ["set1"](p: Foo) { }
+    #|    get ["get2"]() { return new Foo2 }
+    #|    set ["set2"](p: Foo2) { }
+    #|}
+
+  let result = parse_bind_check_errors(source)
+  match result {
+    Err(diagnostics) => {
+      let ts2411_count = diagnostics
+        .iter()
+        .filter(fn(d) { d.code == 2411 })
+        .fold(init=0, fn(count, _d) { count + 1 })
+      if ts2411_count == 2 {
+        println("✓ TS2411: Multiple accessors correctly report 2 errors (incompatible getter and setter)")
+        assert_true(true)
+      } else {
+        println("Expected 2 TS2411 errors but got \{ts2411_count}:")
+        diagnostics.iter().each(fn(d) { println("  - TS\{d.code}: \{d.message}") })
+        assert_false(true)
+      }
+    }
+    Ok(_) => {
+      println("Expected TS2411 errors but got no errors")
+      assert_false(true)
+    }
+  }
+}
+
+test "TS2411: Derived class with both getter and setter vs base index" {
+  let source =
+    #|class Foo { x }
+    #|class Foo2 { x; y }
+    #|
+    #|class C {
+    #|    [s: string]: Foo2;
+    #|}
+    #|
+    #|class D extends C {
+    #|    get ["prop"]() { return new Foo }
+    #|    set ["prop"](p: Foo) { }
+    #|}
+
+  let result = parse_bind_check_errors(source)
+  match result {
+    Err(diagnostics) => {
+      let ts2411_count = diagnostics
+        .iter()
+        .filter(fn(d) { d.code == 2411 })
+        .fold(init=0, fn(count, _d) { count + 1 })
+      if ts2411_count == 2 {
+        println("✓ TS2411: Both getter and setter correctly error against base index")
+        assert_true(true)
+      } else {
+        println("Expected 2 TS2411 errors but got \{ts2411_count}:")
+        diagnostics.iter().each(fn(d) { println("  - TS\{d.code}: \{d.message}") })
+        assert_false(true)
+      }
+    }
+    Ok(_) => {
+      println("Expected TS2411 errors but got no errors")
+      assert_false(true)
+    }
+  }
+}

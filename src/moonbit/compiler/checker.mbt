@@ -18035,24 +18035,156 @@ fn check_class_declaration(
 ///|
 /// Check class members against index signatures (TS2411)
 /// Properties must be assignable to the index signature type
+/// This includes checking derived class members against base class index signatures
+/// and base class members against derived class index signatures
 fn check_class_index_signature_compatibility(
   checker : TypeChecker,
   class_decl : ClassDeclaration,
 ) -> TypeChecker {
-  // Extract index signatures from class members
+  // Get index signatures and members from this class
+  let (current_string_idx, current_number_idx, current_members) = get_class_index_signatures_and_members(
+    checker,
+    class_decl,
+  )
+
+  // Get index signatures from base class (if any)
+  let (base_string_idx, base_number_idx) = get_base_class_index_signatures(
+    checker,
+    class_decl,
+  )
+
+  // Get members from base class (if any)
+  let base_members = get_base_class_members(checker, class_decl)
+
+  let mut checker = checker
+
+  // CASE 1: Check current class members against current class index signatures
+  if current_string_idx is Some(_) || current_number_idx is Some(_) {
+    for mem in current_members {
+      checker = match mem {
+        PropertyDeclaration(prop) =>
+          check_property_against_index_sig(
+            checker,
+            prop.name,
+            prop,
+            current_string_idx,
+            current_number_idx,
+          )
+        GetAccessor(getter) =>
+          check_getter_against_index_sig(
+            checker,
+            getter,
+            current_string_idx,
+            current_number_idx,
+          )
+        SetAccessor(setter) =>
+          check_setter_against_index_sig(
+            checker,
+            setter,
+            current_string_idx,
+            current_number_idx,
+          )
+        MethodDeclaration(method) =>
+          check_method_against_index_sig(
+            checker,
+            method,
+            current_string_idx,
+            current_number_idx,
+          )
+        _ => checker
+      }
+    }
+
+    // CASE 2: Check base class members against current class index signatures
+    // (when derived class has index signature, base class members must match)
+    for mem in base_members {
+      checker = match mem {
+        PropertyDeclaration(prop) =>
+          check_property_against_index_sig(
+            checker,
+            prop.name,
+            prop,
+            current_string_idx,
+            current_number_idx,
+          )
+        GetAccessor(getter) =>
+          check_getter_against_index_sig(
+            checker,
+            getter,
+            current_string_idx,
+            current_number_idx,
+          )
+        SetAccessor(setter) =>
+          check_setter_against_index_sig(
+            checker,
+            setter,
+            current_string_idx,
+            current_number_idx,
+          )
+        MethodDeclaration(method) =>
+          check_method_against_index_sig(
+            checker,
+            method,
+            current_string_idx,
+            current_number_idx,
+          )
+        _ => checker
+      }
+    }
+  }
+
+  // CASE 3: Check current class members against base class index signatures
+  // (when base class has index signature, derived class members must match)
+  if base_string_idx is Some(_) || base_number_idx is Some(_) {
+    for mem in current_members {
+      checker = match mem {
+        PropertyDeclaration(prop) =>
+          check_property_against_index_sig(
+            checker,
+            prop.name,
+            prop,
+            base_string_idx,
+            base_number_idx,
+          )
+        GetAccessor(getter) =>
+          check_getter_against_index_sig(checker, getter, base_string_idx, base_number_idx)
+        SetAccessor(setter) =>
+          check_setter_against_index_sig(checker, setter, base_string_idx, base_number_idx)
+        MethodDeclaration(method) =>
+          check_method_against_index_sig(
+            checker,
+            method,
+            base_string_idx,
+            base_number_idx,
+          )
+        _ => checker
+      }
+    }
+  }
+
+  checker
+}
+
+///|
+/// Helper function to collect index signatures and members from a class declaration
+fn get_class_index_signatures_and_members(
+  checker : TypeChecker,
+  class_decl : ClassDeclaration,
+) -> (IndexSignature?, IndexSignature?, Array[Node]) {
+  // Extract index signatures from this class
   let string_index : Ref[IndexSignature?] = { val: None }
   let number_index : Ref[IndexSignature?] = { val: None }
+  let members : Array[Node] = Array::new()
 
   for mem in class_decl.members {
     match mem {
       IndexSignatureDeclaration(idx_sig) => {
-        // Resolve the parameter type (string or number) and return type
-        let (param_type, c) = resolve_type_annotation_or_any(
+        let (param_type, _c) = resolve_type_annotation_or_any(
           checker,
           Some(idx_sig.parameter_type),
         )
-        let (return_type, c) = resolve_type_annotation_or_any(
-          c,
+        let (return_type, _c) = resolve_type_annotation_or_any(
+          checker,
           Some(idx_sig.return_type),
         )
 
@@ -18074,46 +18206,84 @@ fn check_class_index_signature_compatibility(
           _ => ()
         }
       }
-      _ => ()
+      _ => {
+        // Collect non-index-signature members
+        members.push(mem)
+      }
     }
   }
 
-  // If no index signatures, nothing to check
-  if string_index.val is None && number_index.val is None {
-    return checker
-  }
+  (string_index.val, number_index.val, members)
+}
 
-  // Check each member against index signatures
-  let mut checker = checker
-  for mem in class_decl.members {
-    checker = match mem {
-      PropertyDeclaration(prop) =>
-        check_property_against_index_sig(
-          checker,
-          prop.name,
-          prop,
-          string_index.val,
-          number_index.val,
-        )
-      GetAccessor(getter) =>
-        check_getter_against_index_sig(
-          checker,
-          getter,
-          string_index.val,
-          number_index.val,
-        )
-      MethodDeclaration(method) =>
-        check_method_against_index_sig(
-          checker,
-          method,
-          string_index.val,
-          number_index.val,
-        )
-      _ => checker
+///|
+/// Helper function to collect index signatures from base class
+fn get_base_class_index_signatures(
+  checker : TypeChecker,
+  class_decl : ClassDeclaration,
+) -> (IndexSignature?, IndexSignature?) {
+  // Look for extends clause
+  for heritage_clause in class_decl.heritage_clauses {
+    if heritage_clause.kind == Extends {
+      for type_node in heritage_clause.types {
+        match type_node {
+          TypeReference(type_ref) =>
+            // Look up the base class
+            match lookup_symbol(checker, type_ref.type_name) {
+              Some(base_symbol) =>
+                match base_symbol.value_declaration {
+                  Some(ClassDeclaration(base_class_decl)) => {
+                    let (string_idx, number_idx, _members) = get_class_index_signatures_and_members(
+                      checker,
+                      base_class_decl,
+                    )
+                    return (string_idx, number_idx)
+                  }
+                  _ => ()
+                }
+              None => ()
+            }
+          _ => ()
+        }
+      }
     }
   }
+  (None, None)
+}
 
-  checker
+///|
+/// Helper function to get all members from base class
+fn get_base_class_members(
+  checker : TypeChecker,
+  class_decl : ClassDeclaration,
+) -> Array[Node] {
+  // Look for extends clause
+  for heritage_clause in class_decl.heritage_clauses {
+    if heritage_clause.kind == Extends {
+      for type_node in heritage_clause.types {
+        match type_node {
+          TypeReference(type_ref) =>
+            // Look up the base class
+            match lookup_symbol(checker, type_ref.type_name) {
+              Some(base_symbol) =>
+                match base_symbol.value_declaration {
+                  Some(ClassDeclaration(base_class_decl)) => {
+                    let (_string_idx, _number_idx, members) = get_class_index_signatures_and_members(
+                      checker,
+                      base_class_decl,
+                    )
+                    return members
+                  }
+                  _ => ()
+                }
+              None => ()
+            }
+          _ => ()
+        }
+      }
+    }
+  }
+  Array::new()
 }
 
 ///|
@@ -18196,6 +18366,65 @@ fn check_property_against_index_sig(
       return checker_test
     }
     None => ()
+  }
+
+  // Check against number index signature (only for numeric properties)
+  // Numeric properties include: NumericLiteral computed names, or expressions that evaluate to numbers
+  let is_numeric_property = match prop.computed_name_expr {
+    Some(expr) =>
+      match expr {
+        NumericLiteral(_) => true
+        // For other expressions like [1 << 6], we assume they could be numeric
+        // if there's a number index signature (conservative approach)
+        _ => number_index is Some(_)
+      }
+    None => false // Non-computed properties are handled by string index
+  }
+
+  if is_numeric_property {
+    match number_index {
+      Some(sig) => {
+        let error_count_before = checker.diagnostics.length()
+        let checker_test = check_assignment_detailed(
+          checker,
+          prop_type,
+          sig.return_type,
+          prop.location,
+          "property",
+        )
+        let has_error = checker_test.diagnostics.length() > error_count_before
+
+        if has_error {
+          // Remove the diagnostic(s) added by check_assignment_detailed
+          while checker_test.diagnostics.length() > error_count_before {
+            ignore(checker_test.diagnostics.pop())
+          }
+
+          let prop_type_str = type_to_string(prop_type)
+          let index_type_str = type_to_string(sig.return_type)
+          // Format property name for error message
+          let display_name = if is_computed {
+            "'[" + actual_prop_name + "]'"
+          } else {
+            "'" + actual_prop_name + "'"
+          }
+          return add_diagnostic_with_code(
+            checker_test,
+            "Property " +
+              display_name +
+              " of type '" +
+              prop_type_str +
+              "' is not assignable to 'number' index type '" +
+              index_type_str +
+              "'.",
+            prop.location,
+            TS2411,
+          )
+        }
+        return checker_test
+      }
+      None => ()
+    }
   }
 
   checker
@@ -18307,6 +18536,198 @@ fn check_getter_against_index_sig(
       return checker_test
     }
     None => ()
+  }
+
+  // Check against number index signature (only for numeric getters)
+  let is_numeric_getter = match getter.computed_name_expr {
+    Some(expr) =>
+      match expr {
+        NumericLiteral(_) => true
+        _ => number_index is Some(_)
+      }
+    None => false // Non-computed getters are handled by string index
+  }
+
+  if is_numeric_getter {
+    match number_index {
+      Some(sig) => {
+        let error_count_before = checker.diagnostics.length()
+        let checker_test = check_assignment_detailed(
+          checker,
+          getter_type,
+          sig.return_type,
+          getter.location,
+          "getter",
+        )
+        let has_error = checker_test.diagnostics.length() > error_count_before
+
+        if has_error {
+          while checker_test.diagnostics.length() > error_count_before {
+            ignore(checker_test.diagnostics.pop())
+          }
+
+          let getter_type_str = type_to_string(getter_type)
+          let index_type_str = type_to_string(sig.return_type)
+          let display_name = if is_computed {
+            "'[" + actual_prop_name + "]'"
+          } else {
+            "'" + actual_prop_name + "'"
+          }
+          return add_diagnostic_with_code(
+            checker_test,
+            "Property " +
+              display_name +
+              " of type '" +
+              getter_type_str +
+              "' is not assignable to 'number' index type '" +
+              index_type_str +
+              "'.",
+            getter.location,
+            TS2411,
+          )
+        }
+        return checker_test
+      }
+      None => ()
+    }
+  }
+
+  checker
+}
+
+///|
+/// Check a setter against index signatures (TS2411)
+fn check_setter_against_index_sig(
+  checker : TypeChecker,
+  setter : SetAccessor,
+  string_index : IndexSignature?,
+  number_index : IndexSignature?,
+) -> TypeChecker {
+  // Static members are not subject to index signature constraints
+  if has_modifier(setter.modifiers, Modifier::Static) {
+    return checker
+  }
+
+  // Determine if this is a computed property and get display name for errors
+  let (is_computed, actual_prop_name) = match setter.computed_name_expr {
+    Some(expr) =>
+      match expr {
+        StringLiteral(lit) => (true, lit.value)
+        NumericLiteral(lit) => (true, lit.value)
+        _ => (true, "<computed>") // For expressions like [1 << 6], use placeholder
+      }
+    None => (false, setter.name)
+  }
+
+  // Get setter parameter type
+  let (param_type, checker) = match setter.parameter {
+    Parameter(param) =>
+      match param.type_annotation {
+        Some(_) => resolve_type_annotation_or_any(checker, param.type_annotation)
+        None => any_type(checker)
+      }
+    _ => any_type(checker) // Shouldn't happen, but handle gracefully
+  }
+
+  // Check against string index signature
+  match string_index {
+    Some(sig) => {
+      // Use detailed assignment checking to get proper type compatibility
+      let error_count_before = checker.diagnostics.length()
+      let checker_test = check_assignment_detailed(
+        checker,
+        param_type,
+        sig.return_type,
+        setter.location,
+        "setter",
+      )
+      let has_error = checker_test.diagnostics.length() > error_count_before
+
+      if has_error {
+        // Remove the diagnostic(s) added by check_assignment_detailed
+        // We want to report TS2411 instead
+        while checker_test.diagnostics.length() > error_count_before {
+          ignore(checker_test.diagnostics.pop())
+        }
+
+        let param_type_str = type_to_string(param_type)
+        let index_type_str = type_to_string(sig.return_type)
+        // Format property name for error message
+        let display_name = if is_computed {
+          "'[\"" + actual_prop_name + "\"]'"
+        } else {
+          "'" + actual_prop_name + "'"
+        }
+        return add_diagnostic_with_code(
+          checker_test,
+          "Property " +
+            display_name +
+            " of type '" +
+            param_type_str +
+            "' is not assignable to 'string' index type '" +
+            index_type_str +
+            "'.",
+          setter.location,
+          TS2411,
+        )
+      }
+      return checker_test
+    }
+    None => ()
+  }
+
+  // Check against number index signature (only for numeric setters)
+  let is_numeric_setter = match setter.computed_name_expr {
+    Some(expr) =>
+      match expr {
+        NumericLiteral(_) => true
+        _ => number_index is Some(_)
+      }
+    None => false // Non-computed setters are handled by string index
+  }
+
+  if is_numeric_setter {
+    match number_index {
+      Some(sig) => {
+        let error_count_before = checker.diagnostics.length()
+        let checker_test = check_assignment_detailed(
+          checker,
+          param_type,
+          sig.return_type,
+          setter.location,
+          "setter",
+        )
+        let has_error = checker_test.diagnostics.length() > error_count_before
+
+        if has_error {
+          while checker_test.diagnostics.length() > error_count_before {
+            ignore(checker_test.diagnostics.pop())
+          }
+
+          let param_type_str = type_to_string(param_type)
+          let index_type_str = type_to_string(sig.return_type)
+          let display_name = if is_computed {
+            "'[" + actual_prop_name + "]'"
+          } else {
+            "'" + actual_prop_name + "'"
+          }
+          return add_diagnostic_with_code(
+            checker_test,
+            "Property " +
+              display_name +
+              " of type '" +
+              param_type_str +
+              "' is not assignable to 'number' index type '" +
+              index_type_str +
+              "'.",
+            setter.location,
+            TS2411,
+          )
+        }
+        return checker_test
+      }
+      None => ()
+    }
   }
 
   checker
