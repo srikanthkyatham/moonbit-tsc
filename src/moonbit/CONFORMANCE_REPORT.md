@@ -13,6 +13,42 @@
 
 ## Recent Fixes
 
+### ✅ Fixed TS2411 Computed Property Validation! (December 12, 2025)
+- **Impact**: +4 tests passing (119/142 → 123/142 = 86.6%, +2.8% improvement)
+- **Computed Properties**: **123/142 passing (86.6%)**, up from 119/142 (83.8%)
+- **Feature**: Extended TS2411 validation to handle computed properties and expressions
+  - **TS2411**: "Property type not assignable to index signature type"
+  - **Bug Fixed**: Computed properties were not being validated against index signatures
+  - Computed string literal: `[""]: Foo` → TS2411 error when incompatible ❌
+  - Computed numeric expression: `get [1 << 6]() { return new Foo }` → TS2411 error when incompatible ❌
+  - Regular property with compatible type → valid ✅
+
+- **Implementation details**:
+  1. **Property validation** (checker.mbt:18133-18202):
+     - Changed from only handling `StringLiteral` to handling all computed expressions
+     - Added `(is_computed, actual_prop_name)` tuple to track computed vs regular properties
+     - Handle `StringLiteral`, `NumericLiteral`, and other expressions (use `<computed>` placeholder)
+     - Replaced `is_assignable()` with `check_assignment_detailed()` for proper structural checking
+     - Remove TS2322 diagnostics and report only TS2411 for index signature violations
+  2. **Getter validation** (checker.mbt:18243-18313):
+     - Applied same fixes to `check_getter_against_index_sig()`
+     - Now validates all computed getters, not just string literals
+  3. **Error formatting**:
+     - Computed properties: `'["propname"]'`
+     - Regular properties: `'propname'`
+     - Expression placeholders: `'["<computed>"]'` (for expressions like `[1 << 6]`)
+
+- **Tests fixed** (4 conformance tests):
+  - `computedPropertyNames42_ES5.ts` - computed property with string literal ✅
+  - `computedPropertyNames42_ES6.ts` - computed property with string literal ✅
+  - `computedPropertyNames38_ES5.ts` - computed getter with numeric expression ✅
+  - `computedPropertyNames38_ES6.ts` - computed getter with numeric expression ✅
+
+- **Remaining failures** (19 tests):
+  - TS2411 inheritance validation (17 tests): Members in derived classes need validation against base class index signatures
+  - TS2466 super in computed property (2 tests): Need to implement validation for `super()` in computed property names
+  - TS2464 computed property type (2 tests): Need to validate computed property name types
+
 ### ✅ Fixed TS2411 Static Member Validation + Parser Support! (December 12, 2025)
 - **Impact**: +16 tests passing (103/142 → 119/142 = 83.8%, +11.3% improvement)
 - **Computed Properties**: **119/142 passing (83.8%)**, up from 103/142 (72.5%)
@@ -1306,7 +1342,7 @@ The following categories have achieved full conformance:
 | functionDeclarations | 13 | 13 | 100% |
 | modules | 39 | 39 | 100% |
 | spread | 26 | 27 | 96% |
-| computedProperties | 119 | 142 | 83.8% |
+| computedProperties | 123 | 142 | 86.6% |
 
 ## Types Subcategory Breakdown
 

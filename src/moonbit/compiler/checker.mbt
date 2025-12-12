@@ -18130,6 +18130,17 @@ fn check_property_against_index_sig(
     return checker
   }
 
+  // Determine if this is a computed property and get display name for errors
+  let (is_computed, actual_prop_name) = match prop.computed_name_expr {
+    Some(expr) =>
+      match expr {
+        StringLiteral(lit) => (true, lit.value)
+        NumericLiteral(lit) => (true, lit.value)
+        _ => (true, "<computed>") // For expressions like [1 << 6], use placeholder
+      }
+    None => (false, prop_name)
+  }
+
   // Get property type
   let (prop_type, checker) = match prop.type_annotation {
     Some(_) => resolve_type_annotation_or_any(checker, prop.type_annotation)
@@ -18143,14 +18154,37 @@ fn check_property_against_index_sig(
   // Check against string index signature (all properties match string index)
   match string_index {
     Some(sig) => {
-      if not(is_assignable(prop_type, sig.return_type)) {
+      // Use detailed assignment checking to get proper type compatibility
+      let error_count_before = checker.diagnostics.length()
+      let checker_test = check_assignment_detailed(
+        checker,
+        prop_type,
+        sig.return_type,
+        prop.location,
+        "property",
+      )
+      let has_error = checker_test.diagnostics.length() > error_count_before
+
+      if has_error {
+        // Remove the diagnostic(s) added by check_assignment_detailed
+        // We want to report TS2411 instead
+        while checker_test.diagnostics.length() > error_count_before {
+          ignore(checker_test.diagnostics.pop())
+        }
+
         let prop_type_str = type_to_string(prop_type)
         let index_type_str = type_to_string(sig.return_type)
+        // Format property name for error message
+        let display_name = if is_computed {
+          "'[\"" + actual_prop_name + "\"]'"
+        } else {
+          "'" + actual_prop_name + "'"
+        }
         return add_diagnostic_with_code(
-          checker,
-          "Property '" +
-            prop_name +
-            "' of type '" +
+          checker_test,
+          "Property " +
+            display_name +
+            " of type '" +
             prop_type_str +
             "' is not assignable to 'string' index type '" +
             index_type_str +
@@ -18159,6 +18193,7 @@ fn check_property_against_index_sig(
           TS2411,
         )
       }
+      return checker_test
     }
     None => ()
   }
@@ -18205,14 +18240,15 @@ fn check_getter_against_index_sig(
     return checker
   }
 
-  // Get the computed property name
-  let prop_name = match getter.computed_name_expr {
+  // Determine if this is a computed property and get display name for errors
+  let (is_computed, actual_prop_name) = match getter.computed_name_expr {
     Some(expr) =>
       match expr {
-        StringLiteral(lit) => lit.value
-        _ => return checker // Can't validate dynamic names
+        StringLiteral(lit) => (true, lit.value)
+        NumericLiteral(lit) => (true, lit.value)
+        _ => (true, "<computed>") // For expressions like [1 << 6], use placeholder
       }
-    None => getter.name
+    None => (false, getter.name)
   }
 
   // Get getter return type
@@ -18229,14 +18265,37 @@ fn check_getter_against_index_sig(
   // Check against string index signature
   match string_index {
     Some(sig) => {
-      if not(is_assignable(getter_type, sig.return_type)) {
+      // Use detailed assignment checking to get proper type compatibility
+      let error_count_before = checker.diagnostics.length()
+      let checker_test = check_assignment_detailed(
+        checker,
+        getter_type,
+        sig.return_type,
+        getter.location,
+        "getter",
+      )
+      let has_error = checker_test.diagnostics.length() > error_count_before
+
+      if has_error {
+        // Remove the diagnostic(s) added by check_assignment_detailed
+        // We want to report TS2411 instead
+        while checker_test.diagnostics.length() > error_count_before {
+          ignore(checker_test.diagnostics.pop())
+        }
+
         let getter_type_str = type_to_string(getter_type)
         let index_type_str = type_to_string(sig.return_type)
+        // Format property name for error message
+        let display_name = if is_computed {
+          "'[\"" + actual_prop_name + "\"]'"
+        } else {
+          "'" + actual_prop_name + "'"
+        }
         return add_diagnostic_with_code(
-          checker,
-          "Property '" +
-            prop_name +
-            "' of type '" +
+          checker_test,
+          "Property " +
+            display_name +
+            " of type '" +
             getter_type_str +
             "' is not assignable to 'string' index type '" +
             index_type_str +
@@ -18245,6 +18304,7 @@ fn check_getter_against_index_sig(
           TS2411,
         )
       }
+      return checker_test
     }
     None => ()
   }
