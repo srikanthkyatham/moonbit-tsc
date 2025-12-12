@@ -8709,30 +8709,40 @@ fn lookup_property_in_type(
           _ => () // Fall through to normal lookup
         }
       }
-      // Resolve the type reference and look up property in resolved type
-      let (resolved, checker) = resolve_type_reference(checker, type_ref)
-      match resolved {
-        TypeReference(_) =>
-          // Could not resolve further, check if it's a class or interface with properties
-          match lookup_symbol(checker, type_ref.name) {
-            Some(symbol) =>
-              match symbol.kind {
-                Interface =>
-                  match
-                    get_interface_property_type(checker, symbol, prop_name) {
-                    (Some(prop_type), checker) => (Some(prop_type), checker)
-                    (None, checker) => (None, checker)
+      // Check if this is a type parameter with a constraint
+      match checker.type_parameter_constraints.get(type_ref.name) {
+        Some(Some(constraint)) => {
+          // Type parameter with constraint - look up property in constraint
+          lookup_property_in_type(checker, constraint, prop_name)
+        }
+        Some(None) | None => {
+          // No constraint or not a type parameter - use normal resolution
+          // Resolve the type reference and look up property in resolved type
+          let (resolved, checker) = resolve_type_reference(checker, type_ref)
+          match resolved {
+            TypeReference(_) =>
+              // Could not resolve further, check if it's a class or interface with properties
+              match lookup_symbol(checker, type_ref.name) {
+                Some(symbol) =>
+                  match symbol.kind {
+                    Interface =>
+                      match
+                        get_interface_property_type(checker, symbol, prop_name) {
+                        (Some(prop_type), checker) => (Some(prop_type), checker)
+                        (None, checker) => (None, checker)
+                      }
+                    Class =>
+                      match get_class_property_type(checker, symbol, prop_name) {
+                        (Some(prop_type), checker) => (Some(prop_type), checker)
+                        (None, checker) => (None, checker)
+                      }
+                    _ => (None, checker)
                   }
-                Class =>
-                  match get_class_property_type(checker, symbol, prop_name) {
-                    (Some(prop_type), checker) => (Some(prop_type), checker)
-                    (None, checker) => (None, checker)
-                  }
-                _ => (None, checker)
+                None => (None, checker)
               }
-            None => (None, checker)
+            _ => lookup_property_in_type(checker, resolved, prop_name)
           }
-        _ => lookup_property_in_type(checker, resolved, prop_name)
+        }
       }
     }
     Union(ut) => {
