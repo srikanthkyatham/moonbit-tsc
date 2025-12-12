@@ -12148,6 +12148,30 @@ fn is_always_truthy(expr : Node) -> Bool {
 }
 
 ///|
+/// Validate setter parameter count (TS1049)
+/// A setter must have exactly one parameter
+fn validate_setter_parameter_count(
+  checker : TypeChecker,
+  setter_type : Type,
+  loc : SourceLocation
+) -> TypeChecker {
+  match setter_type {
+    Function(func_type) =>
+      if func_type.parameters.length() != 1 {
+        add_diagnostic_with_code(
+          checker,
+          "A 'set' accessor must have exactly one parameter.",
+          loc,
+          TS1049,
+        )
+      } else {
+        checker
+      }
+    _ => checker
+  }
+}
+
+///|
 /// Infer object literal type
 fn infer_object_literal_type(
   checker : TypeChecker,
@@ -12422,11 +12446,15 @@ fn infer_object_literal_type(
         })
         checker = c
       }
-      SetAccessor(name, func_expr, _) => {
+      SetAccessor(name, func_expr, loc) => {
         // Setter accessor: { set prop(value) { ... } }
         let (setter_type, c) = infer_function_expression_type(
           checker, func_expr,
         )
+
+        // TS1049: Check that setter has exactly one parameter
+        let c = validate_setter_parameter_count(c, setter_type, loc)
+
         // The property type is the parameter type of the setter
         let prop_type = match setter_type {
           Function(func_type) =>
@@ -12525,6 +12553,10 @@ fn infer_object_literal_type(
           c
         }
         let (setter_type, c) = infer_function_expression_type(c, func_expr)
+
+        // TS1049: Check that setter has exactly one parameter
+        let c = validate_setter_parameter_count(c, setter_type, loc)
+
         let prop_type = match setter_type {
           Function(func_type) =>
             if func_type.parameters.length() > 0 {

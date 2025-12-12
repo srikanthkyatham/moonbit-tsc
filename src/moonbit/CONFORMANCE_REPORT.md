@@ -5,13 +5,55 @@
 | Metric | Value |
 |--------|-------|
 | Total Tests | 5,652 |
-| Passed | 3,917 |
-| Failed | 1,735 |
+| Passed | 3,919 |
+| Failed | 1,733 |
 | **Pass Rate** | **69.3%** |
 
 *Last updated: December 12, 2025*
 
 ## Recent Fixes
+
+### ✅ Implemented TS1049 Setter Parameter Count Validation + DRY Refactoring! (December 12, 2025)
+- **Impact**: +2 tests passing (133/142 → 135/142 = 95.1%, +1.4% improvement)
+- **Computed Properties**: **135/142 passing (95.1%)**, up from 133/142 (93.7%)
+- **Feature**: Implemented TS1049 error detection for setters with incorrect parameter count
+  - **TS1049**: "A 'set' accessor must have exactly one parameter."
+  - **Detection**: Validates setter parameter count in both regular and computed setters
+  - **Example**: `set [1 + 1]() { }` correctly triggers TS1049 error (zero parameters)
+
+- **Implementation details**:
+  1. **Added TS1049 to DiagnosticCode** (symbol.mbt:339):
+     - `TS1049 // A 'set' accessor must have exactly one parameter`
+     - Added corresponding mappings in `to_int()` (line 763) and `from_int()` (line 1111) functions
+  2. **DRY Refactoring**: Created `validate_setter_parameter_count()` helper function (checker.mbt:12150-12172):
+     - Consolidated duplicated validation logic from 2 locations (SetAccessor and ComputedSetAccessor)
+     - Takes `TypeChecker`, `Type` (setter type), and `SourceLocation`, returns updated `TypeChecker`
+     - Logic:
+       - Matches on `Function(func_type)` to extract parameters
+       - Checks if `func_type.parameters.length() != 1`
+       - Reports TS1049 diagnostic at setter location if parameter count is invalid
+  3. **Refactored call sites** (2 locations):
+     - Regular setter validation (checker.mbt:12456): `let c = validate_setter_parameter_count(c, setter_type, loc)`
+     - Computed setter validation (checker.mbt:12558): `let c = validate_setter_parameter_count(c, setter_type, loc)`
+  4. **Code reduction**: Eliminated ~26 lines of duplicated code by extracting common validation logic
+
+- **Tests fixed** (2 conformance tests):
+  - `computedPropertyNames49_ES5.ts` - `set [1 + 1]() { }` correctly triggers TS1049 ✅
+  - `computedPropertyNames50_ES5.ts` - `set [1 + 1]() { }` correctly triggers TS1049 ✅
+
+- **Unit tests added** (10 comprehensive tests):
+  - `ts1049_setter_params_test.mbt` (296 lines)
+  - Tests for setters with 0, 1, and 2+ parameters
+  - Tests for both regular and computed setters
+  - Tests that getters do NOT trigger TS1049
+  - Tests for multiple setters in same object
+  - Tests for both conformance test cases
+  - Validation working correctly ✅
+
+- **Remaining failures** (7 tests):
+  - TS2464 computed property type (3 tests): Overload resolution issues with computed property names
+  - TS2300 duplicate identifier (2 tests): Duplicate property names
+  - TS2466 super in computed property (2 tests): `super()` in computed property names
 
 ### ✅ Implemented TS2873 Always Falsy Expression Detection! (December 12, 2025)
 - **Impact**: +4 tests passing (129/142 → 133/142 = 93.7%, +2.8% improvement)
@@ -1472,7 +1514,7 @@ The following categories have achieved full conformance:
 | functionDeclarations | 13 | 13 | 100% |
 | modules | 39 | 39 | 100% |
 | spread | 26 | 27 | 96% |
-| computedProperties | 133 | 142 | 93.7% |
+| computedProperties | 135 | 142 | 95.1% |
 
 ## Types Subcategory Breakdown
 
