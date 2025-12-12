@@ -373,6 +373,7 @@ pub enum DiagnosticCode {
   TS2326 // Types of parameters '{0}' and '{1}' are incompatible
   TS2328 // Types of property '{0}' are incompatible
   TS2329 // Index signature is missing in type '{0}'
+  TS2331 // 'this' cannot be referenced in a module or namespace body
   TS2332 // 'this' cannot be referenced in current location
   TS2334 // 'this' cannot be referenced in a static property initializer
   TS2335 // 'super' can only be referenced in a derived class
@@ -781,6 +782,7 @@ pub fn DiagnosticCode::to_int(self : DiagnosticCode) -> Int {
     TS2326 => 2326
     TS2328 => 2328
     TS2329 => 2329
+    TS2331 => 2331
     TS2332 => 2332
     TS2334 => 2334
     TS2335 => 2335

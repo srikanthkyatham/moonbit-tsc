@@ -304,6 +304,7 @@ pub struct TypeChecker {
   inferring_variables : @hashset.HashSet[String] // Variables currently being inferred (for TS7022 circular reference detection)
   default_export_locations : Array[SourceLocation] // Track all default export locations for TS2528
   import_helpers : Bool // @importHelpers compiler directive - affects TS2807 validation
+  in_namespace_body : Bool // Tracks if we're in a namespace/module body (for TS2331)
 } derive(Show)
 
 ///|
@@ -395,6 +396,7 @@ pub fn TypeChecker::new_with_options(
     inferring_variables: @hashset.new(),
     default_export_locations: [],
     import_helpers: false, // Default to false, can be set later from compiler directives
+    in_namespace_body: false,
   }
 }
 
@@ -3160,9 +3162,13 @@ fn check_module_declaration(
   checker : TypeChecker,
   mod_decl : ModuleDeclaration,
 ) -> TypeChecker {
+  // Set in_namespace_body flag (for TS2331: 'this' in namespace body)
+  let was_in_namespace_body = checker.in_namespace_body
+  let checker = { ..checker, in_namespace_body: true }
+
   // Look up the namespace symbol to get its locals (all members, not just exports)
   // This allows internal access to non-exported members within the namespace
-  match lookup_symbol(checker, mod_decl.name) {
+  let checker = match lookup_symbol(checker, mod_decl.name) {
     Some(ns_symbol) =>
       // Use locals (all members) for internal namespace scope, not just exports
       match ns_symbol.locals {
@@ -3202,6 +3208,9 @@ fn check_module_declaration(
         None => checker
       }
   }
+
+  // Restore in_namespace_body flag
+  { ..checker, in_namespace_body: was_in_namespace_body }
 }
 
 // ============================================================================
@@ -5721,17 +5730,30 @@ fn infer_function_declaration_type(
           let saved_collected_return_types = checker.collected_return_types
           let checker = { ..checker, collected_return_types: [] }
 
+          // Save and reset in_namespace_body (functions create new scope for 'this')
+          let saved_in_namespace_body = checker.in_namespace_body
+          let checker = { ..checker, in_namespace_body: false }
+
+          // Track regular function context (for 'this' in namespace body check)
+          let checker = enter_regular_function(checker)
+
           // Hoist var declarations to function scope
           let checker = hoist_var_declarations(checker, body)
 
           // Check the function body to collect return types
           let checker = check_statement(checker, body)
 
+          // Exit regular function context
+          let checker = exit_regular_function(checker)
+
           // Get the collected return types
           let collected_return_types = checker.collected_return_types
 
           // Restore saved collected return types
           let checker = { ..checker, collected_return_types: saved_collected_return_types }
+
+          // Restore in_namespace_body flag
+          let checker = { ..checker, in_namespace_body: saved_in_namespace_body }
 
           // Pop the function scope
           let checker = pop_local_scope(checker)
@@ -6271,6 +6293,10 @@ fn infer_method_type(
   // Push a local scope for method body checking
   let checker = push_function_scope(checker)
 
+  // Save and reset in_namespace_body (methods create new scope for 'this')
+  let saved_in_namespace_body = checker.in_namespace_body
+  let checker = { ..checker, in_namespace_body: false }
+
   // Track async function context for TS2465
   let checker = if method_decl.is_async {
     enter_async_function(checker)
@@ -6388,6 +6414,9 @@ fn infer_method_type(
   } else {
     checker
   }
+
+  // Restore in_namespace_body flag
+  let checker = { ..checker, in_namespace_body: saved_in_namespace_body }
 
   // Pop the local scope
   let checker = pop_local_scope(checker)
@@ -10342,6 +10371,21 @@ fn infer_this_type(
   checker : TypeChecker,
   location : SourceLocation,
 ) -> (Type, TypeChecker) {
+  // TS2331: 'this' cannot be referenced in a module or namespace body
+  // But it's allowed inside functions/methods/constructors within the namespace
+  let is_in_function = checker.arrow_function_depth > 0 ||
+    checker.regular_function_depth > 0 ||
+    checker.in_constructor
+  let checker = if checker.in_namespace_body && not(is_in_function) {
+    add_diagnostic_with_code(
+      checker,
+      "'this' cannot be referenced in a module or namespace body.",
+      location,
+      TS2331,
+    )
+  } else {
+    checker
+  }
   // TS2334: 'this' cannot be referenced in a static property initializer
   let checker = if checker.in_static_context {
     add_diagnostic_with_code(
@@ -15885,6 +15929,10 @@ fn check_function_declaration(
     )
   }
 
+  // Save and reset in_namespace_body (functions create new scope for 'this')
+  let saved_in_namespace_body = checker.in_namespace_body
+  let checker = { ..checker, in_namespace_body: false }
+
   // Track regular function context (for 'arguments' object availability)
   let checker = enter_regular_function(checker)
 
@@ -16001,6 +16049,9 @@ fn check_function_declaration(
 
   // Pop the local scope
   let checker = pop_local_scope(checker)
+
+  // Restore in_namespace_body flag
+  let checker = { ..checker, in_namespace_body: saved_in_namespace_body }
 
   // Restore narrowed types after exiting function
   { ..checker, narrowed_types: saved_narrowed_types }
@@ -17628,6 +17679,9 @@ fn check_class_declaration(
           Some(body) => {
             // Push local scope for method
             let checker = push_function_scope(checker)
+            // Save and reset in_namespace_body (methods create new scope for 'this')
+            let saved_in_namespace_body = checker.in_namespace_body
+            let checker = { ..checker, in_namespace_body: false }
             // Check for TS2369: parameter property only in constructor
             let checker = check_method_parameter_properties(
               checker,
@@ -17666,6 +17720,8 @@ fn check_class_declaration(
             } else {
               checker
             }
+            // Restore in_namespace_body flag
+            let checker = { ..checker, in_namespace_body: saved_in_namespace_body }
             // Pop local scope
             pop_local_scope(checker)
           }

@@ -123,6 +123,7 @@ pub enum MismatchReason {
   SuperPropertyOutsideClass // TS2335: 'super' can only be referenced in a derived class
   SuperCallInStaticMethod // Super call in static method
   SuperPropertyAccess(String) // TS2339: Property does not exist on type 'super'
+  ThisInModuleBody // TS2331: 'this' cannot be referenced in a module or namespace body
 
   // BigInt errors (TS2365, TS2736)
   BigIntNumberMixing(String) // TS2365: Operator cannot be applied to bigint and number
@@ -931,6 +932,7 @@ pub fn get_friendly_title(reason : MismatchReason) -> String {
     SuperPropertyOutsideClass => "'SUPER' OUTSIDE DERIVED CLASS"
     SuperCallInStaticMethod => "'SUPER' CALL IN STATIC METHOD"
     SuperPropertyAccess(name) => "PROPERTY '" + name + "' NOT ON 'SUPER'"
+    ThisInModuleBody => "'THIS' IN MODULE OR NAMESPACE BODY"
     // BigInt errors
     BigIntNumberMixing(op) => "CANNOT MIX BIGINT AND NUMBER WITH '" + op + "'"
     UnaryPlusBigInt => "UNARY '+' CANNOT BE APPLIED TO BIGINT"
@@ -1344,6 +1346,8 @@ pub fn get_why_explanation(reason : MismatchReason) -> String {
       "The property '" +
       name +
       "' doesn't exist on the parent class. Check that the parent class defines this property or method."
+    ThisInModuleBody =>
+      "'this' cannot be used in a module or namespace body because modules and namespaces don't have an instance context. Unlike classes, they serve as containers for declarations and don't create runtime objects with 'this' binding."
     // BigInt errors
     BigIntNumberMixing(op) =>
       "TypeScript doesn't allow mixing 'bigint' and 'number' in arithmetic operations because they are fundamentally different types. BigInt can represent arbitrarily large integers, while number is a 64-bit floating point. The '" +
@@ -2361,6 +2365,14 @@ pub fn get_how_to_fix(
         name +
         "' if accessing a property defined in this class",
       )
+    }
+    ThisInModuleBody => {
+      fixes.push("'this' cannot be used in a namespace/module body.")
+      fixes.push("")
+      fixes.push("Options:")
+      fixes.push("1. Move the code to a function or class method where 'this' has meaning")
+      fixes.push("2. Use explicit references instead of 'this'")
+      fixes.push("3. If you need instance state, create a class instead of a namespace")
     }
     // BigInt errors
     BigIntNumberMixing(_) => {
@@ -3653,6 +3665,7 @@ pub fn get_error_code(reason : MismatchReason) -> Int {
     SuperPropertyOutsideClass => 2335 // TS2335: 'super' can only be referenced in a derived class
     SuperCallInStaticMethod => 2337 // Reuse TS2337
     SuperPropertyAccess(_) => 2339 // TS2339: Property does not exist on type
+    ThisInModuleBody => 2331 // TS2331: 'this' cannot be referenced in a module or namespace body
     // BigInt errors
     BigIntNumberMixing(_) => 2365 // TS2365: Operator cannot be applied to types
     UnaryPlusBigInt => 2736 // TS2736: Operator '+' cannot be applied to type 'bigint'

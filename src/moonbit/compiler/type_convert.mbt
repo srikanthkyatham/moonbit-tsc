@@ -672,6 +672,7 @@ fn TypeChecker::create_type_info(self : TypeChecker) -> (TypeInfo, TypeChecker) 
     collected_return_types: self.collected_return_types,
     checked_function_bodies: self.checked_function_bodies,
     import_helpers: self.import_helpers,
+    in_namespace_body: self.in_namespace_body,
   }
   (info, new_checker)
 }
