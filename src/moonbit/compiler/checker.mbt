@@ -18396,6 +18396,61 @@ fn check_interface_declaration(
     }
   }
 
+  // TS1169: Validate that interface computed properties use literal or unique symbol types
+  for interface_member in iface_decl.members {
+    match interface_member {
+      PropertyDeclaration(prop) =>
+        match prop.computed_name_expr {
+          Some(name_expr) => {
+            // First check if the expression itself is a literal - literals are always valid
+            if is_literal_expression(name_expr) {
+              // Literal expressions are valid, skip validation
+              ()
+            } else {
+              // Not a literal expression - check the inferred type
+              let (name_type, c) = infer_type(checker, name_expr)
+              checker = c
+              // TS1169: Interface computed properties must have literal or unique symbol types
+              if not(is_literal_or_unique_symbol_type(name_type)) {
+                checker = add_diagnostic_with_code(
+                  checker,
+                  "A computed property name in an interface must refer to an expression whose type is a literal type or a 'unique symbol' type.",
+                  get_location(name_expr),
+                  TS1169,
+                )
+              }
+            }
+          }
+          None => ()
+        }
+      MethodDeclaration(meth) =>
+        match meth.computed_name_expr {
+          Some(name_expr) => {
+            // First check if the expression itself is a literal - literals are always valid
+            if is_literal_expression(name_expr) {
+              // Literal expressions are valid, skip validation
+              ()
+            } else {
+              // Not a literal expression - check the inferred type
+              let (name_type, c) = infer_type(checker, name_expr)
+              checker = c
+              // TS1169: Interface computed properties must have literal or unique symbol types
+              if not(is_literal_or_unique_symbol_type(name_type)) {
+                checker = add_diagnostic_with_code(
+                  checker,
+                  "A computed property name in an interface must refer to an expression whose type is a literal type or a 'unique symbol' type.",
+                  get_location(name_expr),
+                  TS1169,
+                )
+              }
+            }
+          }
+          None => ()
+        }
+      _ => ()
+    }
+  }
+
   // TS2464: Validate computed property names in interface members
   for interface_member in iface_decl.members {
     match interface_member {
@@ -20609,6 +20664,27 @@ fn contains_type_parameter_reference(
         }
       }
       false
+    }
+    _ => false
+  }
+}
+
+///|
+/// Check if a type is a literal type or unique symbol type (for TS1169 validation)
+/// Returns true for: StringLiteral, NumberLiteral, BooleanLiteral, Symbol (unique symbol)
+/// Returns false for: String, Number, Boolean, etc. (non-literal primitives)
+fn is_literal_or_unique_symbol_type(ty : Type) -> Bool {
+  match ty {
+    StringLiteral(_, _) | NumberLiteral(_, _) | BooleanLiteral(_, _) => true
+    Symbol(_) => true // Symbol type includes unique symbols
+    // Union types: true if ALL members are literal or unique symbol
+    Union(union) => {
+      for member in union.types {
+        if not(is_literal_or_unique_symbol_type(member)) {
+          return false
+        }
+      }
+      true
     }
     _ => false
   }

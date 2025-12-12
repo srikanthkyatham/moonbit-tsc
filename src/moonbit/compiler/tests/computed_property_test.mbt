@@ -131,7 +131,7 @@ test "computed property with string literal" {
 }
 
 ///|
-test "computed property with member expression" {
+test "computed property with member expression in interface (TS1169)" {
   let source =
     #|const obj = { prop: "key" };
     #|interface I {
@@ -139,8 +139,8 @@ test "computed property with member expression" {
     #|}
   let result = @compiler.type_check(source, "test.ts")
   match result {
-    Ok(_) => () // Expected to pass
-    Err(_) => fail("Computed property with member expression should parse")
+    Ok(_) => fail("Expected TS1169 error for non-literal computed property in interface")
+    Err(_) => () // Expected to fail with TS1169
   }
 }
 

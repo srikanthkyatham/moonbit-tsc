@@ -342,6 +342,7 @@ pub enum DiagnosticCode {
   TS1160 // Unterminated template literal
   TS1163 // A 'yield' expression is only allowed in a generator body
   TS1166 // A computed property name in a class property declaration must have a simple literal type or a 'unique symbol' type
+  TS1169 // A computed property name in an interface must refer to an expression whose type is a literal type or a 'unique symbol' type
   TS1182 // A destructuring declaration must have an initializer
   TS1186 // A rest element cannot have an initializer
   TS1187 // A parameter property may not be declared using a binding pattern
@@ -757,6 +758,7 @@ pub fn DiagnosticCode::to_int(self : DiagnosticCode) -> Int {
     TS1160 => 1160
     TS1163 => 1163
     TS1166 => 1166
+    TS1169 => 1169
     TS1182 => 1182
     TS1186 => 1186
     TS1187 => 1187
@@ -1098,6 +1100,7 @@ pub fn DiagnosticCode::from_int(code : Int) -> DiagnosticCode? {
     1155 => Some(TS1155)
     1160 => Some(TS1160)
     1166 => Some(TS1166)
+    1169 => Some(TS1169)
     1163 => Some(TS1163)
     1182 => Some(TS1182)
     1186 => Some(TS1186)

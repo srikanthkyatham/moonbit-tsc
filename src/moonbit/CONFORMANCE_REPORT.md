@@ -13,6 +13,83 @@
 
 ## Recent Fixes
 
+### ✅ TS1169 Interface Computed Property Literal Validation! (December 12, 2025)
+- **Impact**: +2 tests passing (107/142 → 109/142 = 76.7%, +1.4% improvement)
+- **Computed Properties**: **109/142 passing (76.7%)**, up from 107/142 (75.3%)
+- **Feature**: Implemented TS1169 validation for interface computed property names
+  - **TS1169**: "A computed property name in an interface must refer to an expression whose type is a literal type or a 'unique symbol' type"
+  - Non-literal expressions: `[foo()]()` where `foo()` returns `string` → TS1169 error ❌
+  - Binary expressions: `["" + ""]()` → TS1169 error ❌
+  - Member access: `[obj.prop]` where type is `string` → TS1169 error ❌
+  - Literal expressions: `["key"]`, `[42]`, `` [`template`] `` → valid ✅
+  - Unique symbols: `[Symbol.iterator]` → valid ✅
+
+- **Implementation details**:
+  1. **Helper function**: Added `is_literal_or_unique_symbol_type()` (checker.mbt:20617-20636)
+     - Checks if type is StringLiteral, NumberLiteral, BooleanLiteral, or Symbol
+     - Returns true for literal types, false for broad types like String/Number
+     - Handles union types: all members must be literal or unique symbol
+  2. **Expression check**: Uses `is_literal_expression()` first
+     - Literal expressions (string/number literals) skip type inference
+     - Only non-literal expressions get their types checked
+     - Avoids false positives on `["literal"]` where inference returns String
+  3. **Interface-only validation**: Added checks in `check_interface_declaration()` (checker.mbt:18399-18452)
+     - Validates both PropertyDeclaration and MethodDeclaration
+     - Applied after TS2467 check, before TS2464 check
+     - Does NOT apply to classes (TS1166 is the class equivalent)
+  4. **Diagnostic code**: Added TS1169 to DiagnosticCode enum (symbol.mbt:345)
+     - Added enum variant, to_int conversion, and from_int conversion
+  5. **Test updates**: Fixed existing test expectations
+     - Updated `computed_property_test.mbt` test to expect TS1169 for `[obj.prop]`
+     - Test now correctly expects error for non-literal member expressions
+
+- **Tests fixed** (2 conformance tests):
+  - `computedPropertyNamesDeclarationEmit3_ES5.ts` - binary expression `["" + ""]` ✅
+  - `computedPropertyNamesDeclarationEmit3_ES6.ts` - binary expression `["" + ""]` ✅
+
+- **Unit tests**: Created comprehensive test suite (interface_ts1169_test.mbt)
+  - 9 test cases covering function calls, binary expressions, member access, literals, symbols
+  - Tests verify TS1169 only applies to interfaces, not classes
+  - All tests passing ✅
+
+### ✅ TS2467 Type Parameter References in Computed Property Names! (December 12, 2025)
+- **Impact**: +4 tests passing (103/142 → 107/142 = 75.3%, +2.8% improvement)
+- **Computed Properties**: **107/142 passing (75.3%)**, up from 103/142 (72.5%)
+- **Feature**: Implemented TS2467 validation for type parameter references in computed property names
+  - **TS2467**: "A computed property name cannot reference a type parameter from its containing type"
+  - Class with type parameter: `class C<T> { [foo<T>()]() {} }` → TS2467 error ❌
+  - Interface with type parameter: `interface I<T> { [foo<T>()](): void }` → TS2467 error ❌
+  - Non-matching type parameter: `class C<T> { [foo<string>()]() {} }` → valid ✅
+  - Type parameter in method body: `method() { return foo<T>(); }` → valid ✅
+
+- **Implementation details**:
+  1. **Helper function**: Added `contains_type_parameter_reference()` (checker.mbt:20412-20497)
+     - Recursively checks if CallExpression type arguments reference containing type's type parameters
+     - Takes expression and array of type parameter names
+     - Matches TypeReference type_name against parameter names
+  2. **Class validation**: Added checks in `build_class_type_for_this()` (checker.mbt:18645)
+     - Validates properties and methods with computed names
+     - Added type_param_names parameter to pass containing type's parameters
+     - Applied after TS2465 (this) and TS2466 (super) validation
+  3. **Interface validation**: Added checks in `check_interface_declaration()` (checker.mbt:18352)
+     - Validates interface properties and methods
+     - Extracts type parameter names from interface declaration
+     - Separate validation loop before TS2464 check
+  4. **Nested expression support**: Correctly detects type parameters in:
+     - Call expressions: `foo<T>()` where T is type parameter
+     - Binary expressions: `getId<T>() + '2'`
+     - Multiple type parameters: `foo<T, string>()` where T matches
+
+- **Tests fixed** (4 conformance tests):
+  - `computedPropertyNames32_ES5.ts` - class with type parameter in computed name ✅
+  - `computedPropertyNames32_ES6.ts` - class with type parameter in computed name ✅
+  - `computedPropertyNames35_ES5.ts` - interface with type parameter in computed name ✅
+  - `computedPropertyNames35_ES6.ts` - interface with type parameter in computed name ✅
+
+- **Unit tests**: Created comprehensive test suite (computed_property_ts2467_test.mbt)
+  - 9 test cases covering classes, interfaces, multiple type parameters, nested expressions
+  - All tests passing ✅
+
 ### ✅ TS2466 'super' in Computed Property Names Validation! (December 12, 2025)
 - **Impact**: +4 tests passing (99/142 → 103/142 = 72.5%, +2.8% improvement)
 - **Computed Properties**: **103/142 passing (72.5%)**, up from 99/142 (69.7%)
