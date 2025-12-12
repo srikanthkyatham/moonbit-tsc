@@ -13,6 +13,47 @@
 
 ## Recent Fixes
 
+### ✅ TS2378 Get Accessor Return Value Validation! (December 12, 2025)
+- **Impact**: +2 tests passing (109/142 → 111/142 = 78.1%, +1.4% improvement)
+- **Computed Properties**: **111/142 passing (78.1%)**, up from 109/142 (76.7%)
+- **Feature**: Implemented TS2378 validation for get accessors requiring return statements
+  - **TS2378**: "A 'get' accessor must return a value."
+  - Empty get accessor: `get value() { }` → TS2378 error ❌
+  - Get accessor with return: `get value() { return 42; }` → valid ✅
+  - Set accessor without return: `set value(v) { }` → valid ✅ (TS2378 only for getters)
+  - Abstract get accessor: `abstract get value(): number;` → valid ✅ (no body needed)
+
+- **Implementation details**:
+  1. **Helper function**: Added `has_return_statement()` (checker.mbt:20673-20757)
+     - Recursively checks if statement contains return statement
+     - Handles BlockStatement, IfStatement, SwitchStatement, TryStatement
+     - Checks all code paths: if/else branches, switch cases, try/catch/finally blocks
+  2. **Validation location**: Added checks in `build_class_type_for_this()` (checker.mbt:18970-18985)
+     - Validates GetAccessor body has return statement
+     - Applied after TS2465 (this) and TS2464 (computed name type) checks
+     - Only validates if body is present (abstract/ambient accessors skip validation)
+  3. **Diagnostic code**: Added TS2378 to DiagnosticCode enum (symbol.mbt:409)
+     - Added enum variant, to_int conversion (819), and from_int conversion (1160)
+  4. **Comprehensive checking**: Validates return statements in:
+     - Simple blocks: `{ return x; }`
+     - If statements: `if (cond) { return x; }`
+     - Try/catch/finally: `try { return x; } catch { return y; }`
+     - Switch statements: `switch { case 1: return x; }`
+  5. **Accessor-specific**: Only applies to get accessors
+     - Set accessors don't need return statements
+     - Regular methods don't require returns
+     - Only get accessors trigger TS2378
+
+- **Tests fixed** (4 conformance tests):
+  - `computedPropertyNames2_ES5.ts` - get accessors with empty bodies ✅
+  - `computedPropertyNames2_ES6.ts` - get accessors with empty bodies ✅
+  - `computedPropertyNames3_ES5.ts` - get accessors with complex computed names ✅
+  - `computedPropertyNames3_ES6.ts` - get accessors with complex computed names ✅
+
+- **Unit tests**: Created comprehensive test suite (accessor_ts2378_test.mbt)
+  - 9 test cases covering empty bodies, computed names, return in if/try, set accessors, abstract accessors
+  - All tests passing ✅
+
 ### ✅ TS1169 Interface Computed Property Literal Validation! (December 12, 2025)
 - **Impact**: +2 tests passing (107/142 → 109/142 = 76.7%, +1.4% improvement)
 - **Computed Properties**: **109/142 passing (76.7%)**, up from 107/142 (75.3%)

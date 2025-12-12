@@ -18966,6 +18966,24 @@ fn build_class_type_for_this(
           }
           None => checker
         }
+
+        // TS2378: Validate that get accessor returns a value
+        checker = match getter.body {
+          Some(body) => {
+            if not(has_return_statement(body)) {
+              add_diagnostic_with_code(
+                checker,
+                "A 'get' accessor must return a value.",
+                getter.location,
+                TS2378,
+              )
+            } else {
+              checker
+            }
+          }
+          None => checker // No body means abstract or ambient, no validation needed
+        }
+
         // Note: Getter/setter types are not added to the simple class_type built here
         // They are only used for 'this' context, and getters/setters don't affect that
       }
@@ -20662,6 +20680,72 @@ fn contains_type_parameter_reference(
             }
           _ => ()
         }
+      }
+      false
+    }
+    _ => false
+  }
+}
+
+///|
+/// Check if a statement contains a return statement (for TS2378 validation)
+/// Recursively checks blocks and nested statements
+fn has_return_statement(stmt : Node) -> Bool {
+  match stmt {
+    ReturnStatement(_) => true
+    BlockStatement(block) => {
+      for s in block.statements {
+        if has_return_statement(s) {
+          return true
+        }
+      }
+      false
+    }
+    IfStatement(if_stmt) => {
+      // Check consequent
+      if has_return_statement(if_stmt.then_statement) {
+        return true
+      }
+      // Check alternate if present
+      match if_stmt.else_statement {
+        Some(else_stmt) =>
+          if has_return_statement(else_stmt) {
+            return true
+          }
+        None => ()
+      }
+      false
+    }
+    SwitchStatement(switch_stmt) => {
+      for case_clause in switch_stmt.cases {
+        for s in case_clause.statements {
+          if has_return_statement(s) {
+            return true
+          }
+        }
+      }
+      false
+    }
+    TryStatement(try_stmt) => {
+      // Check try block
+      if has_return_statement(try_stmt.try_block) {
+        return true
+      }
+      // Check catch clause
+      match try_stmt.catch_clause {
+        Some(catch_clause) =>
+          if has_return_statement(catch_clause.block) {
+            return true
+          }
+        None => ()
+      }
+      // Check finally block
+      match try_stmt.finally_block {
+        Some(finally) =>
+          if has_return_statement(finally) {
+            return true
+          }
+        None => ()
       }
       false
     }
