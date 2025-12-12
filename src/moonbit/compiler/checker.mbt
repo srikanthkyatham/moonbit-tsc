@@ -18125,6 +18125,11 @@ fn check_property_against_index_sig(
   string_index : IndexSignature?,
   number_index : IndexSignature?,
 ) -> TypeChecker {
+  // Static members are not subject to index signature constraints
+  if has_modifier(prop.modifiers, Modifier::Static) {
+    return checker
+  }
+
   // Get property type
   let (prop_type, checker) = match prop.type_annotation {
     Some(_) => resolve_type_annotation_or_any(checker, prop.type_annotation)
@@ -18195,6 +18200,11 @@ fn check_getter_against_index_sig(
   string_index : IndexSignature?,
   number_index : IndexSignature?,
 ) -> TypeChecker {
+  // Static members are not subject to index signature constraints
+  if has_modifier(getter.modifiers, Modifier::Static) {
+    return checker
+  }
+
   // Get the computed property name
   let prop_name = match getter.computed_name_expr {
     Some(expr) =>
@@ -18250,6 +18260,11 @@ fn check_method_against_index_sig(
   string_index : IndexSignature?,
   number_index : IndexSignature?,
 ) -> TypeChecker {
+  // Static members are not subject to index signature constraints
+  if has_modifier(method.modifiers, Modifier::Static) {
+    return checker
+  }
+
   // Methods with computed names need checking
   let prop_name = match method.computed_name_expr {
     Some(expr) =>

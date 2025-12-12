@@ -4393,6 +4393,102 @@ fn parse_class_member_with_decorators(
             }
           }
         }
+        // Static computed property: static ["computed"]() or static ["computed"]: type
+        OpenBracket(bracket_loc) => {
+          let parser = advance_parser(parser)
+          match parse_expression(parser) {
+            Ok((name_expr, parser)) => {
+              let parser = match current_token(parser) {
+                CloseBracket(_) => advance_parser(parser)
+                _ => parser
+              }
+              let computed_name = get_computed_property_name(name_expr)
+              match current_token(parser) {
+                // Static computed method: static ["computed"]()
+                OpenParen(_) => {
+                  let parser = advance_parser(parser)
+                  let (parameters, parser) = parse_parameter_list(parser)
+                  let (return_type, parser) = match current_token(parser) {
+                    Colon(_) => {
+                      let parser = advance_parser(parser)
+                      match parse_type(parser) {
+                        Ok((ty, p)) => (Some(ty), p)
+                        Err(p) => (None, p)
+                      }
+                    }
+                    _ => (None, parser)
+                  }
+                  let (body, parser) = match current_token(parser) {
+                    OpenBrace(_) =>
+                      match parse_function_body(parser) {
+                        Ok((b, p)) => (Some(b), p)
+                        Err(p) => (None, p)
+                      }
+                    _ => (None, parser)
+                  }
+                  acc.push(
+                    Node::MethodDeclaration(MethodDeclaration::{
+                      name: computed_name,
+                      computed_name_expr: Some(name_expr),
+                      type_parameters: [],
+                      parameters,
+                      return_type,
+                      body,
+                      decorators,
+                      modifiers: [Modifier::Static],
+                      is_async: false,
+                      is_generator: false,
+                      is_optional: false,
+                      location: bracket_loc,
+                    }),
+                  )
+                  parse_class_members_aux(parser, acc)
+                }
+                // Static computed property: static ["computed"]: type
+                _ => {
+                  let (type_annotation, parser) = match current_token(parser) {
+                    Colon(_) => {
+                      let parser = advance_parser(parser)
+                      match parse_type(parser) {
+                        Ok((ty, p)) => (Some(ty), p)
+                        Err(p) => (None, p)
+                      }
+                    }
+                    _ => (None, parser)
+                  }
+                  let (initializer, parser) = match current_token(parser) {
+                    Equals(_) => {
+                      let parser = advance_parser(parser)
+                      match parse_assignment_expression(parser) {
+                        Ok((expr, p)) => (Some(expr), p)
+                        Err(p) => (None, p)
+                      }
+                    }
+                    _ => (None, parser)
+                  }
+                  let parser = match current_token(parser) {
+                    Semicolon(_) => advance_parser(parser)
+                    _ => parser
+                  }
+                  acc.push(
+                    Node::PropertyDeclaration(PropertyDeclaration::{
+                      name: computed_name,
+                      computed_name_expr: None,
+                      type_annotation,
+                      initializer,
+                      is_optional: false,
+                      decorators,
+                      modifiers: [Modifier::Static],
+                      location: bracket_loc,
+                    }),
+                  )
+                  parse_class_members_aux(parser, acc)
+                }
+              }
+            }
+            Err(p) => parse_class_members_aux(p, acc)
+          }
+        }
         _ => parse_class_members_aux(parser, acc)
       }
     }

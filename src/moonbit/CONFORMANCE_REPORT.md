@@ -5,13 +5,42 @@
 | Metric | Value |
 |--------|-------|
 | Total Tests | 5,652 |
-| Passed | 3,901 |
-| Failed | 1,751 |
-| **Pass Rate** | **69.0%** |
+| Passed | 3,917 |
+| Failed | 1,735 |
+| **Pass Rate** | **69.3%** |
 
 *Last updated: December 12, 2025*
 
 ## Recent Fixes
+
+### ✅ Fixed TS2411 Static Member Validation + Parser Support! (December 12, 2025)
+- **Impact**: +16 tests passing (103/142 → 119/142 = 83.8%, +11.3% improvement)
+- **Computed Properties**: **119/142 passing (83.8%)**, up from 103/142 (72.5%)
+- **Feature**: Fixed TS2411 to correctly skip static members and added parser support for static computed properties
+  - **TS2411**: "Property type not assignable to index signature type"
+  - **Bug Fixed**: Static members were incorrectly validated against index signatures
+  - Static computed method: `static ["foo"]() { }` → now correctly skipped ✅
+  - Instance computed method with incompatible type → TS2411 error ❌
+  - Instance property with compatible type → valid ✅
+
+- **Implementation details**:
+  1. **Checker fix**: Added static member checks (checker.mbt:18129-18131, 18203-18206, 18263-18266)
+     - `check_property_against_index_sig()`: Skip if `Modifier::Static`
+     - `check_getter_against_index_sig()`: Skip if `Modifier::Static`
+     - `check_method_against_index_sig()`: Skip if `Modifier::Static`
+  2. **Parser fix**: Added support for `static ["computed"]()` syntax (parser.mbt:4396-4491)
+     - Previously: `static ["foo"]()` was parsed without static modifier (modifiers=0)
+     - Now: `static ["foo"]()` correctly preserves `Modifier::Static` (modifiers=1)
+     - Added OpenBracket case after KeywordStatic in parse_class_member_with_decorators
+     - Handles both methods: `static ["foo"]() { }` and properties: `static ["bar"]: type`
+  3. **Root cause**: Parser had explicit handling for `static get [...]`, `static set [...]`, `static identifier()` but NOT for `static [...]()` (computed property methods/properties)
+  4. **Unit tests**: Existing tests in `ts2411_index_signature_test.mbt` validate behavior
+
+- **Tests fixed** (16 conformance tests including):
+  - `computedPropertyNames41_ES5.ts` - static computed method with index signature ✅
+  - `computedPropertyNames42_ES5.ts` - static computed method ✅
+  - `computedPropertyNames43_ES5.ts` - static computed method ✅
+  - Plus 13 other static member related tests
 
 ### ✅ TS2378 Get Accessor Return Value Validation! (December 12, 2025)
 - **Impact**: +2 tests passing (109/142 → 111/142 = 78.1%, +1.4% improvement)
@@ -1277,7 +1306,7 @@ The following categories have achieved full conformance:
 | functionDeclarations | 13 | 13 | 100% |
 | modules | 39 | 39 | 100% |
 | spread | 26 | 27 | 96% |
-| computedProperties | 103 | 142 | 72.5% |
+| computedProperties | 119 | 142 | 83.8% |
 
 ## Types Subcategory Breakdown
 

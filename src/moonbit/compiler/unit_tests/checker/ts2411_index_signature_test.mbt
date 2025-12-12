@@ -177,3 +177,64 @@ test "TS2411: No index signature should not validate" {
     }
   }
 }
+
+test "TS2411: Static members should not be validated" {
+  let source =
+    #|class C {
+    #|    [s: string]: () => number;
+    #|    static ["computed"]() { return 42; }
+    #|    static regularMethod() { return 1; }
+    #|    static prop: string = "test";
+    #|}
+
+  let result = parse_bind_check_errors(source)
+
+  match result {
+    Ok(_) => {
+      println("✓ TS2411: Static members correctly skipped")
+      assert_true(true)
+    }
+    Err(diagnostics) => {
+      let has_ts2411 = diagnostics.iter().any(fn(d) { d.code == 2411 })
+      if has_ts2411 {
+        println("Should not validate static members:")
+        diagnostics.iter().each(fn(d) { println("  - TS\{d.code}: \{d.message}") })
+        assert_false(true)
+      } else {
+        println("✓ TS2411: No false positive for static members")
+        assert_true(true)
+      }
+    }
+  }
+}
+
+test "TS2411: Static computed method should pass (computedPropertyNames41)" {
+  let source =
+    #|class Foo { x }
+    #|class Foo2 { x; y }
+    #|
+    #|class C {
+    #|    [s: string]: () => Foo2;
+    #|    static [""]() { return new Foo }
+    #|}
+
+  let result = parse_bind_check_errors(source)
+
+  match result {
+    Ok(_) => {
+      println("✓ TS2411: computedPropertyNames41 correctly passes")
+      assert_true(true)
+    }
+    Err(diagnostics) => {
+      let has_ts2411 = diagnostics.iter().any(fn(d) { d.code == 2411 })
+      if has_ts2411 {
+        println("computedPropertyNames41 should pass (static method):")
+        diagnostics.iter().each(fn(d) { println("  - TS\{d.code}: \{d.message}") })
+        assert_false(true)
+      } else {
+        println("✓ TS2411: No false positive for computedPropertyNames41")
+        assert_true(true)
+      }
+    }
+  }
+}
