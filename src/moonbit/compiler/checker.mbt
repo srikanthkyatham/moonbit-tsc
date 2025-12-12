@@ -6951,9 +6951,7 @@ fn infer_call_expression_type(
   }
 
   // Get call signatures from function type
-  println("DEBUG: func_type = \{type_to_string(func_type)}")
   let signatures = get_call_signatures(func_type)
-  println("DEBUG: Got \{signatures.length()} signatures")
 
   // TS2556: Validate spread arguments
   // Spread arguments must either have tuple types or be passed to rest parameters
@@ -7224,7 +7222,6 @@ fn format_arg_types(arg_types : Array[Type]) -> String {
 fn get_call_signatures(t : Type) -> Array[CheckerSignature] {
   match t {
     Type::Function(func) => {
-      println("DEBUG: get_call_signatures - Function type (no type params)")
       let result : Array[CheckerSignature] = []
       result.push({
         parameters: func.parameters,
@@ -7233,13 +7230,7 @@ fn get_call_signatures(t : Type) -> Array[CheckerSignature] {
       })
       result
     }
-    Type::Object(obj) => {
-      println("DEBUG: get_call_signatures - Object type with \{obj.call_signatures.length()} signatures")
-      for sig in obj.call_signatures {
-        println("DEBUG:   Signature has \{sig.type_parameters.length()} type params")
-      }
-      obj.call_signatures
-    }
+    Type::Object(obj) => obj.call_signatures
     Union(union) => {
       // Collect signatures from union members
       let result : Array[CheckerSignature] = []
@@ -7707,7 +7698,6 @@ fn infer_type_arguments(
   arg_spread_types : Array[Type?],  // NEW: Original spread types before element extraction
   location : SourceLocation,
 ) -> (Array[Type], TypeChecker) {
-  println("DEBUG: infer_type_arguments called with \{type_params.length()} type params, \{arg_types.length()} args")
   let mut checker = checker
   // Build inference context - maps type param names to candidate types
   let inferences : Map[String, Array[Type]] = Map::new()
@@ -7718,40 +7708,33 @@ fn infer_type_arguments(
   // Collect inferences from argument positions
   // Handle spread-to-rest-param inference specially
   for i = 0; i < arg_types.length(); i = i + 1 {
-    println("DEBUG: Processing arg \{i} of \{arg_types.length()}")
     // Determine which parameter this argument maps to
     let param_idx = if i < param_types.length() { i } else { param_types.length() - 1 }
     if param_idx < 0 {
-      println("DEBUG: param_idx < 0, skipping")
       continue
     }
 
     let param_type = param_types[param_idx]
     let param_is_rest_param = param_is_rest.get(param_idx).or(false)
     let arg_is_spread_arg = arg_is_spread.get(i).or(false)
-    println("DEBUG: arg[\{i}] type=\{type_to_string(arg_types[i])}, param[\{param_idx}] type=\{type_to_string(param_type)}, rest=\{param_is_rest_param}, spread=\{arg_is_spread_arg}")
 
     // Special case: spread argument to rest parameter
     // Example: foo(...arr) where arr: number[] and param is ...s: T[]
     // Should infer T = number (not T = number[])
     if arg_is_spread_arg && param_is_rest_param {
-      println("DEBUG: Spread to rest - using spread type")
       // Use the original spread type (e.g., number[]) instead of extracted element type
       match arg_spread_types.get(i) {
         Some(Some(spread_type)) => {
-          println("DEBUG: Inferring from spread type \{type_to_string(spread_type)} to param type \{type_to_string(param_type)}")
           // Infer from array type to rest parameter's array type
           // e.g., number[] to T[] should infer T = number
           checker = infer_from_types(checker, spread_type, param_type, inferences)
         }
         _ => {
-          println("DEBUG: No spread type, using extracted arg type")
           // Fallback to regular inference
           checker = infer_from_types(checker, arg_types[i], param_type, inferences)
         }
       }
     } else {
-      println("DEBUG: Regular inference from arg type to param type")
       // Regular inference: use extracted argument type
       checker = infer_from_types(checker, arg_types[i], param_type, inferences)
     }
@@ -7760,16 +7743,9 @@ fn infer_type_arguments(
   // Resolve inferences
   let result : Array[Type] = []
   for param in type_params {
-    println("DEBUG: Resolving type param '\{param.name}'")
     match inferences.get(param.name) {
       Some(candidates) => {
-        println("DEBUG: Found candidates array with \{candidates.length()} items")
         if not(candidates.is_empty()) {
-          // DEBUG: Log candidates
-          println("DEBUG: Type param '\{param.name}' has \{candidates.length()} candidates")
-          for i = 0; i < candidates.length(); i = i + 1 {
-            println("  [\{i}]: \{type_to_string(candidates[i])}")
-          }
           // Check if type parameter has array constraint (like T extends any[])
           // If so, and we have multiple candidates, create a tuple type
           let should_create_tuple = match param.constraint {
@@ -7779,7 +7755,6 @@ fn infer_type_arguments(
 
           if should_create_tuple {
             // Create tuple type from all candidates
-            println("DEBUG: Creating tuple type from \{candidates.length()} candidates")
             let tuple_elements : Array[TupleElement] = []
             for candidate in candidates {
               tuple_elements.push(TupleElement::{
@@ -7811,7 +7786,6 @@ fn infer_type_arguments(
                   location,
                   TS2345,
                 )
-                println("DEBUG: Added TS2345 diagnostic, total diagnostics: \{checker.diagnostics.length()}")
                 all_compatible = false
                 break  // Report first incompatibility
               }
@@ -7823,7 +7797,6 @@ fn infer_type_arguments(
             result.push(candidates[0])
           }
         } else {
-          println("DEBUG: No candidates for '\{param.name}', using default/constraint/any")
           // Use constraint or default
           match param.default_type {
             Some(default_t) => result.push(default_t)
@@ -7840,14 +7813,12 @@ fn infer_type_arguments(
         }
       }
       None => {
-        println("DEBUG: No inference entry for '\{param.name}'")
         let (t, c) = any_type(checker)
         result.push(t)
         checker = c
       }
     }
   }
-  println("DEBUG: infer_type_arguments returning with \{checker.diagnostics.length()} diagnostics")
   (result, checker)
 }
 
