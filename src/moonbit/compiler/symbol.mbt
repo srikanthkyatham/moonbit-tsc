@@ -458,9 +458,9 @@ pub enum DiagnosticCode {
   TS2462 // A rest element cannot have an initializer
   TS2463 // A binding pattern parameter cannot be optional in an implementation signature
   TS2464 // A computed property name must be of type 'string', 'number', 'symbol', or 'any'
-  TS2465 // 'await' expression is only allowed within an async function
-  TS2466 // 'yield' expression is only allowed within a generator body
-  TS2467 // The type of a 'catch' clause variable must be 'any' or 'unknown'
+  TS2465 // 'this' cannot be referenced in a computed property name
+  TS2466 // 'super' cannot be referenced in a computed property name
+  TS2467 // A type parameter cannot be referenced in a computed property name
 
   // ============================================================================
   // Enum Errors (2431-2432, 2452, 2474-2478)

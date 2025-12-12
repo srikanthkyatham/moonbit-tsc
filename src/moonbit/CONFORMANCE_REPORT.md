@@ -13,6 +13,56 @@
 
 ## Recent Fixes
 
+### ✅ TS2465 'this' in Computed Property Names Validation! (December 12, 2025)
+- **Impact**: +4 tests passing (95/142 → 99/142 = 69.7%, +2.8% improvement)
+- **Computed Properties**: **99/142 passing (69.7%)**, up from 95/142 (66.9%)
+- **Feature**: Implemented TS2465 validation for 'this' references in computed property names
+  - **TS2465**: "'this' cannot be referenced in a computed property name"
+  - Computed properties with 'this': `[this.bar()]() {}` → TS2465 error ❌
+  - Regular properties without 'this': `[sym]() {}` → valid ✅
+  - 'this' in method body: `method() { return this.value; }` → valid ✅
+
+- **Implementation details**:
+  1. **Helper function**: Added `contains_this_expression()` (checker.mbt:20203-20263)
+     - Recursively checks if expression tree contains 'this' keyword
+     - Handles all expression types: Binary, Unary, Conditional, Call, PropertyAccess, etc.
+     - Pattern matched similar to existing `contains_yield_expression()` function
+  2. **Validation in type inference**: Added TS2465 check in `infer_class_declaration_type()` (checker.mbt:5984-5999)
+     - Validates properties during class type inference phase
+     - Checks before TS1166 validation (semantic before type errors)
+  3. **Validation in type checking**: Added TS2465 check in `check_class_declaration()` (checker.mbt:18595-18610)
+     - Validates properties during class checking phase
+     - Essential for unit tests which use `parse_bind_check_errors()` helper
+  4. **Validation for all member types**: Applied checks to:
+     - Class properties: `[this.prop]: number = 42` ❌
+     - Class methods: `[this.bar()]() {}` ❌
+     - Class getters: `get [this.prop]() {}` ❌
+     - Class setters: `set [this.prop](v) {}` ❌
+  5. **Error code correction**: Updated symbol.mbt (lines 460-463)
+     - Fixed TS2465 from incorrect "await expression" meaning
+     - Prepared TS2466 for future 'super' validation
+     - Prepared TS2467 for future type parameter validation
+
+- **Tests fixed** (4 conformance tests):
+  - `computedPropertyNames21_ES5.ts` - 'this' in method computed name ✅
+  - `computedPropertyNames23_ES5.ts` - 'this' in property computed name ✅
+  - `typeOfThisInStaticMembers12_ES6.ts` - 'this' in static member ✅
+  - `typeOfThisInStaticMembers13_ES6.ts` - 'this' in static member ✅
+
+- **Unit tests**: Created 9 comprehensive tests (computed_property_ts2465_test.mbt)
+  - Property computed names with 'this': 3 tests ✅
+  - Method/getter/setter computed names with 'this': 3 tests ✅
+  - Valid cases without 'this': 3 tests ✅
+  - All 9 tests passing, total test suite: 4780/4780 (100%) ✅
+
+- **Technical achievements**:
+  - Dual validation path ensures both inference and checking phases detect errors
+  - Comprehensive expression tree traversal catches nested 'this' references
+  - Proper validation ordering (TS2465 before TS1166/TS2464)
+  - Consistent with TypeScript error precedence rules
+
+- **Related issue**: bd pure-moonbit-cli-72z (closed)
+
 ### ✅ TS2464 Generic Type Parameter Validation in Computed Properties! (December 12, 2025)
 - **Impact**: +6 tests passing (81/142 → 87/142 = 61%, +4.2% improvement)
 - **Computed Properties**: **87/142 passing (61%)**, up from 81/142 (57%)
@@ -1061,7 +1111,7 @@ The following categories have achieved full conformance:
 | functionDeclarations | 13 | 13 | 100% |
 | modules | 39 | 39 | 100% |
 | spread | 26 | 27 | 96% |
-| computedProperties | 95 | 142 | 66.9% |
+| computedProperties | 99 | 142 | 69.7% |
 
 ## Types Subcategory Breakdown
 

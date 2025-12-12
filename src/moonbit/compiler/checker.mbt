@@ -5981,6 +5981,23 @@ fn infer_class_declaration_type(
         }
         checker = c
 
+        // TS2465: Validate 'this' in computed property names
+        let checker = match prop.computed_name_expr {
+          Some(name_expr) => {
+            if contains_this_expression(name_expr) {
+              add_diagnostic_with_code(
+                checker,
+                "'this' cannot be referenced in a computed property name.",
+                get_location(name_expr),
+                TS2465,
+              )
+            } else {
+              checker
+            }
+          }
+          None => checker
+        }
+
         // TS1166: Validate computed property names in class declarations
         // A computed property name in a class property declaration must have a simple literal type or a 'unique symbol' type
         let checker = match prop.computed_name_expr {
@@ -6026,6 +6043,23 @@ fn infer_class_declaration_type(
         let (method_type, c) = infer_method_type(checker, method_decl)
         checker = c
 
+        // TS2465: Validate 'this' in computed property names
+        checker = match method_decl.computed_name_expr {
+          Some(name_expr) => {
+            if contains_this_expression(name_expr) {
+              add_diagnostic_with_code(
+                checker,
+                "'this' cannot be referenced in a computed property name.",
+                get_location(name_expr),
+                TS2465,
+              )
+            } else {
+              checker
+            }
+          }
+          None => checker
+        }
+
         // TS2464: Validate computed property names in class method declarations
         // A computed property name must be of type 'string', 'number', 'symbol', or 'any'
         checker = match method_decl.computed_name_expr {
@@ -6061,6 +6095,23 @@ fn infer_class_declaration_type(
         }
       }
       GetAccessor(getter) => {
+        // TS2465: Validate 'this' in computed property names
+        checker = match getter.computed_name_expr {
+          Some(name_expr) => {
+            if contains_this_expression(name_expr) {
+              add_diagnostic_with_code(
+                checker,
+                "'this' cannot be referenced in a computed property name.",
+                get_location(name_expr),
+                TS2465,
+              )
+            } else {
+              checker
+            }
+          }
+          None => checker
+        }
+
         // TS2464: Validate computed property names in class getter declarations
         checker = match getter.computed_name_expr {
           Some(name_expr) => {
@@ -6100,6 +6151,23 @@ fn infer_class_declaration_type(
         }
       }
       SetAccessor(setter) => {
+        // TS2465: Validate 'this' in computed property names
+        checker = match setter.computed_name_expr {
+          Some(name_expr) => {
+            if contains_this_expression(name_expr) {
+              add_diagnostic_with_code(
+                checker,
+                "'this' cannot be referenced in a computed property name.",
+                get_location(name_expr),
+                TS2465,
+              )
+            } else {
+              checker
+            }
+          }
+          None => checker
+        }
+
         // TS2464: Validate computed property names in class setter declarations
         checker = match setter.computed_name_expr {
           Some(name_expr) => {
@@ -18524,6 +18592,23 @@ fn build_class_type_for_this(
         }
         checker = c
 
+        // TS2465: Validate 'this' in computed property names
+        let checker = match prop.computed_name_expr {
+          Some(name_expr) => {
+            if contains_this_expression(name_expr) {
+              add_diagnostic_with_code(
+                checker,
+                "'this' cannot be referenced in a computed property name.",
+                get_location(name_expr),
+                TS2465,
+              )
+            } else {
+              checker
+            }
+          }
+          None => checker
+        }
+
         // TS1166: Validate computed property names in class declarations
         let checker = match prop.computed_name_expr {
           Some(name_expr) => {
@@ -18560,6 +18645,23 @@ fn build_class_type_for_this(
         let (method_type, c) = infer_method_type(checker, method_decl)
         checker = c
 
+        // TS2465: Validate 'this' in computed property names
+        checker = match method_decl.computed_name_expr {
+          Some(name_expr) => {
+            if contains_this_expression(name_expr) {
+              add_diagnostic_with_code(
+                checker,
+                "'this' cannot be referenced in a computed property name.",
+                get_location(name_expr),
+                TS2465,
+              )
+            } else {
+              checker
+            }
+          }
+          None => checker
+        }
+
         // TS2464: Validate computed property names in class method declarations
         // A computed property name must be of type 'string', 'number', 'symbol', or 'any'
         checker = match method_decl.computed_name_expr {
@@ -18588,6 +18690,23 @@ fn build_class_type_for_this(
         })
       }
       GetAccessor(getter) => {
+        // TS2465: Validate 'this' in computed property names
+        checker = match getter.computed_name_expr {
+          Some(name_expr) => {
+            if contains_this_expression(name_expr) {
+              add_diagnostic_with_code(
+                checker,
+                "'this' cannot be referenced in a computed property name.",
+                get_location(name_expr),
+                TS2465,
+              )
+            } else {
+              checker
+            }
+          }
+          None => checker
+        }
+
         // TS2464: Validate computed property names in class getter declarations
         checker = match getter.computed_name_expr {
           Some(name_expr) => {
@@ -18610,6 +18729,23 @@ fn build_class_type_for_this(
         // They are only used for 'this' context, and getters/setters don't affect that
       }
       SetAccessor(setter) => {
+        // TS2465: Validate 'this' in computed property names
+        checker = match setter.computed_name_expr {
+          Some(name_expr) => {
+            if contains_this_expression(name_expr) {
+              add_diagnostic_with_code(
+                checker,
+                "'this' cannot be referenced in a computed property name.",
+                get_location(name_expr),
+                TS2465,
+              )
+            } else {
+              checker
+            }
+          }
+          None => checker
+        }
+
         // TS2464: Validate computed property names in class setter declarations
         checker = match setter.computed_name_expr {
           Some(name_expr) => {
@@ -20068,6 +20204,69 @@ fn contains_yield_expression(expr : Node) -> Bool {
         match prop {
           PropertyAssignment(_, value_node, _) =>
             if contains_yield_expression(value_node) {
+              return true
+            }
+          _ => ()
+        }
+      }
+      false
+    }
+    _ => false
+  }
+}
+
+///|
+/// Check if an expression contains 'this' keyword (for TS2465 validation)
+fn contains_this_expression(expr : Node) -> Bool {
+  match expr {
+    ThisExpression(_) => true
+    BinaryExpression(bin) =>
+      contains_this_expression(bin.left) || contains_this_expression(bin.right)
+    ParenthesizedExpression(paren) =>
+      contains_this_expression(paren.expression)
+    UnaryExpression(unary) =>
+      contains_this_expression(unary.operand)
+    ConditionalExpression(cond) =>
+      contains_this_expression(cond.condition) ||
+      contains_this_expression(cond.when_true) ||
+      contains_this_expression(cond.when_false)
+    CallExpression(call) => {
+      if contains_this_expression(call.expression) {
+        return true
+      }
+      for arg in call.arguments {
+        if contains_this_expression(arg) {
+          return true
+        }
+      }
+      false
+    }
+    PropertyAccessExpression(prop) =>
+      contains_this_expression(prop.expression)
+    ElementAccessExpression(elem) =>
+      contains_this_expression(elem.expression) ||
+      contains_this_expression(elem.argument_expression)
+    ArrayLiteralExpression(arr) => {
+      for elem_opt in arr.elements {
+        match elem_opt {
+          Some(elem) =>
+            if contains_this_expression(elem) {
+              return true
+            }
+          None => ()
+        }
+      }
+      false
+    }
+    ObjectLiteralExpression(obj) => {
+      for prop in obj.properties {
+        match prop {
+          PropertyAssignment(_, value_node, _) =>
+            if contains_this_expression(value_node) {
+              return true
+            }
+          ComputedPropertyAssignment(key_node, value_node, _) =>
+            if contains_this_expression(key_node) || contains_this_expression(value_node) {
               return true
             }
           _ => ()
