@@ -187,3 +187,110 @@ test "Multiple generic functions should each preserve their type params" {
     }
   }
 }
+
+// ============================================================================
+// TS2464 validation for generic type parameters in computed properties
+// ============================================================================
+
+///|
+/// Helper function to check if a specific diagnostic code exists
+fn has_diagnostic_code(diagnostics : Array[@compiler.Diagnostic], code : Int) -> Bool {
+  for diag in diagnostics {
+    if diag.code == code {
+      return true
+    }
+  }
+  false
+}
+
+test "TS2464: Unconstrained type parameter in computed property" {
+  let source =
+    #|function f<T>() { var t: T; var v = { [t]: 0 }; }
+
+  let result = parse_bind_check_errors(source)
+  match result {
+    Ok(_) => fail("Should report TS2464 for unconstrained type parameter")
+    Err(diagnostics) =>
+      if not(has_diagnostic_code(diagnostics, 2464)) {
+        fail("Should report TS2464 for computed property with unconstrained T")
+      }
+  }
+}
+
+test "TS2464: Type parameter extending string is valid" {
+  let source =
+    #|function f<T extends string>() { var t: T; var v = { [t]: 0 }; }
+
+  let result = parse_bind_check_errors(source)
+  match result {
+    Ok(_) => () // Should pass
+    Err(diagnostics) => {
+      if has_diagnostic_code(diagnostics, 2464) {
+        fail("Should NOT report TS2464 for type parameter extending string")
+      }
+    }
+  }
+}
+
+test "TS2464: Type parameter extending number is valid" {
+  let source =
+    #|function f<T extends number>() { var t: T; var v = { [t]: 0 }; }
+
+  let result = parse_bind_check_errors(source)
+  match result {
+    Ok(_) => () // Should pass
+    Err(diagnostics) => {
+      if has_diagnostic_code(diagnostics, 2464) {
+        fail("Should NOT report TS2464 for type parameter extending number")
+      }
+    }
+  }
+}
+
+test "TS2464: Type parameter extending symbol is valid" {
+  let source =
+    #|function f<T extends symbol>() { var t: T; var v = { [t]: 0 }; }
+
+  let result = parse_bind_check_errors(source)
+  match result {
+    Ok(_) => () // Should pass
+    Err(diagnostics) => {
+      if has_diagnostic_code(diagnostics, 2464) {
+        fail("Should NOT report TS2464 for type parameter extending symbol")
+      }
+    }
+  }
+}
+
+test "TS2464: Mixed valid and invalid type parameters" {
+  let source =
+    #|function f<T, U extends string>() {
+    #|  var t: T;
+    #|  var u: U;
+    #|  var v = { [t]: 0, [u]: 1 };
+    #|}
+
+  let result = parse_bind_check_errors(source)
+  match result {
+    Ok(_) => fail("Should report TS2464 for unconstrained T")
+    Err(diagnostics) =>
+      if not(has_diagnostic_code(diagnostics, 2464)) {
+        fail("Should report TS2464 for [t] but not for [u]")
+      }
+  }
+}
+
+test "TS2464: Type parameter extending string|number union" {
+  let source =
+    #|function f<T extends string | number>() { var t: T; var v = { [t]: 0 }; }
+
+  let result = parse_bind_check_errors(source)
+  match result {
+    Ok(_) => () // Should pass
+    Err(diagnostics) => {
+      if has_diagnostic_code(diagnostics, 2464) {
+        fail("Should NOT report TS2464 for type parameter extending string|number")
+      }
+    }
+  }
+}

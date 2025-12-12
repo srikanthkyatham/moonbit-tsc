@@ -262,6 +262,7 @@ pub struct TypeGuardInfo {
 pub struct TypeChecker {
   next_type_id : Int
   type_cache : Map[String, Type]
+  type_parameter_constraints : Map[String, Type?] // Type parameter name -> constraint type (for TS2464 validation)
   symbol_types : Map[Int, Type] // Symbol ID -> Type
   node_types : Map[String, Type] // Node identifier -> Type
   narrowed_types : Map[String, NarrowedType] // Variable name -> NarrowedType (for control flow narrowing)
@@ -348,6 +349,7 @@ pub fn TypeChecker::new_with_options(
   {
     next_type_id: 0,
     type_cache: Map::new(),
+    type_parameter_constraints: Map::new(),
     symbol_types: Map::new(),
     node_types: Map::new(),
     narrowed_types: Map::new(),
@@ -788,7 +790,12 @@ fn add_var_to_function_scope(
       match scopes[function_scope_index].function_vars.get(name) {
         Some(existing_type) => {
           // Check if types are equal
-          if not(types_equal(existing_type, var_type)) {
+          // Skip the check if existing_type is Any - this happens during hoisting where all vars start as 'any'
+          let existing_is_any = match existing_type {
+            Any(_) => true
+            _ => false
+          }
+          if not(existing_is_any) && not(types_equal(existing_type, var_type)) {
             checker = add_diagnostic_with_code(
               checker,
               "Subsequent variable declarations must have the same type.  Variable '\{name}' must be of type '\{type_to_string(existing_type)}', but here has type '\{type_to_string(var_type)}'.",
@@ -1206,6 +1213,36 @@ fn hoist_var_declarations(checker : TypeChecker, stmt : Node) -> TypeChecker {
 }
 
 ///|
+/// Add a variable to function_vars during hoisting (simple version without type checking)
+fn add_to_function_vars_for_hoisting(
+  checker : TypeChecker,
+  name : String,
+  var_type : Type,
+) -> TypeChecker {
+  let scopes = checker.local_scopes
+  if scopes.length() > 0 {
+    // Find the nearest function scope for var hoisting
+    let mut function_scope_index = -1
+    for i = scopes.length() - 1; i >= 0; i = i - 1 {
+      if scopes[i].is_function_scope {
+        function_scope_index = i
+        break
+      }
+    }
+    // Add to function scope if found
+    if function_scope_index >= 0 {
+      scopes[function_scope_index].function_vars.set(name, var_type)
+    } else {
+      // No function scope, add to current scope
+      scopes[scopes.length() - 1].function_vars.set(name, var_type)
+    }
+    { ..checker, local_scopes: scopes }
+  } else {
+    checker
+  }
+}
+
+///|
 /// Add a var binding to the current local scope during hoisting
 fn hoist_var_decl_binding(
   checker : TypeChecker,
@@ -1213,7 +1250,7 @@ fn hoist_var_decl_binding(
   var_type : Type,
 ) -> TypeChecker {
   match name {
-    Identifier(id) => add_local_variable(checker, id.name, var_type)
+    Identifier(id) => add_to_function_vars_for_hoisting(checker, id.name, var_type)
     ArrayBindingPattern(pattern) => {
       let mut checker = checker
       for elem in pattern.elements {
@@ -5539,13 +5576,17 @@ fn get_function_declaration_type(
   let (type_parameters, checker) = process_type_parameters(checker, func.type_parameters)
 
   // Add type parameters to type_cache so they can be referenced in parameter types
+  // Also store constraints in type_parameter_constraints for TS2464 validation
   let mut checker = checker
   let saved_type_cache = checker.type_cache.copy() // Save original cache
+  let saved_constraints = checker.type_parameter_constraints.copy() // Save original constraints
   for tp in type_parameters {
     let (info, c) = create_type_info(checker)
     checker = c
     let type_ref = Type::TypeReference({ name: tp.name, type_arguments: [], info })
     checker.type_cache.set(tp.name, type_ref)
+    // Store constraint for TS2464 validation of computed properties
+    checker.type_parameter_constraints.set(tp.name, tp.constraint)
   }
 
   // Build parameter list - now type parameter references will resolve correctly
@@ -5571,8 +5612,8 @@ fn get_function_declaration_type(
   // Get return type
   let (return_type, checker) = resolve_type_annotation_or_any(checker, func.return_type)
 
-  // Restore original type_cache (remove type parameters from cache)
-  let checker = { ..checker, type_cache: saved_type_cache }
+  // Restore original type_cache and constraints (remove type parameters from cache)
+  let checker = { ..checker, type_cache: saved_type_cache, type_parameter_constraints: saved_constraints }
 
   create_function_type_with_params(checker, parameters, return_type, type_parameters)
 }
@@ -5613,13 +5654,17 @@ fn infer_function_declaration_type(
   let (type_parameters, checker) = process_type_parameters(checker, func.type_parameters)
 
   // Add type parameters to type_cache so they can be referenced in parameter types
+  // Also store constraints in type_parameter_constraints for TS2464 validation
   let mut checker = checker
   let saved_type_cache = checker.type_cache.copy() // Save original cache
+  let saved_constraints = checker.type_parameter_constraints.copy() // Save original constraints
   for tp in type_parameters {
     let (info, c) = create_type_info(checker)
     checker = c
     let type_ref = Type::TypeReference({ name: tp.name, type_arguments: [], info })
     checker.type_cache.set(tp.name, type_ref)
+    // Store constraint for TS2464 validation of computed properties
+    checker.type_parameter_constraints.set(tp.name, tp.constraint)
   }
 
   // Single declaration - create simple Function type
@@ -5736,8 +5781,8 @@ fn infer_function_declaration_type(
   // Create function type with the type parameters we processed earlier
   let (func_type, checker) = create_function_type_with_params(checker, parameters, return_type, type_parameters)
 
-  // Restore original type_cache (remove type parameters from cache)
-  let checker = { ..checker, type_cache: saved_type_cache }
+  // Restore original type_cache and constraints (remove type parameters from cache)
+  let checker = { ..checker, type_cache: saved_type_cache, type_parameter_constraints: saved_constraints }
 
   // Cache the type
   let new_symbol_types = checker.symbol_types
@@ -5972,7 +6017,7 @@ fn infer_class_declaration_type(
         checker = match method_decl.computed_name_expr {
           Some(name_expr) => {
             let (name_type, c) = infer_type(checker, name_expr)
-            let c = if not(is_valid_computed_property_type(name_type)) {
+            let c = if not(is_valid_computed_property_type(c, name_type)) {
               add_diagnostic_with_code(
                 c,
                 "A computed property name must be of type 'string', 'number', 'symbol', or 'any'.",
@@ -6006,7 +6051,7 @@ fn infer_class_declaration_type(
         checker = match getter.computed_name_expr {
           Some(name_expr) => {
             let (name_type, c) = infer_type(checker, name_expr)
-            let c = if not(is_valid_computed_property_type(name_type)) {
+            let c = if not(is_valid_computed_property_type(c, name_type)) {
               add_diagnostic_with_code(
                 c,
                 "A computed property name must be of type 'string', 'number', 'symbol', or 'any'.",
@@ -6045,7 +6090,7 @@ fn infer_class_declaration_type(
         checker = match setter.computed_name_expr {
           Some(name_expr) => {
             let (name_type, c) = infer_type(checker, name_expr)
-            let c = if not(is_valid_computed_property_type(name_type)) {
+            let c = if not(is_valid_computed_property_type(c, name_type)) {
               add_diagnostic_with_code(
                 c,
                 "A computed property name must be of type 'string', 'number', 'symbol', or 'any'.",
@@ -6163,11 +6208,14 @@ fn infer_class_declaration_type(
   let constructor_parameters : Array[CheckerParameter] = []
   let mut c = checker
   let saved_type_cache = c.type_cache.copy()
+  let saved_constraints = c.type_parameter_constraints.copy()
   for tp in class_type_parameters {
     let (info, c2) = create_type_info(c)
     c = c2
     let type_ref = Type::TypeReference({ name: tp.name, type_arguments: [], info })
     c.type_cache.set(tp.name, type_ref)
+    // Store constraint for TS2464 validation of computed properties
+    c.type_parameter_constraints.set(tp.name, tp.constraint)
   }
 
   for class_member in class_decl.members {
@@ -6193,8 +6241,8 @@ fn infer_class_declaration_type(
     }
   }
 
-  // Restore original type_cache
-  c = { ..c, type_cache: saved_type_cache }
+  // Restore original type_cache and constraints
+  c = { ..c, type_cache: saved_type_cache, type_parameter_constraints: saved_constraints }
   let checker = c
 
   let construct_sig = CheckerSignature::{
@@ -11790,12 +11838,31 @@ fn infer_array_literal_type(
 
 ///| Check if a type is valid for computed property names (TS2464)
 ///| Valid types: string, number, symbol, any, template literals
-fn is_valid_computed_property_type(t : Type) -> Bool {
+///| For type parameters, check if constraint extends a valid type
+fn is_valid_computed_property_type(checker : TypeChecker, t : Type) -> Bool {
   match t {
     String(_) | Number(_) | Symbol(_) | Any(_) | TemplateLiteral(_) => true
     Union(u) =>
       // For unions, all constituent types must be valid
-      u.types.iter().all(fn(typ) { is_valid_computed_property_type(typ) })
+      u.types.iter().all(fn(typ) { is_valid_computed_property_type(checker, typ) })
+    TypeReference(tr) => {
+      // Check if this is a type parameter with a constraint
+      match checker.type_parameter_constraints.get(tr.name) {
+        Some(Some(constraint)) => {
+          // Type parameter has a constraint - check if the constraint is valid
+          is_valid_computed_property_type(checker, constraint)
+        }
+        Some(None) => {
+          // Type parameter without constraint - invalid for computed properties
+          false
+        }
+        None => {
+          // Not a type parameter - could be a class/interface reference
+          // For safety, reject unknown TypeReferences
+          false
+        }
+      }
+    }
     _ => false
   }
 }
@@ -11850,7 +11917,7 @@ fn infer_object_literal_type(
         let key = if key == "" { "[computed]" } else { key }
         let (name_type, c) = infer_type(checker, name_expr)
         // TS2464: Check if computed property name type is valid
-        let c = if not(is_valid_computed_property_type(name_type)) {
+        let c = if not(is_valid_computed_property_type(c, name_type)) {
           add_diagnostic_with_code(
             c,
             "A computed property name must be of type 'string', 'number', 'symbol', or 'any'.",
@@ -12107,7 +12174,7 @@ fn infer_object_literal_type(
         let key = if key == "" { "[computed]" } else { key }
         let (name_type, c) = infer_type(checker, name_expr)
         // TS2464: Check if computed property name type is valid
-        let c = if not(is_valid_computed_property_type(name_type)) {
+        let c = if not(is_valid_computed_property_type(c, name_type)) {
           add_diagnostic_with_code(
             c,
             "A computed property name must be of type 'string', 'number', 'symbol', or 'any'.",
@@ -12132,7 +12199,7 @@ fn infer_object_literal_type(
         let key = if key == "" { "[computed]" } else { key }
         let (name_type, c) = infer_type(checker, name_expr)
         // TS2464: Check if computed property name type is valid
-        let c = if not(is_valid_computed_property_type(name_type)) {
+        let c = if not(is_valid_computed_property_type(c, name_type)) {
           add_diagnostic_with_code(
             c,
             "A computed property name must be of type 'string', 'number', 'symbol', or 'any'.",
@@ -12161,7 +12228,7 @@ fn infer_object_literal_type(
         let key = if key == "" { "[computed]" } else { key }
         let (name_type, c) = infer_type(checker, name_expr)
         // TS2464: Check if computed property name type is valid
-        let c = if not(is_valid_computed_property_type(name_type)) {
+        let c = if not(is_valid_computed_property_type(c, name_type)) {
           add_diagnostic_with_code(
             c,
             "A computed property name must be of type 'string', 'number', 'symbol', or 'any'.",
@@ -15662,6 +15729,20 @@ fn check_function_declaration(
   // Check type parameter names for reserved keywords (TS2368)
   let checker = check_type_parameter_names(checker, func.type_parameters)
 
+  // Process type parameters and add them to type_cache for body checking
+  // This enables TS2464 validation of computed properties using type parameters
+  let (type_parameters, checker) = process_type_parameters(checker, func.type_parameters)
+  let mut checker = checker
+  let saved_type_cache = checker.type_cache.copy()
+  let saved_constraints = checker.type_parameter_constraints.copy()
+  for tp in type_parameters {
+    let (info, c) = create_type_info(checker)
+    checker = c
+    let type_ref = Type::TypeReference({ name: tp.name, type_arguments: [], info })
+    checker.type_cache.set(tp.name, type_ref)
+    checker.type_parameter_constraints.set(tp.name, tp.constraint)
+  }
+
   // Add function parameters to the local scope
   // Also check rest parameters have array type (TS2370)
   let mut checker = checker
@@ -15885,6 +15966,9 @@ fn check_function_declaration(
   // Check TS2742: Inferred type cannot be named without reference
   // This applies when exported function has no explicit return type
   let checker = check_inferred_type_accessibility(checker, func)
+
+  // Restore type_cache and constraints (remove type parameters from cache)
+  let checker = { ..checker, type_cache: saved_type_cache, type_parameter_constraints: saved_constraints }
 
   // Pop the local scope
   let checker = pop_local_scope(checker)
@@ -18354,7 +18438,7 @@ fn build_class_type_for_this(
         checker = match method_decl.computed_name_expr {
           Some(name_expr) => {
             let (name_type, c) = infer_type(checker, name_expr)
-            let c = if not(is_valid_computed_property_type(name_type)) {
+            let c = if not(is_valid_computed_property_type(c, name_type)) {
               add_diagnostic_with_code(
                 c,
                 "A computed property name must be of type 'string', 'number', 'symbol', or 'any'.",
@@ -18381,7 +18465,7 @@ fn build_class_type_for_this(
         checker = match getter.computed_name_expr {
           Some(name_expr) => {
             let (name_type, c) = infer_type(checker, name_expr)
-            let c = if not(is_valid_computed_property_type(name_type)) {
+            let c = if not(is_valid_computed_property_type(c, name_type)) {
               add_diagnostic_with_code(
                 c,
                 "A computed property name must be of type 'string', 'number', 'symbol', or 'any'.",
@@ -18403,7 +18487,7 @@ fn build_class_type_for_this(
         checker = match setter.computed_name_expr {
           Some(name_expr) => {
             let (name_type, c) = infer_type(checker, name_expr)
-            let c = if not(is_valid_computed_property_type(name_type)) {
+            let c = if not(is_valid_computed_property_type(c, name_type)) {
               add_diagnostic_with_code(
                 c,
                 "A computed property name must be of type 'string', 'number', 'symbol', or 'any'.",
@@ -20246,14 +20330,9 @@ fn get_type_from_type_node(
       // Look up type reference
       // Check type_cache first for type parameters
       {
-        println("DEBUG: get_type_from_type_node - TypeReference name='\{type_ref.type_name}'")
         match checker.type_cache.get(type_ref.type_name) {
-          Some(cached_type) => {
-            println("DEBUG: Found '\{type_ref.type_name}' in type_cache")
-            (Some(cached_type), checker)
-          }
+          Some(cached_type) => (Some(cached_type), checker)
           None => {
-            println("DEBUG: '\{type_ref.type_name}' not in type_cache")
             // Continue with normal type resolution
             match type_ref.type_name {
         "number" => {

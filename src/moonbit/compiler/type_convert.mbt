@@ -630,6 +630,7 @@ fn TypeChecker::create_type_info(self : TypeChecker) -> (TypeInfo, TypeChecker) 
   let new_checker = TypeChecker::{
     next_type_id: self.next_type_id + 1,
     type_cache: self.type_cache,
+    type_parameter_constraints: self.type_parameter_constraints,
     symbol_types: self.symbol_types,
     node_types: self.node_types,
     narrowed_types: self.narrowed_types,
