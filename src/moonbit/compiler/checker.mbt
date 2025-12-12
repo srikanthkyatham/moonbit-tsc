@@ -6037,6 +6037,24 @@ fn infer_class_declaration_type(
           None => checker
         }
 
+        // TS2464: Validate computed property name type
+        let checker = match prop.computed_name_expr {
+          Some(name_expr) => {
+            let (name_type, c) = infer_type(checker, name_expr)
+            if not(is_valid_computed_property_type(c, name_type)) {
+              add_diagnostic_with_code(
+                c,
+                "A computed property name must be of type 'string', 'number', 'symbol', or 'any'.",
+                get_location(name_expr),
+                TS2464,
+              )
+            } else {
+              c
+            }
+          }
+          None => checker
+        }
+
         // TS1166: Validate computed property names in class declarations
         // A computed property name in a class property declaration must have a simple literal type or a 'unique symbol' type
         let checker = match prop.computed_name_expr {
@@ -12013,7 +12031,10 @@ fn infer_array_literal_type(
 ///| For type parameters, check if constraint extends a valid type
 fn is_valid_computed_property_type(checker : TypeChecker, t : Type) -> Bool {
   match t {
+    // Primitive types that are valid
     String(_) | Number(_) | Symbol(_) | Any(_) | TemplateLiteral(_) => true
+    // Literal types are also valid (they're subtypes of primitives)
+    StringLiteral(_, _) | NumberLiteral(_, _) => true
     Union(u) =>
       // For unions, all constituent types must be valid
       u.types.iter().all(fn(typ) { is_valid_computed_property_type(checker, typ) })
