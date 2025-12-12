@@ -12072,6 +12072,31 @@ fn is_valid_computed_property_type(checker : TypeChecker, t : Type) -> Bool {
   }
 }
 
+///| Check if a computed property name expression represents a numeric property
+///| Returns true for: numeric literals, expressions that evaluate to number type
+///| Returns false for: string literals, non-computed properties (None), other types
+fn is_numeric_computed_property(
+  checker : TypeChecker,
+  computed_name_expr : Option[Node]
+) -> Bool {
+  match computed_name_expr {
+    Some(expr) =>
+      match expr {
+        NumericLiteral(_) => true
+        StringLiteral(_) => false // String literals are not numeric
+        // For other expressions, infer the type to check if it's numeric
+        _ => {
+          let (expr_type, _) = infer_type(checker, expr)
+          match expr_type {
+            Number(_) | NumberLiteral(_, _) => true
+            _ => false
+          }
+        }
+      }
+    None => false // Non-computed properties are handled by string index
+  }
+}
+
 ///| Check if an expression is a literal or simple literal expression for TS1166
 ///| Valid expressions: number literals, string literals, template literals without substitutions
 fn is_literal_expression(expr : Node) -> Bool {
@@ -18370,16 +18395,7 @@ fn check_property_against_index_sig(
 
   // Check against number index signature (only for numeric properties)
   // Numeric properties include: NumericLiteral computed names, or expressions that evaluate to numbers
-  let is_numeric_property = match prop.computed_name_expr {
-    Some(expr) =>
-      match expr {
-        NumericLiteral(_) => true
-        // For other expressions like [1 << 6], we assume they could be numeric
-        // if there's a number index signature (conservative approach)
-        _ => number_index is Some(_)
-      }
-    None => false // Non-computed properties are handled by string index
-  }
+  let is_numeric_property = is_numeric_computed_property(checker, prop.computed_name_expr)
 
   if is_numeric_property {
     match number_index {
@@ -18539,14 +18555,7 @@ fn check_getter_against_index_sig(
   }
 
   // Check against number index signature (only for numeric getters)
-  let is_numeric_getter = match getter.computed_name_expr {
-    Some(expr) =>
-      match expr {
-        NumericLiteral(_) => true
-        _ => number_index is Some(_)
-      }
-    None => false // Non-computed getters are handled by string index
-  }
+  let is_numeric_getter = is_numeric_computed_property(checker, getter.computed_name_expr)
 
   if is_numeric_getter {
     match number_index {
@@ -18677,14 +18686,7 @@ fn check_setter_against_index_sig(
   }
 
   // Check against number index signature (only for numeric setters)
-  let is_numeric_setter = match setter.computed_name_expr {
-    Some(expr) =>
-      match expr {
-        NumericLiteral(_) => true
-        _ => number_index is Some(_)
-      }
-    None => false // Non-computed setters are handled by string index
-  }
+  let is_numeric_setter = is_numeric_computed_property(checker, setter.computed_name_expr)
 
   if is_numeric_setter {
     match number_index {

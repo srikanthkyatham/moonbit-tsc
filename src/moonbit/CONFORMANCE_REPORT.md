@@ -13,6 +13,50 @@
 
 ## Recent Fixes
 
+### ✅ Fixed Number Index Validation Bug + DRY Refactoring! (December 12, 2025)
+- **Impact**: +2 tests passing (127/142 → 129/142 = 90.8%, +1.4% improvement)
+- **Computed Properties**: **129/142 passing (90.8%)**, up from 127/142 (89.4%)
+- **Feature**: Fixed critical bug where string literals were incorrectly validated against number index signatures
+  - **Bug**: String literals like `["get1"]` were being treated as numeric when a number index signature existed
+  - **Root cause**: Conservative approach of assuming all expressions could be numeric was too broad
+  - **Fix**: Explicitly check if expression is a string literal before inferring type
+  - String literal `["foo"]` with number index → correctly **not** validated against number index ✅
+  - Numeric expression `[1 << 6]` with number index → correctly validated against number index ✅
+  - Numeric literal `[42]` with number index → correctly validated against number index ✅
+
+- **Implementation details**:
+  1. **DRY Refactoring**: Created `is_numeric_computed_property()` helper function (checker.mbt:12075-12098)
+     - Consolidated duplicated logic from 3 locations (property, getter, setter validation)
+     - Takes `TypeChecker` and `Option[Node]` (computed_name_expr), returns `Bool`
+     - Logic:
+       - `NumericLiteral(_)` → `true` (always numeric)
+       - `StringLiteral(_)` → `false` (never numeric, fixed the bug!)
+       - Other expressions → infer type and check if `Number` or `NumberLiteral`
+       - `None` (non-computed) → `false` (handled by string index)
+  2. **Refactored call sites** (3 locations):
+     - Property validation (checker.mbt:18398): `is_numeric_property = is_numeric_computed_property(checker, prop.computed_name_expr)`
+     - Getter validation (checker.mbt:18558): `is_numeric_getter = is_numeric_computed_property(checker, getter.computed_name_expr)`
+     - Setter validation (checker.mbt:18689): `is_numeric_setter = is_numeric_computed_property(checker, setter.computed_name_expr)`
+  3. **Code reduction**: Eliminated ~39 lines of duplicated code
+
+- **Tests fixed** (2 conformance tests):
+  - `computedPropertyNames37_ES5.ts` - string literal `["get1"]` with number index now correctly passes ✅
+  - `computedPropertyNames37_ES6.ts` - string literal `["get1"]` with number index now correctly passes ✅
+
+- **Unit tests added** (12 comprehensive tests):
+  - `numeric_computed_property_test.mbt` (269 lines)
+  - Tests for numeric literals, string literals, number expressions in properties, getters, setters
+  - Tests for object literals vs class properties
+  - Tests for mixed numeric/string literals
+  - All 12 tests passing ✅
+
+- **Remaining failures** (13 tests):
+  - TS2464 computed property type (3 tests): Overload resolution issues with computed property names
+  - TS2873 always falsy expression (4 tests): `["" || 0]` expression validation
+  - TS1049 setter parameter count (2 tests): Setter must have exactly one parameter
+  - TS2300 duplicate identifier (2 tests): Duplicate property names
+  - TS2466 super in computed property (2 tests): `super()` in computed property names
+
 ### ✅ Fixed TS2411 Setter & Number Index Validation! (December 12, 2025)
 - **Impact**: +4 tests passing (123/142 → 127/142 = 89.4%, +2.8% improvement)
 - **Computed Properties**: **127/142 passing (89.4%)**, up from 123/142 (86.6%)
