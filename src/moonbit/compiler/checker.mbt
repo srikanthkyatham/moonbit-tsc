@@ -4872,6 +4872,32 @@ fn get_symbol_constructor_type(checker : TypeChecker) -> (Type, TypeChecker) {
   // Symbol.for - string -> symbol
   symbol_methods.set("for", make_unary_method("for", "key", TKString, TKSymbol, info))
 
+  // Symbol.keyFor - symbol -> string | undefined
+  // Create the return type: string | undefined
+  let (string_type, checker) = string_type(checker)
+  let (undefined_type, checker) = undefined_type(checker)
+  let (union_info, checker) = create_type_info(checker)
+  let keyfor_return_type = Type::Union(CheckerUnionType::{
+    types: [string_type, undefined_type],
+    info: union_info,
+  })
+  let keyfor_param = CheckerParameter::{
+    name: "sym",
+    param_type: Type::Symbol(info),
+    is_optional: false,
+    is_rest: false,
+  }
+  symbol_methods.set("keyFor", PropertySignature::{
+    name: "keyFor",
+    prop_type: Type::Function(CheckerFunctionType::{
+      parameters: [keyfor_param],
+      return_type: keyfor_return_type,
+      info,
+    }),
+    is_optional: false,
+    is_readonly: false,
+  })
+
   // Well-known Symbol properties (ES2015+)
   // These are readonly properties that return unique symbol values
   let symbol_props = [
