@@ -12644,13 +12644,24 @@ fn is_assignable(source : Type, target : Type) -> Bool {
     (Object(source_obj), Object(target_obj)) =>
       is_object_assignable(source_obj, target_obj)
     // Object with class_name -> TypeReference (class instance to class type)
+    // OR object literal -> TypeReference (structural typing for interfaces/type aliases)
     (Object(source_obj), TypeReference(target_ref)) =>
       match source_obj.class_name {
         Some(class_name) =>
           // Class names match and no type arguments - compatible
           class_name == target_ref.name &&
           target_ref.type_arguments.length() == 0
-        None => false
+        None => {
+          // Object literal without class_name - check if structurally compatible
+          // with the interface/type alias that the TypeReference points to
+          // This is a simplified check - full implementation would:
+          // 1. Resolve TypeReference to underlying type
+          // 2. Instantiate with type arguments if any
+          // 3. Check structural compatibility
+          // For now, we conservatively return true to allow the assignment
+          // and rely on the detailed checking in check_assignment_detailed
+          true
+        }
       }
     // Function types - check parameter and return types
     (Function(source_fn), Function(target_fn)) =>
@@ -13243,7 +13254,30 @@ fn check_assignment_detailed(
             None => () // Fall through to default handling
           }
         }
-        None => () // Object without class_name - fall through
+        None => {
+          // Object literal without class_name -> TypeReference (interface/type alias)
+          // Resolve the TypeReference to its underlying type and check structural compatibility
+          match lookup_symbol(checker, target_ref.name) {
+            Some(symbol) => {
+              // Try to resolve as interface first
+              match resolve_interface_type(checker, symbol) {
+                (Some(resolved_type), c) => {
+                  // Check if the resolved type is an object type
+                  match resolved_type {
+                    Object(target_obj) =>
+                      return check_object_assignability_detailed(
+                        c, source_obj, target_obj, location, path,
+                      )
+                    _ => ()
+                  }
+                }
+                (None, _) => ()
+              }
+            }
+            None => ()
+          }
+          // Fall through if we couldn't resolve
+        }
       }
     _ => ()
   }
@@ -15734,9 +15768,31 @@ fn check_function_declaration(
                 (Some(param_type), c) => {
                   checker = c
                   // Check if type is array
+                  // Handles:
+                  // 1. Direct Array type
+                  // 2. TypeReference to "Array"
+                  // 3. Type parameter with array constraint (e.g., T extends any[])
+                  // 4. Tuple types (which satisfy array constraints)
                   let is_array = match param_type {
                     Array(_) => true
-                    TypeReference(ref_type) => ref_type.name == "Array"
+                    Tuple(_) => true // Tuples are array types
+                    TypeReference(ref_type) =>
+                      if ref_type.name == "Array" {
+                        true
+                      } else {
+                        // Check if this is a type parameter with array constraint
+                        match checker.type_parameter_constraints.get(ref_type.name) {
+                          Some(Some(constraint)) => {
+                            // Check if constraint is an array type
+                            match constraint {
+                              Array(_) => true
+                              Tuple(_) => true
+                              _ => false
+                            }
+                          }
+                          _ => false
+                        }
+                      }
                     _ => false
                   }
                   if not(is_array) {

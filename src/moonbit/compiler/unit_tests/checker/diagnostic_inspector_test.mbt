@@ -104,7 +104,15 @@ test "inspect/complex - generic function with complex constraint violation" {
     #|process(42, "hello");
   let result = inspect_diagnostics(source)
   println(result)
-  inspect(result, content="OK: No errors")
+  // tsc correctly errors: Argument of type 'number' is not assignable to parameter
+  inspect(
+    result,
+    content=(
+      #|Found 1 diagnostic(s):
+      #|[1] TS2769: No overload matches this call. Arguments: (number, string) (line 13)
+      #|
+    ),
+  )
 }
 
 ///|
@@ -188,7 +196,16 @@ test "inspect/complex - intersection type with conflicting properties" {
     #|};
   let result = inspect_diagnostics(source)
   println(result)
-  inspect(result, content="OK: No errors")
+  // tsc correctly errors: Type mismatches for name and id properties
+  inspect(
+    result,
+    content=(
+      #|Found 2 diagnostic(s):
+      #|[1] TS2322: Type 'number' is not assignable to type 'string' at name (line 11)
+      #|[2] TS2322: Type 'string' is not assignable to type 'number' at id (line 11)
+      #|
+    ),
+  )
 }
 
 ///|
