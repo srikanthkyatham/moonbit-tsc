@@ -305,6 +305,7 @@ pub struct TypeChecker {
   default_export_locations : Array[SourceLocation] // Track all default export locations for TS2528
   import_helpers : Bool // @importHelpers compiler directive - affects TS2807 validation
   in_namespace_body : Bool // Tracks if we're in a namespace/module body (for TS2331)
+  class_type_parameters : Array[String] // Current class type parameter names (for TS2302 static member validation)
 } derive(Show)
 
 ///|
@@ -397,6 +398,7 @@ pub fn TypeChecker::new_with_options(
     default_export_locations: [],
     import_helpers: false, // Default to false, can be set later from compiler directives
     in_namespace_body: false,
+    class_type_parameters: [], // Empty initially, set when checking class declarations
   }
 }
 
@@ -7007,6 +7009,13 @@ fn infer_call_expression_type(
   checker : TypeChecker,
   call : CallExpression,
 ) -> (Type, TypeChecker) {
+  // TS2302: Check if type arguments reference class type parameters in static context
+  let checker = check_type_arguments_in_static_context(
+    checker,
+    call.type_arguments,
+    call.location,
+  )
+
   // Check if this is a super() call
   let is_super_call = match call.expression {
     SuperExpression(_) => true
@@ -10108,6 +10117,13 @@ fn infer_new_expression_type(
   checker : TypeChecker,
   new_expr : NewExpression,
 ) -> (Type, TypeChecker) {
+  // TS2302: Check if type arguments reference class type parameters in static context
+  let checker = check_type_arguments_in_static_context(
+    checker,
+    new_expr.type_arguments,
+    new_expr.location,
+  )
+
   let (expr_type, checker) = infer_type(checker, new_expr.expression)
 
   // Check if trying to instantiate an abstract class
@@ -17726,6 +17742,7 @@ fn check_class_declaration(
   let prev_in_constructor = checker.in_constructor
   let prev_in_derived_class = checker.in_derived_class
   let prev_in_extends_null_class = checker.in_extends_null_class
+  let prev_class_type_parameters = checker.class_type_parameters
   // Check if this is a derived class (has extends clause)
   let is_derived = is_derived_class(class_decl)
   let is_extends_null = extends_null(class_decl)
@@ -17735,6 +17752,7 @@ fn check_class_declaration(
     in_class_body: true,
     in_derived_class: is_derived,
     in_extends_null_class: is_extends_null,
+    class_type_parameters: type_param_names, // Set class type parameters for TS2302 validation
   }
 
   // Collect uninitialized properties for definite assignment checking
@@ -17828,6 +17846,14 @@ fn check_class_declaration(
             // Save and reset in_namespace_body (methods create new scope for 'this')
             let saved_in_namespace_body = checker.in_namespace_body
             let checker = { ..checker, in_namespace_body: false }
+            // Set in_static_context for static methods (for TS2302 validation)
+            let is_static = has_modifier(method_dec.modifiers, Modifier::Static)
+            let saved_in_static_context = checker.in_static_context
+            let checker = if is_static {
+              { ..checker, in_static_context: true }
+            } else {
+              checker
+            }
             // Check for TS2369: parameter property only in constructor
             let checker = check_method_parameter_properties(
               checker,
@@ -17866,8 +17892,12 @@ fn check_class_declaration(
             } else {
               checker
             }
-            // Restore in_namespace_body flag
-            let checker = { ..checker, in_namespace_body: saved_in_namespace_body }
+            // Restore in_namespace_body and in_static_context flags
+            let checker = {
+              ..checker,
+              in_namespace_body: saved_in_namespace_body,
+              in_static_context: saved_in_static_context,
+            }
             // Pop local scope
             pop_local_scope(checker)
           }
@@ -17962,6 +17992,7 @@ fn check_class_declaration(
     in_constructor: prev_in_constructor,
     in_derived_class: prev_in_derived_class,
     in_extends_null_class: prev_in_extends_null_class,
+    class_type_parameters: prev_class_type_parameters,
   }
 }
 
@@ -20772,6 +20803,44 @@ fn is_literal_or_unique_symbol_type(ty : Type) -> Bool {
     }
     _ => false
   }
+}
+
+///|
+/// Check if type arguments reference class type parameters in static context (TS2302)
+/// Static members cannot reference class type parameters
+fn check_type_arguments_in_static_context(
+  checker : TypeChecker,
+  type_arguments : Array[Node],
+  location : SourceLocation,
+) -> TypeChecker {
+  // Only check if we're in a static context
+  if not(checker.in_static_context) {
+    return checker
+  }
+
+  // Check each type argument
+  let mut checker = checker
+  for type_arg in type_arguments {
+    match type_arg {
+      TypeReference(type_ref) => {
+        // Check if this type reference is a class type parameter
+        for type_param_name in checker.class_type_parameters {
+          if type_ref.type_name == type_param_name {
+            // Found a reference to a class type parameter in static context
+            checker = add_diagnostic_with_code(
+              checker,
+              "Static members cannot reference class type parameters.",
+              location,
+              TS2302,
+            )
+          }
+        }
+      }
+      _ => () // Other type argument forms don't directly reference type parameters
+    }
+  }
+
+  checker
 }
 
 ///|

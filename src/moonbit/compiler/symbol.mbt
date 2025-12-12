@@ -354,6 +354,11 @@ pub enum DiagnosticCode {
   TS1359 // Identifier expected. '{0}' is a reserved word that cannot be used here
 
   // ============================================================================
+  // Class and Type Parameter Errors
+  // ============================================================================
+  TS2302 // Static members cannot reference class type parameters
+
+  // ============================================================================
   // Name Resolution Errors (2304-2318)
   // ============================================================================
   TS2304 // Cannot find name '{0}'
@@ -768,6 +773,8 @@ pub fn DiagnosticCode::to_int(self : DiagnosticCode) -> Int {
     TS1308 => 1308
     TS1357 => 1357
     TS1359 => 1359
+    // Class and Type Parameter Errors
+    TS2302 => 2302
     // Name Resolution Errors (2304-2318)
     TS2304 => 2304
     TS2305 => 2305
@@ -1111,6 +1118,8 @@ pub fn DiagnosticCode::from_int(code : Int) -> DiagnosticCode? {
     1308 => Some(TS1308)
     1357 => Some(TS1357)
     1359 => Some(TS1359)
+    // Class and Type Parameter Errors
+    2302 => Some(TS2302)
     // Name Resolution Errors (2304-2318)
     2304 => Some(TS2304)
     2305 => Some(TS2305)
