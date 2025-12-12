@@ -5900,6 +5900,9 @@ fn infer_class_declaration_type(
   let (class_type_parameters, c) = process_type_parameters(checker, class_decl.type_parameters)
   let mut checker = c
 
+  // Extract type parameter names for TS2467 validation
+  let type_param_names = class_decl.type_parameters.map(fn(tp) { tp.name })
+
   // Build object type for the class - separating static and instance properties
   // Static properties go on the class constructor type (for X.staticProp)
   // Instance properties go on the instance type (for new X().instanceProp)
@@ -6015,6 +6018,23 @@ fn infer_class_declaration_type(
           None => checker
         }
 
+        // TS2467: Validate type parameter references in computed property names
+        let checker = match prop.computed_name_expr {
+          Some(name_expr) => {
+            if contains_type_parameter_reference(name_expr, type_param_names) {
+              add_diagnostic_with_code(
+                checker,
+                "A computed property name cannot reference a type parameter from its containing type.",
+                get_location(name_expr),
+                TS2467,
+              )
+            } else {
+              checker
+            }
+          }
+          None => checker
+        }
+
         // TS1166: Validate computed property names in class declarations
         // A computed property name in a class property declaration must have a simple literal type or a 'unique symbol' type
         let checker = match prop.computed_name_expr {
@@ -6086,6 +6106,23 @@ fn infer_class_declaration_type(
                 "'super' cannot be referenced in a computed property name.",
                 get_location(name_expr),
                 TS2466,
+              )
+            } else {
+              checker
+            }
+          }
+          None => checker
+        }
+
+        // TS2467: Validate type parameter references in computed property names
+        checker = match method_decl.computed_name_expr {
+          Some(name_expr) => {
+            if contains_type_parameter_reference(name_expr, type_param_names) {
+              add_diagnostic_with_code(
+                checker,
+                "A computed property name cannot reference a type parameter from its containing type.",
+                get_location(name_expr),
+                TS2467,
               )
             } else {
               checker
@@ -17672,8 +17709,15 @@ fn check_class_declaration(
   // Check type parameter names for reserved keywords (TS2368)
   let checker = check_type_parameter_names(checker, class_decl.type_parameters)
 
+  // Extract type parameter names for TS2467 validation
+  let type_param_names = class_decl.type_parameters.map(fn(tp) { tp.name })
+
   // Build the class type so we can set current_this_type
-  let (class_type, checker) = build_class_type_for_this(checker, class_decl)
+  let (class_type, checker) = build_class_type_for_this(
+    checker,
+    class_decl,
+    type_param_names,
+  )
 
   // Save previous this type and context flags, set current_this_type to class type
   let prev_this_type = checker.current_this_type
@@ -18311,7 +18355,46 @@ fn check_interface_declaration(
 ) -> TypeChecker {
   // Check type parameter names for reserved keywords (TS2368)
   let checker = check_type_parameter_names(checker, iface_decl.type_parameters)
+
+  // Extract type parameter names for TS2467 validation
+  let type_param_names = iface_decl.type_parameters.map(fn(tp) { tp.name })
+
   let mut checker = checker
+
+  // TS2467: Validate type parameter references in computed property names
+  for interface_member in iface_decl.members {
+    match interface_member {
+      PropertyDeclaration(prop) =>
+        match prop.computed_name_expr {
+          Some(name_expr) => {
+            if contains_type_parameter_reference(name_expr, type_param_names) {
+              checker = add_diagnostic_with_code(
+                checker,
+                "A computed property name cannot reference a type parameter from its containing type.",
+                get_location(name_expr),
+                TS2467,
+              )
+            }
+          }
+          None => ()
+        }
+      MethodDeclaration(meth) =>
+        match meth.computed_name_expr {
+          Some(name_expr) => {
+            if contains_type_parameter_reference(name_expr, type_param_names) {
+              checker = add_diagnostic_with_code(
+                checker,
+                "A computed property name cannot reference a type parameter from its containing type.",
+                get_location(name_expr),
+                TS2467,
+              )
+            }
+          }
+          None => ()
+        }
+      _ => ()
+    }
+  }
 
   // TS2464: Validate computed property names in interface members
   for interface_member in iface_decl.members {
@@ -18605,6 +18688,7 @@ fn check_type_node_for_rest_errors(
 fn build_class_type_for_this(
   checker : TypeChecker,
   class_decl : ClassDeclaration,
+  type_param_names : Array[String],
 ) -> (Type, TypeChecker) {
   // Build object type for the class instance
   let properties : Map[String, PropertySignature] = Map::new()
@@ -18652,6 +18736,23 @@ fn build_class_type_for_this(
                 "'super' cannot be referenced in a computed property name.",
                 get_location(name_expr),
                 TS2466,
+              )
+            } else {
+              checker
+            }
+          }
+          None => checker
+        }
+
+        // TS2467: Validate type parameter references in computed property names
+        let checker = match prop.computed_name_expr {
+          Some(name_expr) => {
+            if contains_type_parameter_reference(name_expr, type_param_names) {
+              add_diagnostic_with_code(
+                checker,
+                "A computed property name cannot reference a type parameter from its containing type.",
+                get_location(name_expr),
+                TS2467,
               )
             } else {
               checker
@@ -18722,6 +18823,23 @@ fn build_class_type_for_this(
                 "'super' cannot be referenced in a computed property name.",
                 get_location(name_expr),
                 TS2466,
+              )
+            } else {
+              checker
+            }
+          }
+          None => checker
+        }
+
+        // TS2467: Validate type parameter references in computed property names
+        checker = match method_decl.computed_name_expr {
+          Some(name_expr) => {
+            if contains_type_parameter_reference(name_expr, type_param_names) {
+              add_diagnostic_with_code(
+                checker,
+                "A computed property name cannot reference a type parameter from its containing type.",
+                get_location(name_expr),
+                TS2467,
               )
             } else {
               checker
@@ -20398,6 +20516,93 @@ fn contains_super_expression(expr : Node) -> Bool {
             }
           ComputedPropertyAssignment(key_node, value_node, _) =>
             if contains_super_expression(key_node) || contains_super_expression(value_node) {
+              return true
+            }
+          _ => ()
+        }
+      }
+      false
+    }
+    _ => false
+  }
+}
+
+///|
+/// Check if an expression contains a reference to a type parameter from a given set (for TS2467 validation)
+/// Returns true if any CallExpression in the expression tree has type arguments that reference
+/// one of the type parameter names in type_param_names
+fn contains_type_parameter_reference(
+  expr : Node,
+  type_param_names : Array[String]
+) -> Bool {
+  if type_param_names.length() == 0 {
+    return false // No type parameters to check against
+  }
+  match expr {
+    CallExpression(call) => {
+      // Check type arguments of this call expression
+      for type_arg in call.type_arguments {
+        match type_arg {
+          TypeReference(tr) => {
+            // Check if this type reference matches any of the containing type's type parameters
+            for param_name in type_param_names {
+              if tr.type_name == param_name {
+                return true
+              }
+            }
+          }
+          _ => ()
+        }
+      }
+      // Recursively check the call expression itself and arguments
+      if contains_type_parameter_reference(call.expression, type_param_names) {
+        return true
+      }
+      for arg in call.arguments {
+        if contains_type_parameter_reference(arg, type_param_names) {
+          return true
+        }
+      }
+      false
+    }
+    BinaryExpression(bin) =>
+      contains_type_parameter_reference(bin.left, type_param_names) ||
+      contains_type_parameter_reference(bin.right, type_param_names)
+    ParenthesizedExpression(paren) =>
+      contains_type_parameter_reference(paren.expression, type_param_names)
+    UnaryExpression(unary) =>
+      contains_type_parameter_reference(unary.operand, type_param_names)
+    ConditionalExpression(cond) =>
+      contains_type_parameter_reference(cond.condition, type_param_names) ||
+      contains_type_parameter_reference(cond.when_true, type_param_names) ||
+      contains_type_parameter_reference(cond.when_false, type_param_names)
+    PropertyAccessExpression(prop) =>
+      contains_type_parameter_reference(prop.expression, type_param_names)
+    ElementAccessExpression(elem) =>
+      contains_type_parameter_reference(elem.expression, type_param_names) ||
+      contains_type_parameter_reference(elem.argument_expression, type_param_names)
+    ArrayLiteralExpression(arr) => {
+      for elem_opt in arr.elements {
+        match elem_opt {
+          Some(elem) =>
+            if contains_type_parameter_reference(elem, type_param_names) {
+              return true
+            }
+          None => ()
+        }
+      }
+      false
+    }
+    ObjectLiteralExpression(obj) => {
+      for prop in obj.properties {
+        match prop {
+          PropertyAssignment(_, value_node, _) =>
+            if contains_type_parameter_reference(value_node, type_param_names) {
+              return true
+            }
+          ComputedPropertyAssignment(key_node, value_node, _) =>
+            if contains_type_parameter_reference(key_node, type_param_names) ||
+               contains_type_parameter_reference(value_node, type_param_names) {
               return true
             }
           _ => ()
