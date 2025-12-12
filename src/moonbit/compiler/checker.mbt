@@ -12120,6 +12120,33 @@ fn is_valid_class_property_computed_name_type(t : Type) -> Bool {
   }
 }
 
+///| Check if an expression is always falsy (TS2873)
+///| Returns true for: empty string "", zero 0, null, undefined, false
+fn is_always_falsy(expr : Node) -> Bool {
+  match expr {
+    StringLiteral(s) => s.value == "" // Empty string is always falsy
+    NumericLiteral(n) => {
+      // Check if the numeric value is exactly zero
+      let value_str = n.value.to_string()
+      value_str == "0" || value_str == "0.0" || value_str == "-0"
+    }
+    BooleanLiteral(b) => b.value == false // false is always falsy
+    NullLiteral(_) => true // null is always falsy
+    // TODO: Check for undefined literals when implemented
+    _ => false
+  }
+}
+
+///| Check if an expression is always truthy (TS2872)
+///| An expression is always truthy if it's not always falsy and is a known value
+///| Returns true for: non-empty strings, non-zero numbers, true, objects, arrays
+fn is_always_truthy(expr : Node) -> Bool {
+  match expr {
+    ObjectLiteralExpression(_) | ArrayLiteralExpression(_) => true
+    _ => not(is_always_falsy(expr))
+  }
+}
+
 ///|
 /// Infer object literal type
 fn infer_object_literal_type(
@@ -12145,6 +12172,35 @@ fn infer_object_literal_type(
         // For computed properties, try to get the property name from string/identifier
         let key = get_property_name(name_expr)
         let key = if key == "" { "[computed]" } else { key }
+
+        // TS2873: Check for always-falsy expression in OR operator
+        let mut checker = checker
+        checker = match name_expr {
+          BinaryExpression(bin) =>
+            match bin.operator {
+              LogicalOr =>
+                if is_always_falsy(bin.left) {
+                  let left_loc = match bin.left {
+                    StringLiteral(s) => s.location
+                    NumericLiteral(n) => n.location
+                    BooleanLiteral(b) => b.location
+                    NullLiteral(n) => n.location
+                    _ => loc
+                  }
+                  add_diagnostic_with_code(
+                    checker,
+                    "This kind of expression is always falsy.",
+                    left_loc,
+                    TS2873,
+                  )
+                } else {
+                  checker
+                }
+              _ => checker
+            }
+          _ => checker
+        }
+
         let (name_type, c) = infer_type(checker, name_expr)
         // TS2464: Check if computed property name type is valid
         let c = if not(is_valid_computed_property_type(c, name_type)) {

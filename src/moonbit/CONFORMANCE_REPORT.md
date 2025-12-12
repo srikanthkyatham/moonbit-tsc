@@ -13,6 +13,52 @@
 
 ## Recent Fixes
 
+### ✅ Implemented TS2873 Always Falsy Expression Detection! (December 12, 2025)
+- **Impact**: +4 tests passing (129/142 → 133/142 = 93.7%, +2.8% improvement)
+- **Computed Properties**: **133/142 passing (93.7%)**, up from 129/142 (90.8%)
+- **Feature**: Implemented TS2873 error detection for always-falsy expressions in computed property names
+  - **TS2873**: "This kind of expression is always falsy"
+  - **Detection**: Validates left operand of `||` operator in computed properties
+  - **Always-falsy values**: Empty string `""`, zero `0`, `false`, `null`
+  - **Example**: `["" || 0]: value` correctly triggers TS2873 error on `""`
+
+- **Implementation details**:
+  1. **Added TS2872 and TS2873 to DiagnosticCode** (symbol.mbt:702-703):
+     - `TS2872 // This kind of expression is always truthy`
+     - `TS2873 // This kind of expression is always falsy`
+     - Added corresponding mappings in `to_int()` and `from_int()` functions
+  2. **Created helper functions** (checker.mbt:12123-12148):
+     - `is_always_falsy(expr : Node) -> Bool`: Detects empty strings, zero, false, null
+     - `is_always_truthy(expr : Node) -> Bool`: Uses DRY principle with `not(is_always_falsy(expr))`
+  3. **Added validation logic** (checker.mbt:12184-12210):
+     - Checks BinaryExpression with LogicalOr operator in object literal computed properties
+     - Validates left operand is not always falsy
+     - Reports TS2873 diagnostic with proper location extraction
+  4. **Error messages and documentation**:
+     - Clear error message: "This kind of expression is always falsy."
+     - Location extracted via pattern matching on node types (StringLiteral, NumericLiteral, BooleanLiteral, NullLiteral)
+
+- **Tests fixed** (4 conformance tests):
+  - `computedPropertyNames46_ES5.ts` - `["" || 0]: 0` correctly triggers TS2873 ✅
+  - `computedPropertyNames46_ES6.ts` - `["" || 0]: 0` correctly triggers TS2873 ✅
+  - `computedPropertyNames48_ES5.ts` - `["" || 0]: ""` in extractIndexer call correctly triggers TS2873 ✅
+  - `computedPropertyNames48_ES6.ts` - `["" || 0]: ""` in extractIndexer call correctly triggers TS2873 ✅
+
+- **Unit tests added** (11 comprehensive tests):
+  - `ts2873_always_falsy_test.mbt` (320 lines)
+  - Tests for empty string, zero, false, null detection
+  - Tests for non-falsy values (non-empty strings, non-zero numbers, true)
+  - Tests for variable references (should NOT trigger)
+  - Tests for AND operator (only OR should trigger)
+  - Tests for both conformance test cases
+  - All 11 tests passing ✅
+
+- **Remaining failures** (9 tests):
+  - TS2464 computed property type (3 tests): Overload resolution issues with computed property names
+  - TS1049 setter parameter count (2 tests): Setter must have exactly one parameter
+  - TS2300 duplicate identifier (2 tests): Duplicate property names
+  - TS2466 super in computed property (2 tests): `super()` in computed property names
+
 ### ✅ Fixed Number Index Validation Bug + DRY Refactoring! (December 12, 2025)
 - **Impact**: +2 tests passing (127/142 → 129/142 = 90.8%, +1.4% improvement)
 - **Computed Properties**: **129/142 passing (90.8%)**, up from 127/142 (89.4%)
@@ -1426,7 +1472,7 @@ The following categories have achieved full conformance:
 | functionDeclarations | 13 | 13 | 100% |
 | modules | 39 | 39 | 100% |
 | spread | 26 | 27 | 96% |
-| computedProperties | 123 | 142 | 86.6% |
+| computedProperties | 133 | 142 | 93.7% |
 
 ## Types Subcategory Breakdown
 

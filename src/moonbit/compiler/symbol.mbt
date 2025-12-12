@@ -699,6 +699,8 @@ pub enum DiagnosticCode {
   TS2856 // Classes may not have a field named 'constructor'
   TS2857 // JSX element '{0}' has no corresponding closing tag
   TS2859 // A 'super' call must be a root-level statement within a constructor of a derived class that contains initialized properties
+  TS2872 // This kind of expression is always truthy
+  TS2873 // This kind of expression is always falsy
 
   // ============================================================================
   // Build/Emit Errors (4000-4099)
@@ -1049,6 +1051,8 @@ pub fn DiagnosticCode::to_int(self : DiagnosticCode) -> Int {
     TS2856 => 2856
     TS2857 => 2857
     TS2859 => 2859
+    TS2872 => 2872
+    TS2873 => 2873
     // Build/Emit Errors (4000-4099)
     TS4000 => 4000
     TS4002 => 4002
@@ -1391,6 +1395,8 @@ pub fn DiagnosticCode::from_int(code : Int) -> DiagnosticCode? {
     2856 => Some(TS2856)
     2857 => Some(TS2857)
     2859 => Some(TS2859)
+    2872 => Some(TS2872)
+    2873 => Some(TS2873)
     // Build/Emit Errors (4000-4099)
     4000 => Some(TS4000)
     4002 => Some(TS4002)
