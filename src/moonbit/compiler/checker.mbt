@@ -6232,7 +6232,12 @@ fn infer_class_declaration_type(
         // Infer getter return type
         let (getter_return_type, checker) = match getter.return_type {
           Some(_) => resolve_type_annotation_or_any(checker, getter.return_type)
-          None => any_type(checker)
+          None =>
+            // Infer from body if no explicit return type
+            match getter.body {
+              Some(body) => infer_getter_return_type_from_body(checker, body)
+              None => any_type(checker)
+            }
         }
 
         let is_static = has_modifier(getter.modifiers, Modifier::Static)
@@ -18011,6 +18016,9 @@ fn check_class_declaration(
     checker,
   )
 
+  // TS2411: Check properties against index signatures
+  let checker = check_class_index_signature_compatibility(checker, class_decl)
+
   // Restore previous context flags
   {
     ..checker,
@@ -18022,6 +18030,297 @@ fn check_class_declaration(
     in_extends_null_class: prev_in_extends_null_class,
     class_type_parameters: prev_class_type_parameters,
   }
+}
+
+///|
+/// Check class members against index signatures (TS2411)
+/// Properties must be assignable to the index signature type
+fn check_class_index_signature_compatibility(
+  checker : TypeChecker,
+  class_decl : ClassDeclaration,
+) -> TypeChecker {
+  // DEBUG: Always add an error to verify this is being called
+  let checker = add_diagnostic_with_code(
+    checker,
+    "[DEBUG] TS2411 check ENTRY - class has \{class_decl.members.length()} members",
+    class_decl.location,
+    TS2411,
+  )
+
+  // Extract index signatures from class members
+  let string_index : Ref[IndexSignature?] = { val: None }
+  let number_index : Ref[IndexSignature?] = { val: None }
+
+  for mem in class_decl.members {
+    match mem {
+      IndexSignatureDeclaration(idx_sig) => {
+        // DEBUG: Found index signature
+        let checker = add_diagnostic_with_code(
+          checker,
+          "[DEBUG] Found IndexSignatureDeclaration",
+          class_decl.location,
+          TS2411,
+        )
+
+        // Infer the parameter type (string or number)
+        let (param_type, c) = infer_type(checker, idx_sig.parameter_type)
+        let (return_type, c) = infer_type(c, idx_sig.return_type)
+
+        match param_type {
+          String(_) =>
+            string_index.val = Some({
+              parameter_name: idx_sig.parameter_name,
+              parameter_type: param_type,
+              return_type,
+              is_readonly: idx_sig.is_readonly,
+            })
+          Number(_) =>
+            number_index.val = Some({
+              parameter_name: idx_sig.parameter_name,
+              parameter_type: param_type,
+              return_type,
+              is_readonly: idx_sig.is_readonly,
+            })
+          _ => ()
+        }
+      }
+      _ => ()
+    }
+  }
+
+  // If no index signatures, nothing to check
+  if string_index.val is None && number_index.val is None {
+    return checker
+  }
+
+  // DEBUG: Test if this code is being executed
+  let checker = add_diagnostic_with_code(
+    checker,
+    "[DEBUG] TS2411 validation is running - found index signature",
+    class_decl.location,
+    TS2411,
+  )
+
+  // Check each member against index signatures
+  let mut checker = checker
+  for mem in class_decl.members {
+    checker = match mem {
+      PropertyDeclaration(prop) =>
+        check_property_against_index_sig(
+          checker,
+          prop.name,
+          prop,
+          string_index.val,
+          number_index.val,
+        )
+      GetAccessor(getter) =>
+        check_getter_against_index_sig(
+          checker,
+          getter,
+          string_index.val,
+          number_index.val,
+        )
+      MethodDeclaration(method) =>
+        check_method_against_index_sig(
+          checker,
+          method,
+          string_index.val,
+          number_index.val,
+        )
+      _ => checker
+    }
+  }
+
+  checker
+}
+
+///|
+/// Check a property against index signatures (TS2411)
+fn check_property_against_index_sig(
+  checker : TypeChecker,
+  prop_name : String,
+  prop : PropertyDeclaration,
+  string_index : IndexSignature?,
+  number_index : IndexSignature?,
+) -> TypeChecker {
+  // Get property type
+  let (prop_type, checker) = match prop.type_annotation {
+    Some(type_node) => infer_type(checker, type_node)
+    None =>
+      match prop.initializer {
+        Some(init) => infer_type(checker, init)
+        None => any_type(checker)
+      }
+  }
+
+  // DEBUG
+  let prop_type_str = type_to_string(prop_type)
+  let checker = add_diagnostic_with_code(
+    checker,
+    "[DEBUG] Checking property '\{prop_name}' with type '\{prop_type_str}'",
+    prop.location,
+    TS2411,
+  )
+
+  // Check against string index signature (all properties match string index)
+  match string_index {
+    Some(sig) => {
+      let index_type_str = type_to_string(sig.return_type)
+      let assignable = is_assignable(prop_type, sig.return_type)
+      let checker = add_diagnostic_with_code(
+        checker,
+        "[DEBUG] is_assignable(\{prop_type_str}, \{index_type_str}) = \{assignable}",
+        prop.location,
+        TS2411,
+      )
+
+      if not(assignable) {
+        return add_diagnostic_with_code(
+          checker,
+          "Property '" +
+            prop_name +
+            "' of type '" +
+            prop_type_str +
+            "' is not assignable to 'string' index type '" +
+            index_type_str +
+            "'.",
+          prop.location,
+          TS2411,
+        )
+      } else {
+        checker
+      }
+    }
+    None => checker
+  }
+}
+
+///|
+/// Infer return type from getter body by finding return statements
+fn infer_getter_return_type_from_body(
+  checker : TypeChecker,
+  body : Node,
+) -> (Type, TypeChecker) {
+  // Body should be a BlockStatement
+  match body {
+    BlockStatement(block) => {
+      // Look for return statement in body
+      for stmt in block.statements {
+        match stmt {
+          ReturnStatement(ret) =>
+            match ret.expression {
+              Some(expr) => return infer_type(checker, expr)
+              None => return any_type(checker)
+            }
+          _ => ()
+        }
+      }
+      any_type(checker)
+    }
+    _ => any_type(checker) // Shouldn't happen, but handle gracefully
+  }
+}
+
+///|
+/// Check a getter against index signatures (TS2411)
+fn check_getter_against_index_sig(
+  checker : TypeChecker,
+  getter : GetAccessor,
+  string_index : IndexSignature?,
+  number_index : IndexSignature?,
+) -> TypeChecker {
+  // Get the computed property name
+  let prop_name = match getter.computed_name_expr {
+    Some(expr) =>
+      match expr {
+        StringLiteral(lit) => lit.value
+        _ => return checker // Can't validate dynamic names
+      }
+    None => getter.name
+  }
+
+  // Get getter return type
+  let (getter_type, checker) = match getter.return_type {
+    Some(type_node) => infer_type(checker, type_node)
+    None =>
+      // Infer from body if available
+      match getter.body {
+        Some(body) => infer_getter_return_type_from_body(checker, body)
+        None => any_type(checker)
+      }
+  }
+
+  // Check against string index signature
+  match string_index {
+    Some(sig) => {
+      if not(is_assignable(getter_type, sig.return_type)) {
+        let getter_type_str = type_to_string(getter_type)
+        let index_type_str = type_to_string(sig.return_type)
+        return add_diagnostic_with_code(
+          checker,
+          "Property '" +
+            prop_name +
+            "' of type '" +
+            getter_type_str +
+            "' is not assignable to 'string' index type '" +
+            index_type_str +
+            "'.",
+          getter.location,
+          TS2411,
+        )
+      }
+    }
+    None => ()
+  }
+
+  checker
+}
+
+///|
+/// Check a method against index signatures (TS2411)
+fn check_method_against_index_sig(
+  checker : TypeChecker,
+  method : MethodDeclaration,
+  string_index : IndexSignature?,
+  number_index : IndexSignature?,
+) -> TypeChecker {
+  // Methods with computed names need checking
+  let prop_name = match method.computed_name_expr {
+    Some(expr) =>
+      match expr {
+        StringLiteral(lit) => lit.value
+        _ => return checker // Can't validate dynamic names
+      }
+    None => method.name
+  }
+
+  // Build method signature type
+  let (method_type, checker) = infer_method_type(checker, method)
+
+  // Check against string index signature
+  match string_index {
+    Some(sig) => {
+      if not(is_assignable(method_type, sig.return_type)) {
+        let method_type_str = type_to_string(method_type)
+        let index_type_str = type_to_string(sig.return_type)
+        return add_diagnostic_with_code(
+          checker,
+          "Property '" +
+            prop_name +
+            "' of type '" +
+            method_type_str +
+            "' is not assignable to 'string' index type '" +
+            index_type_str +
+            "'.",
+          method.location,
+          TS2411,
+        )
+      }
+    }
+    None => ()
+  }
+
+  checker
 }
 
 ///|
