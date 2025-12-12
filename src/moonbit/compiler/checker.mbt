@@ -18157,6 +18157,48 @@ fn check_interface_declaration(
   // Check type parameter names for reserved keywords (TS2368)
   let checker = check_type_parameter_names(checker, iface_decl.type_parameters)
   let mut checker = checker
+
+  // TS2464: Validate computed property names in interface members
+  for interface_member in iface_decl.members {
+    match interface_member {
+      PropertyDeclaration(prop) =>
+        match prop.computed_name_expr {
+          Some(name_expr) => {
+            let (name_type, c) = infer_type(checker, name_expr)
+            checker = c
+            // Check if computed property name type is valid
+            if not(is_valid_computed_property_type(checker, name_type)) {
+              checker = add_diagnostic_with_code(
+                checker,
+                "A computed property name must be of type 'string', 'number', 'symbol', or 'any'.",
+                prop.location,
+                TS2464,
+              )
+            }
+          }
+          None => ()
+        }
+      MethodDeclaration(meth) =>
+        match meth.computed_name_expr {
+          Some(name_expr) => {
+            let (name_type, c) = infer_type(checker, name_expr)
+            checker = c
+            // Check if computed property name type is valid
+            if not(is_valid_computed_property_type(checker, name_type)) {
+              checker = add_diagnostic_with_code(
+                checker,
+                "A computed property name must be of type 'string', 'number', 'symbol', or 'any'.",
+                meth.location,
+                TS2464,
+              )
+            }
+          }
+          None => ()
+        }
+      _ => ()
+    }
+  }
+
   // First pass: collect index signature return types and validate param types
   let string_index_type : Ref[Type?] = { val: None }
   for interface_member in iface_decl.members {
@@ -21307,6 +21349,24 @@ fn resolve_interface_type(
       for i = 0; i < interface_decl.members.length(); i = i + 1 {
         match interface_decl.members[i] {
           PropertyDeclaration(prop) => {
+            // TS2464: Validate computed property name type if present
+            let mut checker = match prop.computed_name_expr {
+              Some(name_expr) => {
+                let (name_type, c) = infer_type(checker, name_expr)
+                // Check if computed property name type is valid
+                if not(is_valid_computed_property_type(c, name_type)) {
+                  add_diagnostic_with_code(
+                    c,
+                    "A computed property name must be of type 'string', 'number', 'symbol', or 'any'.",
+                    prop.location,
+                    TS2464,
+                  )
+                } else {
+                  c
+                }
+              }
+              None => checker
+            }
             // Get the property type
             let (prop_type, c) = match prop.type_annotation {
               Some(type_node) =>
@@ -21330,6 +21390,24 @@ fn resolve_interface_type(
             })
           }
           MethodDeclaration(meth) => {
+            // TS2464: Validate computed method name type if present
+            let mut checker = match meth.computed_name_expr {
+              Some(name_expr) => {
+                let (name_type, c) = infer_type(checker, name_expr)
+                // Check if computed property name type is valid
+                if not(is_valid_computed_property_type(c, name_type)) {
+                  add_diagnostic_with_code(
+                    c,
+                    "A computed property name must be of type 'string', 'number', 'symbol', or 'any'.",
+                    meth.location,
+                    TS2464,
+                  )
+                } else {
+                  c
+                }
+              }
+              None => checker
+            }
             // Convert method parameters to CheckerParameter array
             let parameters : Array[CheckerParameter] = []
             for param_node in meth.parameters {

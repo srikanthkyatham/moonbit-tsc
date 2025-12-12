@@ -6507,7 +6507,7 @@ fn parse_interface_declaration(
             } else {
               // Computed property: [expression]: Type or [expression](): ReturnType
               // Parse the computed property name expression
-              let (_computed_name, p) = match
+              let (computed_name_expr, p) = match
                 parse_assignment_expression(parser) {
                 Ok((expr, p)) => (expr, p)
                 Err(p) => return Err(p)
@@ -6568,7 +6568,7 @@ fn parse_interface_declaration(
                   members.push(
                     Node::MethodDeclaration(MethodDeclaration::{
                       name: method_name,
-                      computed_name_expr: None,
+                      computed_name_expr: Some(computed_name_expr), // Preserve for TS2464 validation
                       type_parameters: [],
                       parameters: params,
                       return_type,
@@ -6602,7 +6602,7 @@ fn parse_interface_declaration(
                       members.push(
                         Node::PropertyDeclaration(PropertyDeclaration::{
                           name: prop_name,
-                          computed_name_expr: None,
+                          computed_name_expr: Some(computed_name_expr), // Preserve for TS2464 validation
                           type_annotation: Some(prop_type),
                           initializer: None,
                           is_optional,
