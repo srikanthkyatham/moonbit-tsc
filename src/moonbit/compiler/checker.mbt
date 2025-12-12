@@ -20302,6 +20302,22 @@ fn get_type_from_type_node(
       let (info, checker) = create_type_info(checker)
       (Some(Union({ types, info })), checker)
     }
+    IntersectionType(intersection_type) => {
+      // Handle intersection types (A & B)
+      let mut checker = checker
+      let types = []
+      for i = 0; i < intersection_type.types.length(); i = i + 1 {
+        match get_type_from_type_node(checker, intersection_type.types[i]) {
+          (Some(t), c) => {
+            types.push(t)
+            checker = c
+          }
+          (None, c) => checker = c
+        }
+      }
+      let (info, checker) = create_type_info(checker)
+      (Some(Intersection({ types, info })), checker)
+    }
     TypeReference(type_ref) =>
       // Look up type reference
       // Check type_cache first for type parameters
