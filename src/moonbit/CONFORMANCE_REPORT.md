@@ -5,13 +5,57 @@
 | Metric | Value |
 |--------|-------|
 | Total Tests | 5,652 |
-| Passed | 3,919 |
-| Failed | 1,733 |
-| **Pass Rate** | **69.3%** |
+| Passed | 3,921 |
+| Failed | 1,731 |
+| **Pass Rate** | **69.4%** |
 
 *Last updated: December 12, 2025*
 
 ## Recent Fixes
+
+### ✅ Implemented TS2300 Duplicate Identifier Validation + DRY Refactoring! (December 12, 2025)
+- **Impact**: +2 tests passing (135/142 → 137/142 = 96.5%, +1.4% improvement)
+- **Computed Properties**: **137/142 passing (96.5%)**, up from 135/142 (95.1%)
+- **Feature**: Implemented TS2300 error detection for duplicate property names in object literals
+  - **TS2300**: "Duplicate identifier '{0}'."
+  - **Detection**: Validates unique property names across regular properties and getters/setters
+  - **Example**: Object with two `foo` getters correctly triggers TS2300 errors on both occurrences
+
+- **Implementation details**:
+  1. **Added TS2300 to DiagnosticCode** (symbol.mbt:360):
+     - `TS2300 // Duplicate identifier '{0}'`
+     - Added corresponding mappings in `to_int()` (line 782) and `from_int()` (line 1131) functions
+  2. **DRY Refactoring**: Created `check_duplicate_property()` helper function (checker.mbt:12177-12212):
+     - Takes `TypeChecker`, property `name`, `location`, and tracking maps, returns updated `TypeChecker`
+     - Uses two maps for tracking:
+       - `property_locations: Map[String, SourceLocation]` - tracks first occurrence location
+       - `property_reported: Map[String, Bool]` - tracks if first occurrence already reported as duplicate
+     - Logic:
+       - On first occurrence: stores location in `property_locations` map
+       - On duplicate: reports TS2300 on first occurrence (once) AND current occurrence
+       - Ensures both duplicate locations are flagged with clear error messages
+  3. **Refactored call sites** (2 locations):
+     - PropertyAssignment validation (checker.mbt:12229-12235): Regular property duplicate checking
+     - GetAccessor validation (checker.mbt:12484-12490): Getter accessor duplicate checking
+  4. **Code quality**: Eliminated ~40 lines of duplicated code by extracting common validation logic
+
+- **Tests fixed** (2 conformance tests):
+  - `computedPropertyNames49_ES5.ts` - Duplicate `foo` getters correctly trigger TS2300 errors ✅
+  - `computedPropertyNames50_ES5.ts` - Duplicate `foo` getters correctly trigger TS2300 errors ✅
+
+- **Unit tests added** (7 comprehensive tests):
+  - `ts2300_duplicate_identifier_test.mbt` (238 lines)
+  - Tests for duplicate regular properties (expects 2 TS2300 errors)
+  - Tests for duplicate getters (expects 2 TS2300 errors)
+  - Tests for three duplicates (expects 3 TS2300 errors)
+  - Tests for non-duplicate properties (should NOT trigger TS2300)
+  - Tests for different property types (should NOT trigger TS2300)
+  - Tests for both conformance test cases (computedPropertyNames49 and 50)
+  - All 7 unit tests passing ✅
+
+- **Remaining failures** (5 tests):
+  - TS2464 computed property type (3 tests): Overload resolution issues with computed property names
+  - TS2466 super in computed property (2 tests): `super()` in computed property names
 
 ### ✅ Implemented TS1049 Setter Parameter Count Validation + DRY Refactoring! (December 12, 2025)
 - **Impact**: +2 tests passing (133/142 → 135/142 = 95.1%, +1.4% improvement)

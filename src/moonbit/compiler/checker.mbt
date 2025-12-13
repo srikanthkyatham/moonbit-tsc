@@ -12172,6 +12172,46 @@ fn validate_setter_parameter_count(
 }
 
 ///|
+/// Check for duplicate property name and report TS2300 error
+/// Returns updated TypeChecker with diagnostics if duplicate found
+fn check_duplicate_property(
+  checker : TypeChecker,
+  name : String,
+  loc : SourceLocation,
+  property_locations : Map[String, SourceLocation],
+  property_reported : Map[String, Bool]
+) -> TypeChecker {
+  match property_locations.get(name) {
+    Some(first_loc) => {
+      // Report error on the first occurrence only if not already reported
+      let c = match property_reported.get(name) {
+        Some(true) => checker
+        _ => {
+          property_reported.set(name, true)
+          add_diagnostic_with_code(
+            checker,
+            "Duplicate identifier '\{name}'.",
+            first_loc,
+            TS2300,
+          )
+        }
+      }
+      // Always report error on the current duplicate
+      add_diagnostic_with_code(
+        c,
+        "Duplicate identifier '\{name}'.",
+        loc,
+        TS2300,
+      )
+    }
+    None => {
+      property_locations.set(name, loc)
+      checker
+    }
+  }
+}
+
+///|
 /// Infer object literal type
 fn infer_object_literal_type(
   checker : TypeChecker,
@@ -12180,9 +12220,19 @@ fn infer_object_literal_type(
   let mut checker = checker
   let properties = Map::new()
   let spread_types : Array[Type] = [] // Track types being spread (for intersection)
+  let property_locations : Map[String, SourceLocation] = Map::new() // Track property names for TS2300 duplicate detection
+  let property_reported : Map[String, Bool] = Map::new() // Track if we've reported the first occurrence as duplicate
   for i = 0; i < obj.properties.length(); i = i + 1 {
     match obj.properties[i] {
-      PropertyAssignment(name, value, _) => {
+      PropertyAssignment(name, value, loc) => {
+        // TS2300: Check for duplicate property names
+        checker = check_duplicate_property(
+          checker,
+          name,
+          loc,
+          property_locations,
+          property_reported,
+        )
         let (prop_type, c) = infer_type(checker, value)
         properties.set(name, {
           name,
@@ -12428,8 +12478,16 @@ fn infer_object_literal_type(
         })
         checker = c
       }
-      GetAccessor(name, func_expr, _) => {
+      GetAccessor(name, func_expr, loc) => {
         // Getter accessor: { get prop() { ... } }
+        // TS2300: Check for duplicate property names
+        checker = check_duplicate_property(
+          checker,
+          name,
+          loc,
+          property_locations,
+          property_reported,
+        )
         let (getter_type, c) = infer_function_expression_type(
           checker, func_expr,
         )

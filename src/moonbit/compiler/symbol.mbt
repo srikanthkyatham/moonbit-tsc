@@ -357,6 +357,7 @@ pub enum DiagnosticCode {
   // ============================================================================
   // Class and Type Parameter Errors
   // ============================================================================
+  TS2300 // Duplicate identifier '{0}'
   TS2302 // Static members cannot reference class type parameters
 
   // ============================================================================
@@ -778,6 +779,7 @@ pub fn DiagnosticCode::to_int(self : DiagnosticCode) -> Int {
     TS1357 => 1357
     TS1359 => 1359
     // Class and Type Parameter Errors
+    TS2300 => 2300
     TS2302 => 2302
     // Name Resolution Errors (2304-2318)
     TS2304 => 2304
@@ -1126,6 +1128,7 @@ pub fn DiagnosticCode::from_int(code : Int) -> DiagnosticCode? {
     1357 => Some(TS1357)
     1359 => Some(TS1359)
     // Class and Type Parameter Errors
+    2300 => Some(TS2300)
     2302 => Some(TS2302)
     // Name Resolution Errors (2304-2318)
     2304 => Some(TS2304)
