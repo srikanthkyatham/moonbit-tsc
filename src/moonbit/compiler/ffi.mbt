@@ -167,12 +167,23 @@ pub fn compile_source(
   let tokens = scan_all_v2(source, file_path)
 
   // Phase 2: Parse tokens into AST
+  // Note: Parser now always returns Ok with parse diagnostics attached to source_file
   match parse_source_file(tokens, file_path) {
-    Err(diagnostics) => CompileResult::failure(diagnostics)
-    Ok(source_file) =>
+    Err(diagnostics) => CompileResult::failure(diagnostics) // Should never happen
+    Ok(source_file) => {
+      // Extract parse diagnostics to combine with type diagnostics later
+      let parse_diagnostics = source_file.parse_diagnostics
+
       // Phase 3: Bind the AST (symbol resolution)
       match bind_source_file(source_file) {
-        Err(diagnostics) => CompileResult::failure(diagnostics)
+        Err(diagnostics) => {
+          // Combine parse diagnostics with bind diagnostics
+          let all_diagnostics = parse_diagnostics.copy()
+          for d in diagnostics {
+            all_diagnostics.push(d)
+          }
+          CompileResult::failure(all_diagnostics)
+        }
         Ok(bound_source) => {
           // Phase 3.5: Validate isolatedModules constraints if enabled
           let isolated_modules_diagnostics = if options.isolated_modules {
@@ -220,12 +231,17 @@ pub fn compile_source(
 
           // If noEmit is enabled, skip all emit phases and return type check results only
           if options.no_emit {
+            // Combine parse diagnostics with type diagnostics
+            let all_diagnostics = parse_diagnostics.copy()
+            for d in type_diagnostics {
+              all_diagnostics.push(d)
+            }
             return {
               success: true,
               javascript: "",
               source_map: None,
               declaration: None,
-              diagnostics: type_diagnostics,
+              diagnostics: all_diagnostics,
               module_types_json,
             }
           }
@@ -276,17 +292,23 @@ pub fn compile_source(
             None
           }
 
-          // Return result with any type errors as warnings
+          // Return result with parse diagnostics and type errors
+          // Combine parse diagnostics with type diagnostics
+          let all_diagnostics = parse_diagnostics.copy()
+          for d in type_diagnostics {
+            all_diagnostics.push(d)
+          }
           {
             success: true,
             javascript,
             source_map: source_map_json,
             declaration,
-            diagnostics: type_diagnostics,
+            diagnostics: all_diagnostics,
             module_types_json,
           }
         }
       }
+    }
   }
 }
 
@@ -415,12 +437,23 @@ pub fn compile_source_with_external_types(
   let tokens = scan_all_v2(source, file_path)
 
   // Phase 2: Parse tokens into AST
+  // Note: Parser now always returns Ok with parse diagnostics attached to source_file
   match parse_source_file(tokens, file_path) {
-    Err(diagnostics) => CompileResult::failure(diagnostics)
-    Ok(source_file) =>
+    Err(diagnostics) => CompileResult::failure(diagnostics) // Should never happen
+    Ok(source_file) => {
+      // Extract parse diagnostics to combine with type diagnostics later
+      let parse_diagnostics = source_file.parse_diagnostics
+
       // Phase 3: Bind the AST (symbol resolution)
       match bind_source_file(source_file) {
-        Err(diagnostics) => CompileResult::failure(diagnostics)
+        Err(diagnostics) => {
+          // Combine parse diagnostics with bind diagnostics
+          let all_diagnostics = parse_diagnostics.copy()
+          for d in diagnostics {
+            all_diagnostics.push(d)
+          }
+          CompileResult::failure(all_diagnostics)
+        }
         Ok(bound_source) => {
           // Phase 3.5: Validate isolatedModules constraints if enabled
           let isolated_modules_diagnostics = if options.isolated_modules {
@@ -475,12 +508,17 @@ pub fn compile_source_with_external_types(
 
           // If noEmit is enabled, skip all emit phases and return type check results only
           if options.no_emit {
+            // Combine parse diagnostics with type diagnostics
+            let all_diagnostics = parse_diagnostics.copy()
+            for d in type_diagnostics {
+              all_diagnostics.push(d)
+            }
             return {
               success: true,
               javascript: "",
               source_map: None,
               declaration: None,
-              diagnostics: type_diagnostics,
+              diagnostics: all_diagnostics,
               module_types_json,
             }
           }
@@ -531,17 +569,23 @@ pub fn compile_source_with_external_types(
             None
           }
 
-          // Return result with any type errors as warnings
+          // Return result with parse diagnostics and type errors
+          // Combine parse diagnostics with type diagnostics
+          let all_diagnostics = parse_diagnostics.copy()
+          for d in type_diagnostics {
+            all_diagnostics.push(d)
+          }
           {
             success: true,
             javascript,
             source_map: source_map_json,
             declaration,
-            diagnostics: type_diagnostics,
+            diagnostics: all_diagnostics,
             module_types_json,
           }
         }
       }
+    }
   }
 }
 

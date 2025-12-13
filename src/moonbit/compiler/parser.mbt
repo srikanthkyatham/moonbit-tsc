@@ -1344,20 +1344,19 @@ pub fn parse_source_file(
   for d in parser.diagnostics {
     all_diagnostics.push(d)
   }
-  if all_diagnostics.length() > 0 {
-    Err(all_diagnostics)
-  } else {
-    Ok(SourceFile::{
-      file_path,
-      statements,
-      end_of_file_token: eof_token,
-      has_no_default_lib: false,
-      directive_tokens,
-      hashbang,
-      ts_expect_error_directives,
-      compiler_directives,
-    })
-  }
+  // Always return Ok with AST, even if there are parse diagnostics
+  // This allows type checking to continue and report additional errors
+  Ok(SourceFile::{
+    file_path,
+    statements,
+    end_of_file_token: eof_token,
+    has_no_default_lib: false,
+    directive_tokens,
+    hashbang,
+    ts_expect_error_directives,
+    compiler_directives,
+    parse_diagnostics: all_diagnostics,
+  })
 }
 
 ///|

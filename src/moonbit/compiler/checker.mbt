@@ -12212,25 +12212,6 @@ fn check_duplicate_property(
 }
 
 ///|
-/// Validate that 'super' is not used in a computed property name (TS2466)
-/// Returns updated TypeChecker with diagnostic if super is found
-fn validate_super_in_computed_property(
-  checker : TypeChecker,
-  name_expr : Node
-) -> TypeChecker {
-  if contains_super_expression(name_expr) {
-    add_diagnostic_with_code(
-      checker,
-      "'super' cannot be referenced in a computed property name.",
-      get_location(name_expr),
-      TS2466,
-    )
-  } else {
-    checker
-  }
-}
-
-///|
 /// Infer object literal type
 fn infer_object_literal_type(
   checker : TypeChecker,
@@ -12294,8 +12275,20 @@ fn infer_object_literal_type(
           _ => checker
         }
 
-        // TS2466: Check for 'super' in computed property name
-        checker = validate_super_in_computed_property(checker, name_expr)
+        // TS2466: Check for 'super' in computed property name (object literals only)
+        // This catches cases like object literals in arrow functions/constructors
+        // where super is not allowed but wouldn't be caught by class member validation
+        let mut checker = checker
+        checker = if contains_super_expression(name_expr) {
+          add_diagnostic_with_code(
+            checker,
+            "'super' cannot be referenced in a computed property name.",
+            get_location(name_expr),
+            TS2466,
+          )
+        } else {
+          checker
+        }
 
         let (name_type, c) = infer_type(checker, name_expr)
         // TS2464: Check if computed property name type is valid
@@ -12567,9 +12560,20 @@ fn infer_object_literal_type(
         let key = get_property_name(name_expr)
         let key = if key == "" { "[computed]" } else { key }
 
-        // TS2466: Check for 'super' in computed property name
+        // TS2466: Check for 'super' in computed property name (object literals only)
+        // This catches cases like object literals in arrow functions/constructors
+        // where super is not allowed but wouldn't be caught by class member validation
         let mut checker = checker
-        checker = validate_super_in_computed_property(checker, name_expr)
+        checker = if contains_super_expression(name_expr) {
+          add_diagnostic_with_code(
+            checker,
+            "'super' cannot be referenced in a computed property name.",
+            get_location(name_expr),
+            TS2466,
+          )
+        } else {
+          checker
+        }
 
         let (name_type, c) = infer_type(checker, name_expr)
         // TS2464: Check if computed property name type is valid
@@ -12597,9 +12601,20 @@ fn infer_object_literal_type(
         let key = get_property_name(name_expr)
         let key = if key == "" { "[computed]" } else { key }
 
-        // TS2466: Check for 'super' in computed property name
+        // TS2466: Check for 'super' in computed property name (object literals only)
+        // This catches cases like object literals in arrow functions/constructors
+        // where super is not allowed but wouldn't be caught by class member validation
         let mut checker = checker
-        checker = validate_super_in_computed_property(checker, name_expr)
+        checker = if contains_super_expression(name_expr) {
+          add_diagnostic_with_code(
+            checker,
+            "'super' cannot be referenced in a computed property name.",
+            get_location(name_expr),
+            TS2466,
+          )
+        } else {
+          checker
+        }
 
         let (name_type, c) = infer_type(checker, name_expr)
         // TS2464: Check if computed property name type is valid
@@ -12631,9 +12646,20 @@ fn infer_object_literal_type(
         let key = get_property_name(name_expr)
         let key = if key == "" { "[computed]" } else { key }
 
-        // TS2466: Check for 'super' in computed property name
+        // TS2466: Check for 'super' in computed property name (object literals only)
+        // This catches cases like object literals in arrow functions/constructors
+        // where super is not allowed but wouldn't be caught by class member validation
         let mut checker = checker
-        checker = validate_super_in_computed_property(checker, name_expr)
+        checker = if contains_super_expression(name_expr) {
+          add_diagnostic_with_code(
+            checker,
+            "'super' cannot be referenced in a computed property name.",
+            get_location(name_expr),
+            TS2466,
+          )
+        } else {
+          checker
+        }
 
         let (name_type, c) = infer_type(checker, name_expr)
         // TS2464: Check if computed property name type is valid

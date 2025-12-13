@@ -188,6 +188,8 @@ pub struct SourceFile {
   ts_expect_error_directives : Array[SourceLocation]
   /// Compiler directives from comments (// @importHelpers, @filename, @target, etc.)
   compiler_directives : CompilerDirectives
+  /// Parse diagnostics (scanner and parser errors/warnings) - allows type checking to continue even with parse errors
+  parse_diagnostics : Array[Diagnostic]
 } derive(Show)
 
 ///|

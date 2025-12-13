@@ -43,6 +43,7 @@ pub fn parse_incremental(
             hashbang: None,
             ts_expect_error_directives: [],
             compiler_directives: CompilerDirectives::default(),
+            parse_diagnostics: [],
           }
           IncrementalParseResult::{
             source_file: Node::SourceFile(empty_sf),
@@ -95,6 +96,7 @@ fn try_incremental_parse(
           hashbang: None,
           ts_expect_error_directives: [],
           compiler_directives: CompilerDirectives::default(),
+          parse_diagnostics: [],
         }
         IncrementalParseResult::{
           source_file: Node::SourceFile(empty_sf),
@@ -128,6 +130,7 @@ fn try_incremental_parse(
         hashbang: None,
         ts_expect_error_directives: [],
         compiler_directives: CompilerDirectives::default(),
+        parse_diagnostics: [],
       }
       IncrementalParseResult::{
         source_file: Node::SourceFile(empty_sf),

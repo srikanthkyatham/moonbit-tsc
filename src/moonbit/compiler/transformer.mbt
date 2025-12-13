@@ -332,6 +332,7 @@ pub fn transform(node : Node, ctx : TransformerContext) -> Node {
         hashbang: sf.hashbang,
         ts_expect_error_directives: sf.ts_expect_error_directives,
         compiler_directives: sf.compiler_directives,
+        parse_diagnostics: sf.parse_diagnostics,
       })
     }
 
