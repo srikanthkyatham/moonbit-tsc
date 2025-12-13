@@ -2523,3 +2523,209 @@ test "unit/checker/valid generator with Generator return type" {
     Err(_) => assert_true(false) // Should not have errors
   }
 }
+
+// ============================================================================
+// High-Impact Error Codes (Based on 5,652 conformance tests analysis)
+// ============================================================================
+//   TS2322 - 7,473 occurrences (Type assignment errors)
+//   TS2304 - 6,608 occurrences (Cannot find name)
+//   TS2339 - 2,275 occurrences (Property does not exist)
+//   TS2345 - 1,832 occurrences (Argument type mismatch)
+
+///|
+/// Test: TS2322 - string to number assignment
+test "high-impact/TS2322 - string to number assignment" {
+  let result = parse_bind_check_errors("let x: number = \"hello\";")
+  match result {
+    Ok(_) => assert_true(false) // Should have an error
+    Err(diagnostics) => {
+      assert_true(has_diagnostic_code(diagnostics, 2322))
+      assert_true(has_diagnostic_containing(diagnostics, "string"))
+      assert_true(has_diagnostic_containing(diagnostics, "number"))
+    }
+  }
+}
+
+///|
+/// Test: TS2322 - number to string assignment  
+test "high-impact/TS2322 - number to string assignment" {
+  let result = parse_bind_check_errors("let y: string = 42;")
+  match result {
+    Ok(_) => assert_true(false) // Should have an error
+    Err(diagnostics) => {
+      assert_true(has_diagnostic_code(diagnostics, 2322))
+      assert_true(has_diagnostic_containing(diagnostics, "number"))
+      assert_true(has_diagnostic_containing(diagnostics, "string"))
+    }
+  }
+}
+
+///|
+/// Test: TS2322 - object property type mismatch
+test "high-impact/TS2322 - object property type mismatch" {
+  let source =
+    #|interface Person {
+    #|    name: string;
+    #|    age: number;
+    #|}
+    #|let p: Person = { name: "John", age: "30" };
+
+  let result = parse_bind_check_errors(source)
+  match result {
+    Ok(_) => assert_true(false) // Should have an error
+    Err(diagnostics) => {
+      assert_true(has_diagnostic_code(diagnostics, 2322))
+      assert_true(has_diagnostic_containing(diagnostics, "string"))
+      assert_true(has_diagnostic_containing(diagnostics, "number"))
+    }
+  }
+}
+
+///|
+/// Test: TS2322 - valid assignments should not error
+test "high-impact/TS2322 - valid assignments" {
+  let result = parse_bind_check_errors(
+    "let a: number = 42; let b: string = \"hello\";",
+  )
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(diagnostics) =>
+      if has_diagnostic_code(diagnostics, 2322) {
+        assert_true(false) // Should not have TS2322 for valid code
+      } else {
+        // Other errors are OK
+        ()
+      }
+  }
+}
+
+///|
+/// Test: TS2304 - cannot find name  
+test "high-impact/TS2304 - undefined variable reference" {
+  let result = parse_bind_check_errors("console.log(foo);")
+  match result {
+    Ok(_) => assert_true(false) // Should have an error
+    Err(diagnostics) => {
+      assert_true(has_diagnostic_code(diagnostics, 2304))
+      assert_true(has_diagnostic_containing(diagnostics, "foo"))
+    }
+  }
+}
+
+///|
+/// Test: TS2304 - undefined variable in expression
+test "high-impact/TS2304 - undefined variable in expression" {
+  let result = parse_bind_check_errors("let x = bar + 1;")
+  match result {
+    Ok(_) => assert_true(false) // Should have an error
+    Err(diagnostics) => {
+      assert_true(has_diagnostic_code(diagnostics, 2304))
+      assert_true(has_diagnostic_containing(diagnostics, "bar"))
+    }
+  }
+}
+
+///|
+/// Test: TS2304 - defined variable should not error
+test "high-impact/TS2304 - defined variable allowed" {
+  let result = parse_bind_check_errors("let y = 10; console.log(y);")
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(diagnostics) =>
+      if has_diagnostic_code(diagnostics, 2304) {
+        assert_true(false) // Should not have TS2304 for defined variable
+      } else {
+        // Other errors are OK
+        ()
+      }
+  }
+}
+
+///|
+/// Test: TS2339 - property does not exist on interface
+test "high-impact/TS2339 - non-existent property on interface" {
+  let source =
+    #|interface Person {
+    #|    name: string;
+    #|    age: number;
+    #|}
+    #|let person: Person = { name: "John", age: 30 };
+    #|console.log(person.email);
+
+  let result = parse_bind_check_errors(source)
+  match result {
+    Ok(_) => assert_true(false) // Should have an error
+    Err(diagnostics) => {
+      assert_true(has_diagnostic_code(diagnostics, 2339))
+      assert_true(has_diagnostic_containing(diagnostics, "email"))
+    }
+  }
+}
+
+///|
+/// Test: TS2339 - existing property should not error
+test "high-impact/TS2339 - existing property allowed" {
+  let source =
+    #|interface Person {
+    #|    name: string;
+    #|    age: number;
+    #|}
+    #|let person: Person = { name: "John", age: 30 };
+    #|console.log(person.name);
+
+  let result = parse_bind_check_errors(source)
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(diagnostics) =>
+      if has_diagnostic_code(diagnostics, 2339) {
+        assert_true(false) // Should not have TS2339 for existing property
+      } else {
+        // Other errors are OK
+        ()
+      }
+  }
+}
+
+///|
+/// Test: TS2345/TS2769 - function argument type mismatch
+test "high-impact/TS2345 - function argument type mismatch" {
+  let source =
+    #|function greet(name: string): void {
+    #|    console.log("Hello, " + name);
+    #|}
+    #|greet(42);
+
+  let result = parse_bind_check_errors(source)
+  match result {
+    Ok(_) => assert_true(false) // Should have an error
+    Err(diagnostics) => {
+      // Our compiler may use TS2769 or TS2345 for this
+      let has_type_error = has_diagnostic_code(diagnostics, 2345) || has_diagnostic_code(
+        diagnostics, 2769,
+      )
+      assert_true(has_type_error)
+    }
+  }
+}
+
+///|
+/// Test: TS2345 - correct function argument type should not error
+test "high-impact/TS2345 - correct argument type allowed" {
+  let source =
+    #|function greet(name: string): void {
+    #|    console.log("Hello, " + name);
+    #|}
+    #|greet("Alice");
+
+  let result = parse_bind_check_errors(source)
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(diagnostics) =>
+      if has_diagnostic_code(diagnostics, 2345) {
+        assert_true(false) // Should not have TS2345 for correct argument
+      } else {
+        // Other errors are OK
+        ()
+      }
+  }
+}
