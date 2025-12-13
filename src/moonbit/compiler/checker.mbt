@@ -6027,6 +6027,13 @@ fn infer_class_declaration_type(
           None => checker
         }
 
+        // TS2449: Validate class self-reference in computed property names
+        let checker = validate_class_self_reference_in_computed_name(
+          checker,
+          prop.computed_name_expr,
+          class_name_str
+        )
+
         // TS2467: Validate type parameter references in computed property names
         let checker = match prop.computed_name_expr {
           Some(name_expr) => {
@@ -6140,6 +6147,13 @@ fn infer_class_declaration_type(
           }
           None => checker
         }
+
+        // TS2449: Validate class self-reference in computed property names
+        checker = validate_class_self_reference_in_computed_name(
+          checker,
+          method_decl.computed_name_expr,
+          class_name_str
+        )
 
         // TS2467: Validate type parameter references in computed property names
         checker = match method_decl.computed_name_expr {
@@ -12275,21 +12289,6 @@ fn infer_object_literal_type(
           _ => checker
         }
 
-        // TS2466: Check for 'super' in computed property name (object literals only)
-        // This catches cases like object literals in arrow functions/constructors
-        // where super is not allowed but wouldn't be caught by class member validation
-        let mut checker = checker
-        checker = if contains_super_expression(name_expr) {
-          add_diagnostic_with_code(
-            checker,
-            "'super' cannot be referenced in a computed property name.",
-            get_location(name_expr),
-            TS2466,
-          )
-        } else {
-          checker
-        }
-
         let (name_type, c) = infer_type(checker, name_expr)
         // TS2464: Check if computed property name type is valid
         let c = if not(is_valid_computed_property_type(c, name_type)) {
@@ -12560,21 +12559,6 @@ fn infer_object_literal_type(
         let key = get_property_name(name_expr)
         let key = if key == "" { "[computed]" } else { key }
 
-        // TS2466: Check for 'super' in computed property name (object literals only)
-        // This catches cases like object literals in arrow functions/constructors
-        // where super is not allowed but wouldn't be caught by class member validation
-        let mut checker = checker
-        checker = if contains_super_expression(name_expr) {
-          add_diagnostic_with_code(
-            checker,
-            "'super' cannot be referenced in a computed property name.",
-            get_location(name_expr),
-            TS2466,
-          )
-        } else {
-          checker
-        }
-
         let (name_type, c) = infer_type(checker, name_expr)
         // TS2464: Check if computed property name type is valid
         let c = if not(is_valid_computed_property_type(c, name_type)) {
@@ -12600,21 +12584,6 @@ fn infer_object_literal_type(
         // Computed getter: { get [expr]() { ... } }
         let key = get_property_name(name_expr)
         let key = if key == "" { "[computed]" } else { key }
-
-        // TS2466: Check for 'super' in computed property name (object literals only)
-        // This catches cases like object literals in arrow functions/constructors
-        // where super is not allowed but wouldn't be caught by class member validation
-        let mut checker = checker
-        checker = if contains_super_expression(name_expr) {
-          add_diagnostic_with_code(
-            checker,
-            "'super' cannot be referenced in a computed property name.",
-            get_location(name_expr),
-            TS2466,
-          )
-        } else {
-          checker
-        }
 
         let (name_type, c) = infer_type(checker, name_expr)
         // TS2464: Check if computed property name type is valid
@@ -12645,21 +12614,6 @@ fn infer_object_literal_type(
         // Computed setter: { set [expr](value) { ... } }
         let key = get_property_name(name_expr)
         let key = if key == "" { "[computed]" } else { key }
-
-        // TS2466: Check for 'super' in computed property name (object literals only)
-        // This catches cases like object literals in arrow functions/constructors
-        // where super is not allowed but wouldn't be caught by class member validation
-        let mut checker = checker
-        checker = if contains_super_expression(name_expr) {
-          add_diagnostic_with_code(
-            checker,
-            "'super' cannot be referenced in a computed property name.",
-            get_location(name_expr),
-            TS2466,
-          )
-        } else {
-          checker
-        }
 
         let (name_type, c) = infer_type(checker, name_expr)
         // TS2464: Check if computed property name type is valid
@@ -19778,6 +19732,11 @@ fn build_class_type_for_this(
 ) -> (Type, TypeChecker) {
   // Build object type for the class instance
   let properties : Map[String, PropertySignature] = Map::new()
+  // Extract class name from the Identifier node
+  let class_name_str = match class_decl.name {
+    Some(Identifier(id)) => id.name
+    _ => ""  // Fallback for anonymous classes
+  }
   let mut checker = checker
   for class_member in class_decl.members {
     match class_member {
@@ -21628,6 +21587,95 @@ fn contains_super_expression(expr : Node) -> Bool {
       false
     }
     _ => false
+  }
+}
+
+///|
+/// Check if an expression contains a reference to a specific class name (for TS2449 validation)
+/// Returns true if the expression tree contains an Identifier matching the class_name
+fn contains_class_reference(expr : Node, class_name : String) -> Bool {
+  match expr {
+    Identifier(id) => id.name == class_name
+    BinaryExpression(bin) =>
+      contains_class_reference(bin.left, class_name) || contains_class_reference(bin.right, class_name)
+    ParenthesizedExpression(paren) =>
+      contains_class_reference(paren.expression, class_name)
+    UnaryExpression(unary) =>
+      contains_class_reference(unary.operand, class_name)
+    ConditionalExpression(cond) =>
+      contains_class_reference(cond.condition, class_name) ||
+      contains_class_reference(cond.when_true, class_name) ||
+      contains_class_reference(cond.when_false, class_name)
+    CallExpression(call) => {
+      if contains_class_reference(call.expression, class_name) {
+        return true
+      }
+      for arg in call.arguments {
+        if contains_class_reference(arg, class_name) {
+          return true
+        }
+      }
+      false
+    }
+    PropertyAccessExpression(prop) =>
+      contains_class_reference(prop.expression, class_name)
+    ElementAccessExpression(elem) =>
+      contains_class_reference(elem.expression, class_name) ||
+      contains_class_reference(elem.argument_expression, class_name)
+    ArrayLiteralExpression(arr) => {
+      for elem_opt in arr.elements {
+        match elem_opt {
+          Some(elem) =>
+            if contains_class_reference(elem, class_name) {
+              return true
+            }
+          None => ()
+        }
+      }
+      false
+    }
+    ObjectLiteralExpression(obj) => {
+      for prop in obj.properties {
+        match prop {
+          PropertyAssignment(_, value_node, _) =>
+            if contains_class_reference(value_node, class_name) {
+              return true
+            }
+          ComputedPropertyAssignment(key_node, value_node, _) =>
+            if contains_class_reference(key_node, class_name) || contains_class_reference(value_node, class_name) {
+              return true
+            }
+          _ => ()
+        }
+      }
+      false
+    }
+    _ => false
+  }
+}
+
+///|
+/// Validate class self-reference in computed property names (TS2449)
+/// DRY helper to avoid code duplication across property and method declarations
+fn validate_class_self_reference_in_computed_name(
+  checker : TypeChecker,
+  computed_name_expr : Node?,
+  class_name : String
+) -> TypeChecker {
+  match computed_name_expr {
+    Some(name_expr) => {
+      if contains_class_reference(name_expr, class_name) {
+        add_diagnostic_with_code(
+          checker,
+          "Class '" + class_name + "' used before its declaration.",
+          get_location(name_expr),
+          TS2449,
+        )
+      } else {
+        checker
+      }
+    }
+    None => checker
   }
 }
 

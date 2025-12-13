@@ -462,6 +462,7 @@ pub enum DiagnosticCode {
   // ============================================================================
   // Destructuring & Iteration Errors (2461-2467)
   // ============================================================================
+  TS2449 // Class '{0}' used before its declaration
   TS2461 // Type '{0}' is not an array type (for parameter binding patterns)
   TS2462 // A rest element cannot have an initializer
   TS2463 // A binding pattern parameter cannot be optional in an implementation signature
@@ -866,6 +867,7 @@ pub fn DiagnosticCode::to_int(self : DiagnosticCode) -> Int {
     TS2459 => 2459
     TS2460 => 2460
     // Destructuring & Iteration Errors (2461-2467)
+    TS2449 => 2449
     TS2461 => 2461
     TS2462 => 2462
     TS2463 => 2463
@@ -1210,6 +1212,7 @@ pub fn DiagnosticCode::from_int(code : Int) -> DiagnosticCode? {
     2459 => Some(TS2459)
     2460 => Some(TS2460)
     // Destructuring & Iteration Errors (2461-2467)
+    2449 => Some(TS2449)
     2461 => Some(TS2461)
     2462 => Some(TS2462)
     2463 => Some(TS2463)

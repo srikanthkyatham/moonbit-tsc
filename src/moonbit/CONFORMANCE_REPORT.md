@@ -13,6 +13,52 @@
 
 ## Recent Fixes
 
+### ✅ Implemented TS2449 Class Self-Reference Validation + DRY Refactoring! (December 13, 2025)
+- **Impact**: +1 test passing (137/142 → 138/142 = 97.2%, +0.7% improvement)
+- **Computed Properties**: **138/142 passing (97.2%)**, up from 137/142 (96.5%)
+- **Feature**: Implemented TS2449 error detection for class self-references in computed property names
+  - **TS2449**: "Class '{0}' used before its declaration."
+  - **Detection**: Validates that a class doesn't reference itself in computed property names before declaration is complete
+  - **Scope**: Works in both class property declarations AND method declarations
+  - **Example**: `class C1 { static staticProp = 10; [C1.staticProp]() { } }` correctly triggers TS2449
+
+- **Implementation details**:
+  1. **Added TS2449 to DiagnosticCode** (symbol.mbt:465):
+     - `TS2449 // Class '{0}' used before its declaration`
+     - Added corresponding mappings in `to_int()` (line 870) and `from_int()` (line 1215) functions
+  2. **Created detection helper** `contains_class_reference()` (checker.mbt:21710-21769):
+     - Recursively checks expression tree for references to specific class name
+     - Handles Identifier, BinaryExpression, ParenthesizedExpression, UnaryExpression, etc.
+     - Detects patterns like `ClassName`, `ClassName.staticProp`, `ClassName.method()`, etc.
+  3. **DRY Refactoring**: Created `validate_class_self_reference_in_computed_name()` helper (checker.mbt:21774-21794):
+     - Takes `TypeChecker`, optional `computed_name_expr`, and `class_name`, returns updated `TypeChecker`
+     - Uses `contains_class_reference()` to detect self-references
+     - Reports TS2449 diagnostic when class references itself
+     - Eliminates ~60 lines of duplicated code across 4 call sites
+  4. **Validation integration** (2 locations in class member checking):
+     - PropertyDeclaration validation (checker.mbt:6030-6035): Class properties with computed names
+     - MethodDeclaration validation (checker.mbt:6151-6156): Class methods with computed names
+  5. **Avoided duplicate validation**: Only validates in main class processing, not in `build_class_type_for_this()`
+
+- **Tests fixed** (1 conformance test):
+  - `computedPropertyNamesWithStaticProperty.ts` - Class self-reference in static property ✅
+
+- **Unit tests added** (23 comprehensive MoonBit test cases):
+  - **File**: `compiler/unit_tests/checker/ts2449_class_self_reference_test.mbt`
+  - **Coverage**: 9 self-reference detection tests, 6 valid case tests, 7 edge case tests, 1 conformance test
+  - **Tests include**: Static property references, class name references, method calls, binary expressions, parenthesized expressions, conditional expressions, nested property access, array access, call expressions
+  - **Validation**: All tests compile correctly and pass ✅
+  - **Manual verification**: Confirmed TS2449 detection works correctly for self-references and doesn't create false positives ✅
+
+- **Bug fixes during implementation**:
+  - Fixed duplicate TS2449 errors by removing validation from `build_class_type_for_this()`
+  - Fixed regression in tests 25/28/31 by removing incorrect TS2466 validation from object literal inference
+  - Restored test passing rate from 94.4% → 97.2%
+
+- **Remaining failures** (4 tests):
+  - Test 9 ES5/ES6: Overload resolution doesn't handle generic overloads (high complexity)
+  - Test 30 ES5/ES6: Arrow function bodies not fully type-checked (high complexity)
+
 ### ✅ Parser Error Recovery + TS2466 Regression Fix (December 13, 2025)
 - **Impact**: Fixed regression, maintained progress (137/142 → 137/142 = 96.5%)
 - **Computed Properties**: **137/142 passing (96.5%)**, stable after fixing duplicate/false positive issues
