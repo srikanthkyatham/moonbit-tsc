@@ -5,13 +5,54 @@
 | Metric | Value |
 |--------|-------|
 | Total Tests | 5,652 |
-| Passed | 3,921 |
-| Failed | 1,731 |
+| Passed | 3,923 |
+| Failed | 1,729 |
 | **Pass Rate** | **69.4%** |
 
-*Last updated: December 12, 2025*
+*Last updated: December 13, 2025*
 
 ## Recent Fixes
+
+### ✅ Implemented TS2466 Super in Computed Property Validation + DRY Refactoring! (December 13, 2025)
+- **Impact**: +2 tests passing (137/142 → 139/142 = 97.9%, +1.4% improvement)
+- **Computed Properties**: **139/142 passing (97.9%)**, up from 137/142 (96.5%)
+- **Feature**: Implemented TS2466 error detection for `super` expressions in computed property names
+  - **TS2466**: "'super' cannot be referenced in a computed property name."
+  - **Detection**: Validates that `super` keyword (both member access and calls) doesn't appear in computed property names
+  - **Scope**: Works in both class members AND object literals (inside methods, constructors, arrow functions)
+  - **Example**: `{ [(super(), "prop")]() { } }` correctly triggers TS2466 error on `super()`
+
+- **Implementation details**:
+  1. **DRY Refactoring**: Created `validate_super_in_computed_property()` helper function (checker.mbt:12217-12231):
+     - Takes `TypeChecker` and computed property `name_expr`, returns updated `TypeChecker`
+     - Uses existing `contains_super_expression()` to recursively detect `super` in expression tree
+     - Reports TS2466 diagnostic with proper location extraction
+     - Eliminates ~40 lines of duplicated code across 4 call sites
+  2. **Validation integration** (4 locations in object literal type inference):
+     - ComputedPropertyAssignment (checker.mbt:12298): `{ [expr]: value }`
+     - ComputedMethodDeclaration (checker.mbt:12572): `{ [expr]() { } }`
+     - ComputedGetAccessor (checker.mbt:12602): `{ get [expr]() { } }`
+     - ComputedSetAccessor (checker.mbt:12636): `{ set [expr](value) { } }`
+  3. **Existing validation**: Class members already had TS2466 validation, but object literals were missing it
+  4. **Code quality**: Followed DRY principle by extracting common validation logic into helper function
+
+- **Tests fixed** (2 conformance tests):
+  - `computedPropertyNames30_ES5.ts` - Super in object literal inside constructor arrow function ✅
+  - `computedPropertyNames30_ES6.ts` - Super in object literal inside constructor arrow function ✅
+
+- **Unit tests added** (10 comprehensive tests):
+  - `ts2466_super_in_computed_property_test.mbt` (327 lines)
+  - Tests for super call in object literal computed property
+  - Tests for super member access in class method
+  - Tests for super in nested object literal
+  - Tests for super call in comma expression
+  - Tests for super in object literal computed assignment, getter, setter
+  - Tests that regular properties and super in method body do NOT trigger TS2466
+  - Conformance test computedPropertyNames30 validation
+  - All 10 unit tests passing ✅
+
+- **Remaining failures** (3 tests):
+  - TS2464 computed property type (3 tests): Type validation for computed property names
 
 ### ✅ Implemented TS2300 Duplicate Identifier Validation + DRY Refactoring! (December 12, 2025)
 - **Impact**: +2 tests passing (135/142 → 137/142 = 96.5%, +1.4% improvement)

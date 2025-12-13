@@ -12212,6 +12212,25 @@ fn check_duplicate_property(
 }
 
 ///|
+/// Validate that 'super' is not used in a computed property name (TS2466)
+/// Returns updated TypeChecker with diagnostic if super is found
+fn validate_super_in_computed_property(
+  checker : TypeChecker,
+  name_expr : Node
+) -> TypeChecker {
+  if contains_super_expression(name_expr) {
+    add_diagnostic_with_code(
+      checker,
+      "'super' cannot be referenced in a computed property name.",
+      get_location(name_expr),
+      TS2466,
+    )
+  } else {
+    checker
+  }
+}
+
+///|
 /// Infer object literal type
 fn infer_object_literal_type(
   checker : TypeChecker,
@@ -12274,6 +12293,9 @@ fn infer_object_literal_type(
             }
           _ => checker
         }
+
+        // TS2466: Check for 'super' in computed property name
+        checker = validate_super_in_computed_property(checker, name_expr)
 
         let (name_type, c) = infer_type(checker, name_expr)
         // TS2464: Check if computed property name type is valid
@@ -12544,6 +12566,11 @@ fn infer_object_literal_type(
         // Computed method: { [expr]() { ... } }
         let key = get_property_name(name_expr)
         let key = if key == "" { "[computed]" } else { key }
+
+        // TS2466: Check for 'super' in computed property name
+        let mut checker = checker
+        checker = validate_super_in_computed_property(checker, name_expr)
+
         let (name_type, c) = infer_type(checker, name_expr)
         // TS2464: Check if computed property name type is valid
         let c = if not(is_valid_computed_property_type(c, name_type)) {
@@ -12569,6 +12596,11 @@ fn infer_object_literal_type(
         // Computed getter: { get [expr]() { ... } }
         let key = get_property_name(name_expr)
         let key = if key == "" { "[computed]" } else { key }
+
+        // TS2466: Check for 'super' in computed property name
+        let mut checker = checker
+        checker = validate_super_in_computed_property(checker, name_expr)
+
         let (name_type, c) = infer_type(checker, name_expr)
         // TS2464: Check if computed property name type is valid
         let c = if not(is_valid_computed_property_type(c, name_type)) {
@@ -12598,6 +12630,11 @@ fn infer_object_literal_type(
         // Computed setter: { set [expr](value) { ... } }
         let key = get_property_name(name_expr)
         let key = if key == "" { "[computed]" } else { key }
+
+        // TS2466: Check for 'super' in computed property name
+        let mut checker = checker
+        checker = validate_super_in_computed_property(checker, name_expr)
+
         let (name_type, c) = infer_type(checker, name_expr)
         // TS2464: Check if computed property name type is valid
         let c = if not(is_valid_computed_property_type(c, name_type)) {
