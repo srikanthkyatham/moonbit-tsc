@@ -35,6 +35,7 @@ pub fn build_compile_options(
     verbatim_module_syntax: directives.verbatim_module_syntax,
     no_emit: directives.no_emit,
     es_module_interop: directives.es_module_interop,
+    import_helpers: false,
     no_implicit_any: directives.no_implicit_any,
     strict_null_checks: directives.strict_null_checks,
     no_implicit_this: false,
