@@ -7,8 +7,8 @@
 fn parse_and_get_errors(source : String) -> Array[@compiler.Diagnostic] {
   let tokens = @compiler.scan_all_v2(source, "test.ts")
   match @compiler.parse_source_file(tokens, "test.ts") {
-    Ok(_) => [] // No errors - parsing succeeded
-    Err(diagnostics) => diagnostics
+    Ok(source_file) => source_file.parse_diagnostics // Return validation errors from successful parse
+    Err(diagnostics) => diagnostics // Return fatal parse errors
   }
 }
 

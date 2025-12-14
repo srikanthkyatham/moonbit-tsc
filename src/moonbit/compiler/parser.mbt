@@ -1066,10 +1066,17 @@ pub fn parse_virtual_files(
     // Parse into SourceFile
     match parse_source_file(tokens, vfile.filename) {
       Ok(source_file) => {
-        parsed_files.push(ParsedVirtualFile::{
-          filename: vfile.filename,
-          source_file,
-        })
+        // Check if there are validation errors even though parsing succeeded
+        if source_file.parse_diagnostics.length() > 0 {
+          // Files with parse errors are not added to the files list
+          parse_errors.push((vfile.filename, source_file.parse_diagnostics))
+        } else {
+          // Only add files without errors to the parsed_files list
+          parsed_files.push(ParsedVirtualFile::{
+            filename: vfile.filename,
+            source_file,
+          })
+        }
       }
       Err(diagnostics) => {
         parse_errors.push((vfile.filename, diagnostics))
