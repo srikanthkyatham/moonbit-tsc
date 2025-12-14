@@ -12261,8 +12261,20 @@ fn infer_object_literal_type(
         let key = get_property_name(name_expr)
         let key = if key == "" { "[computed]" } else { key }
 
-        // TS2873: Check for always-falsy expression in OR operator
+        // TS2466: Check for bare 'super' calls in computed property name (only in arrow functions)
         let mut checker = checker
+        checker = if checker.arrow_function_depth > 0 && contains_bare_super_call(name_expr) {
+          add_diagnostic_with_code(
+            checker,
+            "'super' cannot be referenced in a computed property name.",
+            get_location(name_expr),
+            TS2466,
+          )
+        } else {
+          checker
+        }
+
+        // TS2873: Check for always-falsy expression in OR operator
         checker = match name_expr {
           BinaryExpression(bin) =>
             match bin.operator {
@@ -12559,6 +12571,19 @@ fn infer_object_literal_type(
         let key = get_property_name(name_expr)
         let key = if key == "" { "[computed]" } else { key }
 
+        // TS2466: Check for bare 'super' calls in computed property name (only in arrow functions)
+        let mut checker = checker
+        checker = if checker.arrow_function_depth > 0 && contains_bare_super_call(name_expr) {
+          add_diagnostic_with_code(
+            checker,
+            "'super' cannot be referenced in a computed property name.",
+            get_location(name_expr),
+            TS2466,
+          )
+        } else {
+          checker
+        }
+
         let (name_type, c) = infer_type(checker, name_expr)
         // TS2464: Check if computed property name type is valid
         let c = if not(is_valid_computed_property_type(c, name_type)) {
@@ -12584,6 +12609,19 @@ fn infer_object_literal_type(
         // Computed getter: { get [expr]() { ... } }
         let key = get_property_name(name_expr)
         let key = if key == "" { "[computed]" } else { key }
+
+        // TS2466: Check for bare 'super' calls in computed property name (only in arrow functions)
+        let mut checker = checker
+        checker = if checker.arrow_function_depth > 0 && contains_bare_super_call(name_expr) {
+          add_diagnostic_with_code(
+            checker,
+            "'super' cannot be referenced in a computed property name.",
+            get_location(name_expr),
+            TS2466,
+          )
+        } else {
+          checker
+        }
 
         let (name_type, c) = infer_type(checker, name_expr)
         // TS2464: Check if computed property name type is valid
@@ -12614,6 +12652,19 @@ fn infer_object_literal_type(
         // Computed setter: { set [expr](value) { ... } }
         let key = get_property_name(name_expr)
         let key = if key == "" { "[computed]" } else { key }
+
+        // TS2466: Check for bare 'super' calls in computed property name (only in arrow functions)
+        let mut checker = checker
+        checker = if checker.arrow_function_depth > 0 && contains_bare_super_call(name_expr) {
+          add_diagnostic_with_code(
+            checker,
+            "'super' cannot be referenced in a computed property name.",
+            get_location(name_expr),
+            TS2466,
+          )
+        } else {
+          checker
+        }
 
         let (name_type, c) = infer_type(checker, name_expr)
         // TS2464: Check if computed property name type is valid
@@ -21579,6 +21630,70 @@ fn contains_super_expression(expr : Node) -> Bool {
             }
           ComputedPropertyAssignment(key_node, value_node, _) =>
             if contains_super_expression(key_node) || contains_super_expression(value_node) {
+              return true
+            }
+          _ => ()
+        }
+      }
+      false
+    }
+    _ => false
+  }
+}
+
+///|
+/// Check if an expression contains a bare 'super' call (for TS2466 validation in object literals)
+/// This differs from contains_super_expression() by NOT catching property accesses like super.foo
+/// Only catches: super(), NOT super.foo or super.foo()
+fn contains_bare_super_call(expr : Node) -> Bool {
+  match expr {
+    CallExpression(call) => {
+      // Check if this is super() - a call with SuperExpression as the callee
+      match call.expression {
+        SuperExpression(_) => true
+        _ => {
+          // Recursively check arguments but NOT the callee
+          // (to avoid catching super.foo() as a bare super call)
+          for arg in call.arguments {
+            if contains_bare_super_call(arg) {
+              return true
+            }
+          }
+          false
+        }
+      }
+    }
+    BinaryExpression(bin) =>
+      contains_bare_super_call(bin.left) || contains_bare_super_call(bin.right)
+    ParenthesizedExpression(paren) =>
+      contains_bare_super_call(paren.expression)
+    UnaryExpression(unary) =>
+      contains_bare_super_call(unary.operand)
+    ConditionalExpression(cond) =>
+      contains_bare_super_call(cond.condition) ||
+      contains_bare_super_call(cond.when_true) ||
+      contains_bare_super_call(cond.when_false)
+    ArrayLiteralExpression(arr) => {
+      for elem_opt in arr.elements {
+        match elem_opt {
+          Some(elem) =>
+            if contains_bare_super_call(elem) {
+              return true
+            }
+          None => ()
+        }
+      }
+      false
+    }
+    ObjectLiteralExpression(obj) => {
+      for prop in obj.properties {
+        match prop {
+          PropertyAssignment(_, value_node, _) =>
+            if contains_bare_super_call(value_node) {
+              return true
+            }
+          ComputedPropertyAssignment(key_node, value_node, _) =>
+            if contains_bare_super_call(key_node) || contains_bare_super_call(value_node) {
               return true
             }
           _ => ()

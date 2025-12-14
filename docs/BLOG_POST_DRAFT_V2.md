@@ -225,6 +225,8 @@ And here's the magic: **the compiler tells you when you miss a case.** Forget to
 
 You can't ship bugs you forgot to write code for.
 
+**The honest truth:** That `_ => Type::Unknown` wildcard pattern? It's a pragmatic shortcut. It catches unhandled cases gracefully, but it also hides missing implementations. The dream is to eventually remove every wildcard and handle all 100+ node types explicitly—true exhaustive matching where the compiler enforces completeness. Maybe someday, when the checker is mature enough, we'll venture down that path. Or perhaps not. Sometimes "good enough" is the right engineering choice.
+
 ---
 
 ## The Type System
@@ -274,6 +276,43 @@ moon build --target js      # Node.js integration
 Want a TypeScript type checker in your browser-based IDE? Compile to WASM. Need maximum CLI speed? Compile to native. Integrating with existing Node tooling? Compile to JS.
 
 No rewrites. No ports. Same code.
+
+---
+
+## The Sequential Bottleneck: Lessons from the Checker
+
+Here's something I didn't anticipate: **the checker became a bottleneck—not for performance, but for development.**
+
+The checker is the central point for all error validation. Every TypeScript error code—TS2466 (super in computed properties), TS2300 (duplicate identifiers), TS1049 (setter parameter count), TS2873 (always-falsy expressions)—flows through this one component.
+
+This created a sequential development constraint:
+
+```
+Parser → Checker → TS2466, TS2300, TS1049, TS2873, ...
+              ↑
+         One feature at a time
+```
+
+I couldn't parallelize error implementation. Each new error type touched the same code paths. Adding TS2300 meant understanding how TS2466 worked. Fixing one edge case could break another.
+
+**The lesson:** In a compiler, architecture decisions compound. A centralized checker is simple to reason about, but it forces sequential feature development. A more modular approach—separate validators, visitor patterns, rule-based systems—would allow parallel work at the cost of more upfront complexity.
+
+For a solo project, the centralized approach was fine. For a team, you'd want to invest in modularity early.
+
+**The saving grace:** Unit tests. Every feature got tests—no exceptions. When adding TS2300 broke something in TS2466, the tests caught it immediately. The 1,996 unit tests weren't just validation; they were **regression armor** that made sequential development survivable. Without them, the cascading dependencies would have been unmanageable.
+
+**The accelerator:** MoonBit's compilation speed. Sub-second rebuilds and <5 second test runs meant I could iterate through the sequential bottleneck at high velocity. Each error implementation followed a tight loop: write code → compile → test → fix → repeat. What would have been painful with 30-second Rust builds became manageable when the entire cycle takes seconds. Speed doesn't eliminate the bottleneck, but it makes sequential work feel almost parallel.
+
+**The pattern:** For each new error type, the workflow was predictable:
+
+1. Write a TypeScript file that triggers the error
+2. Run it through `tsc` to see the expected error message
+3. Implement the same validation in our checker
+4. Compare outputs until they match
+
+Once this pattern was established, Claude could iterate on it autonomously. I'd set a goal—"implement TS2322 (type mismatch)"—and watch the results roll in. Test file created, `tsc` output captured, implementation written, tests passing. It was genuinely delightful to set targets and see them achieved methodically, one error code at a time.
+
+**The type system as refactoring partner:** MoonBit's strong typing wasn't just for correctness—it made refactoring fearless. When I needed to restructure the checker or add a new field to the AST, the compiler told me every place that needed updating. Claude and I could refactor aggressively, knowing the type system would catch missed edge cases. Change a function signature? The compiler shows you every call site. Add a new enum variant? Pattern match exhaustiveness tells you where to handle it. This tight feedback loop between human, AI, and type system made large refactors feel safe instead of terrifying.
 
 ---
 
