@@ -5830,18 +5830,35 @@ fn infer_overloaded_function_type(
         let (type_parameters, c) = process_type_parameters(checker, func.type_parameters)
         checker = c
 
+        // IMPORTANT: Add type parameters to both type_cache AND constraints map
+        // This allows type annotations like `: T` to be resolved to TypeReference("T") instead of any
+        // Also needed for TS2464 validation when T is inferred to boolean
+        for tp in type_parameters {
+          // Create a TypeReference for this type parameter
+          let (info, c) = create_type_info(checker)
+          checker = c
+          let type_ref = Type::TypeReference({ name: tp.name, type_arguments: [], info })
+
+          // Add to type_cache so get_type_from_type_node can resolve it
+          checker.type_cache.set(tp.name, type_ref)
+
+          // Add to constraints for TS2464 validation
+          checker.type_parameter_constraints.set(tp.name, tp.constraint)
+        }
+
         // Build parameter list for this overload
         let parameters : Array[CheckerParameter] = []
         for param_node in func.parameters {
           match param_node {
             Parameter(p) => {
-              let (param_type, checker) = resolve_type_annotation_or_any(checker, p.type_annotation)
+              let (param_type, c) = resolve_type_annotation_or_any(checker, p.type_annotation)
               parameters.push({
                 name: get_parameter_name(p.name),
                 param_type,
                 is_optional: p.is_optional,
                 is_rest: p.is_rest,
               })
+              checker = c
             }
             _ => ()
           }
@@ -5849,11 +5866,12 @@ fn infer_overloaded_function_type(
 
         // Get return type for this overload
         let (return_type, c) = match func.return_type {
-          Some(type_node) =>
+          Some(type_node) => {
             match get_type_from_type_node(checker, type_node) {
               (Some(t), c2) => (t, c2)
               (None, c2) => any_type(c2)
             }
+          }
           None => any_type(checker)
         }
         checker = c
@@ -6059,7 +6077,8 @@ fn infer_class_declaration_type(
         let checker = match prop.computed_name_expr {
           Some(name_expr) => {
             let (name_type, c) = infer_type(checker, name_expr)
-            if not(is_valid_computed_property_type(c, name_type)) {
+            let is_valid = is_valid_computed_property_type(c, name_type)
+            if not(is_valid) {
               add_diagnostic_with_code(
                 c,
                 "A computed property name must be of type 'string', 'number', 'symbol', or 'any'.",
@@ -7482,7 +7501,8 @@ fn resolve_call_overload(
   location : SourceLocation,
 ) -> (Type, TypeChecker)? {
   // Try each signature in order
-  for sig in signatures {
+  for i = 0; i < signatures.length(); i = i + 1 {
+    let sig = signatures[i]
     match try_signature(
       checker,
       sig,
@@ -12307,7 +12327,8 @@ fn infer_object_literal_type(
 
         let (name_type, c) = infer_type(checker, name_expr)
         // TS2464: Check if computed property name type is valid
-        let c = if not(is_valid_computed_property_type(c, name_type)) {
+        let is_valid = is_valid_computed_property_type(c, name_type)
+        let c = if not(is_valid) {
           add_diagnostic_with_code(
             c,
             "A computed property name must be of type 'string', 'number', 'symbol', or 'any'.",
