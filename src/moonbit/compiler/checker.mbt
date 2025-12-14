@@ -5826,6 +5826,10 @@ fn infer_overloaded_function_type(
   for decl in symbol.declarations {
     match decl {
       FunctionDeclaration(func) => {
+        // Process type parameters for this overload
+        let (type_parameters, c) = process_type_parameters(checker, func.type_parameters)
+        checker = c
+
         // Build parameter list for this overload
         let parameters : Array[CheckerParameter] = []
         for param_node in func.parameters {
@@ -5856,7 +5860,7 @@ fn infer_overloaded_function_type(
 
         // Only add overload signatures (those without body), not the implementation
         if func.body is None {
-          call_signatures.push({ parameters, return_type, type_parameters: [] })
+          call_signatures.push({ parameters, return_type, type_parameters })
         }
       }
       _ => ()
