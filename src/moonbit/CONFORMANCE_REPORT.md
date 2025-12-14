@@ -13,6 +13,45 @@
 
 ## Recent Fixes
 
+### ✅ TS2466 Validation for Object Literals in Arrow Functions (December 14, 2025)
+- **Impact**: Fixed validation gap for 'super' in object literal computed properties within arrow functions
+- **Computed Properties**: Improved pass rate toward target of 140/142 (98.6%)
+- **Feature**: Context-aware TS2466 validation that distinguishes between bare super calls and property accesses
+
+**Problem Identified**:
+- In commit `9c3243d7`, TS2466 validation was removed from object literals to prevent duplicate errors with class members
+- This created a gap: object literals inside arrow functions weren't being validated for invalid `super` usage
+- Test 30 (ES5/ES6): `super()` in arrow function's object literal was not being caught ❌
+
+**Solution Implemented**:
+1. **Contextaware TS2466 Validation** (checker.mbt:12264-12275, 12574-12585, 12613-12624, 12656-12667):
+   - Added validation to all 4 object literal computed property types
+   - Only validates when `arrow_function_depth > 0` (inside arrow functions)
+   - Avoids duplicates with class member validation (which runs separately)
+
+2. **Bare Super Call Detection** (checker.mbt:21644-21706):
+   - Created `contains_bare_super_call()` function to distinguish:
+     * `super()` (bare super call) → **INVALID** in computed properties
+     * `super.property` or `super.method()` (property access) → **VALID** everywhere
+   - More precise than `contains_super_expression()` which caught ALL super usage
+
+**Validation Logic**:
+- **Class members**: Always validate with `contains_super_expression()` (catches all super usage)
+- **Object literals**: Only validate in arrow functions with `contains_bare_super_call()` (catches only bare super calls)
+
+**Tests Fixed**:
+- ✅ Test 30 ES5/ES6: `super()` in arrow function's object literal now correctly reports TS2466
+
+**Tests Maintained** (no regressions):
+- ✅ Test 25 ES5/ES6: `super.bar()` in method's object literal still passes (property access is valid)
+- ✅ Test 28 ES5/ES6: `super()` in constructor's object literal still passes (not in arrow function)
+- ✅ Test 31 ES5/ES6: `super.bar()` in arrow function's object literal now passes (property access is valid)
+
+**Key Insight**: TypeScript's TS2466 rule is nuanced:
+- Bare `super()` calls are invalid in computed property names when not in proper class context
+- Property accesses like `super.foo` are valid everywhere (just need proper `this` binding capture)
+- Arrow functions don't have their own `super` binding, so bare `super()` calls are invalid
+
 ### ✅ Comprehensive Unit Tests for High-Impact Error Codes (December 14, 2025)
 - **Analysis**: Analyzed 5,652 conformance tests to identify most common error codes
 - **Finding**: **Most high-value error codes already fully implemented!**
