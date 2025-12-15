@@ -6016,38 +6016,22 @@ fn infer_class_declaration_type(
         checker = c
 
         // TS2465: Validate 'this' in computed property names
-        let checker = match prop.computed_name_expr {
-          Some(name_expr) => {
-            if contains_this_expression(name_expr) {
-              add_diagnostic_with_code(
-                checker,
-                "'this' cannot be referenced in a computed property name.",
-                get_location(name_expr),
-                TS2465,
-              )
-            } else {
-              checker
-            }
-          }
-          None => checker
-        }
+        let checker = validate_computed_property_name(
+          checker,
+          prop.computed_name_expr,
+          contains_this_expression,
+          "'this' cannot be referenced in a computed property name.",
+          TS2465,
+        )
 
         // TS2466: Validate 'super' in computed property names
-        let checker = match prop.computed_name_expr {
-          Some(name_expr) => {
-            if contains_super_expression(name_expr) {
-              add_diagnostic_with_code(
-                checker,
-                "'super' cannot be referenced in a computed property name.",
-                get_location(name_expr),
-                TS2466,
-              )
-            } else {
-              checker
-            }
-          }
-          None => checker
-        }
+        let checker = validate_computed_property_name(
+          checker,
+          prop.computed_name_expr,
+          contains_super_expression,
+          "'super' cannot be referenced in a computed property name.",
+          TS2466,
+        )
 
         // TS2449: Validate class self-reference in computed property names
         let checker = validate_class_self_reference_in_computed_name(
@@ -6057,21 +6041,13 @@ fn infer_class_declaration_type(
         )
 
         // TS2467: Validate type parameter references in computed property names
-        let checker = match prop.computed_name_expr {
-          Some(name_expr) => {
-            if contains_type_parameter_reference(name_expr, type_param_names) {
-              add_diagnostic_with_code(
-                checker,
-                "A computed property name cannot reference a type parameter from its containing type.",
-                get_location(name_expr),
-                TS2467,
-              )
-            } else {
-              checker
-            }
-          }
-          None => checker
-        }
+        let checker = validate_computed_property_name(
+          checker,
+          prop.computed_name_expr,
+          fn(node) { contains_type_parameter_reference(node, type_param_names) },
+          "A computed property name cannot reference a type parameter from its containing type.",
+          TS2467,
+        )
 
         // TS2464: Validate computed property name type
         let checker = match prop.computed_name_expr {
@@ -6138,38 +6114,22 @@ fn infer_class_declaration_type(
         checker = c
 
         // TS2465: Validate 'this' in computed property names
-        checker = match method_decl.computed_name_expr {
-          Some(name_expr) => {
-            if contains_this_expression(name_expr) {
-              add_diagnostic_with_code(
-                checker,
-                "'this' cannot be referenced in a computed property name.",
-                get_location(name_expr),
-                TS2465,
-              )
-            } else {
-              checker
-            }
-          }
-          None => checker
-        }
+        checker = validate_computed_property_name(
+          checker,
+          method_decl.computed_name_expr,
+          contains_this_expression,
+          "'this' cannot be referenced in a computed property name.",
+          TS2465,
+        )
 
         // TS2466: Validate 'super' in computed property names
-        checker = match method_decl.computed_name_expr {
-          Some(name_expr) => {
-            if contains_super_expression(name_expr) {
-              add_diagnostic_with_code(
-                checker,
-                "'super' cannot be referenced in a computed property name.",
-                get_location(name_expr),
-                TS2466,
-              )
-            } else {
-              checker
-            }
-          }
-          None => checker
-        }
+        checker = validate_computed_property_name(
+          checker,
+          method_decl.computed_name_expr,
+          contains_super_expression,
+          "'super' cannot be referenced in a computed property name.",
+          TS2466,
+        )
 
         // TS2449: Validate class self-reference in computed property names
         checker = validate_class_self_reference_in_computed_name(
@@ -6179,21 +6139,13 @@ fn infer_class_declaration_type(
         )
 
         // TS2467: Validate type parameter references in computed property names
-        checker = match method_decl.computed_name_expr {
-          Some(name_expr) => {
-            if contains_type_parameter_reference(name_expr, type_param_names) {
-              add_diagnostic_with_code(
-                checker,
-                "A computed property name cannot reference a type parameter from its containing type.",
-                get_location(name_expr),
-                TS2467,
-              )
-            } else {
-              checker
-            }
-          }
-          None => checker
-        }
+        checker = validate_computed_property_name(
+          checker,
+          method_decl.computed_name_expr,
+          fn(node) { contains_type_parameter_reference(node, type_param_names) },
+          "A computed property name cannot reference a type parameter from its containing type.",
+          TS2467,
+        )
 
         // TS2464: Validate computed property names in class method declarations
         // A computed property name must be of type 'string', 'number', 'symbol', or 'any'
@@ -6231,21 +6183,13 @@ fn infer_class_declaration_type(
       }
       GetAccessor(getter) => {
         // TS2465: Validate 'this' in computed property names
-        checker = match getter.computed_name_expr {
-          Some(name_expr) => {
-            if contains_this_expression(name_expr) {
-              add_diagnostic_with_code(
-                checker,
-                "'this' cannot be referenced in a computed property name.",
-                get_location(name_expr),
-                TS2465,
-              )
-            } else {
-              checker
-            }
-          }
-          None => checker
-        }
+        checker = validate_computed_property_name(
+          checker,
+          getter.computed_name_expr,
+          contains_this_expression,
+          "'this' cannot be referenced in a computed property name.",
+          TS2465,
+        )
 
         // TS2464: Validate computed property names in class getter declarations
         checker = match getter.computed_name_expr {
@@ -6292,21 +6236,13 @@ fn infer_class_declaration_type(
       }
       SetAccessor(setter) => {
         // TS2465: Validate 'this' in computed property names
-        checker = match setter.computed_name_expr {
-          Some(name_expr) => {
-            if contains_this_expression(name_expr) {
-              add_diagnostic_with_code(
-                checker,
-                "'this' cannot be referenced in a computed property name.",
-                get_location(name_expr),
-                TS2465,
-              )
-            } else {
-              checker
-            }
-          }
-          None => checker
-        }
+        checker = validate_computed_property_name(
+          checker,
+          setter.computed_name_expr,
+          contains_this_expression,
+          "'this' cannot be referenced in a computed property name.",
+          TS2465,
+        )
 
         // TS2464: Validate computed property names in class setter declarations
         checker = match setter.computed_name_expr {
@@ -18206,6 +18142,36 @@ fn check_class_declaration(
       PropertyDeclaration(prop) => {
         // Check if this is a static property for TS2334
         let is_static = has_modifier(prop.modifiers, Modifier::Static)
+
+        // TS1166: Validate computed property names for static properties
+        // (instance properties are validated in build_class_type_for_this)
+        let checker = if is_static {
+          match prop.computed_name_expr {
+            Some(name_expr) => {
+              // First check if the expression itself is a literal
+              if is_literal_expression(name_expr) {
+                checker // Literal expressions are always valid
+              } else {
+                // Not a literal expression - check if the inferred type is valid
+                let (name_type, c) = infer_type(checker, name_expr)
+                if not(is_valid_class_property_computed_name_type(name_type)) {
+                  add_diagnostic_with_code(
+                    c,
+                    "A computed property name in a class property declaration must have a simple literal type or a 'unique symbol' type.",
+                    prop.location,
+                    TS1166,
+                  )
+                } else {
+                  c
+                }
+              }
+            }
+            None => checker
+          }
+        } else {
+          checker
+        }
+
         match prop.initializer {
           Some(init) => {
             let checker = if is_static {
@@ -19408,6 +19374,38 @@ fn is_simple_type_compatible(source : Type, target : Type) -> Bool {
 }
 
 ///|
+/// Validate that a computed property name has a literal or unique symbol type (TS1169)
+/// Returns the updated TypeChecker with diagnostic added if validation fails
+fn validate_interface_computed_name_ts1169(
+  checker : TypeChecker,
+  computed_name_expr : Node?,
+) -> TypeChecker {
+  match computed_name_expr {
+    Some(name_expr) => {
+      // First check if the expression itself is a literal - literals are always valid
+      if is_literal_expression(name_expr) {
+        checker // Literal expressions are valid
+      } else {
+        // Not a literal expression - check the inferred type
+        let (name_type, c) = infer_type(checker, name_expr)
+        // TS1169: Interface computed properties must have literal or unique symbol types
+        if not(is_literal_or_unique_symbol_type(name_type)) {
+          add_diagnostic_with_code(
+            c,
+            "A computed property name in an interface must refer to an expression whose type is a literal type or a 'unique symbol' type.",
+            get_location(name_expr),
+            TS1169,
+          )
+        } else {
+          c
+        }
+      }
+    }
+    None => checker
+  }
+}
+
+///|
 /// Check interface declaration - validates index signature parameter types
 /// and property compatibility with index signatures
 fn check_interface_declaration(
@@ -19461,53 +19459,15 @@ fn check_interface_declaration(
   for interface_member in iface_decl.members {
     match interface_member {
       PropertyDeclaration(prop) =>
-        match prop.computed_name_expr {
-          Some(name_expr) => {
-            // First check if the expression itself is a literal - literals are always valid
-            if is_literal_expression(name_expr) {
-              // Literal expressions are valid, skip validation
-              ()
-            } else {
-              // Not a literal expression - check the inferred type
-              let (name_type, c) = infer_type(checker, name_expr)
-              checker = c
-              // TS1169: Interface computed properties must have literal or unique symbol types
-              if not(is_literal_or_unique_symbol_type(name_type)) {
-                checker = add_diagnostic_with_code(
-                  checker,
-                  "A computed property name in an interface must refer to an expression whose type is a literal type or a 'unique symbol' type.",
-                  get_location(name_expr),
-                  TS1169,
-                )
-              }
-            }
-          }
-          None => ()
-        }
+        checker = validate_interface_computed_name_ts1169(
+          checker,
+          prop.computed_name_expr,
+        )
       MethodDeclaration(meth) =>
-        match meth.computed_name_expr {
-          Some(name_expr) => {
-            // First check if the expression itself is a literal - literals are always valid
-            if is_literal_expression(name_expr) {
-              // Literal expressions are valid, skip validation
-              ()
-            } else {
-              // Not a literal expression - check the inferred type
-              let (name_type, c) = infer_type(checker, name_expr)
-              checker = c
-              // TS1169: Interface computed properties must have literal or unique symbol types
-              if not(is_literal_or_unique_symbol_type(name_type)) {
-                checker = add_diagnostic_with_code(
-                  checker,
-                  "A computed property name in an interface must refer to an expression whose type is a literal type or a 'unique symbol' type.",
-                  get_location(name_expr),
-                  TS1169,
-                )
-              }
-            }
-          }
-          None => ()
-        }
+        checker = validate_interface_computed_name_ts1169(
+          checker,
+          meth.computed_name_expr,
+        )
       _ => ()
     }
   }
@@ -19832,55 +19792,31 @@ fn build_class_type_for_this(
         checker = c
 
         // TS2465: Validate 'this' in computed property names
-        let checker = match prop.computed_name_expr {
-          Some(name_expr) => {
-            if contains_this_expression(name_expr) {
-              add_diagnostic_with_code(
-                checker,
-                "'this' cannot be referenced in a computed property name.",
-                get_location(name_expr),
-                TS2465,
-              )
-            } else {
-              checker
-            }
-          }
-          None => checker
-        }
+        let checker = validate_computed_property_name(
+          checker,
+          prop.computed_name_expr,
+          contains_this_expression,
+          "'this' cannot be referenced in a computed property name.",
+          TS2465,
+        )
 
         // TS2466: Validate 'super' in computed property names
-        let checker = match prop.computed_name_expr {
-          Some(name_expr) => {
-            if contains_super_expression(name_expr) {
-              add_diagnostic_with_code(
-                checker,
-                "'super' cannot be referenced in a computed property name.",
-                get_location(name_expr),
-                TS2466,
-              )
-            } else {
-              checker
-            }
-          }
-          None => checker
-        }
+        let checker = validate_computed_property_name(
+          checker,
+          prop.computed_name_expr,
+          contains_super_expression,
+          "'super' cannot be referenced in a computed property name.",
+          TS2466,
+        )
 
         // TS2467: Validate type parameter references in computed property names
-        let checker = match prop.computed_name_expr {
-          Some(name_expr) => {
-            if contains_type_parameter_reference(name_expr, type_param_names) {
-              add_diagnostic_with_code(
-                checker,
-                "A computed property name cannot reference a type parameter from its containing type.",
-                get_location(name_expr),
-                TS2467,
-              )
-            } else {
-              checker
-            }
-          }
-          None => checker
-        }
+        let checker = validate_computed_property_name(
+          checker,
+          prop.computed_name_expr,
+          fn(node) { contains_type_parameter_reference(node, type_param_names) },
+          "A computed property name cannot reference a type parameter from its containing type.",
+          TS2467,
+        )
 
         // TS1166: Validate computed property names in class declarations
         let checker = match prop.computed_name_expr {
@@ -19919,55 +19855,31 @@ fn build_class_type_for_this(
         checker = c
 
         // TS2465: Validate 'this' in computed property names
-        checker = match method_decl.computed_name_expr {
-          Some(name_expr) => {
-            if contains_this_expression(name_expr) {
-              add_diagnostic_with_code(
-                checker,
-                "'this' cannot be referenced in a computed property name.",
-                get_location(name_expr),
-                TS2465,
-              )
-            } else {
-              checker
-            }
-          }
-          None => checker
-        }
+        checker = validate_computed_property_name(
+          checker,
+          method_decl.computed_name_expr,
+          contains_this_expression,
+          "'this' cannot be referenced in a computed property name.",
+          TS2465,
+        )
 
         // TS2466: Validate 'super' in computed property names
-        checker = match method_decl.computed_name_expr {
-          Some(name_expr) => {
-            if contains_super_expression(name_expr) {
-              add_diagnostic_with_code(
-                checker,
-                "'super' cannot be referenced in a computed property name.",
-                get_location(name_expr),
-                TS2466,
-              )
-            } else {
-              checker
-            }
-          }
-          None => checker
-        }
+        checker = validate_computed_property_name(
+          checker,
+          method_decl.computed_name_expr,
+          contains_super_expression,
+          "'super' cannot be referenced in a computed property name.",
+          TS2466,
+        )
 
         // TS2467: Validate type parameter references in computed property names
-        checker = match method_decl.computed_name_expr {
-          Some(name_expr) => {
-            if contains_type_parameter_reference(name_expr, type_param_names) {
-              add_diagnostic_with_code(
-                checker,
-                "A computed property name cannot reference a type parameter from its containing type.",
-                get_location(name_expr),
-                TS2467,
-              )
-            } else {
-              checker
-            }
-          }
-          None => checker
-        }
+        checker = validate_computed_property_name(
+          checker,
+          method_decl.computed_name_expr,
+          fn(node) { contains_type_parameter_reference(node, type_param_names) },
+          "A computed property name cannot reference a type parameter from its containing type.",
+          TS2467,
+        )
 
         // TS2464: Validate computed property names in class method declarations
         // A computed property name must be of type 'string', 'number', 'symbol', or 'any'
@@ -19998,21 +19910,13 @@ fn build_class_type_for_this(
       }
       GetAccessor(getter) => {
         // TS2465: Validate 'this' in computed property names
-        checker = match getter.computed_name_expr {
-          Some(name_expr) => {
-            if contains_this_expression(name_expr) {
-              add_diagnostic_with_code(
-                checker,
-                "'this' cannot be referenced in a computed property name.",
-                get_location(name_expr),
-                TS2465,
-              )
-            } else {
-              checker
-            }
-          }
-          None => checker
-        }
+        checker = validate_computed_property_name(
+          checker,
+          getter.computed_name_expr,
+          contains_this_expression,
+          "'this' cannot be referenced in a computed property name.",
+          TS2465,
+        )
 
         // TS2464: Validate computed property names in class getter declarations
         checker = match getter.computed_name_expr {
@@ -20055,21 +19959,13 @@ fn build_class_type_for_this(
       }
       SetAccessor(setter) => {
         // TS2465: Validate 'this' in computed property names
-        checker = match setter.computed_name_expr {
-          Some(name_expr) => {
-            if contains_this_expression(name_expr) {
-              add_diagnostic_with_code(
-                checker,
-                "'this' cannot be referenced in a computed property name.",
-                get_location(name_expr),
-                TS2465,
-              )
-            } else {
-              checker
-            }
-          }
-          None => checker
-        }
+        checker = validate_computed_property_name(
+          checker,
+          setter.computed_name_expr,
+          contains_this_expression,
+          "'this' cannot be referenced in a computed property name.",
+          TS2465,
+        )
 
         // TS2464: Validate computed property names in class setter declarations
         checker = match setter.computed_name_expr {
@@ -21810,6 +21706,42 @@ fn validate_class_self_reference_in_computed_name(
           "Class '" + class_name + "' used before its declaration.",
           get_location(name_expr),
           TS2449,
+        )
+      } else {
+        checker
+      }
+    }
+    None => checker
+  }
+}
+
+///|
+/// Generic helper to validate computed property names with a custom validation function
+/// DRY principle: Eliminates repeated pattern of match-validate-diagnose
+///
+/// Parameters:
+/// - checker: The TypeChecker to update
+/// - computed_name_expr: Optional Node representing the computed property name expression
+/// - validation_fn: Function that takes a Node and returns true if validation FAILS
+/// - diagnostic_message: The error message to display if validation fails
+/// - diagnostic_code: The TypeScript error code to use
+///
+/// Returns: Updated TypeChecker with diagnostic added if validation fails
+fn validate_computed_property_name(
+  checker : TypeChecker,
+  computed_name_expr : Node?,
+  validation_fn : (Node) -> Bool,
+  diagnostic_message : String,
+  diagnostic_code : DiagnosticCode,
+) -> TypeChecker {
+  match computed_name_expr {
+    Some(name_expr) => {
+      if validation_fn(name_expr) {
+        add_diagnostic_with_code(
+          checker,
+          diagnostic_message,
+          get_location(name_expr),
+          diagnostic_code,
         )
       } else {
         checker

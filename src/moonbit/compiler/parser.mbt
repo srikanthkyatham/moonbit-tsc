@@ -4479,7 +4479,7 @@ fn parse_class_member_with_decorators(
                   acc.push(
                     Node::PropertyDeclaration(PropertyDeclaration::{
                       name: computed_name,
-                      computed_name_expr: None,
+                      computed_name_expr: Some(name_expr), // Preserve for TS1166 validation
                       type_annotation,
                       initializer,
                       is_optional: false,
@@ -6263,7 +6263,7 @@ fn parse_class_member_with_modifiers(
               acc.push(
                 Node::PropertyDeclaration(PropertyDeclaration::{
                   name: computed_name,
-                  computed_name_expr: None,
+                  computed_name_expr: Some(name_expr), // Preserve for TS1166 validation
                   type_annotation,
                   initializer,
                   is_optional: false,
