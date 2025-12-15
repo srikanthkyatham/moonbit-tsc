@@ -7773,6 +7773,27 @@ fn substitute_in_type(
         checker,
       )
     }
+    Type::Tuple(tuple) => {
+      // Substitute in tuple element types
+      let mut checker = checker
+      let new_elements : Array[TupleElement] = []
+      for elem in tuple.element_types {
+        let (new_type, c) = substitute_in_type(
+          checker,
+          elem.element_type,
+          substitutions,
+        )
+        checker = c
+        new_elements.push({
+          element_type: new_type,
+          is_optional: elem.is_optional,
+          is_rest: elem.is_rest,
+          label: elem.label,
+        })
+      }
+      let (info, checker) = create_type_info(checker)
+      (Type::Tuple({ element_types: new_elements, info }), checker)
+    }
     _ => (t, checker) // Primitives don't need substitution
   }
 }
@@ -8074,6 +8095,24 @@ fn infer_from_types(
               checker,
               func.parameters[i].param_type,
               source_func.parameters[i].param_type,
+              inferences,
+            )
+          }
+        }
+        _ => ()
+      }
+    Type::Tuple(tuple) =>
+      match source {
+        Type::Tuple(source_tuple) => {
+          // Infer from tuple elements
+          for i = 0
+              i < tuple.element_types.length() &&
+             i < source_tuple.element_types.length()
+              i = i + 1 {
+            checker = infer_from_types(
+              checker,
+              source_tuple.element_types[i].element_type,
+              tuple.element_types[i].element_type,
               inferences,
             )
           }
