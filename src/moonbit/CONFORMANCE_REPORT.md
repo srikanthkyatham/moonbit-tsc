@@ -5,9 +5,9 @@
 | Metric | Value |
 |--------|-------|
 | Total Tests | 5,652 |
-| Passed | 3,930 |
-| Failed | 1,722 |
-| **Pass Rate** | **69.5%** |
+| Passed | 3,932 |
+| Failed | 1,720 |
+| **Pass Rate** | **69.6%** |
 
 *Last updated: December 15, 2025*
 
@@ -1785,7 +1785,7 @@ The following categories have achieved full conformance:
 | functionDeclarations | 13 | 13 | 100% |
 | modules | 39 | 39 | 100% |
 | spread | 26 | 27 | 96% |
-| computedProperties | 140 | 142 | 98.6% |
+| computedProperties | 142 | 142 | 100% |
 
 ## Types Subcategory Breakdown
 
@@ -1965,15 +1965,17 @@ Tests that should report errors but don't:
   - Checker validation in assignment expressions (checker.mbt:11776-11804)
   - Error: "A rest element must be last in a destructuring pattern."
   - Correctly distinguishes destructuring patterns from tuple type declarations
-- **computedProperties: 98.6% (140/142)** ✅ - up from 93.7% (+7 tests, +4.9% improvement)
-  - Improved from 133/142 to 140/142 passing tests
-  - Only 2 remaining failures related to specific super validation edge cases
-- **Pass rate: 69.4% → 69.5%** (+0.1%, +7 tests net improvement)
+- **computedProperties: 100% (142/142)** 🎯 - up from 93.7% (+9 tests, +6.3% improvement, **COMPLETE**)
+  - Improved from 133/142 to 142/142 passing tests
+  - Fixed TS2466 validation: Object literal computed properties with `super()` now correctly allowed in constructors
+  - TS2466 now only validates in arrow functions (`checker.arrow_function_depth > 0`)
+  - Changed to `contains_bare_super_call()` for precise validation (comma expressions like `(super(), "prop")` work correctly)
+- **Pass rate: 69.4% → 69.6%** (+0.2%, +9 tests net improvement)
 - **Unit tests: 4,955 passing** (all tests maintained, no regressions)
 - **Files modified**:
   - `parser.mbt` - TS2462 validation for rest element position in binding patterns
-  - `checker.mbt` - Rest parameter tuple expansion and TS2462 validation in assignments
-  - `CONFORMANCE_REPORT.md` - Documented improvements
+  - `checker.mbt` - Rest parameter tuple expansion, TS2462 validation in assignments, and TS2466 arrow function depth guard (lines 12297-12308, 12608-12619, 12647-12658, 12690-12701)
+  - `CONFORMANCE_REPORT.md` - Documented improvements and 100% computedProperties achievement
 - **Impact**: Essential for TypeScript patterns including generic rest parameters, partial application, bind, and function composition
 
 ### December 2024 (Update 23)

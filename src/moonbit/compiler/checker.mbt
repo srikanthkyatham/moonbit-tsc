@@ -12294,9 +12294,9 @@ fn infer_object_literal_type(
         let key = get_property_name(name_expr)
         let key = if key == "" { "[computed]" } else { key }
 
-        // TS2466: Check for 'super' in computed property name (property assignments catch any super)
+        // TS2466: Check for bare 'super' calls in computed property name (only in arrow functions)
         let mut checker = checker
-        checker = if contains_super_expression(name_expr) {
+        checker = if checker.arrow_function_depth > 0 && contains_bare_super_call(name_expr) {
           add_diagnostic_with_code(
             checker,
             "'super' cannot be referenced in a computed property name.",
@@ -12605,9 +12605,9 @@ fn infer_object_literal_type(
         let key = get_property_name(name_expr)
         let key = if key == "" { "[computed]" } else { key }
 
-        // TS2466: Check for bare 'super' calls in computed property name
+        // TS2466: Check for bare 'super' calls in computed property name (only in arrow functions)
         let mut checker = checker
-        checker = if contains_bare_super_call(name_expr) {
+        checker = if checker.arrow_function_depth > 0 && contains_bare_super_call(name_expr) {
           add_diagnostic_with_code(
             checker,
             "'super' cannot be referenced in a computed property name.",
@@ -12644,9 +12644,9 @@ fn infer_object_literal_type(
         let key = get_property_name(name_expr)
         let key = if key == "" { "[computed]" } else { key }
 
-        // TS2466: Check for 'super' in computed property name (getters catch any super)
+        // TS2466: Check for bare 'super' calls in computed property name (only in arrow functions)
         let mut checker = checker
-        checker = if contains_super_expression(name_expr) {
+        checker = if checker.arrow_function_depth > 0 && contains_bare_super_call(name_expr) {
           add_diagnostic_with_code(
             checker,
             "'super' cannot be referenced in a computed property name.",
@@ -12687,9 +12687,9 @@ fn infer_object_literal_type(
         let key = get_property_name(name_expr)
         let key = if key == "" { "[computed]" } else { key }
 
-        // TS2466: Check for 'super' in computed property name (setters catch any super)
+        // TS2466: Check for bare 'super' calls in computed property name (only in arrow functions)
         let mut checker = checker
-        checker = if contains_super_expression(name_expr) {
+        checker = if checker.arrow_function_depth > 0 && contains_bare_super_call(name_expr) {
           add_diagnostic_with_code(
             checker,
             "'super' cannot be referenced in a computed property name.",
