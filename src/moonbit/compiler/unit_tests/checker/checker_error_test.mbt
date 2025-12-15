@@ -16,11 +16,18 @@
 fn parse_bind_check_errors(source : String) -> @compiler.CheckResult {
   let tokens = @compiler.scan_all_v2(source, "test.ts")
   match @compiler.parse_source_file(tokens, "test.ts") {
-    Ok(source_file) =>
-      match @compiler.bind_source_file(source_file) {
-        Ok(bound) => @compiler.check_source_file(bound)
-        Err(diagnostics) => Err(diagnostics)
+    Ok(source_file) => {
+      // Check parse diagnostics first (for parser-level validations like TS1187)
+      if source_file.parse_diagnostics.length() > 0 {
+        Err(source_file.parse_diagnostics)
+      } else {
+        // Then proceed with binding and checking
+        match @compiler.bind_source_file(source_file) {
+          Ok(bound) => @compiler.check_source_file(bound)
+          Err(diagnostics) => Err(diagnostics)
+        }
       }
+    }
     Err(diagnostics) => Err(diagnostics)
   }
 }

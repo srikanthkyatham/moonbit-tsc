@@ -9,11 +9,18 @@
 fn check_source(source : String) -> @compiler.CheckResult {
   let tokens = @compiler.scan_all_v2(source, "test.ts")
   match @compiler.parse_source_file(tokens, "test.ts") {
-    Ok(source_file) =>
-      match @compiler.bind_source_file(source_file) {
-        Ok(bound) => @compiler.check_source_file(bound)
-        Err(diagnostics) => Err(diagnostics)
+    Ok(source_file) => {
+      // Check parse diagnostics first (for parser-level validations)
+      if source_file.parse_diagnostics.length() > 0 {
+        Err(source_file.parse_diagnostics)
+      } else {
+        // Then proceed with binding and checking
+        match @compiler.bind_source_file(source_file) {
+          Ok(bound) => @compiler.check_source_file(bound)
+          Err(diagnostics) => Err(diagnostics)
+        }
       }
+    }
     Err(diagnostics) => Err(diagnostics)
   }
 }
@@ -26,12 +33,19 @@ fn check_source_with_target(
 ) -> @compiler.CheckResult {
   let tokens = @compiler.scan_all_v2(source, "test.ts")
   match @compiler.parse_source_file(tokens, "test.ts") {
-    Ok(source_file) =>
-      match @compiler.bind_source_file(source_file) {
-        Ok(bound) =>
-          @compiler.check_source_file_with_options(bound, false, target)
-        Err(diagnostics) => Err(diagnostics)
+    Ok(source_file) => {
+      // Check parse diagnostics first (for parser-level validations)
+      if source_file.parse_diagnostics.length() > 0 {
+        Err(source_file.parse_diagnostics)
+      } else {
+        // Then proceed with binding and checking
+        match @compiler.bind_source_file(source_file) {
+          Ok(bound) =>
+            @compiler.check_source_file_with_options(bound, false, target)
+          Err(diagnostics) => Err(diagnostics)
+        }
       }
+    }
     Err(diagnostics) => Err(diagnostics)
   }
 }
