@@ -11772,6 +11772,37 @@ fn infer_array_literal_type(
       _ => ()
     }
   }
+
+  // TS2462: Check that rest elements are last in destructuring patterns
+  if checker.in_destructuring_pattern {
+    let mut found_spread_idx : Int? = None
+    for i = 0; i < arr.elements.length(); i = i + 1 {
+      match arr.elements[i] {
+        Some(SpreadExpression(spread)) => found_spread_idx = Some(i)
+        _ => ()
+      }
+    }
+    match found_spread_idx {
+      Some(spread_idx) => {
+        // Check if there are more elements after the spread
+        if spread_idx < arr.elements.length() - 1 {
+          // There are elements after the spread - report error
+          match arr.elements[spread_idx] {
+            Some(SpreadExpression(spread)) =>
+              checker = add_diagnostic_with_code(
+                checker,
+                "A rest element must be last in a destructuring pattern.",
+                spread.location,
+                TS2462,
+              )
+            _ => ()
+          }
+        }
+      }
+      None => ()
+    }
+  }
+
   // Infer element types and create union
   let element_types = []
   for i = 0; i < arr.elements.length(); i = i + 1 {

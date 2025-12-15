@@ -2002,9 +2002,26 @@ fn parse_array_binding_pattern(
           location: spread_loc,
         })
         elements.push(Some(spread_node))
-        // Optional comma (though rest should be last element)
+
+        // TS2462: A rest element must be last in a destructuring pattern
+        // Check if there are more elements after the rest element
         match current_token(parser) {
-          Comma(_) => parser = advance_parser(parser)
+          Comma(_) => {
+            parser = advance_parser(parser) // consume comma
+            // Check if there's actually another element (not just trailing comma)
+            match current_token(parser) {
+              CloseBracket(_) => () // Trailing comma is OK
+              _ => {
+                // There's another element after rest - report error
+                parser = add_error_checked(
+                  parser,
+                  "A rest element must be last in a destructuring pattern.",
+                  spread_loc,
+                  2462,
+                )
+              }
+            }
+          }
           _ => ()
         }
       }
