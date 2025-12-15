@@ -5,11 +5,11 @@
 | Metric | Value |
 |--------|-------|
 | Total Tests | 5,652 |
-| Passed | 3,923 |
-| Failed | 1,729 |
-| **Pass Rate** | **69.4%** |
+| Passed | 3,930 |
+| Failed | 1,722 |
+| **Pass Rate** | **69.5%** |
 
-*Last updated: December 14, 2025*
+*Last updated: December 15, 2025*
 
 ## Recent Fixes
 
@@ -1785,7 +1785,7 @@ The following categories have achieved full conformance:
 | functionDeclarations | 13 | 13 | 100% |
 | modules | 39 | 39 | 100% |
 | spread | 26 | 27 | 96% |
-| computedProperties | 133 | 142 | 93.7% |
+| computedProperties | 140 | 142 | 98.6% |
 
 ## Types Subcategory Breakdown
 
@@ -1953,6 +1953,28 @@ Tests that should report errors but don't:
 ---
 
 ## Changelog
+
+### December 2025 (Update 24)
+- **Rest Parameter Tuple Expansion**:
+  - Implemented TypeScript rest parameter with tuple type support: `(...x: [A, B, C])` ↔ `(a: A, b: B, c: C)`
+  - Function signature compatibility now works bidirectionally between rest tuple and individual parameters
+  - Function call arguments correctly checked against expanded tuple element types
+  - Created `expand_function_parameters()` helper (checker.mbt:14061-14091)
+- **TS2462 Validation - Rest Element Position**:
+  - Parser validation in array binding patterns (parser.mbt:2006-2026)
+  - Checker validation in assignment expressions (checker.mbt:11776-11804)
+  - Error: "A rest element must be last in a destructuring pattern."
+  - Correctly distinguishes destructuring patterns from tuple type declarations
+- **computedProperties: 98.6% (140/142)** ✅ - up from 93.7% (+7 tests, +4.9% improvement)
+  - Improved from 133/142 to 140/142 passing tests
+  - Only 2 remaining failures related to specific super validation edge cases
+- **Pass rate: 69.4% → 69.5%** (+0.1%, +7 tests net improvement)
+- **Unit tests: 4,955 passing** (all tests maintained, no regressions)
+- **Files modified**:
+  - `parser.mbt` - TS2462 validation for rest element position in binding patterns
+  - `checker.mbt` - Rest parameter tuple expansion and TS2462 validation in assignments
+  - `CONFORMANCE_REPORT.md` - Documented improvements
+- **Impact**: Essential for TypeScript patterns including generic rest parameters, partial application, bind, and function composition
 
 ### December 2024 (Update 23)
 - **Global Augmentation Binding Fix**:
