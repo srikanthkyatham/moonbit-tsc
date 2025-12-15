@@ -7299,13 +7299,16 @@ fn check_function_call_args(
 ) -> (Type, TypeChecker) {
   let mut checker = checker
 
-  // Check if function has rest parameter
-  let has_rest = func.parameters.length() > 0 &&
-    func.parameters[func.parameters.length() - 1].is_rest
+  // Expand rest parameters with tuple types into individual parameters
+  let expanded_params = expand_function_parameters(func.parameters)
+
+  // Check if function has rest parameter (after expansion)
+  let has_rest = expanded_params.length() > 0 &&
+    expanded_params[expanded_params.length() - 1].is_rest
 
   // Check argument count
-  let min_params = count_required_params(func.parameters)
-  let max_params = if has_rest { -1 } else { func.parameters.length() }
+  let min_params = count_required_params(expanded_params)
+  let max_params = if has_rest { -1 } else { expanded_params.length() }
   if arg_types.length() < min_params {
     checker = add_diagnostic_with_code(
       checker,
@@ -7325,8 +7328,8 @@ fn check_function_call_args(
 
   // Check each argument type
   for i = 0; i < arg_types.length(); i = i + 1 {
-    if i < func.parameters.length() {
-      let param = func.parameters[i]
+    if i < expanded_params.length() {
+      let param = expanded_params[i]
       // For rest parameters, extract element type from array type
       if param.is_rest {
         match param.param_type {
@@ -7343,7 +7346,7 @@ fn check_function_call_args(
             }
           }
           _ => {
-            // Rest parameter with non-array type (shouldn't happen, but handle it)
+            // Rest parameter with non-array/non-tuple type (shouldn't happen, but handle it)
             if not(is_assignable(arg_types[i], param.param_type)) {
               checker = add_diagnostic_with_code(
                 checker,
@@ -7355,7 +7358,7 @@ fn check_function_call_args(
           }
         }
       } else {
-        // Regular parameter
+        // Regular parameter (including expanded from tuple rest)
         if not(is_assignable(arg_types[i], param.param_type)) {
           checker = add_diagnostic_with_code(
             checker,
@@ -7367,7 +7370,7 @@ fn check_function_call_args(
       }
     } else if has_rest {
       // Arguments beyond parameter count, but there's a rest parameter
-      let rest_param = func.parameters[func.parameters.length() - 1]
+      let rest_param = expanded_params[expanded_params.length() - 1]
       match rest_param.param_type {
         Array(arr_type) => {
           let assignable = is_assignable(arg_types[i], arr_type.element_type)
@@ -14057,6 +14060,39 @@ fn check_array_assignability_detailed(
 
 ///|
 /// Check function assignability with parameter and return type checking
+///|
+/// Expand rest parameters with tuple types into individual parameters
+/// For example: (...x: [A, B, C]) becomes 3 parameters of types A, B, C
+fn expand_function_parameters(params : Array[CheckerParameter]) -> Array[CheckerParameter] {
+  let expanded = []
+  for param in params {
+    if param.is_rest {
+      match param.param_type {
+        Tuple(tuple_type) => {
+          // Expand tuple rest parameter into individual parameters
+          for i = 0; i < tuple_type.element_types.length(); i = i + 1 {
+            let elem = tuple_type.element_types[i]
+            expanded.push({
+              name: "\{param.name}[\{i}]",
+              param_type: elem.element_type,
+              is_optional: elem.is_optional,
+              is_rest: false,  // Individual elements are not rest
+            })
+          }
+        }
+        _ => {
+          // Non-tuple rest parameter - keep as is
+          expanded.push(param)
+        }
+      }
+    } else {
+      // Regular parameter - keep as is
+      expanded.push(param)
+    }
+  }
+  expanded
+}
+
 fn check_function_assignability_detailed(
   checker : TypeChecker,
   source : CheckerFunctionType,
@@ -14076,27 +14112,31 @@ fn check_function_assignability_detailed(
     ret_path,
   )
 
+  // Expand rest parameters with tuple types into individual parameters
+  let source_params = expand_function_parameters(source.parameters)
+  let target_params = expand_function_parameters(target.parameters)
+
   // Parameters are contravariant - target params must be assignable to source
-  if source.parameters.length() < target.parameters.length() {
+  if source_params.length() < target_params.length() {
     checker = add_diagnostic_with_code(
       checker,
-      "Function has fewer parameters (\{source.parameters.length()}) than required (\{target.parameters.length()})",
+      "Function has fewer parameters (\{source_params.length()}) than required (\{target_params.length()})",
       location,
       TS2322,
     )
   }
-  for i = 0; i < target.parameters.length(); i = i + 1 {
-    if i < source.parameters.length() {
+  for i = 0; i < target_params.length(); i = i + 1 {
+    if i < source_params.length() {
       let param_path = if path == "" {
-        "parameter '\{target.parameters[i].name}'"
+        "parameter '\{target_params[i].name}'"
       } else {
-        "\{path}.parameter '\{target.parameters[i].name}'"
+        "\{path}.parameter '\{target_params[i].name}'"
       }
       // Contravariant: target param type must be assignable to source param type
       checker = check_assignment_detailed(
         checker,
-        target.parameters[i].param_type,
-        source.parameters[i].param_type,
+        target_params[i].param_type,
+        source_params[i].param_type,
         location,
         param_path,
       )
