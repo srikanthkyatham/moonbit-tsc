@@ -13,6 +13,48 @@
 
 ## Recent Fixes
 
+### ✅ Rest Parameter Tuple Expansion (December 15, 2025)
+- **Impact**: Implemented TypeScript rest parameter with tuple type support
+- **Feature**: `(...x: [A, B, C])` is now equivalent to `(a: A, b: B, c: C)`
+- **Error Code**: TS2462 validation for rest element position in destructuring patterns
+
+**Problems Solved**:
+1. Function signature compatibility: `(...x: [number, string, boolean])` was incompatible with `(x0: number, x1: string, x2: boolean)`
+2. Function calls with rest parameter tuples didn't accept individual arguments correctly
+3. Rest elements not being validated for position in destructuring patterns
+
+**Solution Implemented**:
+
+1. **TS2462 Validation** (parser.mbt:2006-2026, checker.mbt:11776-11804):
+   - Parser: Validates rest element position in array binding patterns
+   - Checker: Validates rest element position in assignment expressions
+   - Error: "A rest element must be last in a destructuring pattern."
+   - Correctly distinguishes destructuring patterns from tuple type declarations
+
+2. **Rest Parameter Tuple Expansion** (checker.mbt:14061-14091):
+   - Created `expand_function_parameters()` helper function
+   - Expands rest parameters with tuple types into individual parameters
+   - Example: `(...x: [A, B, C])` → 3 parameters of types A, B, C
+
+3. **Function Compatibility** (checker.mbt:14093-14143):
+   - Updated `check_function_assignability_detailed()` to use expanded parameters
+   - Enables proper contravariant parameter checking
+
+4. **Function Call Arguments** (checker.mbt:7294-7391):
+   - Updated `check_function_call_args()` to use expanded parameters
+   - Individual arguments now correctly checked against tuple element types
+
+**Tests Verified**:
+- ✅ All 4955 unit tests pass
+- ✅ `f1 = f2` and `f2 = f1` where f1 has rest tuple parameter
+- ✅ `f1(42, "hello", true)` works with rest tuple parameter
+- ✅ `restElementMustBeLast.ts` correctly reports 2 errors (lines 1 and 2)
+
+**Impact on Rest Parameter Support**:
+- Implements core TypeScript feature for generic rest parameters
+- Essential for patterns like: partial application, bind, generic function composition
+- Expected improvement in rest parameter conformance tests
+
 ### ✅ TS2466 Validation for Object Literals in Arrow Functions (December 14, 2025)
 - **Impact**: Fixed validation gap for 'super' in object literal computed properties within arrow functions
 - **Computed Properties**: Improved pass rate toward target of 140/142 (98.6%)
