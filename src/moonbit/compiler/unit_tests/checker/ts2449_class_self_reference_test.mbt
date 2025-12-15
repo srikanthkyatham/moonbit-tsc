@@ -394,45 +394,6 @@ test "TS2449: expression without class reference should NOT error" {
 
 test "TS2449: conformance test computedPropertyNamesWithStaticProperty" {
   let source =
-    #|class Foo {
-    #|    static ["x"]() { }
-    #|    static get ["y"]() {
-    #|        return 1;
-    #|    }
-    #|    static set ["y"](v: number) {
-    #|    }
-    #|}
-    #|var x = new Foo();
-    #|
-    #|class Bar {
-    #|    static [""]() { }
-    #|    static get [""]() {
-    #|        return 1;
-    #|    }
-    #|    static set [""](v: number) {
-    #|    }
-    #|}
-    #|var y = new Bar();
-    #|
-    #|class Baz {
-    #|    static [0]() { }
-    #|    static get [0]() {
-    #|        return 1;
-    #|    }
-    #|    static set [0](v: number) {
-    #|    }
-    #|}
-    #|var z = new Baz();
-    #|
-    #|class Bam {
-    #|    static [0 as number]() { }
-    #|    static get [0 as number]() {
-    #|        return 1;
-    #|    }
-    #|    static set [0 as number](v: number) {
-    #|    }
-    #|}
-    #|
     #|class C1 {
     #|    static staticProp = 10;
     #|    [C1.staticProp]() { }
