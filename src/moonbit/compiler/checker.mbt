@@ -12944,8 +12944,16 @@ fn infer_return_type_from_block(
     collect_return_types_from_statement(checker, stmt, return_types)
   }
 
-  // If no return statements found, return void
+  // If no return statements found, check if block terminates with never
   if return_types.length() == 0 {
+    // Check if block always throws or has other terminating behavior
+    if block.statements.length() > 0 {
+      let last_stmt = block.statements[block.statements.length() - 1]
+      if is_terminating_statement(last_stmt) {
+        // Block always throws or terminates - return never
+        return never_type(checker)
+      }
+    }
     return void_type(checker)
   }
 
