@@ -16,6 +16,7 @@ async fn async_main() -> Unit {
     Err(msg) => {
       println("Error: " + msg)
       print_usage()
+      exit(1)
     }
     Ok(Command::Help) =>
       // Check for tsconfig.json auto-detection before showing help
@@ -36,6 +37,19 @@ async fn async_main() -> Unit {
     Ok(Command::BuildReferences(tsconfig_path, options)) =>
       run_build_references(tsconfig_path, options)
   }
+}
+
+///|
+/// Exit with the given code (calls C exit function)
+#cfg(target="native")
+extern "C" fn exit(code : Int) = "exit"
+
+///|
+/// Exit function for JS target (no-op)
+#cfg(target="js")
+fn exit(_code : Int) -> Unit {
+  // JS target doesn't support exit codes
+  ()
 }
 
 ///|
@@ -380,6 +394,10 @@ fn print_summary(
   // If JSON output mode, use JSON format
   if options.json_output {
     print_json_summary(summary)
+    // Exit with error code if there were errors (even in JSON mode)
+    if summary.failed > 0 {
+      exit(1)
+    }
     return
   }
 
@@ -463,6 +481,11 @@ fn print_summary(
       msg = msg + total_warnings.to_string() + " warning(s)"
     }
     println(msg)
+  }
+
+  // Exit with error code if there were errors
+  if summary.failed > 0 || total_errors > 0 {
+    exit(1)
   }
 }
 
