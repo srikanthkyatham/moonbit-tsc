@@ -287,6 +287,12 @@ defmodule ConformanceTestRunner do
       _ -> args
     end
 
+    # Handle @importHelpers directive
+    args = case Map.get(options, "importHelpers") do
+      "true" -> args ++ ["--importHelpers"]
+      _ -> args
+    end
+
     args
   end
 
