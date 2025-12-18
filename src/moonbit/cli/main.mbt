@@ -705,6 +705,7 @@ fn build_coordinator_options(
     external_types_json: options.external_types_json,
     no_emit: options.no_emit,
     no_implicit_any: options.no_implicit_any,
+    import_helpers: options.import_helpers,
   }
 }
 
@@ -801,6 +802,15 @@ fn build_coordinator_options_from_tsconfig(
       None => false
     }
   }
+  // Get importHelpers from tsconfig or CLI
+  let import_helpers = if cli_options.import_helpers {
+    true
+  } else {
+    match tsconfig.compiler_options {
+      Some(opts) => opts.import_helpers.unwrap_or(false)
+      None => false
+    }
+  }
   @coordinator.CoordinatorOptions::{
     target,
     module_kind,
@@ -815,6 +825,7 @@ fn build_coordinator_options_from_tsconfig(
     external_types_json: cli_options.external_types_json,
     no_emit,
     no_implicit_any,
+    import_helpers,
   }
 }
 

@@ -17,6 +17,7 @@ pub(all) struct CoordinatorOptions {
   external_types_json : String? // JSON string containing external types for cross-file checking
   no_emit : Bool // Only run type checking, don't emit JavaScript
   no_implicit_any : Bool // Raise error on expressions and declarations with an implied 'any' type
+  import_helpers : Bool // Import emit helpers from tslib
 } derive(Show)
 
 ///|
@@ -36,6 +37,7 @@ pub fn CoordinatorOptions::default() -> CoordinatorOptions {
     external_types_json: None,
     no_emit: false,
     no_implicit_any: false,
+    import_helpers: false,
   } // Default to 4 workers
 }
 
@@ -417,7 +419,7 @@ fn compile_single(
     verbatim_module_syntax: false,
     no_emit: options.no_emit,
     es_module_interop: options.es_module_interop,
-    import_helpers: false,
+    import_helpers: options.import_helpers,
     no_implicit_any: options.no_implicit_any,
     strict_null_checks: false,
     no_implicit_this: false,

@@ -42,6 +42,7 @@ pub(all) struct CLIOptions {
   no_implicit_any : Bool // Raise error on expressions with an implied 'any' type
   strict_null_checks : Bool // Enable strict null checks
   strict_function_types : Bool // Enable strict checking of function types
+  import_helpers : Bool // Import emit helpers from tslib (e.g., __spreadArray)
 } derive(Show)
 
 ///|
@@ -65,6 +66,7 @@ pub fn CLIOptions::default() -> CLIOptions {
     no_implicit_any: false,
     strict_null_checks: false,
     strict_function_types: false,
+    import_helpers: false,
   }
 }
 
@@ -94,6 +96,7 @@ pub fn parse_args(args : Array[String]) -> Result[Command, String] {
   let mut no_implicit_any = false
   let mut strict_null_checks = false
   let mut strict_function_types = false
+  let mut import_helpers = false
   let mut i = 1 // Skip program name
   while i < args.length() {
     let arg = args[i]
@@ -133,6 +136,7 @@ pub fn parse_args(args : Array[String]) -> Result[Command, String] {
         no_implicit_any: false,
         strict_null_checks: false,
         strict_function_types: false,
+        import_helpers: false,
       }
       return Ok(Command::BuildReferences(build_path, options))
     } else if arg == "--list-imports" {
@@ -229,6 +233,8 @@ pub fn parse_args(args : Array[String]) -> Result[Command, String] {
       strict_null_checks = true
     } else if arg == "--strictFunctionTypes" {
       strict_function_types = true
+    } else if arg == "--importHelpers" {
+      import_helpers = true
     } else if arg.has_prefix("-") {
       return Err("Unknown option: " + arg)
     } else {
@@ -254,6 +260,7 @@ pub fn parse_args(args : Array[String]) -> Result[Command, String] {
     no_implicit_any,
     strict_null_checks,
     strict_function_types,
+    import_helpers,
   }
 
   // If --project was specified, use project mode

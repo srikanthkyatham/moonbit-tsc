@@ -303,8 +303,9 @@ defmodule ConformanceTestRunner do
     should_error = has_error_baseline?(file)
 
     case System.cmd(@cli_path, args, stderr_to_stdout: true) do
-      {output, _code} ->
-        compiled_ok = String.contains?(output, "Successfully compiled")
+      {output, code} ->
+        # Use exit code to determine success (0 = success, non-zero = error)
+        compiled_ok = code == 0
 
         cond do
           # Test should pass (no error baseline) and it did
@@ -353,77 +354,65 @@ defmodule ConformanceTestRunner do
     end
   end
 
-  defp run_multifile_test(original_file, header_options, virtual_files) do
+  defp run_multifile_test(original_file, header_options, _virtual_files) do
     should_error = has_error_baseline?(original_file)
 
-    # Setup temp files
-    {_test_dir, ts_files, _all_files} = setup_multifile_test(original_file, virtual_files)
+    # For multi-file tests with @filename directives, pass the original file
+    # The compiler has built-in support for parsing and handling @filename directives
+    # Build CLI args from header options (like @target)
+    option_args = build_cli_args_from_options(header_options)
+    # Run compiler on the original file (which contains @filename directives)
+    args = ["--noEmit", "--reportDiagnostics"] ++ option_args ++ [original_file]
 
-    if ts_files == [] do
-      # No .ts files to compile (might be all .js or .json)
-      %{
-        file: original_file,
-        status: :passed,
-        error_type: nil,
-        failure_type: nil,
-        message: "Multi-file test with no .ts files"
-      }
-    else
-      # Build CLI args from header options (like @target)
-      option_args = build_cli_args_from_options(header_options)
-      # Run compiler on all .ts files at once
-      args = ["--noEmit", "--reportDiagnostics"] ++ option_args ++ ts_files
+    case System.cmd(@cli_path, args, stderr_to_stdout: true) do
+      {output, code} ->
+        # Use exit code to determine success (0 = success, non-zero = error)
+        compiled_ok = code == 0
 
-      case System.cmd(@cli_path, args, stderr_to_stdout: true) do
-        {output, _code} ->
-          compiled_ok = String.contains?(output, "Successfully compiled") or
-                        String.contains?(output, "0 error")
+        cond do
+          # Test should pass (no error baseline) and it did
+          not should_error and compiled_ok ->
+            %{
+              file: original_file,
+              status: :passed,
+              error_type: nil,
+              failure_type: nil,
+              message: nil
+            }
 
-          cond do
-            # Test should pass (no error baseline) and it did
-            not should_error and compiled_ok ->
-              %{
-                file: original_file,
-                status: :passed,
-                error_type: nil,
-                failure_type: nil,
-                message: nil
-              }
+          # Test should error (has error baseline) and it did
+          should_error and not compiled_ok ->
+            %{
+              file: original_file,
+              status: :passed,
+              error_type: nil,
+              failure_type: nil,
+              message: nil
+            }
 
-            # Test should error (has error baseline) and it did
-            should_error and not compiled_ok ->
-              %{
-                file: original_file,
-                status: :passed,
-                error_type: nil,
-                failure_type: nil,
-                message: nil
-              }
+          # Test should pass but failed
+          not should_error and not compiled_ok ->
+            first_error = extract_first_error(output)
+            error_type = categorize_error(first_error)
+            %{
+              file: original_file,
+              status: :failed,
+              failure_type: :should_pass,
+              error_type: error_type,
+              message: first_error,
+              output: String.slice(output, 0, 1000)
+            }
 
-            # Test should pass but failed
-            not should_error and not compiled_ok ->
-              first_error = extract_first_error(output)
-              error_type = categorize_error(first_error)
-              %{
-                file: original_file,
-                status: :failed,
-                failure_type: :should_pass,
-                error_type: error_type,
-                message: first_error,
-                output: String.slice(output, 0, 1000)
-              }
-
-            # Test should error but passed
-            should_error and compiled_ok ->
-              %{
-                file: original_file,
-                status: :failed,
-                failure_type: :should_error,
-                error_type: :missing_error,
-                message: "Should produce errors but compiled successfully"
-              }
-          end
-      end
+          # Test should error but passed
+          should_error and compiled_ok ->
+            %{
+              file: original_file,
+              status: :failed,
+              failure_type: :should_error,
+              error_type: :missing_error,
+              message: "Should produce errors but compiled successfully"
+            }
+        end
     end
   end
 
