@@ -10413,6 +10413,29 @@ fn infer_tagged_template_expression_type(
   // First, infer the type of the tag expression
   let (tag_type, checker) = infer_type(checker, tte.tag)
 
+  // Resolve type arguments if provided (e.g., f<Stuff>`template`)
+  let (resolved_type_args, checker) = if tte.type_arguments.length() > 0 {
+    let mut c = checker
+    let type_args : Array[Type] = []
+    for type_arg_node in tte.type_arguments {
+      match get_type_from_type_node(c, type_arg_node) {
+        (Some(t), checker2) => {
+          type_args.push(t)
+          c = checker2
+        }
+        (None, checker2) => {
+          // Failed to resolve type argument, use any
+          let (any, checker3) = any_type(checker2)
+          type_args.push(any)
+          c = checker3
+        }
+      }
+    }
+    (Some(type_args), c)
+  } else {
+    (None, checker)
+  }
+
   // Collect template expression types for checking against call signature
   let mut checker = checker
   let expr_types : Array[(Type, SourceLocation)] = []
@@ -10444,8 +10467,48 @@ fn infer_tagged_template_expression_type(
     // For other types, try to find a call signature
     Object(obj) =>
       if obj.call_signatures.length() > 0 {
-        // Check template expression types against call signature parameters
+        // Get the first call signature
         let sig = obj.call_signatures[0]
+
+        // Apply type arguments if provided and signature has type parameters
+        let (sig, checker) = match resolved_type_args {
+          Some(type_args) if sig.type_parameters.length() > 0 => {
+            // Substitute type parameters in signature
+            let mut c = checker
+            let new_params : Array[CheckerParameter] = []
+            for param in sig.parameters {
+              let (subst_type, c2) = substitute_type_parameters(
+                c,
+                param.param_type,
+                sig.type_parameters,
+                type_args,
+              )
+              c = c2
+              new_params.push({
+                name: param.name,
+                param_type: subst_type,
+                is_optional: param.is_optional,
+                is_rest: param.is_rest,
+              })
+            }
+            // Substitute in return type
+            let (subst_return, c2) = substitute_type_parameters(
+              c,
+              sig.return_type,
+              sig.type_parameters,
+              type_args,
+            )
+            let new_sig = {
+              parameters: new_params,
+              return_type: subst_return,
+              type_parameters: [], // Type parameters are now substituted
+            }
+            (new_sig, c2)
+          }
+          _ => (sig, checker)
+        }
+
+        // Check template expression types against call signature parameters
         let checker = check_tagged_template_args(
           checker,
           sig.parameters,
@@ -10518,6 +10581,9 @@ fn check_tagged_template_args(
     // Rest parameter - all interpolation values must be assignable to the rest element type
     let rest_element_type = match last_param.param_type {
       Array(arr) => arr.element_type
+      TypeReference(tr) if tr.name == "Array" && tr.type_arguments.length() > 0 =>
+        // Array<T> syntax - extract first type argument
+        tr.type_arguments[0]
       _ => last_param.param_type
     }
     for i = 0; i < expr_types.length(); i = i + 1 {
@@ -12358,30 +12424,55 @@ fn infer_object_literal_type(
       }
       ShorthandProperty(name, loc) => {
         // Shorthand property - get type from identifier in scope
-        // First check local scopes (for function parameters and local variables)
-        // then fall back to global scope lookup
-        let (prop_type, c) = match lookup_local_variable(checker, name) {
-          Some(local_type) => (local_type, checker)
-          None =>
-            match lookup_symbol(checker, name) {
-              Some(symbol) =>
-                match checker.symbol_types.get(symbol.id) {
-                  Some(t) => (t, checker)
-                  None => any_type(checker)
-                }
-              None => {
-                // TS18004: No value exists in scope for the shorthand property
-                let checker = add_diagnostic_with_code(
-                  checker,
-                  "No value exists in scope for the shorthand property '" +
-                  name +
-                  "'. Either declare one or provide an initializer.",
-                  loc,
-                  TS18004,
-                )
-                any_type(checker)
-              }
+        // Handle 'arguments' specially (like identifier expressions do)
+        let (prop_type, c) = if name == "arguments" {
+          // Check if 'arguments' is a parameter in the current scope (shadows built-in)
+          if is_in_innermost_scope(checker, name) {
+            // arguments is a parameter name, use normal lookup
+            match lookup_local_variable(checker, name) {
+              Some(local_type) => (local_type, checker)
+              None => any_type(checker)
             }
+          } else if is_in_regular_function(checker) {
+            // Inside a regular function - 'arguments' is available
+            get_arguments_type(checker)
+          } else {
+            // TS18004: No value exists in scope for the shorthand property
+            let checker = add_diagnostic_with_code(
+              checker,
+              "No value exists in scope for the shorthand property '" +
+              name +
+              "'. Either declare one or provide an initializer.",
+              loc,
+              TS18004,
+            )
+            any_type(checker)
+          }
+        } else {
+          // Normal shorthand property - check local scopes then global scope
+          match lookup_local_variable(checker, name) {
+            Some(local_type) => (local_type, checker)
+            None =>
+              match lookup_symbol(checker, name) {
+                Some(symbol) =>
+                  match checker.symbol_types.get(symbol.id) {
+                    Some(t) => (t, checker)
+                    None => any_type(checker)
+                  }
+                None => {
+                  // TS18004: No value exists in scope for the shorthand property
+                  let checker = add_diagnostic_with_code(
+                    checker,
+                    "No value exists in scope for the shorthand property '" +
+                    name +
+                    "'. Either declare one or provide an initializer.",
+                    loc,
+                    TS18004,
+                  )
+                  any_type(checker)
+                }
+              }
+          }
         }
         properties.set(name, {
           name,

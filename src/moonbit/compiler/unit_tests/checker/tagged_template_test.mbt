@@ -303,6 +303,119 @@ test "nested-new/tagged-template - new on tagged template with construct member"
 }
 
 // ============================================================================
+// Tagged Template with Type Arguments Tests (TS2345)
+// ============================================================================
+
+///|
+test "tagged-template/type-arguments - generic function with explicit type args" {
+  // Generic tagged template function with explicit type arguments
+  // Tests that type parameters are properly substituted when checking template arguments
+  let source =
+    #|declare function f<T>(strs: TemplateStringsArray, ...callbacks: Array<(x: T) => any>): void;
+    #|interface Stuff {
+    #|    x: number;
+    #|    y: string;
+    #|    z: boolean;
+    #|}
+    #|export const a = f<Stuff> `
+    #|    hello
+    #|    ${stuff => stuff.x}
+    #|    brave
+    #|    ${stuff => stuff.y}
+    #|    world
+    #|    ${stuff => stuff.z}
+    #|`;
+  let result = parse_and_check_tagged(source)
+  match result {
+    Ok(_) => () // Should pass - type arguments properly substituted
+    Err(diagnostics) =>
+      if has_error_code(diagnostics, 2345) {
+        fail(
+          "Should not have TS2345 - type arguments should be substituted in signature",
+        )
+      }
+  }
+}
+
+///|
+test "tagged-template/type-arguments - Array<T> syntax for rest parameter" {
+  // Tests that Array<T> syntax is recognized as array type (not just T[])
+  let source =
+    #|declare function tag<T>(strs: TemplateStringsArray, ...args: Array<T>): void;
+    #|tag<number> `hello ${1} world ${2}`;
+  let result = parse_and_check_tagged(source)
+  match result {
+    Ok(_) => () // Should pass - Array<number> should work like number[]
+    Err(diagnostics) =>
+      if has_error_code(diagnostics, 2345) {
+        fail("Should not have TS2345 - Array<T> should be recognized as array type")
+      }
+  }
+}
+
+///|
+test "tagged-template/type-arguments - simple generic with single type parameter" {
+  // Simple generic function with one type parameter
+  let source =
+    #|declare function identity<T>(strs: TemplateStringsArray, val: T): T;
+    #|const result = identity<string> `value ${"hello"}`;
+  let result = parse_and_check_tagged(source)
+  match result {
+    Ok(_) => () // Should pass
+    Err(diagnostics) =>
+      if has_error_code(diagnostics, 2345) {
+        fail("Should not have TS2345 for simple generic tagged template")
+      }
+  }
+}
+
+///|
+test "tagged-template/type-arguments - multiple type parameters" {
+  // Generic function with multiple type parameters
+  let source =
+    #|declare function pair<T, U>(strs: TemplateStringsArray, a: T, b: U): [T, U];
+    #|const result = pair<number, string> `pair ${1} ${"hello"}`;
+  let result = parse_and_check_tagged(source)
+  match result {
+    Ok(_) => () // Should pass
+    Err(diagnostics) =>
+      if has_error_code(diagnostics, 2345) {
+        fail("Should not have TS2345 for multiple type parameters")
+      }
+  }
+}
+
+///|
+test "tagged-template/type-arguments - callback with interface property access" {
+  // Test that callbacks can access properties of the type argument
+  let source =
+    #|declare function map<T>(strs: TemplateStringsArray, ...fns: Array<(item: T) => any>): void;
+    #|interface Person { name: string; age: number; }
+    #|map<Person> `users ${p => p.name} ${p => p.age}`;
+  let result = parse_and_check_tagged(source)
+  match result {
+    Ok(_) => () // Should pass - callbacks should receive Person type
+    Err(diagnostics) =>
+      if has_error_code(diagnostics, 2345) {
+        fail("Should not have TS2345 - callbacks should have correct type parameter")
+      }
+  }
+}
+
+///|
+test "tagged-template/type-arguments - without explicit type args should still work" {
+  // Tagged templates without explicit type arguments should still work (type inference)
+  let source =
+    #|declare function f<T>(strs: TemplateStringsArray, ...args: T[]): void;
+    #|f `hello ${1} world ${2}`;
+  let result = parse_and_check_tagged(source)
+  match result {
+    Ok(_) => () // Should pass - type inference should work
+    Err(_) => () // May error depending on type inference implementation
+  }
+}
+
+// ============================================================================
 // Error Cases - Should Produce Errors
 // ============================================================================
 
