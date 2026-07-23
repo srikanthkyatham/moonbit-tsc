@@ -167,7 +167,7 @@ fn replace_wildcard(target : String, replacement : String) -> String {
     if target[i] == '*' {
       result.write_string(replacement)
     } else {
-      result.write_char(Int::unsafe_to_char(target[i]))
+      result.write_char(Int::unsafe_to_char(target[i].to_int()))
     }
     i = i + 1
   }
@@ -216,7 +216,7 @@ fn join_path(base : String, relative : String) -> String {
 fn find_char(s : String, c : Char) -> Int? {
   let code = c.to_int()
   for i = 0; i < s.length(); i = i + 1 {
-    if s[i] == code {
+    if s[i].to_int() == code {
       return Some(i)
     }
   }
@@ -238,7 +238,7 @@ pub fn is_absolute_specifier(specifier : String) -> Bool {
 ///|
 /// Check if a module specifier looks like a bare specifier (npm package)
 pub fn is_bare_specifier(specifier : String) -> Bool {
-  not(is_relative_specifier(specifier)) && not(is_absolute_specifier(specifier))
+  !(is_relative_specifier(specifier)) && !(is_absolute_specifier(specifier))
 }
 
 ///|
@@ -327,7 +327,7 @@ pub fn parse_package_name(specifier : String) -> ParsedPackageName {
 fn find_char_from(s : String, c : Char, start : Int) -> Int? {
   let code = c.to_int()
   for i = start; i < s.length(); i = i + 1 {
-    if s[i] == code {
+    if s[i].to_int() == code {
       return Some(i)
     }
   }
@@ -643,7 +643,7 @@ pub fn resolve_package_exports(
           }
 
           // Try with "./" prefix if subpath doesn't have it
-          if not(match_key.has_prefix("./")) && match_key != "." {
+          if !(match_key.has_prefix("./")) && match_key != "." {
             let prefixed_key = "./" + match_key
             match subpaths.get(prefixed_key) {
               Some(target) =>
@@ -701,7 +701,7 @@ fn parse_exports_field(json : String) -> ExportsField? {
           }
 
           // Check what type of value we have
-          if json[value_start] == '"'.to_int() {
+          if json[value_start].to_int() == '"'.to_int() {
             // Simple string export
             let quote_end = find_char_from(json, '"', value_start + 1)
             match quote_end {
@@ -711,7 +711,7 @@ fn parse_exports_field(json : String) -> ExportsField? {
                 Some(ExportsField::Single(path))
               }
             }
-          } else if json[value_start] == '{'.to_int() {
+          } else if json[value_start].to_int() == '{'.to_int() {
             // Object export - parse it
             match parse_exports_object(json, value_start) {
               Some(subpaths) => Some(ExportsField::Subpaths(subpaths))
@@ -732,7 +732,7 @@ fn parse_exports_object(
   json : String,
   start : Int,
 ) -> Map[String, ExportTarget]? {
-  let result : Map[String, ExportTarget] = {}
+  let result : Map[String, ExportTarget] = Map([])
   let mut pos = start + 1 // Skip opening brace
   let mut depth = 1
   while pos < json.length() && depth > 0 {
@@ -743,20 +743,20 @@ fn parse_exports_object(
     }
 
     // Check for closing brace
-    if json[pos] == '}'.to_int() {
+    if json[pos].to_int() == '}'.to_int() {
       depth = depth - 1
       pos = pos + 1
       continue
     }
 
     // Check for comma
-    if json[pos] == ','.to_int() {
+    if json[pos].to_int() == ','.to_int() {
       pos = pos + 1
       continue
     }
 
     // Parse key (should be a string)
-    if json[pos] != '"'.to_int() {
+    if json[pos].to_int() != '"'.to_int() {
       pos = pos + 1
       continue
     }
@@ -770,7 +770,7 @@ fn parse_exports_object(
 
         // Find colon
         pos = skip_whitespace(json, pos)
-        if pos >= json.length() || json[pos] != ':'.to_int() {
+        if pos >= json.length() || json[pos].to_int() != ':'.to_int() {
           break
         }
         pos = pos + 1
@@ -780,7 +780,7 @@ fn parse_exports_object(
         if pos >= json.length() {
           break
         }
-        if json[pos] == '"'.to_int() {
+        if json[pos].to_int() == '"'.to_int() {
           // String value
           let value_start = pos + 1
           let value_end = find_char_from(json, '"', value_start)
@@ -792,7 +792,7 @@ fn parse_exports_object(
               pos = ve + 1
             }
           }
-        } else if json[pos] == '{'.to_int() {
+        } else if json[pos].to_int() == '{'.to_int() {
           // Nested object (conditional exports)
           match parse_exports_object(json, pos) {
             Some(nested) => {
@@ -802,7 +802,7 @@ fn parse_exports_object(
             }
             None => break
           }
-        } else if json[pos] == 'n'.to_int() {
+        } else if json[pos].to_int() == 'n'.to_int() {
           // Possibly "null"
           if @utils.substr(json, start=pos, end=pos + 4) == "null" {
             result[key] = ExportTarget::Null
@@ -831,9 +831,9 @@ fn find_object_end(json : String, start : Int) -> Int {
   let mut pos = start
   let mut in_string = false
   while pos < json.length() {
-    let ch = json[pos]
+    let ch = json[pos].to_int()
     if in_string {
-      if ch == '"'.to_int() && (pos == 0 || json[pos - 1] != '\\'.to_int()) {
+      if ch == '"'.to_int() && (pos == 0 || json[pos - 1].to_int() != '\\'.to_int()) {
         in_string = false
       }
     } else if ch == '"'.to_int() {
@@ -856,7 +856,7 @@ fn find_object_end(json : String, start : Int) -> Int {
 fn skip_whitespace(s : String, start : Int) -> Int {
   let mut pos = start
   while pos < s.length() {
-    let ch = s[pos]
+    let ch = s[pos].to_int()
     if ch == ' '.to_int() ||
       ch == '\t'.to_int() ||
       ch == '\n'.to_int() ||
@@ -1012,7 +1012,7 @@ fn substitute_export_pattern(
     ExportTarget::Path(path) =>
       ExportTarget::Path(replace_wildcard(path, matched_part))
     ExportTarget::Conditional(conditions) => {
-      let new_conditions : Map[String, ExportTarget] = {}
+      let new_conditions : Map[String, ExportTarget] = Map([])
       for key, value in conditions {
         new_conditions[key] = substitute_export_pattern(value, matched_part)
       }
@@ -1193,7 +1193,7 @@ fn parse_imports_field(json : String) -> Map[String, ExportTarget]? {
           }
 
           // imports field must be an object
-          if json[value_start] == '{'.to_int() {
+          if json[value_start].to_int() == '{'.to_int() {
             parse_exports_object(json, value_start)
           } else {
             None
@@ -1208,7 +1208,7 @@ fn parse_imports_field(json : String) -> Map[String, ExportTarget]? {
 /// Try to match an imports pattern like "#internal/*"
 fn try_match_imports_pattern(pattern : String, specifier : String) -> String? {
   // Both pattern and specifier should start with #
-  if not(pattern.has_prefix("#")) || not(specifier.has_prefix("#")) {
+  if !(pattern.has_prefix("#")) || !(specifier.has_prefix("#")) {
     return None
   }
 

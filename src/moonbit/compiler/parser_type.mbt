@@ -441,9 +441,9 @@ fn parse_primary_type_with_readonly(
         }
         None =>
           Err(
-            add_error(
+            add_error_code(
               parser,
-              "Expected identifier after 'typeof' in type position",
+              IdentifierExpected,
               current_token(parser).location(),
             ),
           )
@@ -503,9 +503,9 @@ fn parse_primary_type_with_readonly(
           }
           _ =>
             Err(
-              add_error(
+              add_error_code(
                 parser,
-                "Expected type parameter name after 'infer'",
+                IdentifierExpected,
                 current_token(parser).location(),
               ),
             )
@@ -627,9 +627,9 @@ fn parse_primary_type_with_readonly(
           }
           None =>
             Err(
-              add_error(
+              add_error_code(
                 parser,
-                "Expected identifier after 'typeof' in type position",
+                IdentifierExpected,
                 current_token(parser).location(),
               ),
             )
@@ -771,9 +771,9 @@ fn parse_primary_type_with_readonly(
                   }
                   _ =>
                     return Err(
-                      add_error(
+                      add_error_code(
                         parser,
-                        "Expected template continuation after }",
+                        ExpectedCloseBrace,
                         current_token(parser).location(),
                       ),
                     )
@@ -781,9 +781,9 @@ fn parse_primary_type_with_readonly(
               }
               _ =>
                 return Err(
-                  add_error(
+                  add_error_code(
                     parser,
-                    "Expected '}' after type in template literal type",
+                    ExpectedCloseBrace,
                     current_token(parser).location(),
                   ),
                 )
@@ -1592,9 +1592,9 @@ fn parse_primary_type_with_readonly(
             }
             _ =>
               Err(
-                add_error(
+                add_error_code(
                   parser,
-                  "Expected '=>' in generic function type",
+                  ExpectedToken("=>"),
                   current_token(parser).location(),
                 ),
               )
@@ -1602,9 +1602,9 @@ fn parse_primary_type_with_readonly(
         }
         _ =>
           Err(
-            add_error(
+            add_error_code(
               parser,
-              "Expected '(' after type parameters in generic function type",
+              ExpectedOpenParen,
               current_token(parser).location(),
             ),
           )
@@ -1645,9 +1645,9 @@ fn parse_primary_type_with_readonly(
             }
             _ =>
               Err(
-                add_error(
+                add_error_code(
                   parser,
-                  "Expected '=>' in constructor type",
+                  ExpectedToken("=>"),
                   current_token(parser).location(),
                 ),
               )
@@ -1655,9 +1655,9 @@ fn parse_primary_type_with_readonly(
         }
         _ =>
           Err(
-            add_error(
+            add_error_code(
               parser,
-              "Expected '(' after 'new' in constructor type",
+              ExpectedOpenParen,
               current_token(parser).location(),
             ),
           )
@@ -1743,9 +1743,9 @@ fn parse_primary_type_with_readonly(
         }
         _ =>
           Err(
-            add_error(
+            add_error_code(
               parser,
-              "Expected '=>' in function type",
+              ExpectedToken("=>"),
               current_token(parser).location(),
             ),
           )
@@ -1887,7 +1887,7 @@ fn parse_primary_type_with_readonly(
         ),
       )
     }
-    _ => Err(add_error(parser, "Expected type", loc))
+    _ => Err(add_error_code(parser, TypeExpected, loc))
   }
 }
 

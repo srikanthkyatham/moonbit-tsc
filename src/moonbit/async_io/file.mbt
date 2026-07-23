@@ -5,7 +5,7 @@
 pub struct FileContent {
   path : String
   content : String
-} derive(Show)
+} derive(Debug)
 
 /// Read a file asynchronously
 pub async fn read_file(path : String) -> Result[String, String] {
@@ -98,7 +98,7 @@ pub struct FileMetadata {
   is_file : Bool
   is_directory : Bool
   modified_time : Int  // Unix timestamp
-} derive(Show)
+} derive(Debug)
 
 pub async fn get_metadata(path : String) -> Result[FileMetadata, String] {
   // TODO: Implement async metadata retrieval
@@ -123,4 +123,4 @@ pub enum FileChangeKind {
   Created
   Modified
   Deleted
-} derive(Show, Eq)
+} derive(Debug, Eq)

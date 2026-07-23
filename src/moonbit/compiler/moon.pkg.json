@@ -1,6 +1,14 @@
 {
   "is-main": false,
   "import": [
-    "moonbit-ts-compiler/utils"
+    "moonbit-ts-compiler/utils",
+    "moonbitlang/core/hashmap",
+    "moonbitlang/core/hashset",
+    "moonbitlang/core/json",
+    "moonbitlang/core/string"
+  ],
+  "test-import": [
+    "moonbitlang/core/test",
+    "moonbitlang/core/debug"
   ]
 }

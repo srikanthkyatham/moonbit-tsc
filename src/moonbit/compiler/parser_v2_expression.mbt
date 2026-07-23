@@ -369,7 +369,6 @@ fn parse_colon_property_value(
   parser : Parser,
   name : String,
   start_loc : SourceLocation,
-  error_context : String,
 ) -> Result[(ObjectProperty, Parser), Parser] {
   match current_token(parser) {
     Colon(_) => {
@@ -384,9 +383,9 @@ fn parse_colon_property_value(
     }
     _ =>
       Err(
-        add_error(
+        add_error_code(
           parser,
-          "Expected ':' after " + error_context,
+          ExpectedColon,
           current_token(parser).location(),
         ),
       )
@@ -485,9 +484,9 @@ fn parse_async_arrow_with_params(
     }
     _ =>
       Err(
-        add_error(
+        add_error_code(
           parser,
-          "Expected '=>' after async arrow function parameters",
+          ExpectedToken("=>"),
           current_token(parser).location(),
         ),
       )
@@ -526,9 +525,9 @@ fn parse_async_arrow_single_param(
     }
     _ =>
       Err(
-        add_error(
+        add_error_code(
           parser,
-          "Expected '=>' after async identifier",
+          ExpectedToken("=>"),
           current_token(parser).location(),
         ),
       )

@@ -15,7 +15,7 @@
 pub struct TypeComparisonId {
   source_id : String
   target_id : String
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 /// Create a comparison ID from two types
@@ -119,16 +119,16 @@ pub struct RecursiveResolutionContext {
   current_depth : Int
   /// Cache of already resolved types
   resolved_cache : Map[String, TypeV2]
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Create a new recursive resolution context
 pub fn RecursiveResolutionContext::new() -> RecursiveResolutionContext {
   {
-    resolving: Map::new(),
+    resolving: Map([]),
     max_depth: 50, // TypeScript uses ~50 for recursion limit
     current_depth: 0,
-    resolved_cache: Map::new(),
+    resolved_cache: Map([]),
   }
 }
 
@@ -220,13 +220,13 @@ pub struct RecursiveComparisonContext {
   max_depth : Int
   /// Current comparison depth
   current_depth : Int
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Create a new recursive comparison context
 pub fn RecursiveComparisonContext::new() -> RecursiveComparisonContext {
   {
-    comparing: Map::new(),
+    comparing: Map([]),
     max_depth: 100, // Higher limit for comparisons
     current_depth: 0,
   }
@@ -451,7 +451,7 @@ fn resolve_type_impl(
     }
     TObject(obj) => {
       // Resolve field types
-      let resolved_fields : Map[String, FieldInfoV2] = Map::new()
+      let resolved_fields : Map[String, FieldInfoV2] = Map([])
       let mut current_ctx = ctx
       for entry in obj.fields.iter() {
         let (name, field) = entry
@@ -644,7 +644,7 @@ fn is_subtype_impl(
       } else {
         let mut all_match = true
         for i = 0; i < src_args.length(); i = i + 1 {
-          if not(is_subtype_with_context(src_args[i], tgt_args[i], ctx)) {
+          if !(is_subtype_with_context(src_args[i], tgt_args[i], ctx)) {
             all_match = false
             break
           }
@@ -659,10 +659,10 @@ fn is_subtype_impl(
       }
       for i = 0; i < tgt_elems.length(); i = i + 1 {
         if i >= src_elems.length() {
-          if not(tgt_elems[i].optional) {
+          if !(tgt_elems[i].optional) {
             return false
           }
-        } else if not(
+        } else if !(
             is_subtype_with_context(src_elems[i].ty, tgt_elems[i].ty, ctx),
           ) {
           return false
@@ -702,10 +702,10 @@ fn is_object_subtype_recursive(
     let (name, tgt_field) = entry
     match source.fields.get(name) {
       Some(src_field) =>
-        if not(is_subtype_with_context(src_field.ty, tgt_field.ty, ctx)) {
+        if !(is_subtype_with_context(src_field.ty, tgt_field.ty, ctx)) {
           return false
         }
-      None => if not(tgt_field.optional) { return false }
+      None => if !(tgt_field.optional) { return false }
     }
   }
   true
@@ -722,7 +722,7 @@ fn is_function_subtype_recursive(
   // Parameter count compatibility
   let min_src_params = source.params
     .iter()
-    .filter(fn(p) { not(p.optional) })
+    .filter(fn(p) { !(p.optional) })
     .count()
   if min_src_params > target.params.length() {
     return false
@@ -732,7 +732,7 @@ fn is_function_subtype_recursive(
   for i = 0; i < target.params.length(); i = i + 1 {
     if i < source.params.length() {
       // Target param must be subtype of source param (contravariant)
-      if not(
+      if !(
           is_subtype_with_context(target.params[i].ty, source.params[i].ty, ctx),
         ) {
         return false
@@ -754,7 +754,7 @@ pub enum InfiniteTypeResult {
   Safe // Type is safe, no infinite expansion
   Infinite(String) // Type would expand infinitely with reason
   DepthLimitReached // Couldn't determine, depth limit reached
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Check if a type alias would cause infinite expansion
@@ -763,7 +763,7 @@ pub fn check_infinite_expansion(
   type_body : TypeV2,
   _type_params : Array[String],
 ) -> InfiniteTypeResult {
-  let visited : Map[String, Bool] = Map::new()
+  let visited : Map[String, Bool] = Map([])
   check_expansion_impl(type_name, type_body, visited, 0, 50)
 }
 
@@ -934,17 +934,17 @@ fn check_expansion_impl(
 pub struct MutualRecursionInfo {
   is_mutually_recursive : Bool
   cycle_path : Array[String] // Names involved in the cycle
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Check for mutual recursion between type aliases
 pub fn check_mutual_recursion(
   type_aliases : Map[String, TypeV2],
 ) -> Map[String, MutualRecursionInfo] {
-  let results : Map[String, MutualRecursionInfo] = Map::new()
+  let results : Map[String, MutualRecursionInfo] = Map([])
   for entry in type_aliases.iter() {
     let (name, _) = entry
-    let visited : Map[String, Bool] = Map::new()
+    let visited : Map[String, Bool] = Map([])
     let path : Array[String] = []
     let info = find_type_cycle(name, type_aliases, visited, path)
     results.set(name, info)

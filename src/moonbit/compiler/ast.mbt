@@ -132,7 +132,7 @@ pub enum Node {
 
   // JSDoc
   JSDocComment(JSDocComment)
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Compiler directives parsed from comments (// @directive: value)
@@ -143,7 +143,7 @@ pub struct CompilerDirectives {
   no_emit : Bool // @noEmit: true
   isolated_modules : Bool // @isolatedModules: true
   no_types_and_symbols : Bool // @noTypesAndSymbols: true
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Default compiler directives (all false/none)
@@ -164,14 +164,14 @@ pub struct TestVirtualFile {
   filename : String // The filename from @filename directive
   content : String // The source code for this file
   start_line : Int // Starting line in original source
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Collection of virtual files from a test with @filename directives
 pub struct TestVirtualFileSet {
   files : Array[TestVirtualFile] // All virtual files
   global_directives : CompilerDirectives // Directives that apply to all files
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Source file - root of AST
@@ -190,7 +190,7 @@ pub struct SourceFile {
   compiler_directives : CompilerDirectives
   /// Parse diagnostics (scanner and parser errors/warnings) - allows type checking to continue even with parse errors
   parse_diagnostics : Array[Diagnostic]
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Variable statement (let/const/var)
@@ -200,7 +200,7 @@ pub struct VariableStatement {
   is_let : Bool
   modifiers : Array[Modifier]
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 pub struct VariableDeclaration {
@@ -208,7 +208,7 @@ pub struct VariableDeclaration {
   type_annotation : Node?
   initializer : Node?
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Function declaration
@@ -222,7 +222,7 @@ pub struct FunctionDeclaration {
   is_generator : Bool
   modifiers : Array[Modifier]
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Type parameter (generic)
@@ -232,7 +232,7 @@ pub struct TypeParameter {
   default : Node?
   is_const : Bool // `const` type parameter (TS 5.0+): function foo<const T>()
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Class declaration
@@ -245,21 +245,21 @@ pub struct ClassDeclaration {
   decorators : Array[Node]
   modifiers : Array[Modifier]
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 pub struct HeritageClause {
   kind : HeritageKind
   types : Array[Node]
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 #valtype
 pub enum HeritageKind {
   Extends
   Implements
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 /// Interface declaration
@@ -270,7 +270,7 @@ pub struct InterfaceDeclaration {
   members : Array[Node]
   modifiers : Array[Modifier]
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Type alias
@@ -280,7 +280,7 @@ pub struct TypeAliasDeclaration {
   type_node : Node
   modifiers : Array[Modifier]
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Enum declaration
@@ -291,14 +291,14 @@ pub struct EnumDeclaration {
   is_const : Bool
   modifiers : Array[Modifier]
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 pub struct EnumMember {
   name : String
   initializer : Node?
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Module/namespace declaration
@@ -309,7 +309,7 @@ pub struct ModuleDeclaration {
   is_global_augmentation : Bool // True for "declare global { }"
   modifiers : Array[Modifier]
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Import declaration
@@ -318,7 +318,7 @@ pub struct ImportDeclaration {
   module_specifier : String
   is_type_only : Bool // True for "import type { ... }" syntax
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Import equals declaration: import X = M.N or import X = require("module")
@@ -328,27 +328,27 @@ pub struct ImportEqualsDeclaration {
   is_export : Bool // True for "export import X = N"
   is_type_only : Bool // True for "import type X = require(...)"
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Module reference in import equals declaration
 pub enum ModuleReference {
   EntityName(Node) // M.N - Identifier or PropertyAccessExpression
   ExternalModuleReference(String, SourceLocation) // require("module")
-} derive(Show)
+} derive(Debug)
 
 ///|
 pub struct ImportClause {
   name : String? // Default import
   named_bindings : NamedImports?
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 pub enum NamedImports {
   NamespaceImport(String, SourceLocation) // * as name
   NamedImports(Array[ImportSpecifier], SourceLocation)
-} derive(Show)
+} derive(Debug)
 
 ///|
 pub struct ImportSpecifier {
@@ -356,7 +356,7 @@ pub struct ImportSpecifier {
   name : String
   is_type_only : Bool // For "import { type foo }" inline type import
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Export declaration
@@ -365,13 +365,13 @@ pub struct ExportDeclaration {
   module_specifier : String?
   is_type_only : Bool
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 pub enum NamedExports {
   NamedExports(Array[ExportSpecifier], SourceLocation)
   NamespaceExport(String, SourceLocation) // export * as ns from 'mod'
-} derive(Show)
+} derive(Debug)
 
 ///|
 pub struct ExportSpecifier {
@@ -379,14 +379,14 @@ pub struct ExportSpecifier {
   name : String
   is_type_only : Bool // For "export { type foo }" inline type export
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 pub struct ExportAssignment {
   expression : Node
   is_export_equals : Bool
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Control flow statements
@@ -395,21 +395,21 @@ pub struct IfStatement {
   then_statement : Node
   else_statement : Node?
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 pub struct SwitchStatement {
   expression : Node
   cases : Array[CaseClause]
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 pub struct CaseClause {
   expression : Node? // None for default
   statements : Array[Node]
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 pub struct ForStatement {
@@ -418,7 +418,7 @@ pub struct ForStatement {
   incrementor : Node?
   statement : Node
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 pub struct ForInStatement {
@@ -426,7 +426,7 @@ pub struct ForInStatement {
   expression : Node
   statement : Node
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 pub struct ForOfStatement {
@@ -435,45 +435,45 @@ pub struct ForOfStatement {
   expression : Node
   statement : Node
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 pub struct WhileStatement {
   condition : Node
   statement : Node
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 pub struct DoWhileStatement {
   statement : Node
   condition : Node
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 pub struct BreakStatement {
   label : String?
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 pub struct ContinueStatement {
   label : String?
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 pub struct ReturnStatement {
   expression : Node?
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 pub struct ThrowStatement {
   expression : Node
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 pub struct TryStatement {
@@ -481,7 +481,7 @@ pub struct TryStatement {
   catch_clause : CatchClause?
   finally_block : Node?
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 pub struct CatchClause {
@@ -489,44 +489,44 @@ pub struct CatchClause {
   type_annotation : Node? // Optional type annotation: catch (e: unknown)
   block : Node
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Other statements
 pub struct BlockStatement {
   statements : Array[Node]
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 pub struct ExpressionStatement {
   expression : Node
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 pub struct EmptyStatement {
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 pub struct LabeledStatement {
   label : String
   statement : Node
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 pub struct WithStatement {
   expression : Node
   statement : Node
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 pub struct DebuggerStatement {
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Binary expressions
@@ -535,7 +535,7 @@ pub struct BinaryExpression {
   operator : BinaryOperator
   right : Node
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 #valtype
@@ -593,7 +593,7 @@ pub enum BinaryOperator {
   In
   InstanceOf
   Comma
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 /// Unary expressions
@@ -602,7 +602,7 @@ pub struct UnaryExpression {
   operand : Node
   is_prefix : Bool
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 #valtype
@@ -616,7 +616,7 @@ pub enum UnaryOperator {
   TypeOf
   Void
   Delete
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 /// Conditional (ternary) expression
@@ -625,7 +625,7 @@ pub struct ConditionalExpression {
   when_true : Node
   when_false : Node
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Call expression
@@ -634,7 +634,7 @@ pub struct CallExpression {
   type_arguments : Array[Node]
   arguments : Array[Node]
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// New expression
@@ -643,7 +643,7 @@ pub struct NewExpression {
   type_arguments : Array[Node]
   arguments : Array[Node]?
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Property access (obj.property)
@@ -651,7 +651,7 @@ pub struct PropertyAccessExpression {
   expression : Node
   name : String
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Element access (obj[element])
@@ -659,7 +659,7 @@ pub struct ElementAccessExpression {
   expression : Node
   argument_expression : Node
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Arrow function
@@ -670,7 +670,7 @@ pub struct ArrowFunction {
   body : Node // Block or expression
   is_async : Bool
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Function expression
@@ -683,21 +683,21 @@ pub struct FunctionExpression {
   is_async : Bool
   is_generator : Bool
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Array literal [1, 2, 3]
 pub struct ArrayLiteralExpression {
   elements : Array[Node?] // None for holes
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Object literal { key: value }
 pub struct ObjectLiteralExpression {
   properties : Array[ObjectProperty]
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 pub enum ObjectProperty {
@@ -711,14 +711,14 @@ pub enum ObjectProperty {
   ComputedMethodDeclaration(Node, FunctionExpression, SourceLocation) // [expression]() { }
   ComputedGetAccessor(Node, FunctionExpression, SourceLocation) // get [expression]() { }
   ComputedSetAccessor(Node, FunctionExpression, SourceLocation) // set [expression]() { }
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Parenthesized expression
 pub struct ParenthesizedExpression {
   expression : Node
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Template expression
@@ -726,14 +726,14 @@ pub struct TemplateExpression {
   head : String
   template_spans : Array[TemplateSpan]
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 pub struct TemplateSpan {
   expression : Node
   literal : String
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Tagged template expression: tag`template` or tag<T>`template`
@@ -742,7 +742,7 @@ pub struct TaggedTemplateExpression {
   template : Node // The template literal (TemplateExpression)
   type_arguments : Array[Node] // Optional type arguments for generic tagged templates (e.g., tag<T>`...`)
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Type assertion (as)
@@ -750,7 +750,7 @@ pub struct AsExpression {
   expression : Node
   type_node : Node
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Satisfies expression (expr satisfies Type)
@@ -758,7 +758,7 @@ pub struct SatisfiesExpression {
   expression : Node
   type_node : Node
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Type assertion (<Type>expr)
@@ -766,21 +766,21 @@ pub struct TypeAssertionExpression {
   type_node : Node
   expression : Node
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Non-null assertion (expr!)
 pub struct NonNullExpression {
   expression : Node
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Spread (...expr)
 pub struct SpreadExpression {
   expression : Node
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Optional chain expression (obj?.prop, func?.(), arr?.[0])
@@ -788,7 +788,7 @@ pub struct OptionalChain {
   expression : Node
   chain : OptionalChainKind
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Kind of optional chain
@@ -796,14 +796,14 @@ pub enum OptionalChainKind {
   Property(String) // obj?.prop
   Call(Array[Node]) // func?.()
   Element(Node) // arr?.[0]
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Await expression (await expr)
 pub struct AwaitExpression {
   expression : Node
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Yield expression (yield expr, yield* expr)
@@ -811,28 +811,28 @@ pub struct YieldExpression {
   expression : Node?
   is_delegate : Bool // true for yield*
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Dynamic import expression: import('./module')
 pub struct ImportExpression {
   source : Node // The module specifier (usually a StringLiteral or expression)
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Array binding pattern for destructuring ([a, b])
 pub struct ArrayBindingPattern {
   elements : Array[Node?] // Can be Identifier, ArrayBindingPattern, ObjectBindingPattern, or None for holes
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Object binding pattern for destructuring ({ x, y })
 pub struct ObjectBindingPattern {
   properties : Array[BindingElement]
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Binding element in object pattern
@@ -841,59 +841,59 @@ pub struct BindingElement {
   name : Node // The binding name (Identifier or nested pattern)
   initializer : Node? // Default value initializer (e.g., { x = 5 })
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Primary expressions
 pub struct Identifier {
   name : String
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 pub struct NumericLiteral {
   value : String
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 pub struct BigIntLiteral {
   value : String
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 pub struct StringLiteral {
   value : String
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 pub struct BooleanLiteral {
   value : Bool
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 pub struct NullLiteral {
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 pub struct RegExpLiteral {
   pattern : String // Full regex including /pattern/flags
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 pub struct ThisExpression {
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 pub struct SuperExpression {
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Meta property (import.meta or new.target)
@@ -901,14 +901,14 @@ pub struct MetaProperty {
   keyword_kind : MetaPropertyKind // import or new
   name : String // meta or target
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 #valtype
 pub enum MetaPropertyKind {
   ImportMeta // import.meta
   NewTarget // new.target
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 /// Type nodes
@@ -916,19 +916,19 @@ pub struct TypeReference {
   type_name : String
   type_arguments : Array[Node]
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 pub struct UnionType {
   types : Array[Node]
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 pub struct IntersectionType {
   types : Array[Node]
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 pub struct FunctionType {
@@ -936,7 +936,7 @@ pub struct FunctionType {
   parameters : Array[Node]
   return_type : Node
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Constructor type: new (params) => ReturnType
@@ -945,33 +945,33 @@ pub struct ConstructorType {
   parameters : Array[Node]
   return_type : Node
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 pub struct ArrayType {
   element_type : Node
   is_readonly : Bool
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 pub struct TupleType {
   element_types : Array[Node]
   is_readonly : Bool
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 pub struct LiteralType {
   literal : Node
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 pub struct KeywordType {
   kind : TypeKeyword
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 #valtype
@@ -989,7 +989,7 @@ pub enum TypeKeyword {
   BigInt
   Object
   Const // For "as const" assertions
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 /// Modifier for mapped types (+, -, or unchanged)
@@ -997,7 +997,7 @@ pub enum MappedTypeModifier {
   Unchanged // No modifier
   Plus // +readonly, +?
   Minus // -readonly, -?
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 pub struct MappedType {
@@ -1007,7 +1007,7 @@ pub struct MappedType {
   readonly_modifier : MappedTypeModifier
   optional_modifier : MappedTypeModifier
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 pub struct ConditionalType {
@@ -1016,28 +1016,28 @@ pub struct ConditionalType {
   true_type : Node
   false_type : Node
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 pub struct IndexedAccessType {
   object_type : Node
   index_type : Node
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Optional type (for tuple optional elements like string? in [number, string?])
 pub struct OptionalType {
   element_type : Node
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Rest type (for tuple rest elements like ...number[] in [string, ...number[]])
 pub struct RestType {
   element_type : Node
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Type predicate for type guards: x is string, asserts x is string
@@ -1046,7 +1046,7 @@ pub struct TypePredicate {
   type_node : Node? // The type in "x is type" - None for "asserts x"
   is_asserts : Bool // True for "asserts x" or "asserts x is type"
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Named tuple member (labeled element in tuple type): [x: number, y: string]
@@ -1055,7 +1055,7 @@ pub struct NamedTupleMember {
   element_type : Node
   is_optional : Bool // name?: type
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Type operator kind (keyof, typeof, unique, readonly)
@@ -1064,7 +1064,7 @@ pub enum TypeOperatorKind {
   TypeOf
   Unique // For "unique symbol"
   Readonly
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 /// Type operator: keyof T, typeof value, unique symbol, readonly T
@@ -1072,14 +1072,14 @@ pub struct TypeOperator {
   operator : TypeOperatorKind
   type_node : Node
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Infer type for conditional types: infer R
 pub struct InferType {
   type_parameter : String
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Template literal type: `on${string}`, `color-${Color}`
@@ -1087,21 +1087,21 @@ pub struct TemplateLiteralType {
   head : String // Text before first interpolation
   spans : Array[TemplateLiteralTypeSpan] // Interpolated types and tail text
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Span in a template literal type
 pub struct TemplateLiteralTypeSpan {
   type_node : Node // The interpolated type
   literal : String // Text after the interpolation
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Object type literal: { prop: type; [key: string]: type }
 pub struct TypeLiteral {
   members : Array[Node] // PropertySignature, IndexSignatureDeclaration, MethodSignature, etc.
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Property in type literal: name: type or name?: type
@@ -1111,14 +1111,14 @@ pub struct TypeLiteralProperty {
   is_optional : Bool
   is_readonly : Bool
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Parenthesized type: (type)
 pub struct ParenthesizedType {
   type_node : Node
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Parameter
@@ -1132,7 +1132,7 @@ pub struct Parameter {
   decorators : Array[Node]
   modifiers : Array[Modifier]
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Class members
@@ -1145,7 +1145,7 @@ pub struct PropertyDeclaration {
   decorators : Array[Node]
   modifiers : Array[Modifier]
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 pub struct IndexSignatureDeclaration {
@@ -1154,7 +1154,7 @@ pub struct IndexSignatureDeclaration {
   return_type : Node
   is_readonly : Bool
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 pub struct MethodDeclaration {
@@ -1170,7 +1170,7 @@ pub struct MethodDeclaration {
   is_generator : Bool
   is_optional : Bool
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 pub struct ConstructorDeclaration {
@@ -1178,7 +1178,7 @@ pub struct ConstructorDeclaration {
   body : Node?
   decorators : Array[Node]
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 pub struct GetAccessor {
@@ -1189,7 +1189,7 @@ pub struct GetAccessor {
   decorators : Array[Node]
   modifiers : Array[Modifier]
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 pub struct SetAccessor {
@@ -1200,7 +1200,7 @@ pub struct SetAccessor {
   decorators : Array[Node]
   modifiers : Array[Modifier]
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Static initialization block (ES2022)
@@ -1208,14 +1208,14 @@ pub struct SetAccessor {
 pub struct StaticBlock {
   body : Node // BlockStatement
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Decorator (@decorator or @decorator(args))
 pub struct Decorator {
   expression : Node // The decorator expression (identifier or call expression)
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Auto-accessor (TS 4.9+)
@@ -1227,7 +1227,7 @@ pub struct AutoAccessor {
   decorators : Array[Node]
   modifiers : Array[Modifier]
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Using statement (TS 5.2+)
@@ -1237,7 +1237,7 @@ pub struct UsingStatement {
   declarations : Array[VariableDeclaration]
   is_await : Bool // `await using` vs `using`
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 // ============================================================================
 // JSX Types
@@ -1250,7 +1250,7 @@ pub struct JsxElement {
   children : Array[JsxChild]
   closing_element : Node? // JsxClosingElement
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// JSX self-closing element: <tag ... />
@@ -1259,7 +1259,7 @@ pub struct JsxSelfClosingElement {
   type_arguments : Array[Node]
   attributes : Array[JsxAttribute]
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// JSX fragment: <>...</>
@@ -1268,7 +1268,7 @@ pub struct JsxFragment {
   children : Array[JsxChild]
   closing_fragment : SourceLocation
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// JSX opening element: <tag ...>
@@ -1277,21 +1277,21 @@ pub struct JsxOpeningElement {
   type_arguments : Array[Node]
   attributes : Array[JsxAttribute]
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// JSX closing element: </tag>
 pub struct JsxClosingElement {
   tag_name : JsxTagName
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// JSX expression container: {expression}
 pub struct JsxExpression {
   expression : Node? // None for empty expression {}
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// JSX tag name types
@@ -1302,7 +1302,7 @@ pub enum JsxTagName {
   NamespacedName(String, String, SourceLocation)
   /// Property access: Module.Component.SubComponent
   PropertyAccess(Node, String, SourceLocation)
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// JSX attribute types
@@ -1311,7 +1311,7 @@ pub enum JsxAttribute {
   Attribute(JsxAttributeNode)
   /// Spread attribute: {...props}
   SpreadAttribute(Node, SourceLocation)
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// JSX attribute node
@@ -1319,7 +1319,7 @@ pub struct JsxAttributeNode {
   name : JsxAttributeName
   initializer : JsxAttributeValue? // None for boolean attributes like "disabled"
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// JSX attribute name
@@ -1328,7 +1328,7 @@ pub enum JsxAttributeName {
   Identifier(String, SourceLocation)
   /// Namespaced name: xlink:href
   NamespacedName(String, String, SourceLocation)
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// JSX attribute value
@@ -1339,7 +1339,7 @@ pub enum JsxAttributeValue {
   Expression(Node, SourceLocation)
   /// Nested JSX element
   Element(Node, SourceLocation)
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// JSX child types
@@ -1352,7 +1352,7 @@ pub enum JsxChild {
   Element(Node, SourceLocation)
   /// Fragment
   Fragment(Node, SourceLocation)
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// JSDoc comment block
@@ -1360,7 +1360,7 @@ pub struct JSDocComment {
   comment : String // Full comment text
   tags : Array[JSDocTag] // Parsed tags
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// JSDoc tag types
@@ -1409,7 +1409,7 @@ pub enum JSDocTag {
   Virtual(SourceLocation)
   /// Generic/unknown tag
   Unknown(String, String, SourceLocation) // tag name, content, location
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// JSDoc @param tag
@@ -1419,7 +1419,7 @@ pub struct JSDocParam {
   description : String
   is_optional : Bool
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// JSDoc @returns tag
@@ -1427,14 +1427,14 @@ pub struct JSDocReturns {
   type_annotation : String?
   description : String
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// JSDoc @type tag
 pub struct JSDocTypeTag {
   type_annotation : String
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// JSDoc @typedef tag
@@ -1443,7 +1443,7 @@ pub struct JSDocTypeDef {
   type_annotation : String
   description : String
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// JSDoc @property tag
@@ -1453,7 +1453,7 @@ pub struct JSDocProperty {
   description : String
   is_optional : Bool
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// JSDoc @callback tag
@@ -1462,7 +1462,7 @@ pub struct JSDocCallback {
   params : Array[JSDocParam]
   returns : JSDocReturns?
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// JSDoc @template tag
@@ -1470,28 +1470,28 @@ pub struct JSDocTemplate {
   type_params : Array[String]
   constraint : String?
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// JSDoc @deprecated tag
 pub struct JSDocDeprecated {
   description : String
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// JSDoc @example tag
 pub struct JSDocExample {
   content : String
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// JSDoc @see tag
 pub struct JSDocSee {
   reference : String
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// JSDoc @throws tag
@@ -1499,28 +1499,28 @@ pub struct JSDocThrows {
   type_annotation : String?
   description : String
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// JSDoc @author tag
 pub struct JSDocAuthor {
   name : String
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// JSDoc @since tag
 pub struct JSDocSince {
   version : String
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// JSDoc @default tag
 pub struct JSDocDefault {
   value : String
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 // ============================================================================
 // Incremental Parsing Support
@@ -1531,14 +1531,14 @@ pub struct JSDocDefault {
 pub struct TextChangeRange {
   span : TextSpan // The span of text that was changed
   new_length : Int // Length of the new text that replaced the span
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Represents a span of text in the source
 pub struct TextSpan {
   start : Int // Start position (character offset)
   length : Int // Length of the span
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Create a new TextSpan
@@ -1584,7 +1584,7 @@ pub fn TextChangeRange::delta(self : TextChangeRange) -> Int {
 pub struct IncrementalParseResult {
   source_file : Node // The parsed source file
   affected_range : TextSpan? // The range that was re-parsed (None if full reparse)
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Modifiers
@@ -1601,7 +1601,7 @@ pub enum Modifier {
   Default
   Declare
   Const
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 /// Helper to get location from any node

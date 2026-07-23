@@ -60,21 +60,21 @@ pub enum Type {
 
   // Error type (for type errors)
   Error(TypeInfo)
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Type information (common to all types)
 pub struct TypeInfo {
   id : Int
   flags : TypeFlags
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Type flags
 pub struct TypeFlags {
   is_readonly : Bool
   is_optional : Bool
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Create default type flags
@@ -91,7 +91,7 @@ pub struct ObjectType {
   index_signatures : Array[IndexSignature]
   info : TypeInfo
   class_name : String? // For class instances, the name of the class they came from
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Property signature
@@ -100,7 +100,7 @@ pub struct PropertySignature {
   prop_type : Type
   is_optional : Bool
   is_readonly : Bool
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Function type (for type checking)
@@ -108,7 +108,7 @@ pub struct CheckerFunctionType {
   parameters : Array[CheckerParameter]
   return_type : Type
   info : TypeInfo
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Function parameter (for type checking)
@@ -117,7 +117,7 @@ pub struct CheckerParameter {
   param_type : Type
   is_optional : Bool
   is_rest : Bool
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Signature (for call/construct signatures)
@@ -125,7 +125,7 @@ pub struct CheckerSignature {
   parameters : Array[CheckerParameter]
   return_type : Type
   type_parameters : Array[CheckerTypeParameter]
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Index signature
@@ -134,7 +134,7 @@ pub struct IndexSignature {
   parameter_type : Type
   return_type : Type
   is_readonly : Bool
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Type parameter (generic) - for type checking
@@ -142,21 +142,21 @@ pub struct CheckerTypeParameter {
   name : String
   constraint : Type?
   default_type : Type?
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Union type info
 pub struct CheckerUnionType {
   types : Array[Type]
   info : TypeInfo
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Array type info
 pub struct CheckerArrayType {
   element_type : Type
   info : TypeInfo
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Type reference (references to named types)
@@ -164,21 +164,21 @@ pub struct TypeReferenceType {
   name : String
   type_arguments : Array[Type]
   info : TypeInfo
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Intersection type info (A & B)
 pub struct CheckerIntersectionType {
   types : Array[Type]
   info : TypeInfo
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Tuple type info ([T1, T2, T3])
 pub struct CheckerTupleType {
   element_types : Array[TupleElement]
   info : TypeInfo
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Tuple element (can be optional or rest)
@@ -187,7 +187,7 @@ pub struct TupleElement {
   is_optional : Bool
   is_rest : Bool
   label : String? // Named tuple elements
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Conditional type info (T extends U ? X : Y)
@@ -197,7 +197,7 @@ pub struct CheckerConditionalType {
   true_type : Type
   false_type : Type
   info : TypeInfo
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Mapped type info ({ [K in keyof T]: T[K] })
@@ -208,7 +208,7 @@ pub struct CheckerMappedType {
   readonly_modifier : MappedModifier
   optional_modifier : MappedModifier
   info : TypeInfo
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Modifier for mapped types (+, -, or none)
@@ -216,7 +216,7 @@ pub enum MappedModifier {
   Unchanged // No modifier
   Add // +readonly, +?
   Remove // -readonly, -?
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 /// Template literal type info (`${string}-${number}`)
@@ -224,7 +224,7 @@ pub struct CheckerTemplateLiteralType {
   texts : Array[String] // Static text parts
   types : Array[Type] // Interpolated types
   info : TypeInfo
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Index access type info (T[K])
@@ -233,21 +233,21 @@ pub struct CheckerIndexAccessType {
   index_type : Type
   info : TypeInfo
   is_keyof : Bool // True if this represents "keyof T" (T is object_type)
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Infer type placeholder (infer R)
 pub struct CheckerInferType {
   type_parameter_name : String
   info : TypeInfo
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Type narrowing information for a variable
 pub struct NarrowedType {
   original_type : Type
   narrowed_type : Type
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Type guard information
@@ -255,7 +255,7 @@ pub struct TypeGuardInfo {
   parameter_name : String
   type_when_true : Type?
   type_when_false : Type?
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Type checker state
@@ -306,7 +306,7 @@ pub struct TypeChecker {
   import_helpers : Bool // @importHelpers compiler directive - affects TS2807 validation
   in_namespace_body : Bool // Tracks if we're in a namespace/module body (for TS2331)
   class_type_parameters : Array[String] // Current class type parameter names (for TS2302 static member validation)
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Local scope for tracking variable types in function bodies
@@ -315,7 +315,7 @@ pub struct LocalScope {
   function_vars : Map[String, Type] // Function-scoped variables (var declarations)
   const_vars : @hashset.HashSet[String] // Set of const variable names
   is_function_scope : Bool // True if this is a function scope (for var hoisting)
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Result of type checking
@@ -328,7 +328,7 @@ pub struct TypedFile {
   statements : Array[Node]
   types : Map[String, Type]
   diagnostics : Array[Diagnostic]
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Create a new type checker
@@ -350,11 +350,11 @@ pub fn TypeChecker::new_with_options(
 ) -> TypeChecker {
   {
     next_type_id: 0,
-    type_cache: Map::new(),
-    type_parameter_constraints: Map::new(),
-    symbol_types: Map::new(),
-    node_types: Map::new(),
-    narrowed_types: Map::new(),
+    type_cache: Map([]),
+    type_parameter_constraints: Map([]),
+    symbol_types: Map([]),
+    node_types: Map([]),
+    narrowed_types: Map([]),
     diagnostics: [],
     file_path,
     global_scope,
@@ -362,7 +362,7 @@ pub fn TypeChecker::new_with_options(
     current_this_type: None,
     no_unchecked_indexed_access,
     target,
-    resolving_symbols: Map::new(),
+    resolving_symbols: Map([]),
     arrow_function_depth: 0,
     async_function_depth: 0,
     generator_function_depth: 0,
@@ -373,9 +373,9 @@ pub fn TypeChecker::new_with_options(
     generator_yield_type: None,
     collected_yield_types: [],
     collected_return_types: [],
-    checked_function_bodies: Map::new(),
-    block_scoped_decls: Map::new(),
-    uninitialized_vars: Map::new(),
+    checked_function_bodies: Map([]),
+    block_scoped_decls: Map([]),
+    uninitialized_vars: Map([]),
     in_static_context: false,
     in_constructor: false,
     in_class_body: false,
@@ -388,13 +388,13 @@ pub fn TypeChecker::new_with_options(
       Position::{ line: 0, column: 0, offset: 0 },
     ),
     external_registry: None,
-    import_map: Map::new(),
-    namespace_symbols: Map::new(),
+    import_map: Map([]),
+    namespace_symbols: Map([]),
     in_destructuring_pattern: false,
     in_expression_statement: false,
     no_implicit_any,
-    implicit_any_array_vars: @hashset.new(),
-    inferring_variables: @hashset.new(),
+    implicit_any_array_vars: @hashset.HashSet([]),
+    inferring_variables: @hashset.HashSet([]),
     default_export_locations: [],
     import_helpers: false, // Default to false, can be set later from compiler directives
     in_namespace_body: false,
@@ -460,9 +460,9 @@ fn apply_global_augmentations_to_checker(
 fn push_local_scope(checker : TypeChecker) -> TypeChecker {
   let scopes = checker.local_scopes
   scopes.push(LocalScope::{
-    variables: Map::new(),
-    function_vars: Map::new(),
-    const_vars: @hashset.new(),
+    variables: Map([]),
+    function_vars: Map([]),
+    const_vars: @hashset.HashSet([]),
     is_function_scope: false,
   })
   { ..checker, local_scopes: scopes }
@@ -473,9 +473,9 @@ fn push_local_scope(checker : TypeChecker) -> TypeChecker {
 fn push_function_scope(checker : TypeChecker) -> TypeChecker {
   let scopes = checker.local_scopes
   scopes.push(LocalScope::{
-    variables: Map::new(),
-    function_vars: Map::new(),
-    const_vars: @hashset.new(),
+    variables: Map([]),
+    function_vars: Map([]),
+    const_vars: @hashset.HashSet([]),
     is_function_scope: true,
   })
   { ..checker, local_scopes: scopes }
@@ -594,7 +594,7 @@ fn collect_yield_type(
   is_delegate : Bool,
 ) -> TypeChecker {
   // Only collect if we're in a generator function
-  if not(is_in_generator_function(checker)) {
+  if !(is_in_generator_function(checker)) {
     return checker
   }
   // For yield*, extract element type from the iterable
@@ -772,7 +772,7 @@ fn add_var_to_function_scope(
   checker : TypeChecker,
   name : String,
   var_type : Type,
-  location : SourceLocation,
+  _location : SourceLocation,
   has_initializer : Bool,
 ) -> TypeChecker {
   let scopes = checker.local_scopes
@@ -794,7 +794,7 @@ fn add_var_to_function_scope(
       match scopes[function_scope_index].function_vars.get(name) {
         Some(existing_type) => {
           // Check if types are equal
-          if not(types_equal(existing_type, var_type)) {
+          if !(types_equal(existing_type, var_type)) {
             checker = add_diagnostic_with_code(
               checker,
               "Subsequent variable declarations must have the same type.  Variable '\{name}' must be of type '\{type_to_string(existing_type)}', but here has type '\{type_to_string(var_type)}'.",
@@ -839,7 +839,7 @@ fn add_local_const_variable(
   if scopes.length() > 0 {
     let scope = scopes[scopes.length() - 1]
     scope.variables.set(name, var_type)
-    scope.const_vars.insert(name)
+    scope.const_vars.add(name)
     { ..checker, local_scopes: scopes }
   } else {
     // At global scope - look up the symbol and set its type
@@ -888,7 +888,7 @@ fn check_duplicate_bindings(
   collect_binding_names(pattern, names)
 
   // Check for duplicates
-  let seen : @hashmap.HashMap[String, SourceLocation] = @hashmap.new()
+  let seen : @hashmap.HashMap[String, SourceLocation] = @hashmap.HashMap([])
   let mut c = checker
 
   fn check_name(name : String, location : SourceLocation) -> Unit {
@@ -1003,7 +1003,7 @@ fn validate_destructuring_elements(
       for i = 0; i < arr_pattern.elements.length(); i = i + 1 {
         match arr_pattern.elements[i] {
           Some(elem) => {
-            if not(is_valid_destructuring_target(elem)) {
+            if !(is_valid_destructuring_target(elem)) {
               c = add_diagnostic_with_code(
                 c,
                 "The left-hand side of an assignment expression must be a variable or a property access.",
@@ -1025,7 +1025,7 @@ fn validate_destructuring_elements(
       for i = 0; i < obj_pattern.properties.length(); i = i + 1 {
         let prop = obj_pattern.properties[i]
         // Validate the binding name (right side of {x: name} or just name in {name})
-        if not(is_valid_destructuring_target(prop.name)) {
+        if !(is_valid_destructuring_target(prop.name)) {
           c = add_diagnostic_with_code(
             c,
             "The left-hand side of an assignment expression must be a variable or a property access.",
@@ -1355,7 +1355,7 @@ fn add_array_binding_elements_to_scope(
               _ => false
             }
             // If not a rest element and index exceeds tuple length, report error
-            if not(is_rest) && i >= tuple_len {
+            if !(is_rest) && i >= tuple_len {
               let tuple_str = type_to_string(arr_type)
               checker = add_diagnostic_with_code(
                 checker,
@@ -1752,7 +1752,7 @@ pub fn merge_intersection(
   checker : TypeChecker,
   intersection : CheckerIntersectionType,
 ) -> (Type, TypeChecker) {
-  let merged_props : Map[String, PropertySignature] = Map::new()
+  let merged_props : Map[String, PropertySignature] = Map([])
   let merged_call_sigs : Array[CheckerSignature] = []
   let merged_construct_sigs : Array[CheckerSignature] = []
   let merged_index_sigs : Array[IndexSignature] = []
@@ -1926,7 +1926,7 @@ pub fn evaluate_mapped_type(
   match source_type {
     Object(obj) => {
       // Map over each property in the source
-      let result_props : Map[String, PropertySignature] = Map::new()
+      let result_props : Map[String, PropertySignature] = Map([])
       let props_iter = obj.properties.iter()
       for entry in props_iter {
         let (name, prop) = entry
@@ -1995,7 +1995,7 @@ pub fn matches_template_literal(
     return true
   }
   let first_text = template.texts[0]
-  if not(value.has_prefix(first_text)) {
+  if !(value.has_prefix(first_text)) {
     return false
   }
   // For full implementation, would need regex-like matching
@@ -2127,7 +2127,7 @@ pub fn infer_type_parameters(
   check_type : Type,
   extends_type : Type,
 ) -> (Map[String, Type], TypeChecker) {
-  let inferred : Map[String, Type] = Map::new()
+  let inferred : Map[String, Type] = Map([])
   let checker = infer_type_parameters_recursive(
     checker, check_type, extends_type, inferred,
   )
@@ -2236,11 +2236,11 @@ pub fn union_type(
     match types[i] {
       Union(inner) =>
         for j = 0; j < inner.types.length(); j = j + 1 {
-          if not(contains_type(flattened, inner.types[j])) {
+          if !(contains_type(flattened, inner.types[j])) {
             flattened.push(inner.types[j])
           }
         }
-      other => if not(contains_type(flattened, other)) { flattened.push(other) }
+      other => if !(contains_type(flattened, other)) { flattened.push(other) }
     }
   }
   // Single type doesn't need union
@@ -2349,7 +2349,7 @@ fn types_equal(a : Type, b : Type) -> Bool {
             break
           }
         }
-        if not(found) {
+        if !(found) {
           return false
         }
       }
@@ -2565,7 +2565,7 @@ fn build_import_map(
   current_file : String,
   registry : ExternalTypeRegistry,
 ) -> Map[String, (String, String)] {
-  let import_map : Map[String, (String, String)] = Map::new()
+  let import_map : Map[String, (String, String)] = Map([])
   for import_info in imports {
     let module_spec = import_info.module_specifier
 
@@ -2622,14 +2622,46 @@ fn resolve_module_path_with_registry(
       module_spec
     }
 
-    // Add .ts extension if not present
+    // Try resolution candidates in TypeScript order against the registry:
+    // exact path (when an extension is given), .js -> .ts substitution,
+    // appended .ts/.tsx/.d.ts extensions, then directory index files.
+    let candidates : Array[String] = []
+    if joined.has_suffix(".ts") || joined.has_suffix(".tsx") {
+      candidates.push(joined)
+    } else if joined.has_suffix(".js") || joined.has_suffix(".jsx") {
+      let dot = if joined.has_suffix(".jsx") { 4 } else { 3 }
+      let base = substring(joined, 0, joined.length() - dot)
+      candidates.push(base + ".ts")
+      candidates.push(base + ".tsx")
+      candidates.push(base + ".d.ts")
+    }
+    candidates.push(joined + ".ts")
+    candidates.push(joined + ".tsx")
+    candidates.push(joined + ".d.ts")
+    candidates.push(joined + "/index.ts")
+    candidates.push(joined + "/index.tsx")
+    candidates.push(joined + "/index.d.ts")
+    for candidate in candidates {
+      // Registry keys are the file paths as given to the compiler; try the
+      // absolute-normalized form and the relative form (no leading slash)
+      let normalized = normalize_import_path(candidate)
+      if registry.get_module(normalized) is Some(_) {
+        return normalized
+      }
+      if normalized.has_prefix("/") {
+        let relative = substring(normalized, 1, normalized.length())
+        if registry.get_module(relative) is Some(_) {
+          return relative
+        }
+      }
+    }
+
+    // Nothing matched: keep the historical ".ts" guess
     let with_ext = if joined.has_suffix(".ts") || joined.has_suffix(".tsx") {
       joined
     } else {
       joined + ".ts"
     }
-
-    // Normalize path (remove ./ and resolve ../)
     normalize_import_path(with_ext)
   } else {
     // Non-relative import (node_modules, etc.) - try registry first
@@ -2816,7 +2848,7 @@ fn lookup_imported_namespace_member(
 /// Convert ObjectTypeV2 to ObjectType
 fn object_type_v2_to_type(obj : ObjectTypeV2) -> ObjectType {
   let info = default_type_info()
-  let props : Map[String, PropertySignature] = Map::new()
+  let props : Map[String, PropertySignature] = Map([])
   for entry in obj.fields {
     let (name, field) = entry
     props.set(name, PropertySignature::{
@@ -2876,7 +2908,7 @@ fn type_v2_to_type(ty : TypeV2) -> Type {
     TSymbol => Symbol(info)
     TUniqueSymbol(_) => Symbol(info) // Treat unique symbols as regular symbols for now
     TObject(obj) => {
-      let props : Map[String, PropertySignature] = Map::new()
+      let props : Map[String, PropertySignature] = Map([])
       for entry in obj.fields {
         let (name, field) = entry
         props.set(name, PropertySignature::{
@@ -2941,7 +2973,7 @@ fn type_v2_to_type(ty : TypeV2) -> Type {
         type_arguments: type_args.map(type_v2_to_type),
         info,
       })
-    TTypeParam(name, constraint) =>
+    TTypeParam(name, _constraint) =>
       // Type parameters are represented as type references for now
       TypeReference(TypeReferenceType::{ name, type_arguments: [], info })
     TConditional(cond) =>
@@ -2995,7 +3027,7 @@ fn type_v2_to_type(ty : TypeV2) -> Type {
 ///|
 /// Convert ModuleTypes to an Object type (for namespace imports)
 fn module_types_to_object_type(module_types : ModuleTypes) -> Type {
-  let props : Map[String, PropertySignature] = Map::new()
+  let props : Map[String, PropertySignature] = Map([])
   let type_info = default_type_info()
   for entry in module_types.named_exports {
     let (name, export_info) = entry
@@ -3029,7 +3061,7 @@ fn check_unused_ts_expect_error_directives(
   }
 
   // Build a set of line numbers that have errors
-  let error_lines : Map[Int, Bool] = Map::new()
+  let error_lines : Map[Int, Bool] = Map([])
   for diag in checker.diagnostics {
     error_lines.set(diag.location.start.line, true)
   }
@@ -3041,7 +3073,7 @@ fn check_unused_ts_expect_error_directives(
     let expected_error_line = directive_loc.start.line + 1
 
     // Check if there's an error on the expected line
-    if not(error_lines.contains(expected_error_line)) {
+    if !(error_lines.contains(expected_error_line)) {
       // No error on the following line - report TS2578
       result_checker = add_diagnostic_with_code(
         result_checker,
@@ -3144,7 +3176,7 @@ fn check_statement(checker : TypeChecker, node : Node) -> TypeChecker {
     ExportAssignment(ea) => {
       // Check for multiple default exports (TS2528)
       // This handles 'export default <expression>'
-      let checker = if not(ea.is_export_equals) {
+      let checker = if !(ea.is_export_equals) {
         track_default_export(checker, ea.location)
       } else {
         checker
@@ -3412,7 +3444,7 @@ fn check_inferred_type_accessibility(
   func : FunctionDeclaration,
 ) -> TypeChecker {
   // Only check exported functions without explicit return type
-  if not(has_export_modifier(func.modifiers)) {
+  if !(has_export_modifier(func.modifiers)) {
     return checker
   }
   if func.return_type is Some(_) {
@@ -3436,7 +3468,7 @@ fn check_inferred_type_accessibility(
 
       // Check if any referenced type is not exported
       for name in type_names {
-        if not(is_symbol_exported(checker, name)) {
+        if !(is_symbol_exported(checker, name)) {
           return add_diagnostic_with_code(
             checker,
             "The inferred type of '\{func_name}' cannot be named without a reference to '\{name}'. This is likely not portable. A type annotation is necessary.",
@@ -3471,7 +3503,7 @@ fn check_variable_statement(
     // This occurs when 'var' is declared in a nested block, but a let/const with the
     // same name exists in a parent scope (e.g., for-of loop binding)
     // We only check this for block-scoped variables (those in const_vars set)
-    if not(var_stmt.is_let) && not(var_stmt.is_const) {
+    if !(var_stmt.is_let) && !(var_stmt.is_const) {
       match decl.name {
         Identifier(id) => {
           // Check if there's a block-scoped variable with this name in parent scope
@@ -3491,12 +3523,12 @@ fn check_variable_statement(
     }
 
     // Pass is_var flag: true if not let and not const
-    let is_var = not(var_stmt.is_let) && not(var_stmt.is_const)
+    let is_var = !(var_stmt.is_let) && !(var_stmt.is_const)
     checker = check_variable_declaration(checker, decl, var_stmt.is_const, is_var)
 
     // TS1155: 'const' declarations must be initialized
     // Only check if NOT ambient declaration (declare const x: T is allowed)
-    if var_stmt.is_const && not(is_ambient) {
+    if var_stmt.is_const && !(is_ambient) {
       match decl.initializer {
         None =>
           checker = add_diagnostic_with_code(
@@ -3512,7 +3544,7 @@ fn check_variable_statement(
     // TS1182: A destructuring declaration must have an initializer
     // Only check if NOT ambient declaration (declare var is allowed without initializer)
     // Note: for-of/for-in loop bindings are handled separately and don't go through this function
-    if not(is_ambient) {
+    if !(is_ambient) {
       match (decl.name, decl.initializer) {
         (ArrayBindingPattern(_), None) | (ObjectBindingPattern(_), None) =>
           checker = add_diagnostic_with_code(
@@ -3538,7 +3570,7 @@ fn check_variable_statement(
     // 3. Is let or const (NOT var - var is hoisted and initialized to undefined)
     // 4. Type annotation is NOT 'any' (any-typed vars are implicitly allowed uninitialized)
     let is_block_scoped = var_stmt.is_let || var_stmt.is_const
-    if not(is_ambient) && is_block_scoped {
+    if !(is_ambient) && is_block_scoped {
       match (decl.name, decl.type_annotation, decl.initializer) {
         (Identifier(id), Some(type_ann), None) => {
           // Skip tracking if type annotation is 'any'
@@ -3546,7 +3578,7 @@ fn check_variable_statement(
             KeywordType(kt) => kt.kind == Any
             _ => false
           }
-          if not(is_any_type) {
+          if !(is_any_type) {
             // Block-scoped variable declared with type but no initializer - track it
             checker.uninitialized_vars.set(id.name, decl.location.start.line)
           }
@@ -3560,7 +3592,7 @@ fn check_variable_statement(
 
 ///|
 /// Check TS2494: Exported variable using private type
-fn check_exported_variable_private_type(
+fn _check_exported_variable_private_type(
   checker : TypeChecker,
   decl : VariableDeclaration,
 ) -> TypeChecker {
@@ -3576,7 +3608,7 @@ fn check_exported_variable_private_type(
     Some(type_node) => {
       let type_names = collect_type_names_from_type_node(type_node)
       for name in type_names {
-        if not(is_symbol_exported(checker, name)) {
+        if !(is_symbol_exported(checker, name)) {
           return add_diagnostic_with_code(
             checker,
             "Exported variable '\{var_name}' has or is using private name '\{name}'.",
@@ -3594,7 +3626,7 @@ fn check_exported_variable_private_type(
           let (t, checker) = infer_type(checker, init)
           let type_names = collect_type_reference_names(t)
           for name in type_names {
-            if not(is_symbol_exported(checker, name)) {
+            if !(is_symbol_exported(checker, name)) {
               return add_diagnostic_with_code(
                 checker,
                 "Exported variable '\{var_name}' has or is using private name '\{name}'.",
@@ -3738,7 +3770,7 @@ fn check_variable_declaration(
   }
   let checker = match (decl.name, type_for_array_check) {
     (ArrayBindingPattern(_), Some(check_t)) =>
-      if not(is_array_like_type(check_t)) {
+      if !(is_array_like_type(check_t)) {
         add_diagnostic_with_code(
           checker,
           "Type '\{type_to_string(check_t)}' is not an array type.",
@@ -3767,7 +3799,7 @@ fn check_variable_declaration(
 
   // TS7034: Check for implicit any[] type in variable declaration
   // This occurs when a variable is initialized to [] without type annotation
-  let checker = if checker.no_implicit_any && declared_type.is_empty() {
+  let checker = if checker.no_implicit_any && declared_type is None {
     match var_type {
       Array(arr_type) =>
         match arr_type.element_type {
@@ -3875,7 +3907,7 @@ fn infer_type_with_context(
         }
       // Number literal with number literal type annotation
       (NumericLiteral(lit), Some(NumberLiteral(expected_val, _))) => {
-        let num_val = @strconv.parse_double(lit.value) catch { _ => 0.0 }
+        let num_val = @string.parse_double(lit.value) catch { _ => 0.0 }
         if num_val == expected_val {
           number_literal_type(checker, num_val)
         } else {
@@ -3884,7 +3916,7 @@ fn infer_type_with_context(
       }
       // Number literal with union type annotation containing number literals
       (NumericLiteral(lit), Some(Union(union))) => {
-        let num_val = @strconv.parse_double(lit.value) catch { _ => 0.0 }
+        let num_val = @string.parse_double(lit.value) catch { _ => 0.0 }
         if union_contains_number_literal(union, num_val) {
           number_literal_type(checker, num_val)
         } else {
@@ -3996,10 +4028,10 @@ fn infer_tuple_from_array_literal(
   let element_types : Array[TupleElement] = []
 
   // Check if tuple has a rest element
-  let mut rest_element_idx : Int? = None
+  let mut _rest_element_idx : Int? = None
   for i = 0; i < tuple_type.element_types.length(); i = i + 1 {
     if tuple_type.element_types[i].is_rest {
-      rest_element_idx = Some(i)
+      _rest_element_idx = Some(i)
       break
     }
   }
@@ -4091,7 +4123,7 @@ fn infer_type(checker : TypeChecker, expr : Node) -> (Type, TypeChecker) {
     NullLiteral(_) => null_type(checker)
     BigIntLiteral(lit) => {
       // TS2737: BigInt literals are not available when targeting lower than ES2020
-      let checker = if not(checker.target.supports_bigint()) {
+      let checker = if !(checker.target.supports_bigint()) {
         add_diagnostic_with_code(
           checker,
           "BigInt literals are not available when targeting lower than ES2020.",
@@ -4260,7 +4292,7 @@ fn infer_identifier_type(
   // Don't emit for assignment targets (left side of = in destructuring patterns)
   let checker = if checker.no_implicit_any &&
     checker.implicit_any_array_vars.contains(id.name) &&
-    not(checker.in_destructuring_pattern) {
+    !(checker.in_destructuring_pattern) {
     add_diagnostic_with_code(
       checker,
       "Variable '\{id.name}' implicitly has an 'any[]' type.",
@@ -4287,7 +4319,7 @@ fn infer_identifier_type(
               // BUT first check if this is a namespace import from an external module
               // (e.g., import * as m1 from "m1") - those should resolve from registry
               if is_namespace_symbol(symbol) &&
-                not(namespace_has_value_exports(symbol)) {
+                !(namespace_has_value_exports(symbol)) {
                 // Before reporting error, check if this is an imported namespace
                 // that has exports in the external registry
                 match resolve_import_type(checker, id.name) {
@@ -4580,7 +4612,7 @@ fn get_arguments_type(checker : TypeChecker) -> (Type, TypeChecker) {
   // - length: number
   // - [index: number]: any (numeric indexing)
   // - callee: Function (deprecated but exists)
-  let properties : Map[String, PropertySignature] = Map::new()
+  let properties : Map[String, PropertySignature] = Map([])
 
   // length property
   let (num_id, checker) = next_type_id(checker)
@@ -4627,7 +4659,7 @@ fn get_arguments_type(checker : TypeChecker) -> (Type, TypeChecker) {
 /// Get the type for the console global object
 fn get_console_type(checker : TypeChecker) -> (Type, TypeChecker) {
   let (id, checker) = next_type_id(checker)
-  let console_methods : Map[String, PropertySignature] = Map::new()
+  let console_methods : Map[String, PropertySignature] = Map([])
   let default_flags = TypeFlags::default()
   let void_info = TypeInfo::{ id: 0, flags: default_flags }
 
@@ -4654,7 +4686,7 @@ fn get_console_type(checker : TypeChecker) -> (Type, TypeChecker) {
 /// Get the type for the JSON global object
 fn get_json_type(checker : TypeChecker) -> (Type, TypeChecker) {
   let (id, checker) = next_type_id(checker)
-  let json_methods : Map[String, PropertySignature] = Map::new()
+  let json_methods : Map[String, PropertySignature] = Map([])
   let default_flags = TypeFlags::default()
   let info = TypeInfo::{ id: 0, flags: default_flags }
 
@@ -4679,7 +4711,7 @@ fn get_json_type(checker : TypeChecker) -> (Type, TypeChecker) {
 /// Get the type for the Math global object
 fn get_math_type(checker : TypeChecker) -> (Type, TypeChecker) {
   let (id, checker) = next_type_id(checker)
-  let math_methods : Map[String, PropertySignature] = Map::new()
+  let math_methods : Map[String, PropertySignature] = Map([])
   let default_flags = TypeFlags::default()
   let info = TypeInfo::{ id: 0, flags: default_flags }
 
@@ -4718,7 +4750,7 @@ fn get_math_type(checker : TypeChecker) -> (Type, TypeChecker) {
 /// Get the type for the Promise global constructor
 fn get_promise_type(checker : TypeChecker) -> (Type, TypeChecker) {
   let (id, checker) = next_type_id(checker)
-  let promise_methods : Map[String, PropertySignature] = Map::new()
+  let promise_methods : Map[String, PropertySignature] = Map([])
   let default_flags = TypeFlags::default()
   let info = TypeInfo::{ id: 0, flags: default_flags }
 
@@ -4779,7 +4811,7 @@ fn get_promise_type(checker : TypeChecker) -> (Type, TypeChecker) {
 /// Get the type for the Date global constructor
 fn get_date_type(checker : TypeChecker) -> (Type, TypeChecker) {
   let (id, checker) = next_type_id(checker)
-  let date_methods : Map[String, PropertySignature] = Map::new()
+  let date_methods : Map[String, PropertySignature] = Map([])
   let default_flags = TypeFlags::default()
   let info = TypeInfo::{ id: 0, flags: default_flags }
 
@@ -4791,7 +4823,7 @@ fn get_date_type(checker : TypeChecker) -> (Type, TypeChecker) {
 
   // Create Date instance type with methods like getTime, getFullYear, etc.
   let (instance_id, checker) = next_type_id(checker)
-  let instance_methods : Map[String, PropertySignature] = Map::new()
+  let instance_methods : Map[String, PropertySignature] = Map([])
   instance_methods.set("getTime", make_nullary_method("getTime", TKNumber, info))
 
   let date_instance_type = Type::Object(ObjectType::{
@@ -4838,7 +4870,7 @@ fn get_date_type(checker : TypeChecker) -> (Type, TypeChecker) {
 /// Get the type for the String global constructor
 fn get_string_constructor_type(checker : TypeChecker) -> (Type, TypeChecker) {
   let (id, checker) = next_type_id(checker)
-  let string_methods : Map[String, PropertySignature] = Map::new()
+  let string_methods : Map[String, PropertySignature] = Map([])
   let default_flags = TypeFlags::default()
   let info = TypeInfo::{ id: 0, flags: default_flags }
 
@@ -4847,7 +4879,7 @@ fn get_string_constructor_type(checker : TypeChecker) -> (Type, TypeChecker) {
 
   // Create String instance type (the result of new String())
   let string_instance_type = Type::Object(ObjectType::{
-    properties: Map::new(),
+    properties: Map([]),
     call_signatures: [],
     construct_signatures: [],
     index_signatures: [],
@@ -4883,7 +4915,7 @@ fn get_string_constructor_type(checker : TypeChecker) -> (Type, TypeChecker) {
 /// Get the type for the Symbol global constructor
 fn get_symbol_constructor_type(checker : TypeChecker) -> (Type, TypeChecker) {
   let (id, checker) = next_type_id(checker)
-  let symbol_methods : Map[String, PropertySignature] = Map::new()
+  let symbol_methods : Map[String, PropertySignature] = Map([])
   let default_flags = TypeFlags::default()
   let info = TypeInfo::{ id: 0, flags: default_flags }
 
@@ -4941,7 +4973,7 @@ fn get_symbol_constructor_type(checker : TypeChecker) -> (Type, TypeChecker) {
               for entry in user_obj.properties {
                 let (key, value) = entry
                 // Don't overwrite built-in properties
-                if not(symbol_methods.contains(key)) {
+                if !(symbol_methods.contains(key)) {
                   symbol_methods.set(key, value)
                 }
               }
@@ -4987,7 +5019,7 @@ fn get_error_constructor_type(checker : TypeChecker) -> (Type, TypeChecker) {
   let info = TypeInfo::{ id: 0, flags: default_flags }
 
   // Error instance type - returned when constructed
-  let error_instance_properties : Map[String, PropertySignature] = Map::new()
+  let error_instance_properties : Map[String, PropertySignature] = Map([])
   error_instance_properties.set("message", make_simple_property("message", Type::String(info)))
   error_instance_properties.set("name", make_simple_property("name", Type::String(info)))
   // stack is optional
@@ -5023,7 +5055,7 @@ fn get_error_constructor_type(checker : TypeChecker) -> (Type, TypeChecker) {
 
   // Error constructor type with construct signature
   let error_type = Type::Object(ObjectType::{
-    properties: Map::new(),
+    properties: Map([]),
     call_signatures: [],
     construct_signatures: [construct_sig],
     index_signatures: [],
@@ -5037,7 +5069,7 @@ fn get_error_constructor_type(checker : TypeChecker) -> (Type, TypeChecker) {
 /// Get the type for the Array global constructor
 fn get_array_constructor_type(checker : TypeChecker) -> (Type, TypeChecker) {
   let (id, checker) = next_type_id(checker)
-  let array_methods : Map[String, PropertySignature] = Map::new()
+  let array_methods : Map[String, PropertySignature] = Map([])
   let default_flags = TypeFlags::default()
   let info = TypeInfo::{ id: 0, flags: default_flags }
 
@@ -5062,7 +5094,7 @@ fn get_array_constructor_type(checker : TypeChecker) -> (Type, TypeChecker) {
 /// Get the type for the Object global constructor
 fn get_object_constructor_type(checker : TypeChecker) -> (Type, TypeChecker) {
   let (id, checker) = next_type_id(checker)
-  let object_methods : Map[String, PropertySignature] = Map::new()
+  let object_methods : Map[String, PropertySignature] = Map([])
   let default_flags = TypeFlags::default()
   let info = TypeInfo::{ id: 0, flags: default_flags }
 
@@ -5107,7 +5139,7 @@ fn get_object_constructor_type(checker : TypeChecker) -> (Type, TypeChecker) {
 /// Get the type for the Number global constructor
 fn get_number_constructor_type(checker : TypeChecker) -> (Type, TypeChecker) {
   let (id, checker) = next_type_id(checker)
-  let number_methods : Map[String, PropertySignature] = Map::new()
+  let number_methods : Map[String, PropertySignature] = Map([])
   let default_flags = TypeFlags::default()
   let info = TypeInfo::{ id: 0, flags: default_flags }
 
@@ -5135,7 +5167,7 @@ fn get_boolean_constructor_type(checker : TypeChecker) -> (Type, TypeChecker) {
   let (id, checker) = next_type_id(checker)
   let default_flags = TypeFlags::default()
   let boolean_type = Type::Object(ObjectType::{
-    properties: Map::new(),
+    properties: Map([]),
     call_signatures: [],
     construct_signatures: [],
     index_signatures: [],
@@ -5149,7 +5181,7 @@ fn get_boolean_constructor_type(checker : TypeChecker) -> (Type, TypeChecker) {
 /// Get the type for the Map global constructor
 fn get_map_constructor_type(checker : TypeChecker) -> (Type, TypeChecker) {
   let (id, checker) = next_type_id(checker)
-  let map_methods : Map[String, PropertySignature] = Map::new()
+  let map_methods : Map[String, PropertySignature] = Map([])
   let default_flags = TypeFlags::default()
   let info = TypeInfo::{ id: 0, flags: default_flags }
 
@@ -5165,7 +5197,7 @@ fn get_map_constructor_type(checker : TypeChecker) -> (Type, TypeChecker) {
   // Map instance type (returned by new Map())
   let (instance_id, checker) = next_type_id(checker)
   let map_instance_type = Type::Object(ObjectType::{
-    properties: Map::new(),
+    properties: Map([]),
     call_signatures: [],
     construct_signatures: [],
     index_signatures: [],
@@ -5207,7 +5239,7 @@ fn get_set_constructor_type(checker : TypeChecker) -> (Type, TypeChecker) {
   // Set instance type (returned by new Set())
   let (instance_id, checker) = next_type_id(checker)
   let set_instance_type = Type::Object(ObjectType::{
-    properties: Map::new(),
+    properties: Map([]),
     call_signatures: [],
     construct_signatures: [],
     index_signatures: [],
@@ -5229,7 +5261,7 @@ fn get_set_constructor_type(checker : TypeChecker) -> (Type, TypeChecker) {
     type_parameters: [],
   }
   let set_type = Type::Object(ObjectType::{
-    properties: Map::new(),
+    properties: Map([]),
     call_signatures: [],
     construct_signatures: [construct_sig],
     index_signatures: [],
@@ -5249,7 +5281,7 @@ fn get_weakmap_constructor_type(checker : TypeChecker) -> (Type, TypeChecker) {
   // WeakMap instance type (returned by new WeakMap())
   let (instance_id, checker) = next_type_id(checker)
   let weakmap_instance_type = Type::Object(ObjectType::{
-    properties: Map::new(),
+    properties: Map([]),
     call_signatures: [],
     construct_signatures: [],
     index_signatures: [],
@@ -5271,7 +5303,7 @@ fn get_weakmap_constructor_type(checker : TypeChecker) -> (Type, TypeChecker) {
     type_parameters: [],
   }
   let weakmap_type = Type::Object(ObjectType::{
-    properties: Map::new(),
+    properties: Map([]),
     call_signatures: [],
     construct_signatures: [construct_sig],
     index_signatures: [],
@@ -5291,7 +5323,7 @@ fn get_weakset_constructor_type(checker : TypeChecker) -> (Type, TypeChecker) {
   // WeakSet instance type (returned by new WeakSet())
   let (instance_id, checker) = next_type_id(checker)
   let weakset_instance_type = Type::Object(ObjectType::{
-    properties: Map::new(),
+    properties: Map([]),
     call_signatures: [],
     construct_signatures: [],
     index_signatures: [],
@@ -5313,7 +5345,7 @@ fn get_weakset_constructor_type(checker : TypeChecker) -> (Type, TypeChecker) {
     type_parameters: [],
   }
   let weakset_type = Type::Object(ObjectType::{
-    properties: Map::new(),
+    properties: Map([]),
     call_signatures: [],
     construct_signatures: [construct_sig],
     index_signatures: [],
@@ -5363,7 +5395,7 @@ fn get_exports_type(checker : TypeChecker) -> (Type, TypeChecker) {
     is_readonly: false,
   }
   let exports_type = Type::Object(ObjectType::{
-    properties: Map::new(),
+    properties: Map([]),
     call_signatures: [],
     construct_signatures: [],
     index_signatures: [string_index],
@@ -5389,14 +5421,14 @@ fn get_module_type(checker : TypeChecker) -> (Type, TypeChecker) {
     is_readonly: false,
   }
   let exports_inner_type = Type::Object(ObjectType::{
-    properties: Map::new(),
+    properties: Map([]),
     call_signatures: [],
     construct_signatures: [],
     index_signatures: [string_index],
     info: TypeInfo::{ id: 0, flags: default_flags },
     class_name: None,
   })
-  let module_properties : Map[String, PropertySignature] = Map::new()
+  let module_properties : Map[String, PropertySignature] = Map([])
   module_properties.set("exports", PropertySignature::{
     name: "exports",
     prop_type: exports_inner_type,
@@ -5559,7 +5591,7 @@ fn create_function_type_with_params(
     let (info, checker) = create_type_info(checker)
     let call_signature : CheckerSignature = { parameters, return_type, type_parameters }
     let func_type = Type::Object({
-      properties: Map::new(),
+      properties: Map([]),
       call_signatures: [call_signature],
       construct_signatures: [],
       index_signatures: [],
@@ -5888,7 +5920,7 @@ fn infer_overloaded_function_type(
   // Create Object type with call signatures
   let (info, checker) = create_type_info(checker)
   let func_type = Type::Object({
-    properties: Map::new(),
+    properties: Map([]),
     call_signatures,
     construct_signatures: [],
     index_signatures: [],
@@ -5937,8 +5969,8 @@ fn infer_class_declaration_type(
   // Build object type for the class - separating static and instance properties
   // Static properties go on the class constructor type (for X.staticProp)
   // Instance properties go on the instance type (for new X().instanceProp)
-  let static_properties : Map[String, PropertySignature] = Map::new()
-  let instance_properties : Map[String, PropertySignature] = Map::new()
+  let static_properties : Map[String, PropertySignature] = Map([])
+  let instance_properties : Map[String, PropertySignature] = Map([])
 
   // Inherit properties from parent class (if extends clause exists)
   for heritage_clause in class_decl.heritage_clauses {
@@ -5988,7 +6020,7 @@ fn infer_class_declaration_type(
   let class_name_str = symbol.name
   let (instance_info_temp, checker) = create_type_info(checker)
   let temp_instance_type = Type::Object(ObjectType::{
-    properties: Map::new(), // Empty for now, will be filled after methods are inferred
+    properties: Map([]), // Empty for now, will be filled after methods are inferred
     call_signatures: [],
     construct_signatures: [],
     index_signatures: [],
@@ -6054,7 +6086,7 @@ fn infer_class_declaration_type(
           Some(name_expr) => {
             let (name_type, c) = infer_type(checker, name_expr)
             let is_valid = is_valid_computed_property_type(c, name_type)
-            if not(is_valid) {
+            if !(is_valid) {
               add_diagnostic_with_code(
                 c,
                 "A computed property name must be of type 'string', 'number', 'symbol', or 'any'.",
@@ -6070,7 +6102,7 @@ fn infer_class_declaration_type(
 
         // TS1166: Validate computed property names in class declarations
         // A computed property name in a class property declaration must have a simple literal type or a 'unique symbol' type
-        let checker = match prop.computed_name_expr {
+        let _checker = match prop.computed_name_expr {
           Some(name_expr) => {
             // First check if the expression itself is a literal (0, "hello", `template`)
             // This handles cases where type inference widens literals to general types
@@ -6079,7 +6111,7 @@ fn infer_class_declaration_type(
             } else {
               // Not a literal expression - check if the inferred type is valid
               let (name_type, c) = infer_type(checker, name_expr)
-              if not(is_valid_class_property_computed_name_type(name_type)) {
+              if !(is_valid_class_property_computed_name_type(name_type)) {
                 add_diagnostic_with_code(
                   c,
                   "A computed property name in a class property declaration must have a simple literal type or a 'unique symbol' type.",
@@ -6152,7 +6184,7 @@ fn infer_class_declaration_type(
         checker = match method_decl.computed_name_expr {
           Some(name_expr) => {
             let (name_type, c) = infer_type(checker, name_expr)
-            let c = if not(is_valid_computed_property_type(c, name_type)) {
+            let c = if !(is_valid_computed_property_type(c, name_type)) {
               add_diagnostic_with_code(
                 c,
                 "A computed property name must be of type 'string', 'number', 'symbol', or 'any'.",
@@ -6195,7 +6227,7 @@ fn infer_class_declaration_type(
         checker = match getter.computed_name_expr {
           Some(name_expr) => {
             let (name_type, c) = infer_type(checker, name_expr)
-            let c = if not(is_valid_computed_property_type(c, name_type)) {
+            let c = if !(is_valid_computed_property_type(c, name_type)) {
               add_diagnostic_with_code(
                 c,
                 "A computed property name must be of type 'string', 'number', 'symbol', or 'any'.",
@@ -6211,7 +6243,7 @@ fn infer_class_declaration_type(
         }
 
         // Infer getter return type
-        let (getter_return_type, checker) = match getter.return_type {
+        let (getter_return_type, _checker) = match getter.return_type {
           Some(_) => resolve_type_annotation_or_any(checker, getter.return_type)
           None =>
             // Infer from body if no explicit return type
@@ -6248,7 +6280,7 @@ fn infer_class_declaration_type(
         checker = match setter.computed_name_expr {
           Some(name_expr) => {
             let (name_type, c) = infer_type(checker, name_expr)
-            let c = if not(is_valid_computed_property_type(c, name_type)) {
+            let c = if !(is_valid_computed_property_type(c, name_type)) {
               add_diagnostic_with_code(
                 c,
                 "A computed property name must be of type 'string', 'number', 'symbol', or 'any'.",
@@ -6264,7 +6296,7 @@ fn infer_class_declaration_type(
         }
 
         // Infer setter parameter type
-        let (setter_param_type, checker) = match setter.parameter {
+        let (setter_param_type, _checker) = match setter.parameter {
           Parameter(p) => resolve_type_annotation_or_any(checker, p.type_annotation)
           _ => any_type(checker)
         }
@@ -6316,7 +6348,7 @@ fn infer_class_declaration_type(
 
   // Post-process method return types: replace temp_instance_type with actual instance_type
   // This fixes methods that 'return this' - they were set to the empty temp type during inference
-  let updated_properties : Map[String, PropertySignature] = Map::new()
+  let updated_properties : Map[String, PropertySignature] = Map([])
   for entry in instance_properties.iter() {
     let (prop_name, prop_sig) = entry
     match prop_sig.prop_type {
@@ -6887,7 +6919,7 @@ fn infer_binary_expression_type(
     // Comma operator: evaluates left, discards result, returns right
     Comma => {
       // TS2695: Left operand of comma operator is unused and has no side effects
-      let checker = if not(expression_has_side_effects(bin_expr.left)) {
+      let checker = if !(expression_has_side_effects(bin_expr.left)) {
         add_diagnostic_with_code(
           checker,
           "Left side of comma operator is unused and has no side effects.",
@@ -7036,7 +7068,7 @@ fn infer_call_expression_type(
           super_expr.location,
           TS17005,
         )
-      } else if not(checker.in_class_body) || not(checker.in_derived_class) {
+      } else if !(checker.in_class_body) || !(checker.in_derived_class) {
         // TS2335: 'super' can only be referenced in a derived class
         add_diagnostic_with_code(
           checker,
@@ -7044,7 +7076,7 @@ fn infer_call_expression_type(
           super_expr.location,
           TS2335,
         )
-      } else if not(checker.in_constructor) {
+      } else if !(checker.in_constructor) {
         // TS2337: Super calls are not permitted outside constructors
         add_diagnostic_with_code(
           checker,
@@ -7124,7 +7156,7 @@ fn infer_call_expression_type(
   let checker = if is_super_call &&
     checker.in_constructor &&
     checker.in_derived_class &&
-    not(checker.in_extends_null_class) {
+    !(checker.in_extends_null_class) {
     { ..checker, super_called: true }
   } else {
     checker
@@ -7136,7 +7168,7 @@ fn infer_call_expression_type(
   // TS2556: Validate spread arguments
   // Spread arguments must either have tuple types or be passed to rest parameters
   let mut checker = checker
-  if not(signatures.is_empty()) && arg_is_spread.length() > 0 {
+  if !(signatures.is_empty()) && arg_is_spread.length() > 0 {
     // For each signature, check if spreads are valid
     // A spread is valid if:
     // 1. It's a tuple type, OR
@@ -7146,7 +7178,7 @@ fn infer_call_expression_type(
       // Count required parameters (non-optional, non-rest)
       let mut num_required = 0
       for param in sig.parameters {
-        if not(param.is_optional) && not(param.is_rest) {
+        if !(param.is_optional) && !(param.is_rest) {
           num_required = num_required + 1
         }
       }
@@ -7175,7 +7207,7 @@ fn infer_call_expression_type(
           // It maps to rest parameter if i >= num_required and has_rest
           let maps_to_rest = i >= num_required && has_rest
 
-          if not(is_tuple) && not(maps_to_rest) {
+          if !(is_tuple) && !(maps_to_rest) {
             all_spreads_valid = false
             break
           }
@@ -7185,7 +7217,7 @@ fn infer_call_expression_type(
     })
 
     // If no signature accepts spreads, report error
-    if not(has_valid_signature) {
+    if !(has_valid_signature) {
       for i = 0; i < arg_is_spread.length(); i = i + 1 {
         if arg_is_spread[i] {
           // Check if this spread is a tuple type
@@ -7195,7 +7227,7 @@ fn infer_call_expression_type(
           }
 
           // Only error if it's not a tuple
-          if not(is_tuple) {
+          if !(is_tuple) {
             // Extract location from the spread expression
             let spread_loc = match call.arguments[i] {
               SpreadExpression(s) => s.location
@@ -7336,7 +7368,7 @@ fn check_function_call_args(
           Array(arr_type) => {
             // Rest parameter - check argument against element type
             let assignable = is_assignable(arg_types[i], arr_type.element_type)
-            if not(assignable) {
+            if !(assignable) {
               checker = add_diagnostic_with_code(
                 checker,
                 "Argument of type '\{type_to_string(arg_types[i])}' is not assignable to parameter of type '\{type_to_string(arr_type.element_type)}'.",
@@ -7347,7 +7379,7 @@ fn check_function_call_args(
           }
           _ => {
             // Rest parameter with non-array/non-tuple type (shouldn't happen, but handle it)
-            if not(is_assignable(arg_types[i], param.param_type)) {
+            if !(is_assignable(arg_types[i], param.param_type)) {
               checker = add_diagnostic_with_code(
                 checker,
                 "Argument of type '\{type_to_string(arg_types[i])}' is not assignable to parameter '\{param.name}' of type '\{type_to_string(param.param_type)}'",
@@ -7359,7 +7391,7 @@ fn check_function_call_args(
         }
       } else {
         // Regular parameter (including expanded from tuple rest)
-        if not(is_assignable(arg_types[i], param.param_type)) {
+        if !(is_assignable(arg_types[i], param.param_type)) {
           checker = add_diagnostic_with_code(
             checker,
             "Argument of type '\{type_to_string(arg_types[i])}' is not assignable to parameter '\{param.name}' of type '\{type_to_string(param.param_type)}'",
@@ -7374,7 +7406,7 @@ fn check_function_call_args(
       match rest_param.param_type {
         Array(arr_type) => {
           let assignable = is_assignable(arg_types[i], arr_type.element_type)
-          if not(assignable) {
+          if !(assignable) {
             checker = add_diagnostic_with_code(
               checker,
               "Argument of type '\{type_to_string(arg_types[i])}' is not assignable to parameter of type '\{type_to_string(arr_type.element_type)}'.",
@@ -7534,7 +7566,7 @@ fn try_signature(
   }
 
   // If constraints were violated, this signature doesn't match
-  if not(constraint_ok) {
+  if !(constraint_ok) {
     return None
   }
 
@@ -7566,7 +7598,7 @@ fn try_signature(
       param.param_type
     }
     let assignable = is_assignable(arg_types[i], expected_type)
-    if not(assignable) {
+    if !(assignable) {
       return None
     }
   }
@@ -7602,7 +7634,7 @@ fn check_type_arguments_strict(
   for i = 0; i < type_args.length() && i < type_params.length(); i = i + 1 {
     match type_params[i].constraint {
       Some(constraint) =>
-        if not(is_assignable(type_args[i], constraint)) {
+        if !(is_assignable(type_args[i], constraint)) {
           all_satisfied = false
         }
       None => ()
@@ -7616,7 +7648,7 @@ fn check_type_arguments_strict(
 fn count_required_params(params : Array[CheckerParameter]) -> Int {
   let mut count = 0
   for param in params {
-    if not(param.is_optional) && not(param.is_rest) {
+    if !(param.is_optional) && !(param.is_rest) {
       count = count + 1
     }
   }
@@ -7645,7 +7677,7 @@ fn substitute_type_parameters(
   type_args : Array[Type],
 ) -> (Type, TypeChecker) {
   // Build substitution map
-  let substitutions : Map[String, Type] = Map::new()
+  let substitutions : Map[String, Type] = Map([])
   for i = 0; i < type_params.length(); i = i + 1 {
     if i < type_args.length() {
       substitutions.set(type_params[i].name, type_args[i])
@@ -7747,7 +7779,7 @@ fn substitute_in_type(
     }
     Type::Object(obj) => {
       let mut checker = checker
-      let new_props : Map[String, PropertySignature] = Map::new()
+      let new_props : Map[String, PropertySignature] = Map([])
       for entry in obj.properties {
         let (name, prop) = entry
         let (new_type, c) = substitute_in_type(
@@ -7809,7 +7841,7 @@ fn check_type_constraint(
   constraint : Type,
   location : SourceLocation,
 ) -> TypeChecker {
-  if not(is_assignable(type_arg, constraint)) {
+  if !(is_assignable(type_arg, constraint)) {
     add_diagnostic_with_code(
       checker,
       "Type does not satisfy the constraint",
@@ -7905,7 +7937,7 @@ fn infer_type_arguments(
 ) -> (Array[Type], TypeChecker) {
   let mut checker = checker
   // Build inference context - maps type param names to candidate types
-  let inferences : Map[String, Array[Type]] = Map::new()
+  let inferences : Map[String, Array[Type]] = Map([])
   for param in type_params {
     inferences.set(param.name, [])
   }
@@ -7920,8 +7952,8 @@ fn infer_type_arguments(
     }
 
     let param_type = param_types[param_idx]
-    let param_is_rest_param = param_is_rest.get(param_idx).or(false)
-    let arg_is_spread_arg = arg_is_spread.get(i).or(false)
+    let param_is_rest_param = param_is_rest.get(param_idx).unwrap_or(false)
+    let arg_is_spread_arg = arg_is_spread.get(i).unwrap_or(false)
 
     // Special case: spread argument to rest parameter
     // Example: foo(...arr) where arr: number[] and param is ...s: T[]
@@ -7950,7 +7982,7 @@ fn infer_type_arguments(
   for param in type_params {
     match inferences.get(param.name) {
       Some(candidates) => {
-        if not(candidates.is_empty()) {
+        if !(candidates.is_empty()) {
           // Check if type parameter has array constraint (like T extends any[])
           // If so, and we have multiple candidates, create a tuple type
           let should_create_tuple = match param.constraint {
@@ -7978,12 +8010,12 @@ fn infer_type_arguments(
             result.push(tuple_type)
           } else if candidates.length() > 1 {
             // Check if all candidates are compatible
-            let mut all_compatible = true
+            let mut _all_compatible = true
             for i = 1; i < candidates.length(); i = i + 1 {
               // Check if candidate[i] is assignable to candidate[0]
               // and vice versa (they should unify)
-              if not(is_assignable(candidates[i], candidates[0])) &&
-                not(is_assignable(candidates[0], candidates[i])) {
+              if !(is_assignable(candidates[i], candidates[0])) &&
+                !(is_assignable(candidates[0], candidates[i])) {
                 // Types are incompatible - generate TS2345 error
                 checker = add_diagnostic_with_code(
                   checker,
@@ -7991,7 +8023,7 @@ fn infer_type_arguments(
                   location,
                   TS2345,
                 )
-                all_compatible = false
+                _all_compatible = false
                 break  // Report first incompatibility
               }
             }
@@ -8308,7 +8340,7 @@ fn typeof_string_to_type(checker : TypeChecker, s : String) -> Type? {
     "object" =>
       Some(
         Type::Object({
-          properties: Map::new(),
+          properties: Map([]),
           call_signatures: [],
           construct_signatures: [],
           index_signatures: [],
@@ -8475,7 +8507,7 @@ fn mark_assignment_pattern_variables_initialized(
 ///|
 /// Clear all narrowed types (useful when exiting a narrowing scope)
 fn clear_narrowed_types(checker : TypeChecker) -> TypeChecker {
-  { ..checker, narrowed_types: Map::new() }
+  { ..checker, narrowed_types: Map([]) }
 }
 
 ///|
@@ -8546,7 +8578,7 @@ fn apply_narrowing_to_checker(
   let narrowed = apply_type_narrowing(original, type_guard_info, is_true_branch)
 
   // Check if narrowing was effective (different from original)
-  if not(types_are_identical(original, narrowed)) {
+  if !(types_are_identical(original, narrowed)) {
     add_narrowed_type(
       checker,
       type_guard_info.parameter_name,
@@ -8566,7 +8598,7 @@ fn narrow_union(union : CheckerUnionType, exclude_types : Array[Type]) -> Type {
     let should_exclude = exclude_types
       .iter()
       .any(fn(exclude) { types_are_identical(union_member, exclude) })
-    if not(should_exclude) {
+    if !(should_exclude) {
       remaining.push(union_member)
     }
   }
@@ -8757,7 +8789,7 @@ fn check_private_field_this_access(
       ThisExpression(_) => true
       _ => false
     }
-    if not(is_this_access) {
+    if !(is_this_access) {
       // TS2810: Property '#field' can only be assigned using 'this' access
       add_diagnostic_with_code(
         checker,
@@ -9109,7 +9141,7 @@ fn lookup_property_in_type(
           // Return an Object type with call signatures for the overloads
           let (obj_info, checker) = create_type_info(checker)
           let concat_fn = Type::Object({
-            properties: Map::new(),
+            properties: Map([]),
             call_signatures: [sig1, sig2],
             construct_signatures: [],
             index_signatures: [],
@@ -10245,7 +10277,7 @@ fn infer_new_expression_type(
       }
     _ => false
   }
-  let checker = if not(is_class_type) {
+  let checker = if !(is_class_type) {
     match expr_type {
       Object(obj_type) =>
         if obj_type.construct_signatures.length() == 0 {
@@ -10370,7 +10402,7 @@ fn infer_template_expression_type(
         true
       _ => false
     }
-    if not(is_literal_node) {
+    if !(is_literal_node) {
       all_literal_nodes = false
     }
 
@@ -10378,7 +10410,7 @@ fn infer_template_expression_type(
     // For literal nodes, create literal types; otherwise, use inferred type
     let (expr_type, c) = match span.expression {
       NumericLiteral(lit) => {
-        let num_val = @strconv.parse_double(lit.value) catch { _ => 0.0 }
+        let num_val = @string.parse_double(lit.value) catch { _ => 0.0 }
         number_literal_type(checker, num_val)
       }
       Node::StringLiteral(lit) => string_literal_type(checker, lit.value)
@@ -10588,7 +10620,7 @@ fn check_tagged_template_args(
     }
     for i = 0; i < expr_types.length(); i = i + 1 {
       let (expr_type, loc) = expr_types[i]
-      if not(is_assignable(expr_type, rest_element_type)) {
+      if !(is_assignable(expr_type, rest_element_type)) {
         // TS2345: Argument of type 'X' is not assignable to parameter of type 'Y'
         let expr_type_str = type_to_string(expr_type)
         let param_type_str = type_to_string(rest_element_type)
@@ -10611,7 +10643,7 @@ fn check_tagged_template_args(
       if param_index < parameters.length() {
         let param = parameters[param_index]
         let (expr_type, loc) = expr_types[i]
-        if not(is_assignable(expr_type, param.param_type)) {
+        if !(is_assignable(expr_type, param.param_type)) {
           // TS2345: Argument of type 'X' is not assignable to parameter of type 'Y'
           let expr_type_str = type_to_string(expr_type)
           let param_type_str = type_to_string(param.param_type)
@@ -10643,7 +10675,7 @@ fn infer_this_type(
   let is_in_function = checker.arrow_function_depth > 0 ||
     checker.regular_function_depth > 0 ||
     checker.in_constructor
-  let checker = if checker.in_namespace_body && not(is_in_function) {
+  let checker = if checker.in_namespace_body && !(is_in_function) {
     add_diagnostic_with_code(
       checker,
       "'this' cannot be referenced in a module or namespace body.",
@@ -10669,7 +10701,7 @@ fn infer_this_type(
   // Arrow functions inherit 'this' but don't count as direct constructor body access
   let checker = if checker.in_constructor &&
     checker.in_derived_class &&
-    not(checker.super_called) &&
+    !(checker.super_called) &&
     checker.arrow_function_depth == 0 {
     add_diagnostic_with_code(
       checker,
@@ -10709,7 +10741,7 @@ fn get_global_this_type(checker : TypeChecker) -> (Type, TypeChecker) {
   // This will cause TS2339 for known restricted properties like 'name'
   // Use class_name to mark this as a special globalThis type
   let global_this_type = Type::Object({
-    properties: {},
+    properties: Map([]),
     call_signatures: [],
     construct_signatures: [],
     index_signatures: [],
@@ -10782,7 +10814,7 @@ fn infer_await_expression_type(
   ae : AwaitExpression,
 ) -> (Type, TypeChecker) {
   // TS1308: 'await' expressions are only allowed within async functions and at top level of modules
-  let checker = if not(is_in_async_function(checker)) {
+  let checker = if !(is_in_async_function(checker)) {
     add_diagnostic_with_code(
       checker,
       "'await' expressions are only allowed within async functions and at the top levels of modules.",
@@ -10814,7 +10846,7 @@ fn infer_yield_expression_type(
   ye : YieldExpression,
 ) -> (Type, TypeChecker) {
   // TS1163: A 'yield' expression is only allowed in a generator body
-  let checker = if not(is_in_generator_function(checker)) {
+  let checker = if !(is_in_generator_function(checker)) {
     add_diagnostic_with_code(
       checker,
       "A 'yield' expression is only allowed in a generator body.",
@@ -10833,7 +10865,7 @@ fn infer_yield_expression_type(
       // without return type annotation, and noImplicitAny is set, report error
       let checker = match expr {
         YieldExpression(_) =>
-          if checker.no_implicit_any && not(checker.generator_has_return_type) {
+          if checker.no_implicit_any && !(checker.generator_has_return_type) {
             add_diagnostic_with_code(
               checker,
               "'yield' expression implicitly results in an 'any' type because its containing generator lacks a return-type annotation.",
@@ -10849,7 +10881,7 @@ fn infer_yield_expression_type(
       // TS2741: Check if yield operand type is compatible with expected yield type
       // For regular yield (not yield*), check the operand directly
       // For yield*, check if elements of the iterable are compatible
-      let checker = if not(ye.is_delegate) {
+      let checker = if !(ye.is_delegate) {
         check_yield_type_compatibility(checker, expr_type, expr, ye.location)
       } else {
         // For yield*, we need to check the element type of the iterable
@@ -10889,9 +10921,9 @@ fn infer_yield_expression_type(
       // Only emit for simple yield, not for yield* (delegation)
       // Don't emit for statement-level yields (e.g., "yield 0;" where result isn't used)
       let checker = if checker.no_implicit_any &&
-        not(checker.generator_has_return_type) &&
-        not(ye.is_delegate) &&
-        not(checker.in_expression_statement) {
+        !(checker.generator_has_return_type) &&
+        !(ye.is_delegate) &&
+        !(checker.in_expression_statement) {
         add_diagnostic_with_code(
           checker,
           "'yield' expression implicitly results in an 'any' type because its containing generator lacks a return-type annotation.",
@@ -10916,7 +10948,7 @@ fn infer_yield_expression_type(
       let checker = collect_yield_type(checker, undefined_t, false)
 
       let checker = if checker.no_implicit_any &&
-        not(checker.generator_has_return_type) {
+        !(checker.generator_has_return_type) {
         add_diagnostic_with_code(
           checker,
           "'yield' expression implicitly results in an 'any' type because its containing generator lacks a return-type annotation.",
@@ -10988,7 +11020,7 @@ fn check_yield_operand_then_member(
   location : SourceLocation,
 ) -> TypeChecker {
   // Only check in async generators
-  if not(is_in_async_generator(checker)) {
+  if !(is_in_async_generator(checker)) {
     return checker
   }
 
@@ -11119,7 +11151,7 @@ fn find_missing_property_with_checker(
           continue
         }
         // Check if source has this property
-        if not(type_has_property_with_resolved(resolved_source, prop_name)) {
+        if !(type_has_property_with_resolved(resolved_source, prop_name)) {
           return (Some(prop_name), checker)
         }
       }
@@ -11141,8 +11173,8 @@ fn find_missing_property_with_checker(
                     // Check if source has all target properties
                     for prop_name in target_props.keys() {
                       let prop = target_props[prop_name]
-                      if not(prop.is_optional) &&
-                        not(
+                      if !(prop.is_optional) &&
+                        !(
                           type_has_property_with_resolved(
                             resolved_source, prop_name,
                           ),
@@ -11172,8 +11204,8 @@ fn find_missing_property_with_checker(
                 // Check if source has all required target properties
                 for prop_name in target_props.keys() {
                   let prop = target_props[prop_name]
-                  if not(prop.is_optional) &&
-                    not(source_props.contains(prop_name)) {
+                  if !(prop.is_optional) &&
+                    !(source_props.contains(prop_name)) {
                     return (Some(prop_name), checker)
                   }
                 }
@@ -11341,7 +11373,7 @@ fn check_yield_delegate_iterable(
   location : SourceLocation,
 ) -> TypeChecker {
   // Check if the type is iterable
-  if not(is_type_iterable(operand_type)) {
+  if !(is_type_iterable(operand_type)) {
     let type_str = type_to_string_for_error(operand_type, expr)
     add_diagnostic_with_code(
       checker,
@@ -11412,7 +11444,7 @@ fn is_type_iterable(t : Type) -> Bool {
     // Union types - all members must be iterable
     Union(ut) => {
       for member_type in ut.types {
-        if not(is_type_iterable(member_type)) {
+        if !(is_type_iterable(member_type)) {
           return false
         }
       }
@@ -11788,7 +11820,7 @@ fn infer_function_expression_type(
       }),
       checker,
     )
-  } else if fe.return_type is None && not(collected_return_types.is_empty()) {
+  } else if fe.return_type is None && !(collected_return_types.is_empty()) {
     // Non-generator function without explicit return type - infer from collected return types
     let (inferred_return_type, checker) = if collected_return_types.length() == 1 {
       (collected_return_types[0], checker)
@@ -11847,7 +11879,7 @@ fn infer_array_literal_type(
     let mut found_spread_idx : Int? = None
     for i = 0; i < arr.elements.length(); i = i + 1 {
       match arr.elements[i] {
-        Some(SpreadExpression(spread)) => found_spread_idx = Some(i)
+        Some(SpreadExpression(_spread)) => found_spread_idx = Some(i)
         _ => ()
       }
     }
@@ -11884,7 +11916,7 @@ fn infer_array_literal_type(
             checker = c
             // Only check iterability for spread sources (array construction), not targets
             // in_destructuring_pattern is set when we're on the left side of an assignment
-            if not(checker.in_destructuring_pattern) {
+            if !(checker.in_destructuring_pattern) {
               // Check if type is iterable - use extract_iterable_element_type to determine if we can extract an element
               let is_iterable = match spread_type {
                 Array(_) | String(_) => true
@@ -12018,7 +12050,7 @@ fn infer_array_literal_type(
               }
               // Error if not iterable (extract_iterable_element_type returned None)
               // BUT be permissive for TypeReference/Union/Intersection like for-of
-              let should_error = if not(is_iterable) {
+              let should_error = if !(is_iterable) {
                 match spread_type {
                   TypeReference(_) | Union(_) | Intersection(_) => false
                   Any(_) => false
@@ -12081,7 +12113,7 @@ fn infer_array_literal_type(
                 // TS2322: Check if spread element type is assignable to contextual type
                 match contextual_element_type {
                   Some(expected) =>
-                    if not(is_assignable(arr_type.element_type, expected)) {
+                    if !(is_assignable(arr_type.element_type, expected)) {
                       checker = add_diagnostic_with_code(
                         checker,
                         "Type '\{type_to_string(arr_type.element_type)}' is not assignable to type '\{type_to_string(expected)}'.",
@@ -12111,7 +12143,7 @@ fn infer_array_literal_type(
                     // TS2322: Check if spread element type is assignable to contextual type
                     match contextual_element_type {
                       Some(expected) =>
-                        if not(is_assignable(elem_type, expected)) {
+                        if !(is_assignable(elem_type, expected)) {
                           checker = add_diagnostic_with_code(
                             checker,
                             "Type '\{type_to_string(elem_type)}' is not assignable to type '\{type_to_string(expected)}'.",
@@ -12256,7 +12288,7 @@ fn is_always_falsy(expr : Node) -> Bool {
 fn is_always_truthy(expr : Node) -> Bool {
   match expr {
     ObjectLiteralExpression(_) | ArrayLiteralExpression(_) => true
-    _ => not(is_always_falsy(expr))
+    _ => !(is_always_falsy(expr))
   }
 }
 
@@ -12331,10 +12363,10 @@ fn infer_object_literal_type(
   obj : ObjectLiteralExpression,
 ) -> (Type, TypeChecker) {
   let mut checker = checker
-  let properties = Map::new()
+  let properties = Map([])
   let spread_types : Array[Type] = [] // Track types being spread (for intersection)
-  let property_locations : Map[String, SourceLocation] = Map::new() // Track property names for TS2300 duplicate detection
-  let property_reported : Map[String, Bool] = Map::new() // Track if we've reported the first occurrence as duplicate
+  let property_locations : Map[String, SourceLocation] = Map([]) // Track property names for TS2300 duplicate detection
+  let property_reported : Map[String, Bool] = Map([]) // Track if we've reported the first occurrence as duplicate
   for i = 0; i < obj.properties.length(); i = i + 1 {
     match obj.properties[i] {
       PropertyAssignment(name, value, loc) => {
@@ -12403,7 +12435,7 @@ fn infer_object_literal_type(
         let (name_type, c) = infer_type(checker, name_expr)
         // TS2464: Check if computed property name type is valid
         let is_valid = is_valid_computed_property_type(c, name_type)
-        let c = if not(is_valid) {
+        let c = if !(is_valid) {
           add_diagnostic_with_code(
             c,
             "A computed property name must be of type 'string', 'number', 'symbol', or 'any'.",
@@ -12504,7 +12536,7 @@ fn infer_object_literal_type(
               }
               let should_skip = is_class_instance && is_method
 
-              if not(should_skip) {
+              if !(should_skip) {
                 properties.set(prop_name, prop_info)
               }
             }
@@ -12574,7 +12606,7 @@ fn infer_object_literal_type(
                           }
                           let should_skip = is_class_instance && is_method
 
-                          if not(should_skip) {
+                          if !(should_skip) {
                             properties.set(prop_name, prop_info)
                           }
                         }
@@ -12711,7 +12743,7 @@ fn infer_object_literal_type(
 
         let (name_type, c) = infer_type(checker, name_expr)
         // TS2464: Check if computed property name type is valid
-        let c = if not(is_valid_computed_property_type(c, name_type)) {
+        let c = if !(is_valid_computed_property_type(c, name_type)) {
           add_diagnostic_with_code(
             c,
             "A computed property name must be of type 'string', 'number', 'symbol', or 'any'.",
@@ -12750,7 +12782,7 @@ fn infer_object_literal_type(
 
         let (name_type, c) = infer_type(checker, name_expr)
         // TS2464: Check if computed property name type is valid
-        let c = if not(is_valid_computed_property_type(c, name_type)) {
+        let c = if !(is_valid_computed_property_type(c, name_type)) {
           add_diagnostic_with_code(
             c,
             "A computed property name must be of type 'string', 'number', 'symbol', or 'any'.",
@@ -12793,7 +12825,7 @@ fn infer_object_literal_type(
 
         let (name_type, c) = infer_type(checker, name_expr)
         // TS2464: Check if computed property name type is valid
-        let c = if not(is_valid_computed_property_type(c, name_type)) {
+        let c = if !(is_valid_computed_property_type(c, name_type)) {
           add_diagnostic_with_code(
             c,
             "A computed property name must be of type 'string', 'number', 'symbol', or 'any'.",
@@ -13361,7 +13393,7 @@ fn is_type_reference_assignable(
       return false
     }
     for i = 0; i < source.type_arguments.length(); i = i + 1 {
-      if not(is_assignable(source.type_arguments[i], target.type_arguments[i])) {
+      if !(is_assignable(source.type_arguments[i], target.type_arguments[i])) {
         return false
       }
     }
@@ -13403,8 +13435,8 @@ fn is_type_reference_assignable(
   // object representations.
   if source.type_arguments.length() == 0 &&
     target.type_arguments.length() == 0 &&
-    not(is_builtin_generic_type(source.name)) &&
-    not(is_builtin_generic_type(target.name)) {
+    !(is_builtin_generic_type(source.name)) &&
+    !(is_builtin_generic_type(target.name)) {
     // For class types, defer to structural checking (handled elsewhere)
     // This allows Bar extends Foo to work
     true
@@ -13424,9 +13456,9 @@ fn is_array_assignable_to_tuple(
   // Array can be assigned to tuple if all tuple elements accept the array element type
   for i = 0; i < tuple.element_types.length(); i = i + 1 {
     let elem = tuple.element_types[i]
-    if not(elem.is_optional) && not(elem.is_rest) {
+    if !(elem.is_optional) && !(elem.is_rest) {
       // Required element - check if array element type is compatible
-      if not(is_assignable(arr.element_type, elem.element_type)) {
+      if !(is_assignable(arr.element_type, elem.element_type)) {
         return false
       }
     }
@@ -13477,7 +13509,7 @@ fn is_template_literal_assignable(
     return false
   }
   for i = 0; i < source.types.length(); i = i + 1 {
-    if not(is_assignable(source.types[i], target.types[i])) {
+    if !(is_assignable(source.types[i], target.types[i])) {
       return false
     }
   }
@@ -13512,7 +13544,7 @@ fn is_intersection_assignable_to(
   match target {
     Object(target_obj) => {
       // Collect all properties from intersection members
-      let merged_props = Map::new()
+      let merged_props = Map([])
       for member_type in intersection.types {
         match member_type {
           Object(obj_type) =>
@@ -13535,12 +13567,12 @@ fn is_intersection_assignable_to(
         match merged_props.get(target_prop_name) {
           Some(source_prop_info) =>
             // Check if property types are assignable
-            if not(is_assignable(source_prop_info.prop_type, target_prop_info.prop_type)) {
+            if !(is_assignable(source_prop_info.prop_type, target_prop_info.prop_type)) {
               return false
             }
           None =>
             // Missing required property
-            if not(target_prop_info.is_optional) {
+            if !(target_prop_info.is_optional) {
               return false
             }
         }
@@ -13567,11 +13599,11 @@ fn is_tuple_assignable(
 ) -> Bool {
   // Count required elements in target (excluding rest)
   let mut target_required = 0
-  let mut target_rest_idx : Int? = None
+  let mut _target_rest_idx : Int? = None
   for i = 0; i < target.element_types.length(); i = i + 1 {
     if target.element_types[i].is_rest {
-      target_rest_idx = Some(i)
-    } else if not(target.element_types[i].is_optional) {
+      _target_rest_idx = Some(i)
+    } else if !(target.element_types[i].is_optional) {
       target_required = target_required + 1
     }
   }
@@ -13593,7 +13625,7 @@ fn is_tuple_assignable(
       }
       // Check all remaining source elements
       for j = i; j < source.element_types.length(); j = j + 1 {
-        if not(
+        if !(
             is_assignable(source.element_types[j].element_type, rest_elem_type),
           ) {
           return false
@@ -13603,7 +13635,7 @@ fn is_tuple_assignable(
       return true
     }
     if i < source.element_types.length() {
-      if not(
+      if !(
           is_assignable(
             source.element_types[i].element_type,
             target_elem.element_type,
@@ -13611,7 +13643,7 @@ fn is_tuple_assignable(
         ) {
         return false
       }
-    } else if not(target_elem.is_optional) {
+    } else if !(target_elem.is_optional) {
       return false
     }
   }
@@ -13643,7 +13675,7 @@ fn is_union_to_union_assignable(
 ) -> Bool {
   // Check if all source members are assignable to the target union
   for i = 0; i < source_union.types.length(); i = i + 1 {
-    if not(is_assignable_to_union(source_union.types[i], target_union)) {
+    if !(is_assignable_to_union(source_union.types[i], target_union)) {
       return false
     }
   }
@@ -13923,7 +13955,7 @@ fn check_object_assignability_detailed(
         )
       None =>
         // Property missing
-        if not(target_prop.is_optional) {
+        if !(target_prop.is_optional) {
           checker = add_diagnostic_with_code(
             checker,
             "Property '\{prop_name}' is missing in type '\{type_to_string(Object(source))}' but required in type '\{type_to_string(Object(target))}'",
@@ -13941,7 +13973,7 @@ fn check_object_assignability_detailed(
       let (prop_name, source_prop) = entry
       // Skip properties already defined in target (they have their own types)
       if target.properties.get(prop_name) is None {
-        if not(is_assignable(source_prop.prop_type, index_sig.return_type)) {
+        if !(is_assignable(source_prop.prop_type, index_sig.return_type)) {
           checker = add_diagnostic_with_code(
             checker,
             "Property '\{prop_name}' of type '\{type_to_string(source_prop.prop_type)}' is not assignable to index signature type '\{type_to_string(index_sig.return_type)}'",
@@ -13977,7 +14009,7 @@ fn check_union_assignability_detailed(
             break
           }
         }
-        if not(member_assignable) {
+        if !(member_assignable) {
           return add_diagnostic_with_code(
             checker,
             "Type '\{type_to_string(source)}' is not assignable to type '\{type_to_string(Union(union))}'",
@@ -14042,7 +14074,7 @@ fn check_union_assignability_detailed(
 /// Find discriminant properties in a union (properties that are literal types)
 fn find_discriminant_properties(union : CheckerUnionType) -> Array[String] {
   let result : Array[String] = []
-  let candidates : Map[String, Int] = Map::new()
+  let candidates : Map[String, Int] = Map([])
 
   // Find properties that appear in all object members with literal types
   for union_type in union.types {
@@ -14258,7 +14290,7 @@ fn check_tuple_assignability_detailed(
   // Count required elements in target (excluding rest)
   let mut target_required = 0
   for elem in target.element_types {
-    if not(elem.is_optional) && not(elem.is_rest) {
+    if !(elem.is_optional) && !(elem.is_rest) {
       target_required = target_required + 1
     }
   }
@@ -14391,8 +14423,8 @@ fn check_type_reference_assignability_detailed(
   // structural compatibility
   if source.type_arguments.length() == 0 &&
     target.type_arguments.length() == 0 &&
-    not(is_builtin_generic_type(source.name)) &&
-    not(is_builtin_generic_type(target.name)) {
+    !(is_builtin_generic_type(source.name)) &&
+    !(is_builtin_generic_type(target.name)) {
     // Resolve class types to their object types for structural comparison
     let source_obj_opt = resolve_class_to_object_type(checker, source.name)
     let target_obj_opt = resolve_class_to_object_type(checker, target.name)
@@ -14441,7 +14473,7 @@ fn resolve_class_to_object_type(
       match symbol.kind {
         Class => {
           // Get the class from the symbol and extract its properties
-          let properties : Map[String, PropertySignature] = Map::new()
+          let properties : Map[String, PropertySignature] = Map([])
           // Use the value_declaration to get the class declaration
           match symbol.value_declaration {
             Some(node) =>
@@ -14549,7 +14581,7 @@ fn check_numeric_operands(
   let right_is_numeric = is_numeric_type(right)
 
   // TS2362: The left-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type
-  let checker = if not(left_is_numeric) {
+  let checker = if !(left_is_numeric) {
     add_diagnostic_with_code(
       checker,
       "The left-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.",
@@ -14561,7 +14593,7 @@ fn check_numeric_operands(
   }
 
   // TS2363: The right-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type
-  let checker = if not(right_is_numeric) {
+  let checker = if !(right_is_numeric) {
     add_diagnostic_with_code(
       checker,
       "The right-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.",
@@ -14588,7 +14620,7 @@ fn check_numeric_operands_with_locations(
   let right_is_numeric = is_numeric_type(right)
 
   // TS2362: The left-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type
-  let checker = if not(left_is_numeric) {
+  let checker = if !(left_is_numeric) {
     add_diagnostic_with_code(
       checker,
       "The left-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.",
@@ -14600,7 +14632,7 @@ fn check_numeric_operands_with_locations(
   }
 
   // TS2363: The right-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type
-  let checker = if not(right_is_numeric) {
+  let checker = if !(right_is_numeric) {
     add_diagnostic_with_code(
       checker,
       "The right-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.",
@@ -14821,7 +14853,7 @@ fn template_literal_matches_string(
       None => {
         // Cannot evaluate (has non-literal expressions)
         // Check if the string at least starts with first text part
-        if tl.texts.length() > 0 && not(s.has_prefix(tl.texts[0])) {
+        if tl.texts.length() > 0 && !(s.has_prefix(tl.texts[0])) {
           return false
         }
         // Has non-literal expressions, could potentially match any value
@@ -14872,8 +14904,8 @@ fn template_literals_could_match(
       // If first texts are different, they likely can't match
       if tl1.texts.length() > 0 && tl2.texts.length() > 0 {
         if tl1.texts[0] != tl2.texts[0] &&
-          not(tl1.texts[0].has_prefix(tl2.texts[0])) &&
-          not(tl2.texts[0].has_prefix(tl1.texts[0])) {
+          !(tl1.texts[0].has_prefix(tl2.texts[0])) &&
+          !(tl2.texts[0].has_prefix(tl1.texts[0])) {
           return false
         }
       }
@@ -15266,6 +15298,22 @@ fn extract_iterable_element_type(
   iter_type : Type,
   expr_location_opt : SourceLocation?,
 ) -> (Type?, TypeChecker) {
+  extract_iterable_element_type_impl(checker, iter_type, expr_location_opt, [])
+}
+
+///|
+/// Implementation of extract_iterable_element_type with cycle detection.
+/// `visited` tracks TypeReference names already being resolved on this path.
+/// This is required because type parameters are stored in type_cache as
+/// self-referential entries (e.g. type_cache["U"] = TypeReference("U")),
+/// which would otherwise cause infinite (tail-)recursion — e.g. spreading a
+/// value typed by a generic type parameter: f(...u) with u: U extends string[].
+fn extract_iterable_element_type_impl(
+  checker : TypeChecker,
+  iter_type : Type,
+  expr_location_opt : SourceLocation?,
+  visited : Array[String],
+) -> (Type?, TypeChecker) {
   match iter_type {
     Type::Array(arr) => (Some(arr.element_type), checker)
     TypeReference(tr) =>
@@ -15278,13 +15326,33 @@ fn extract_iterable_element_type(
         ) &&
         tr.type_arguments.length() > 0 {
         (Some(tr.type_arguments[0]), checker)
+      } else if visited.contains(tr.name) {
+        // Cycle detected (e.g. self-referential type parameter entry) - stop
+        (None, checker)
       } else {
+        visited.push(tr.name)
         // Try to look up the class/interface and check if it has Symbol.iterator
         // First try type_cache, then lookup_symbol
         match checker.type_cache.get(tr.name) {
-          Some(resolved_type) =>
+          Some(resolved_type) => {
             // Recursively check the resolved type
-            extract_iterable_element_type(checker, resolved_type, expr_location_opt)
+            let (result, c) = extract_iterable_element_type_impl(
+              checker, resolved_type, expr_location_opt, visited,
+            )
+            match result {
+              Some(_) => (result, c)
+              None =>
+                // If this is a type parameter, fall back to its constraint
+                // (e.g. U extends string[] - spreading u yields string)
+                match c.type_parameter_constraints.get(tr.name) {
+                  Some(Some(constraint_type)) =>
+                    extract_iterable_element_type_impl(
+                      c, constraint_type, expr_location_opt, visited,
+                    )
+                  _ => (None, c)
+                }
+            }
+          }
           None =>
             // Look up symbol and get its type
             match lookup_symbol(checker, tr.name) {
@@ -15296,14 +15364,17 @@ fn extract_iterable_element_type(
                       Object(obj) =>
                         if obj.construct_signatures.length() > 0 {
                           // Get instance type and check if it has Symbol.iterator
-                          extract_iterable_element_type(
+                          extract_iterable_element_type_impl(
                             c,
                             obj.construct_signatures[0].return_type,
                             expr_location_opt,
+                            visited,
                           )
                         } else {
                           // Not a class constructor, check the object itself
-                          extract_iterable_element_type(c, class_type, expr_location_opt)
+                          extract_iterable_element_type_impl(
+                            c, class_type, expr_location_opt, visited,
+                          )
                         }
                       _ => (None, c)
                     }
@@ -15613,7 +15684,7 @@ fn check_for_iterator_iterable_conflict_in_heritage(
                   // Check for conflict
                   match (iterator_type_arg, iterable_type_arg) {
                     (Some(iter_type), Some(itbl_type)) =>
-                      if not(types_equal(iter_type, itbl_type)) {
+                      if !(types_equal(iter_type, itbl_type)) {
                         // Report TS2322 error
                         let itbl_str = type_to_string(itbl_type)
                         let gen_type_str = "Generator<\{itbl_str}, any, any>"
@@ -15955,7 +16026,7 @@ fn check_generator_type_assignability_v2(
         let is_generator_prop = generator_props
           .iter()
           .any(fn(p) { p == prop_name })
-        if not(is_generator_prop) && not(target_prop.is_optional) {
+        if !(is_generator_prop) && !(target_prop.is_optional) {
           // TS2741: Property is missing
           checker = add_diagnostic_with_code(
             checker,
@@ -16043,10 +16114,10 @@ fn filter_undefined_from_type(t : Type) -> Type? {
     Union(u) => {
       // Filter out undefined from the union
       let filtered : Array[Type] = []
-      for member in u.types {
-        match member {
+      for mem in u.types {
+        match mem {
           Undefined(_) => () // Skip undefined
-          _ => filtered.push(member)
+          _ => filtered.push(mem)
         }
       }
       if filtered.length() == 0 {
@@ -16119,7 +16190,7 @@ fn is_valid_generator_return_type(return_type_node : Node) -> Bool {
     // Intersection types - need to check each member
     IntersectionType(it) => {
       for t in it.types {
-        if not(is_valid_generator_return_type(t)) {
+        if !(is_valid_generator_return_type(t)) {
           return false
         }
       }
@@ -16310,7 +16381,7 @@ fn check_function_declaration(
           let is_valid_generator_return = is_valid_generator_return_type(
             return_type_node,
           )
-          if not(is_valid_generator_return) {
+          if !(is_valid_generator_return) {
             let return_type_str = type_node_to_string(return_type_node)
             add_diagnostic_with_code(
               checker,
@@ -16433,7 +16504,7 @@ fn check_function_declaration(
                       }
                     _ => false
                   }
-                  if not(is_array) {
+                  if !(is_array) {
                     checker = add_diagnostic_with_code(
                       checker,
                       "A rest parameter must be of an array type",
@@ -16457,7 +16528,7 @@ fn check_function_declaration(
             let (init_type, c) = infer_type(checker, init)
             checker = c
             // Check if default value type is array-like
-            if not(is_array_like_type(init_type)) {
+            if !(is_array_like_type(init_type)) {
               checker = add_diagnostic_with_code(
                 checker,
                 "Type '\{type_to_string(init_type)}' is not an array type.",
@@ -16476,7 +16547,7 @@ fn check_function_declaration(
     // may have is_optional = true but they have an initializer.
     match param {
       Parameter(p) =>
-        if p.is_optional && p.initializer.is_empty() {
+        if p.is_optional && p.initializer is None {
           match p.name {
             ArrayBindingPattern(_) | ObjectBindingPattern(_) =>
               checker = add_diagnostic_with_code(
@@ -16542,7 +16613,7 @@ fn check_function_declaration(
 
   // Hoist var declarations to the function scope before checking body
   // Skip if body was already checked during type inference
-  let checker = if not(body_already_checked) {
+  let checker = if !(body_already_checked) {
     match func.body {
       Some(body) => hoist_var_declarations(checker, body)
       None => checker
@@ -16553,7 +16624,7 @@ fn check_function_declaration(
 
   // Check function body
   // Skip if body was already checked during type inference
-  let checker = if not(body_already_checked) {
+  let checker = if !(body_already_checked) {
     // Reset iteration_depth when entering function (continue/break cannot cross function boundaries)
     let saved_iteration_depth = checker.iteration_depth
     let checker = { ..checker, iteration_depth: 0 }
@@ -17027,7 +17098,7 @@ fn check_for_of_statement(
         collect_binding_names(decl.name, names)
         let new_set = checker.inferring_variables.copy()
         for name in names {
-          new_set.insert(name)
+          new_set.add(name)
         }
         ({ ..checker, inferring_variables: new_set }, names)
       } else {
@@ -17309,7 +17380,7 @@ fn add_for_of_variable_to_scope(
           }
 
           // Type check: ensure elem_type is assignable to variable's declared type
-          let checker = if not(is_assignable(elem_type, declared_type)) {
+          let checker = if !(is_assignable(elem_type, declared_type)) {
             let elem_str = type_to_string(elem_type)
             let var_str = type_to_string(declared_type)
             let msg = "Type '\{elem_str}' is not assignable to type '\{var_str}'."
@@ -17332,7 +17403,7 @@ fn add_for_of_variable_to_scope(
       let (prop_type, checker) = infer_type(checker, PropertyAccessExpression(prop_access))
 
       // TS2322: Type check the element type against the property type
-      let checker = if not(is_assignable(elem_type, prop_type)) {
+      let checker = if !(is_assignable(elem_type, prop_type)) {
         let elem_str = type_to_string(elem_type)
         let prop_str = type_to_string(prop_type)
         let msg = "Type '\{elem_str}' is not assignable to type '\{prop_str}'."
@@ -17353,7 +17424,7 @@ fn add_for_of_variable_to_scope(
       let (access_type, checker) = infer_type(checker, ElementAccessExpression(elem_access))
 
       // TS2322: Type check the element type against the accessed element type
-      let checker = if not(is_assignable(elem_type, access_type)) {
+      let checker = if !(is_assignable(elem_type, access_type)) {
         let elem_str = type_to_string(elem_type)
         let access_str = type_to_string(access_type)
         let msg = "Type '\{elem_str}' is not assignable to type '\{access_str}'."
@@ -17386,7 +17457,7 @@ fn add_for_of_variable_to_scope(
       for i = 0; i < arr_lit.elements.length(); i = i + 1 {
         match arr_lit.elements[i] {
           Some(elem) => {
-            if not(is_valid_destructuring_target(elem)) {
+            if !(is_valid_destructuring_target(elem)) {
               c = add_diagnostic_with_code(
                 c,
                 "The left-hand side of an assignment expression must be a variable or a property access.",
@@ -17414,7 +17485,7 @@ fn add_for_of_variable_to_scope(
       for i = 0; i < obj_lit.properties.length(); i = i + 1 {
         match obj_lit.properties[i] {
           PropertyAssignment(_prop_name, value, _loc) => {
-            if not(is_valid_destructuring_target(value)) {
+            if !(is_valid_destructuring_target(value)) {
               c = add_diagnostic_with_code(
                 c,
                 "The left-hand side of an assignment expression must be a variable or a property access.",
@@ -17748,7 +17819,7 @@ fn get_for_of_element_type(
 /// Scan statements for block-scoped (let/const) declarations
 /// Returns a map of variable name -> declaration line number
 fn scan_block_scoped_declarations(statements : Array[Node]) -> Map[String, Int] {
-  let decls : Map[String, Int] = Map::new()
+  let decls : Map[String, Int] = Map([])
   for stmt in statements {
     match stmt {
       VariableStatement(vs) =>
@@ -17968,12 +18039,12 @@ fn check_super_call_in_constructor(
   location : SourceLocation,
 ) -> TypeChecker {
   // Only check if this is a derived class (has extends clause)
-  if not(is_derived_class(class_decl)) {
+  if !(is_derived_class(class_decl)) {
     return checker
   }
 
   // Check if constructor body contains super() call
-  if not(contains_super_call(body)) {
+  if !(contains_super_call(body)) {
     // Emit TS2377 error
     return add_diagnostic_with_code(
       checker,
@@ -17999,8 +18070,8 @@ fn check_super_call_in_constructor(
 fn class_has_initialized_or_parameter_properties(
   class_decl : ClassDeclaration,
 ) -> Bool {
-  for member in class_decl.members {
-    match member {
+  for mem in class_decl.members {
+    match mem {
       PropertyDeclaration(prop) => {
         // Check if property has an initializer
         match prop.initializer {
@@ -18012,10 +18083,10 @@ fn class_has_initialized_or_parameter_properties(
           return true
         }
       }
-      MethodDeclaration(method) =>
+      MethodDeclaration(meth) =>
         // Check for parameter properties in constructor
-        if method.name == "constructor" {
-          for param in method.parameters {
+        if meth.name == "constructor" {
+          for param in meth.parameters {
             match param {
               Parameter(p) =>
                 // Parameter properties have accessibility modifiers (public, private, protected, readonly)
@@ -18198,7 +18269,7 @@ fn check_class_declaration(
   }
 
   // Collect uninitialized properties for definite assignment checking
-  let uninitialized_props : Map[String, SourceLocation] = Map::new()
+  let uninitialized_props : Map[String, SourceLocation] = Map([])
   for mem in class_decl.members {
     match mem {
       PropertyDeclaration(prop) =>
@@ -18212,11 +18283,11 @@ fn check_class_declaration(
 
   // For TS2729: Track properties not yet initialized (includes later properties with initializers)
   // A property initializer cannot reference properties that appear later in the class
-  let not_yet_initialized : Map[String, Bool] = Map::new()
+  let not_yet_initialized : Map[String, Bool] = Map([])
   for mem in class_decl.members {
     match mem {
       PropertyDeclaration(prop) =>
-        if not(has_modifier(prop.modifiers, Modifier::Static)) {
+        if !(has_modifier(prop.modifiers, Modifier::Static)) {
           // Add all non-static properties - we'll remove them as we process them
           not_yet_initialized.set(prop.name, true)
         }
@@ -18363,7 +18434,7 @@ fn check_class_declaration(
               } else {
                 // Not a literal expression - check if the inferred type is valid
                 let (name_type, c) = infer_type(checker, name_expr)
-                if not(is_valid_class_property_computed_name_type(name_type)) {
+                if !(is_valid_class_property_computed_name_type(name_type)) {
                   add_diagnostic_with_code(
                     c,
                     "A computed property name in a class property declaration must have a simple literal type or a 'unique symbol' type.",
@@ -18389,7 +18460,7 @@ fn check_class_declaration(
               checker
             }
             // Check for TS2729: property forward reference (only for non-static properties)
-            let checker = if not(is_static) {
+            let checker = if !(is_static) {
               check_property_forward_reference(
                 checker, init, not_yet_initialized,
               )
@@ -18415,7 +18486,7 @@ fn check_class_declaration(
               c
             }
             // Remove from not_yet_initialized after processing (for TS2729)
-            if not(is_static) {
+            if !(is_static) {
               not_yet_initialized.remove(prop.name)
             }
             c
@@ -18423,7 +18494,7 @@ fn check_class_declaration(
           None => {
             // Property without initializer - still remove from not_yet_initialized
             // (it's in uninitialized_props for TS2565 checking in constructor)
-            if not(is_static) {
+            if !(is_static) {
               not_yet_initialized.remove(prop.name)
             }
             checker
@@ -18523,10 +18594,10 @@ fn check_class_index_signature_compatibility(
             current_string_idx,
             current_number_idx,
           )
-        MethodDeclaration(method) =>
+        MethodDeclaration(meth) =>
           check_method_against_index_sig(
             checker,
-            method,
+            meth,
             current_string_idx,
             current_number_idx,
           )
@@ -18560,10 +18631,10 @@ fn check_class_index_signature_compatibility(
             current_string_idx,
             current_number_idx,
           )
-        MethodDeclaration(method) =>
+        MethodDeclaration(meth) =>
           check_method_against_index_sig(
             checker,
-            method,
+            meth,
             current_string_idx,
             current_number_idx,
           )
@@ -18589,10 +18660,10 @@ fn check_class_index_signature_compatibility(
           check_getter_against_index_sig(checker, getter, base_string_idx, base_number_idx)
         SetAccessor(setter) =>
           check_setter_against_index_sig(checker, setter, base_string_idx, base_number_idx)
-        MethodDeclaration(method) =>
+        MethodDeclaration(meth) =>
           check_method_against_index_sig(
             checker,
-            method,
+            meth,
             base_string_idx,
             base_number_idx,
           )
@@ -19153,32 +19224,32 @@ fn check_setter_against_index_sig(
 /// Check a method against index signatures (TS2411)
 fn check_method_against_index_sig(
   checker : TypeChecker,
-  method : MethodDeclaration,
+  meth : MethodDeclaration,
   string_index : IndexSignature?,
-  number_index : IndexSignature?,
+  _number_index : IndexSignature?,
 ) -> TypeChecker {
   // Static members are not subject to index signature constraints
-  if has_modifier(method.modifiers, Modifier::Static) {
+  if has_modifier(meth.modifiers, Modifier::Static) {
     return checker
   }
 
   // Methods with computed names need checking
-  let prop_name = match method.computed_name_expr {
+  let prop_name = match meth.computed_name_expr {
     Some(expr) =>
       match expr {
         StringLiteral(lit) => lit.value
         _ => return checker // Can't validate dynamic names
       }
-    None => method.name
+    None => meth.name
   }
 
   // Build method signature type
-  let (method_type, checker) = infer_method_type(checker, method)
+  let (method_type, checker) = infer_method_type(checker, meth)
 
   // Check against string index signature
   match string_index {
     Some(sig) => {
-      if not(is_assignable(method_type, sig.return_type)) {
+      if !(is_assignable(method_type, sig.return_type)) {
         let method_type_str = type_to_string(method_type)
         let index_type_str = type_to_string(sig.return_type)
         return add_diagnostic_with_code(
@@ -19190,7 +19261,7 @@ fn check_method_against_index_sig(
             "' is not assignable to 'string' index type '" +
             index_type_str +
             "'.",
-          method.location,
+          meth.location,
           TS2411,
         )
       }
@@ -19272,7 +19343,7 @@ fn check_abstract_member_implementation(
 
                 // Check each abstract member is implemented
                 for abstract_member in abstract_members {
-                  if not(implemented_members.contains(abstract_member.0)) {
+                  if !(implemented_members.contains(abstract_member.0)) {
                     checker = add_diagnostic_with_code(
                       checker,
                       "Non-abstract class '\{get_class_decl_name(class_decl)}' does not implement inherited abstract member '\{abstract_member.0}' from class '\{type_ref.type_name}'.",
@@ -19351,7 +19422,7 @@ fn check_property_use_before_assignment(
   uninitialized_props : Map[String, SourceLocation],
 ) -> TypeChecker {
   // Track which properties have been assigned
-  let assigned_props : Map[String, Bool] = Map::new()
+  let assigned_props : Map[String, Bool] = Map([])
 
   // Scan the constructor body for this.prop accesses
   check_this_property_accesses(
@@ -19440,7 +19511,7 @@ fn check_this_property_accesses(
         ThisExpression(_) =>
           // Reading this.prop - check if it's assigned
           if uninitialized_props.contains(pa.name) &&
-            not(assigned_props.get(pa.name).unwrap_or(false)) {
+            !(assigned_props.get(pa.name).unwrap_or(false)) {
             // Property is used before being assigned
             add_diagnostic_with_code(
               checker,
@@ -19598,7 +19669,7 @@ fn validate_interface_computed_name_ts1169(
         // Not a literal expression - check the inferred type
         let (name_type, c) = infer_type(checker, name_expr)
         // TS1169: Interface computed properties must have literal or unique symbol types
-        if not(is_literal_or_unique_symbol_type(name_type)) {
+        if !(is_literal_or_unique_symbol_type(name_type)) {
           add_diagnostic_with_code(
             c,
             "A computed property name in an interface must refer to an expression whose type is a literal type or a 'unique symbol' type.",
@@ -19690,7 +19761,7 @@ fn check_interface_declaration(
             let (name_type, c) = infer_type(checker, name_expr)
             checker = c
             // Check if computed property name type is valid
-            if not(is_valid_computed_property_type(checker, name_type)) {
+            if !(is_valid_computed_property_type(checker, name_type)) {
               checker = add_diagnostic_with_code(
                 checker,
                 "A computed property name must be of type 'string', 'number', 'symbol', or 'any'.",
@@ -19707,7 +19778,7 @@ fn check_interface_declaration(
             let (name_type, c) = infer_type(checker, name_expr)
             checker = c
             // Check if computed property name type is valid
-            if not(is_valid_computed_property_type(checker, name_type)) {
+            if !(is_valid_computed_property_type(checker, name_type)) {
               checker = add_diagnostic_with_code(
                 checker,
                 "A computed property name must be of type 'string', 'number', 'symbol', or 'any'.",
@@ -19794,7 +19865,7 @@ fn check_interface_declaration(
             let is_compatible = is_simple_type_compatible(
               prop_type, idx_ret_type,
             )
-            if not(is_compatible) {
+            if !(is_compatible) {
               checker = add_diagnostic_with_code(
                 checker,
                 "Property '\{prop.name}' of type '\{type_to_string(prop_type)}' is not assignable to '\{type_to_string(idx_ret_type)}' index type '\{type_to_string(idx_ret_type)}'",
@@ -19828,7 +19899,7 @@ fn check_interface_heritage_conflicts(
 ) -> TypeChecker {
   let mut checker = checker
   // Collect properties from all base interfaces
-  let base_properties : Map[String, (Type, String)] = Map::new() // name -> (type, source_interface)
+  let base_properties : Map[String, (Type, String)] = Map([]) // name -> (type, source_interface)
   for heritage_clause in iface_decl.heritage_clauses {
     if heritage_clause.kind == Extends {
       for base_type_node in heritage_clause.types {
@@ -19854,13 +19925,13 @@ fn check_interface_heritage_conflicts(
                       match base_properties.get(prop_name) {
                         Some((existing_type, existing_source)) =>
                           // Check if types are compatible
-                          if not(
+                          if !(
                               is_simple_type_compatible(
                                 prop_sig.prop_type,
                                 existing_type,
                               ),
                             ) &&
-                            not(
+                            !(
                               is_simple_type_compatible(
                                 existing_type,
                                 prop_sig.prop_type,
@@ -19976,9 +20047,9 @@ fn build_class_type_for_this(
   type_param_names : Array[String],
 ) -> (Type, TypeChecker) {
   // Build object type for the class instance
-  let properties : Map[String, PropertySignature] = Map::new()
+  let properties : Map[String, PropertySignature] = Map([])
   // Extract class name from the Identifier node
-  let class_name_str = match class_decl.name {
+  let _class_name_str = match class_decl.name {
     Some(Identifier(id)) => id.name
     _ => ""  // Fallback for anonymous classes
   }
@@ -20028,7 +20099,7 @@ fn build_class_type_for_this(
         )
 
         // TS1166: Validate computed property names in class declarations
-        let checker = match prop.computed_name_expr {
+        let _checker = match prop.computed_name_expr {
           Some(name_expr) => {
             // First check if the expression itself is a literal
             if is_literal_expression(name_expr) {
@@ -20036,7 +20107,7 @@ fn build_class_type_for_this(
             } else {
               // Not a literal expression - check if the inferred type is valid
               let (name_type, c) = infer_type(checker, name_expr)
-              if not(is_valid_class_property_computed_name_type(name_type)) {
+              if !(is_valid_class_property_computed_name_type(name_type)) {
                 add_diagnostic_with_code(
                   c,
                   "A computed property name in a class property declaration must have a simple literal type or a 'unique symbol' type.",
@@ -20095,7 +20166,7 @@ fn build_class_type_for_this(
         checker = match method_decl.computed_name_expr {
           Some(name_expr) => {
             let (name_type, c) = infer_type(checker, name_expr)
-            let c = if not(is_valid_computed_property_type(c, name_type)) {
+            let c = if !(is_valid_computed_property_type(c, name_type)) {
               add_diagnostic_with_code(
                 c,
                 "A computed property name must be of type 'string', 'number', 'symbol', or 'any'.",
@@ -20131,7 +20202,7 @@ fn build_class_type_for_this(
         checker = match getter.computed_name_expr {
           Some(name_expr) => {
             let (name_type, c) = infer_type(checker, name_expr)
-            let c = if not(is_valid_computed_property_type(c, name_type)) {
+            let c = if !(is_valid_computed_property_type(c, name_type)) {
               add_diagnostic_with_code(
                 c,
                 "A computed property name must be of type 'string', 'number', 'symbol', or 'any'.",
@@ -20149,7 +20220,7 @@ fn build_class_type_for_this(
         // TS2378: Validate that get accessor returns a value
         checker = match getter.body {
           Some(body) => {
-            if not(has_return_statement(body)) {
+            if !(has_return_statement(body)) {
               add_diagnostic_with_code(
                 checker,
                 "A 'get' accessor must return a value.",
@@ -20180,7 +20251,7 @@ fn build_class_type_for_this(
         checker = match setter.computed_name_expr {
           Some(name_expr) => {
             let (name_type, c) = infer_type(checker, name_expr)
-            let c = if not(is_valid_computed_property_type(c, name_type)) {
+            let c = if !(is_valid_computed_property_type(c, name_type)) {
               add_diagnostic_with_code(
                 c,
                 "A computed property name must be of type 'string', 'number', 'symbol', or 'any'.",
@@ -20250,12 +20321,12 @@ fn check_enum_declaration(
   }
 
   // Collect all enum member names for forward reference checking
-  let all_member_names : Map[String, Bool] = Map::new()
+  let all_member_names : Map[String, Bool] = Map([])
   for mem in enum_decl.members {
     all_member_names.set(mem.name, true)
   }
   // Track seen members as we process them
-  let seen_members : Map[String, Bool] = Map::new()
+  let seen_members : Map[String, Bool] = Map([])
   let checker = check_enum_members_with_forward_check(
     checker,
     enum_decl.members,
@@ -20451,7 +20522,7 @@ fn check_enum_initializer_forward_reference(
     Identifier(id) =>
       // If the identifier is an enum member that hasn't been seen yet, it's a forward reference
       if all_member_names.contains(id.name) &&
-        not(seen_members.contains(id.name)) {
+        !(seen_members.contains(id.name)) {
         add_diagnostic_with_code(
           checker,
           "Enum member '\{id.name}' cannot be accessed before it is defined.",
@@ -20464,7 +20535,7 @@ fn check_enum_initializer_forward_reference(
     PropertyAccessExpression(prop_access) =>
       // Check if accessing a forward-declared member like MyEnum.ForwardMember
       if all_member_names.contains(prop_access.name) &&
-        not(seen_members.contains(prop_access.name)) {
+        !(seen_members.contains(prop_access.name)) {
         add_diagnostic_with_code(
           checker,
           "Enum member '\{prop_access.name}' cannot be accessed before it is defined.",
@@ -20613,7 +20684,7 @@ fn validate_enum_initializer(
 
 ///|
 /// Result of evaluating a const enum initializer
-enum ConstEnumValue {
+priv enum ConstEnumValue {
   FiniteValue(Double)
   InfinityValue
   NaNValue
@@ -20625,7 +20696,7 @@ fn evaluate_const_enum_value(expr : Node) -> ConstEnumValue? {
   match expr {
     NumericLiteral(lit) => {
       // Parse the string value to a double
-      let v = @strconv.parse_double(lit.value) catch { _ => 0.0 }
+      let v = @string.parse_double(lit.value) catch { _ => 0.0 }
       Some(ConstEnumValue::FiniteValue(v))
     }
     Identifier(id) =>
@@ -20800,7 +20871,7 @@ fn check_import_declaration(
   // In single-file compilation, we can't resolve external modules, so emit an error
   // Relative paths start with './' or '../'
   let is_relative = module_spec.has_prefix("./") || module_spec.has_prefix("../")
-  let mut checker = if not(is_relative) {
+  let mut checker = if !(is_relative) {
     // External module - in single-file compilation context, we can't resolve these
     add_diagnostic_with_code(
       checker,
@@ -20859,7 +20930,7 @@ pub struct ResolvedModuleExports {
   has_default_export : Bool
   /// Set of exported names
   exports : @hashset.HashSet[String]
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Validate import against resolved module exports
@@ -20884,7 +20955,7 @@ pub fn validate_import_resolution(
       )
     Some(module_exports) =>
       // Check if the file is a module (has exports)
-      if not(module_exports.is_module) {
+      if !(module_exports.is_module) {
         // TS2306: File is not a module
         diagnostics.push(
           create_file_not_module_diagnostic(module_spec, import_decl.location),
@@ -20896,7 +20967,7 @@ pub fn validate_import_resolution(
             // Check default import
             match clause.name {
               Some(_default_name) =>
-                if not(module_exports.has_default_export) {
+                if !(module_exports.has_default_export) {
                   // TS1192: Module has no default export
                   diagnostics.push(
                     create_no_default_export_diagnostic_with_location(
@@ -20916,7 +20987,7 @@ pub fn validate_import_resolution(
                     Some(prop) => prop
                     None => specifier.name
                   }
-                  if not(module_exports.exports.contains(import_name)) {
+                  if !(module_exports.exports.contains(import_name)) {
                     // Try to find a close match for spelling suggestion
                     match find_closest_export(import_name, module_exports.exports) {
                       Some(suggestion) =>
@@ -20990,7 +21061,7 @@ pub fn detect_export_star_conflicts(
 
     // If we have multiple export *, check for conflicts
     if export_stars.length() > 1 {
-      let exported_names : Map[String, String] = Map::new()  // name -> first module that exported it
+      let exported_names : Map[String, String] = Map([])  // name -> first module that exported it
 
       for i = 0; i < export_stars.length(); i = i + 1 {
         let (module_spec, location) = export_stars[i]
@@ -21037,7 +21108,7 @@ pub fn ResolvedModuleExports::from_bound_file(
   bound_file : BoundSourceFile,
   file_path : String,
 ) -> ResolvedModuleExports {
-  let exports : @hashset.HashSet[String] = @hashset.new()
+  let exports : @hashset.HashSet[String] = @hashset.HashSet([])
   let mut has_default = false
   let mut is_module = false
 
@@ -21276,7 +21347,7 @@ fn check_switch_statement(
         checker = c
 
         // TS2678: Check if case type is comparable to switch expression type
-        if not(types_have_overlap(case_type, switch_type)) {
+        if !(types_have_overlap(case_type, switch_type)) {
           checker = add_diagnostic_with_code(
             checker,
             "Type '\{type_to_string(case_type)}' is not comparable to type '\{type_to_string(switch_type)}'.",
@@ -22101,8 +22172,8 @@ fn has_return_statement(stmt : Node) -> Bool {
       }
       // Check finally block
       match try_stmt.finally_block {
-        Some(finally) =>
-          if has_return_statement(finally) {
+        Some(fin) =>
+          if has_return_statement(fin) {
             return true
           }
         None => ()
@@ -22123,8 +22194,8 @@ fn is_literal_or_unique_symbol_type(ty : Type) -> Bool {
     Symbol(_) => true // Symbol type includes unique symbols
     // Union types: true if ALL members are literal or unique symbol
     Union(union) => {
-      for member in union.types {
-        if not(is_literal_or_unique_symbol_type(member)) {
+      for mem in union.types {
+        if !(is_literal_or_unique_symbol_type(mem)) {
           return false
         }
       }
@@ -22143,7 +22214,7 @@ fn check_type_arguments_in_static_context(
   location : SourceLocation,
 ) -> TypeChecker {
   // Only check if we're in a static context
-  if not(checker.in_static_context) {
+  if !(checker.in_static_context) {
     return checker
   }
 
@@ -22513,7 +22584,7 @@ fn get_type_from_type_node(
           (
             Some(
               Object({
-                properties: Map::new(),
+                properties: Map([]),
                 call_signatures: [],
                 construct_signatures: [],
                 index_signatures: [],
@@ -22780,7 +22851,7 @@ fn get_type_from_type_node(
     TypeLiteral(type_literal) => {
       // Handle object type literals: { prop: type; }
       let mut checker = checker
-      let properties : Map[String, PropertySignature] = Map::new()
+      let properties : Map[String, PropertySignature] = Map([])
       let call_signatures : Array[CheckerSignature] = []
       let construct_signatures : Array[CheckerSignature] = []
       let index_signatures : Array[IndexSignature] = []
@@ -22899,7 +22970,7 @@ fn get_type_from_type_node(
         NumericLiteral(n) => {
           let (info, c) = create_type_info(checker)
           // Parse the string value to a number
-          let num_value = @strconv.parse_double(n.value) catch { _ => 0.0 }
+          let num_value = @string.parse_double(n.value) catch { _ => 0.0 }
           (Some(NumberLiteral(num_value, info)), c)
         }
         BooleanLiteral(b) => {
@@ -23344,7 +23415,7 @@ fn type_to_string(t : Type) -> String {
         Some(name) => name
         None =>
           // Display empty object literals as {} (like TypeScript does)
-          if obj.properties.size() == 0 &&
+          if obj.properties.length() == 0 &&
             obj.call_signatures.length() == 0 &&
             obj.construct_signatures.length() == 0 &&
             obj.index_signatures.length() == 0 {
@@ -23488,7 +23559,7 @@ fn resolve_interface_type(
       let mut checker = c
 
       // Build property map from interface members
-      let properties : Map[String, PropertySignature] = Map::new()
+      let properties : Map[String, PropertySignature] = Map([])
       let index_signatures : Array[IndexSignature] = []
       let call_signatures : Array[CheckerSignature] = []
       let construct_signatures : Array[CheckerSignature] = []
@@ -23500,7 +23571,7 @@ fn resolve_interface_type(
               Some(name_expr) => {
                 let (name_type, c) = infer_type(checker, name_expr)
                 // Check if computed property name type is valid
-                if not(is_valid_computed_property_type(c, name_type)) {
+                if !(is_valid_computed_property_type(c, name_type)) {
                   add_diagnostic_with_code(
                     c,
                     "A computed property name must be of type 'string', 'number', 'symbol', or 'any'.",
@@ -23541,7 +23612,7 @@ fn resolve_interface_type(
               Some(name_expr) => {
                 let (name_type, c) = infer_type(checker, name_expr)
                 // Check if computed property name type is valid
-                if not(is_valid_computed_property_type(c, name_type)) {
+                if !(is_valid_computed_property_type(c, name_type)) {
                   add_diagnostic_with_code(
                     c,
                     "A computed property name must be of type 'string', 'number', 'symbol', or 'any'.",
@@ -23775,7 +23846,7 @@ fn resolve_type_alias_type_with_args(
       }
 
       // Create substitution map
-      let subst_map : Map[String, Type] = Map::new()
+      let subst_map : Map[String, Type] = Map([])
       for i = 0
           i < type_param_names.length() && i < resolved_args.length()
           i = i + 1 {
@@ -23846,9 +23917,9 @@ fn substitute_and_expand_type(
     Union(union) => {
       let mut checker = checker
       let new_types : Array[Type] = []
-      for member in union.types {
+      for mem in union.types {
         let (new_member, c) = substitute_and_expand_type(
-          checker, member, subst_map,
+          checker, mem, subst_map,
         )
         new_types.push(new_member)
         checker = c
@@ -23869,7 +23940,7 @@ fn substitute_and_expand_type(
     // Object type - substitute property types
     Object(obj) => {
       let mut checker = checker
-      let new_props : Map[String, PropertySignature] = Map::new()
+      let new_props : Map[String, PropertySignature] = Map([])
       for entry in obj.properties {
         let (name, prop) = entry
         let (new_type, c) = substitute_and_expand_type(
@@ -23914,7 +23985,7 @@ fn expand_mapped_type_with_subst(
           match target_type {
             Object(obj) => {
               // Create properties from the target object
-              let result_props : Map[String, PropertySignature] = Map::new()
+              let result_props : Map[String, PropertySignature] = Map([])
               for entry in obj.properties {
                 let (name, prop) = entry
                 // Substitute the template type with the property type
@@ -24103,7 +24174,7 @@ pub fn validate_isolated_modules(
   let diagnostics : Array[Diagnostic] = []
 
   // TS1208: File must be a module (have import/export statements)
-  if not(bound.module_info.is_external_module) {
+  if !(bound.module_info.is_external_module) {
     let location = SourceLocation::{
       file_path,
       start: Position::{ line: 1, column: 1, offset: 0 },
@@ -24146,7 +24217,7 @@ pub fn validate_verbatim_module_syntax(
   let diagnostics : Array[Diagnostic] = []
 
   // Collect all type-only symbols (interfaces, type aliases) from the source file
-  let type_only_symbols : Map[String, Bool] = Map::new()
+  let type_only_symbols : Map[String, Bool] = Map([])
   for stmt in bound.statements {
     match stmt {
       InterfaceDeclaration(iface) => type_only_symbols.set(iface.name, true)
@@ -24284,7 +24355,7 @@ fn exact_opt_find_interface_properties(
   type_name : String,
 ) -> Map[String, ExactOptPropertyInfo] {
   // Returns map of property name -> property info
-  let props : Map[String, ExactOptPropertyInfo] = Map::new()
+  let props : Map[String, ExactOptPropertyInfo] = Map([])
   for stmt in bound.statements {
     match stmt {
       InterfaceDeclaration(iface) =>
@@ -24361,7 +24432,7 @@ pub fn validate_exact_optional_property_types(
                               Some(tn) => exact_opt_type_includes_undefined(tn)
                               None => false
                             }
-                            if not(includes_undefined) {
+                            if !(includes_undefined) {
                               diagnostics.push(Diagnostic::{
                                 code: 2412,
                                 category: DiagnosticCategory::Error,
@@ -24434,7 +24505,7 @@ fn check_type_parameter_names(
     // TS2706: Check required type params don't follow optional
     let has_default = param.default is Some(_)
     if has_default {
-      if not(seen_optional) {
+      if !(seen_optional) {
         seen_optional = true
         first_optional_name = param.name
       }
@@ -24800,7 +24871,7 @@ fn collect_require_bindings(
   statements : Array[Node],
   current_file : String,
 ) -> Map[String, String] {
-  let bindings : Map[String, String] = Map::new()
+  let bindings : Map[String, String] = Map([])
   for statement in statements {
     match statement {
       // var x = require('mod') or const x = require('mod')
@@ -24870,7 +24941,7 @@ fn resolve_require_path(specifier : String, current_file : String) -> String {
 
 ///|
 /// Context for CommonJS expression type inference
-struct CommonJSTypeContext {
+priv struct CommonJSTypeContext {
   env : TypeEnv
   require_bindings : Map[String, String] // variable name -> resolved module path
   external_registry : ExternalTypeRegistry?
@@ -24881,7 +24952,7 @@ struct CommonJSTypeContext {
 fn simple_cjs_context(env : TypeEnv) -> CommonJSTypeContext {
   CommonJSTypeContext::{
     env,
-    require_bindings: Map::new(),
+    require_bindings: Map([]),
     external_registry: None,
   }
 }
@@ -24917,7 +24988,7 @@ fn expression_to_type_v2_with_context(
 
     // Object literals - create object type
     ObjectLiteralExpression(ole) => {
-      let fields : Map[String, FieldInfoV2] = Map::new()
+      let fields : Map[String, FieldInfoV2] = Map([])
       for prop in ole.properties {
         match prop {
           // PropertyAssignment(name: String, value: Node, location: SourceLocation)
@@ -25012,7 +25083,7 @@ fn resolve_identifier_type(ctx : CommonJSTypeContext, name : String) -> TypeV2 {
 ///|
 /// Convert ModuleTypes to a TypeV2 object type
 fn module_types_to_type_v2(module_types : ModuleTypes) -> TypeV2 {
-  let fields : Map[String, FieldInfoV2] = Map::new()
+  let fields : Map[String, FieldInfoV2] = Map([])
 
   // Add all named exports as fields
   module_types.named_exports.each(fn(name, info) {
@@ -25082,7 +25153,7 @@ fn module_declaration_to_object_type(
   scope : Scope,
   md : ModuleDeclaration,
 ) -> ObjectTypeV2 {
-  let fields : Map[String, FieldInfoV2] = Map::new()
+  let fields : Map[String, FieldInfoV2] = Map([])
   let call_signatures : Array[FunctionTypeV2] = []
   let construct_signatures : Array[FunctionTypeV2] = []
 
@@ -25223,7 +25294,7 @@ fn resolve_export_type(scope : Scope, name : String, env : TypeEnv) -> TypeV2 {
 ///|
 /// Convert a class declaration to TypeV2
 fn class_declaration_to_type(env : TypeEnv, cd : ClassDeclaration) -> TypeV2 {
-  let fields : Map[String, FieldInfoV2] = Map::new()
+  let fields : Map[String, FieldInfoV2] = Map([])
   let call_signatures : Array[FunctionTypeV2] = []
   let construct_signatures : Array[FunctionTypeV2] = []
   for mem in cd.members {

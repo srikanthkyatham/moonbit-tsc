@@ -25,7 +25,7 @@ test "TS2304: Undeclared variable in for-of loop" {
           match @compiler.check_source_file(bound) {
             Ok(_) => fail("Should report TS2304 for undeclared variable")
             Err(diagnostics) =>
-              if not(has_for_of_diagnostic(diagnostics, 2304)) {
+              if !(has_for_of_diagnostic(diagnostics, 2304)) {
                 fail("Should report TS2304 for undeclared variable 'x'")
               }
           }
@@ -45,7 +45,7 @@ test "TS2322: Type mismatch in for-of with identifier" {
           match @compiler.check_source_file(bound) {
             Ok(_) => fail("Should report TS2322 for type mismatch")
             Err(diagnostics) =>
-              if not(has_for_of_diagnostic(diagnostics, 2322)) {
+              if !(has_for_of_diagnostic(diagnostics, 2322)) {
                 fail("Should report TS2322 for number -> string assignment")
               }
           }
@@ -65,7 +65,7 @@ test "TS2322: Type mismatch in for-of with property access" {
           match @compiler.check_source_file(bound) {
             Ok(_) => fail("Should report TS2322 for type mismatch in property access")
             Err(diagnostics) =>
-              if not(has_for_of_diagnostic(diagnostics, 2322)) {
+              if !(has_for_of_diagnostic(diagnostics, 2322)) {
                 fail("Should report TS2322 for number -> string assignment to property")
               }
           }
@@ -85,7 +85,7 @@ test "TS2322: Type mismatch in for-of with element access" {
           match @compiler.check_source_file(bound) {
             Ok(_) => fail("Should report TS2322 for type mismatch in element access")
             Err(diagnostics) =>
-              if not(has_for_of_diagnostic(diagnostics, 2322)) {
+              if !(has_for_of_diagnostic(diagnostics, 2322)) {
                 fail("Should report TS2322 for number -> string assignment to element")
               }
           }
@@ -105,7 +105,7 @@ test "TS2588: Cannot assign to const in for-of" {
           match @compiler.check_source_file(bound) {
             Ok(_) => fail("Should report TS2588 for assigning to const")
             Err(diagnostics) =>
-              if not(has_for_of_diagnostic(diagnostics, 2588)) {
+              if !(has_for_of_diagnostic(diagnostics, 2588)) {
                 fail("Should report TS2588 for assigning to const variable")
               }
           }

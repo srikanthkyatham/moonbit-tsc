@@ -791,7 +791,7 @@ test "for-of: interface without Symbol.iterator - limitation" {
     #|declare var obj: NoIterator;
     #|for (var x of obj) { }
 
-  let result = check_for_of(source)
+  let _result = check_for_of(source)
 
   // Currently doesn't error (limitation)
   // This test documents the current behavior
@@ -835,7 +835,7 @@ test "for-of - Symbol.iterator returns any should pass" {
   let diagnostics = get_diagnostics(result)
 
   // Should not have TS2488 error - 'any' is valid
-  assert_true(not(has_error(diagnostics, 2488)))
+  assert_true(!(has_error(diagnostics, 2488)))
 }
 
 test "for-of - Symbol.iterator property typed as any should pass" {
@@ -850,7 +850,7 @@ test "for-of - Symbol.iterator property typed as any should pass" {
   let diagnostics = get_diagnostics(result)
 
   // Should not have TS2488 error - 'any' is valid
-  assert_true(not(has_error(diagnostics, 2488)))
+  assert_true(!(has_error(diagnostics, 2488)))
 }
 
 test "for-of - Symbol.iterator with proper next() should pass" {
@@ -905,7 +905,7 @@ test "for-of - next() returns any should pass" {
   let diagnostics = get_diagnostics(result)
 
   // Should not have TS2488 error - next() returning 'any' is valid
-  assert_true(not(has_error(diagnostics, 2488)))
+  assert_true(!(has_error(diagnostics, 2488)))
 }
 
 test "for-of - next property typed as any should pass" {
@@ -923,7 +923,7 @@ test "for-of - next property typed as any should pass" {
   let diagnostics = get_diagnostics(result)
 
   // Should not have TS2488 error - next property as 'any' is valid
-  assert_true(not(has_error(diagnostics, 2488)))
+  assert_true(!(has_error(diagnostics, 2488)))
 }
 
 test "for-of - object with next() but no Symbol.iterator should error" {
@@ -982,7 +982,7 @@ test "for-of - interface without Symbol.iterator falls back to any" {
 
   // Should not error - interfaces without explicit iterator fall back to 'any'
   // This is a known limitation, not a bug
-  assert_true(not(has_error(diagnostics, 2488)))
+  assert_true(!(has_error(diagnostics, 2488)))
 }
 
 // Note: TS2767 tests for iterator return property validation
@@ -1089,7 +1089,7 @@ test "for-of - TS2767: class with 'return' method should not error" {
   let result = check_for_of(source)
   let diagnostics = get_diagnostics(result)
 
-  assert_true(not(has_error(diagnostics, 2767)))
+  assert_true(!(has_error(diagnostics, 2767)))
 }
 
 test "for-of - TS2767: static 'return' property should not affect iterator validation" {
@@ -1110,7 +1110,7 @@ test "for-of - TS2767: static 'return' property should not affect iterator valid
   let diagnostics = get_diagnostics(result)
 
   // Static property doesn't affect instance iterator validation
-  assert_true(not(has_error(diagnostics, 2767)))
+  assert_true(!(has_error(diagnostics, 2767)))
 }
 
 test "for-of - TS2767: class without 'return' property should not error" {
@@ -1129,7 +1129,7 @@ test "for-of - TS2767: class without 'return' property should not error" {
   let result = check_for_of(source)
   let diagnostics = get_diagnostics(result)
 
-  assert_true(not(has_error(diagnostics, 2767)))
+  assert_true(!(has_error(diagnostics, 2767)))
 }
 
 // ============================================================================

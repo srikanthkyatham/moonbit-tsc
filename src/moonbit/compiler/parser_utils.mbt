@@ -7,7 +7,7 @@ pub enum TrailingCommaMode {
   Allow // Allow trailing commas without error (TypeScript style)
   Error(ParserErrorCode) // Report error but continue (JSON style)
   Forbid // Hard error and stop parsing
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 /// Check for and handle trailing comma after consuming a comma token.
@@ -48,7 +48,7 @@ pub fn handle_trailing_comma(
       }
       TrailingCommaMode::Forbid => {
         // Hard error
-        Err(add_error(parser, "Trailing comma not allowed", loc))
+        Err(add_error_code(parser, TrailingCommaNotAllowed, loc))
       }
     }
   } else {
@@ -104,7 +104,7 @@ pub fn add_unexpected_token_error_at(
 /// ```
 pub fn add_expression_expected_error(parser : Parser) -> Parser {
   let loc = current_token(parser).location()
-  add_error(parser, "Expression expected.", loc)
+  add_error_code(parser, ExpressionExpected, loc)
 }
 
 ///|

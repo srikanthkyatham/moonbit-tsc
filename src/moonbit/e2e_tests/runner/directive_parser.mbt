@@ -7,7 +7,7 @@ pub fn parse_directives(content : String) -> TestDirectives {
   let directives = TestDirectives::default()
   let lines = content.split("\n")
   for line in lines {
-    let trimmed = line.trim_start(chars=" \t").to_string()
+    let trimmed = line.trim_start(chars=" \t").to_owned()
     // Match // @directive: value pattern
     if trimmed.has_prefix("// @") {
       match parse_directive_line(trimmed) {
@@ -64,15 +64,12 @@ fn parse_directive_line(line : String) -> (String, String)? {
   if line.length() <= 4 {
     return None
   }
-  let after_at = line.substring(start=4)
+  let after_at = line[4:].to_owned()
   // Find the colon
   match find_char(after_at, ':') {
     Some(colon_pos) => {
-      let name = after_at.substring(end=colon_pos).trim(chars=" \t").to_string()
-      let value = after_at
-        .substring(start=colon_pos + 1)
-        .trim(chars=" \t")
-        .to_string()
+      let name = after_at[:colon_pos].trim(chars=" \t").to_owned()
+      let value = after_at[colon_pos + 1:].trim(chars=" \t").to_owned()
       Some((name, value))
     }
     None => None
@@ -97,7 +94,7 @@ fn parse_comma_separated(value : String) -> Array[String] {
   let parts = value.split(",")
   let result : Array[String] = []
   for part in parts {
-    let trimmed = part.trim(chars=" \t").to_string()
+    let trimmed = part.trim(chars=" \t").to_owned()
     if trimmed.length() > 0 {
       result.push(trimmed)
     }

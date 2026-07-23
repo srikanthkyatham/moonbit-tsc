@@ -81,7 +81,7 @@ fn glob_match_impl(pattern : String, pi : Int, path : String, si : Int) -> Bool 
 
   // Handle [...]
   if pattern[pi] == '[' {
-    let (matched, new_pi) = match_bracket(pattern, pi, path[si])
+    let (matched, new_pi) = match_bracket(pattern, pi, path[si].to_int())
     if matched {
       return glob_match_impl(pattern, new_pi, path, si + 1)
     }
@@ -114,11 +114,11 @@ fn match_bracket(pattern : String, pi : Int, c : Int) -> (Bool, Int) {
   let mut first = true
   while i < plen && (pattern[i] != ']' || first) {
     first = false
-    let char_code = pattern[i]
+    let char_code = pattern[i].to_int()
 
     // Check for range a-z
     if i + 2 < plen && pattern[i + 1] == '-' && pattern[i + 2] != ']' {
-      let range_end = pattern[i + 2]
+      let range_end = pattern[i + 2].to_int()
       if c >= char_code && c <= range_end {
         matched = true
       }
@@ -136,7 +136,7 @@ fn match_bracket(pattern : String, pi : Int, c : Int) -> (Bool, Int) {
     i = i + 1
   }
   if negate {
-    (not(matched), i)
+    (!(matched), i)
   } else {
     (matched, i)
   }
@@ -159,7 +159,7 @@ pub fn matches_any_pattern(patterns : Array[String], path : String) -> Bool {
 pub fn should_exclude(exclude_patterns : Array[String], path : String) -> Bool {
   for pattern in exclude_patterns {
     // For simple directory names like "node_modules", check if path contains it
-    if not(pattern.contains("*")) && not(pattern.contains("?")) {
+    if !(pattern.contains("*")) && !(pattern.contains("?")) {
       if path.contains(pattern) {
         return true
       }
@@ -178,7 +178,7 @@ pub fn normalize_path(path : String) -> String {
     if path[i] == '\\' {
       result.write_char('/')
     } else {
-      result.write_char(Int::unsafe_to_char(path[i]))
+      result.write_char(Int::unsafe_to_char(path[i].to_int()))
     }
   }
   result.to_string()
@@ -213,7 +213,7 @@ fn substring_from(s : String, start : Int) -> String {
   }
   let result = StringBuilder::new()
   for i = start; i < s.length(); i = i + 1 {
-    result.write_char(Int::unsafe_to_char(s[i]))
+    result.write_char(Int::unsafe_to_char(s[i].to_int()))
   }
   result.to_string()
 }

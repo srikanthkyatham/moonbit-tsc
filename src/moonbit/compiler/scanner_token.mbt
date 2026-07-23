@@ -21,11 +21,12 @@ fn scan_single_token_v2(
     )
   }
 
-  loop code {
+  for cur = code {
+    match cur {
     // End of input
     [] as remaining => {
       let loc = make_loc(state.line, state.col, state.offset)
-      (EOF(loc), remaining)
+      break (EOF(loc), remaining)
     }
 
     // === Whitespace ===
@@ -64,67 +65,67 @@ fn scan_single_token_v2(
       let loc = make_loc(state.line, state.col, state.offset)
       state.col += 4
       state.offset += 4
-      (GreaterThanGreaterThanGreaterThanEquals(loc), rest)
+      break (GreaterThanGreaterThanGreaterThanEquals(loc), rest)
     }
     [.. "===", .. rest] => {
       let loc = make_loc(state.line, state.col, state.offset)
       state.col += 3
       state.offset += 3
-      (EqualsEqualsEquals(loc), rest)
+      break (EqualsEqualsEquals(loc), rest)
     }
     [.. "!==", .. rest] => {
       let loc = make_loc(state.line, state.col, state.offset)
       state.col += 3
       state.offset += 3
-      (ExclamationEqualsEquals(loc), rest)
+      break (ExclamationEqualsEquals(loc), rest)
     }
     [.. ">>>", .. rest] => {
       let loc = make_loc(state.line, state.col, state.offset)
       state.col += 3
       state.offset += 3
-      (GreaterThanGreaterThanGreaterThan(loc), rest)
+      break (GreaterThanGreaterThanGreaterThan(loc), rest)
     }
     [.. "<<=", .. rest] => {
       let loc = make_loc(state.line, state.col, state.offset)
       state.col += 3
       state.offset += 3
-      (LessThanLessThanEquals(loc), rest)
+      break (LessThanLessThanEquals(loc), rest)
     }
     [.. ">>=", .. rest] => {
       let loc = make_loc(state.line, state.col, state.offset)
       state.col += 3
       state.offset += 3
-      (GreaterThanGreaterThanEquals(loc), rest)
+      break (GreaterThanGreaterThanEquals(loc), rest)
     }
     [.. "**=", .. rest] => {
       let loc = make_loc(state.line, state.col, state.offset)
       state.col += 3
       state.offset += 3
-      (StarStarEquals(loc), rest)
+      break (StarStarEquals(loc), rest)
     }
     [.. "&&=", .. rest] => {
       let loc = make_loc(state.line, state.col, state.offset)
       state.col += 3
       state.offset += 3
-      (AmpersandAmpersandEquals(loc), rest)
+      break (AmpersandAmpersandEquals(loc), rest)
     }
     [.. "||=", .. rest] => {
       let loc = make_loc(state.line, state.col, state.offset)
       state.col += 3
       state.offset += 3
-      (BarBarEquals(loc), rest)
+      break (BarBarEquals(loc), rest)
     }
     [.. "??=", .. rest] => {
       let loc = make_loc(state.line, state.col, state.offset)
       state.col += 3
       state.offset += 3
-      (QuestionQuestionEquals(loc), rest)
+      break (QuestionQuestionEquals(loc), rest)
     }
     [.. "...", .. rest] => {
       let loc = make_loc(state.line, state.col, state.offset)
       state.col += 3
       state.offset += 3
-      (DotDotDot(loc), rest)
+      break (DotDotDot(loc), rest)
     }
 
     // 2-character operators
@@ -132,151 +133,151 @@ fn scan_single_token_v2(
       let loc = make_loc(state.line, state.col, state.offset)
       state.col += 2
       state.offset += 2
-      (EqualsEquals(loc), rest)
+      break (EqualsEquals(loc), rest)
     }
     [.. "!=", .. rest] => {
       let loc = make_loc(state.line, state.col, state.offset)
       state.col += 2
       state.offset += 2
-      (ExclamationEquals(loc), rest)
+      break (ExclamationEquals(loc), rest)
     }
     [.. "<=", .. rest] => {
       let loc = make_loc(state.line, state.col, state.offset)
       state.col += 2
       state.offset += 2
-      (LessThanEquals(loc), rest)
+      break (LessThanEquals(loc), rest)
     }
     [.. ">=", .. rest] => {
       let loc = make_loc(state.line, state.col, state.offset)
       state.col += 2
       state.offset += 2
-      (GreaterThanEquals(loc), rest)
+      break (GreaterThanEquals(loc), rest)
     }
     [.. "<<", .. rest] => {
       let loc = make_loc(state.line, state.col, state.offset)
       state.col += 2
       state.offset += 2
-      (LessThanLessThan(loc), rest)
+      break (LessThanLessThan(loc), rest)
     }
     [.. ">>", .. rest] => {
       let loc = make_loc(state.line, state.col, state.offset)
       state.col += 2
       state.offset += 2
-      (GreaterThanGreaterThan(loc), rest)
+      break (GreaterThanGreaterThan(loc), rest)
     }
     [.. "++", .. rest] => {
       let loc = make_loc(state.line, state.col, state.offset)
       state.col += 2
       state.offset += 2
-      (PlusPlus(loc), rest)
+      break (PlusPlus(loc), rest)
     }
     [.. "--", .. rest] => {
       let loc = make_loc(state.line, state.col, state.offset)
       state.col += 2
       state.offset += 2
-      (MinusMinus(loc), rest)
+      break (MinusMinus(loc), rest)
     }
     [.. "**", .. rest] => {
       let loc = make_loc(state.line, state.col, state.offset)
       state.col += 2
       state.offset += 2
-      (StarStar(loc), rest)
+      break (StarStar(loc), rest)
     }
     [.. "&&", .. rest] => {
       let loc = make_loc(state.line, state.col, state.offset)
       state.col += 2
       state.offset += 2
-      (AmpersandAmpersand(loc), rest)
+      break (AmpersandAmpersand(loc), rest)
     }
     [.. "||", .. rest] => {
       let loc = make_loc(state.line, state.col, state.offset)
       state.col += 2
       state.offset += 2
-      (BarBar(loc), rest)
+      break (BarBar(loc), rest)
     }
     [.. "??", .. rest] => {
       let loc = make_loc(state.line, state.col, state.offset)
       state.col += 2
       state.offset += 2
-      (QuestionQuestion(loc), rest)
+      break (QuestionQuestion(loc), rest)
     }
     [.. "?.", .. rest] => {
       let loc = make_loc(state.line, state.col, state.offset)
       state.col += 2
       state.offset += 2
-      (QuestionDot(loc), rest)
+      break (QuestionDot(loc), rest)
     }
     [.. "=>", .. rest] => {
       let loc = make_loc(state.line, state.col, state.offset)
       state.col += 2
       state.offset += 2
-      (Arrow(loc), rest)
+      break (Arrow(loc), rest)
     }
     [.. "+=", .. rest] => {
       let loc = make_loc(state.line, state.col, state.offset)
       state.col += 2
       state.offset += 2
-      (PlusEquals(loc), rest)
+      break (PlusEquals(loc), rest)
     }
     [.. "-=", .. rest] => {
       let loc = make_loc(state.line, state.col, state.offset)
       state.col += 2
       state.offset += 2
-      (MinusEquals(loc), rest)
+      break (MinusEquals(loc), rest)
     }
     [.. "*=", .. rest] => {
       let loc = make_loc(state.line, state.col, state.offset)
       state.col += 2
       state.offset += 2
-      (StarEquals(loc), rest)
+      break (StarEquals(loc), rest)
     }
     [.. "/=", .. rest] => {
       let loc = make_loc(state.line, state.col, state.offset)
       state.col += 2
       state.offset += 2
-      (SlashEquals(loc), rest)
+      break (SlashEquals(loc), rest)
     }
     [.. "%=", .. rest] => {
       let loc = make_loc(state.line, state.col, state.offset)
       state.col += 2
       state.offset += 2
-      (PercentEquals(loc), rest)
+      break (PercentEquals(loc), rest)
     }
     [.. "&=", .. rest] => {
       let loc = make_loc(state.line, state.col, state.offset)
       state.col += 2
       state.offset += 2
-      (AmpersandEquals(loc), rest)
+      break (AmpersandEquals(loc), rest)
     }
     [.. "|=", .. rest] => {
       let loc = make_loc(state.line, state.col, state.offset)
       state.col += 2
       state.offset += 2
-      (BarEquals(loc), rest)
+      break (BarEquals(loc), rest)
     }
     [.. "^=", .. rest] => {
       let loc = make_loc(state.line, state.col, state.offset)
       state.col += 2
       state.offset += 2
-      (CaretEquals(loc), rest)
+      break (CaretEquals(loc), rest)
     }
     [.. "</", .. rest] => {
       let loc = make_loc(state.line, state.col, state.offset)
       state.col += 2
       state.offset += 2
-      (LessThanSlash(loc), rest)
+      break (LessThanSlash(loc), rest)
     }
     [.. "/>", .. rest] => {
       let loc = make_loc(state.line, state.col, state.offset)
       state.col += 2
       state.offset += 2
-      (SlashGreaterThan(loc), rest)
+      break (SlashGreaterThan(loc), rest)
     }
     [.. "!.", .. rest] => {
       let loc = make_loc(state.line, state.col, state.offset)
       state.col += 2
       state.offset += 2
-      (ExclamationDot(loc), rest)
+      break (ExclamationDot(loc), rest)
     }
 
     // === Single-character operators ===
@@ -284,151 +285,151 @@ fn scan_single_token_v2(
       let loc = make_loc(state.line, state.col, state.offset)
       state.col += 1
       state.offset += 1
-      (Plus(loc), rest)
+      break (Plus(loc), rest)
     }
     ['-', .. rest] => {
       let loc = make_loc(state.line, state.col, state.offset)
       state.col += 1
       state.offset += 1
-      (Minus(loc), rest)
+      break (Minus(loc), rest)
     }
     ['*', .. rest] => {
       let loc = make_loc(state.line, state.col, state.offset)
       state.col += 1
       state.offset += 1
-      (Star(loc), rest)
+      break (Star(loc), rest)
     }
     ['/', .. rest] => {
       let loc = make_loc(state.line, state.col, state.offset)
       state.col += 1
       state.offset += 1
-      (Slash(loc), rest)
+      break (Slash(loc), rest)
     }
     ['%', .. rest] => {
       let loc = make_loc(state.line, state.col, state.offset)
       state.col += 1
       state.offset += 1
-      (Percent(loc), rest)
+      break (Percent(loc), rest)
     }
     ['<', .. rest] => {
       let loc = make_loc(state.line, state.col, state.offset)
       state.col += 1
       state.offset += 1
-      (LessThan(loc), rest)
+      break (LessThan(loc), rest)
     }
     ['>', .. rest] => {
       let loc = make_loc(state.line, state.col, state.offset)
       state.col += 1
       state.offset += 1
-      (GreaterThan(loc), rest)
+      break (GreaterThan(loc), rest)
     }
     ['=', .. rest] => {
       let loc = make_loc(state.line, state.col, state.offset)
       state.col += 1
       state.offset += 1
-      (Equals(loc), rest)
+      break (Equals(loc), rest)
     }
     ['!', .. rest] => {
       let loc = make_loc(state.line, state.col, state.offset)
       state.col += 1
       state.offset += 1
-      (Exclamation(loc), rest)
+      break (Exclamation(loc), rest)
     }
     ['&', .. rest] => {
       let loc = make_loc(state.line, state.col, state.offset)
       state.col += 1
       state.offset += 1
-      (Ampersand(loc), rest)
+      break (Ampersand(loc), rest)
     }
     ['|', .. rest] => {
       let loc = make_loc(state.line, state.col, state.offset)
       state.col += 1
       state.offset += 1
-      (Bar(loc), rest)
+      break (Bar(loc), rest)
     }
     ['^', .. rest] => {
       let loc = make_loc(state.line, state.col, state.offset)
       state.col += 1
       state.offset += 1
-      (Caret(loc), rest)
+      break (Caret(loc), rest)
     }
     ['~', .. rest] => {
       let loc = make_loc(state.line, state.col, state.offset)
       state.col += 1
       state.offset += 1
-      (Tilde(loc), rest)
+      break (Tilde(loc), rest)
     }
     ['?', .. rest] => {
       let loc = make_loc(state.line, state.col, state.offset)
       state.col += 1
       state.offset += 1
-      (Question(loc), rest)
+      break (Question(loc), rest)
     }
     [':', .. rest] => {
       let loc = make_loc(state.line, state.col, state.offset)
       state.col += 1
       state.offset += 1
-      (Colon(loc), rest)
+      break (Colon(loc), rest)
     }
     [';', .. rest] => {
       let loc = make_loc(state.line, state.col, state.offset)
       state.col += 1
       state.offset += 1
-      (Semicolon(loc), rest)
+      break (Semicolon(loc), rest)
     }
     [',', .. rest] => {
       let loc = make_loc(state.line, state.col, state.offset)
       state.col += 1
       state.offset += 1
-      (Comma(loc), rest)
+      break (Comma(loc), rest)
     }
     ['.', .. rest] => {
       let loc = make_loc(state.line, state.col, state.offset)
       state.col += 1
       state.offset += 1
-      (Dot(loc), rest)
+      break (Dot(loc), rest)
     }
     ['(', .. rest] => {
       let loc = make_loc(state.line, state.col, state.offset)
       state.col += 1
       state.offset += 1
-      (OpenParen(loc), rest)
+      break (OpenParen(loc), rest)
     }
     [')', .. rest] => {
       let loc = make_loc(state.line, state.col, state.offset)
       state.col += 1
       state.offset += 1
-      (CloseParen(loc), rest)
+      break (CloseParen(loc), rest)
     }
     ['{', .. rest] => {
       let loc = make_loc(state.line, state.col, state.offset)
       state.col += 1
       state.offset += 1
-      (OpenBrace(loc), rest)
+      break (OpenBrace(loc), rest)
     }
     ['}', .. rest] => {
       let loc = make_loc(state.line, state.col, state.offset)
       state.col += 1
       state.offset += 1
-      (CloseBrace(loc), rest)
+      break (CloseBrace(loc), rest)
     }
     ['[', .. rest] => {
       let loc = make_loc(state.line, state.col, state.offset)
       state.col += 1
       state.offset += 1
-      (OpenBracket(loc), rest)
+      break (OpenBracket(loc), rest)
     }
     [']', .. rest] => {
       let loc = make_loc(state.line, state.col, state.offset)
       state.col += 1
       state.offset += 1
-      (CloseBracket(loc), rest)
+      break (CloseBracket(loc), rest)
     }
     ['@', .. rest] => {
       let loc = make_loc(state.line, state.col, state.offset)
       state.col += 1
       state.offset += 1
-      (At(loc), rest)
+      break (At(loc), rest)
     }
 
     // === Private identifier (#name) ===
@@ -454,14 +455,14 @@ fn scan_single_token_v2(
         Position::new(start_line, start_col, start_offset),
         Position::new(state.line, state.col, state.offset),
       )
-      (PrivateIdentifier(ident.to_string(), loc), rest2)
+      break (PrivateIdentifier(ident.to_string(), loc), rest2)
     }
     // Invalid private identifier - just # followed by non-identifier char
     ['#', .. rest] => {
       let loc = make_loc(state.line, state.col, state.offset)
       state.col += 1
       state.offset += 1
-      (Unknown("#", loc), rest)
+      break (Unknown("#", loc), rest)
     }
 
     // === Strings ===
@@ -478,7 +479,7 @@ fn scan_single_token_v2(
         Position::new(start_line, start_col, start_offset),
         Position::new(state.line, state.col, state.offset),
       )
-      (StringLiteral(content.to_string(), loc), rest2)
+      break (StringLiteral(content.to_string(), loc), rest2)
     }
     ['\'', .. rest] => {
       let start_line = state.line
@@ -493,7 +494,7 @@ fn scan_single_token_v2(
         Position::new(start_line, start_col, start_offset),
         Position::new(state.line, state.col, state.offset),
       )
-      (StringLiteral(content.to_string(), loc), rest2)
+      break (StringLiteral(content.to_string(), loc), rest2)
     }
 
     // === Template literal ===
@@ -512,7 +513,7 @@ fn scan_single_token_v2(
             Position::new(start_line, start_col, start_offset),
             Position::new(state.line, state.col, state.offset),
           )
-          (TemplateLiteral(content.to_string(), loc), rest2)
+          break (TemplateLiteral(content.to_string(), loc), rest2)
         }
         TemplateScanResultV2::Head(rest2)
         | TemplateScanResultV2::Middle(rest2) => {
@@ -521,7 +522,7 @@ fn scan_single_token_v2(
             Position::new(start_line, start_col, start_offset),
             Position::new(state.line, state.col, state.offset),
           )
-          (TemplateHead(content.to_string(), loc), rest2)
+          break (TemplateHead(content.to_string(), loc), rest2)
         }
         TemplateScanResultV2::Unterminated(rest2) => {
           let loc = SourceLocation::new(
@@ -529,7 +530,7 @@ fn scan_single_token_v2(
             Position::new(start_line, start_col, start_offset),
             Position::new(state.line, state.col, state.offset),
           )
-          (ScanError("Unterminated template literal.", 1160, loc), rest2)
+          break (ScanError("Unterminated template literal.", 1160, loc), rest2)
         }
       }
     }
@@ -552,7 +553,7 @@ fn scan_single_token_v2(
             Position::new(state.line, start_col, start_offset),
             Position::new(state.line, state.col, state.offset),
           )
-          (BigIntLiteral(digits.to_string() + "n", loc), rest3)
+          break (BigIntLiteral(digits.to_string() + "n", loc), rest3)
         }
         _ => {
           let loc = SourceLocation::new(
@@ -560,7 +561,7 @@ fn scan_single_token_v2(
             Position::new(state.line, start_col, start_offset),
             Position::new(state.line, state.col, state.offset),
           )
-          (NumericLiteral(digits.to_string(), loc), rest2)
+          break (NumericLiteral(digits.to_string(), loc), rest2)
         }
       }
     }
@@ -581,7 +582,7 @@ fn scan_single_token_v2(
             Position::new(state.line, start_col, start_offset),
             Position::new(state.line, state.col, state.offset),
           )
-          (BigIntLiteral(digits.to_string() + "n", loc), rest3)
+          break (BigIntLiteral(digits.to_string() + "n", loc), rest3)
         }
         _ => {
           let loc = SourceLocation::new(
@@ -589,7 +590,7 @@ fn scan_single_token_v2(
             Position::new(state.line, start_col, start_offset),
             Position::new(state.line, state.col, state.offset),
           )
-          (NumericLiteral(digits.to_string(), loc), rest2)
+          break (NumericLiteral(digits.to_string(), loc), rest2)
         }
       }
     }
@@ -610,7 +611,7 @@ fn scan_single_token_v2(
             Position::new(state.line, start_col, start_offset),
             Position::new(state.line, state.col, state.offset),
           )
-          (BigIntLiteral(digits.to_string() + "n", loc), rest3)
+          break (BigIntLiteral(digits.to_string() + "n", loc), rest3)
         }
         _ => {
           let loc = SourceLocation::new(
@@ -618,7 +619,7 @@ fn scan_single_token_v2(
             Position::new(state.line, start_col, start_offset),
             Position::new(state.line, state.col, state.offset),
           )
-          (NumericLiteral(digits.to_string(), loc), rest2)
+          break (NumericLiteral(digits.to_string(), loc), rest2)
         }
       }
     }
@@ -664,7 +665,7 @@ fn scan_single_token_v2(
       }
       // BigInt suffix
       match rest4 {
-        ['n', .. rest5] if not(has_dot) && not(has_exp) => {
+        ['n', .. rest5] if !(has_dot) && !(has_exp) => {
           state.col += 1
           state.offset += 1
           let loc = SourceLocation::new(
@@ -672,7 +673,7 @@ fn scan_single_token_v2(
             Position::new(state.line, start_col, start_offset),
             Position::new(state.line, state.col, state.offset),
           )
-          (BigIntLiteral(num.to_string() + "n", loc), rest5)
+          break (BigIntLiteral(num.to_string() + "n", loc), rest5)
         }
         _ => {
           let loc = SourceLocation::new(
@@ -680,7 +681,7 @@ fn scan_single_token_v2(
             Position::new(state.line, start_col, start_offset),
             Position::new(state.line, state.col, state.offset),
           )
-          (NumericLiteral(num.to_string(), loc), rest4)
+          break (NumericLiteral(num.to_string(), loc), rest4)
         }
       }
     }
@@ -699,7 +700,7 @@ fn scan_single_token_v2(
         Position::new(state.line, start_col, start_offset),
         Position::new(state.line, state.col, state.offset),
       )
-      (keyword_token(ident.to_string(), loc), rest2)
+      break (keyword_token(ident.to_string(), loc), rest2)
     }
 
     // === Unicode identifiers ===
@@ -716,7 +717,7 @@ fn scan_single_token_v2(
         Position::new(state.line, start_col, start_offset),
         Position::new(state.line, state.col, state.offset),
       )
-      (Identifier(ident.to_string(), loc), rest2)
+      break (Identifier(ident.to_string(), loc), rest2)
     }
 
     // === Smart quotes (common copy-paste error from documents/websites) ===
@@ -725,14 +726,14 @@ fn scan_single_token_v2(
       let loc = make_loc(state.line, state.col, state.offset)
       state.col += 1
       state.offset += 1
-      (SmartQuote(Char::to_string(ch), "\"", loc), rest)
+      break (SmartQuote(Char::to_string(ch), "\"", loc), rest)
     }
     // Left single quotation mark (U+2018), Right single quotation mark (U+2019)
     [ch, .. rest] if ch.to_int() == 0x2018 || ch.to_int() == 0x2019 => {
       let loc = make_loc(state.line, state.col, state.offset)
       state.col += 1
       state.offset += 1
-      (SmartQuote(Char::to_string(ch), "'", loc), rest)
+      break (SmartQuote(Char::to_string(ch), "'", loc), rest)
     }
 
     // === Unknown character ===
@@ -740,8 +741,9 @@ fn scan_single_token_v2(
       let loc = make_loc(state.line, state.col, state.offset)
       state.col += 1
       state.offset += 1
-      (Unknown(Char::to_string(ch), loc), rest)
+      break (Unknown(Char::to_string(ch), loc), rest)
     }
+  }
   }
 }
 

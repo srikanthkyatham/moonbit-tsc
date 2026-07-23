@@ -1,5 +1,6 @@
 {
   "import": [
-    "moonbit-ts-compiler/compiler"
+    "moonbit-ts-compiler/compiler",
+    "moonbitlang/core/json"
   ]
 }

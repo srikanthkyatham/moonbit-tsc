@@ -1,6 +1,6 @@
 {
   "is-main": false,
-  "import": [
+  "test-import": [
     "moonbit-ts-compiler/compiler"
   ]
 }

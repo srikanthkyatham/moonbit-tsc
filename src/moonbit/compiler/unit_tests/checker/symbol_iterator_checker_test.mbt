@@ -77,7 +77,7 @@ test "checker: class with [Symbol.iterator]() but no next() - currently passes (
     #|
     #|for (const x of new BadIterator) { }
 
-  let result = check_for_of(source)
+  let _result = check_for_of(source)
   // TODO: Should error because the iterator has no next() method
   // Currently passes because we don't validate the return type has next()
   // This is a known limitation that can be addressed in future work
@@ -136,7 +136,7 @@ test "checker: class with [Symbol.asyncIterator]() should work" {
     #|    }
     #|}
 
-  let result = check_for_of(source)
+  let _result = check_for_of(source)
   // Note: for-await-of is complex, but the iterator should at least be recognized
   // We're mainly testing that [Symbol.asyncIterator] is properly converted
   assert_true(true) // Just verify it doesn't crash
@@ -208,7 +208,7 @@ test "checker: class with [Symbol.iterator]() generator method - limitation" {
     #|    const test: string = x;
     #|}
 
-  let result = check_for_of(source)
+  let _result = check_for_of(source)
   // TODO: Generator methods with computed names not fully supported yet
   // Currently fails with TS1163 errors because the generator flag is lost
   // This is a known limitation that can be addressed in future work
@@ -227,7 +227,7 @@ test "checker: class with static [Symbol.iterator]() - limitation" {
     #|// Instance should not be iterable (static method doesn't count)
     #|for (const x of new StaticIter) { }
 
-  let result = check_for_of(source)
+  let _result = check_for_of(source)
   // TODO: Should error because static methods don't make instances iterable
   // Currently passes because static methods aren't filtered out properly
   // This is a known limitation that can be addressed in future work

@@ -8,63 +8,63 @@
 ///|
 test "unit/module-resolver/classify - relative path ./" {
   let kind = @compiler.classify_module_specifier("./utils")
-  let str = kind.to_string()
+  let str = @debug.to_string(kind)
   assert_eq(str, "Relative")
 }
 
 ///|
 test "unit/module-resolver/classify - relative path ../" {
   let kind = @compiler.classify_module_specifier("../utils")
-  let str = kind.to_string()
+  let str = @debug.to_string(kind)
   assert_eq(str, "Relative")
 }
 
 ///|
 test "unit/module-resolver/classify - absolute path /" {
   let kind = @compiler.classify_module_specifier("/usr/lib/node_modules/lodash")
-  let str = kind.to_string()
+  let str = @debug.to_string(kind)
   assert_eq(str, "Absolute")
 }
 
 ///|
 test "unit/module-resolver/classify - package reference" {
   let kind = @compiler.classify_module_specifier("lodash")
-  let str = kind.to_string()
+  let str = @debug.to_string(kind)
   assert_eq(str, "Package")
 }
 
 ///|
 test "unit/module-resolver/classify - scoped package reference" {
   let kind = @compiler.classify_module_specifier("@types/node")
-  let str = kind.to_string()
+  let str = @debug.to_string(kind)
   assert_eq(str, "Package")
 }
 
 ///|
 test "unit/module-resolver/classify - URL import https" {
   let kind = @compiler.classify_module_specifier("https://example.com/mod.ts")
-  let str = kind.to_string()
+  let str = @debug.to_string(kind)
   assert_eq(str, "URL")
 }
 
 ///|
 test "unit/module-resolver/classify - URL import http" {
   let kind = @compiler.classify_module_specifier("http://example.com/mod.ts")
-  let str = kind.to_string()
+  let str = @debug.to_string(kind)
   assert_eq(str, "URL")
 }
 
 ///|
 test "unit/module-resolver/classify - dot only" {
   let kind = @compiler.classify_module_specifier(".")
-  let str = kind.to_string()
+  let str = @debug.to_string(kind)
   assert_eq(str, "Relative")
 }
 
 ///|
 test "unit/module-resolver/classify - double dot only" {
   let kind = @compiler.classify_module_specifier("..")
-  let str = kind.to_string()
+  let str = @debug.to_string(kind)
   assert_eq(str, "Relative")
 }
 

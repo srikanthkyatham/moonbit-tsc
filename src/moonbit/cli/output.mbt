@@ -5,7 +5,7 @@
 fn find_last_char(s : String, c : Char) -> Int? {
   let mut last_idx : Int? = None
   for i = 0; i < s.length(); i = i + 1 {
-    if s[i] == c.to_int() {
+    if s[i].to_int() == c.to_int() {
       last_idx = Some(i)
     }
   }
@@ -77,7 +77,7 @@ fn base64_encode(input : String) -> String {
 async fn ensure_dir(path : String) -> Unit raise Error {
   // Try to create the directory, ignore if exists
   let exists = @fs.exists(path)
-  if not(exists) {
+  if !(exists) {
     // Create parent directories first if needed
     match find_last_char(path, '/') {
       Some(idx) if idx > 0 => {
@@ -96,7 +96,7 @@ pub async fn write_output(
   response : @protocol.CompileResponse,
   options : CLIOptions,
 ) -> Unit raise Error {
-  if not(response.success) {
+  if !(response.success) {
     return
   }
 
@@ -133,14 +133,14 @@ pub async fn write_output(
 
   // Write JavaScript file
   let js_path = out_dir + "/" + base_name + ".js"
-  @fs.write_file(js_path, js_content, create=0o644, truncate=true)
+  @fs.write_file(js_path, js_content, create_mode=@fs.CreateOrTruncate, permission=0o644)
 
   // Write external source map if requested
   if source_map_mode == SourceMapMode::External {
     match response.source_map {
       Some(sm) => {
         let map_path = out_dir + "/" + base_name + ".js.map"
-        @fs.write_file(map_path, sm, create=0o644, truncate=true)
+        @fs.write_file(map_path, sm, create_mode=@fs.CreateOrTruncate, permission=0o644)
       }
       None => ()
     }
@@ -150,7 +150,7 @@ pub async fn write_output(
   match response.declaration {
     Some(decl) => {
       let dts_path = out_dir + "/" + base_name + ".d.ts"
-      @fs.write_file(dts_path, decl, create=0o644, truncate=true)
+      @fs.write_file(dts_path, decl, create_mode=@fs.CreateOrTruncate, permission=0o644)
     }
     None => ()
   }
@@ -177,7 +177,7 @@ pub(all) struct DiagnosticInfo {
   code : String // "TS2322"
   code_number : Int // 2322
   message : String
-} derive(Show, ToJson)
+} derive(Debug, ToJson)
 
 ///|
 /// Parse a diagnostic string into structured info
@@ -223,8 +223,8 @@ fn parse_diagnostic_string(diag : String) -> DiagnosticInfo? {
     end=last_colon,
   )
   let col_str = @utils.substr(file_part, start=last_colon + 1)
-  let line = @strconv.parse_int(line_str) catch { _ => return None }
-  let column = @strconv.parse_int(col_str) catch { _ => return None }
+  let line = @string.parse_int(line_str) catch { _ => return None }
+  let column = @string.parse_int(col_str) catch { _ => return None }
 
   // Parse category TScode: message
   // Find space after category
@@ -257,7 +257,7 @@ fn parse_diagnostic_string(diag : String) -> DiagnosticInfo? {
 
   // Parse code number from TSnnnn
   let code_number = if code.length() > 2 && code.has_prefix("TS") {
-    @strconv.parse_int(@utils.substr(code, start=2)) catch {
+    @string.parse_int(@utils.substr(code, start=2)) catch {
       _ => 0
     }
   } else {
@@ -282,7 +282,7 @@ pub(all) struct FileResult {
   compile_time_ms : Int64
   diagnostics : Array[DiagnosticInfo]
   module_types_json : String? // Exported types for cross-file type checking cache
-} derive(Show, ToJson)
+} derive(Debug, ToJson)
 
 ///|
 /// Summary stats for JSON output
@@ -293,7 +293,7 @@ pub(all) struct SummaryStats {
   total_errors : Int
   total_warnings : Int
   total_time_ms : Int64
-} derive(Show, ToJson)
+} derive(Debug, ToJson)
 
 ///|
 /// Full JSON output structure
@@ -301,7 +301,7 @@ pub(all) struct JsonOutput {
   success : Bool
   stats : SummaryStats
   files : Array[FileResult]
-} derive(Show, ToJson)
+} derive(Debug, ToJson)
 
 ///|
 /// Build JSON output from compilation summary

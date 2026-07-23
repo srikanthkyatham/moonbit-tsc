@@ -240,7 +240,7 @@ test "TS2339 - outside for-of loops (variable declaration)" {
   // where TS2339 is checked for primitives
   // Outside for-of, this might not be validated yet
   // This test documents current behavior
-  let ts2339_errors = diagnostics.iter().filter(fn(d) { d.code == 2339 }).to_array()
+  let _ts2339_errors = diagnostics.iter().filter(fn(d) { d.code == 2339 }).to_array()
   // Note: This may be 0 if validation only happens in for-of context
   // The test documents the behavior
 }
@@ -269,7 +269,7 @@ test "TS2339 - computed property names (should still validate)" {
     #|}
 
   let result = check_source(source)
-  let diagnostics = get_diagnostics(result)
+  let _diagnostics = get_diagnostics(result)
 
   // Computed properties might have different behavior
   // This test documents the current behavior

@@ -21,7 +21,7 @@ pub enum TypePath {
   PRestParam(TypePath) // Rest parameter ...args
   PTupleElement(TypePath, Int, String?) // Tuple element with optional label
   POverload(Int) // Overload candidate at index
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 /// Create a root TypePath (factory function for external use)

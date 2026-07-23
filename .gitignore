@@ -4,6 +4,7 @@ recursive_bug_repro
 # Build output
 target/
 build/
+_build/
 cmake-build-*/
 
 # CMake user-specific files
@@ -16,3 +17,4 @@ zig_coordinator/
 
 DUPLICATION_ANALYSIS.md
 parser_duplication_analysis.md
+

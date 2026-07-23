@@ -196,7 +196,7 @@ test "unit/module_system/context - type_only_import tracking" {
   let host = @compiler.ModuleResolutionHost::placeholder()
   let symbol_resolver = @compiler.ModuleSymbolResolver::with_defaults("/")
   let ctx = @compiler.ModuleResolutionContext::new(symbol_resolver, host)
-  let imports : Map[String, Bool] = Map::new()
+  let imports : Map[String, Bool] = Map([])
   imports.set("MyType", true)
   ctx.register_type_only_imports("/test/file.ts", imports)
   assert_eq(ctx.is_type_only_import("/test/file.ts", "MyType"), true)

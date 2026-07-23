@@ -293,7 +293,7 @@ fn check_jsx_attributes(
   let mut checker = checker
 
   // Build map of provided attributes
-  let provided_attrs : Map[String, Type] = Map::new()
+  let provided_attrs : Map[String, Type] = Map([])
   for i = 0; i < attributes.length(); i = i + 1 {
     match attributes[i] {
       Attribute(attr_node) => {
@@ -336,7 +336,7 @@ fn check_single_attribute(
       match obj_type.properties.get(attr_name) {
         Some(expected_prop) =>
           // Check type compatibility
-          if not(is_type_assignable(attr_type, expected_prop.prop_type)) {
+          if !(is_type_assignable(attr_type, expected_prop.prop_type)) {
             let loc = make_default_location(checker.file_path)
             jsx_error_prop_type_mismatch(
               checker,
@@ -388,7 +388,7 @@ fn check_required_props(
       let mut c = checker
       for entry in obj_type.properties.iter() {
         let (name, prop_sig) = entry
-        if not(prop_sig.is_optional) && not(provided.contains(name)) {
+        if !(prop_sig.is_optional) && !(provided.contains(name)) {
           let loc = make_default_location(c.file_path)
           c = jsx_error_missing_prop(
             c,
@@ -598,7 +598,7 @@ fn create_jsx_element_type(checker : TypeChecker) -> (Type, TypeChecker) {
   let id = checker.next_type_id
   let flags = TypeFlags::{ is_readonly: false, is_optional: false }
   let jsx_element = Type::Object({
-    properties: Map::new(),
+    properties: Map([]),
     index_signatures: [],
     call_signatures: [],
     construct_signatures: [],

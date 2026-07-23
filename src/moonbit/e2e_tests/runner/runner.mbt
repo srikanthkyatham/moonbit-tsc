@@ -8,7 +8,7 @@ pub(all) struct RunnerConfig {
   baseline_dir : String // Baseline directory
   verbose : Bool // Show detailed output
   update_baselines : Bool // Update baselines instead of comparing
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Default runner config
@@ -27,9 +27,9 @@ pub async fn discover_transpile_tests(
   test_dir : String,
 ) -> Array[String] raise Error {
   let files : Array[String] = []
-  @fs.walk(test_dir, async fn(_dir, entries) {
+  @fs.walk(test_dir, fn(_dir, entries) {
     for entry in entries {
-      if entry.has_suffix(".ts") && not(entry.has_suffix(".d.ts")) {
+      if entry.has_suffix(".ts") && !(entry.has_suffix(".d.ts")) {
         files.push(entry)
       }
     }
@@ -63,7 +63,7 @@ pub async fn load_test_case(
 /// Extract test name from filename (remove .ts extension)
 fn extract_test_name(filename : String) -> String {
   if filename.has_suffix(".ts") {
-    filename.substring(end=filename.length() - 3)
+    filename[:filename.length() - 3].to_owned()
   } else {
     filename
   }
@@ -137,7 +137,7 @@ pub async fn run_transpile_tests(
     }
     results.push(result)
   }
-  if not(config.verbose) {
+  if !(config.verbose) {
     println("") // Newline after dots
   }
 

@@ -9,7 +9,7 @@
 pub enum Direction {
   Infer // Bottom-up: infer the type of an expression
   Check(TypeV2) // Top-down: check against an expected type
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 /// Check if direction is inference mode

@@ -222,17 +222,17 @@ fn check_tuple_extends(
   target : Array[TupleElementV2],
 ) -> Bool {
   // Source must have at least as many elements as target's required elements
-  let required_count = target.filter(fn(e) { not(e.optional) }).length()
+  let required_count = target.filter(fn(e) { !(e.optional) }).length()
   if source.length() < required_count {
     return false
   }
   // Check each corresponding element
   for i, tgt_elem in target {
     if i < source.length() {
-      if not(is_subtype_check_simple(source[i].ty, tgt_elem.ty)) {
+      if !(is_subtype_check_simple(source[i].ty, tgt_elem.ty)) {
         return false
       }
-    } else if not(tgt_elem.optional) {
+    } else if !(tgt_elem.optional) {
       return false
     }
   }
@@ -247,9 +247,9 @@ fn check_object_extends(source : ObjectTypeV2, target : ObjectTypeV2) -> Bool {
     let name = kv.0
     let tgt_field = kv.1
     match source.fields.get(name) {
-      None => if not(tgt_field.optional) { return false }
+      None => if !(tgt_field.optional) { return false }
       Some(src_field) =>
-        if not(is_subtype_check_simple(src_field.ty, tgt_field.ty)) {
+        if !(is_subtype_check_simple(src_field.ty, tgt_field.ty)) {
           return false
         }
     }
@@ -264,19 +264,19 @@ fn check_function_extends(
   target : FunctionTypeV2,
 ) -> Bool {
   // Return type is covariant
-  if not(is_subtype_check_simple(source.return_type, target.return_type)) {
+  if !(is_subtype_check_simple(source.return_type, target.return_type)) {
     return false
   }
   // Parameters are contravariant
   for i, tgt_param in target.params {
     if i >= source.params.length() {
-      if not(tgt_param.optional) {
+      if !(tgt_param.optional) {
         return false
       }
     } else {
       let src_param = source.params[i]
       // Contravariance: target param must be subtype of source param
-      if not(is_subtype_check_simple(tgt_param.ty, src_param.ty)) {
+      if !(is_subtype_check_simple(tgt_param.ty, src_param.ty)) {
         return false
       }
     }
@@ -294,7 +294,7 @@ fn check_type_args_extend(
     return false
   }
   for i, src in source {
-    if not(is_subtype_check_simple(src, target[i])) {
+    if !(is_subtype_check_simple(src, target[i])) {
       return false
     }
   }
@@ -307,7 +307,7 @@ fn extract_inferred_types(
   check_type : TypeV2,
   extends_type : TypeV2,
 ) -> Map[String, TypeV2] {
-  let inferred : Map[String, TypeV2] = Map::new()
+  let inferred : Map[String, TypeV2] = Map([])
   do_extract_inferred(check_type, extends_type, inferred)
   inferred
 }
@@ -555,7 +555,7 @@ pub fn evaluate_mapped_type_v2(env : TypeEnv, mapped : MappedTypeV2) -> TypeV2 {
   }
 
   // Build the result object type
-  let fields : Map[String, FieldInfoV2] = Map::new()
+  let fields : Map[String, FieldInfoV2] = Map([])
   for key in keys {
     // Get the key name
     let key_name = match key {
@@ -567,7 +567,7 @@ pub fn evaluate_mapped_type_v2(env : TypeEnv, mapped : MappedTypeV2) -> TypeV2 {
     let actual_key = match mapped.name_type {
       Some(name_ty) => {
         // Substitute K with the current key
-        let subst : Map[String, TypeV2] = Map::new()
+        let subst : Map[String, TypeV2] = Map([])
         subst.set(mapped.type_param.name, key)
         let remapped = apply_substitution(name_ty, subst)
         match remapped {
@@ -580,7 +580,7 @@ pub fn evaluate_mapped_type_v2(env : TypeEnv, mapped : MappedTypeV2) -> TypeV2 {
     }
 
     // Substitute the type parameter in the template
-    let subst : Map[String, TypeV2] = Map::new()
+    let subst : Map[String, TypeV2] = Map([])
     subst.set(mapped.type_param.name, key)
     let value_type = apply_substitution(mapped.template_type, subst)
     let resolved_value = resolve_type(env, value_type)
@@ -844,7 +844,7 @@ pub fn evaluate_index_access_type_v2(
 pub fn make_partial(ty : TypeV2) -> TypeV2 {
   match ty {
     TObject(obj) => {
-      let fields : Map[String, FieldInfoV2] = Map::new()
+      let fields : Map[String, FieldInfoV2] = Map([])
       for kv in obj.fields {
         fields.set(kv.0, FieldInfoV2::{
           ty: kv.1.ty,
@@ -863,7 +863,7 @@ pub fn make_partial(ty : TypeV2) -> TypeV2 {
 pub fn make_required(ty : TypeV2) -> TypeV2 {
   match ty {
     TObject(obj) => {
-      let fields : Map[String, FieldInfoV2] = Map::new()
+      let fields : Map[String, FieldInfoV2] = Map([])
       for kv in obj.fields {
         fields.set(kv.0, FieldInfoV2::{
           ty: kv.1.ty,
@@ -882,7 +882,7 @@ pub fn make_required(ty : TypeV2) -> TypeV2 {
 pub fn make_readonly_type(ty : TypeV2) -> TypeV2 {
   match ty {
     TObject(obj) => {
-      let fields : Map[String, FieldInfoV2] = Map::new()
+      let fields : Map[String, FieldInfoV2] = Map([])
       for kv in obj.fields {
         fields.set(kv.0, FieldInfoV2::{
           ty: kv.1.ty,
@@ -901,7 +901,7 @@ pub fn make_readonly_type(ty : TypeV2) -> TypeV2 {
 pub fn make_pick(ty : TypeV2, keys : Array[String]) -> TypeV2 {
   match ty {
     TObject(obj) => {
-      let fields : Map[String, FieldInfoV2] = Map::new()
+      let fields : Map[String, FieldInfoV2] = Map([])
       for key in keys {
         match obj.fields.get(key) {
           Some(field) => fields.set(key, field)
@@ -919,9 +919,9 @@ pub fn make_pick(ty : TypeV2, keys : Array[String]) -> TypeV2 {
 pub fn make_omit(ty : TypeV2, keys : Array[String]) -> TypeV2 {
   match ty {
     TObject(obj) => {
-      let fields : Map[String, FieldInfoV2] = Map::new()
+      let fields : Map[String, FieldInfoV2] = Map([])
       for kv in obj.fields {
-        if not(keys.contains(kv.0)) {
+        if !(keys.contains(kv.0)) {
           fields.set(kv.0, kv.1)
         }
       }
@@ -951,7 +951,7 @@ pub fn make_exclude(ty : TypeV2, filter_ty : TypeV2) -> TypeV2 {
   match ty {
     TUnion(types) => {
       let filtered = types.filter(fn(t) {
-        not(is_subtype_check_simple(t, filter_ty))
+        !(is_subtype_check_simple(t, filter_ty))
       })
       make_union(filtered)
     }
@@ -999,7 +999,7 @@ pub fn get_instance_type(ty : TypeV2) -> TypeV2 {
   match ty {
     TObject(obj) =>
       // Check construct signatures
-      if not(obj.construct_signatures.is_empty()) {
+      if !(obj.construct_signatures.is_empty()) {
         obj.construct_signatures[0].return_type
       } else {
         TAny
@@ -1317,7 +1317,7 @@ fn extract_literal_strings(ty : TypeV2) -> Array[String] {
       for t in types {
         let literals = extract_literal_strings(t)
         for lit in literals {
-          if not(results.contains(lit)) {
+          if !(results.contains(lit)) {
             results.push(lit)
           }
         }
@@ -1496,7 +1496,7 @@ pub fn evaluate_intrinsic_string_type(
 pub struct TemplateLiteralMatchResult {
   matched : Bool
   inferred_types : Map[String, TypeV2] // infer variable name -> inferred type
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Match a literal string against a template literal pattern
@@ -1509,7 +1509,7 @@ pub fn match_template_literal_pattern(
   pattern : TemplateLiteralTypeV2,
   infer_names : Array[String], // Names of infer type variables at each position
 ) -> TemplateLiteralMatchResult {
-  let inferred : Map[String, TypeV2] = Map::new()
+  let inferred : Map[String, TypeV2] = Map([])
 
   // Simple case: no interpolations, just match the static text
   if pattern.types.is_empty() {
@@ -1558,7 +1558,7 @@ fn try_match_template_pattern(
 
     // First text segment must be a prefix
     if i == 0 {
-      if not(tl_string_starts_with(remaining, text)) {
+      if !(tl_string_starts_with(remaining, text)) {
         return None
       }
       remaining = tl_string_substring(remaining, text.length())
@@ -1574,7 +1574,7 @@ fn try_match_template_pattern(
 
       // Check if the inferred value matches the expected type constraint
       if i - 1 < types.length() {
-        if not(inferred_value_matches_type(inferred, types[i - 1])) {
+        if !(inferred_value_matches_type(inferred, types[i - 1])) {
           return None
         }
       }
@@ -1639,7 +1639,7 @@ fn is_numeric_string(s : String) -> Bool {
     let c = s[i].unsafe_to_char()
     if c >= '0' && c <= '9' {
       has_digit = true
-    } else if c == '.' && not(has_dot) {
+    } else if c == '.' && !(has_dot) {
       has_dot = true
     } else {
       return false
@@ -1702,7 +1702,7 @@ pub fn matches_template_literal_pattern(
     let text = pattern.texts[i]
     if i == 0 {
       // First text must be prefix
-      if not(tl_string_starts_with(remaining, text)) {
+      if !(tl_string_starts_with(remaining, text)) {
         return false
       }
       remaining = tl_string_substring(remaining, text.length())
@@ -1710,7 +1710,7 @@ pub fn matches_template_literal_pattern(
     } else if text.length() == 0 && i == pattern.texts.length() - 1 {
       // Empty suffix means capture everything remaining
       if i - 1 < pattern.types.length() {
-        if not(
+        if !(
             string_matches_interpolation_type(remaining, pattern.types[i - 1]),
           ) {
           return false
@@ -1727,7 +1727,7 @@ pub fn matches_template_literal_pattern(
       // Check that the value before matches the expected type
       if i - 1 < pattern.types.length() {
         let captured = tl_string_substring_range(remaining, 0, pos)
-        if not(
+        if !(
             string_matches_interpolation_type(captured, pattern.types[i - 1]),
           ) {
           return false
@@ -1740,7 +1740,7 @@ pub fn matches_template_literal_pattern(
   // Check final interpolation if exists
   if pattern.texts.length() <= pattern.types.length() && remaining.length() > 0 {
     let last_type = pattern.types[pattern.types.length() - 1]
-    if not(string_matches_interpolation_type(remaining, last_type)) {
+    if !(string_matches_interpolation_type(remaining, last_type)) {
       return false
     }
     remaining = ""
@@ -1871,7 +1871,7 @@ pub fn are_template_literals_compatible(
 
   // Check interpolation types are compatible
   for i in 0..<source.types.length() {
-    if not(is_interpolation_type_assignable(source.types[i], target.types[i])) {
+    if !(is_interpolation_type_assignable(source.types[i], target.types[i])) {
       return false
     }
   }
@@ -1914,7 +1914,7 @@ pub fn get_constructor_parameters_type(ty : TypeV2) -> TypeV2 {
   match ty {
     TObject(obj) =>
       // Check construct signatures
-      if not(obj.construct_signatures.is_empty()) {
+      if !(obj.construct_signatures.is_empty()) {
         let sig = obj.construct_signatures[0]
         let elems = sig.params.map(fn(p) {
           TupleElementV2::{
@@ -2118,7 +2118,7 @@ pub fn resolve_builtin_utility_type(
 /// - Index signatures are merged (later declaration wins)
 pub fn merge_object_types(a : ObjectTypeV2, b : ObjectTypeV2) -> ObjectTypeV2 {
   // Merge fields - b's fields override a's fields with same name
-  let merged_fields : Map[String, FieldInfoV2] = Map::new()
+  let merged_fields : Map[String, FieldInfoV2] = Map([])
   a.fields.each(fn(name, field) { merged_fields.set(name, field) })
   b.fields.each(fn(name, field) { merged_fields.set(name, field) })
 

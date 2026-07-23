@@ -577,28 +577,28 @@ test "scanner_v2 template with interpolation" {
   match tokens[0] {
     TemplateHead(value, _) => assert_eq(value, "hello ")
     _ => {
-      println("Expected TemplateHead, got: \{tokens[0]}")
+      println("Expected TemplateHead, got: \{@debug.to_string(tokens[0])}")
       assert_true(false)
     }
   }
   match tokens[1] {
     Identifier(value, _) => assert_eq(value, "name")
     _ => {
-      println("Expected Identifier, got: \{tokens[1]}")
+      println("Expected Identifier, got: \{@debug.to_string(tokens[1])}")
       assert_true(false)
     }
   }
   match tokens[2] {
     CloseBrace(_) => () // End of interpolation
     _ => {
-      println("Expected CloseBrace, got: \{tokens[2]}")
+      println("Expected CloseBrace, got: \{@debug.to_string(tokens[2])}")
       assert_true(false)
     }
   }
   match tokens[3] {
     TemplateTail(value, _) => assert_eq(value, " world")
     _ => {
-      println("Expected TemplateTail, got: \{tokens[3]}")
+      println("Expected TemplateTail, got: \{@debug.to_string(tokens[3])}")
       assert_true(false)
     }
   }
@@ -617,7 +617,7 @@ test "scanner_v2 template with multiple interpolations" {
   match tokens[0] {
     TemplateHead(value, _) => assert_eq(value, "a")
     _ => {
-      println("Expected TemplateHead, got: \{tokens[0]}")
+      println("Expected TemplateHead, got: \{@debug.to_string(tokens[0])}")
       assert_true(false)
     }
   }
@@ -628,14 +628,14 @@ test "scanner_v2 template with multiple interpolations" {
   match tokens[2] {
     CloseBrace(_) => ()
     _ => {
-      println("Expected CloseBrace, got: \{tokens[2]}")
+      println("Expected CloseBrace, got: \{@debug.to_string(tokens[2])}")
       assert_true(false)
     }
   }
   match tokens[3] {
     TemplateMiddle(value, _) => assert_eq(value, "b")
     _ => {
-      println("Expected TemplateMiddle, got: \{tokens[3]}")
+      println("Expected TemplateMiddle, got: \{@debug.to_string(tokens[3])}")
       assert_true(false)
     }
   }
@@ -646,14 +646,14 @@ test "scanner_v2 template with multiple interpolations" {
   match tokens[5] {
     CloseBrace(_) => ()
     _ => {
-      println("Expected CloseBrace, got: \{tokens[5]}")
+      println("Expected CloseBrace, got: \{@debug.to_string(tokens[5])}")
       assert_true(false)
     }
   }
   match tokens[6] {
     TemplateTail(value, _) => assert_eq(value, "c")
     _ => {
-      println("Expected TemplateTail, got: \{tokens[6]}")
+      println("Expected TemplateTail, got: \{@debug.to_string(tokens[6])}")
       assert_true(false)
     }
   }
@@ -670,7 +670,7 @@ test "scanner_v2 simple template (no interpolation)" {
   match tokens[0] {
     TemplateLiteral(value, _) => assert_eq(value, "hello world")
     _ => {
-      println("Expected TemplateLiteral, got: \{tokens[0]}")
+      println("Expected TemplateLiteral, got: \{@debug.to_string(tokens[0])}")
       assert_true(false)
     }
   }
@@ -693,7 +693,7 @@ test "scanner_v2 regex literal after operator" {
   match tokens[2] {
     RegExpLiteral(value, _) => assert_eq(value, "/abc/gi")
     _ => {
-      println("Expected RegExpLiteral, got: \{tokens[2]}")
+      println("Expected RegExpLiteral, got: \{@debug.to_string(tokens[2])}")
       assert_true(false)
     }
   }
@@ -712,7 +712,7 @@ test "scanner_v2 division not regex" {
   match tokens[1] {
     Slash(_) => ()
     _ => {
-      println("Expected Slash, got: \{tokens[1]}")
+      println("Expected Slash, got: \{@debug.to_string(tokens[1])}")
       assert_true(false)
     }
   }
@@ -730,7 +730,7 @@ test "scanner_v2 regex with character class" {
   match tokens[2] {
     RegExpLiteral(value, _) => assert_eq(value, "/[a/b]/")
     _ => {
-      println("Expected RegExpLiteral, got: \{tokens[2]}")
+      println("Expected RegExpLiteral, got: \{@debug.to_string(tokens[2])}")
       assert_true(false)
     }
   }
@@ -748,7 +748,7 @@ test "scanner_v2 regex after return keyword" {
   match tokens[1] {
     RegExpLiteral(value, _) => assert_eq(value, "/test/")
     _ => {
-      println("Expected RegExpLiteral, got: \{tokens[1]}")
+      println("Expected RegExpLiteral, got: \{@debug.to_string(tokens[1])}")
       assert_true(false)
     }
   }
@@ -762,21 +762,21 @@ test "scanner_v2_jsx simple element" {
   match tokens[0] {
     JsxTagOpen(_) => ()
     _ => {
-      println("Expected JsxTagOpen, got: \{tokens[0]}")
+      println("Expected JsxTagOpen, got: \{@debug.to_string(tokens[0])}")
       assert_true(false)
     }
   }
   match tokens[1] {
     Identifier(name, _) => assert_eq(name, "div")
     _ => {
-      println("Expected Identifier(div), got: \{tokens[1]}")
+      println("Expected Identifier(div), got: \{@debug.to_string(tokens[1])}")
       assert_true(false)
     }
   }
   match tokens[2] {
     JsxTagClose(_) => ()
     _ => {
-      println("Expected JsxTagClose, got: \{tokens[2]}")
+      println("Expected JsxTagClose, got: \{@debug.to_string(tokens[2])}")
       assert_true(false)
     }
   }
@@ -790,21 +790,21 @@ test "scanner_v2_jsx self-closing element" {
   match tokens[0] {
     JsxTagOpen(_) => ()
     _ => {
-      println("Expected JsxTagOpen, got: \{tokens[0]}")
+      println("Expected JsxTagOpen, got: \{@debug.to_string(tokens[0])}")
       assert_true(false)
     }
   }
   match tokens[1] {
     Identifier(name, _) => assert_eq(name, "br")
     _ => {
-      println("Expected Identifier(br), got: \{tokens[1]}")
+      println("Expected Identifier(br), got: \{@debug.to_string(tokens[1])}")
       assert_true(false)
     }
   }
   match tokens[2] {
     SlashGreaterThan(_) => ()
     _ => {
-      println("Expected SlashGreaterThan, got: \{tokens[2]}")
+      println("Expected SlashGreaterThan, got: \{@debug.to_string(tokens[2])}")
       assert_true(false)
     }
   }
@@ -820,35 +820,35 @@ test "scanner_v2_jsx with attribute" {
   match tokens[0] {
     JsxTagOpen(_) => ()
     _ => {
-      println("Expected JsxTagOpen, got: \{tokens[0]}")
+      println("Expected JsxTagOpen, got: \{@debug.to_string(tokens[0])}")
       assert_true(false)
     }
   }
   match tokens[1] {
     Identifier(name, _) => assert_eq(name, "div")
     _ => {
-      println("Expected Identifier(div), got: \{tokens[1]}")
+      println("Expected Identifier(div), got: \{@debug.to_string(tokens[1])}")
       assert_true(false)
     }
   }
   match tokens[2] {
     Identifier(name, _) => assert_eq(name, "class")
     _ => {
-      println("Expected Identifier(class), got: \{tokens[2]}")
+      println("Expected Identifier(class), got: \{@debug.to_string(tokens[2])}")
       assert_true(false)
     }
   }
   match tokens[3] {
     Equals(_) => ()
     _ => {
-      println("Expected Equals, got: \{tokens[3]}")
+      println("Expected Equals, got: \{@debug.to_string(tokens[3])}")
       assert_true(false)
     }
   }
   match tokens[4] {
     StringLiteral(value, _) => assert_eq(value, "container")
     _ => {
-      println("Expected StringLiteral, got: \{tokens[4]}")
+      println("Expected StringLiteral, got: \{@debug.to_string(tokens[4])}")
       assert_true(false)
     }
   }
@@ -864,14 +864,14 @@ test "scanner_v2 hashbang" {
   match tokens[0] {
     Hashbang(content, _) => assert_eq(content, "#!/usr/bin/env node")
     _ => {
-      println("Expected Hashbang, got: \{tokens[0]}")
+      println("Expected Hashbang, got: \{@debug.to_string(tokens[0])}")
       assert_true(false)
     }
   }
   match tokens[1] {
     KeywordConst(_) => ()
     _ => {
-      println("Expected KeywordConst, got: \{tokens[1]}")
+      println("Expected KeywordConst, got: \{@debug.to_string(tokens[1])}")
       assert_true(false)
     }
   }
@@ -889,14 +889,14 @@ test "scanner_v2 jsdoc comment" {
       // Content should be " This is JSDoc " (without the /** and */)
       assert_true(content.contains("This is JSDoc"))
     _ => {
-      println("Expected JSDocComment, got: \{tokens[0]}")
+      println("Expected JSDocComment, got: \{@debug.to_string(tokens[0])}")
       assert_true(false)
     }
   }
   match tokens[1] {
     KeywordConst(_) => ()
     _ => {
-      println("Expected KeywordConst, got: \{tokens[1]}")
+      println("Expected KeywordConst, got: \{@debug.to_string(tokens[1])}")
       assert_true(false)
     }
   }
@@ -917,7 +917,7 @@ test "scanner_v2 ts-ignore directive" {
         }
       }
     _ => {
-      println("Expected CommentDirective, got: \{tokens[0]}")
+      println("Expected CommentDirective, got: \{@debug.to_string(tokens[0])}")
       assert_true(false)
     }
   }
@@ -941,7 +941,7 @@ test "scanner_v2 ts-expect-error directive" {
       assert_true(arg.contains("some error"))
     }
     _ => {
-      println("Expected CommentDirective, got: \{tokens[0]}")
+      println("Expected CommentDirective, got: \{@debug.to_string(tokens[0])}")
       assert_true(false)
     }
   }
@@ -965,7 +965,7 @@ test "scanner_v2 triple-slash reference directive" {
       assert_true(content.contains("reference"))
     }
     _ => {
-      println("Expected CommentDirective, got: \{tokens[0]}")
+      println("Expected CommentDirective, got: \{@debug.to_string(tokens[0])}")
       assert_true(false)
     }
   }
@@ -981,7 +981,7 @@ test "scanner_v2 regular comment skipped" {
     KeywordConst(_) => ()
     _ => {
       println(
-        "Expected KeywordConst (regular comment should be skipped), got: \{tokens[0]}",
+        "Expected KeywordConst (regular comment should be skipped), got: \{@debug.to_string(tokens[0])}",
       )
       assert_true(false)
     }
@@ -998,7 +998,7 @@ test "scanner_v2 block comment skipped" {
     KeywordConst(_) => ()
     _ => {
       println(
-        "Expected KeywordConst (block comment should be skipped), got: \{tokens[0]}",
+        "Expected KeywordConst (block comment should be skipped), got: \{@debug.to_string(tokens[0])}",
       )
       assert_true(false)
     }

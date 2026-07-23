@@ -6,7 +6,7 @@ pub(all) enum SourceMapMode {
   None
   External
   Inline
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 /// CLI command
@@ -20,7 +20,7 @@ pub(all) enum Command {
   Version
   Help
   Init // Generate tsconfig.json (future)
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// CLI options for compilation
@@ -43,7 +43,7 @@ pub(all) struct CLIOptions {
   strict_null_checks : Bool // Enable strict null checks
   strict_function_types : Bool // Enable strict checking of function types
   import_helpers : Bool // Import emit helpers from tslib (e.g., __spreadArray)
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Default CLI options
@@ -199,7 +199,7 @@ pub fn parse_args(args : Array[String]) -> Result[Command, String] {
         return Err("--watchInterval requires a number (milliseconds)")
       }
       try {
-        watch_interval = @strconv.parse_int(args[i])
+        watch_interval = @string.parse_int(args[i])
       } catch {
         _ => return Err("--watchInterval requires a valid number")
       }
@@ -209,7 +209,7 @@ pub fn parse_args(args : Array[String]) -> Result[Command, String] {
         return Err("--parallel requires a number")
       }
       try {
-        parallel = Some(@strconv.parse_int(args[i]))
+        parallel = Some(@string.parse_int(args[i]))
       } catch {
         _ => return Err("--parallel requires a valid number")
       }

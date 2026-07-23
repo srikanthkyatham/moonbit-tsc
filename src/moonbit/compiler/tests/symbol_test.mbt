@@ -254,7 +254,7 @@ test "Symbol properties are readonly" {
         .any(fn(d) {
           d.message.contains("read-only") || d.message.contains("readonly")
         })
-      if not(has_readonly_error) {
+      if !(has_readonly_error) {
         fail("Symbol properties should be readonly")
       }
     }

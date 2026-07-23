@@ -11,12 +11,20 @@ fn main {
 ///|
 /// Async main function
 async fn async_main() -> Unit {
+  // Restore default signal dispositions so SIGTERM/SIGINT terminate the
+  // process immediately (with the standard signal exit status).
+  // By default the moonbitlang/async runtime blocks these signals and turns
+  // them into *cooperative* cancellation via the event loop; a long
+  // synchronous compilation never reaches a suspension point, which made the
+  // CLI un-killable except by SIGKILL (e.g. `timeout 30 cli.exe ...` had no
+  // effect). Passing an empty list unblocks the signals process-wide.
+  @signal.set_global_cancellation_signals([])
   let args = @env.args()
   match parse_args(args) {
     Err(msg) => {
       println("Error: " + msg)
       print_usage()
-      exit(1)
+      exit(EXIT_FAILURE)
     }
     Ok(Command::Help) =>
       // Check for tsconfig.json auto-detection before showing help
@@ -88,6 +96,7 @@ async fn run_single_compile(
   let file_paths = @coordinator.discover_files(file_patterns)
   if file_paths.length() == 0 {
     println("No TypeScript files found")
+    exit(EXIT_FAILURE)
     return
   }
   if options.verbose {
@@ -134,6 +143,13 @@ async fn run_single_compile(
   let summary = @coordinator.compile_parallel(
     executable, all_files, coord_options,
   )
+
+  // Validate relative imports across the compiled file set (multi-file only)
+  let summary = if all_files.length() > 1 {
+    apply_cross_file_import_diagnostics(summary, all_files)
+  } else {
+    summary
+  }
 
   // Write output files
   write_all_outputs(summary.results, options)
@@ -185,6 +201,9 @@ async fn run_json_compile(
 
   // Output JSON response
   print_json_summary(summary)
+
+  // Exit with error code if there were errors
+  exit_if_errors(summary)
 }
 
 ///|
@@ -202,6 +221,7 @@ async fn run_watch_mode(
   let file_paths = @coordinator.discover_files(file_patterns)
   if file_paths.length() == 0 {
     println("No TypeScript files found")
+    exit(EXIT_FAILURE)
     return
   }
   @coordinator.print_watch_message(
@@ -304,7 +324,7 @@ async fn compile_files_with_dag(
 
   // Print results
   for result in summary.results {
-    if not(result.success) {
+    if !(result.success) {
       for diag in result.diagnostics {
         println(diag)
       }
@@ -356,7 +376,7 @@ async fn compile_files(
 
   // Print results
   for result in summary.results {
-    if not(result.success) {
+    if !(result.success) {
       for diag in result.diagnostics {
         println(diag)
       }
@@ -395,9 +415,7 @@ fn print_summary(
   if options.json_output {
     print_json_summary(summary)
     // Exit with error code if there were errors (even in JSON mode)
-    if summary.failed > 0 {
-      exit(1)
-    }
+    exit_if_errors(summary)
     return
   }
 
@@ -409,15 +427,15 @@ fn print_summary(
   for result in summary.results {
     // Count diagnostics
     for diag in result.diagnostics {
-      if diag.contains(" - error ") {
+      if is_error_diagnostic(diag) {
         total_errors = total_errors + 1
-      } else if diag.contains(" - warning ") {
+      } else if is_warning_diagnostic(diag) {
         total_warnings = total_warnings + 1
       }
     }
 
     // Print diagnostics if failed OR if --reportDiagnostics is set
-    if not(result.success) || options.report_diagnostics {
+    if !(result.success) || options.report_diagnostics {
       for diag in result.diagnostics {
         println(diag)
       }
@@ -484,9 +502,7 @@ fn print_summary(
   }
 
   // Exit with error code if there were errors
-  if summary.failed > 0 || total_errors > 0 {
-    exit(1)
-  }
+  exit_if_errors(summary)
 }
 
 ///|
@@ -596,7 +612,7 @@ async fn run_list_imports(
         }
       }
     }
-    Err(_) =>
+    Err(_) => {
       if json_output {
         println(
           "{\"file\": \"" +
@@ -606,6 +622,8 @@ async fn run_list_imports(
       } else {
         println("Error: Failed to parse " + file_path)
       }
+      exit(EXIT_FAILURE)
+    }
   }
 }
 
@@ -848,7 +866,7 @@ fn build_cli_options_from_tsconfig(
               // Resolve relative paths against project directory
               match project_dir {
                 Some(proj_dir) =>
-                  if dir.length() > 0 && not(dir.has_prefix("/")) {
+                  if dir.length() > 0 && !(dir.has_prefix("/")) {
                     // Relative path - resolve against project dir
                     Some(proj_dir + "/" + dir)
                   } else {
@@ -919,6 +937,7 @@ async fn run_project_compile(
   let file_paths = discover_project_files(tsconfig, project_dir)
   if file_paths.length() == 0 {
     println("No TypeScript files found in project")
+    exit(EXIT_FAILURE)
     return
   }
   if cli_options.verbose {
@@ -1080,7 +1099,7 @@ async fn compile_project_files(
 
   // Print results
   for result in summary.results {
-    if not(result.success) {
+    if !(result.success) {
       for diag in result.diagnostics {
         println(diag)
       }
@@ -1154,7 +1173,7 @@ async fn discover_project_files(
     let matches_exclude = @config.should_exclude(exclude_patterns, rel_path)
 
     // Include file if it matches include patterns and doesn't match exclude
-    if matches_include && not(matches_exclude) {
+    if matches_include && !(matches_exclude) {
       filtered.push(file)
     }
   }
@@ -1213,6 +1232,7 @@ async fn run_build_references(
   let graph = @config.load_project_graph(tsconfig_path)
   if graph.projects.length() == 0 {
     println("No projects found")
+    exit(EXIT_FAILURE)
     return
   }
   println(
@@ -1224,6 +1244,7 @@ async fn run_build_references(
   let mut total_files = 0
   let mut total_success = 0
   let mut total_failed = 0
+  let mut has_errors = false
   let start_time = @async.now()
   for project_path in graph.build_order {
     // Find the project config
@@ -1272,6 +1293,9 @@ async fn run_build_references(
     total_files = total_files + summary.total_files
     total_success = total_success + summary.successful
     total_failed = total_failed + summary.failed
+    if compute_exit_code(summary) != EXIT_SUCCESS {
+      has_errors = true
+    }
 
     // Print project result
     if summary.failed == 0 {
@@ -1285,7 +1309,7 @@ async fn run_build_references(
     } else {
       // Print errors
       for result in summary.results {
-        if not(result.success) {
+        if !(result.success) {
           for diag in result.diagnostics {
             println("  " + diag)
           }
@@ -1312,4 +1336,9 @@ async fn run_build_references(
     println("  Failed: " + total_failed.to_string())
   }
   println("  Total time: " + total_time.to_string() + "ms")
+
+  // Exit with error code if any project had failures or error diagnostics
+  if has_errors {
+    exit(EXIT_FAILURE)
+  }
 }

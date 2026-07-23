@@ -5432,7 +5432,7 @@ test "ExternalTypeRegistry - basic creation and lookup" {
           match registry.lookup_export("./utils.ts", "add") {
             Some(found_info) => {
               assert_eq(found_info.original_name, "add")
-              assert_true(not(found_info.is_type_only))
+              assert_true(!(found_info.is_type_only))
             }
             None => assert_true(false)
           }
@@ -5482,8 +5482,8 @@ test "ImportBindingInfo - named import" {
   let binding = @compiler.ImportBindingInfo::named("./utils.ts", "helper")
   assert_eq(binding.module_path, "./utils.ts")
   assert_eq(binding.imported_name, "helper")
-  assert_true(not(binding.is_default))
-  assert_true(not(binding.is_namespace))
+  assert_true(!(binding.is_default))
+  assert_true(!(binding.is_namespace))
 }
 
 ///|
@@ -5491,15 +5491,15 @@ test "ImportBindingInfo - default import" {
   let binding = @compiler.ImportBindingInfo::default("./utils.ts")
   assert_eq(binding.module_path, "./utils.ts")
   assert_true(binding.is_default)
-  assert_true(not(binding.is_namespace))
+  assert_true(!(binding.is_namespace))
 }
 
 ///|
 test "ImportBindingInfo - namespace import" {
-  let binding = @compiler.ImportBindingInfo::namespace("./utils.ts")
+  let binding = @compiler.ImportBindingInfo::namespace_import("./utils.ts")
   assert_eq(binding.module_path, "./utils.ts")
   assert_true(binding.is_namespace)
-  assert_true(not(binding.is_default))
+  assert_true(!(binding.is_default))
 }
 
 ///|
@@ -5562,7 +5562,7 @@ test "extract_module_types - extracts exported function" {
           match module_types.get_export("add") {
             Some(info) => {
               assert_eq(info.original_name, "add")
-              assert_true(not(info.is_type_only))
+              assert_true(!(info.is_type_only))
             }
             None => assert_true(false)
           }
@@ -5587,7 +5587,7 @@ test "extract_module_types - extracts exported variable" {
           match module_types.get_export("PI") {
             Some(info) => {
               assert_eq(info.original_name, "PI")
-              assert_true(not(info.is_type_only))
+              assert_true(!(info.is_type_only))
             }
             None => assert_true(false)
           }
@@ -5672,7 +5672,7 @@ test "extract_module_types - extracts exported class" {
           match module_types.get_export("Calculator") {
             Some(info) => {
               assert_eq(info.original_name, "Calculator")
-              assert_true(not(info.is_type_only))
+              assert_true(!(info.is_type_only))
             }
             None => assert_true(false)
           }
@@ -5786,11 +5786,11 @@ test "tagged template with valid argument types should pass" {
               let has_2345 = typed.diagnostics
                 .iter()
                 .any(fn(d) { d.code == 2345 })
-              assert_true(not(has_2345))
+              assert_true(!(has_2345))
             }
             Err(diagnostics) => {
               let has_2345 = diagnostics.iter().any(fn(d) { d.code == 2345 })
-              assert_true(not(has_2345))
+              assert_true(!(has_2345))
             }
           }
         Err(_) => assert_true(false)
@@ -5815,11 +5815,11 @@ test "delete on property access is valid" {
               let has_2703 = typed.diagnostics
                 .iter()
                 .any(fn(d) { d.code == 2703 })
-              assert_true(not(has_2703))
+              assert_true(!(has_2703))
             }
             Err(diagnostics) => {
               let has_2703 = diagnostics.iter().any(fn(d) { d.code == 2703 })
-              assert_true(not(has_2703))
+              assert_true(!(has_2703))
             }
           }
         Err(_) => assert_true(false)
@@ -5844,11 +5844,11 @@ test "callable tag function is valid" {
               let has_2349 = typed.diagnostics
                 .iter()
                 .any(fn(d) { d.code == 2349 })
-              assert_true(not(has_2349))
+              assert_true(!(has_2349))
             }
             Err(diagnostics) => {
               let has_2349 = diagnostics.iter().any(fn(d) { d.code == 2349 })
-              assert_true(not(has_2349))
+              assert_true(!(has_2349))
             }
           }
         Err(_) => assert_true(false)
@@ -5873,7 +5873,7 @@ test "TS2367 template literal equality with no overlap" {
               let has_2367 = typed.diagnostics
                 .iter()
                 .any(fn(d) { d.code == 2367 })
-              if not(has_2367) {
+              if !(has_2367) {
                 println("Expected TS2367 error but got none")
                 println("Diagnostics count: \{typed.diagnostics.length()}")
                 for d in typed.diagnostics {
@@ -6003,7 +6003,7 @@ test "SymbolConstructor interface augmentation - direct property access" {
               let has_2339 = typed.diagnostics
                 .iter()
                 .any(fn(d) { d.code == 2339 })
-              assert_true(not(has_2339))
+              assert_true(!(has_2339))
             }
             Err(diagnostics) => {
               // Should not have TS2339
@@ -6014,7 +6014,7 @@ test "SymbolConstructor interface augmentation - direct property access" {
                   println("  - TS\{d.code}: \{d.message}")
                 }
               }
-              assert_true(not(has_2339))
+              assert_true(!(has_2339))
             }
           }
         Err(_) => assert_true(false)
@@ -6041,14 +6041,14 @@ test "SymbolConstructor augmentation - custom symbol property" {
               let has_property_error = typed.diagnostics
                 .iter()
                 .any(fn(d) { d.code == 2339 })
-              assert_true(not(has_property_error))
+              assert_true(!(has_property_error))
             }
             Err(diagnostics) => {
               // Should not fail or have property errors
               let has_property_error = diagnostics.iter().any(
                 fn(d) { d.code == 2339 },
               )
-              assert_true(not(has_property_error))
+              assert_true(!(has_property_error))
             }
           }
         Err(_) => assert_true(false)
@@ -6075,11 +6075,11 @@ test "SymbolConstructor augmentation - multiple properties" {
               let has_error = typed.diagnostics
                 .iter()
                 .any(fn(d) { d.code == 2339 })
-              assert_true(not(has_error))
+              assert_true(!(has_error))
             }
             Err(diagnostics) => {
               let has_error = diagnostics.iter().any(fn(d) { d.code == 2339 })
-              assert_true(not(has_error))
+              assert_true(!(has_error))
             }
           }
         Err(_) => assert_true(false)
@@ -6105,11 +6105,11 @@ test "SymbolConstructor augmentation - built-in properties preserved" {
               let has_error = typed.diagnostics
                 .iter()
                 .any(fn(d) { d.code == 2339 })
-              assert_true(not(has_error))
+              assert_true(!(has_error))
             }
             Err(diagnostics) => {
               let has_error = diagnostics.iter().any(fn(d) { d.code == 2339 })
-              assert_true(not(has_error))
+              assert_true(!(has_error))
             }
           }
         Err(_) => assert_true(false)
@@ -6135,15 +6135,41 @@ test "SymbolConstructor augmentation - used in computed property" {
               let has_error = typed.diagnostics
                 .iter()
                 .any(fn(d) { d.code == 2339 })
-              assert_true(not(has_error))
+              assert_true(!(has_error))
             }
             Err(diagnostics) => {
               let has_error = diagnostics.iter().any(fn(d) { d.code == 2339 })
-              assert_true(not(has_error))
+              assert_true(!(has_error))
             }
           }
         Err(_) => assert_true(false)
       }
     Err(_) => assert_true(false)
+  }
+}
+
+// ============================================================================
+// extract_iterable_element_type cycle detection regression test
+// (see checker_cycle_wbtest.mbt for direct unit tests of the cycle guard)
+// ============================================================================
+
+///|
+test "spread of generic type parameter in generic rest call does not hang" {
+  // Minimal repro distilled from genericRestParameters1.ts - this used to
+  // hang the checker forever: type parameters are stored in type_cache as
+  // self-referential TypeReference entries, and extract_iterable_element_type
+  // (tail-)recursed on them forever when spreading a value typed by a
+  // generic type parameter (also hit by restTuplesFromContextualTypes.ts and
+  // variadicTuples1/2.ts).
+  let source =
+    #|declare function f10<T extends unknown[]>(...args: T): T;
+    #|function g10<U extends string[]>(u: U) {
+    #|    f10(...u);
+    #|}
+  let result = parse_bind_and_check(source)
+  // The point of this test is termination; accept either outcome.
+  match result {
+    Ok(typed) => assert_eq(typed.file_path, "test.ts")
+    Err(diags) => assert_true(diags.length() > 0)
   }
 }

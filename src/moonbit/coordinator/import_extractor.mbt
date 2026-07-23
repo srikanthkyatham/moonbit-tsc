@@ -197,11 +197,42 @@ fn resolve_relative_path(base_dir : String, relative : String) -> String {
 }
 
 ///|
+/// Resolve a relative import against the set of files being compiled,
+/// honoring TypeScript resolution order (.ts/.tsx/.d.ts extensions, .js->.ts
+/// substitution, and directory index files). Falls back to the naive
+/// ".ts"-appending guess when nothing in the set matches, preserving the
+/// previous behavior for files outside the compilation.
+pub fn resolve_import_path_with_resolver(
+  module_specifier : String,
+  from_file : String,
+  resolver : @compiler.ModuleResolver,
+) -> String? {
+  if module_specifier.has_prefix("./") || module_specifier.has_prefix("../") {
+    match resolver.resolve_module_name(module_specifier, from_file) {
+      Ok(resolved) => Some(resolved.resolved_file_name)
+      Err(_) => resolve_import_path(module_specifier, from_file)
+    }
+  } else {
+    // Bare import (node_modules) - not tracked in dependency graph
+    None
+  }
+}
+
+///|
 /// Build the dependency graph from source files
 pub fn build_dependency_graph(
   files : Array[(String, String)], // (path, source) pairs - matches read_files output
 ) -> DependencyDag {
   let dag = DependencyDag::new()
+
+  // Resolver whose filesystem view is the set of files being compiled,
+  // so relative imports resolve to the actual on-disk participants
+  // (a.d.ts, dir/index.ts, ...) instead of a naive ".ts" guess.
+  let file_paths : Array[String] = []
+  for file in files {
+    file_paths.push(file.0)
+  }
+  let resolver = @compiler.ModuleResolver::with_file_set(file_paths, ".")
 
   // Store resolved imports/references and content hash for each file
   let file_data : Array[(String, Array[String], Int64)] = []
@@ -215,7 +246,7 @@ pub fn build_dependency_graph(
     // Resolve imports to absolute paths
     let resolved_deps : Array[String] = []
     for module_spec in result.imports {
-      match resolve_import_path(module_spec, path) {
+      match resolve_import_path_with_resolver(module_spec, path, resolver) {
         Some(resolved) => resolved_deps.push(resolved)
         None => () // Skip bare imports (node_modules)
       }
@@ -250,7 +281,7 @@ pub fn collect_reference_paths(
   files : Array[(String, String)], // (path, source) pairs
 ) -> Array[String] {
   let references : Array[String] = []
-  let seen : Map[String, Bool] = Map::new()
+  let seen : Map[String, Bool] = Map([])
   for file in files {
     let (path, source) = file
     let result = extract_imports_and_references(source, path)
@@ -278,15 +309,15 @@ pub fn filter_new_references(
   references : Array[String],
   existing_files : Array[String],
 ) -> Array[String] {
-  let existing_set : Map[String, Bool] = Map::new()
+  let existing_set : Map[String, Bool] = Map([])
   for file in existing_files {
     existing_set.set(file, true)
   }
   let new_refs : Array[String] = []
-  for ref in references {
-    match existing_set.get(ref) {
+  for reference in references {
+    match existing_set.get(reference) {
       Some(_) => () // Already in the file set
-      None => new_refs.push(ref)
+      None => new_refs.push(reference)
     }
   }
   new_refs

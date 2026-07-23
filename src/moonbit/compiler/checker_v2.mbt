@@ -8,7 +8,7 @@ pub struct CheckResultV2 {
   ty : TypeV2
   narrowing : Narrowing
   errors : Array[TypeMismatchError]
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Create a successful check result
@@ -46,7 +46,7 @@ pub fn CheckResultV2::errors(
 ///|
 /// Check if result has errors
 pub fn CheckResultV2::has_errors(self : CheckResultV2) -> Bool {
-  not(self.errors.is_empty())
+  !(self.errors.is_empty())
 }
 
 ///|
@@ -86,7 +86,7 @@ pub fn infer_expr_v2(env : TypeEnv, node : Node) -> CheckResultV2 {
   match node {
     // Literals - direct type synthesis
     NumericLiteral(lit) => {
-      let num_val = @strconv.parse_double(lit.value) catch { _ => 0.0 }
+      let num_val = @string.parse_double(lit.value) catch { _ => 0.0 }
       CheckResultV2::ok(TLiteralNumber(num_val))
     }
     StringLiteral(lit) => CheckResultV2::ok(TLiteralString(lit.value))
@@ -295,7 +295,7 @@ fn infer_object_literal_v2(
   env : TypeEnv,
   properties : Array[ObjectProperty],
 ) -> CheckResultV2 {
-  let fields : Map[String, FieldInfoV2] = Map::new()
+  let fields : Map[String, FieldInfoV2] = Map([])
   let all_errors : Array[TypeMismatchError] = []
   for prop in properties {
     match prop {
@@ -376,7 +376,7 @@ fn check_object_literal_v2(
   properties : Array[ObjectProperty],
   expected : ObjectTypeV2,
 ) -> CheckResultV2 {
-  let fields : Map[String, FieldInfoV2] = Map::new()
+  let fields : Map[String, FieldInfoV2] = Map([])
   let all_errors : Array[TypeMismatchError] = []
   let provided_props : Array[String] = []
   for prop in properties {
@@ -493,8 +493,8 @@ fn check_object_literal_v2(
   for kv in expected.fields {
     let name = kv.0
     let field = kv.1
-    if not(field.optional) &&
-      not(provided_props.iter().any(fn(p) { p == name })) {
+    if !(field.optional) &&
+      !(provided_props.iter().any(fn(p) { p == name })) {
       all_errors.push(
         missing_property_error(
           PProperty(PRoot, name),
@@ -1270,7 +1270,7 @@ pub fn check_assignable_v2(
     TUnion(targets) => {
       for t in targets {
         let result = check_assignable_v2(source, t, path)
-        if not(result.has_errors()) {
+        if !(result.has_errors()) {
           return CheckResultV2::ok(source)
         }
       }
@@ -1374,7 +1374,7 @@ fn check_object_assignable_v2(
         all_errors.append(result.errors)
       }
       None =>
-        if not(t_field.optional) {
+        if !(t_field.optional) {
           let available : Array[String] = []
           for skv in source.fields {
             available.push(skv.0)

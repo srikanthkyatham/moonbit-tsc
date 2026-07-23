@@ -7,7 +7,7 @@ pub(all) enum DiffLineType {
   Same
   Added
   Removed
-} derive(Show, Eq)
+} derive(Eq, Debug)
 
 ///|
 /// A single diff line
@@ -15,18 +15,18 @@ pub(all) struct DiffLine {
   line_type : DiffLineType
   line_number : Int
   content : String
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Generate a simple line-by-line diff
 pub fn diff_lines(expected : String, actual : String) -> Array[DiffLine] {
   let exp_lines : Array[String] = expected
     .split("\n")
-    .map(fn(s) { s.to_string() })
+    .map(fn(s) { s.to_owned() })
     .collect()
   let act_lines : Array[String] = actual
     .split("\n")
-    .map(fn(s) { s.to_string() })
+    .map(fn(s) { s.to_owned() })
     .collect()
   let result : Array[DiffLine] = []
   let max_lines = if exp_lines.length() > act_lines.length() {
@@ -184,7 +184,7 @@ pub fn format_test_summary(summary : TestSummary) -> String {
   if summary.failed > 0 {
     sb.write_string("\nFailed Tests:\n")
     for result in summary.results {
-      if not(result.passed) {
+      if !(result.passed) {
         sb.write_string("  - ")
         sb.write_string(result.name)
         match result.variant {

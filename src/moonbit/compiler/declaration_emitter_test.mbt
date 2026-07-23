@@ -1544,7 +1544,7 @@ test "emit interface with call signature" {
       assert_true(output.contains("(x: T)"))
       assert_true(output.contains(": T"))
       // Should NOT have a method name before <T>
-      assert_true(not(output.contains("?<T>")))
+      assert_true(!(output.contains("?<T>")))
       println("\nInterface with call signature output:")
       println(output)
     }

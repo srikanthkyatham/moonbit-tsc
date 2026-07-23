@@ -22,7 +22,7 @@ pub enum Narrowing {
   NTypePredicate(String, TypeV2) // User-defined type guard: x is Type (param_name, predicate_type)
   NAsserts(String, TypeV2?) // Assertion function: asserts x, asserts x is Type
   NNone // No narrowing possible
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 /// Check if narrowing is None
@@ -50,8 +50,8 @@ pub fn invert_narrowing(narrowing : Narrowing) -> Narrowing {
     NHasProperty(name, prop) => NNot(NHasProperty(name, prop))
     NPropertyEquality(obj, prop, ty) => NPropertyInequality(obj, prop, ty)
     NPropertyInequality(obj, prop, ty) => NPropertyEquality(obj, prop, ty)
-    NNullCheck(name, is_null) => NNullCheck(name, not(is_null))
-    NUndefinedCheck(name, is_undef) => NUndefinedCheck(name, not(is_undef))
+    NNullCheck(name, is_null) => NNullCheck(name, !(is_null))
+    NUndefinedCheck(name, is_undef) => NUndefinedCheck(name, !(is_undef))
     NIsArray(name) => NNot(NIsArray(name))
     NTypePredicate(name, ty) => NNot(NTypePredicate(name, ty))
     NAsserts(_, _) => NNone // Assertion functions don't have an else branch
@@ -136,7 +136,7 @@ pub fn intersect_types(current : TypeV2, narrowed : TypeV2) -> TypeV2 {
 pub fn exclude_type(current : TypeV2, excluded : TypeV2) -> TypeV2 {
   match current {
     TUnion(types) => {
-      let filtered = types.filter(fn(t) { not(types_v2_equal(t, excluded)) })
+      let filtered = types.filter(fn(t) { !(types_v2_equal(t, excluded)) })
       simplify_union(filtered)
     }
     t => if types_v2_equal(t, excluded) { TNever } else { t }
@@ -260,7 +260,7 @@ pub fn apply_property_inequality_narrowing(
         match t {
           TObject(obj) =>
             match obj.fields.get(prop) {
-              Some(field_info) => not(types_v2_equal(field_info.ty, value_type))
+              Some(field_info) => !(types_v2_equal(field_info.ty, value_type))
               None => true // Keep members that don't have the property
             }
           _ => true

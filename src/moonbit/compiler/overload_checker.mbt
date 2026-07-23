@@ -17,7 +17,7 @@ pub struct OverloadSignature {
   type_parameters : Array[TypeParameter]
   location : SourceLocation
   is_ambient : Bool
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Parameter in an overload signature
@@ -26,7 +26,7 @@ pub struct OverloadParameter {
   type_annotation : Node?
   is_optional : Bool
   is_rest : Bool
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Collected overloads for a function
@@ -35,7 +35,7 @@ pub struct FunctionOverloads {
   signatures : Array[OverloadSignature]
   implementation : FunctionDeclaration?
   implementation_location : SourceLocation?
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Create empty function overloads
@@ -79,7 +79,7 @@ pub fn collect_overloads(
   statements : Array[Node],
   is_ambient_file : Bool,
 ) -> Map[String, FunctionOverloads] {
-  let overloads : Map[String, FunctionOverloads] = Map::new()
+  let overloads : Map[String, FunctionOverloads] = Map([])
   for stmt in statements {
     match stmt {
       FunctionDeclaration(func) =>
@@ -214,7 +214,7 @@ fn overload_has_declare_modifier(modifiers : Array[Modifier]) -> Bool {
 pub struct OverloadValidationResult {
   errors : Array[OverloadError]
   is_valid : Bool
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Overload-specific error
@@ -223,7 +223,7 @@ pub struct OverloadError {
   message : String
   location : SourceLocation
   code : Int
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Types of overload errors
@@ -234,7 +234,7 @@ pub enum OverloadErrorKind {
   ParamCountMismatch(Int, Int) // signature index, expected vs actual
   ParamTypeMismatch(Int, Int) // signature index, param index
   ReturnTypeMismatch(Int) // signature index
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Validate function overloads
@@ -251,7 +251,7 @@ pub fn validate_overloads(
   // Check TS2391: Missing implementation (for non-ambient overloads)
   let has_non_ambient = overloads.signatures
     .iter()
-    .any(fn(s) { not(s.is_ambient) })
+    .any(fn(s) { !(s.is_ambient) })
   if has_non_ambient && overloads.implementation is None {
     errors.push({
       kind: MissingImplementation,
@@ -354,7 +354,7 @@ fn check_overload_compatibility(
     // Exception: If implementation has 0 parameters, it's a "catch-all" that accepts any args
     if impl_total > 0 &&
       impl_total < sig_total &&
-      not(overload_has_rest_param(impl_.parameters)) {
+      !(overload_has_rest_param(impl_.parameters)) {
       errors.push({
         kind: NotCompatibleWithImpl(i),
         message: "Overload signature is not compatible with function implementation. " +
@@ -401,12 +401,12 @@ fn collect_overload_param_types(
         match param.type_annotation {
           Some(type_node) => {
             let type_str = get_type_annotation_text(type_node)
-            if not(types_at_pos.contains(type_str)) {
+            if !(types_at_pos.contains(type_str)) {
               types_at_pos.push(type_str)
             }
           }
           None =>
-            if not(types_at_pos.contains("any")) {
+            if !(types_at_pos.contains("any")) {
               types_at_pos.push("any")
             }
         }
@@ -486,7 +486,7 @@ fn check_impl_param_type_compatibility(
     // Check if impl type can handle all overload types
     // Implementation type must be a supertype (or union) of all overload types
     let is_compatible = check_type_covers_all(impl_type, expected_types)
-    if not(is_compatible) {
+    if !(is_compatible) {
       let expected_union = expected_types.join(" | ")
       errors.push({
         kind: ParamTypeMismatch(0, i),
@@ -527,7 +527,7 @@ fn check_type_covers_all(
     let is_covered = impl_parts.contains(expected) ||
       impl_parts.contains("any") ||
       impl_parts.contains("unknown")
-    if not(is_covered) {
+    if !(is_covered) {
       return false
     }
   }
@@ -539,7 +539,7 @@ fn check_type_covers_all(
 fn count_overload_required_params(params : Array[OverloadParameter]) -> Int {
   let mut count = 0
   for p in params {
-    if not(p.is_optional) && not(p.is_rest) {
+    if !(p.is_optional) && !(p.is_rest) {
       count = count + 1
     }
   }
@@ -553,7 +553,7 @@ fn count_impl_required_params(params : Array[Node]) -> Int {
   for param_node in params {
     match param_node {
       Parameter(p) =>
-        if not(p.is_optional) && not(p.is_rest) {
+        if !(p.is_optional) && !(p.is_rest) {
           count = count + 1
         }
       _ => ()
@@ -584,7 +584,7 @@ pub struct OverloadSelectionResult {
   selected_index : Int?
   matched_signature : CheckerSignature?
   inference_context : Map[String, Type]
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Select the best overload based on contextual typing of callback parameters
@@ -606,7 +606,7 @@ pub fn select_overload_contextually(
         Some({
           selected_index: Some(i),
           matched_signature: Some(sig),
-          inference_context: Map::new(),
+          inference_context: Map([]),
         }),
         checker,
       )
@@ -636,7 +636,7 @@ fn try_contextual_match(
     if i >= signature.parameters.length() {
       // More args than params - check for rest parameter
       let last_param = signature.parameters[signature.parameters.length() - 1]
-      if not(last_param.is_rest) {
+      if !(last_param.is_rest) {
         return (false, checker)
       }
       continue
@@ -655,7 +655,7 @@ fn try_contextual_match(
       arg_node,
       param.param_type,
     )
-    if not(compatible) {
+    if !(compatible) {
       return (false, checker)
     }
   }
@@ -728,7 +728,7 @@ fn types_structurally_compatible(source : Type, target : Type) -> Bool {
     // Source is union - all union types must be compatible with target
     (Union(src_union), _) => {
       for union_type in src_union.types {
-        if not(types_structurally_compatible(union_type, target)) {
+        if !(types_structurally_compatible(union_type, target)) {
           return false
         }
       }
@@ -771,7 +771,7 @@ fn try_callback_contextual_match(
 fn count_checker_required_params(params : Array[CheckerParameter]) -> Int {
   let mut count = 0
   for p in params {
-    if not(p.is_optional) && not(p.is_rest) {
+    if !(p.is_optional) && !(p.is_rest) {
       count = count + 1
     }
   }
@@ -790,7 +790,7 @@ pub fn check_statement_overloads(
   checker : TypeChecker,
 ) -> TypeChecker {
   // Check if this is a .d.ts file - functions without bodies are ambient in .d.ts
-  let is_ambient_file = checker.file_path.ends_with(".d.ts")
+  let is_ambient_file = checker.file_path.has_suffix(".d.ts")
   let overloads_map = collect_overloads(statements, is_ambient_file)
   let checker = checker
   overloads_map.each(fn(_name, overloads) {
@@ -816,7 +816,7 @@ pub struct ConstructorOverloads {
   signatures : Array[OverloadSignature]
   implementation : ConstructorDeclaration?
   implementation_location : SourceLocation?
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Create empty constructor overloads
@@ -941,7 +941,7 @@ pub struct MethodOverloadSignature {
   location : SourceLocation
   is_static : Bool
   is_ambient : Bool
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Collected method overloads for a class method
@@ -951,7 +951,7 @@ pub struct MethodOverloads {
   implementation : MethodDeclaration?
   implementation_location : SourceLocation?
   implementation_is_static : Bool
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Create empty method overloads
@@ -996,7 +996,7 @@ pub fn collect_method_overloads(
   members : Array[Node],
   class_is_ambient : Bool,
 ) -> Map[String, MethodOverloads] {
-  let overloads : Map[String, MethodOverloads] = Map::new()
+  let overloads : Map[String, MethodOverloads] = Map([])
   for mem in members {
     match mem {
       MethodDeclaration(meth) => {
@@ -1111,7 +1111,7 @@ pub fn validate_method_overloads(
       // Check TS2391: Missing implementation (for non-ambient overloads)
       let has_non_ambient = overloads.signatures
         .iter()
-        .any(fn(s) { not(s.is_ambient) })
+        .any(fn(s) { !(s.is_ambient) })
       if has_non_ambient {
         errors.push({
           kind: MissingImplementation,

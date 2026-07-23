@@ -127,7 +127,7 @@ test "TS1166: Number variable - should error" {
           match @compiler.check_source_file(bound) {
             Ok(_) => fail("Should report TS1166 for number variable")
             Err(diagnostics) =>
-              if not(has_ts1166(diagnostics)) {
+              if !(has_ts1166(diagnostics)) {
                 fail("Should report TS1166 for number variable")
               }
           }
@@ -147,7 +147,7 @@ test "TS1166: String variable - should error" {
           match @compiler.check_source_file(bound) {
             Ok(_) => fail("Should report TS1166 for string variable")
             Err(diagnostics) =>
-              if not(has_ts1166(diagnostics)) {
+              if !(has_ts1166(diagnostics)) {
                 fail("Should report TS1166 for string variable")
               }
           }
@@ -167,7 +167,7 @@ test "TS1166: Any variable - should error" {
           match @compiler.check_source_file(bound) {
             Ok(_) => fail("Should report TS1166 for any variable")
             Err(diagnostics) =>
-              if not(has_ts1166(diagnostics)) {
+              if !(has_ts1166(diagnostics)) {
                 fail("Should report TS1166 for any variable")
               }
           }
@@ -187,7 +187,7 @@ test "TS1166: String concatenation expression - should error" {
           match @compiler.check_source_file(bound) {
             Ok(_) => fail("Should report TS1166 for expression")
             Err(diagnostics) =>
-              if not(has_ts1166(diagnostics)) {
+              if !(has_ts1166(diagnostics)) {
                 fail("Should report TS1166 for expression")
               }
           }
@@ -207,7 +207,7 @@ test "TS1166: Template literal with substitutions - should error" {
           match @compiler.check_source_file(bound) {
             Ok(_) => fail("Should report TS1166 for template with substitutions")
             Err(diagnostics) =>
-              if not(has_ts1166(diagnostics)) {
+              if !(has_ts1166(diagnostics)) {
                 fail("Should report TS1166 for template with substitutions")
               }
           }
@@ -227,7 +227,7 @@ test "TS1166: Type assertion to any - should error" {
           match @compiler.check_source_file(bound) {
             Ok(_) => fail("Should report TS1166 for type assertion to any")
             Err(diagnostics) =>
-              if not(has_ts1166(diagnostics)) {
+              if !(has_ts1166(diagnostics)) {
                 fail("Should report TS1166 for type assertion to any")
               }
           }
@@ -247,7 +247,7 @@ test "TS1166: Static property with non-literal - should error" {
           match @compiler.check_source_file(bound) {
             Ok(_) => fail("Should report TS1166 for static property with non-literal")
             Err(diagnostics) =>
-              if not(has_ts1166(diagnostics)) {
+              if !(has_ts1166(diagnostics)) {
                 fail("Should report TS1166 for static property with non-literal")
               }
           }
@@ -267,7 +267,7 @@ test "TS1166: Unary plus expression - should error" {
           match @compiler.check_source_file(bound) {
             Ok(_) => fail("Should report TS1166 for unary expression")
             Err(diagnostics) =>
-              if not(has_ts1166(diagnostics)) {
+              if !(has_ts1166(diagnostics)) {
                 fail("Should report TS1166 for unary expression")
               }
           }
@@ -287,7 +287,7 @@ test "TS1166: Property with initializer and non-literal name - should error" {
           match @compiler.check_source_file(bound) {
             Ok(_) => fail("Should report TS1166 for property with initializer and non-literal name")
             Err(diagnostics) =>
-              if not(has_ts1166(diagnostics)) {
+              if !(has_ts1166(diagnostics)) {
                 fail("Should report TS1166 for property with initializer and non-literal name")
               }
           }
@@ -309,7 +309,7 @@ test "TS1166: Mixed valid and invalid properties" {
           match @compiler.check_source_file(bound) {
             Ok(_) => fail("Should report TS1166 for the invalid property")
             Err(diagnostics) =>
-              if not(has_ts1166(diagnostics)) {
+              if !(has_ts1166(diagnostics)) {
                 fail("Should report TS1166 for the invalid property")
               }
           }

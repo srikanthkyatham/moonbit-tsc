@@ -201,7 +201,7 @@ test "TS2464: Unconstrained type parameter in computed property" {
   match result {
     Ok(_) => fail("Should report TS2464 for unconstrained type parameter")
     Err(diagnostics) =>
-      if not(has_diagnostic_code(diagnostics, 2464)) {
+      if !(has_diagnostic_code(diagnostics, 2464)) {
         fail("Should report TS2464 for computed property with unconstrained T")
       }
   }
@@ -264,7 +264,7 @@ test "TS2464: Mixed valid and invalid type parameters" {
   match result {
     Ok(_) => fail("Should report TS2464 for unconstrained T")
     Err(diagnostics) =>
-      if not(has_diagnostic_code(diagnostics, 2464)) {
+      if !(has_diagnostic_code(diagnostics, 2464)) {
         fail("Should report TS2464 for [t] but not for [u]")
       }
   }

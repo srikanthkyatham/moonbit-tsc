@@ -24,7 +24,7 @@ test "TS2802 - custom iterator in ES5 (ES5For-ofTypeCheck10)" {
     #|for (var v of new MyStringIterator) { }
 
   let result = check_source_with_target(source, @compiler.ES5)
-  let diagnostics = get_diagnostics(result)
+  let _diagnostics = get_diagnostics(result)
 
   // NOTE: TS2802 validation works correctly as confirmed by conformance test pass
   // The ES5For-ofTypeCheck10 conformance test now passes (100% conformance achieved)
@@ -106,7 +106,7 @@ test "TS2802 - custom iterator with let in ES5 (if triggered)" {
     #|for (let v of new MyIterator) { }
 
   let result = check_source_with_target(source, @compiler.ES5)
-  let diagnostics = get_diagnostics(result)
+  let _diagnostics = get_diagnostics(result)
 
   // NOTE: Documents expected behavior - TS2802 for custom iterables in ES5
   // Verified to work correctly in conformance tests
@@ -122,7 +122,7 @@ test "TS2802 - custom iterator with const in ES5 (if triggered)" {
     #|for (const v of new MyIterator) { }
 
   let result = check_source_with_target(source, @compiler.ES5)
-  let diagnostics = get_diagnostics(result)
+  let _diagnostics = get_diagnostics(result)
 
   // NOTE: Documents expected behavior - TS2802 for custom iterables in ES5
   // Verified to work correctly in conformance tests
@@ -138,7 +138,7 @@ test "TS2802 - custom iterator with destructuring in ES5 (if triggered)" {
     #|for (var {x} of new MyIterator) { }
 
   let result = check_source_with_target(source, @compiler.ES5)
-  let diagnostics = get_diagnostics(result)
+  let _diagnostics = get_diagnostics(result)
 
   // NOTE: Documents expected behavior - TS2802 for custom iterables in ES5
   // Verified to work correctly in conformance tests
@@ -182,7 +182,7 @@ test "TS2802 - nested for-of with custom iterator in ES5" {
     #|}
 
   let result = check_source_with_target(source, @compiler.ES5)
-  let diagnostics = get_diagnostics(result)
+  let _diagnostics = get_diagnostics(result)
 
   // NOTE: Documents expected behavior - TS2802 for custom iterables in ES5
   // Verified to work correctly in conformance tests

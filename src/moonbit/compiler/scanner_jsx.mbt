@@ -18,9 +18,10 @@ fn scan_jsx_text_v2(
   let start_col = state.col
   let start_offset = state.offset
   let text = StringBuilder::new()
-  let rest = loop code {
-    [] as remaining => remaining
-    ['<' | '{', ..] as remaining => remaining // End of text
+  let rest = for cur = code {
+    match cur {
+    [] as remaining => break remaining
+    ['<' | '{', ..] as remaining => break remaining // End of text
     ['\n', .. rest] => {
       text.write_char('\n')
       state.line += 1
@@ -34,6 +35,7 @@ fn scan_jsx_text_v2(
       state.offset += 1
       continue rest
     }
+  }
   }
   let loc = SourceLocation::new(
     file_path,
@@ -54,14 +56,16 @@ fn scan_jsx_identifier(
   let start_col = state.col
   let start_offset = state.offset
   let ident = StringBuilder::new()
-  let rest = loop code {
+  let rest = for cur = code {
+    match cur {
     ['a'..='z' | 'A'..='Z' | '0'..='9' | '_' | '$' | '-' as ch, .. rest] => {
       ident.write_char(ch)
       state.col += 1
       state.offset += 1
       continue rest
     }
-    remaining => remaining
+    remaining => break remaining
+  }
   }
   let loc = SourceLocation::new(
     file_path,

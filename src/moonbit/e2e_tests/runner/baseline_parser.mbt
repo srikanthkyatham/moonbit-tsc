@@ -5,17 +5,17 @@
 /// Sections parsed from a baseline file
 pub(all) struct BaselineSections {
   sections : Map[String, String]
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Parse a baseline file into sections
 pub fn parse_baseline_file(content : String) -> BaselineSections {
-  let sections : Map[String, String] = Map::new()
+  let sections : Map[String, String] = Map([])
   let lines = content.split("\n")
   let mut current_filename = ""
   let mut current_lines : Array[String] = []
   for line in lines {
-    let line_str = line.to_string()
+    let line_str = line.to_owned()
     match parse_section_header(line_str) {
       Some(filename) => {
         // Save previous section if exists
@@ -45,8 +45,8 @@ pub fn parse_baseline_file(content : String) -> BaselineSections {
 ///|
 /// Parse a section header line: "//// [filename] ////" -> Some(filename)
 fn parse_section_header(line : String) -> String? {
-  let trimmed = line.trim(chars=" \t").to_string()
-  if not(trimmed.has_prefix("//// [")) {
+  let trimmed = line.trim(chars=" \t").to_owned()
+  if !(trimmed.has_prefix("//// [")) {
     return None
   }
 
@@ -55,7 +55,7 @@ fn parse_section_header(line : String) -> String? {
   match find_substring(trimmed, "] ////") {
     Some(end_pos) =>
       if end_pos > start {
-        Some(trimmed.substring(start~, end=end_pos))
+        Some(trimmed[start:end_pos].to_owned())
       } else {
         None
       }
@@ -64,7 +64,7 @@ fn parse_section_header(line : String) -> String? {
       match find_char_bp(trimmed, ']') {
         Some(end_pos) =>
           if end_pos > start {
-            Some(trimmed.substring(start~, end=end_pos))
+            Some(trimmed[start:end_pos].to_owned())
           } else {
             None
           }
@@ -144,8 +144,8 @@ test "parse baseline file" {
     #|//// [output.js] ////
     #|exports.x = 1;
   let sections = parse_baseline_file(content)
-  assert_true(sections.sections.get("source.ts").is_some())
-  assert_true(sections.sections.get("output.js").is_some())
+  assert_true(sections.sections.get("source.ts") is Some(_))
+  assert_true(sections.sections.get("output.js") is Some(_))
 }
 
 ///|

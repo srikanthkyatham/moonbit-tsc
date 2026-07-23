@@ -1,12 +1,11 @@
 {
   "is-main": false,
-  "import": [
-    "moonbit-ts-compiler/compiler",
-    "moonbitlang/async",
-    "moonbitlang/async/fs",
-    "moonbitlang/async/io"
-  ],
   "targets": {
-    "type_check_test.mbt": ["native"]
-  }
+    "type_check_test.mbt": [
+      "native"
+    ]
+  },
+  "test-import": [
+    "moonbit-ts-compiler/compiler"
+  ]
 }

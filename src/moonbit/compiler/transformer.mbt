@@ -52,7 +52,7 @@ pub(all) enum JsxTransform {
   Automatic(String) // import source (e.g., "react")
   /// Automatic dev mode: jsxDEV from runtime import
   AutomaticDev(String) // import source
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// TransformerContext holds state during transformation
@@ -83,7 +83,7 @@ pub(all) enum Target {
   ES2019
   ES2020
   ESNext
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 /// Get the ordinal value of a target for comparison
@@ -124,9 +124,9 @@ pub fn TransformerContext::new(target : Target) -> TransformerContext {
   {
     target,
     in_decorated_class: false,
-    const_enums: Map::new(),
+    const_enums: Map([]),
     jsx_transform: Preserve,
-    temp_counter: Ref::new(0),
+    temp_counter: Ref(0),
   }
 }
 
@@ -139,9 +139,9 @@ pub fn TransformerContext::with_jsx(
   {
     target,
     in_decorated_class: false,
-    const_enums: Map::new(),
+    const_enums: Map([]),
     jsx_transform,
-    temp_counter: Ref::new(0),
+    temp_counter: Ref(0),
   }
 }
 
@@ -151,9 +151,9 @@ pub fn TransformerContext::default() -> TransformerContext {
   {
     target: ES2015,
     in_decorated_class: false,
-    const_enums: Map::new(),
+    const_enums: Map([]),
     jsx_transform: Preserve,
-    temp_counter: Ref::new(0),
+    temp_counter: Ref(0),
   }
 }
 
@@ -163,9 +163,9 @@ pub fn TransformerContext::es5() -> TransformerContext {
   {
     target: ES5,
     in_decorated_class: false,
-    const_enums: Map::new(),
+    const_enums: Map([]),
     jsx_transform: Preserve,
-    temp_counter: Ref::new(0),
+    temp_counter: Ref(0),
   }
 }
 
@@ -190,9 +190,9 @@ pub fn TransformerContext::es2015() -> TransformerContext {
   {
     target: ES2015,
     in_decorated_class: false,
-    const_enums: Map::new(),
+    const_enums: Map([]),
     jsx_transform: Preserve,
-    temp_counter: Ref::new(0),
+    temp_counter: Ref(0),
   }
 }
 
@@ -202,9 +202,9 @@ pub fn TransformerContext::es2016() -> TransformerContext {
   {
     target: ES2016,
     in_decorated_class: false,
-    const_enums: Map::new(),
+    const_enums: Map([]),
     jsx_transform: Preserve,
-    temp_counter: Ref::new(0),
+    temp_counter: Ref(0),
   }
 }
 
@@ -214,9 +214,9 @@ pub fn TransformerContext::es2017() -> TransformerContext {
   {
     target: ES2017,
     in_decorated_class: false,
-    const_enums: Map::new(),
+    const_enums: Map([]),
     jsx_transform: Preserve,
-    temp_counter: Ref::new(0),
+    temp_counter: Ref(0),
   }
 }
 
@@ -226,9 +226,9 @@ pub fn TransformerContext::es2018() -> TransformerContext {
   {
     target: ES2018,
     in_decorated_class: false,
-    const_enums: Map::new(),
+    const_enums: Map([]),
     jsx_transform: Preserve,
-    temp_counter: Ref::new(0),
+    temp_counter: Ref(0),
   }
 }
 
@@ -238,9 +238,9 @@ pub fn TransformerContext::es2019() -> TransformerContext {
   {
     target: ES2019,
     in_decorated_class: false,
-    const_enums: Map::new(),
+    const_enums: Map([]),
     jsx_transform: Preserve,
-    temp_counter: Ref::new(0),
+    temp_counter: Ref(0),
   }
 }
 
@@ -250,9 +250,9 @@ pub fn TransformerContext::es2020() -> TransformerContext {
   {
     target: ES2020,
     in_decorated_class: false,
-    const_enums: Map::new(),
+    const_enums: Map([]),
     jsx_transform: Preserve,
-    temp_counter: Ref::new(0),
+    temp_counter: Ref(0),
   }
 }
 
@@ -262,9 +262,9 @@ pub fn TransformerContext::esnext() -> TransformerContext {
   {
     target: ESNext,
     in_decorated_class: false,
-    const_enums: Map::new(),
+    const_enums: Map([]),
     jsx_transform: Preserve,
-    temp_counter: Ref::new(0),
+    temp_counter: Ref(0),
   }
 }
 
@@ -279,7 +279,7 @@ fn collect_const_enums(
       EnumDeclaration(ed) =>
         if ed.is_const {
           // Build member map for this const enum
-          let members : Map[String, Node] = Map::new()
+          let members : Map[String, Node] = Map([])
           let mut auto_value = 0
           for m in ed.members {
             let value : Node = match m.initializer {
@@ -287,7 +287,7 @@ fn collect_const_enums(
                 // Try to extract numeric value for auto-increment
                 match init {
                   NumericLiteral(nl) => {
-                    let num_val = @strconv.parse_int(nl.value) catch { _ => 0 }
+                    let num_val = @string.parse_int(nl.value) catch { _ => 0 }
                     auto_value = num_val + 1
                   }
                   _ => ()
@@ -987,21 +987,21 @@ fn transform_enum_declaration(
         // Handle different initializer types
         match init {
           NumericLiteral(nl) => {
-            let num_val = @strconv.parse_int(nl.value) catch { _ => 0 }
+            let num_val = @string.parse_int(nl.value) catch { _ => 0 }
             auto_value = num_val + 1
             has_numeric_member = true
           }
           StringLiteral(_) => is_string_enum = true
           // String literals don't affect auto-increment
           // Handle computed values (constant expressions)
-          BinaryExpression(be) => {
+          BinaryExpression(_be) => {
             let computed = evaluate_constant_expression(init)
             match computed {
               Some(n) => auto_value = n + 1
               None => ()
             }
           }
-          UnaryExpression(ue) => {
+          UnaryExpression(_ue) => {
             let computed = evaluate_constant_expression(init)
             match computed {
               Some(n) => auto_value = n + 1
@@ -1026,7 +1026,7 @@ fn transform_enum_declaration(
       }
       None =>
         // Auto-increment only works for numeric enums
-        if is_string_enum && not(has_numeric_member) {
+        if is_string_enum && !(has_numeric_member) {
           // String enums require all members to have initializers
           // For now, use the member name as a string value (TypeScript behavior for string enums)
           let node : Node = Node::StringLiteral({
@@ -1076,7 +1076,7 @@ fn transform_enum_declaration(
 fn evaluate_constant_expression(node : Node) -> Int? {
   match node {
     NumericLiteral(nl) => {
-      let result = @strconv.parse_int(nl.value) catch { _ => return None }
+      let result = @string.parse_int(nl.value) catch { _ => return None }
       Some(result)
     }
     UnaryExpression(ue) =>
@@ -2781,7 +2781,7 @@ fn jsx_tag_name_to_node(
   match tag_name {
     Identifier(name, _) =>
       // Lowercase = intrinsic element (string), uppercase = component (identifier)
-      if name.length() > 0 && is_lowercase(name[0]) {
+      if name.length() > 0 && is_lowercase(name[0].to_int()) {
         Node::StringLiteral({ value: name, location })
       } else {
         Node::Identifier({ name, location })
@@ -2940,12 +2940,12 @@ fn trim_jsx_text(text : String) -> String {
   let mut last_was_space = true
   let mut has_content = false
   for i = 0; i < text.length(); i = i + 1 {
-    let ch = text[i]
+    let ch = text[i].to_int()
     if ch == ' '.to_int() ||
       ch == '\t'.to_int() ||
       ch == '\n'.to_int() ||
       ch == '\r'.to_int() {
-      if not(last_was_space) && has_content {
+      if !(last_was_space) && has_content {
         result.write_char(' ')
         last_was_space = true
       }
@@ -2972,11 +2972,11 @@ fn split_string(s : String, delim : Char) -> Array[String] {
   let current = StringBuilder::new()
   let delim_code = delim.to_int()
   for i = 0; i < s.length(); i = i + 1 {
-    if s[i] == delim_code {
+    if s[i].to_int() == delim_code {
       result.push(current.to_string())
       current.reset()
     } else {
-      current.write_char(Int::unsafe_to_char(s[i]))
+      current.write_char(Int::unsafe_to_char(s[i].to_int()))
     }
   }
 

@@ -105,7 +105,7 @@ pub fn validate_constructor_body(
     }
 
     // Error if super() is never called in derived class constructor
-    if not(found_super) {
+    if !(found_super) {
       let class_name = state.base_class_name.unwrap_or("unknown")
       errors.push(TypeMismatchError::{
         path: PRoot,
@@ -142,7 +142,7 @@ fn analyze_constructor_body_for_super(
             let (_, found_this) = analyze_constructor_body_for_super(
               arg, super_called, in_nested_function,
             )
-            if found_this && not(super_called) {
+            if found_this && !(super_called) {
               this_before = true
             }
           }
@@ -163,7 +163,7 @@ fn analyze_constructor_body_for_super(
         (false, false)
       } else {
         // 'this' accessed directly - check if before super
-        (false, not(super_called))
+        (false, !(super_called))
       }
 
     // Block statement - process statements in order
@@ -177,7 +177,7 @@ fn analyze_constructor_body_for_super(
         if found_super {
           current_super_called = true
         }
-        if found_this && not(current_super_called) {
+        if found_this && !(current_super_called) {
           this_before_super = true
         }
       }
@@ -298,7 +298,7 @@ pub fn validate_super_call(
   let errors : Array[TypeMismatchError] = []
 
   // super() can only be called in constructors
-  if not(in_constructor) {
+  if !(in_constructor) {
     errors.push(TypeMismatchError::{
       path: PRoot,
       expected: TVoid,
@@ -312,7 +312,7 @@ pub fn validate_super_call(
   }
 
   // super() can only be used in derived classes
-  if not(is_derived) && in_constructor {
+  if !(is_derived) && in_constructor {
     errors.push(TypeMismatchError::{
       path: PRoot,
       expected: TVoid,
@@ -493,7 +493,7 @@ pub fn infer_class_expression_type(
   let instance_type = TObject(class_info.object_type)
 
   // Build static type from static members
-  let static_fields : Map[String, FieldInfoV2] = Map::new()
+  let static_fields : Map[String, FieldInfoV2] = Map([])
   class_info.static_members.each(fn(name, member_info) {
     static_fields.set(name, FieldInfoV2::{
       ty: member_info.ty,
@@ -522,7 +522,7 @@ fn build_class_expression_constructor_type(
   class_info : ClassTypeInfo,
 ) -> TypeV2 {
   // If there are explicit construct signatures, use the first one
-  if not(class_info.construct_signatures.is_empty()) {
+  if !(class_info.construct_signatures.is_empty()) {
     let sig = class_info.construct_signatures[0]
     return TFunction(sig)
   }
@@ -639,7 +639,7 @@ pub fn resolve_super_method_call(
 ) -> SuperResolutionResult {
   // First resolve the property
   let prop_result = resolve_super_property(base_class_info, method_name)
-  if not(prop_result.errors.is_empty()) {
+  if !(prop_result.errors.is_empty()) {
     return prop_result
   }
 
@@ -649,7 +649,7 @@ pub fn resolve_super_method_call(
       // Validate argument types (simplified)
       let errors : Array[TypeMismatchError] = []
       let required_params = func.params
-        .filter(fn(p) { not(p.optional) })
+        .filter(fn(p) { !(p.optional) })
         .length()
       if arg_types.length() < required_params {
         errors.push(TypeMismatchError::{
@@ -703,7 +703,7 @@ pub fn resolve_super_constructor_call(
       // Get the constructor signature from base class
       if base.construct_signatures.is_empty() {
         // Default constructor takes no arguments
-        if not(arg_types.is_empty()) {
+        if !(arg_types.is_empty()) {
           errors.push(TypeMismatchError::{
             path: PRoot,
             expected: TVoid,
@@ -719,7 +719,7 @@ pub fn resolve_super_constructor_call(
       } else {
         // Use the first construct signature
         let ctor = base.construct_signatures[0]
-        let required = ctor.params.filter(fn(p) { not(p.optional) }).length()
+        let required = ctor.params.filter(fn(p) { !(p.optional) }).length()
         if arg_types.length() < required {
           errors.push(TypeMismatchError::{
             path: PRoot,

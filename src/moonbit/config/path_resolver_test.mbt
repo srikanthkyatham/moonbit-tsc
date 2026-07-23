@@ -85,7 +85,7 @@ test "resolve_module_path - skips absolute imports" {
 
 ///|
 test "resolve_module_path - with paths mapping" {
-  let paths : Map[String, Array[String]] = {}
+  let paths : Map[String, Array[String]] = Map([])
   paths["@/*"] = ["./src/*"]
   let options : CompilerOptions = {
     ..CompilerOptions::default(),
@@ -104,7 +104,7 @@ test "resolve_module_path - with paths mapping" {
 
 ///|
 test "resolve_module_path - multiple path patterns" {
-  let paths : Map[String, Array[String]] = {}
+  let paths : Map[String, Array[String]] = Map([])
   paths["@/*"] = ["./src/*"]
   paths["@utils/*"] = ["./src/utils/*"]
   let options : CompilerOptions = {
@@ -128,7 +128,7 @@ test "resolve_module_path - multiple path patterns" {
 
 ///|
 test "resolve_module_path - exact match path (no wildcard)" {
-  let paths : Map[String, Array[String]] = {}
+  let paths : Map[String, Array[String]] = Map([])
   paths["config"] = ["./src/config/index"]
   let options : CompilerOptions = {
     ..CompilerOptions::default(),
@@ -374,7 +374,7 @@ test "resolve_module_full - node_modules resolution without baseUrl" {
 
 ///|
 test "resolve_module_full - paths take priority over node_modules" {
-  let paths : Map[String, Array[String]] = {}
+  let paths : Map[String, Array[String]] = Map([])
   paths["my-lib"] = ["./src/local-lib"]
   let options : CompilerOptions = {
     ..CompilerOptions::default(),

@@ -3,7 +3,7 @@
 
 ///|
 /// Position in source code (line and column) for sourcemap generation
-struct SourceMapPosition {
+priv struct SourceMapPosition {
   line : Int // 0-based line number
   column : Int // 0-based column number
 }
@@ -138,7 +138,7 @@ pub fn escape_json_string(s : String) -> String {
   let mut result = ""
   let len = s.length()
   for i = 0; i < len; i = i + 1 {
-    match s.get(i) {
+    match @utils.code_unit(s, i) {
       Some(ch_code) =>
         match ch_code.to_char() {
           Some(ch) =>
@@ -170,7 +170,7 @@ pub fn escape_json_string(s : String) -> String {
 /// Gets base64 character for given index
 pub fn get_base64_char(index : Int) -> Char {
   let base64_chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
-  match base64_chars.get(index) {
+  match @utils.code_unit(base64_chars, index) {
     Some(ch_code) =>
       match ch_code.to_char() {
         Some(ch) => ch
@@ -195,8 +195,6 @@ pub fn encode_vlq(value : Int) -> String {
     if vlq == 0 {
       break
     }
-  } else {
-    ()
   }
   encoded
 }
@@ -218,9 +216,9 @@ pub struct SourceMapBuilder {
 pub fn SourceMapBuilder::new() -> SourceMapBuilder {
   {
     sources: [],
-    sources_map: Map::new(),
+    sources_map: Map([]),
     names: [],
-    names_map: Map::new(),
+    names_map: Map([]),
     mappings: [],
     generated_line: 0,
     generated_column: 0,
@@ -453,7 +451,7 @@ pub fn generate_sourcemap_reference(map_file : String) -> String {
 
 ///|
 /// Base64 encoding table
-let base64_table = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+let _base64_table = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
 
 ///|
 /// Proper base64 encoding implementation
@@ -464,7 +462,7 @@ pub fn base64_encode_simple(s : String) -> String {
 
   // Process 3 bytes at a time
   while i + 2 < len {
-    match (s.get(i), s.get(i + 1), s.get(i + 2)) {
+    match (@utils.code_unit(s, i), @utils.code_unit(s, i + 1), @utils.code_unit(s, i + 2)) {
       (Some(b1), Some(b2), Some(b3)) => {
         // Convert 3 bytes (24 bits) to 4 base64 characters (6 bits each)
         let val = b1 * 65536 + b2 * 256 + b3
@@ -485,11 +483,11 @@ pub fn base64_encode_simple(s : String) -> String {
 
   // Handle remaining 1 or 2 bytes with padding
   if i < len {
-    match s.get(i) {
+    match @utils.code_unit(s, i) {
       Some(b1) =>
         if i + 1 < len {
           // 2 bytes remaining
-          match s.get(i + 1) {
+          match @utils.code_unit(s, i + 1) {
             Some(b2) => {
               let val = b1 * 256 + b2
               let c1 = get_base64_char(val / 1024 % 64) // val >> 10

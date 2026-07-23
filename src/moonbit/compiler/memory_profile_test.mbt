@@ -12,7 +12,7 @@ struct MemoryStats {
   statement_count : Int
   compilation_success : Bool
   estimated_memory_kb : Double
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Count AST nodes recursively (simplified version)

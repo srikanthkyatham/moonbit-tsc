@@ -2,9 +2,12 @@
   "import": [
     "moonbitlang/async/fs",
     "moonbitlang/async/io",
-    "moonbit-ts-compiler/utils"
+    "moonbit-ts-compiler/utils",
+    "moonbitlang/core/json"
   ],
   "targets": {
-    "*.mbt": ["native"]
+    "*.mbt": [
+      "native"
+    ]
   }
 }

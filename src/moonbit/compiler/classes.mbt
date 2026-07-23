@@ -15,7 +15,17 @@ pub enum Accessibility {
   Public
   Private
   Protected
-} derive(Show, Eq)
+} derive(Debug, Eq)
+
+///|
+/// String representation of accessibility (matches previous derived Show output)
+pub fn Accessibility::to_string(self : Accessibility) -> String {
+  match self {
+    Public => "Public"
+    Private => "Private"
+    Protected => "Protected"
+  }
+}
 
 ///|
 /// Get accessibility from modifier list
@@ -86,7 +96,7 @@ pub struct ClassMemberInfo {
   is_readonly : Bool
   is_optional : Bool
   declared_in : String // Class name where this member was declared
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 /// Create a class member info
@@ -129,7 +139,7 @@ pub struct ClassTypeInfo {
   construct_signatures : Array[FunctionTypeV2]
   is_abstract : Bool
   object_type : ObjectTypeV2 // The instance type
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 /// Create an empty class type info
@@ -140,8 +150,8 @@ pub fn ClassTypeInfo::new(name : String) -> ClassTypeInfo {
     base_class: None,
     base_type_args: [],
     implemented_interfaces: [],
-    members: Map::new(),
-    static_members: Map::new(),
+    members: Map([]),
+    static_members: Map([]),
     construct_signatures: [],
     is_abstract: false,
     object_type: ObjectTypeV2::empty(),
@@ -157,7 +167,7 @@ pub fn ClassTypeInfo::new(name : String) -> ClassTypeInfo {
 pub struct AccessCheckResult {
   allowed : Bool
   errors : Array[TypeMismatchError]
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Check if a member can be accessed from a given context
@@ -335,7 +345,7 @@ pub fn check_method_override(
   let errors : Array[TypeMismatchError] = []
 
   // Check return type - covariant (derived can be narrower)
-  if not(is_subtype_of(derived_method.return_type, base_method.return_type)) {
+  if !(is_subtype_of(derived_method.return_type, base_method.return_type)) {
     errors.push(TypeMismatchError::{
       path: PReturnType(PRoot),
       expected: base_method.return_type,
@@ -351,10 +361,10 @@ pub fn check_method_override(
   // Check parameters - contravariant (derived can be wider)
   // Also, derived must accept at least as many parameters
   let base_required = base_method.params
-    .filter(fn(p) { not(p.optional) })
+    .filter(fn(p) { !(p.optional) })
     .length()
   let derived_required = derived_method.params
-    .filter(fn(p) { not(p.optional) })
+    .filter(fn(p) { !(p.optional) })
     .length()
   if derived_required > base_required {
     errors.push(TypeMismatchError::{
@@ -377,7 +387,7 @@ pub fn check_method_override(
       let base_param = base_method.params[i]
       let derived_param = derived_method.params[i]
       // Contravariance: base param should be subtype of derived param
-      if not(is_subtype_of(base_param.ty, derived_param.ty)) {
+      if !(is_subtype_of(base_param.ty, derived_param.ty)) {
         errors.push(TypeMismatchError::{
           path: PParameter(PRoot, i, base_param.name),
           expected: base_param.ty,
@@ -469,7 +479,7 @@ pub fn create_this_type(class_info : ClassTypeInfo) -> TypeV2 {
 pub struct ClassCheckResult {
   class_info : ClassTypeInfo
   errors : Array[TypeMismatchError]
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Get class name from node
@@ -509,8 +519,8 @@ pub fn build_class_info(
     base_class: None,
     base_type_args: [],
     implemented_interfaces: [],
-    members: Map::new(),
-    static_members: Map::new(),
+    members: Map([]),
+    static_members: Map([]),
     construct_signatures: [],
     is_abstract: is_abstract_modifier(cd.modifiers),
     object_type: ObjectTypeV2::empty(),
@@ -867,7 +877,7 @@ fn build_constructor_type(
 ///|
 /// Build the ObjectTypeV2 for a class instance
 fn build_class_object_type(class_info : ClassTypeInfo) -> ObjectTypeV2 {
-  let fields : Map[String, FieldInfoV2] = Map::new()
+  let fields : Map[String, FieldInfoV2] = Map([])
   for kv in class_info.members {
     let name = kv.0
     let member_info = kv.1

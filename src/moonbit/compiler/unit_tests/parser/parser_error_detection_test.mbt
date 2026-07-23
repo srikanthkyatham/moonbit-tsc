@@ -158,9 +158,9 @@ test "parser error detection - valid rest parameter" {
   // Valid rest parameter should not produce parameter errors
   let source = "function foo(a, b, ...args) { }"
   let errors = parse_and_get_errors(source)
-  assert_true(not(has_error_code(errors, 1014)))
-  assert_true(not(has_error_code(errors, 1048)))
-  assert_true(not(has_error_code(errors, 1049)))
+  assert_true(!(has_error_code(errors, 1014)))
+  assert_true(!(has_error_code(errors, 1048)))
+  assert_true(!(has_error_code(errors, 1049)))
 }
 
 ///|
@@ -168,7 +168,7 @@ test "parser error detection - valid optional parameters" {
   // Optional parameters at end should not produce errors
   let source = "function foo(a, b?, c?) { }"
   let errors = parse_and_get_errors(source)
-  assert_true(not(has_error_code(errors, 1016)))
+  assert_true(!(has_error_code(errors, 1016)))
 }
 
 ///|
@@ -176,7 +176,7 @@ test "parser error detection - valid default parameters" {
   // Default parameters at end should not produce errors
   let source = "function foo(a, b = 1, c = 2) { }"
   let errors = parse_and_get_errors(source)
-  assert_true(not(has_error_code(errors, 1016)))
+  assert_true(!(has_error_code(errors, 1016)))
 }
 
 ///|
@@ -187,7 +187,7 @@ test "parser error detection - valid getter" {
     #|  get value() { return this._value; }
     #|}
   let errors = parse_and_get_errors(source)
-  assert_true(not(has_error_code(errors, 1094)))
+  assert_true(!(has_error_code(errors, 1094)))
 }
 
 ///|
@@ -198,8 +198,8 @@ test "parser error detection - valid setter" {
     #|  set value(v) { this._value = v; }
     #|}
   let errors = parse_and_get_errors(source)
-  assert_true(not(has_error_code(errors, 1093)))
-  assert_true(not(has_error_code(errors, 1095)))
+  assert_true(!(has_error_code(errors, 1093)))
+  assert_true(!(has_error_code(errors, 1095)))
 }
 
 // ============================================================================
@@ -329,7 +329,7 @@ test "parser error detection - valid decorator on class" {
     #|@decorator
     #|class Foo { }
   let errors = parse_and_get_errors(source)
-  assert_true(not(has_error_code(errors, 1206)))
+  assert_true(!(has_error_code(errors, 1206)))
 }
 
 ///|
@@ -341,7 +341,7 @@ test "parser error detection - valid decorator on class method" {
     #|  bar() { }
     #|}
   let errors = parse_and_get_errors(source)
-  assert_true(not(has_error_code(errors, 1206)))
+  assert_true(!(has_error_code(errors, 1206)))
 }
 
 ///|
@@ -353,7 +353,7 @@ test "parser error detection - valid decorator on class property" {
     #|  value: number;
     #|}
   let errors = parse_and_get_errors(source)
-  assert_true(not(has_error_code(errors, 1206)))
+  assert_true(!(has_error_code(errors, 1206)))
 }
 
 ///|
@@ -365,7 +365,7 @@ test "parser error detection - valid decorator on class accessor" {
     #|  get value() { return 1; }
     #|}
   let errors = parse_and_get_errors(source)
-  assert_true(not(has_error_code(errors, 1206)))
+  assert_true(!(has_error_code(errors, 1206)))
 }
 
 // ============================================================================
@@ -403,7 +403,7 @@ test "parser error detection - valid class method" {
     #|  bar() { return 1; }
     #|}
   let errors = parse_and_get_errors(source)
-  assert_true(not(has_error_code(errors, 1248)))
+  assert_true(!(has_error_code(errors, 1248)))
 }
 
 ///|
@@ -411,7 +411,7 @@ test "parser error detection - valid import string literal" {
   // Import with string literal path is valid
   let source = "import x from './module';"
   let errors = parse_and_get_errors(source)
-  assert_true(not(has_error_code(errors, 1440)))
+  assert_true(!(has_error_code(errors, 1440)))
 }
 
 // ============================================================================
@@ -436,7 +436,7 @@ test "parser error detection - valid decorator before export" {
   // Decorator before export is valid - should not produce TS1432
   let source = "@decorator export class Foo { }"
   let errors = parse_and_get_errors(source)
-  assert_true(not(has_error_code(errors, 1432)))
+  assert_true(!(has_error_code(errors, 1432)))
 }
 
 // ============================================================================
@@ -457,7 +457,7 @@ test "parser error detection - valid delete on property access" {
   // delete on property access is valid - should not produce TS1243
   let source = "delete obj.prop;"
   let errors = parse_and_get_errors(source)
-  assert_true(not(has_error_code(errors, 1243)))
+  assert_true(!(has_error_code(errors, 1243)))
 }
 
 ///|
@@ -465,7 +465,7 @@ test "parser error detection - valid delete on element access" {
   // delete on element access is valid - should not produce TS1243
   let source = "delete arr[0];"
   let errors = parse_and_get_errors(source)
-  assert_true(not(has_error_code(errors, 1243)))
+  assert_true(!(has_error_code(errors, 1243)))
 }
 
 // ============================================================================
@@ -487,7 +487,7 @@ test "parser error detection - TS1227 as expression in exponentiation" {
   let source = "(x as number) ** 2;"
   let errors = parse_and_get_errors(source)
   // Note: (x as number) is parenthesized, so it should not trigger TS1227
-  assert_true(not(has_error_code(errors, 1227)))
+  assert_true(!(has_error_code(errors, 1227)))
 }
 
 ///|
@@ -495,7 +495,7 @@ test "parser error detection - valid exponentiation without type assertion" {
   // Regular exponentiation should not produce TS1227
   let source = "x ** 2;"
   let errors = parse_and_get_errors(source)
-  assert_true(not(has_error_code(errors, 1227)))
+  assert_true(!(has_error_code(errors, 1227)))
 }
 
 // ============================================================================
@@ -525,7 +525,7 @@ test "parser error detection - valid rest parameter with array type" {
   // Rest parameter with array type should not produce TS4091
   let source = "function foo(...args: number[]) { }"
   let errors = parse_and_get_errors(source)
-  assert_true(not(has_error_code(errors, 4091)))
+  assert_true(!(has_error_code(errors, 4091)))
 }
 
 ///|
@@ -533,7 +533,7 @@ test "parser error detection - valid rest parameter with Array generic" {
   // Rest parameter with Array<T> type should not produce TS4091
   let source = "function foo(...args: Array<string>) { }"
   let errors = parse_and_get_errors(source)
-  assert_true(not(has_error_code(errors, 4091)))
+  assert_true(!(has_error_code(errors, 4091)))
 }
 
 // ----------------------------------------------------------------------------
@@ -570,7 +570,7 @@ test "parser error detection - valid set accessor without rest" {
     #|  set value(v) { this._value = v; }
     #|}
   let errors = parse_and_get_errors(source)
-  assert_true(not(has_error_code(errors, 4092)))
+  assert_true(!(has_error_code(errors, 4092)))
 }
 
 // ----------------------------------------------------------------------------
@@ -600,8 +600,8 @@ test "parser error detection - valid get accessor no parameters" {
     #|  get value() { return this._value; }
     #|}
   let errors = parse_and_get_errors(source)
-  assert_true(not(has_error_code(errors, 1094)))
-  assert_true(not(has_error_code(errors, 4094)))
+  assert_true(!(has_error_code(errors, 1094)))
+  assert_true(!(has_error_code(errors, 4094)))
 }
 
 // ----------------------------------------------------------------------------
@@ -644,8 +644,8 @@ test "parser error detection - valid set accessor one parameter" {
     #|  set value(v) { this._value = v; }
     #|}
   let errors = parse_and_get_errors(source)
-  assert_true(not(has_error_code(errors, 1095)))
-  assert_true(not(has_error_code(errors, 4097)))
+  assert_true(!(has_error_code(errors, 1095)))
+  assert_true(!(has_error_code(errors, 4097)))
 }
 
 // ----------------------------------------------------------------------------
@@ -668,7 +668,7 @@ test "parser error detection - valid type parameter with default" {
   // Valid type parameter default should not produce TS4002
   let source = "type Foo<T = string> = T;"
   let errors = parse_and_get_errors(source)
-  assert_true(not(has_error_code(errors, 4002)))
+  assert_true(!(has_error_code(errors, 4002)))
 }
 
 // ----------------------------------------------------------------------------
@@ -693,7 +693,7 @@ test "parser error detection - valid extends class" {
     #|class Base { }
     #|class Derived extends Base { }
   let errors = parse_and_get_errors(source)
-  assert_true(not(has_error_code(errors, 4023)))
+  assert_true(!(has_error_code(errors, 4023)))
 }
 
 // ----------------------------------------------------------------------------
@@ -708,7 +708,7 @@ test "parser error detection - interface get accessor valid" {
     #|  get value(): number;
     #|}
   let errors = parse_and_get_errors(source)
-  assert_true(not(has_error_code(errors, 4045)))
+  assert_true(!(has_error_code(errors, 4045)))
 }
 
 ///|
@@ -719,7 +719,7 @@ test "parser error detection - interface set accessor valid" {
     #|  set value(v: number);
     #|}
   let errors = parse_and_get_errors(source)
-  assert_true(not(has_error_code(errors, 4048)))
+  assert_true(!(has_error_code(errors, 4048)))
 }
 
 // ----------------------------------------------------------------------------
@@ -732,8 +732,8 @@ test "parser error detection - valid exported class" {
   // Valid exported class should not produce private name errors
   let source = "export class Foo { public value: number = 0; }"
   let errors = parse_and_get_errors(source)
-  assert_true(not(has_error_code(errors, 4000)))
-  assert_true(not(has_error_code(errors, 4030)))
+  assert_true(!(has_error_code(errors, 4000)))
+  assert_true(!(has_error_code(errors, 4030)))
 }
 
 ///|
@@ -741,7 +741,7 @@ test "parser error detection - valid default export" {
   // Valid default export should not produce TS4064
   let source = "export default class Foo { }"
   let errors = parse_and_get_errors(source)
-  assert_true(not(has_error_code(errors, 4064)))
+  assert_true(!(has_error_code(errors, 4064)))
 }
 
 ///|
@@ -751,7 +751,7 @@ test "parser error detection - valid named export" {
     #|class Foo { }
     #|export { Foo };
   let errors = parse_and_get_errors(source)
-  assert_true(not(has_error_code(errors, 4000)))
+  assert_true(!(has_error_code(errors, 4000)))
 }
 
 // ----------------------------------------------------------------------------
@@ -763,7 +763,7 @@ test "parser error detection - valid exported type alias" {
   // Valid exported type alias should not produce TS4083
   let source = "export type MyType = string | number;"
   let errors = parse_and_get_errors(source)
-  assert_true(not(has_error_code(errors, 4083)))
+  assert_true(!(has_error_code(errors, 4083)))
 }
 
 ///|
@@ -771,7 +771,7 @@ test "parser error detection - valid generic type alias" {
   // Valid generic type alias should not produce TS4065
   let source = "export type Container<T> = { value: T };"
   let errors = parse_and_get_errors(source)
-  assert_true(not(has_error_code(errors, 4065)))
+  assert_true(!(has_error_code(errors, 4065)))
 }
 
 // ----------------------------------------------------------------------------
@@ -783,7 +783,7 @@ test "parser error detection - valid exported mapped type" {
   // Valid mapped type should not produce TS4067
   let source = "export type Readonly<T> = { readonly [P in keyof T]: T[P] };"
   let errors = parse_and_get_errors(source)
-  assert_true(not(has_error_code(errors, 4067)))
+  assert_true(!(has_error_code(errors, 4067)))
 }
 
 // ----------------------------------------------------------------------------
@@ -798,8 +798,8 @@ test "parser error detection - valid index signature" {
     #|  [key: string]: number;
     #|}
   let errors = parse_and_get_errors(source)
-  assert_true(not(has_error_code(errors, 4060)))
-  assert_true(not(has_error_code(errors, 4063)))
+  assert_true(!(has_error_code(errors, 4060)))
+  assert_true(!(has_error_code(errors, 4063)))
 }
 
 // ----------------------------------------------------------------------------
@@ -814,8 +814,8 @@ test "parser error detection - valid call signature" {
     #|  (x: number): string;
     #|}
   let errors = parse_and_get_errors(source)
-  assert_true(not(has_error_code(errors, 4055)))
-  assert_true(not(has_error_code(errors, 4058)))
+  assert_true(!(has_error_code(errors, 4055)))
+  assert_true(!(has_error_code(errors, 4058)))
 }
 
 // ----------------------------------------------------------------------------
@@ -830,7 +830,7 @@ test "parser error detection - valid constructor signature" {
     #|  new (x: number): object;
     #|}
   let errors = parse_and_get_errors(source)
-  assert_true(not(has_error_code(errors, 4049)))
+  assert_true(!(has_error_code(errors, 4049)))
 }
 
 // ----------------------------------------------------------------------------
@@ -842,7 +842,7 @@ test "parser error detection - valid exported class expression" {
   // Valid exported class expression should not produce TS4084
   let source = "export const MyClass = class<T> { value: T; };"
   let errors = parse_and_get_errors(source)
-  assert_true(not(has_error_code(errors, 4084)))
+  assert_true(!(has_error_code(errors, 4084)))
 }
 
 // ----------------------------------------------------------------------------
@@ -856,7 +856,7 @@ test "parser error detection - valid implements clause" {
     #|interface IFoo { value: number; }
     #|class Foo implements IFoo { value = 0; }
   let errors = parse_and_get_errors(source)
-  assert_true(not(has_error_code(errors, 4022)))
+  assert_true(!(has_error_code(errors, 4022)))
 }
 
 // ----------------------------------------------------------------------------
@@ -870,7 +870,7 @@ test "parser error detection - valid extends clause" {
     #|class Base { }
     #|class Derived extends Base { }
   let errors = parse_and_get_errors(source)
-  assert_true(not(has_error_code(errors, 4020)))
+  assert_true(!(has_error_code(errors, 4020)))
 }
 
 // ============================================================================
@@ -910,7 +910,7 @@ test "parser error detection - valid identifier in variable" {
   // Valid variable declaration should not produce TS1003
   let source = "let myVar = 5;"
   let errors = parse_and_get_errors(source)
-  assert_true(not(has_error_code(errors, 1003)))
+  assert_true(!(has_error_code(errors, 1003)))
 }
 
 // ----------------------------------------------------------------------------
@@ -942,7 +942,7 @@ test "parser error detection - valid expression" {
   // Valid expression should not produce TS1109
   let source = "let x = 5 + 3;"
   let errors = parse_and_get_errors(source)
-  assert_true(not(has_error_code(errors, 1109)))
+  assert_true(!(has_error_code(errors, 1109)))
 }
 
 // ----------------------------------------------------------------------------
@@ -965,7 +965,7 @@ test "parser error detection - valid declaration" {
   // Valid declaration should not produce TS1128
   let source = "const x = 10;"
   let errors = parse_and_get_errors(source)
-  assert_true(not(has_error_code(errors, 1128)))
+  assert_true(!(has_error_code(errors, 1128)))
 }
 
 // ============================================================================
@@ -1057,7 +1057,7 @@ test "parser error detection - valid object property" {
   let source = "const x = { name: 'test' };"
   let errors = parse_and_get_errors(source)
   // Should not produce property name errors
-  assert_true(not(has_error_code(errors, 1131)))
+  assert_true(!(has_error_code(errors, 1131)))
 }
 
 // ============================================================================
@@ -1091,7 +1091,7 @@ test "parser error detection - valid interface extends" {
     #|interface B { y: string; }
     #|interface C extends A, B { }
   let errors = parse_and_get_errors(source)
-  assert_true(not(has_error_code(errors, 2320)))
+  assert_true(!(has_error_code(errors, 2320)))
 }
 
 // ----------------------------------------------------------------------------
@@ -1140,7 +1140,7 @@ test "parser error detection - valid this in instance property" {
     #|  x = this.name;
     #|}
   let errors = parse_and_get_errors(source)
-  assert_true(not(has_error_code(errors, 2334)))
+  assert_true(!(has_error_code(errors, 2334)))
 }
 
 // ----------------------------------------------------------------------------
@@ -1171,7 +1171,7 @@ test "parser error detection - valid super in constructor" {
     #|  constructor() { super(); }
     #|}
   let errors = parse_and_get_errors(source)
-  assert_true(not(has_error_code(errors, 2337)))
+  assert_true(!(has_error_code(errors, 2337)))
 }
 
 // ----------------------------------------------------------------------------
@@ -1227,7 +1227,7 @@ test "parser error detection - valid arithmetic" {
   // Valid arithmetic on numbers
   let source = "const x = 5 + 3 - 2;"
   let errors = parse_and_get_errors(source)
-  assert_true(not(has_error_code(errors, 2356)))
+  assert_true(!(has_error_code(errors, 2356)))
 }
 
 // ----------------------------------------------------------------------------
@@ -1250,7 +1250,7 @@ test "parser error detection - valid increment" {
   // Valid increment on variable
   let source = "let x = 5; x++;"
   let errors = parse_and_get_errors(source)
-  assert_true(not(has_error_code(errors, 2357)))
+  assert_true(!(has_error_code(errors, 2357)))
 }
 
 // ----------------------------------------------------------------------------
@@ -1273,7 +1273,7 @@ test "parser error detection - valid instanceof" {
   // Valid instanceof
   let source = "const obj = {}; const x = obj instanceof Object;"
   let errors = parse_and_get_errors(source)
-  assert_true(not(has_error_code(errors, 2358)))
+  assert_true(!(has_error_code(errors, 2358)))
 }
 
 // ----------------------------------------------------------------------------
@@ -1330,7 +1330,7 @@ test "parser error detection - valid parameter property in constructor" {
     #|  constructor(public x: number) { }
     #|}
   let errors = parse_and_get_errors(source)
-  assert_true(not(has_error_code(errors, 2369)))
+  assert_true(!(has_error_code(errors, 2369)))
 }
 
 // ----------------------------------------------------------------------------
@@ -1359,7 +1359,7 @@ test "parser error detection - valid getter with return" {
     #|  get value() { return 5; }
     #|}
   let errors = parse_and_get_errors(source)
-  assert_true(not(has_error_code(errors, 2378)))
+  assert_true(!(has_error_code(errors, 2378)))
 }
 
 // ----------------------------------------------------------------------------
@@ -1390,7 +1390,7 @@ test "parser error detection - valid getter setter same visibility" {
     #|  public set value(v) { }
     #|}
   let errors = parse_and_get_errors(source)
-  assert_true(not(has_error_code(errors, 2379)))
+  assert_true(!(has_error_code(errors, 2379)))
 }
 
 // ----------------------------------------------------------------------------
@@ -1421,7 +1421,7 @@ test "parser error detection - valid getter setter same type" {
     #|  set value(v: number) { }
     #|}
   let errors = parse_and_get_errors(source)
-  assert_true(not(has_error_code(errors, 2380)))
+  assert_true(!(has_error_code(errors, 2380)))
 }
 
 // ----------------------------------------------------------------------------
@@ -1461,7 +1461,7 @@ test "parser error detection - valid for-in" {
   // Valid for-in
   let source = "const obj = {}; for (const key in obj) { }"
   let errors = parse_and_get_errors(source)
-  assert_true(not(has_error_code(errors, 2406)))
+  assert_true(!(has_error_code(errors, 2406)))
 }
 
 // ----------------------------------------------------------------------------
@@ -1484,7 +1484,7 @@ test "parser error detection - valid enum member names" {
   // Valid enum member names
   let source = "enum Foo { A, B, C }"
   let errors = parse_and_get_errors(source)
-  assert_true(not(has_error_code(errors, 2452)))
+  assert_true(!(has_error_code(errors, 2452)))
 }
 
 // ----------------------------------------------------------------------------
@@ -1509,7 +1509,7 @@ test "parser error detection - valid rest last in destructuring" {
   // Valid rest element at end
   let source = "const [first, ...rest] = [1, 2, 3];"
   let errors = parse_and_get_errors(source)
-  assert_true(not(has_error_code(errors, 2461)))
+  assert_true(!(has_error_code(errors, 2461)))
 }
 
 // ----------------------------------------------------------------------------
@@ -1549,7 +1549,7 @@ test "parser error detection - valid const enum literal" {
   // Valid const enum with literal
   let source = "const enum Foo { A = 1, B = 2 }"
   let errors = parse_and_get_errors(source)
-  assert_true(not(has_error_code(errors, 2474)))
+  assert_true(!(has_error_code(errors, 2474)))
 }
 
 // ----------------------------------------------------------------------------
@@ -1578,7 +1578,7 @@ test "parser error detection - valid abstract property in abstract class" {
     #|  abstract x: number;
     #|}
   let errors = parse_and_get_errors(source)
-  assert_true(not(has_error_code(errors, 2517)))
+  assert_true(!(has_error_code(errors, 2517)))
 }
 
 // ----------------------------------------------------------------------------
@@ -1622,7 +1622,7 @@ test "parser error detection - valid constructor without this param" {
     #|  constructor(x: number) { }
     #|}
   let errors = parse_and_get_errors(source)
-  assert_true(not(has_error_code(errors, 2681)))
+  assert_true(!(has_error_code(errors, 2681)))
 }
 
 // ----------------------------------------------------------------------------
@@ -1645,7 +1645,7 @@ test "parser error detection - valid type param order" {
   // Valid type parameter order
   let source = "type Foo<T, U = string> = { t: T; u: U };"
   let errors = parse_and_get_errors(source)
-  assert_true(not(has_error_code(errors, 2706)))
+  assert_true(!(has_error_code(errors, 2706)))
 }
 
 // ----------------------------------------------------------------------------
@@ -1668,7 +1668,7 @@ test "parser error detection - valid infer in conditional" {
   // Valid infer in conditional type
   let source = "type Foo<T> = T extends Array<infer U> ? U : never;"
   let errors = parse_and_get_errors(source)
-  assert_true(not(has_error_code(errors, 2730)))
+  assert_true(!(has_error_code(errors, 2730)))
 }
 
 // ----------------------------------------------------------------------------
@@ -1714,7 +1714,7 @@ test "parser error detection - valid private identifier in class" {
     #|  #x = 5;
     #|}
   let errors = parse_and_get_errors(source)
-  assert_true(not(has_error_code(errors, 2813)))
+  assert_true(!(has_error_code(errors, 2813)))
 }
 
 // ----------------------------------------------------------------------------
@@ -1737,7 +1737,7 @@ test "parser error detection - valid assignment" {
   // Valid property assignment
   let source = "const obj = { prop: 1 }; obj.prop = 5;"
   let errors = parse_and_get_errors(source)
-  assert_true(not(has_error_code(errors, 2832)))
+  assert_true(!(has_error_code(errors, 2832)))
 }
 
 // ----------------------------------------------------------------------------
@@ -1777,7 +1777,7 @@ test "parser error detection - valid constructor without type params" {
     #|  constructor(x: number) { }
     #|}
   let errors = parse_and_get_errors(source)
-  assert_true(not(has_error_code(errors, 1092)))
+  assert_true(!(has_error_code(errors, 1092)))
 }
 
 ///|
@@ -1788,7 +1788,7 @@ test "parser error detection - valid generic class constructor" {
     #|  constructor(x: T) { }
     #|}
   let errors = parse_and_get_errors(source)
-  assert_true(not(has_error_code(errors, 1092)))
+  assert_true(!(has_error_code(errors, 1092)))
 }
 
 // ============================================================================
@@ -1825,7 +1825,7 @@ test "parser error detection - valid return inside function" {
   // Return inside function should be valid
   let source = "function foo() { return 42; }"
   let errors = parse_and_get_errors(source)
-  assert_true(not(has_error_code(errors, 1108)))
+  assert_true(!(has_error_code(errors, 1108)))
 }
 
 ///|
@@ -1833,7 +1833,7 @@ test "parser error detection - valid return inside arrow function" {
   // Return inside arrow function should be valid
   let source = "const fn = () => { return 1; };"
   let errors = parse_and_get_errors(source)
-  assert_true(not(has_error_code(errors, 1108)))
+  assert_true(!(has_error_code(errors, 1108)))
 }
 
 ///|
@@ -1844,7 +1844,7 @@ test "parser error detection - valid return inside method" {
     #|  bar() { return 42; }
     #|}
   let errors = parse_and_get_errors(source)
-  assert_true(not(has_error_code(errors, 1108)))
+  assert_true(!(has_error_code(errors, 1108)))
 }
 
 ///|
@@ -1855,7 +1855,7 @@ test "parser error detection - valid return inside getter" {
     #|  get value() { return 42; }
     #|}
   let errors = parse_and_get_errors(source)
-  assert_true(not(has_error_code(errors, 1108)))
+  assert_true(!(has_error_code(errors, 1108)))
 }
 
 ///|
@@ -1863,7 +1863,7 @@ test "parser error detection - valid return inside function expression" {
   // Return inside function expression should be valid
   let source = "const fn = function() { return 1; };"
   let errors = parse_and_get_errors(source)
-  assert_true(not(has_error_code(errors, 1108)))
+  assert_true(!(has_error_code(errors, 1108)))
 }
 
 ///|
@@ -1871,7 +1871,7 @@ test "parser error detection - valid return inside async function" {
   // Return inside async function should be valid
   let source = "async function foo() { return await Promise.resolve(1); }"
   let errors = parse_and_get_errors(source)
-  assert_true(not(has_error_code(errors, 1108)))
+  assert_true(!(has_error_code(errors, 1108)))
 }
 
 ///|
@@ -1882,7 +1882,7 @@ test "parser error detection - valid return inside constructor" {
     #|  constructor() { return; }
     #|}
   let errors = parse_and_get_errors(source)
-  assert_true(not(has_error_code(errors, 1108)))
+  assert_true(!(has_error_code(errors, 1108)))
 }
 
 // ----------------------------------------------------------------------------
@@ -1922,7 +1922,7 @@ test "parser error detection - valid enum comma separated" {
   // Valid enum with comma-separated members
   let source = "enum Foo { A, B, C }"
   let errors = parse_and_get_errors(source)
-  assert_true(not(has_error_code(errors, 1357)))
+  assert_true(!(has_error_code(errors, 1357)))
 }
 
 ///|
@@ -1930,7 +1930,7 @@ test "parser error detection - valid enum with initializers" {
   // Valid enum with equals initializers
   let source = "enum Foo { A = 1, B = 2, C = 3 }"
   let errors = parse_and_get_errors(source)
-  assert_true(not(has_error_code(errors, 1357)))
+  assert_true(!(has_error_code(errors, 1357)))
 }
 
 ///|
@@ -1983,7 +1983,7 @@ test "parser error detection - no TS1359 for contextual keyword" {
   let source = "var { x: number } = { x: 1 };"
   let errors = parse_and_get_errors(source)
   // Should NOT have TS1359
-  assert_true(not(has_error_code(errors, 1359)))
+  assert_true(!(has_error_code(errors, 1359)))
 }
 
 ///|
@@ -1992,7 +1992,7 @@ test "parser error detection - reserved keyword as property name allowed" {
   let source = "var { while: x } = { while: 1 };"
   let errors = parse_and_get_errors(source)
   // Should NOT have errors (while is allowed as property name)
-  assert_true(not(has_error_code(errors, 1359)))
+  assert_true(!(has_error_code(errors, 1359)))
 }
 
 ///|
@@ -2023,7 +2023,7 @@ test "parser error detection - string literal with colon allowed" {
   let source = "var { \"while\": x } = { while: 1 };"
   let errors = parse_and_get_errors(source)
   // Should NOT have TS1005 for colon
-  assert_true(not(has_error_code(errors, 1005)))
+  assert_true(!(has_error_code(errors, 1005)))
 }
 
 // ============================================================================
@@ -2047,7 +2047,7 @@ test "parser error detection - no TS1186 for rest without initializer" {
   let source = "var a = [1, 2]; var [...x] = a;"
   let errors = parse_and_get_errors(source)
   // Should NOT have TS1186
-  assert_true(not(has_error_code(errors, 1186)))
+  assert_true(!(has_error_code(errors, 1186)))
 }
 
 ///|
@@ -2056,5 +2056,5 @@ test "parser error detection - no TS1186 for spread in array literal" {
   let source = "var a = [1, 2]; var b = [...a];"
   let errors = parse_and_get_errors(source)
   // Should NOT have TS1186
-  assert_true(not(has_error_code(errors, 1186)))
+  assert_true(!(has_error_code(errors, 1186)))
 }

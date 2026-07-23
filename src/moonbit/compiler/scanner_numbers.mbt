@@ -8,7 +8,8 @@ fn scan_hex_digits(
   state : ScanState,
   digits : StringBuilder,
 ) -> StringView {
-  loop code {
+  for cur = code {
+    match cur {
     ['0'..='9' | 'a'..='f' | 'A'..='F' as ch, .. rest] => {
       digits.write_char(ch)
       state.col += 1
@@ -20,7 +21,8 @@ fn scan_hex_digits(
       state.offset += 1
       continue rest
     }
-    remaining => remaining
+    remaining => break remaining
+  }
   }
 }
 
@@ -31,7 +33,8 @@ fn scan_octal_digits(
   state : ScanState,
   digits : StringBuilder,
 ) -> StringView {
-  loop code {
+  for cur = code {
+    match cur {
     ['0'..='7' as ch, .. rest] => {
       digits.write_char(ch)
       state.col += 1
@@ -43,7 +46,8 @@ fn scan_octal_digits(
       state.offset += 1
       continue rest
     }
-    remaining => remaining
+    remaining => break remaining
+  }
   }
 }
 
@@ -54,7 +58,8 @@ fn scan_binary_digits(
   state : ScanState,
   digits : StringBuilder,
 ) -> StringView {
-  loop code {
+  for cur = code {
+    match cur {
     ['0' | '1' as ch, .. rest] => {
       digits.write_char(ch)
       state.col += 1
@@ -66,7 +71,8 @@ fn scan_binary_digits(
       state.offset += 1
       continue rest
     }
-    remaining => remaining
+    remaining => break remaining
+  }
   }
 }
 
@@ -77,7 +83,8 @@ fn scan_decimal_digits(
   state : ScanState,
   num : StringBuilder,
 ) -> StringView {
-  loop code {
+  for cur = code {
+    match cur {
     ['0'..='9' as ch, .. rest] => {
       num.write_char(ch)
       state.col += 1
@@ -89,6 +96,7 @@ fn scan_decimal_digits(
       state.offset += 1
       continue rest
     }
-    remaining => remaining
+    remaining => break remaining
+  }
   }
 }

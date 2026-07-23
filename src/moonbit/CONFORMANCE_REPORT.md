@@ -1,15 +1,227 @@
 # TypeScript Conformance Test Report
 
-## Executive Summary
+*Last updated: July 23, 2026*
 
-| Metric | Value |
-|--------|-------|
-| Total Tests | 5,652 |
-| Passed | 3,932 |
-| Failed | 1,720 |
-| **Pass Rate** | **69.6%** |
+## July 2026 Conformance Sweep (current)
 
-*Last updated: December 15, 2025*
+Full sweep of `tests/cases/conformance` from microsoft/TypeScript (5,693 tests
+across 52 top-level categories), run with the rewritten
+`run_conformance_tests.exs` runner (see `docs/CONFORMANCE_RUNNER.md`) against
+the native CLI built with moon 0.1.20260713. The unit suite was 5000/5000
+green on the same build.
+
+### Executive summary
+
+| Mode | Passed | Total | Pass rate | Fail | Fail* (unhonored directives) | Crash |
+|------|--------|-------|-----------|------|------------------------------|-------|
+| Loose (errors-present vs baseline-present) | 3,569 | 5,693 | **62.7%** | 840 | 1,276 | 8 |
+| Strict (TSxxxx error-code set equality)    | 1,517 | 5,693 | **26.6%** | 1,810 | 2,358 | 8 |
+
+- **Loose** counts a pass when "compiler reported errors" matches "a
+  `.errors.txt` baseline exists" — presence only, not which errors.
+- **Strict** compares the *set* of `TSxxxx` codes emitted against the codes in
+  the baseline (union across variants for variant baselines). Still weaker
+  than tsc's positional baseline diff, but far stronger than loose.
+- **Fail\*** are mismatches on tests whose harness directives the runner cannot
+  honor (mostly `@filename` multi-file tests); they are real failures but
+  conflate harness limitations with diagnostic gaps, so the runner buckets
+  them separately.
+
+> **Correction of the December 2025 numbers.** The previously reported
+> 69.6% (3,932/5,652) was measured with a runner that mishandled variant
+> baselines (`name(target=es5).errors.txt` was not recognized, so such tests
+> were treated as "expects no errors") and did a binary errors-vs-no-errors
+> comparison only. Re-measured July 2026 with the fixed runner:
+> es6/computedProperties is **108/142 loose, 59/142 strict** (not the 142/142
+> previously claimed) and es6/templates is **171/178 loose, 152/178 strict**
+> (not 178/178). The December material is preserved unchanged under the
+> "Historical Report Content" heading below.
+
+### Per-category results (both modes)
+
+`F/D*/C` = Fail / Fail-with-unhonored-directives / Crash.
+
+| Category | Total | Loose pass | Loose rate | Strict pass | Strict rate | Loose F/D*/C | Strict F/D*/C |
+|----------|-------|-----------|------------|-------------|-------------|--------------|---------------|
+| Symbols | 8 | 0 | 0.0% | 0 | 0.0% | 7/1/0 | 7/1/0 |
+| additionalChecks | 1 | 0 | 0.0% | 0 | 0.0% | 0/1/0 | 0/1/0 |
+| ambient | 22 | 12 | 54.5% | 11 | 50.0% | 2/8/0 | 2/9/0 |
+| async | 185 | 123 | 66.5% | 60 | 32.4% | 5/57/0 | 5/120/0 |
+| asyncGenerators | 3 | 3 | 100.0% | 2 | 66.7% | 0/0/0 | 0/1/0 |
+| classes | 466 | 267 | 57.3% | 77 | 16.5% | 99/100/0 | 207/182/0 |
+| constEnums | 9 | 4 | 44.4% | 2 | 22.2% | 3/2/0 | 3/4/0 |
+| controlFlow | 56 | 36 | 64.3% | 18 | 32.1% | 5/15/0 | 8/30/0 |
+| declarationEmit | 23 | 8 | 34.8% | 6 | 26.1% | 0/15/0 | 0/17/0 |
+| decorators | 88 | 39 | 44.3% | 15 | 17.0% | 3/46/0 | 9/64/0 |
+| directives | 5 | 3 | 60.0% | 2 | 40.0% | 1/1/0 | 2/1/0 |
+| dynamicImport | 71 | 32 | 45.1% | 23 | 32.4% | 0/39/0 | 0/48/0 |
+| emitter | 13 | 7 | 53.8% | 5 | 38.5% | 0/6/0 | 0/8/0 |
+| enums | 14 | 14 | 100.0% | 13 | 92.9% | 0/0/0 | 1/0/0 |
+| es2016 | 1 | 1 | 100.0% | 0 | 0.0% | 0/0/0 | 1/0/0 |
+| es2017 | 12 | 7 | 58.3% | 1 | 8.3% | 1/4/0 | 2/9/0 |
+| es2018 | 4 | 1 | 25.0% | 0 | 0.0% | 2/1/0 | 2/2/0 |
+| es2019 | 13 | 11 | 84.6% | 2 | 15.4% | 1/1/0 | 3/8/0 |
+| es2020 | 15 | 10 | 66.7% | 3 | 20.0% | 1/4/0 | 2/10/0 |
+| es2021 | 12 | 5 | 41.7% | 5 | 41.7% | 1/6/0 | 1/6/0 |
+| es2022 | 7 | 5 | 71.4% | 0 | 0.0% | 2/0/0 | 2/5/0 |
+| es2023 | 2 | 1 | 50.0% | 0 | 0.0% | 0/1/0 | 0/2/0 |
+| es2024 | 3 | 0 | 0.0% | 0 | 0.0% | 0/3/0 | 0/3/0 |
+| es2025 | 4 | 0 | 0.0% | 0 | 0.0% | 0/4/0 | 0/4/0 |
+| es5 | 1 | 1 | 100.0% | 0 | 0.0% | 0/0/0 | 0/1/0 |
+| es6 | 1045 | 778 | 74.4% | 528 | 50.5% | 171/94/2 | 339/176/2 |
+| es7 | 45 | 27 | 60.0% | 6 | 13.3% | 17/1/0 | 36/3/0 |
+| esDecorators | 110 | 50 | 45.5% | 31 | 28.2% | 2/58/0 | 2/77/0 |
+| esnext | 2 | 0 | 0.0% | 0 | 0.0% | 0/2/0 | 0/2/0 |
+| expressions | 376 | 252 | 67.0% | 74 | 19.7% | 74/50/0 | 172/130/0 |
+| externalModules | 227 | 138 | 60.8% | 29 | 12.8% | 16/73/0 | 25/173/0 |
+| functions | 18 | 14 | 77.8% | 6 | 33.3% | 1/3/0 | 1/11/0 |
+| generators | 15 | 10 | 66.7% | 6 | 40.0% | 0/5/0 | 0/9/0 |
+| importAssertion | 5 | 5 | 100.0% | 0 | 0.0% | 0/0/0 | 2/3/0 |
+| importAttributes | 11 | 8 | 72.7% | 0 | 0.0% | 0/3/0 | 2/9/0 |
+| importDefer | 17 | 13 | 76.5% | 2 | 11.8% | 0/4/0 | 0/15/0 |
+| interfaces | 66 | 38 | 57.6% | 5 | 7.6% | 27/1/0 | 58/3/0 |
+| internalModules | 76 | 44 | 57.9% | 15 | 19.7% | 23/9/0 | 45/16/0 |
+| jsdoc | 341 | 155 | 45.5% | 96 | 28.2% | 1/185/0 | 2/243/0 |
+| jsx | 4 | 3 | 75.0% | 2 | 50.0% | 0/1/0 | 0/2/0 |
+| moduleResolution | 51 | 40 | 78.4% | 1 | 2.0% | 0/11/0 | 0/50/0 |
+| node | 94 | 71 | 75.5% | 1 | 1.1% | 0/23/0 | 0/93/0 |
+| nonjsExtensions | 5 | 3 | 60.0% | 0 | 0.0% | 0/2/0 | 0/5/0 |
+| override | 31 | 16 | 51.6% | 4 | 12.9% | 0/15/0 | 1/26/0 |
+| parser | 819 | 582 | 71.1% | 205 | 25.0% | 170/66/1 | 472/141/1 |
+| pedantic | 2 | 2 | 100.0% | 0 | 0.0% | 0/0/0 | 0/2/0 |
+| references | 15 | 3 | 20.0% | 3 | 20.0% | 0/12/0 | 0/12/0 |
+| salsa | 191 | 102 | 53.4% | 56 | 29.3% | 2/87/0 | 3/132/0 |
+| scanner | 35 | 20 | 57.1% | 8 | 22.9% | 15/0/0 | 26/1/0 |
+| statements | 203 | 106 | 52.2% | 13 | 6.4% | 20/77/0 | 41/149/0 |
+| types | 842 | 493 | 58.6% | 181 | 21.5% | 168/176/5 | 326/330/5 |
+| typings | 9 | 6 | 66.7% | 0 | 0.0% | 0/3/0 | 0/9/0 |
+
+### Top failing categories (strict mode, by Fail + Fail\* count)
+
+| Category | Strict failures (Fail + Fail\*) | Total | Strict rate |
+|----------|--------------------------------|-------|-------------|
+| types | 656 | 842 | 21.5% |
+| parser | 613 | 819 | 25.0% |
+| es6 | 515 | 1045 | 50.5% |
+| classes | 389 | 466 | 16.5% |
+| expressions | 302 | 376 | 19.7% |
+| jsdoc | 245 | 341 | 28.2% |
+| externalModules | 198 | 227 | 12.8% |
+| statements | 190 | 203 | 6.4% |
+| salsa | 135 | 191 | 29.3% |
+| async | 125 | 185 | 32.4% |
+
+Note that in `jsdoc`, `externalModules`, `moduleResolution`, `node`, `salsa`,
+`async` and `statements` the failures are overwhelmingly Fail\* — multi-file
+`@filename` tests and other unhonored directives — i.e. a harness/module-I/O
+gap more than a diagnostics gap.
+
+### Most frequent MISSING error codes (strict mode)
+
+Codes tsc's baselines expect that this compiler did not emit, counted across
+all 4,168 strict failures (a code counts once per failing test). This is the
+prioritization input for wave-3 work.
+
+| Rank | Code | Failing tests | Meaning (short) |
+|------|------|---------------|-----------------|
+| 1 | TS5107 | 874 | Deprecated compiler-option value (target=ES3/ES5 variants; see policy note below) |
+| 2 | TS2564 | 312 | Property has no initializer (strictPropertyInitialization) |
+| 3 | TS2322 | 271 | Type not assignable |
+| 4 | TS2304 | 271 | Cannot find name |
+| 5 | TS2454 | 228 | Variable used before being assigned |
+| 6 | TS2339 | 154 | Property does not exist on type |
+| 7 | TS1005 | 129 | '{token}' expected (parse) |
+| 8 | TS2345 | 114 | Argument type not assignable |
+| 9 | TS1109 | 96 | Expression expected (parse) |
+| 10 | TS5101 | 48 | Deprecated compiler option (flag form) |
+| 11 | TS2343 | 41 | This syntax requires an imported helper which does not exist in tslib |
+| 12 | TS2554 | 40 | Expected N arguments, got M |
+| 13 | TS1100 | 40 | Invalid use of '{name}' in strict mode (parse) |
+| 14 | TS18050 | 38 | The value '{x}' cannot be used here |
+| 15 | TS7006 | 37 | Parameter implicitly has an 'any' type (noImplicitAny) |
+
+704 distinct codes appear as missing overall; the noImplicitAny family just
+below the cutoff is also significant in aggregate: TS7010 (24), TS7008 (16),
+TS7031 (15), TS7005 (8) — ~100 failing tests combined with TS7006.
+
+### Most frequent EXTRA error codes (strict mode)
+
+Codes this compiler emitted that the baseline does not contain (false
+positives / wrong-code substitutions), counted across all strict failures.
+
+| Rank | Code | Failing tests | Meaning (short) |
+|------|------|---------------|-----------------|
+| 1 | TS1000 | 1,118 | Generic/internal parse-error code (should be a specific TS1xxx code) |
+| 2 | TS2300 | 283 | Duplicate identifier (over-reported) |
+| 3 | TS1005 | 232 | '{token}' expected (emitted where baseline has a different code) |
+| 4 | TS2304 | 189 | Cannot find name (false positive, e.g. unresolved lib/module symbols) |
+| 5 | TS2339 | 183 | Property does not exist (false positive) |
+| 6 | TS2552 | 176 | Cannot find name, did-you-mean variant (false positive) |
+| 7 | TS2769 | 149 | No overload matches (emitted where baseline has e.g. TS2345) |
+| 8 | TS1003 | 142 | Identifier expected (parse, wrong-code substitution) |
+| 9 | TS2322 | 135 | Type not assignable (false positive) |
+| 10 | TS2307 | 100 | Cannot find module (multi-file/module resolution gaps) |
+
+119 distinct codes appear as extra overall.
+
+### Recurring strict-mode gap patterns
+
+These are the systematic patterns behind the strict-mode gap (first identified
+in the T2 runner-rewrite analysis, confirmed by the frequency data above):
+
+1. **Generic TS1000 instead of specific parse-error codes.** TS1000 is the
+   single most frequent extra code (1,118 failing tests). The parser reports a
+   catch-all code where tsc emits specific codes such as TS1005/TS1109/TS1128/
+   TS1003 — those same codes dominate both the missing and extra tables
+   (wrong-code substitution). Mapping parse failures onto the correct TS1xxx
+   codes is the single highest-leverage strict-mode fix.
+2. **Missing noImplicitAny family (TS7006/TS7010/TS7008/TS7031/TS7005).**
+   The compiler never emits implicit-any diagnostics; ~100 strict failures
+   include at least one of these codes.
+3. **Variant-baseline TS5107/TS5101 policy.** TS5107 tops the missing table
+   (874 tests), and 800 of those 874 are tagged `[variant baseline]`. Variant
+   baselines for old targets (e.g. `(target=es3)`) contain deprecated-option
+   diagnostics, and strict mode compares against the union of codes across all
+   variants, so tests fail on a diagnostic about a configuration the runner
+   never even selects. This is a runner-policy question (exclude
+   TS5107/TS5101 from the union, or pick a single variant) as much as a
+   compiler gap.
+4. **Missing strict-null/initialization analysis.** TS2564 (312) and TS2454
+   (228) are the top non-policy missing codes — definite-assignment analysis
+   and `strictPropertyInitialization` are not implemented.
+
+### Crashes (8)
+
+| Test | Exit | Kind |
+|------|------|------|
+| es6/unicodeExtendedEscapesInStrings12 | 134 | abort/panic |
+| es6/unicodeExtendedEscapesInTemplates12 | 134 | abort/panic |
+| parser/parserErrorRecovery_ClassElement3 | 134 | abort/panic |
+| types/rest/genericRestParameters1 | 137 | infinite loop, killed at timeout |
+| types/rest/restTuplesFromContextualTypes | 137 | infinite loop, killed at timeout |
+| types/tuple/variadicTuples1 | 137 | infinite loop, killed at timeout |
+| types/tuple/variadicTuples2 | 137 | infinite loop, killed at timeout |
+| types/typeRelationships/assignmentCompatibility/assignmentCompatWithObjectMembers | 139 | segfault |
+
+Methodology note: the four exit-137 tests loop forever in the checker; the
+runner's 30s `timeout(1)` guard sends SIGTERM, which the CLI binary ignores,
+so during this sweep they were SIGKILLed externally at ~40s and are counted in
+the Crash bucket. The CLI's SIGTERM handling is worth fixing so the runner's
+own timeout works unassisted.
+
+---
+
+# Historical Report Content (December 2025 — superseded)
+
+> **Warning:** everything below this heading is the historical December 2025
+> report, preserved unchanged. Its headline number (3,932/5,652 = 69.6%) and
+> per-category tables (e.g. computedProperties 142/142, templates 178/178)
+> were measured with an earlier runner that (a) mishandled variant baselines —
+> `name(target=es5).errors.txt` files were not matched to their test, so those
+> tests were scored as "expects no errors" — and (b) compared only the binary
+> presence of errors, never which error codes were emitted. The corrected
+> July 2026 numbers are in the section above. The per-fix engineering notes
+> below remain accurate as a changelog of what was implemented and when.
 
 ## Recent Fixes
 

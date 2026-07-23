@@ -43,7 +43,7 @@ test "unit/parser/class-members/computed - computed method name with string lite
   match parse_only(source) {
     Ok(_) => assert_true(true)
     Err(diagnostics) => {
-      println("Errors: \{diagnostics}")
+      println("Errors: \{@debug.to_string(diagnostics)}")
       assert_true(false)
     }
   }
@@ -58,7 +58,7 @@ test "unit/parser/class-members/computed - computed getter with string literal" 
   match parse_only(source) {
     Ok(_) => assert_true(true)
     Err(diagnostics) => {
-      println("Errors: \{diagnostics}")
+      println("Errors: \{@debug.to_string(diagnostics)}")
       assert_true(false)
     }
   }
@@ -73,7 +73,7 @@ test "unit/parser/class-members/computed - computed setter with string literal" 
   match parse_only(source) {
     Ok(_) => assert_true(true)
     Err(diagnostics) => {
-      println("Errors: \{diagnostics}")
+      println("Errors: \{@debug.to_string(diagnostics)}")
       assert_true(false)
     }
   }
@@ -88,7 +88,7 @@ test "unit/parser/class-members/computed - static computed method" {
   match parse_only(source) {
     Ok(_) => assert_true(true)
     Err(diagnostics) => {
-      println("Errors: \{diagnostics}")
+      println("Errors: \{@debug.to_string(diagnostics)}")
       assert_true(false)
     }
   }
@@ -104,7 +104,7 @@ test "unit/parser/class-members/computed - computed property with expression" {
   match parse_only(source) {
     Ok(_) => assert_true(true)
     Err(diagnostics) => {
-      println("Errors: \{diagnostics}")
+      println("Errors: \{@debug.to_string(diagnostics)}")
       assert_true(false)
     }
   }
@@ -125,7 +125,7 @@ test "unit/parser/class-members/extends-null - class extends null" {
   match parse_only(source) {
     Ok(_) => assert_true(true)
     Err(diagnostics) => {
-      println("Errors: \{diagnostics}")
+      println("Errors: \{@debug.to_string(diagnostics)}")
       assert_true(false)
     }
   }
@@ -141,7 +141,7 @@ test "unit/parser/class-members/extends-null - class extends null with propertie
   match parse_only(source) {
     Ok(_) => assert_true(true)
     Err(diagnostics) => {
-      println("Errors: \{diagnostics}")
+      println("Errors: \{@debug.to_string(diagnostics)}")
       assert_true(false)
     }
   }
@@ -160,7 +160,7 @@ test "unit/parser/class-members/extends-paren - parenthesized function call in e
   match parse_only(source) {
     Ok(_) => assert_true(true)
     Err(diagnostics) => {
-      println("Errors: \{diagnostics}")
+      println("Errors: \{@debug.to_string(diagnostics)}")
       assert_true(false)
     }
   }
@@ -175,7 +175,7 @@ test "unit/parser/class-members/extends-paren - property access on parenthesized
   match parse_only(source) {
     Ok(_) => assert_true(true)
     Err(diagnostics) => {
-      println("Errors: \{diagnostics}")
+      println("Errors: \{@debug.to_string(diagnostics)}")
       assert_true(false)
     }
   }
@@ -194,7 +194,7 @@ test "unit/parser/class-members/reserved-word - interface as method name" {
   match parse_only(source) {
     Ok(_) => assert_true(true)
     Err(diagnostics) => {
-      println("Errors: \{diagnostics}")
+      println("Errors: \{@debug.to_string(diagnostics)}")
       assert_true(false)
     }
   }
@@ -209,7 +209,7 @@ test "unit/parser/class-members/reserved-word - interface as property name" {
   match parse_only(source) {
     Ok(_) => assert_true(true)
     Err(diagnostics) => {
-      println("Errors: \{diagnostics}")
+      println("Errors: \{@debug.to_string(diagnostics)}")
       assert_true(false)
     }
   }
@@ -228,7 +228,7 @@ test "unit/parser/class-members/numeric-literal - decimal number as method name"
   match parse_only(source) {
     Ok(_) => assert_true(true)
     Err(diagnostics) => {
-      println("Errors: \{diagnostics}")
+      println("Errors: \{@debug.to_string(diagnostics)}")
       assert_true(false)
     }
   }
@@ -243,7 +243,7 @@ test "unit/parser/class-members/numeric-literal - binary literal as method name"
   match parse_only(source) {
     Ok(_) => assert_true(true)
     Err(diagnostics) => {
-      println("Errors: \{diagnostics}")
+      println("Errors: \{@debug.to_string(diagnostics)}")
       assert_true(false)
     }
   }
@@ -258,7 +258,7 @@ test "unit/parser/class-members/numeric-literal - octal literal as property" {
   match parse_only(source) {
     Ok(_) => assert_true(true)
     Err(diagnostics) => {
-      println("Errors: \{diagnostics}")
+      println("Errors: \{@debug.to_string(diagnostics)}")
       assert_true(false)
     }
   }
@@ -273,7 +273,7 @@ test "unit/parser/class-members/numeric-literal - hex literal as method name" {
   match parse_only(source) {
     Ok(_) => assert_true(true)
     Err(diagnostics) => {
-      println("Errors: \{diagnostics}")
+      println("Errors: \{@debug.to_string(diagnostics)}")
       assert_true(false)
     }
   }
@@ -288,7 +288,7 @@ test "unit/parser/class-members/numeric-literal - static numeric method" {
   match parse_only(source) {
     Ok(_) => assert_true(true)
     Err(diagnostics) => {
-      println("Errors: \{diagnostics}")
+      println("Errors: \{@debug.to_string(diagnostics)}")
       assert_true(false)
     }
   }
@@ -303,7 +303,7 @@ test "unit/parser/class-members/numeric-literal - static numeric property" {
   match parse_only(source) {
     Ok(_) => assert_true(true)
     Err(diagnostics) => {
-      println("Errors: \{diagnostics}")
+      println("Errors: \{@debug.to_string(diagnostics)}")
       assert_true(false)
     }
   }
@@ -322,7 +322,7 @@ test "unit/parser/class-members/string-literal - string as method name" {
   match parse_only(source) {
     Ok(_) => assert_true(true)
     Err(diagnostics) => {
-      println("Errors: \{diagnostics}")
+      println("Errors: \{@debug.to_string(diagnostics)}")
       assert_true(false)
     }
   }
@@ -337,7 +337,7 @@ test "unit/parser/class-members/string-literal - string as property name" {
   match parse_only(source) {
     Ok(_) => assert_true(true)
     Err(diagnostics) => {
-      println("Errors: \{diagnostics}")
+      println("Errors: \{@debug.to_string(diagnostics)}")
       assert_true(false)
     }
   }
@@ -352,7 +352,7 @@ test "unit/parser/class-members/string-literal - static string method" {
   match parse_only(source) {
     Ok(_) => assert_true(true)
     Err(diagnostics) => {
-      println("Errors: \{diagnostics}")
+      println("Errors: \{@debug.to_string(diagnostics)}")
       assert_true(false)
     }
   }
@@ -367,7 +367,7 @@ test "unit/parser/class-members/string-literal - static string property" {
   match parse_only(source) {
     Ok(_) => assert_true(true)
     Err(diagnostics) => {
-      println("Errors: \{diagnostics}")
+      println("Errors: \{@debug.to_string(diagnostics)}")
       assert_true(false)
     }
   }
@@ -393,7 +393,7 @@ test "unit/parser/class-members/combined - all literal property types together" 
   match parse_only(source) {
     Ok(_) => assert_true(true)
     Err(diagnostics) => {
-      println("Errors: \{diagnostics}")
+      println("Errors: \{@debug.to_string(diagnostics)}")
       assert_true(false)
     }
   }
@@ -411,7 +411,7 @@ test "unit/parser/class-members/combined - static literal properties and methods
   match parse_only(source) {
     Ok(_) => assert_true(true)
     Err(diagnostics) => {
-      println("Errors: \{diagnostics}")
+      println("Errors: \{@debug.to_string(diagnostics)}")
       assert_true(false)
     }
   }
@@ -432,7 +432,7 @@ test "unit/parser/class-members/combined - computed getters and setters" {
   match parse_only(source) {
     Ok(_) => assert_true(true)
     Err(diagnostics) => {
-      println("Errors: \{diagnostics}")
+      println("Errors: \{@debug.to_string(diagnostics)}")
       assert_true(false)
     }
   }
@@ -456,7 +456,7 @@ test "unit/parser/class-members/static-getter - multiple static getters" {
   match parse_only(source) {
     Ok(_) => assert_true(true)
     Err(diagnostics) => {
-      println("Errors: \{diagnostics}")
+      println("Errors: \{@debug.to_string(diagnostics)}")
       assert_true(false)
     }
   }
@@ -472,7 +472,7 @@ test "unit/parser/class-members/static-setter - multiple static setters" {
   match parse_only(source) {
     Ok(_) => assert_true(true)
     Err(diagnostics) => {
-      println("Errors: \{diagnostics}")
+      println("Errors: \{@debug.to_string(diagnostics)}")
       assert_true(false)
     }
   }
@@ -502,7 +502,7 @@ test "unit/parser/class-members/static-accessor - mixed static getters and sette
   match parse_only(source) {
     Ok(_) => assert_true(true)
     Err(diagnostics) => {
-      println("Errors: \{diagnostics}")
+      println("Errors: \{@debug.to_string(diagnostics)}")
       assert_true(false)
     }
   }
@@ -520,7 +520,7 @@ test "unit/parser/class-members/static-accessor - static computed getter and set
   match parse_only(source) {
     Ok(_) => assert_true(true)
     Err(diagnostics) => {
-      println("Errors: \{diagnostics}")
+      println("Errors: \{@debug.to_string(diagnostics)}")
       assert_true(false)
     }
   }
@@ -542,7 +542,7 @@ test "unit/parser/class-members/generator - basic generator method" {
   match parse_only(source) {
     Ok(_) => assert_true(true)
     Err(diagnostics) => {
-      println("Errors: \{diagnostics}")
+      println("Errors: \{@debug.to_string(diagnostics)}")
       assert_true(false)
     }
   }
@@ -559,7 +559,7 @@ test "unit/parser/class-members/generator - generator method with return type" {
   match parse_only(source) {
     Ok(_) => assert_true(true)
     Err(diagnostics) => {
-      println("Errors: \{diagnostics}")
+      println("Errors: \{@debug.to_string(diagnostics)}")
       assert_true(false)
     }
   }
@@ -577,7 +577,7 @@ test "unit/parser/class-members/generator - generator method with parameters" {
   match parse_only(source) {
     Ok(_) => assert_true(true)
     Err(diagnostics) => {
-      println("Errors: \{diagnostics}")
+      println("Errors: \{@debug.to_string(diagnostics)}")
       assert_true(false)
     }
   }
@@ -594,7 +594,7 @@ test "unit/parser/class-members/generator - generator method with type parameter
   match parse_only(source) {
     Ok(_) => assert_true(true)
     Err(diagnostics) => {
-      println("Errors: \{diagnostics}")
+      println("Errors: \{@debug.to_string(diagnostics)}")
       assert_true(false)
     }
   }
@@ -612,7 +612,7 @@ test "unit/parser/class-members/generator - async generator method" {
   match parse_only(source) {
     Ok(_) => assert_true(true)
     Err(diagnostics) => {
-      println("Errors: \{diagnostics}")
+      println("Errors: \{@debug.to_string(diagnostics)}")
       assert_true(false)
     }
   }
@@ -630,7 +630,7 @@ test "unit/parser/class-members/generator - multiple generator methods" {
   match parse_only(source) {
     Ok(_) => assert_true(true)
     Err(diagnostics) => {
-      println("Errors: \{diagnostics}")
+      println("Errors: \{@debug.to_string(diagnostics)}")
       assert_true(false)
     }
   }
@@ -647,7 +647,7 @@ test "unit/parser/class-members/generator - generator with yield star" {
   match parse_only(source) {
     Ok(_) => assert_true(true)
     Err(diagnostics) => {
-      println("Errors: \{diagnostics}")
+      println("Errors: \{@debug.to_string(diagnostics)}")
       assert_true(false)
     }
   }
@@ -663,7 +663,7 @@ test "unit/parser/class-members/generator - generator in declare class parses" {
   match parse_only(source) {
     Ok(_) => assert_true(true)
     Err(diagnostics) => {
-      println("Errors: \{diagnostics}")
+      println("Errors: \{@debug.to_string(diagnostics)}")
       assert_true(false)
     }
   }
@@ -679,7 +679,7 @@ test "unit/parser/class-members/generator - generator function outside class" {
   match parse_only(source) {
     Ok(_) => assert_true(true)
     Err(diagnostics) => {
-      println("Errors: \{diagnostics}")
+      println("Errors: \{@debug.to_string(diagnostics)}")
       assert_true(false)
     }
   }
@@ -695,7 +695,7 @@ test "unit/parser/class-members/generator - async generator function outside cla
   match parse_only(source) {
     Ok(_) => assert_true(true)
     Err(diagnostics) => {
-      println("Errors: \{diagnostics}")
+      println("Errors: \{@debug.to_string(diagnostics)}")
       assert_true(false)
     }
   }
@@ -716,7 +716,7 @@ test "unit/parser/object-literal/generator-method - basic generator method" {
   match parse_only(source) {
     Ok(_) => assert_true(true)
     Err(diagnostics) => {
-      println("Errors: \{diagnostics}")
+      println("Errors: \{@debug.to_string(diagnostics)}")
       assert_true(false)
     }
   }
@@ -733,7 +733,7 @@ test "unit/parser/object-literal/computed-method - method with computed name" {
   match parse_only(source) {
     Ok(_) => assert_true(true)
     Err(diagnostics) => {
-      println("Errors: \{diagnostics}")
+      println("Errors: \{@debug.to_string(diagnostics)}")
       assert_true(false)
     }
   }
@@ -750,7 +750,7 @@ test "unit/parser/object-literal/generator-computed - generator with computed na
   match parse_only(source) {
     Ok(_) => assert_true(true)
     Err(diagnostics) => {
-      println("Errors: \{diagnostics}")
+      println("Errors: \{@debug.to_string(diagnostics)}")
       assert_true(false)
     }
   }
@@ -767,7 +767,7 @@ test "unit/parser/object-literal/symbol-iterator - generator with Symbol.iterato
   match parse_only(source) {
     Ok(_) => assert_true(true)
     Err(diagnostics) => {
-      println("Errors: \{diagnostics}")
+      println("Errors: \{@debug.to_string(diagnostics)}")
       assert_true(false)
     }
   }
@@ -785,7 +785,7 @@ test "unit/parser/object-literal/mixed-methods - regular and generator methods" 
   match parse_only(source) {
     Ok(_) => assert_true(true)
     Err(diagnostics) => {
-      println("Errors: \{diagnostics}")
+      println("Errors: \{@debug.to_string(diagnostics)}")
       assert_true(false)
     }
   }
@@ -803,7 +803,7 @@ test "unit/parser/object-literal/computed-variable - method with variable as com
   match parse_only(source) {
     Ok(_) => assert_true(true)
     Err(diagnostics) => {
-      println("Errors: \{diagnostics}")
+      println("Errors: \{@debug.to_string(diagnostics)}")
       assert_true(false)
     }
   }
@@ -820,7 +820,7 @@ test "unit/parser/yield-identifier/var-yield - yield as variable name outside ge
   match parse_only(source) {
     Ok(_) => assert_true(true)
     Err(diagnostics) => {
-      println("Errors: \{diagnostics}")
+      println("Errors: \{@debug.to_string(diagnostics)}")
       assert_true(false)
     }
   }
@@ -833,7 +833,7 @@ test "unit/parser/yield-identifier/let-yield - yield as let variable" {
   match parse_only(source) {
     Ok(_) => assert_true(true)
     Err(diagnostics) => {
-      println("Errors: \{diagnostics}")
+      println("Errors: \{@debug.to_string(diagnostics)}")
       assert_true(false)
     }
   }
@@ -849,7 +849,7 @@ test "unit/parser/yield-identifier/typeof-yield - typeof yield in type position"
   match parse_only(source) {
     Ok(_) => assert_true(true)
     Err(diagnostics) => {
-      println("Errors: \{diagnostics}")
+      println("Errors: \{@debug.to_string(diagnostics)}")
       assert_true(false)
     }
   }
@@ -872,7 +872,7 @@ test "unit/parser/object-literal/computed-getter - get [expr]() in object" {
   match parse_only(source) {
     Ok(_) => assert_true(true)
     Err(diagnostics) => {
-      println("Errors: \{diagnostics}")
+      println("Errors: \{@debug.to_string(diagnostics)}")
       assert_true(false)
     }
   }
@@ -891,7 +891,7 @@ test "unit/parser/object-literal/computed-setter - set [expr](val) in object" {
   match parse_only(source) {
     Ok(_) => assert_true(true)
     Err(diagnostics) => {
-      println("Errors: \{diagnostics}")
+      println("Errors: \{@debug.to_string(diagnostics)}")
       assert_true(false)
     }
   }
@@ -908,7 +908,7 @@ test "unit/parser/generator-expr/basic - generator function expression" {
   match parse_only(source) {
     Ok(_) => assert_true(true)
     Err(diagnostics) => {
-      println("Errors: \{diagnostics}")
+      println("Errors: \{@debug.to_string(diagnostics)}")
       assert_true(false)
     }
   }
@@ -921,7 +921,7 @@ test "unit/parser/generator-expr/named - named generator function expression" {
   match parse_only(source) {
     Ok(_) => assert_true(true)
     Err(diagnostics) => {
-      println("Errors: \{diagnostics}")
+      println("Errors: \{@debug.to_string(diagnostics)}")
       assert_true(false)
     }
   }
@@ -934,7 +934,7 @@ test "unit/parser/generator-expr/iife - generator IIFE" {
   match parse_only(source) {
     Ok(_) => assert_true(true)
     Err(diagnostics) => {
-      println("Errors: \{diagnostics}")
+      println("Errors: \{@debug.to_string(diagnostics)}")
       assert_true(false)
     }
   }
@@ -951,7 +951,7 @@ test "unit/parser/generator-expr/yield-star-iife - yield * generator IIFE" {
   match parse_only(source) {
     Ok(_) => assert_true(true)
     Err(diagnostics) => {
-      println("Errors: \{diagnostics}")
+      println("Errors: \{@debug.to_string(diagnostics)}")
       assert_true(false)
     }
   }
@@ -964,7 +964,7 @@ test "unit/parser/generator-expr/async-generator - async generator function expr
   match parse_only(source) {
     Ok(_) => assert_true(true)
     Err(diagnostics) => {
-      println("Errors: \{diagnostics}")
+      println("Errors: \{@debug.to_string(diagnostics)}")
       assert_true(false)
     }
   }

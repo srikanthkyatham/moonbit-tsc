@@ -370,7 +370,7 @@ fn parse_unary_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
           let parser = decrement_depth(parser)
           // TS1109: yield* requires an expression after it
           let parser = if is_delegate {
-            add_error(parser, "Expression expected.", loc)
+            add_error_code(parser, ExpressionExpected, loc)
           } else {
             parser
           }
@@ -397,9 +397,9 @@ fn parse_unary_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
               let parser = decrement_depth(parser)
               // TS1109: yield* requires an expression after it
               let parser = if is_delegate {
-                add_error(
+                add_error_code(
                   parser,
-                  "Expression expected.",
+                  ExpressionExpected,
                   current_token(parser).location(),
                 )
               } else {
@@ -567,9 +567,9 @@ fn parse_template_spans(
               }
               _ =>
                 return Err(
-                  add_error(
+                  add_error_code(
                     current_parser,
-                    "Unexpected token",
+                    ExpectedCloseBrace,
                     current_token(current_parser).location(),
                   ),
                 )
@@ -1425,9 +1425,9 @@ fn parse_primary_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
             }
             _ =>
               Err(
-                add_error(
+                add_error_code(
                   parser,
-                  "Unexpected token",
+                  ExpressionExpected,
                   current_token(parser).location(),
                 ),
               )
@@ -1507,9 +1507,9 @@ fn parse_primary_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
         KeywordClass(_) => parse_class_expression(parser, start_loc, decorators)
         _ =>
           Err(
-            add_error(
+            add_error_code(
               parser,
-              "Decorators are only valid on class declarations",
+              DecoratorsNotValidHere,
               current_token(parser).location(),
             ),
           )
@@ -1666,9 +1666,9 @@ fn parse_primary_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
         }
         _ =>
           Err(
-            add_error(
+            add_error_code(
               parser,
-              "Unexpected token",
+              ExpressionExpected,
               current_token(parser).location(),
             ),
           )
@@ -1704,7 +1704,7 @@ fn parse_primary_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
               advance_parser(parser),
             ),
           )
-        None => Err(add_unexpected_token_error_at(parser, token.location()))
+        None => Err(add_error_code(parser, ExpressionExpected, token.location()))
       }
   }
 }
@@ -1924,16 +1924,12 @@ fn parse_object_property(
     StringLiteral(name, _) => {
       // String literal property name: "name": value or 'name': value
       let parser = advance_parser(parser) // consume string literal
-      parse_colon_property_value(
-        parser, name, start_loc, "string property name",
-      )
+      parse_colon_property_value(parser, name, start_loc)
     }
     NumericLiteral(name, _) => {
       // Numeric literal property name: 0: value, 1: value
       let parser = advance_parser(parser) // consume numeric literal
-      parse_colon_property_value(
-        parser, name, start_loc, "numeric property name",
-      )
+      parse_colon_property_value(parser, name, start_loc)
     }
     // getter with computed property name: get [expr]() { }
     Identifier("get", _) => {

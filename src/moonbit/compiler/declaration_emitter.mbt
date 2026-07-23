@@ -23,7 +23,7 @@ pub fn DeclarationEmitterContext::default() -> DeclarationEmitterContext {
     strip_internal: true,
     type_env: None,
     strip_private: true,
-    type_only_imports: Map::new(),
+    type_only_imports: Map([]),
   }
 }
 
@@ -40,7 +40,7 @@ pub fn DeclarationEmitterContext::new(
     strip_internal,
     type_env: None,
     strip_private: true,
-    type_only_imports: Map::new(),
+    type_only_imports: Map([]),
   }
 }
 
@@ -56,7 +56,7 @@ pub fn DeclarationEmitterContext::with_type_env(
     strip_internal: true,
     type_env: Some(type_env),
     strip_private: true,
-    type_only_imports: Map::new(),
+    type_only_imports: Map([]),
   }
 }
 
@@ -373,7 +373,7 @@ fn merge_interface_declarations(
   statements : Array[Node],
 ) -> (Array[Node], Map[String, InterfaceDeclaration]) {
   // Collect interfaces by name
-  let interface_map : Map[String, Array[InterfaceDeclaration]] = Map::new()
+  let interface_map : Map[String, Array[InterfaceDeclaration]] = Map([])
   let other_statements : Array[Node] = []
   for stmt in statements {
     match stmt {
@@ -386,7 +386,7 @@ fn merge_interface_declarations(
     }
   }
   // Merge interfaces with the same name
-  let merged_interfaces : Map[String, InterfaceDeclaration] = Map::new()
+  let merged_interfaces : Map[String, InterfaceDeclaration] = Map([])
   for kv in interface_map {
     let name = kv.0
     let interfaces = kv.1
@@ -417,10 +417,10 @@ fn merge_interfaces(
   }
   // Merge type parameters (take union)
   let merged_type_params : Array[TypeParameter] = []
-  let seen_params : Map[String, Bool] = Map::new()
+  let seen_params : Map[String, Bool] = Map([])
   for iface in interfaces {
     for param in iface.type_parameters {
-      if not(seen_params.contains(param.name)) {
+      if !(seen_params.contains(param.name)) {
         merged_type_params.push(param)
         seen_params.set(param.name, true)
       }
@@ -451,7 +451,7 @@ fn merge_interfaces(
 /// Flatten re-exports by collecting exported names
 /// Returns a map of exported names to their declarations (if available)
 fn collect_reexports(statements : Array[Node]) -> Map[String, String?] {
-  let exports : Map[String, String?] = Map::new()
+  let exports : Map[String, String?] = Map([])
   for stmt in statements {
     match stmt {
       ExportDeclaration(exp) =>
@@ -537,7 +537,7 @@ fn is_type_only_import(imp : ImportDeclaration) -> Bool {
 /// Collect used type references from statements
 /// This helps identify which imports are actually used
 fn collect_used_type_refs(statements : Array[Node]) -> Map[String, Bool] {
-  let used : Map[String, Bool] = Map::new()
+  let used : Map[String, Bool] = Map([])
   for stmt in statements {
     collect_type_refs_from_node(stmt, used)
   }
@@ -1278,7 +1278,7 @@ fn emit_decl_method_signature(
   let is_call_signature = meth.name == ""
 
   // Add method name (skip for call signatures)
-  if not(is_call_signature) {
+  if !(is_call_signature) {
     output = output + meth.name
     // Optional marker (only for named methods)
     if meth.is_optional {

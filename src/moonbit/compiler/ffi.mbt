@@ -11,7 +11,7 @@ pub(all) enum ModuleKind {
   CommonJS // Node.js require/module.exports
   AMD // Asynchronous Module Definition (deprecated)
   UMD // Universal Module Definition (deprecated)
-} derive(Show, Eq)
+} derive(Eq, Debug)
 
 ///|
 /// Compilation options passed from Zig
@@ -39,7 +39,7 @@ pub(all) struct CompileOptions {
   no_implicit_returns : Bool // Report error when not all code paths return a value
   no_fallthrough_cases_in_switch : Bool // Report errors for fallthrough cases in switch statements
   strict_property_initialization : Bool // Ensure class properties are initialized in constructor
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Create default compile options
@@ -108,7 +108,7 @@ pub struct CompileResult {
   declaration : String?
   diagnostics : Array[Diagnostic]
   module_types_json : String? // JSON string containing exported types for caching
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Create a failed result with diagnostics
@@ -138,7 +138,7 @@ fn extract_inline_options(source : String) -> TestOptions {
         let val = ffi_trim(ffi_substring_from(directive, 14))
         no_implicit_any = val == "true"
       }
-    } else if not(trimmed.has_prefix("//")) && trimmed.length() > 0 {
+    } else if !(trimmed.has_prefix("//")) && trimmed.length() > 0 {
       // Stop at first non-comment line
       break
     }
@@ -601,7 +601,7 @@ pub struct CompilerInfo {
   version : String
   name : String
   description : String
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Get compiler information
@@ -653,7 +653,7 @@ pub fn extract_reference_paths(
 pub(all) struct VirtualFile {
   filename : String
   content : String
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Represents test options extracted from directives
@@ -665,14 +665,14 @@ pub(all) struct TestOptions {
   no_implicit_any : Bool // @noImplicitAny: true
   import_helpers : Bool // @importHelpers: true
   lib : Array[String] // Library files to include
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Result of splitting a multi-file test
 pub(all) struct MultiFileTest {
   files : Array[VirtualFile]
   options : TestOptions
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Default test options
@@ -902,7 +902,7 @@ pub fn compile_multi_file_test(
   options : CompileOptions,
 ) -> CompileResult {
   // Check if this is actually a multi-file test
-  if not(is_multi_file_test(source)) {
+  if !(is_multi_file_test(source)) {
     // Single file test - compile directly
     return compile_source(source, base_path, options)
   }
@@ -949,8 +949,8 @@ pub fn compile_multi_file_test(
   let all_diagnostics : Array[Diagnostic] = []
 
   // Build maps for later use
-  let parsed_files : Map[String, SourceFile] = Map::new()
-  let bound_files : Map[String, BoundSourceFile] = Map::new()
+  let parsed_files : Map[String, SourceFile] = Map([])
+  let bound_files : Map[String, BoundSourceFile] = Map([])
 
   for parsed_file in parse_result.files {
     parsed_files.set(parsed_file.filename, parsed_file.source_file)
@@ -977,7 +977,7 @@ pub fn compile_multi_file_test(
   }
 
   // Third pass: validate imports across files (TS2724, TS2305, TS1192, etc.)
-  let module_registry : Map[String, ResolvedModuleExports] = Map::new()
+  let module_registry : Map[String, ResolvedModuleExports] = Map([])
   for entry in bound_files.iter() {
     let (file_path, bound_file) = entry
     let resolved = ResolvedModuleExports::from_bound_file(bound_file, file_path)
@@ -991,7 +991,7 @@ pub fn compile_multi_file_test(
       // Add "./filename.ts" version
       module_registry.set("./" + file_path, resolved)
       // Add "./filename" version (without .ts)
-      let name_without_ext = file_path.substring(end=file_path.length() - 3)
+      let name_without_ext = file_path[:file_path.length() - 3].to_owned()
       module_registry.set("./" + name_without_ext, resolved)
     } else {
       module_registry.set("./" + file_path, resolved)

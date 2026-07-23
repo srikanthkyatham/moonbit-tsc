@@ -15,7 +15,7 @@ pub enum TypeKind {
   TKVoid
   TKAny
   TKSymbol
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Parameter configuration for declarative method/function definitions
@@ -24,7 +24,7 @@ pub struct BuiltinParamConfig {
   param_kind : TypeKind
   optional : Bool
   rest : Bool
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Convert TypeKind to actual Type

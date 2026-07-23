@@ -58,7 +58,8 @@ fn scan_ident_chars(
   state : ScanState,
   ident : StringBuilder,
 ) -> StringView {
-  loop code {
+  for cur = code {
+    match cur {
     ['a'..='z' | 'A'..='Z' | '0'..='9' | '_' | '$' as ch, .. rest] => {
       ident.write_char(ch)
       state.col += 1
@@ -71,7 +72,8 @@ fn scan_ident_chars(
       state.offset += 1
       continue rest
     }
-    remaining => remaining
+    remaining => break remaining
+  }
   }
 }
 

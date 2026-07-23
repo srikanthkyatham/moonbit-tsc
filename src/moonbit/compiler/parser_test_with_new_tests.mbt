@@ -700,7 +700,7 @@ test "parse generic interface with multiple type parameters" {
           match decl.members[0] {
             PropertyDeclaration(prop) => {
               assert_eq(prop.name.to_string(), "data")
-              assert_true(not(prop.is_optional))
+              assert_true(!(prop.is_optional))
             }
             _ => assert_true(false)
           }
@@ -759,12 +759,12 @@ test "parse interface with mixed optional and required properties" {
           assert_eq(decl.members.length(), 4)
           // id - required
           match decl.members[0] {
-            PropertyDeclaration(prop) => assert_true(not(prop.is_optional))
+            PropertyDeclaration(prop) => assert_true(!(prop.is_optional))
             _ => assert_true(false)
           }
           // name - required
           match decl.members[1] {
-            PropertyDeclaration(prop) => assert_true(not(prop.is_optional))
+            PropertyDeclaration(prop) => assert_true(!(prop.is_optional))
             _ => assert_true(false)
           }
           // email - optional

@@ -148,7 +148,7 @@ fn find_statement_start(source : String, position : Int) -> Int {
   let mut brace_depth = 0
   let mut paren_depth = 0
   while pos > 0 {
-    match source.get(pos - 1) {
+    match @utils.code_unit(source, pos - 1) {
       Some(ch) => {
         let c = @utils.int_to_char(ch)
         match c {
@@ -187,7 +187,7 @@ fn find_statement_end(source : String, position : Int) -> Int {
   let mut paren_depth = 0
   let len = source.length()
   while pos < len {
-    match source.get(pos) {
+    match @utils.code_unit(source, pos) {
       Some(ch) => {
         let c = @utils.int_to_char(ch)
         match c {

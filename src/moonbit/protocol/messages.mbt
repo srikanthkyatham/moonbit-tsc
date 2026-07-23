@@ -16,7 +16,7 @@ pub(all) struct CompileRequest {
   es_module_interop : Bool // Emit helpers for CommonJS/ES module interoperability
   external_types_json : String? // JSON string containing external types for cross-file checking
   no_emit : Bool // Only run type checking, don't emit JavaScript
-} derive(Show, ToJson, FromJson)
+} derive(Debug, ToJson, FromJson)
 
 ///|
 /// Create a compile request
@@ -61,7 +61,7 @@ pub(all) struct CompileResponse {
   diagnostics : Array[String]
   compile_time_ms : Int64
   module_types_json : String? // JSON string containing exported types for caching
-} derive(Show, ToJson, FromJson)
+} derive(Debug, ToJson, FromJson)
 
 ///|
 /// Create a successful response from CompileResult

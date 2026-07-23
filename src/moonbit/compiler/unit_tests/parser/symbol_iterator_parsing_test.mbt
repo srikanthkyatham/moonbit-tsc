@@ -14,7 +14,7 @@ test "parser: class with [Symbol.iterator]() method parses successfully" {
   match parse_only(source) {
     Ok(_) => assert_true(true)
     Err(diagnostics) => {
-      println("Parse errors for [Symbol.iterator](): \{diagnostics}")
+      println("Parse errors for [Symbol.iterator](): \{@debug.to_string(diagnostics)}")
       assert_true(false)
     }
   }
@@ -32,7 +32,7 @@ test "parser: class with [Symbol.asyncIterator]() method parses successfully" {
   match parse_only(source) {
     Ok(_) => assert_true(true)
     Err(diagnostics) => {
-      println("Parse errors for [Symbol.asyncIterator](): \{diagnostics}")
+      println("Parse errors for [Symbol.asyncIterator](): \{@debug.to_string(diagnostics)}")
       assert_true(false)
     }
   }
@@ -50,7 +50,7 @@ test "parser: object literal with [Symbol.iterator]() parses successfully" {
   match parse_only(source) {
     Ok(_) => assert_true(true)
     Err(diagnostics) => {
-      println("Parse errors: \{diagnostics}")
+      println("Parse errors: \{@debug.to_string(diagnostics)}")
       assert_true(false)
     }
   }
@@ -68,7 +68,7 @@ test "parser: static [Symbol.iterator]() method parses successfully" {
   match parse_only(source) {
     Ok(_) => assert_true(true)
     Err(diagnostics) => {
-      println("Parse errors: \{diagnostics}")
+      println("Parse errors: \{@debug.to_string(diagnostics)}")
       assert_true(false)
     }
   }
@@ -86,7 +86,7 @@ test "parser: generator with [Symbol.iterator]() parses successfully" {
   match parse_only(source) {
     Ok(_) => assert_true(true)
     Err(diagnostics) => {
-      println("Parse errors: \{diagnostics}")
+      println("Parse errors: \{@debug.to_string(diagnostics)}")
       assert_true(false)
     }
   }
@@ -104,7 +104,7 @@ test "parser: [Symbol.iterator]() with return type annotation parses successfull
   match parse_only(source) {
     Ok(_) => assert_true(true)
     Err(diagnostics) => {
-      println("Parse errors: \{diagnostics}")
+      println("Parse errors: \{@debug.to_string(diagnostics)}")
       assert_true(false)
     }
   }
@@ -122,7 +122,7 @@ test "parser: async [Symbol.asyncIterator]() parses successfully" {
   match parse_only(source) {
     Ok(_) => assert_true(true)
     Err(diagnostics) => {
-      println("Parse errors: \{diagnostics}")
+      println("Parse errors: \{@debug.to_string(diagnostics)}")
       assert_true(false)
     }
   }
@@ -146,7 +146,7 @@ test "parser: multiple Symbol methods in same class parse successfully" {
   match parse_only(source) {
     Ok(_) => assert_true(true)
     Err(diagnostics) => {
-      println("Parse errors: \{diagnostics}")
+      println("Parse errors: \{@debug.to_string(diagnostics)}")
       assert_true(false)
     }
   }
@@ -166,7 +166,7 @@ test "parser: [Symbol.iterator]() in nested class parses successfully" {
   match parse_only(source) {
     Ok(_) => assert_true(true)
     Err(diagnostics) => {
-      println("Parse errors: \{diagnostics}")
+      println("Parse errors: \{@debug.to_string(diagnostics)}")
       assert_true(false)
     }
   }
@@ -184,7 +184,7 @@ test "parser: [Symbol.iterator]() with complex return type parses successfully" 
   match parse_only(source) {
     Ok(_) => assert_true(true)
     Err(diagnostics) => {
-      println("Parse errors: \{diagnostics}")
+      println("Parse errors: \{@debug.to_string(diagnostics)}")
       assert_true(false)
     }
   }

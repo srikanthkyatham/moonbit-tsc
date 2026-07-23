@@ -399,7 +399,7 @@ async test "type_cache - has checks existence" {
   let cache = TypeCache::new()
   cache.put("/a.ts", "{}")
   assert_true(cache.has("/a.ts"))
-  assert_true(not(cache.has("/b.ts")))
+  assert_true(!(cache.has("/b.ts")))
 }
 
 ///|
@@ -445,7 +445,7 @@ async test "type_cache - build_external_types_json excludes specified files" {
   match result {
     Some(json) => {
       assert_true(json.contains("/a.ts"))
-      assert_true(not(json.contains("/b.ts")))
+      assert_true(!(json.contains("/b.ts")))
       assert_true(json.contains("/c.ts"))
     }
     None => assert_true(false)
@@ -484,7 +484,7 @@ async test "type_cache - invalidate removes specific entry" {
   cache.put("/a.ts", "{}")
   cache.put("/b.ts", "{}")
   cache.invalidate("/a.ts")
-  assert_true(not(cache.has("/a.ts")))
+  assert_true(!(cache.has("/a.ts")))
   assert_true(cache.has("/b.ts"))
 }
 

@@ -26,7 +26,7 @@ test "narrowing/discriminated-union - basic switch on kind property" {
     Ok(sf) =>
       // Parse succeeded - the narrowing infrastructure should handle this
       assert_true(sf.statements.length() > 0)
-    Err(e) => fail("Parse failed: " + e.to_string())
+    Err(e) => fail("Parse failed: " + @debug.to_string(e))
   }
 }
 
@@ -44,7 +44,7 @@ test "narrowing/discriminated-union - else branch narrows to other type" {
   let tokens = @compiler.scan_all_v2(source, "test.ts")
   match @compiler.parse_source_file(tokens, "test.ts") {
     Ok(sf) => assert_true(sf.statements.length() > 0)
-    Err(e) => fail("Parse failed: " + e.to_string())
+    Err(e) => fail("Parse failed: " + @debug.to_string(e))
   }
 }
 
@@ -62,7 +62,7 @@ test "narrowing/discriminated-union - switch statement exhaustiveness" {
   let tokens = @compiler.scan_all_v2(source, "test.ts")
   match @compiler.parse_source_file(tokens, "test.ts") {
     Ok(sf) => assert_true(sf.statements.length() > 0)
-    Err(e) => fail("Parse failed: " + e.to_string())
+    Err(e) => fail("Parse failed: " + @debug.to_string(e))
   }
 }
 
@@ -79,7 +79,7 @@ test "narrowing/discriminated-union - boolean discriminant" {
   let tokens = @compiler.scan_all_v2(source, "test.ts")
   match @compiler.parse_source_file(tokens, "test.ts") {
     Ok(sf) => assert_true(sf.statements.length() > 0)
-    Err(e) => fail("Parse failed: " + e.to_string())
+    Err(e) => fail("Parse failed: " + @debug.to_string(e))
   }
 }
 
@@ -96,7 +96,7 @@ test "narrowing/discriminated-union - not-equals narrowing" {
   let tokens = @compiler.scan_all_v2(source, "test.ts")
   match @compiler.parse_source_file(tokens, "test.ts") {
     Ok(sf) => assert_true(sf.statements.length() > 0)
-    Err(e) => fail("Parse failed: " + e.to_string())
+    Err(e) => fail("Parse failed: " + @debug.to_string(e))
   }
 }
 
@@ -118,7 +118,7 @@ test "narrowing/in-operator - basic property check" {
   let tokens = @compiler.scan_all_v2(source, "test.ts")
   match @compiler.parse_source_file(tokens, "test.ts") {
     Ok(sf) => assert_true(sf.statements.length() > 0)
-    Err(e) => fail("Parse failed: " + e.to_string())
+    Err(e) => fail("Parse failed: " + @debug.to_string(e))
   }
 }
 
@@ -135,7 +135,7 @@ test "narrowing/in-operator - with optional properties" {
   let tokens = @compiler.scan_all_v2(source, "test.ts")
   match @compiler.parse_source_file(tokens, "test.ts") {
     Ok(sf) => assert_true(sf.statements.length() > 0)
-    Err(e) => fail("Parse failed: " + e.to_string())
+    Err(e) => fail("Parse failed: " + @debug.to_string(e))
   }
 }
 
@@ -154,7 +154,7 @@ test "narrowing/in-operator - combined with typeof" {
   let tokens = @compiler.scan_all_v2(source, "test.ts")
   match @compiler.parse_source_file(tokens, "test.ts") {
     Ok(sf) => assert_true(sf.statements.length() > 0)
-    Err(e) => fail("Parse failed: " + e.to_string())
+    Err(e) => fail("Parse failed: " + @debug.to_string(e))
   }
 }
 
@@ -174,7 +174,7 @@ test "narrowing/isArray - basic array check" {
   let tokens = @compiler.scan_all_v2(source, "test.ts")
   match @compiler.parse_source_file(tokens, "test.ts") {
     Ok(sf) => assert_true(sf.statements.length() > 0)
-    Err(e) => fail("Parse failed: " + e.to_string())
+    Err(e) => fail("Parse failed: " + @debug.to_string(e))
   }
 }
 
@@ -190,7 +190,7 @@ test "narrowing/isArray - with unknown type" {
   let tokens = @compiler.scan_all_v2(source, "test.ts")
   match @compiler.parse_source_file(tokens, "test.ts") {
     Ok(sf) => assert_true(sf.statements.length() > 0)
-    Err(e) => fail("Parse failed: " + e.to_string())
+    Err(e) => fail("Parse failed: " + @debug.to_string(e))
   }
 }
 
@@ -216,7 +216,7 @@ test "narrowing/type-guard - basic user-defined guard" {
   let tokens = @compiler.scan_all_v2(source, "test.ts")
   match @compiler.parse_source_file(tokens, "test.ts") {
     Ok(sf) => assert_true(sf.statements.length() > 0)
-    Err(e) => fail("Parse failed: " + e.to_string())
+    Err(e) => fail("Parse failed: " + @debug.to_string(e))
   }
 }
 
@@ -241,7 +241,7 @@ test "narrowing/type-guard - method type guard" {
   let tokens = @compiler.scan_all_v2(source, "test.ts")
   match @compiler.parse_source_file(tokens, "test.ts") {
     Ok(sf) => assert_true(sf.statements.length() > 0)
-    Err(e) => fail("Parse failed: " + e.to_string())
+    Err(e) => fail("Parse failed: " + @debug.to_string(e))
   }
 }
 
@@ -260,7 +260,7 @@ test "narrowing/type-guard - type predicate with generic" {
   let tokens = @compiler.scan_all_v2(source, "test.ts")
   match @compiler.parse_source_file(tokens, "test.ts") {
     Ok(sf) => assert_true(sf.statements.length() > 0)
-    Err(e) => fail("Parse failed: " + e.to_string())
+    Err(e) => fail("Parse failed: " + @debug.to_string(e))
   }
 }
 
@@ -283,7 +283,7 @@ test "narrowing/assertion - basic assertion function" {
   let tokens = @compiler.scan_all_v2(source, "test.ts")
   match @compiler.parse_source_file(tokens, "test.ts") {
     Ok(sf) => assert_true(sf.statements.length() > 0)
-    Err(e) => fail("Parse failed: " + e.to_string())
+    Err(e) => fail("Parse failed: " + @debug.to_string(e))
   }
 }
 
@@ -302,7 +302,7 @@ test "narrowing/assertion - asserts without type" {
   let tokens = @compiler.scan_all_v2(source, "test.ts")
   match @compiler.parse_source_file(tokens, "test.ts") {
     Ok(sf) => assert_true(sf.statements.length() > 0)
-    Err(e) => fail("Parse failed: " + e.to_string())
+    Err(e) => fail("Parse failed: " + @debug.to_string(e))
   }
 }
 
@@ -323,7 +323,7 @@ test "narrowing/control-flow - early return narrows remainder" {
   let tokens = @compiler.scan_all_v2(source, "test.ts")
   match @compiler.parse_source_file(tokens, "test.ts") {
     Ok(sf) => assert_true(sf.statements.length() > 0)
-    Err(e) => fail("Parse failed: " + e.to_string())
+    Err(e) => fail("Parse failed: " + @debug.to_string(e))
   }
 }
 
@@ -339,7 +339,7 @@ test "narrowing/control-flow - throw narrows remainder" {
   let tokens = @compiler.scan_all_v2(source, "test.ts")
   match @compiler.parse_source_file(tokens, "test.ts") {
     Ok(sf) => assert_true(sf.statements.length() > 0)
-    Err(e) => fail("Parse failed: " + e.to_string())
+    Err(e) => fail("Parse failed: " + @debug.to_string(e))
   }
 }
 
@@ -355,7 +355,7 @@ test "narrowing/control-flow - logical and preserves narrowing" {
   let tokens = @compiler.scan_all_v2(source, "test.ts")
   match @compiler.parse_source_file(tokens, "test.ts") {
     Ok(sf) => assert_true(sf.statements.length() > 0)
-    Err(e) => fail("Parse failed: " + e.to_string())
+    Err(e) => fail("Parse failed: " + @debug.to_string(e))
   }
 }
 
@@ -371,7 +371,7 @@ test "narrowing/control-flow - logical or with type guards" {
   let tokens = @compiler.scan_all_v2(source, "test.ts")
   match @compiler.parse_source_file(tokens, "test.ts") {
     Ok(sf) => assert_true(sf.statements.length() > 0)
-    Err(e) => fail("Parse failed: " + e.to_string())
+    Err(e) => fail("Parse failed: " + @debug.to_string(e))
   }
 }
 
@@ -387,7 +387,7 @@ test "narrowing/control-flow - negated condition" {
   let tokens = @compiler.scan_all_v2(source, "test.ts")
   match @compiler.parse_source_file(tokens, "test.ts") {
     Ok(sf) => assert_true(sf.statements.length() > 0)
-    Err(e) => fail("Parse failed: " + e.to_string())
+    Err(e) => fail("Parse failed: " + @debug.to_string(e))
   }
 }
 
@@ -411,7 +411,7 @@ test "narrowing/combined - multiple conditions" {
   let tokens = @compiler.scan_all_v2(source, "test.ts")
   match @compiler.parse_source_file(tokens, "test.ts") {
     Ok(sf) => assert_true(sf.statements.length() > 0)
-    Err(e) => fail("Parse failed: " + e.to_string())
+    Err(e) => fail("Parse failed: " + @debug.to_string(e))
   }
 }
 
@@ -430,7 +430,7 @@ test "narrowing/combined - typeof and property access" {
   let tokens = @compiler.scan_all_v2(source, "test.ts")
   match @compiler.parse_source_file(tokens, "test.ts") {
     Ok(sf) => assert_true(sf.statements.length() > 0)
-    Err(e) => fail("Parse failed: " + e.to_string())
+    Err(e) => fail("Parse failed: " + @debug.to_string(e))
   }
 }
 
@@ -539,7 +539,7 @@ test "narrowing/closure - arrow function inherits typeof narrowing" {
   let tokens = @compiler.scan_all_v2(source, "test.ts")
   match @compiler.parse_source_file(tokens, "test.ts") {
     Ok(sf) => assert_true(sf.statements.length() > 0)
-    Err(e) => fail("Parse failed: " + e.to_string())
+    Err(e) => fail("Parse failed: " + @debug.to_string(e))
   }
 }
 
@@ -559,7 +559,7 @@ test "narrowing/closure - function expression inherits narrowing" {
   let tokens = @compiler.scan_all_v2(source, "test.ts")
   match @compiler.parse_source_file(tokens, "test.ts") {
     Ok(sf) => assert_true(sf.statements.length() > 0)
-    Err(e) => fail("Parse failed: " + e.to_string())
+    Err(e) => fail("Parse failed: " + @debug.to_string(e))
   }
 }
 
@@ -584,7 +584,7 @@ test "narrowing/closure - nested arrow functions inherit narrowing" {
   let tokens = @compiler.scan_all_v2(source, "test.ts")
   match @compiler.parse_source_file(tokens, "test.ts") {
     Ok(sf) => assert_true(sf.statements.length() > 0)
-    Err(e) => fail("Parse failed: " + e.to_string())
+    Err(e) => fail("Parse failed: " + @debug.to_string(e))
   }
 }
 
@@ -599,7 +599,7 @@ test "narrowing/closure - array method callback with narrowing" {
   let tokens = @compiler.scan_all_v2(source, "test.ts")
   match @compiler.parse_source_file(tokens, "test.ts") {
     Ok(sf) => assert_true(sf.statements.length() > 0)
-    Err(e) => fail("Parse failed: " + e.to_string())
+    Err(e) => fail("Parse failed: " + @debug.to_string(e))
   }
 }
 
@@ -617,7 +617,7 @@ test "narrowing/closure - closure captures discriminated union narrowing" {
   let tokens = @compiler.scan_all_v2(source, "test.ts")
   match @compiler.parse_source_file(tokens, "test.ts") {
     Ok(sf) => assert_true(sf.statements.length() > 0)
-    Err(e) => fail("Parse failed: " + e.to_string())
+    Err(e) => fail("Parse failed: " + @debug.to_string(e))
   }
 }
 
@@ -635,7 +635,7 @@ test "narrowing/closure - callback in promise chain" {
   let tokens = @compiler.scan_all_v2(source, "test.ts")
   match @compiler.parse_source_file(tokens, "test.ts") {
     Ok(sf) => assert_true(sf.statements.length() > 0)
-    Err(e) => fail("Parse failed: " + e.to_string())
+    Err(e) => fail("Parse failed: " + @debug.to_string(e))
   }
 }
 
@@ -653,7 +653,7 @@ test "narrowing/closure - event handler with narrowed variable" {
   let tokens = @compiler.scan_all_v2(source, "test.ts")
   match @compiler.parse_source_file(tokens, "test.ts") {
     Ok(sf) => assert_true(sf.statements.length() > 0)
-    Err(e) => fail("Parse failed: " + e.to_string())
+    Err(e) => fail("Parse failed: " + @debug.to_string(e))
   }
 }
 
@@ -671,6 +671,6 @@ test "narrowing/closure - closure with instanceof check" {
   let tokens = @compiler.scan_all_v2(source, "test.ts")
   match @compiler.parse_source_file(tokens, "test.ts") {
     Ok(sf) => assert_true(sf.statements.length() > 0)
-    Err(e) => fail("Parse failed: " + e.to_string())
+    Err(e) => fail("Parse failed: " + @debug.to_string(e))
   }
 }

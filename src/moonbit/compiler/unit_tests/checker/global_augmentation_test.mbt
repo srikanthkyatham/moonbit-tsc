@@ -30,7 +30,7 @@ test "global augmentation SymbolConstructor property access" {
   match check_source_with_global_aug(source) {
     Ok(_) => assert_true(true) // Should succeed
     Err(diags) => {
-      println("Unexpected errors: \{diags}")
+      println("Unexpected errors: \{@debug.to_string(diags)}")
       assert_true(false)
     }
   }
@@ -49,7 +49,7 @@ test "global augmentation SymbolConstructor typeof" {
   match check_source_with_global_aug(source) {
     Ok(_) => assert_true(true)
     Err(diags) => {
-      println("Unexpected errors: \{diags}")
+      println("Unexpected errors: \{@debug.to_string(diags)}")
       assert_true(false)
     }
   }
@@ -68,7 +68,7 @@ test "global augmentation SymbolConstructor in computed property" {
   match check_source_with_global_aug(source) {
     Ok(_) => assert_true(true)
     Err(diags) => {
-      println("Unexpected errors: \{diags}")
+      println("Unexpected errors: \{@debug.to_string(diags)}")
       assert_true(false)
     }
   }
@@ -87,7 +87,7 @@ test "global augmentation SymbolConstructor with export" {
   match check_source_with_global_aug(source) {
     Ok(_) => assert_true(true)
     Err(diags) => {
-      println("Unexpected errors: \{diags}")
+      println("Unexpected errors: \{@debug.to_string(diags)}")
       assert_true(false)
     }
   }
@@ -106,7 +106,7 @@ test "global augmentation custom interface" {
   match check_source_with_global_aug(source) {
     Ok(_) => assert_true(true)
     Err(diags) => {
-      println("Unexpected errors: \{diags}")
+      println("Unexpected errors: \{@debug.to_string(diags)}")
       assert_true(false)
     }
   }
@@ -123,7 +123,7 @@ test "global augmentation variable declaration" {
   match check_source_with_global_aug(source) {
     Ok(_) => assert_true(true)
     Err(diags) => {
-      println("Unexpected errors: \{diags}")
+      println("Unexpected errors: \{@debug.to_string(diags)}")
       assert_true(false)
     }
   }
@@ -140,7 +140,7 @@ test "global augmentation type alias" {
   match check_source_with_global_aug(source) {
     Ok(_) => assert_true(true)
     Err(diags) => {
-      println("Unexpected errors: \{diags}")
+      println("Unexpected errors: \{@debug.to_string(diags)}")
       assert_true(false)
     }
   }
@@ -161,7 +161,7 @@ test "global augmentation namespace" {
   match check_source_with_global_aug(source) {
     Ok(_) => assert_true(true)
     Err(diags) => {
-      println("Unexpected errors: \{diags}")
+      println("Unexpected errors: \{@debug.to_string(diags)}")
       assert_true(false)
     }
   }
@@ -185,7 +185,7 @@ test "multiple global augmentations same interface" {
   match check_source_with_global_aug(source) {
     Ok(_) => assert_true(true)
     Err(diags) => {
-      println("Unexpected errors: \{diags}")
+      println("Unexpected errors: \{@debug.to_string(diags)}")
       assert_true(false)
     }
   }
@@ -202,7 +202,7 @@ test "global augmentation union type alias" {
   match check_source_with_global_aug(source) {
     Ok(_) => assert_true(true)
     Err(diags) => {
-      println("Unexpected errors: \{diags}")
+      println("Unexpected errors: \{@debug.to_string(diags)}")
       assert_true(false)
     }
   }
@@ -267,7 +267,7 @@ test "symbolProperty61.ts conformance" {
   match check_source_with_global_aug(source) {
     Ok(_) => assert_true(true)
     Err(diags) => {
-      println("symbolProperty61 errors: \{diags}")
+      println("symbolProperty61 errors: \{@debug.to_string(diags)}")
       assert_true(false)
     }
   }

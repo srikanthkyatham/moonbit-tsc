@@ -20,7 +20,7 @@ pub enum ModuleFormat {
   Ambient
   /// Script (no module syntax)
   Script
-} derive(Show, Eq)
+} derive(Eq, Debug)
 
 ///|
 /// Factory function for ESM
@@ -63,7 +63,7 @@ pub struct ModuleFormatInfo {
   mut has_top_level_await : Bool
   /// Whether file extension forces module format
   mut extension_forced : Bool
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Create default module format info
@@ -100,7 +100,7 @@ pub fn detect_module_format(source_file : SourceFile) -> ModuleFormatInfo {
   }
 
   // Determine final format if not extension-forced
-  if not(info.extension_forced) {
+  if !(info.extension_forced) {
     info.format = determine_format(info)
   }
   info
@@ -419,7 +419,7 @@ pub fn validate_type_only_semantics(
   let warnings : Array[Diagnostic] = []
 
   // Track type-only imports
-  let type_only_imports : Map[String, Bool] = Map::new()
+  let type_only_imports : Map[String, Bool] = Map([])
 
   // First pass: collect type-only imports
   for stmt in bound_source.statements {
@@ -513,14 +513,14 @@ fn validate_statement_type_only_usage(
       }
     // Check for non-type-only exports of types
     ExportDeclaration(export_decl) =>
-      if not(export_decl.is_type_only) {
+      if !(export_decl.is_type_only) {
         match export_decl.export_clause {
           Some(NamespaceExport(_, _)) =>
             // Namespace exports (export * as ns from 'mod') are always OK
             ()
           Some(NamedExports::NamedExports(specifiers, _)) =>
             for spec in specifiers {
-              if not(spec.is_type_only) {
+              if !(spec.is_type_only) {
                 let local_name = match spec.property_name {
                   Some(pn) => pn
                   None => spec.name
@@ -670,7 +670,7 @@ pub struct ModuleResolutionHost {
 pub fn ModuleResolutionHost::new(
   fs : FileSystemInterface,
 ) -> ModuleResolutionHost {
-  { fs, file_cache: Map::new(), dir_cache: Map::new() }
+  { fs, file_cache: Map([]), dir_cache: Map([]) }
 }
 
 ///|
@@ -754,8 +754,8 @@ pub fn ModuleResolutionContext::new(
   {
     symbol_resolver,
     host,
-    format_info: Map::new(),
-    type_only_imports: Map::new(),
+    format_info: Map([]),
+    type_only_imports: Map([]),
   }
 }
 
@@ -856,6 +856,163 @@ pub fn resolve_and_validate_import(
 }
 
 // ============================================================================
+// Multi-File Import Validation
+// ============================================================================
+
+///|
+/// A relative import that did not resolve within the compiled file set.
+/// `candidates` lists every path the resolver searched, so a caller with
+/// real filesystem access (the CLI) can check whether the import target
+/// exists on disk (e.g. an untyped .js file) before reporting TS2307.
+pub(all) struct UnresolvedRelativeImport {
+  file_path : String
+  specifier : String
+  location : SourceLocation
+  candidates : Array[String]
+} derive(Debug)
+
+///|
+/// Result of validating imports across a multi-file compilation
+pub(all) struct MultiFileImportValidation {
+  /// Definite cross-file diagnostics (TS2305/TS2306/TS2724/TS1192)
+  diagnostics : Array[Diagnostic]
+  /// Relative imports that resolved to nothing in the compiled file set;
+  /// candidates should be checked against the real filesystem before
+  /// emitting TS2307
+  unresolved : Array[UnresolvedRelativeImport]
+} derive(Debug)
+
+///|
+/// Check whether a module specifier is a relative path (./a, ../b)
+fn is_relative_specifier(spec : String) -> Bool {
+  spec.has_prefix("./") || spec.has_prefix("../") || spec == "." || spec == ".."
+}
+
+///|
+/// Validate relative imports across a set of real files compiled together.
+/// Resolves each relative specifier against the file set (with .ts/.tsx/.d.ts
+/// extension and directory-index resolution) and validates imported members
+/// against the target module's exports.
+///
+/// Returns member-mismatch diagnostics plus the list of unresolved relative
+/// imports (see UnresolvedRelativeImport for how callers should handle them).
+pub fn validate_multi_file_imports(
+  files : Array[(String, String)], // (file_path, source) pairs
+) -> MultiFileImportValidation {
+  let diagnostics : Array[Diagnostic] = []
+  let unresolved : Array[UnresolvedRelativeImport] = []
+  let file_paths : Array[String] = []
+  for f in files {
+    file_paths.push(f.0)
+  }
+  let resolver = ModuleResolver::with_file_set(file_paths, ".")
+
+  // Parse and bind every file; collect exports keyed by normalized path
+  let exports_by_path : Map[String, ResolvedModuleExports] = Map([])
+  let parsed_files : Array[(String, SourceFile)] = []
+  for f in files {
+    let (path, source) = f
+    let tokens = scan_all_v2(source, path)
+    match parse_source_file(tokens, path) {
+      Ok(sf) => {
+        parsed_files.push((path, sf))
+        match bind_source_file(sf) {
+          Ok(bound) =>
+            exports_by_path.set(
+              normalize_path(path),
+              ResolvedModuleExports::from_bound_file(bound, path),
+            )
+          Err(_) => ()
+        }
+      }
+      Err(_) => ()
+    }
+  }
+
+  // Record an unresolved relative import (deferred TS2307 decision)
+  fn record_unresolved(
+    path : String,
+    spec : String,
+    location : SourceLocation,
+    failure : ResolutionFailure,
+  ) -> Unit {
+    let candidates = match failure {
+      ModuleNotFound(_, searched) => searched
+      _ => []
+    }
+    unresolved.push(UnresolvedRelativeImport::{
+      file_path: path,
+      specifier: spec,
+      location,
+      candidates,
+    })
+  }
+
+  for entry in parsed_files {
+    let (path, sf) = entry
+
+    // All import forms (import, import =, require()) — existence check
+    for import_decl in get_imports(sf) {
+      let spec = import_decl.module_specifier
+      if !(is_relative_specifier(spec)) {
+        continue
+      }
+      match resolver.resolve_module_name(spec, path) {
+        Ok(_) => ()
+        Err(failure) => record_unresolved(path, spec, import_decl.location, failure)
+      }
+    }
+
+    for stmt in sf.statements {
+      match stmt {
+        // Genuine ES import declarations — validate imported members.
+        // (import x = require(...) intentionally excluded: it binds the
+        // whole module, not the default export.)
+        Node::ImportDeclaration(import_decl) => {
+          let spec = import_decl.module_specifier
+          if is_relative_specifier(spec) {
+            match resolver.resolve_module_name(spec, path) {
+              Ok(resolved) =>
+                match
+                  exports_by_path.get(
+                    normalize_path(resolved.resolved_file_name),
+                  ) {
+                  Some(module_exports) => {
+                    // Reuse the checker's single-import validation
+                    let registry : Map[String, ResolvedModuleExports] = Map([])
+                    registry.set(spec, module_exports)
+                    for d in validate_import_resolution(import_decl, registry) {
+                      diagnostics.push(d)
+                    }
+                  }
+                  // Resolved to a file we didn't compile/bind (e.g. .js):
+                  // treat as untyped, no member validation
+                  None => ()
+                }
+              Err(_) => () // already recorded above
+            }
+          }
+        }
+        // export ... from './x' — existence check for the re-export target
+        Node::ExportDeclaration(ed) =>
+          match ed.module_specifier {
+            Some(spec) =>
+              if is_relative_specifier(spec) {
+                match resolver.resolve_module_name(spec, path) {
+                  Ok(_) => ()
+                  Err(failure) => record_unresolved(path, spec, ed.location, failure)
+                }
+              }
+            None => ()
+          }
+        _ => ()
+      }
+    }
+  }
+  { diagnostics, unresolved }
+}
+
+// ============================================================================
 // Package.json Processing
 // ============================================================================
 
@@ -887,7 +1044,7 @@ pub fn PackageJsonInfo::empty() -> PackageJsonInfo {
     main: None,
     esm_entry: None,
     types: None,
-    exports: Map::new(),
+    exports: Map([]),
     type_field: None,
   }
 }
@@ -901,7 +1058,7 @@ pub fn PackageJsonInfo::with_type(type_field : String) -> PackageJsonInfo {
     main: None,
     esm_entry: None,
     types: None,
-    exports: Map::new(),
+    exports: Map([]),
     type_field: Some(type_field),
   }
 }
@@ -918,7 +1075,7 @@ pub fn PackageJsonInfo::with_entries(
     main: Some(main),
     esm_entry,
     types: None,
-    exports: Map::new(),
+    exports: Map([]),
     type_field: None,
   }
 }

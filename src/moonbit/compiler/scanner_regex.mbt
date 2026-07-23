@@ -12,13 +12,14 @@ fn scan_regex_pattern_v2(
   let mut in_char_class = false
 
   // Scan pattern
-  let rest = loop code {
+  let rest = for cur = code {
+    match cur {
     [] => return None // Unterminated regex
     ['\n' | '\r', ..] => return None // Newline in regex is invalid
-    ['/', .. rest] if not(in_char_class) => {
+    ['/', .. rest] if !(in_char_class) => {
       state.col += 1
       state.offset += 1
-      rest // Found closing /
+      break rest // Found closing /
     }
     ['[', .. rest] => {
       in_char_class = true
@@ -50,17 +51,20 @@ fn scan_regex_pattern_v2(
       continue rest
     }
   }
+  }
 
   // Scan flags (g, i, m, s, u, y, d, v)
   let flags = StringBuilder::new()
-  let rest2 = loop rest {
+  let rest2 = for cur = rest {
+    match cur {
     ['g' | 'i' | 'm' | 's' | 'u' | 'y' | 'd' | 'v' as ch, .. rest3] => {
       flags.write_char(ch)
       state.col += 1
       state.offset += 1
       continue rest3
     }
-    remaining => remaining
+    remaining => break remaining
+  }
   }
   Some((pattern.to_string(), flags.to_string(), rest2))
 }

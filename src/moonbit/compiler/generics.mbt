@@ -197,7 +197,7 @@ pub fn ast_type_to_v2(env : TypeEnv, node : Node) -> TypeV2 {
       match lt.literal {
         StringLiteral(s) => TLiteralString(s.value)
         NumericLiteral(n) => {
-          let num_val = @strconv.parse_double(n.value) catch { _ => 0.0 }
+          let num_val = @string.parse_double(n.value) catch { _ => 0.0 }
           TLiteralNumber(num_val)
         }
         BooleanLiteral(b) => TLiteralBool(b.value)
@@ -207,7 +207,7 @@ pub fn ast_type_to_v2(env : TypeEnv, node : Node) -> TypeV2 {
 
     // Type literal (object type)
     TypeLiteral(tl) => {
-      let fields : Map[String, FieldInfoV2] = Map::new()
+      let fields : Map[String, FieldInfoV2] = Map([])
       for mem in tl.members {
         match mem {
           TypeLiteralProperty(prop) => {
@@ -434,7 +434,7 @@ fn convert_mapped_modifier_v2(
 pub struct InferenceResult {
   inferred_args : Map[String, TypeV2]
   errors : Array[TypeMismatchError]
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Infer type arguments from function call arguments
@@ -444,7 +444,7 @@ pub fn infer_generic_type_args(
   arg_types : Array[TypeV2],
   explicit_type_args : Array[TypeV2],
 ) -> InferenceResult {
-  let inferred : Map[String, TypeV2] = Map::new()
+  let inferred : Map[String, TypeV2] = Map([])
   let errors : Array[TypeMismatchError] = []
 
   // First, use any explicit type arguments
@@ -464,7 +464,7 @@ pub fn infer_generic_type_args(
 
   // Fill in defaults for any uninferred type parameters
   for param in func.type_params {
-    if not(inferred.contains(param.name)) {
+    if !(inferred.contains(param.name)) {
       match param.default_type {
         Some(default_ty) => inferred.set(param.name, default_ty)
         None =>
@@ -495,7 +495,7 @@ fn do_infer_from_types(
   match param_ty {
     // Direct type parameter - infer from argument
     TTypeParam(name, _) =>
-      if not(inferred.contains(name)) {
+      if !(inferred.contains(name)) {
         inferred.set(name, arg_ty)
       }
 
@@ -718,7 +718,7 @@ fn is_subtype_of_with_ctx(
         let mut all_match = true
         for i, src_arg in src_args {
           if i < tgt_args.length() {
-            if not(is_subtype_of_with_ctx(src_arg, tgt_args[i], ctx)) {
+            if !(is_subtype_of_with_ctx(src_arg, tgt_args[i], ctx)) {
               all_match = false
               break
             }
@@ -735,11 +735,11 @@ fn is_subtype_of_with_ctx(
         let mut result = true
         for i, tgt_elem in tgt_elems {
           if i >= src_elems.length() {
-            if not(tgt_elem.optional) {
+            if !(tgt_elem.optional) {
               result = false
               break
             }
-          } else if not(
+          } else if !(
               is_subtype_of_with_ctx(src_elems[i].ty, tgt_elem.ty, ctx),
             ) {
             result = false
@@ -753,7 +753,7 @@ fn is_subtype_of_with_ctx(
     (TTuple(src_elems), TArray(tgt_elem)) => {
       let mut result = true
       for src_elem in src_elems {
-        if not(is_subtype_of_with_ctx(src_elem.ty, tgt_elem, ctx)) {
+        if !(is_subtype_of_with_ctx(src_elem.ty, tgt_elem, ctx)) {
           result = false
           break
         }
@@ -788,12 +788,12 @@ fn is_object_subtype_with_ctx(
     match source.fields.get(name) {
       None =>
         // If property is missing and not optional, check index signature
-        if not(tgt_field.optional) {
+        if !(tgt_field.optional) {
           match source.index_signature {
             Some(src_sig) =>
               match get_index_key_type(src_sig.key_type) {
                 Some(StringKey) =>
-                  if not(
+                  if !(
                       is_subtype_of_with_ctx(
                         src_sig.value_type,
                         tgt_field.ty,
@@ -808,7 +808,7 @@ fn is_object_subtype_with_ctx(
           }
         }
       Some(src_field) =>
-        if not(is_subtype_of_with_ctx(src_field.ty, tgt_field.ty, ctx)) {
+        if !(is_subtype_of_with_ctx(src_field.ty, tgt_field.ty, ctx)) {
           return false
         }
     }
@@ -817,7 +817,7 @@ fn is_object_subtype_with_ctx(
   // Check index signature compatibility
   match (source.index_signature, target.index_signature) {
     (Some(src_sig), Some(tgt_sig)) =>
-      if not(
+      if !(
           is_subtype_of_with_ctx(src_sig.value_type, tgt_sig.value_type, ctx),
         ) {
         return false
@@ -846,7 +846,7 @@ fn is_function_subtype_with_ctx(
   ctx : RecursiveComparisonContext,
 ) -> Bool {
   // Return type is covariant
-  if not(is_subtype_of_with_ctx(source.return_type, target.return_type, ctx)) {
+  if !(is_subtype_of_with_ctx(source.return_type, target.return_type, ctx)) {
     return false
   }
 
@@ -855,13 +855,13 @@ fn is_function_subtype_with_ctx(
   for i, tgt_param in target.params {
     if i >= source.params.length() {
       // Source has fewer params - OK if remaining target params are optional
-      if not(tgt_param.optional) {
+      if !(tgt_param.optional) {
         return false
       }
     } else {
       let src_param = source.params[i]
       // Contravariance: target param type must be subtype of source param type
-      if not(is_subtype_of_with_ctx(tgt_param.ty, src_param.ty, ctx)) {
+      if !(is_subtype_of_with_ctx(tgt_param.ty, src_param.ty, ctx)) {
         return false
       }
     }
@@ -878,7 +878,7 @@ fn is_function_subtype_with_ctx(
 pub struct GenericCallResult {
   return_type : TypeV2
   errors : Array[TypeMismatchError]
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Check a call to a generic function
@@ -965,7 +965,7 @@ pub fn instantiate_function(
   type_args : Array[TypeV2],
 ) -> FunctionTypeV2 {
   // Build substitution map
-  let subst : Map[String, TypeV2] = Map::new()
+  let subst : Map[String, TypeV2] = Map([])
   for i, param in func.type_params {
     if i < type_args.length() {
       subst.set(param.name, type_args[i])
@@ -1051,7 +1051,7 @@ pub struct OverloadResolutionResult {
   return_type : TypeV2
   /// Errors from the resolution process
   errors : Array[TypeMismatchError]
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Resolve function call against multiple overload signatures
@@ -1170,7 +1170,7 @@ fn try_match_overload(
 
   // Check argument count
   let required_params = overload.params
-    .filter(fn(p) { not(p.optional) })
+    .filter(fn(p) { !(p.optional) })
     .length()
   let max_params = if overload.rest_param is Some(_) {
     2147483647 // Effectively unlimited with rest param
@@ -1204,7 +1204,7 @@ fn try_match_overload(
   let inference = infer_generic_type_args(
     overload, arg_types, explicit_type_args,
   )
-  if not(inference.errors.is_empty()) {
+  if !(inference.errors.is_empty()) {
     return { is_match: false, errors: inference.errors }
   }
 
@@ -1222,7 +1222,7 @@ fn try_match_overload(
 
   // Check constraints
   let constraint_errors = check_all_constraints(overload.type_params, type_args)
-  if not(constraint_errors.is_empty()) {
+  if !(constraint_errors.is_empty()) {
     return { is_match: false, errors: constraint_errors }
   }
 
@@ -1233,7 +1233,7 @@ fn try_match_overload(
   for i, arg_ty in arg_types {
     if i < instantiated.params.length() {
       let param = instantiated.params[i]
-      if not(is_assignable_to(arg_ty, param.ty)) {
+      if !(is_assignable_to(arg_ty, param.ty)) {
         errors.push(TypeMismatchError::{
           path: PParameter(PRoot, i, param.name),
           expected: param.ty,
@@ -1248,7 +1248,7 @@ fn try_match_overload(
       let rest = instantiated.rest_param.unwrap()
       match rest.ty {
         TArray(elem_ty) =>
-          if not(is_assignable_to(arg_ty, elem_ty)) {
+          if !(is_assignable_to(arg_ty, elem_ty)) {
             errors.push(TypeMismatchError::{
               path: PParameter(PRoot, i, rest.name),
               expected: elem_ty,
@@ -1263,7 +1263,7 @@ fn try_match_overload(
           let rest_idx = i - instantiated.params.length()
           if rest_idx < tuple_elems.length() {
             let elem = tuple_elems[rest_idx]
-            if not(is_assignable_to(arg_ty, elem.ty)) {
+            if !(is_assignable_to(arg_ty, elem.ty)) {
               errors.push(TypeMismatchError::{
                 path: PParameter(PRoot, i, rest.name),
                 expected: elem.ty,
@@ -1297,7 +1297,7 @@ fn create_overload_error_children(
 ) -> Array[TypeMismatchError] {
   let children : Array[TypeMismatchError] = []
   for i, _overload in overloads {
-    if i < all_errors.length() && not(all_errors[i].is_empty()) {
+    if i < all_errors.length() && !(all_errors[i].is_empty()) {
       // Take first error from this overload attempt
       let err = all_errors[i][0]
       children.push(TypeMismatchError::{

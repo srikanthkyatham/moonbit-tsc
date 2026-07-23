@@ -152,7 +152,7 @@ test "checker error detection - valid type assignment" {
     Ok(_) => assert_true(true)
     Err(diagnostics) =>
       // Should not have type assignment errors
-      assert_true(not(check_has_error_code(diagnostics, 2322)))
+      assert_true(!(check_has_error_code(diagnostics, 2322)))
   }
 }
 
@@ -166,7 +166,7 @@ test "checker error detection - valid let reassignment" {
   match result {
     Ok(_) => assert_true(true)
     Err(diagnostics) =>
-      assert_true(not(check_has_error_code(diagnostics, 2588)))
+      assert_true(!(check_has_error_code(diagnostics, 2588)))
   }
 }
 
@@ -180,7 +180,7 @@ test "checker error detection - valid function call" {
   match result {
     Ok(_) => assert_true(true)
     Err(diagnostics) =>
-      assert_true(not(check_has_error_code(diagnostics, 2554)))
+      assert_true(!(check_has_error_code(diagnostics, 2554)))
   }
 }
 
@@ -196,7 +196,7 @@ test "checker error detection - valid class instantiation" {
   match result {
     Ok(_) => assert_true(true)
     Err(diagnostics) =>
-      assert_true(not(check_has_error_code(diagnostics, 2511)))
+      assert_true(!(check_has_error_code(diagnostics, 2511)))
   }
 }
 
@@ -211,7 +211,7 @@ test "checker error detection - valid property access" {
   match result {
     Ok(_) => assert_true(true)
     Err(diagnostics) =>
-      assert_true(not(check_has_error_code(diagnostics, 2339)))
+      assert_true(!(check_has_error_code(diagnostics, 2339)))
   }
 }
 
@@ -231,7 +231,7 @@ test "checker error detection - valid class inheritance" {
   match result {
     Ok(_) => assert_true(true)
     Err(diagnostics) =>
-      assert_true(not(check_has_error_code(diagnostics, 2377)))
+      assert_true(!(check_has_error_code(diagnostics, 2377)))
   }
 }
 

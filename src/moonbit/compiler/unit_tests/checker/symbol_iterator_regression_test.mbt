@@ -249,7 +249,7 @@ test "regression: return this in conditional statement" {
     #|    const test: number = x;
     #|}
 
-  let result = check_for_of(source)
+  let _result = check_for_of(source)
   // Note: Currently only detects 'return this' in last statement of block
   // This test may have errors due to that limitation - that's OK
   assert_true(true)

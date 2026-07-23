@@ -1872,7 +1872,7 @@ test "TS2454 not triggered for any-typed uninitialized variables" {
     Ok(_) => () // Should compile without TS2454
     Err(diagnostics) =>
       // Should not have TS2454 for 'd'
-      assert_true(not(has_diagnostic_code(diagnostics, 2454)))
+      assert_true(!(has_diagnostic_code(diagnostics, 2454)))
   }
 }
 
@@ -1894,7 +1894,7 @@ test "Array destructuring with class instance - no TS2460" {
   )
   match result {
     Ok(_) => () // Should compile without TS2460
-    Err(diagnostics) => assert_true(not(has_diagnostic_code(diagnostics, 2460)))
+    Err(diagnostics) => assert_true(!(has_diagnostic_code(diagnostics, 2460)))
   }
 }
 
@@ -1911,7 +1911,7 @@ test "Rest element in destructuring pattern - no TS2548" {
     Ok(_) => () // Should compile - rest element is a target, not source
     Err(diagnostics) =>
       // Should not have TS2548 for rest in pattern
-      assert_true(not(has_diagnostic_code(diagnostics, 2548)))
+      assert_true(!(has_diagnostic_code(diagnostics, 2548)))
   }
 }
 
@@ -1986,7 +1986,7 @@ test "unit/checker/no TS2463 - array binding pattern with default value" {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(diagnostics) =>
       // Should NOT have TS2463 for default value syntax
-      assert_true(not(has_diagnostic_code(diagnostics, 2463)))
+      assert_true(!(has_diagnostic_code(diagnostics, 2463)))
   }
 }
 
@@ -2000,7 +2000,7 @@ test "unit/checker/no TS2463 - object binding pattern with default value" {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(diagnostics) =>
       // Should NOT have TS2463 for default value syntax
-      assert_true(not(has_diagnostic_code(diagnostics, 2463)))
+      assert_true(!(has_diagnostic_code(diagnostics, 2463)))
   }
 }
 
@@ -2017,7 +2017,7 @@ test "unit/checker/no TS2463 - binding pattern with variable default" {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(diagnostics) =>
       // Should NOT have TS2463 for default value syntax
-      assert_true(not(has_diagnostic_code(diagnostics, 2463)))
+      assert_true(!(has_diagnostic_code(diagnostics, 2463)))
   }
 }
 
@@ -2029,7 +2029,7 @@ test "unit/checker/no TS2463 - arrow function binding pattern with default" {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(diagnostics) =>
       // Should NOT have TS2463 for default value syntax
-      assert_true(not(has_diagnostic_code(diagnostics, 2463)))
+      assert_true(!(has_diagnostic_code(diagnostics, 2463)))
   }
 }
 
@@ -2082,7 +2082,7 @@ test "unit/checker/no TS1186 - spread in array literal" {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(diagnostics) =>
       // Should NOT have TS1186 for normal spread
-      assert_true(not(has_diagnostic_code(diagnostics, 1186)))
+      assert_true(!(has_diagnostic_code(diagnostics, 1186)))
   }
 }
 
@@ -2097,7 +2097,7 @@ test "unit/checker/no TS1186 - rest element without initializer" {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(diagnostics) =>
       // Should NOT have TS1186 for rest without initializer
-      assert_true(not(has_diagnostic_code(diagnostics, 1186)))
+      assert_true(!(has_diagnostic_code(diagnostics, 1186)))
   }
 }
 
@@ -2112,7 +2112,7 @@ test "unit/checker/no TS1186 - rest parameter in function" {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(diagnostics) =>
       // Should NOT have TS1186 for rest parameter
-      assert_true(not(has_diagnostic_code(diagnostics, 1186)))
+      assert_true(!(has_diagnostic_code(diagnostics, 1186)))
   }
 }
 
@@ -2331,7 +2331,7 @@ test "unit/checker/no TS2460 - any type annotation" {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(diagnostics) =>
       // Should NOT have TS2460
-      assert_true(not(has_diagnostic_code(diagnostics, 2460)))
+      assert_true(!(has_diagnostic_code(diagnostics, 2460)))
   }
 }
 
@@ -2344,7 +2344,7 @@ test "unit/checker/no TS2460 - any type with defaults" {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(diagnostics) =>
       // Should NOT have TS2460
-      assert_true(not(has_diagnostic_code(diagnostics, 2460)))
+      assert_true(!(has_diagnostic_code(diagnostics, 2460)))
   }
 }
 

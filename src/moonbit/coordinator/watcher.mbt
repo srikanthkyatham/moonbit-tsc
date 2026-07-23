@@ -17,7 +17,7 @@ pub struct WatchState {
 ///|
 /// Create a new watch state
 pub fn WatchState::new() -> WatchState {
-  { files: {} }
+  { files: Map([]) }
 }
 
 ///|
@@ -31,7 +31,7 @@ async fn read_and_hash(path : String) -> Int64 raise Error {
 ///|
 /// Initialize watch state with current file content hashes
 pub async fn init_watch_state(paths : Array[String]) -> WatchState raise Error {
-  let files : Map[String, FileState] = {}
+  let files : Map[String, FileState] = Map([])
   for path in paths {
     let content_hash = read_and_hash(path)
     files[path] = { path, content_hash }
@@ -73,7 +73,7 @@ pub async fn add_files_to_watch(
   new_paths : Array[String],
 ) -> Unit raise Error {
   for path in new_paths {
-    if not(state.files.contains(path)) {
+    if !(state.files.contains(path)) {
       let content_hash = read_and_hash(path)
       state.files[path] = { path, content_hash }
     }

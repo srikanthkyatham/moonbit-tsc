@@ -16,7 +16,7 @@ pub enum IndexKeyType {
   StringKey // [key: string]: T
   NumberKey // [key: number]: T
   SymbolKey // [key: symbol]: T
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 /// Get the index key type from a TypeV2 type
@@ -49,21 +49,21 @@ pub fn is_valid_index_key_type(ty : TypeV2) -> Bool {
 pub struct IndexKeyTypeMismatchInfo {
   expected_key : String
   actual_key : String
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Index value type mismatch info
 pub struct IndexValueTypeMismatchInfo {
   expected_value : String
   actual_value : String
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Numeric string covariance error info
 pub struct NumericStringCovarianceInfo {
   numeric_type : String
   string_type : String
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Errors that can occur during index signature checking
@@ -74,14 +74,14 @@ pub enum IndexSignatureError {
   ReadonlyIndexMismatch
   MissingIndexSignature(String) // required_key
   NumericIndexNotSubtypeOfString(NumericStringCovarianceInfo)
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Result of index signature compatibility check
 pub struct IndexSignatureCheckResult {
   is_compatible : Bool
   errors : Array[IndexSignatureError]
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Check if two index signatures are compatible
@@ -112,7 +112,7 @@ pub fn check_index_signature_compatibility(
   }
 
   // Check value type compatibility (covariant)
-  if not(is_index_value_subtype(source.value_type, target.value_type)) {
+  if !(is_index_value_subtype(source.value_type, target.value_type)) {
     errors.push(
       IndexValueTypeMismatch({
         expected_value: format_type_v2(target.value_type),
@@ -123,7 +123,7 @@ pub fn check_index_signature_compatibility(
 
   // Check readonly compatibility
   // A readonly index signature is more restrictive, so non-readonly cannot be assigned to readonly
-  if target.is_readonly && not(source.is_readonly) {
+  if target.is_readonly && !(source.is_readonly) {
     errors.push(ReadonlyIndexMismatch)
   }
   { is_compatible: errors.is_empty(), errors }
@@ -198,7 +198,7 @@ pub struct ExtendedIndexSignatures {
   string_index : IndexSignatureV2?
   number_index : IndexSignatureV2?
   symbol_index : IndexSignatureV2?
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 /// Create empty extended index signatures
@@ -285,7 +285,7 @@ pub fn apply_unchecked_indexed_access(
   is_known_property : Bool,
 ) -> TypeV2 {
   // If the flag is disabled or this is a known property, return as-is
-  if not(no_unchecked) || is_known_property {
+  if !(no_unchecked) || is_known_property {
     return ty
   }
 
@@ -425,14 +425,14 @@ pub fn is_object_subtype_with_index(
     match source.fields.get(name) {
       None =>
         // If property is missing, check if source has compatible index signature
-        if not(tgt_field.optional) {
+        if !(tgt_field.optional) {
           // Check if source index signature can satisfy the property
           match source.index_signature {
             Some(src_sig) =>
               // Index signature key must be string and value must be compatible
               match get_index_key_type(src_sig.key_type) {
                 Some(StringKey) =>
-                  if not(
+                  if !(
                       is_index_value_subtype(src_sig.value_type, tgt_field.ty),
                     ) {
                     return false
@@ -443,7 +443,7 @@ pub fn is_object_subtype_with_index(
           }
         }
       Some(src_field) =>
-        if not(is_index_value_subtype(src_field.ty, tgt_field.ty)) {
+        if !(is_index_value_subtype(src_field.ty, tgt_field.ty)) {
           return false
         }
     }
@@ -453,7 +453,7 @@ pub fn is_object_subtype_with_index(
   match (source.index_signature, target.index_signature) {
     (Some(src_sig), Some(tgt_sig)) => {
       let result = check_index_signature_compatibility(src_sig, tgt_sig)
-      if not(result.is_compatible) {
+      if !(result.is_compatible) {
         return false
       }
     }

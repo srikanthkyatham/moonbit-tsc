@@ -1800,7 +1800,7 @@ test "parse non-abstract class declaration" {
     Ok(source_file) => {
       assert_eq(source_file.statements.length(), 1)
       match source_file.statements[0] {
-        ClassDeclaration(cls) => assert_true(not(cls.is_abstract))
+        ClassDeclaration(cls) => assert_true(!(cls.is_abstract))
         _ => assert_true(false)
       }
     }
@@ -1843,7 +1843,7 @@ test "parse await in non-async function" {
       assert_eq(source_file.statements.length(), 1)
       match source_file.statements[0] {
         FunctionDeclaration(func) => {
-          assert_true(not(func.is_async))
+          assert_true(!(func.is_async))
           match func.body {
             Some(BlockStatement(block)) => {
               assert_eq(block.statements.length(), 1)
@@ -1929,7 +1929,7 @@ test "parse yield expression" {
               match block.statements[0] {
                 ExpressionStatement(stmt) =>
                   match stmt.expression {
-                    YieldExpression(ye) => assert_true(not(ye.is_delegate))
+                    YieldExpression(ye) => assert_true(!(ye.is_delegate))
                     _ => assert_true(false)
                   }
                 _ => assert_true(false)
@@ -5163,7 +5163,7 @@ test "parse array destructuring mixed elements and defaults" {
                             Identifier(id) => assert_eq(id.name, "b")
                             _ => assert_true(false)
                           }
-                          assert_true(be.initializer.is_empty() == false)
+                          assert_true(be.initializer is Some(_))
                         }
                         _ => assert_true(false)
                       }
@@ -5694,7 +5694,7 @@ test "parse constructor type signature" {
             ConstructorType(ct) => {
               assert_eq(ct.parameters.length(), 0)
               match ct.return_type {
-                KeywordType(kt) => assert_eq(kt.kind.to_string(), "Void")
+                KeywordType(kt) => assert_eq(@debug.to_string(kt.kind), "Void")
                 _ => assert_true(false)
               }
             }

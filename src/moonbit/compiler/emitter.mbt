@@ -458,7 +458,7 @@ fn get_commonjs_var_export_suffix(
   vs : VariableStatement,
   ctx : EmitterContext,
 ) -> String {
-  if ctx.module_kind != CommonJS || not(has_export_modifier(vs.modifiers)) {
+  if ctx.module_kind != CommonJS || !(has_export_modifier(vs.modifiers)) {
     return ""
   }
   if has_default_modifier(vs.modifiers) {
@@ -491,7 +491,7 @@ fn get_commonjs_fn_export_suffix(
   fd : FunctionDeclaration,
   ctx : EmitterContext,
 ) -> String {
-  if ctx.module_kind != CommonJS || not(has_export_modifier(fd.modifiers)) {
+  if ctx.module_kind != CommonJS || !(has_export_modifier(fd.modifiers)) {
     return ""
   }
   let indent = ctx.get_indent()
@@ -517,7 +517,7 @@ fn get_commonjs_class_export_suffix(
   cd : ClassDeclaration,
   ctx : EmitterContext,
 ) -> String {
-  if ctx.module_kind != CommonJS || not(has_export_modifier(cd.modifiers)) {
+  if ctx.module_kind != CommonJS || !(has_export_modifier(cd.modifiers)) {
     return ""
   }
   let indent = ctx.get_indent()
@@ -601,7 +601,7 @@ fn emit_function_declaration(
   // export default function() {} -> exports.default = function() {}
   if ctx.module_kind == CommonJS &&
     has_default_modifier(fd.modifiers) &&
-    not(fd.name is Some(_)) {
+    !(fd.name is Some(_)) {
     return emit_anonymous_default_function_commonjs(fd, ctx)
   }
 
@@ -2930,7 +2930,7 @@ fn emit_jsx_attributes(
   for attr in attributes {
     match attr {
       JsxAttribute::Attribute(attr_node) => {
-        if not(first) {
+        if !(first) {
           result = result + ", "
         }
         first = false
@@ -2942,7 +2942,7 @@ fn emit_jsx_attributes(
         }
       }
       JsxAttribute::SpreadAttribute(expr, _) => {
-        if not(first) {
+        if !(first) {
           result = result + ", "
         }
         first = false
@@ -3070,7 +3070,7 @@ fn emit_using_statement(us : UsingStatement, ctx : EmitterContext) -> String {
   // Emit declarations
   let mut first = true
   for decl in us.declarations {
-    if not(first) {
+    if !(first) {
       result.write_string(", ")
     }
     first = false

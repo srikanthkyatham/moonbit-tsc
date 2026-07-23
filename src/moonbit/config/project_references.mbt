@@ -7,21 +7,21 @@ pub(all) struct LoadedProject {
   path : String // Path to tsconfig.json
   config : TSConfig
   dependencies : Array[String] // Paths to referenced projects
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Result of resolving project references
 pub(all) struct ProjectGraph {
   projects : Array[LoadedProject]
   build_order : Array[String] // Topologically sorted project paths
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Load a project and all its references recursively
 pub async fn load_project_graph(
   root_tsconfig : String,
 ) -> ProjectGraph raise Error {
-  let loaded : Map[String, LoadedProject] = {}
+  let loaded : Map[String, LoadedProject] = Map([])
   let loading : Array[String] = [] // For cycle detection
 
   // Load root project and all references
@@ -100,18 +100,18 @@ async fn load_project_recursive(
 /// Projects with no dependencies come first
 fn topological_sort(projects : Array[LoadedProject]) -> Array[String] {
   let result : Array[String] = []
-  let visited : Map[String, Bool] = {}
-  let temp_visited : Map[String, Bool] = {}
+  let visited : Map[String, Bool] = Map([])
+  let temp_visited : Map[String, Bool] = Map([])
 
   // Build adjacency map
-  let project_map : Map[String, LoadedProject] = {}
+  let project_map : Map[String, LoadedProject] = Map([])
   for project in projects {
     project_map[project.path] = project
   }
 
   // Visit each project
   for project in projects {
-    if not(visited.get(project.path).unwrap_or(false)) {
+    if !(visited.get(project.path).unwrap_or(false)) {
       visit_project(project.path, project_map, visited, temp_visited, result)
     }
   }
@@ -164,7 +164,7 @@ fn resolve_reference_path(ref_path : String, project_dir : String) -> String {
     }
 
     // Add tsconfig.json if path is a directory
-    if not(ref_path.has_suffix(".json")) {
+    if !(ref_path.has_suffix(".json")) {
       if joined.has_suffix("/") {
         joined + "tsconfig.json"
       } else {
@@ -267,7 +267,7 @@ pub(all) enum ProjectValidationError {
   ProjectNotFound(String)
   /// Invalid project reference path
   InvalidReferencePath(String)
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 /// Make ProjectValidationError public for testing
@@ -301,7 +301,7 @@ pub(all) struct ValidationResult {
   is_valid : Bool
   errors : Array[ProjectValidationError]
   warnings : Array[String]
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Make ValidationResult public for testing
@@ -321,7 +321,7 @@ pub fn validate_project_graph(graph : ProjectGraph) -> ValidationResult {
   let warnings : Array[String] = []
 
   // Build a map of all projects
-  let project_map : Map[String, LoadedProject] = {}
+  let project_map : Map[String, LoadedProject] = Map([])
   for project in graph.projects {
     project_map[project.path] = project
   }
@@ -333,7 +333,7 @@ pub fn validate_project_graph(graph : ProjectGraph) -> ValidationResult {
       match project_map.get(dep_path) {
         Some(dep_project) => {
           // Check composite flag
-          if not(is_composite_project(dep_project.config)) {
+          if !(is_composite_project(dep_project.config)) {
             errors.push(MissingComposite(dep_path))
           }
 
@@ -347,7 +347,7 @@ pub fn validate_project_graph(graph : ProjectGraph) -> ValidationResult {
               }
             None =>
               // No compiler options means no declaration (unless composite)
-              if not(is_composite_project(dep_project.config)) {
+              if !(is_composite_project(dep_project.config)) {
                 errors.push(MissingDeclaration(dep_path))
               }
           }
@@ -389,7 +389,7 @@ pub(all) struct ReferencedProjectInfo {
   base_url : String?
   /// Path mappings from the project
   paths : Map[String, Array[String]]?
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Make ReferencedProjectInfo for testing
@@ -408,7 +408,7 @@ pub fn make_referenced_project_info(
 pub fn build_project_resolution_map(
   graph : ProjectGraph,
 ) -> Map[String, ReferencedProjectInfo] {
-  let result : Map[String, ReferencedProjectInfo] = {}
+  let result : Map[String, ReferencedProjectInfo] = Map([])
   for project in graph.projects {
     let project_dir = get_project_directory(project.path)
     let declaration_dir = get_project_declaration_dir(project.config)
@@ -589,7 +589,7 @@ fn replace_star(s : String, replacement : String) -> String {
     if s[i] == '*' {
       result.write_string(replacement)
     } else {
-      result.write_char(Int::unsafe_to_char(s[i]))
+      result.write_char(Int::unsafe_to_char(s[i].to_int()))
     }
   }
   result.to_string()
@@ -600,7 +600,7 @@ fn replace_star(s : String, replacement : String) -> String {
 fn find_char_in_string(s : String, c : Char) -> Int? {
   let code = c.to_int()
   for i = 0; i < s.length(); i = i + 1 {
-    if s[i] == code {
+    if s[i].to_int() == code {
       return Some(i)
     }
   }
@@ -639,7 +639,7 @@ pub(all) struct ProjectDeclarations {
   project_path : String
   /// List of declaration file paths
   declaration_files : Array[String]
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Make ProjectDeclarations for testing
@@ -699,7 +699,7 @@ async fn discover_declaration_files_in_dir(
   }
 
   // Walk the directory
-  @fs.walk(dir, async fn(current_dir, entries) {
+  @fs.walk(dir, fn(current_dir, entries) {
     for entry in entries {
       let full_path = current_dir + "/" + entry
       if full_path.has_suffix(".d.ts") {
@@ -725,7 +725,7 @@ pub(all) enum ProjectBuildStatus {
   Built
   /// Project build failed
   Failed(String)
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 /// Make ProjectBuildStatus for testing
@@ -757,7 +757,7 @@ pub(all) struct ProjectBuildState {
   status : ProjectBuildStatus
   /// Hash of source files (for change detection)
   source_hash : Int64
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Make ProjectBuildState for testing
@@ -778,7 +778,7 @@ pub(all) struct BuildContext {
   states : Map[String, ProjectBuildState]
   /// Validation result
   validation : ValidationResult
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Make BuildContext for testing
@@ -793,7 +793,7 @@ pub fn make_build_context(
 ///|
 /// Initialize a build context for a project graph
 pub fn init_build_context(graph : ProjectGraph) -> BuildContext {
-  let states : Map[String, ProjectBuildState] = {}
+  let states : Map[String, ProjectBuildState] = Map([])
 
   // Initialize all projects as needing build
   for project_path in graph.build_order {
@@ -810,7 +810,7 @@ pub fn init_build_context(graph : ProjectGraph) -> BuildContext {
 /// Returns None if all projects are built or there's an error
 pub fn get_next_project_to_build(ctx : BuildContext) -> String? {
   // If validation failed, don't build
-  if not(ctx.validation.is_valid) {
+  if !(ctx.validation.is_valid) {
     return None
   }
 

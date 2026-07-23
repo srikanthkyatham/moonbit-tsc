@@ -5,7 +5,8 @@
 /// Skip whitespace and comments, returning remaining code
 /// Also handles UTF-8 BOM (Byte Order Mark) which is \uFEFF
 fn skip_whitespace_v2(code : StringView, state : ScanState) -> StringView {
-  loop code {
+  for cur = code {
+    match cur {
     [' ' | '\t', .. rest] => {
       state.col += 1
       state.offset += 1
@@ -40,37 +41,41 @@ fn skip_whitespace_v2(code : StringView, state : ScanState) -> StringView {
       let rest2 = skip_block_comment(rest, state)
       continue rest2
     }
-    remaining => remaining
+    remaining => break remaining
+  }
   }
 }
 
 ///|
 /// Skip single-line comment and return remaining code
 fn skip_line_comment(code : StringView, state : ScanState) -> StringView {
-  loop code {
+  for cur = code {
+    match cur {
     ['\n', .. rest] => {
       state.line += 1
       state.col = 1
       state.offset += 1
-      rest
+      break rest
     }
     [_, .. rest] => {
       state.col += 1
       state.offset += 1
       continue rest
     }
-    remaining => remaining // End of input or after newline
+    remaining => break remaining // End of input or after newline
+  }
   }
 }
 
 ///|
 /// Skip block comment and return remaining code
 fn skip_block_comment(code : StringView, state : ScanState) -> StringView {
-  loop code {
+  for cur = code {
+    match cur {
     [.. "*/", .. rest] => {
       state.col += 2
       state.offset += 2
-      rest
+      break rest
     }
     ['\n', .. rest] => {
       state.line += 1
@@ -83,7 +88,8 @@ fn skip_block_comment(code : StringView, state : ScanState) -> StringView {
       state.offset += 1
       continue rest
     }
-    remaining => remaining // End of input (unterminated comment)
+    remaining => break remaining // End of input (unterminated comment)
+  }
   }
 }
 
@@ -137,14 +143,15 @@ fn scan_jsdoc_comment_v2(
   }
 
   // Skip the opening /** and scan content
-  let rest = loop code {
+  let rest = for cur = code {
+    match cur {
     // Skip opening /**
     [.. "/**", .. rest] => continue rest
     // End of JSDoc
     [.. "*/", .. rest] => {
       state.col += 2
       state.offset += 2
-      rest
+      break rest
     }
     ['\n', .. rest] => {
       content.write_char('\n')
@@ -159,7 +166,8 @@ fn scan_jsdoc_comment_v2(
       state.offset += 1
       continue rest
     }
-    [] as remaining => remaining // Unterminated
+    [] as remaining => break remaining // Unterminated
+  }
   }
   (JSDocComment(content.to_string(), make_loc()), rest)
 }
@@ -189,15 +197,17 @@ fn scan_comment_directive_v2(
       state.offset += 3
       // Scan rest of line as content
       let content = StringBuilder::new()
-      let rest2 = loop rest {
-        ['\n', ..] as remaining => remaining
+      let rest2 = for cur = rest {
+        match cur {
+        ['\n', ..] as remaining => break remaining
         [ch, .. rest3] => {
           content.write_char(ch)
           state.col += 1
           state.offset += 1
           continue rest3
         }
-        [] as remaining => remaining
+        [] as remaining => break remaining
+      }
       }
       return (
         CommentDirective(TripleSlashRef, content.to_string(), make_loc()),
@@ -208,7 +218,7 @@ fn scan_comment_directive_v2(
   }
 
   // Handle // @ts-* directives and compiler directives
-  let (directive_kind, rest) = loop code {
+  let (directive_kind, rest) = match code {
     [.. "// @ts-ignore", .. rest] => {
       state.col += 13
       state.offset += 13
@@ -273,15 +283,17 @@ fn scan_comment_directive_v2(
 
   // Scan rest of line as argument
   let arg = StringBuilder::new()
-  let rest2 = loop rest {
-    ['\n', ..] as remaining => remaining
+  let rest2 = for cur = rest {
+    match cur {
+    ['\n', ..] as remaining => break remaining
     [ch, .. rest3] => {
       arg.write_char(ch)
       state.col += 1
       state.offset += 1
       continue rest3
     }
-    [] as remaining => remaining
+    [] as remaining => break remaining
+  }
   }
   (CommentDirective(directive_kind, arg.to_string(), make_loc()), rest2)
 }
@@ -309,13 +321,14 @@ fn scan_hashbang_v2(
       state.offset += 2
 
       // Scan to end of line
-      let rest2 = loop rest {
+      let rest2 = for cur = rest {
+        match cur {
         ['\n', .. rest3] => {
           // Don't include newline in content, but advance past it
           state.line += 1
           state.col = 1
           state.offset += 1
-          rest3
+          break rest3
         }
         [ch, .. rest3] => {
           content.write_char(ch)
@@ -323,7 +336,8 @@ fn scan_hashbang_v2(
           state.offset += 1
           continue rest3
         }
-        [] as remaining => remaining
+        [] as remaining => break remaining
+      }
       }
       let loc = SourceLocation::new(
         file_path,
@@ -346,7 +360,8 @@ fn skip_whitespace_with_special_comments_v2(
   file_path : String,
 ) -> (StringView, Token?) {
   let input = code
-  loop input {
+  for cur = input {
+    match cur {
     [' ' | '\t', .. rest] => {
       state.col += 1
       state.offset += 1
@@ -372,34 +387,34 @@ fn skip_whitespace_with_special_comments_v2(
     // Check for JSDoc comment first (/** but not /**/)
     [.. "/**", ch, ..] as current if ch != '/' => {
       let (token, rest) = scan_jsdoc_comment_v2(current, state, file_path)
-      (rest, Some(token))
+      break (rest, Some(token))
     }
     // Check for comment directive - triple slash
     [.. "///", ' ', '<', ..] as current => {
       let (token, rest) = scan_comment_directive_v2(current, state, file_path)
-      (rest, Some(token))
+      break (rest, Some(token))
     }
     [.. "///<", ..] as current => {
       let (token, rest) = scan_comment_directive_v2(current, state, file_path)
-      (rest, Some(token))
+      break (rest, Some(token))
     }
     // Check for comment directive - ts directives
     [.. "// @ts-", ..] as current => {
       let (token, rest) = scan_comment_directive_v2(current, state, file_path)
-      (rest, Some(token))
+      break (rest, Some(token))
     }
     [.. "//@ts-", ..] as current => {
       let (token, rest) = scan_comment_directive_v2(current, state, file_path)
-      (rest, Some(token))
+      break (rest, Some(token))
     }
     // Check for compiler directives: @importHelpers, @filename, @target, etc.
     [.. "// @", ..] as current => {
       let (token, rest) = scan_comment_directive_v2(current, state, file_path)
-      (rest, Some(token))
+      break (rest, Some(token))
     }
     [.. "//@", ..] as current => {
       let (token, rest) = scan_comment_directive_v2(current, state, file_path)
-      (rest, Some(token))
+      break (rest, Some(token))
     }
     // Regular single-line comment
     [.. "//", .. rest] => {
@@ -415,6 +430,7 @@ fn skip_whitespace_with_special_comments_v2(
       let rest2 = skip_block_comment(rest, state)
       continue rest2
     }
-    remaining => (remaining, None)
+    remaining => break (remaining, None)
+  }
   }
 }

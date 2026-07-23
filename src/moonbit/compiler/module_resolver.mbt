@@ -21,7 +21,7 @@ pub enum ModuleResolutionKind {
   NodeNext
   /// Bundler-style resolution (no extensions required)
   Bundler
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 /// Module resolution options
@@ -40,7 +40,7 @@ pub struct ModuleResolutionOptions {
   resolve_json_module : Bool
   /// Type roots for @types packages
   type_roots : Array[String]
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Default module resolution options
@@ -48,7 +48,7 @@ pub fn ModuleResolutionOptions::default() -> ModuleResolutionOptions {
   {
     strategy: Node,
     base_url: None,
-    paths: Map::new(),
+    paths: Map([]),
     root_dirs: [],
     extensions: [".ts", ".tsx", ".d.ts", ".js", ".jsx"],
     resolve_json_module: false,
@@ -73,7 +73,7 @@ pub struct ResolvedModule {
   mut package_id : PackageId?
   /// Extension of the resolved file
   extension : String
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Package identifier
@@ -81,7 +81,7 @@ pub struct PackageId {
   name : String
   sub_module_name : String?
   version : String?
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Resolution failure reasons
@@ -96,7 +96,7 @@ pub enum ResolutionFailure {
   CircularDependency(Array[String]) // dependency chain
   /// Package.json exports don't match
   PackageExportsNotFound(String, String) // package, subpath
-} derive(Show)
+} derive(Debug)
 
 // ============================================================================
 // Module Resolver
@@ -113,7 +113,13 @@ pub struct ModuleResolver {
   failed_lookups : Map[String, ResolutionFailure]
   /// Current directory context
   current_directory : String
-} derive(Show)
+  /// Set of files known to exist (normalized paths).
+  /// This is the resolver's view of the filesystem: callers populate it with
+  /// the real on-disk files that participate in the compilation (the CLI
+  /// passes the full file set it read from disk). An empty set means nothing
+  /// resolves, which preserves the historical pure-compilation behavior.
+  known_files : Map[String, Bool]
+} derive(Debug)
 
 ///|
 /// Create a new module resolver
@@ -123,9 +129,10 @@ pub fn ModuleResolver::new(
 ) -> ModuleResolver {
   {
     options,
-    resolution_cache: Map::new(),
-    failed_lookups: Map::new(),
+    resolution_cache: Map([]),
+    failed_lookups: Map([]),
     current_directory,
+    known_files: Map([]),
   }
 }
 
@@ -135,6 +142,35 @@ pub fn ModuleResolver::with_defaults(
   current_directory : String,
 ) -> ModuleResolver {
   ModuleResolver::new(ModuleResolutionOptions::default(), current_directory)
+}
+
+///|
+/// Create a resolver whose filesystem view is the given set of files
+/// (e.g. all files passed to the CLI, as read from the real filesystem)
+pub fn ModuleResolver::with_file_set(
+  files : Array[String],
+  current_directory : String,
+) -> ModuleResolver {
+  let resolver = ModuleResolver::with_defaults(current_directory)
+  for f in files {
+    resolver.add_known_file(f)
+  }
+  resolver
+}
+
+///|
+/// Register a file as existing for resolution purposes
+pub fn ModuleResolver::add_known_file(
+  self : ModuleResolver,
+  path : String,
+) -> Unit {
+  self.known_files.set(normalize_path(path), true)
+}
+
+///|
+/// Check if a file exists in the resolver's filesystem view
+pub fn ModuleResolver::file_exists(self : ModuleResolver, path : String) -> Bool {
+  self.known_files.get(normalize_path(path)) is Some(true)
 }
 
 // ============================================================================
@@ -284,7 +320,7 @@ fn normalize_path(path : String) -> String {
   let parts = path.split("/")
   let result : Array[String] = []
   for part in parts {
-    let part_str = part.to_string()
+    let part_str = part.to_owned()
     if part_str == "." || part_str.is_empty() {
       continue
     } else if part_str == ".." {
@@ -333,16 +369,48 @@ fn resolve_relative_module(
 ) -> Result[ResolvedModule, ResolutionFailure] {
   let containing_dir = get_directory_path(containing_file)
   let candidate = normalize_path(join_paths(containing_dir, module_name))
+  try_resolve_candidate(resolver, candidate, module_name)
+}
 
-  // Try to resolve with various extensions
+///|
+/// Resolve a candidate path (already joined/normalized) by trying the exact
+/// path, extension substitution (./a.js -> a.ts), added extensions, and
+/// directory index files. Shared by relative, rooted, and file resolution.
+fn try_resolve_candidate(
+  resolver : ModuleResolver,
+  candidate : String,
+  original_name : String,
+) -> Result[ResolvedModule, ResolutionFailure] {
   let searched : Array[String] = []
 
   // First, try the exact path if it has an extension
-  let ext = get_extension(module_name)
-  if not(ext.is_empty()) {
+  let ext = get_extension(candidate)
+  if !(ext.is_empty()) {
     searched.push(candidate)
-    if file_exists(candidate) {
-      return Ok(create_resolved_module(candidate, module_name, false, ext))
+    if resolver.file_exists(candidate) {
+      return Ok(create_resolved_module(candidate, original_name, false, ext))
+    }
+
+    // TypeScript resolves "./a.js" to "a.ts"/"a.tsx"/"a.d.ts":
+    // substitute JS output extensions with their TS source extensions
+    if ext == ".js" || ext == ".jsx" || ext == ".mjs" || ext == ".cjs" {
+      let base = string_substring(candidate, 0, end=candidate.length() - ext.length())
+      let substitutions = if ext == ".mjs" {
+        [".mts", ".d.mts"]
+      } else if ext == ".cjs" {
+        [".cts", ".d.cts"]
+      } else {
+        [".ts", ".tsx", ".d.ts"]
+      }
+      for sub_ext in substitutions {
+        let with_sub = base + sub_ext
+        searched.push(with_sub)
+        if resolver.file_exists(with_sub) {
+          return Ok(
+            create_resolved_module(with_sub, original_name, false, sub_ext),
+          )
+        }
+      }
     }
   }
 
@@ -350,8 +418,10 @@ fn resolve_relative_module(
   for extension in resolver.options.extensions {
     let with_ext = candidate + extension
     searched.push(with_ext)
-    if file_exists(with_ext) {
-      return Ok(create_resolved_module(with_ext, module_name, false, extension))
+    if resolver.file_exists(with_ext) {
+      return Ok(
+        create_resolved_module(with_ext, original_name, false, extension),
+      )
     }
   }
 
@@ -359,13 +429,13 @@ fn resolve_relative_module(
   for extension in resolver.options.extensions {
     let index_path = join_paths(candidate, "index" + extension)
     searched.push(index_path)
-    if file_exists(index_path) {
+    if resolver.file_exists(index_path) {
       return Ok(
-        create_resolved_module(index_path, module_name, false, extension),
+        create_resolved_module(index_path, original_name, false, extension),
       )
     }
   }
-  Err(ModuleNotFound(module_name, searched))
+  Err(ModuleNotFound(original_name, searched))
 }
 
 ///|
@@ -374,37 +444,7 @@ fn resolve_rooted_module(
   resolver : ModuleResolver,
   module_name : String,
 ) -> Result[ResolvedModule, ResolutionFailure] {
-  let searched : Array[String] = []
-
-  // Try exact path
-  let ext = get_extension(module_name)
-  if not(ext.is_empty()) {
-    searched.push(module_name)
-    if file_exists(module_name) {
-      return Ok(create_resolved_module(module_name, module_name, false, ext))
-    }
-  }
-
-  // Try with extensions
-  for extension in resolver.options.extensions {
-    let with_ext = module_name + extension
-    searched.push(with_ext)
-    if file_exists(with_ext) {
-      return Ok(create_resolved_module(with_ext, module_name, false, extension))
-    }
-  }
-
-  // Try as directory
-  for extension in resolver.options.extensions {
-    let index_path = join_paths(module_name, "index" + extension)
-    searched.push(index_path)
-    if file_exists(index_path) {
-      return Ok(
-        create_resolved_module(index_path, module_name, false, extension),
-      )
-    }
-  }
-  Err(ModuleNotFound(module_name, searched))
+  try_resolve_candidate(resolver, normalize_path(module_name), module_name)
 }
 
 // ============================================================================
@@ -686,7 +726,7 @@ fn try_resolve_package(
     for ext in resolver.options.extensions {
       let index_path = join_paths(package_path, "index" + ext)
       searched.push(index_path)
-      if file_exists(index_path) {
+      if resolver.file_exists(index_path) {
         return Ok(
           create_resolved_module(index_path, original_module, true, ext),
         )
@@ -707,18 +747,10 @@ fn try_resolve_package(
 ///|
 /// Read main field from package.json
 /// Returns the main entry point path if found
-fn read_package_json_main(package_json_path : String) -> String? {
-  // This would need actual file system access
-  // For now, return common defaults
-  if file_exists(package_json_path) {
-    // In a real implementation, parse JSON and extract:
-    // 1. "main" field
-    // 2. "types" or "typings" field (for TypeScript)
-    // 3. "exports" field (for modern packages)
-    None
-  } else {
-    None
-  }
+/// TODO(follow-up): parse package.json ("main"/"types"/"exports") — requires
+/// file contents, not just existence; out of scope for relative resolution.
+fn read_package_json_main(_package_json_path : String) -> String? {
+  None
 }
 
 // ============================================================================
@@ -763,36 +795,7 @@ fn try_resolve_file(
   resolver : ModuleResolver,
   path : String,
 ) -> Result[ResolvedModule, ResolutionFailure] {
-  let searched : Array[String] = []
-  let normalized = normalize_path(path)
-
-  // Try exact path if it has extension
-  let ext = get_extension(normalized)
-  if not(ext.is_empty()) {
-    searched.push(normalized)
-    if file_exists(normalized) {
-      return Ok(create_resolved_module(normalized, path, false, ext))
-    }
-  }
-
-  // Try with TypeScript extensions
-  for extension in resolver.options.extensions {
-    let with_ext = normalized + extension
-    searched.push(with_ext)
-    if file_exists(with_ext) {
-      return Ok(create_resolved_module(with_ext, path, false, extension))
-    }
-  }
-
-  // Try as directory with index
-  for extension in resolver.options.extensions {
-    let index = join_paths(normalized, "index" + extension)
-    searched.push(index)
-    if file_exists(index) {
-      return Ok(create_resolved_module(index, path, false, extension))
-    }
-  }
-  Err(ModuleNotFound(path, searched))
+  try_resolve_candidate(resolver, normalize_path(path), path)
 }
 
 ///|
@@ -812,14 +815,6 @@ fn create_resolved_module(
   }
 }
 
-///|
-/// Check if a file exists (placeholder - needs actual FS access)
-fn file_exists(_path : String) -> Bool {
-  // TODO: Implement actual file existence check
-  // This will be connected to the file system layer
-  false
-}
-
 // ============================================================================
 // Module Specifier Classification
 // ============================================================================
@@ -835,7 +830,7 @@ pub enum ModuleSpecifierKind {
   Package
   /// URL import: https://example.com/mod.ts
   URL
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 /// Classify a module specifier

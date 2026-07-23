@@ -110,7 +110,7 @@ pub fn type_to_v2(ty : Type) -> TypeV2 {
 ///|
 /// Convert ObjectType to ObjectTypeV2
 fn object_type_to_v2(obj : ObjectType) -> ObjectTypeV2 {
-  let fields : Map[String, FieldInfoV2] = Map::new()
+  let fields : Map[String, FieldInfoV2] = Map([])
   for kv in obj.properties {
     let name = kv.0
     let prop = kv.1
@@ -411,7 +411,7 @@ fn object_v2_to_type(
   let info_result = checker.create_type_info()
   let info = info_result.0
   let mut current_checker = info_result.1
-  let properties : Map[String, PropertySignature] = Map::new()
+  let properties : Map[String, PropertySignature] = Map([])
   for kv in obj.fields {
     let name = kv.0
     let field = kv.1

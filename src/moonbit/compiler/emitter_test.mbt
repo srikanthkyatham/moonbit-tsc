@@ -633,7 +633,7 @@ test "emit export default async function" {
 test "emit declare const produces no output" {
   let js = compile_to_js("declare const x: number;")
   // Declare statements should not produce JavaScript output
-  assert_true(not(js.contains("const x")))
+  assert_true(!(js.contains("const x")))
 }
 
 ///|
@@ -641,7 +641,7 @@ test "emit declare const produces no output" {
 test "emit declare function produces no output" {
   let js = compile_to_js("declare function foo(): void;")
   // Declare statements should not produce JavaScript output
-  assert_true(not(js.contains("function foo")))
+  assert_true(!(js.contains("function foo")))
 }
 
 ///|
@@ -649,7 +649,7 @@ test "emit declare function produces no output" {
 test "emit declare class produces no output" {
   let js = compile_to_js("declare class Foo { bar(): void; }")
   // Declare statements should not produce JavaScript output
-  assert_true(not(js.contains("class Foo")))
+  assert_true(!(js.contains("class Foo")))
 }
 
 ///|
@@ -778,7 +778,7 @@ test "emit non-null assertion property access" {
   let js = compile_to_js("const x = obj!.property;")
   // The !. should be stripped, becoming just .property
   assert_true(js.contains("obj.property"))
-  assert_true(not(js.contains("!")))
+  assert_true(!(js.contains("!")))
 }
 
 ///|
@@ -787,7 +787,7 @@ test "emit chained non-null assertion" {
   let js = compile_to_js("const x = a!.b!.c;")
   // All !. should be stripped
   assert_true(js.contains("a.b.c"))
-  assert_true(not(js.contains("!")))
+  assert_true(!(js.contains("!")))
 }
 
 ///|
@@ -795,7 +795,7 @@ test "emit chained non-null assertion" {
 test "emit non-null assertion with method call" {
   let js = compile_to_js("const x = obj!.method();")
   assert_true(js.contains("obj.method()"))
-  assert_true(not(js.contains("!")))
+  assert_true(!(js.contains("!")))
 }
 
 // ============================================================================
@@ -998,9 +998,9 @@ test "emit class without decorators unchanged" {
   let js = compile_to_js("class NormalClass { constructor() { } }")
   // Regular class should not use let = pattern
   assert_true(js.contains("class NormalClass"))
-  assert_true(not(js.contains("let NormalClass = class")))
+  assert_true(!(js.contains("let NormalClass = class")))
   // Should not have __decorate
-  assert_true(not(js.contains("__decorate")))
+  assert_true(!(js.contains("__decorate")))
 }
 
 ///|
@@ -2479,7 +2479,7 @@ test "emit tagged template with type arguments" {
   // Type arguments should be stripped in the output
   assert_true(js.contains("f`hello`"))
   // The <string> should NOT appear in the output
-  assert_true(not(js.contains("<string>")))
+  assert_true(!(js.contains("<string>")))
 }
 
 ///|
@@ -2491,8 +2491,8 @@ test "emit tagged template with multiple type arguments" {
   println("Tagged template with multiple type arguments:\n\{js}")
   assert_true(js.contains("g`world`"))
   // Neither type argument should appear
-  assert_true(not(js.contains("<number")))
-  assert_true(not(js.contains("string>")))
+  assert_true(!(js.contains("<number")))
+  assert_true(!(js.contains("string>")))
 }
 
 ///|
@@ -2503,5 +2503,5 @@ test "emit tagged template with type arguments and interpolation" {
   )
   println("Tagged template with type args and interpolation:\n\{js}")
   assert_true(js.contains("f`hello ${42} world`"))
-  assert_true(not(js.contains("<boolean>")))
+  assert_true(!(js.contains("<boolean>")))
 }

@@ -403,7 +403,7 @@ test "DiagnosticCode - TS2391 valid overload with implementation" {
     Ok(_) => assert_true(true)
     Err(diagnostics) =>
       // Should NOT have TS2391 error
-      assert_true(not(has_error(diagnostics, 2391)))
+      assert_true(!(has_error(diagnostics, 2391)))
   }
 }
 
@@ -623,7 +623,7 @@ test "DiagnosticCode - valid await in async function" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 1308)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 1308)))
   }
 }
 
@@ -658,7 +658,7 @@ test "DiagnosticCode - valid await in async arrow function" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 1308)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 1308)))
   }
 }
 
@@ -742,7 +742,7 @@ test "DiagnosticCode - TS2515 class implements abstract member" {
     Ok(_) => assert_true(true)
     Err(diagnostics) =>
       // Should NOT have TS2515 error
-      assert_true(not(has_error(diagnostics, 2515)))
+      assert_true(!(has_error(diagnostics, 2515)))
   }
 }
 
@@ -810,7 +810,7 @@ test "DiagnosticCode - TS2516 valid abstract method in abstract class" {
     Ok(_) => assert_true(true)
     Err(diagnostics) =>
       // Should NOT have TS2516 error
-      assert_true(not(has_error(diagnostics, 2516)))
+      assert_true(!(has_error(diagnostics, 2516)))
   }
 }
 
@@ -1221,7 +1221,7 @@ test "DiagnosticCode - valid generic type usage" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2314)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2314)))
   }
 }
 
@@ -1233,7 +1233,7 @@ test "DiagnosticCode - valid function call" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2349)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2349)))
   }
 }
 
@@ -1245,7 +1245,7 @@ test "DiagnosticCode - valid class instantiation" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2351)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2351)))
   }
 }
 
@@ -1258,7 +1258,7 @@ test "DiagnosticCode - valid async await" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2465)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2465)))
   }
 }
 
@@ -1272,7 +1272,7 @@ test "DiagnosticCode - valid generator yield" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2466)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2466)))
   }
 }
 
@@ -1289,8 +1289,8 @@ test "DiagnosticCode - valid interface implementation" {
   match result {
     Ok(_) => assert_true(true)
     Err(diagnostics) => {
-      assert_true(not(has_error(diagnostics, 2410)))
-      assert_true(not(has_error(diagnostics, 2420)))
+      assert_true(!(has_error(diagnostics, 2410)))
+      assert_true(!(has_error(diagnostics, 2420)))
     }
   }
 }
@@ -1307,7 +1307,7 @@ test "DiagnosticCode - valid abstract class implementation" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2515)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2515)))
   }
 }
 
@@ -1320,7 +1320,7 @@ test "DiagnosticCode - valid property initialization" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2564)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2564)))
   }
 }
 
@@ -1332,7 +1332,7 @@ test "DiagnosticCode - valid object literal" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2561)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2561)))
   }
 }
 
@@ -1413,7 +1413,7 @@ test "DiagnosticCode - TS2334 valid instance property with this" {
     Err(diagnostics) =>
       // Should NOT have TS2334 for instance properties
       assert_true(
-        not(has_error(diagnostics, 2334)),
+        !(has_error(diagnostics, 2334)),
         msg="Instance property should be allowed to use 'this'",
       )
   }
@@ -1458,7 +1458,7 @@ test "DiagnosticCode - TS2337 super call in constructor is valid" {
     Err(diagnostics) =>
       // Should NOT have TS2337 for super() in constructor
       assert_true(
-        not(has_error(diagnostics, 2337)),
+        !(has_error(diagnostics, 2337)),
         msg="super() in constructor should be valid",
       )
   }
@@ -1516,7 +1516,7 @@ test "DiagnosticCode - TS2335 super in derived class is valid" {
     Err(diagnostics) =>
       // Should NOT have TS2335 for super() in derived class
       assert_true(
-        not(has_error(diagnostics, 2335)),
+        !(has_error(diagnostics, 2335)),
         msg="super() in derived class should be valid",
       )
   }
@@ -1565,7 +1565,7 @@ test "DiagnosticCode - TS17009 valid super then this" {
     Err(diagnostics) =>
       // Should NOT have TS17009 after super() is called
       assert_true(
-        not(has_error(diagnostics, 17009)),
+        !(has_error(diagnostics, 17009)),
         msg="'this' after super() should be valid",
       )
   }
@@ -1932,9 +1932,9 @@ test "DiagnosticCode - valid arithmetic operations" {
   match result {
     Ok(_) => assert_true(true)
     Err(diagnostics) => {
-      assert_true(not(has_error(diagnostics, 2356)))
-      assert_true(not(has_error(diagnostics, 2362)))
-      assert_true(not(has_error(diagnostics, 2363)))
+      assert_true(!(has_error(diagnostics, 2356)))
+      assert_true(!(has_error(diagnostics, 2362)))
+      assert_true(!(has_error(diagnostics, 2363)))
     }
   }
 }
@@ -1949,8 +1949,8 @@ test "DiagnosticCode - valid let reassignment" {
   match result {
     Ok(_) => assert_true(true)
     Err(diagnostics) => {
-      assert_true(not(has_error(diagnostics, 2357)))
-      assert_true(not(has_error(diagnostics, 2588)))
+      assert_true(!(has_error(diagnostics, 2357)))
+      assert_true(!(has_error(diagnostics, 2588)))
     }
   }
 }
@@ -1969,8 +1969,8 @@ test "DiagnosticCode - valid enum" {
   match result {
     Ok(_) => assert_true(true)
     Err(diagnostics) => {
-      assert_true(not(has_error(diagnostics, 2452)))
-      assert_true(not(has_error(diagnostics, 2474)))
+      assert_true(!(has_error(diagnostics, 2452)))
+      assert_true(!(has_error(diagnostics, 2474)))
     }
   }
 }
@@ -1986,7 +1986,7 @@ test "DiagnosticCode - valid string enum" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2553)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2553)))
   }
 }
 
@@ -2000,7 +2000,7 @@ test "DiagnosticCode - valid tuple access" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2493)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2493)))
   }
 }
 
@@ -2018,8 +2018,8 @@ test "DiagnosticCode - valid overload" {
   match result {
     Ok(_) => assert_true(true)
     Err(diagnostics) => {
-      assert_true(not(has_error(diagnostics, 2391)))
-      assert_true(not(has_error(diagnostics, 2394)))
+      assert_true(!(has_error(diagnostics, 2391)))
+      assert_true(!(has_error(diagnostics, 2394)))
     }
   }
 }
@@ -2036,10 +2036,10 @@ test "DiagnosticCode - valid accessor" {
   match result {
     Ok(_) => assert_true(true)
     Err(diagnostics) => {
-      assert_true(not(has_error(diagnostics, 2379)))
-      assert_true(not(has_error(diagnostics, 2380)))
-      assert_true(not(has_error(diagnostics, 4094)))
-      assert_true(not(has_error(diagnostics, 4097)))
+      assert_true(!(has_error(diagnostics, 2379)))
+      assert_true(!(has_error(diagnostics, 2380)))
+      assert_true(!(has_error(diagnostics, 4094)))
+      assert_true(!(has_error(diagnostics, 4097)))
     }
   }
 }
@@ -2053,7 +2053,7 @@ test "DiagnosticCode - valid spread with tuple" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2556)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2556)))
   }
 }
 
@@ -2179,7 +2179,7 @@ test "DiagnosticCode - valid namespace member access" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2694)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2694)))
   }
 }
 
@@ -2217,7 +2217,7 @@ test "DiagnosticCode - valid namespace type usage" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2709)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2709)))
   }
 }
 
@@ -2251,8 +2251,8 @@ test "DiagnosticCode - TS2710 namespace with value exports is OK" {
   match result {
     Ok(tf) =>
       // Should NOT have TS2710 because namespace has value exports
-      assert_true(not(has_error(tf.diagnostics, 2710)))
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2710)))
+      assert_true(!(has_error(tf.diagnostics, 2710)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2710)))
   }
 }
 
@@ -2273,8 +2273,8 @@ test "DiagnosticCode - TS2494 TypeScript allows non-exported types in exports" {
   match result {
     Ok(tf) =>
       // Modern TypeScript does NOT emit TS2494 for this case
-      assert_true(not(has_error(tf.diagnostics, 2494)))
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2494)))
+      assert_true(!(has_error(tf.diagnostics, 2494)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2494)))
   }
 }
 
@@ -2287,8 +2287,8 @@ test "DiagnosticCode - TS2494 exported variable with exported type is OK" {
   match result {
     Ok(tf) =>
       // No error because type is exported
-      assert_true(not(has_error(tf.diagnostics, 2494)))
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2494)))
+      assert_true(!(has_error(tf.diagnostics, 2494)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2494)))
   }
 }
 
@@ -2301,8 +2301,8 @@ test "DiagnosticCode - TS2494 exported variable with inferred private type" {
   let result = check_source(source)
   // TypeScript allows this - no TS2494 error
   match result {
-    Ok(tf) => assert_true(not(has_error(tf.diagnostics, 2494)))
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2494)))
+    Ok(tf) => assert_true(!(has_error(tf.diagnostics, 2494)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2494)))
   }
 }
 
@@ -2359,7 +2359,7 @@ test "DiagnosticCode - valid import statement syntax" {
     Ok(_) => assert_true(true) // Valid syntax should pass parsing
     Err(diagnostics) =>
       // Module resolution errors are expected (2307), but syntax should be valid
-      assert_true(not(has_message(diagnostics, "syntax")))
+      assert_true(!(has_message(diagnostics, "syntax")))
   }
 }
 
@@ -2520,7 +2520,7 @@ test "DiagnosticCode - valid generic constraint" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2344)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2344)))
   }
 }
 
@@ -2591,7 +2591,7 @@ test "DiagnosticCode - valid type assertion" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2352)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2352)))
   }
 }
 
@@ -2688,7 +2688,7 @@ test "DiagnosticCode - TS2752 different types same name" {
     Ok(_) => assert_true(true) // This should pass as there's no conflict
     Err(diagnostics) =>
       // No TS2752 expected here
-      assert_true(not(has_error(diagnostics, 2752)))
+      assert_true(!(has_error(diagnostics, 2752)))
   }
 }
 
@@ -2747,7 +2747,7 @@ test "DiagnosticCode - valid interface extension" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2320)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2320)))
   }
 }
 
@@ -2760,8 +2760,8 @@ test "DiagnosticCode - valid property assignment" {
   match result {
     Ok(_) => assert_true(true)
     Err(diagnostics) => {
-      assert_true(not(has_error(diagnostics, 2324)))
-      assert_true(not(has_error(diagnostics, 2739)))
+      assert_true(!(has_error(diagnostics, 2324)))
+      assert_true(!(has_error(diagnostics, 2739)))
     }
   }
 }
@@ -2774,7 +2774,7 @@ test "DiagnosticCode - valid parameter type" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2326)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2326)))
   }
 }
 
@@ -2786,7 +2786,7 @@ test "DiagnosticCode - valid index signature usage" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2329)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2329)))
   }
 }
 
@@ -2853,8 +2853,8 @@ test "DiagnosticCode - valid instanceof usage" {
   match result {
     Ok(_) => assert_true(true)
     Err(diagnostics) => {
-      assert_true(not(has_error(diagnostics, 2358)))
-      assert_true(not(has_error(diagnostics, 2359)))
+      assert_true(!(has_error(diagnostics, 2358)))
+      assert_true(!(has_error(diagnostics, 2359)))
     }
   }
 }
@@ -2945,7 +2945,7 @@ test "DiagnosticCode - valid comma operator with side effects" {
     Ok(_) => assert_true(true) // Valid - left side has side effects
     Err(diagnostics) =>
       // Should not report TS2695 if side effect exists
-      assert_true(not(has_error(diagnostics, 2695)))
+      assert_true(!(has_error(diagnostics, 2695)))
   }
 }
 
@@ -2989,7 +2989,7 @@ test "DiagnosticCode - valid in operator usage" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2772)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2772)))
   }
 }
 
@@ -3025,7 +3025,7 @@ test "DiagnosticCode - valid function call in condition" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2773)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2773)))
   }
 }
 
@@ -3101,7 +3101,7 @@ test "DiagnosticCode - valid arithmetic operators" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2800)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2800)))
   }
 }
 
@@ -3136,7 +3136,7 @@ test "DiagnosticCode - bigint arithmetic" {
     Ok(_) => assert_true(true)
     Err(diagnostics) =>
       // BigInt arithmetic should be valid
-      assert_true(not(has_error(diagnostics, 2365))) // Not mixing with number
+      assert_true(!(has_error(diagnostics, 2365))) // Not mixing with number
   }
 }
 
@@ -3156,7 +3156,7 @@ test "DiagnosticCode - valid comparison operators" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2367)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2367)))
   }
 }
 
@@ -3171,7 +3171,7 @@ test "DiagnosticCode - valid logical operators" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2800)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2800)))
   }
 }
 
@@ -3184,7 +3184,7 @@ test "DiagnosticCode - valid string concatenation" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2800)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2800)))
   }
 }
 
@@ -3231,7 +3231,7 @@ test "DiagnosticCode - valid type parameter name" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2368)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2368)))
   }
 }
 
@@ -3293,7 +3293,7 @@ test "DiagnosticCode - TS2369 param property in method" {
   match result {
     Ok(_) => fail("Expected TS2369 error")
     Err(diagnostics) =>
-      if not(has_error(diagnostics, 2369)) {
+      if !(has_error(diagnostics, 2369)) {
         fail("Expected TS2369 error")
       }
   }
@@ -3308,7 +3308,7 @@ test "DiagnosticCode - valid param property in constructor" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2369)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2369)))
   }
 }
 
@@ -3322,7 +3322,7 @@ test "DiagnosticCode - TS2371 param initializer in declaration" {
   match result {
     Ok(_) => fail("Expected TS2371 error")
     Err(diagnostics) =>
-      if not(has_error(diagnostics, 2371)) {
+      if !(has_error(diagnostics, 2371)) {
         fail("Expected TS2371 error")
       }
   }
@@ -3336,7 +3336,7 @@ test "DiagnosticCode - valid param initializer in function" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2371)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2371)))
   }
 }
 
@@ -3350,7 +3350,7 @@ test "DiagnosticCode - TS2372 param references itself" {
   match result {
     Ok(_) => fail("Expected TS2372 error")
     Err(diagnostics) =>
-      if not(has_error(diagnostics, 2372)) {
+      if !(has_error(diagnostics, 2372)) {
         fail("Expected TS2372 error")
       }
   }
@@ -3364,7 +3364,7 @@ test "DiagnosticCode - valid param with external reference" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2372)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2372)))
   }
 }
 
@@ -3395,7 +3395,7 @@ test "DiagnosticCode - valid non-ambient overloads" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2383)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2383)))
   }
 }
 
@@ -3433,7 +3433,7 @@ test "DiagnosticCode - valid static method overload" {
     Ok(_) => assert_true(true)
     Err(diagnostics) =>
       // Should NOT report TS2388 for consistent static overloads
-      assert_true(not(has_error(diagnostics, 2388)))
+      assert_true(!(has_error(diagnostics, 2388)))
   }
 }
 
@@ -3469,7 +3469,7 @@ test "DiagnosticCode - valid impl signature" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2389)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2389)))
   }
 }
 
@@ -3506,7 +3506,7 @@ test "DiagnosticCode - valid constructor with overloads" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2390)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2390)))
   }
 }
 
@@ -3539,7 +3539,7 @@ test "DiagnosticCode - valid consistent export declarations" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2395)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2395)))
   }
 }
 
@@ -3572,7 +3572,7 @@ test "DiagnosticCode - valid type param order" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2706)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2706)))
   }
 }
 
@@ -3590,7 +3590,7 @@ test "DiagnosticCode - TS2707 too few args with optional params" {
     Ok(_) => fail("Expected TS2707 error")
     Err(diagnostics) =>
       // Should report TS2707 since there's a range of valid type args
-      if not(has_error(diagnostics, 2707)) {
+      if !(has_error(diagnostics, 2707)) {
         fail("Expected TS2707 error")
       }
   }
@@ -3607,7 +3607,7 @@ test "DiagnosticCode - TS2707 too many args with optional params" {
     Ok(_) => fail("Expected TS2707 error")
     Err(diagnostics) =>
       // Should report TS2707 since there's a range of valid type args
-      if not(has_error(diagnostics, 2707)) {
+      if !(has_error(diagnostics, 2707)) {
         fail("Expected TS2707 error")
       }
   }
@@ -3622,7 +3622,7 @@ test "DiagnosticCode - valid number of type args" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2707)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2707)))
   }
 }
 
@@ -3642,8 +3642,8 @@ test "DiagnosticCode - valid function overloads" {
   match result {
     Ok(_) => assert_true(true)
     Err(diagnostics) => {
-      assert_true(not(has_error(diagnostics, 2389)))
-      assert_true(not(has_error(diagnostics, 2394)))
+      assert_true(!(has_error(diagnostics, 2389)))
+      assert_true(!(has_error(diagnostics, 2394)))
     }
   }
 }
@@ -3657,8 +3657,8 @@ test "DiagnosticCode - valid generic function" {
   match result {
     Ok(_) => assert_true(true)
     Err(diagnostics) => {
-      assert_true(not(has_error(diagnostics, 2368)))
-      assert_true(not(has_error(diagnostics, 2707)))
+      assert_true(!(has_error(diagnostics, 2368)))
+      assert_true(!(has_error(diagnostics, 2707)))
     }
   }
 }
@@ -3673,8 +3673,8 @@ test "DiagnosticCode - valid class with constructor" {
   match result {
     Ok(_) => assert_true(true)
     Err(diagnostics) => {
-      assert_true(not(has_error(diagnostics, 2369)))
-      assert_true(not(has_error(diagnostics, 2371)))
+      assert_true(!(has_error(diagnostics, 2369)))
+      assert_true(!(has_error(diagnostics, 2371)))
     }
   }
 }
@@ -3727,7 +3727,7 @@ test "DiagnosticCode - valid for-in with let" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2406)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2406)))
   }
 }
 
@@ -3741,7 +3741,7 @@ test "DiagnosticCode - valid for-in with const" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2406)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2406)))
   }
 }
 
@@ -3787,7 +3787,7 @@ test "DiagnosticCode - valid for-in with object" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2407)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2407)))
   }
 }
 
@@ -3801,7 +3801,7 @@ test "DiagnosticCode - valid for-in with array indices" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2407)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2407)))
   }
 }
 
@@ -3852,7 +3852,7 @@ test "DiagnosticCode - valid for-of with let" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2487)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2487)))
   }
 }
 
@@ -3866,7 +3866,7 @@ test "DiagnosticCode - valid for-of with const" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2487)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2487)))
   }
 }
 
@@ -3880,7 +3880,7 @@ test "DiagnosticCode - valid for-of with destructuring" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2487)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2487)))
   }
 }
 
@@ -3894,7 +3894,7 @@ test "DiagnosticCode - valid for-of with string" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2487)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2487)))
   }
 }
 
@@ -3913,7 +3913,7 @@ test "DiagnosticCode - valid for-in with existing variable" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2406)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2406)))
   }
 }
 
@@ -3928,7 +3928,7 @@ test "DiagnosticCode - valid for-of with existing variable" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2487)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2487)))
   }
 }
 
@@ -3942,7 +3942,7 @@ test "DiagnosticCode - valid for-of with Set" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2487)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2487)))
   }
 }
 
@@ -3956,7 +3956,7 @@ test "DiagnosticCode - valid for-of with Map entries" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2487)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2487)))
   }
 }
 
@@ -3993,7 +3993,7 @@ test "DiagnosticCode - valid property access with string index" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2459)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2459)))
   }
 }
 
@@ -4019,7 +4019,7 @@ test "DiagnosticCode - valid array destructuring" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2460)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2460)))
   }
 }
 
@@ -4059,7 +4059,7 @@ test "DiagnosticCode - valid index access with number" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2538)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2538)))
   }
 }
 
@@ -4072,7 +4072,7 @@ test "DiagnosticCode - valid index access with string" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2538)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2538)))
   }
 }
 
@@ -4104,7 +4104,7 @@ test "DiagnosticCode - valid writable index signature" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2542)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2542)))
   }
 }
 
@@ -4146,7 +4146,7 @@ test "DiagnosticCode - valid index signature with string" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2716)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2716)))
   }
 }
 
@@ -4160,7 +4160,7 @@ test "DiagnosticCode - valid index signature with number" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2716)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2716)))
   }
 }
 
@@ -4180,7 +4180,7 @@ test "DiagnosticCode - valid property initialized before use" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2729)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2729)))
   }
 }
 
@@ -4212,7 +4212,7 @@ test "DiagnosticCode - valid property compatible with index signature" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2745)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2745)))
   }
 }
 
@@ -4249,7 +4249,7 @@ test "DiagnosticCode - valid interface extending compatible types" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2746)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2746)))
   }
 }
 
@@ -4296,7 +4296,7 @@ test "DiagnosticCode - valid new with class" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2747)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2747)))
   }
 }
 
@@ -4311,7 +4311,7 @@ test "DiagnosticCode - valid new with construct signature" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2747)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2747)))
   }
 }
 
@@ -4324,7 +4324,7 @@ test "DiagnosticCode - valid new with built-in Array constructor" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2747)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2747)))
   }
 }
 
@@ -4338,7 +4338,7 @@ test "DiagnosticCode - valid new with built-in Map and Set constructors" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2747)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2747)))
   }
 }
 
@@ -4350,7 +4350,7 @@ test "DiagnosticCode - valid new with built-in Date and RegExp constructors" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2747)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2747)))
   }
 }
 
@@ -4364,7 +4364,7 @@ test "DiagnosticCode - valid new with built-in Error constructors" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2747)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2747)))
   }
 }
 
@@ -4375,7 +4375,7 @@ test "DiagnosticCode - valid new with built-in Promise constructor" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2747)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2747)))
   }
 }
 
@@ -4389,7 +4389,7 @@ test "DiagnosticCode - valid new with built-in TypedArray constructors" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2747)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2747)))
   }
 }
 
@@ -4405,7 +4405,7 @@ test "DiagnosticCode - valid new with Array in namespace" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2747)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2747)))
   }
 }
 
@@ -4473,7 +4473,7 @@ test "DiagnosticCode - valid variable access after declaration" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2748)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2748)))
   }
 }
 
@@ -4490,7 +4490,7 @@ test "DiagnosticCode - valid readonly property assignment with this" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2810)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2810)))
   }
 }
 
@@ -4504,7 +4504,7 @@ test "DiagnosticCode - valid readonly with parameter property" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2810)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2810)))
   }
 }
 
@@ -4540,7 +4540,7 @@ test "DiagnosticCode - valid private field assignment via this" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true) // Should not have TS2810 error
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2810)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2810)))
   }
 }
 
@@ -4572,7 +4572,7 @@ test "DiagnosticCode - valid ts-expect-error suppresses type error" {
     Ok(_) => assert_true(true)
     Err(diagnostics) =>
       // Should NOT have TS2578 because there IS an error on the next line
-      assert_true(not(has_error(diagnostics, 2578)))
+      assert_true(!(has_error(diagnostics, 2578)))
   }
 }
 
@@ -4601,7 +4601,7 @@ test "DiagnosticCode - valid spread with array" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2548)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2548)))
   }
 }
 
@@ -4613,7 +4613,7 @@ test "DiagnosticCode - valid spread with string" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2548)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2548)))
   }
 }
 
@@ -4656,7 +4656,7 @@ test "DiagnosticCode - valid property access" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2551)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2551)))
   }
 }
 
@@ -4682,7 +4682,7 @@ test "DiagnosticCode - valid name reference" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2552)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2552)))
   }
 }
 
@@ -4709,7 +4709,7 @@ test "DiagnosticCode - valid rest parameter with array type" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2574)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2574)))
   }
 }
 
@@ -4744,7 +4744,7 @@ test "DiagnosticCode - valid overload call" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2575)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2575)))
   }
 }
 
@@ -4758,7 +4758,7 @@ test "DiagnosticCode - valid array iteration with for-of" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2802)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2802)))
   }
 }
 
@@ -4772,7 +4772,7 @@ test "DiagnosticCode - valid string iteration with for-of" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2802)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2802)))
   }
 }
 
@@ -4784,7 +4784,7 @@ test "DiagnosticCode - valid tuple destructuring with rest" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2574)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2574)))
   }
 }
 
@@ -4796,7 +4796,7 @@ test "DiagnosticCode - valid Array.from usage" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2548)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2548)))
   }
 }
 
@@ -4907,7 +4907,7 @@ test "DiagnosticCode - valid object spread" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2762)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2762)))
   }
 }
 
@@ -4929,7 +4929,7 @@ test "DiagnosticCode - valid tuple with rest array type" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2574)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2574)))
   }
 }
 
@@ -4941,7 +4941,7 @@ test "DiagnosticCode - valid array spread" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2574)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2574)))
   }
 }
 
@@ -4953,7 +4953,7 @@ test "DiagnosticCode - valid object rest destructuring" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2566)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2566)))
   }
 }
 
@@ -4970,7 +4970,7 @@ test "DiagnosticCode - valid property assignment in constructor" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2565)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2565)))
   }
 }
 
@@ -4983,7 +4983,7 @@ test "DiagnosticCode - valid function rest parameter" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2700)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2700)))
   }
 }
 
@@ -5016,7 +5016,7 @@ test "DiagnosticCode - valid yield with value" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2764)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2764)))
   }
 }
 
@@ -5055,7 +5055,7 @@ test "DiagnosticCode - valid async generator yield" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2770)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2770)))
   }
 }
 
@@ -5088,7 +5088,7 @@ test "DiagnosticCode - valid Promise-like interface" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2771)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2771)))
   }
 }
 
@@ -5124,7 +5124,7 @@ test "DiagnosticCode - valid catch clause with unknown" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2467)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2467)))
   }
 }
 
@@ -5139,7 +5139,7 @@ test "DiagnosticCode - valid catch clause with any" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2467)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2467)))
   }
 }
 
@@ -5168,7 +5168,7 @@ test "DiagnosticCode - valid const enum literal access" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2475)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2475)))
   }
 }
 
@@ -5199,7 +5199,7 @@ test "DiagnosticCode - valid const enum member" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2476)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2476)))
   }
 }
 
@@ -5239,7 +5239,7 @@ test "DiagnosticCode - valid public field access" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2494)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2494)))
   }
 }
 
@@ -5279,7 +5279,7 @@ test "DiagnosticCode - valid enum member order" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2651)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2651)))
   }
 }
 
@@ -5294,7 +5294,7 @@ test "DiagnosticCode - valid enum without references" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2651)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2651)))
   }
 }
 
@@ -5331,7 +5331,7 @@ test "DiagnosticCode - valid distinct exports" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2484)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2484)))
   }
 }
 
@@ -5364,7 +5364,7 @@ test "DiagnosticCode - valid arguments in regular function" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2496)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2496)))
   }
 }
 
@@ -5379,7 +5379,7 @@ test "DiagnosticCode - TS2496 not triggered when arguments is parameter name" {
   let result = check_source_with_target(source, @compiler.ES5)
   match result {
     Ok(_) => assert_true(true) // Should NOT error - arguments is a parameter
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2496)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2496)))
   }
 }
 
@@ -5413,7 +5413,7 @@ test "DiagnosticCode - TS2496 no error in ES2015+ target" {
   let result = check_source_with_target(source, @compiler.ES2015)
   match result {
     Ok(_) => assert_true(true) // ES2015+ doesn't trigger TS2496
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2496)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2496)))
   }
 }
 
@@ -5429,9 +5429,9 @@ test "DiagnosticCode - arguments available in regular function" {
     Ok(_) => assert_true(true) // arguments is valid in regular functions
     Err(diagnostics) => {
       // Should not have TS2304 (cannot find name 'arguments')
-      assert_true(not(has_error(diagnostics, 2304)))
+      assert_true(!(has_error(diagnostics, 2304)))
       // Should not have TS2496 either
-      assert_true(not(has_error(diagnostics, 2496)))
+      assert_true(!(has_error(diagnostics, 2496)))
     }
   }
 }
@@ -5450,8 +5450,8 @@ test "DiagnosticCode - arguments in regular function inside arrow" {
     Ok(_) => assert_true(true) // arguments is valid in the inner regular function
     Err(diagnostics) => {
       // Should not have errors for the arguments reference
-      assert_true(not(has_error(diagnostics, 2304)))
-      assert_true(not(has_error(diagnostics, 2496)))
+      assert_true(!(has_error(diagnostics, 2304)))
+      assert_true(!(has_error(diagnostics, 2496)))
     }
   }
 }
@@ -5467,8 +5467,8 @@ test "DiagnosticCode - arguments in function expression" {
   match result {
     Ok(_) => assert_true(true) // arguments is valid in function expression
     Err(diagnostics) => {
-      assert_true(not(has_error(diagnostics, 2304)))
-      assert_true(not(has_error(diagnostics, 2496)))
+      assert_true(!(has_error(diagnostics, 2304)))
+      assert_true(!(has_error(diagnostics, 2496)))
     }
   }
 }
@@ -5518,7 +5518,7 @@ test "DiagnosticCode - valid ES module import" {
   let result = check_source(source)
   match result {
     Ok(_) => () // Module resolution may not work in test
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2497)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2497)))
   }
 }
 
@@ -5552,7 +5552,7 @@ test "DiagnosticCode - valid class extension" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2502)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2502)))
   }
 }
 
@@ -5591,7 +5591,7 @@ test "DiagnosticCode - valid explicit return type" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2527)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2527)))
   }
 }
 
@@ -5668,7 +5668,7 @@ test "DiagnosticCode - valid interface merging" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2687)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2687)))
   }
 }
 
@@ -5695,7 +5695,7 @@ test "DiagnosticCode - valid namespace merging" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2687)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2687)))
   }
 }
 
@@ -5730,7 +5730,7 @@ test "DiagnosticCode - valid type reference" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2688)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2688)))
   }
 }
 
@@ -5800,7 +5800,7 @@ test "DiagnosticCode - valid static member access" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2576)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2576)))
   }
 }
 
@@ -5962,7 +5962,7 @@ test "DiagnosticCode - valid simple union type" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2590)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2590)))
   }
 }
 
@@ -6005,7 +6005,7 @@ test "DiagnosticCode - valid module import" {
   let result = check_source(source)
   match result {
     Ok(_) => () // Module resolution may not work in test
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2591)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2591)))
   }
 }
 
@@ -6081,9 +6081,9 @@ test "DiagnosticCode - TS2742 no error with exported interface" {
     Ok(tf) => {
       // Should not have TS2742 because PublicData is exported
       let found = tf.diagnostics.iter().any(fn(d) { d.code == 2742 })
-      assert_true(not(found))
+      assert_true(!(found))
     }
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2742)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2742)))
   }
 }
 
@@ -6099,9 +6099,9 @@ test "DiagnosticCode - TS2742 valid explicit return type" {
     Ok(tf) => {
       // With explicit return type, TS2742 should not be reported
       let found = tf.diagnostics.iter().any(fn(d) { d.code == 2742 })
-      assert_true(not(found))
+      assert_true(!(found))
     }
-    Err(diagnostics) => assert_true(not(has_error(diagnostics, 2742)))
+    Err(diagnostics) => assert_true(!(has_error(diagnostics, 2742)))
   }
 }
 
@@ -6159,7 +6159,7 @@ test "DiagnosticCode - TS2341 private property accessible within class" {
     Ok(_) => assert_true(true)
     Err(diagnostics) =>
       // Should not have TS2341 error for accessing private inside the class
-      assert_true(not(has_error(diagnostics, 2341)))
+      assert_true(!(has_error(diagnostics, 2341)))
   }
 }
 
@@ -6201,7 +6201,7 @@ test "DiagnosticCode - TS2445 protected property accessible in subclass" {
     Ok(_) => assert_true(true)
     Err(diagnostics) =>
       // Should not have TS2445 error for accessing protected in subclass
-      assert_true(not(has_error(diagnostics, 2445)))
+      assert_true(!(has_error(diagnostics, 2445)))
   }
 }
 
@@ -6300,7 +6300,7 @@ test "DiagnosticCode - TS2377 derived class constructor with super call" {
     Ok(_) => assert_true(true)
     Err(diagnostics) =>
       // Should not have TS2377 error when super() is called
-      assert_true(not(has_error(diagnostics, 2377)))
+      assert_true(!(has_error(diagnostics, 2377)))
   }
 }
 
@@ -6317,7 +6317,7 @@ test "DiagnosticCode - TS2377 non-derived class without super" {
     Ok(_) => assert_true(true)
     Err(diagnostics) =>
       // Should not have TS2377 error for non-derived class
-      assert_true(not(has_error(diagnostics, 2377)))
+      assert_true(!(has_error(diagnostics, 2377)))
   }
 }
 
@@ -6371,7 +6371,7 @@ test "DiagnosticCode - TS2448 var should not trigger TDZ" {
     Ok(_) => assert_true(true)
     Err(diagnostics) =>
       // Should NOT have TS2448 for var (var is hoisted)
-      assert_true(not(has_error(diagnostics, 2448)))
+      assert_true(!(has_error(diagnostics, 2448)))
   }
 }
 
@@ -6387,7 +6387,7 @@ test "DiagnosticCode - TS2448 let after usage is fine" {
     Ok(_) => assert_true(true)
     Err(diagnostics) =>
       // Should NOT have TS2448 when used after declaration
-      assert_true(not(has_error(diagnostics, 2448)))
+      assert_true(!(has_error(diagnostics, 2448)))
   }
 }
 
@@ -6437,7 +6437,7 @@ test "DiagnosticCode - TS2454 assigned before use is fine" {
   let result = check_source(source)
   match result {
     Ok(_) => assert_true(true)
-    Err(diagnostics) =>
+    Err(_diagnostics) =>
       // This is a complex control-flow case that may or may not work
       // depending on how deeply assignment tracking is integrated
       ()
@@ -6454,7 +6454,7 @@ test "DiagnosticCode - TS2454 declare var should not trigger" {
     Ok(_) => assert_true(true)
     Err(diagnostics) =>
       // Should NOT have TS2454 for ambient declarations
-      assert_true(not(has_error(diagnostics, 2454)))
+      assert_true(!(has_error(diagnostics, 2454)))
   }
 }
 
@@ -6468,7 +6468,7 @@ test "DiagnosticCode - TS2454 initialized variable is fine" {
     Ok(_) => assert_true(true)
     Err(diagnostics) =>
       // Should NOT have TS2454 when initialized
-      assert_true(not(has_error(diagnostics, 2454)))
+      assert_true(!(has_error(diagnostics, 2454)))
   }
 }
 
@@ -6477,7 +6477,7 @@ test "DiagnosticCode - TS2454 initialized variable is fine" {
 // ============================================================================
 
 ///|
-test "DiagnosticCode - TS2736 unary plus on bigint" {
+test "DiagnosticCode - TS2736 unary plus on bigint (variant)" {
   let source =
     #|const x = 10n;
     #|const y = +x;
@@ -6505,7 +6505,7 @@ test "DiagnosticCode - TS2736 unary plus on number is fine" {
     Ok(_) => assert_true(true)
     Err(diagnostics) =>
       // Should NOT have TS2736 for number
-      assert_true(not(has_error(diagnostics, 2736)))
+      assert_true(!(has_error(diagnostics, 2736)))
   }
 }
 
@@ -6520,7 +6520,7 @@ test "DiagnosticCode - TS2736 unary minus on bigint is fine" {
     Ok(_) => assert_true(true)
     Err(diagnostics) =>
       // Should NOT have TS2736 for unary minus
-      assert_true(not(has_error(diagnostics, 2736)))
+      assert_true(!(has_error(diagnostics, 2736)))
   }
 }
 
@@ -6565,7 +6565,7 @@ test "DiagnosticCode - TS2376 super first is OK" {
     Ok(_) => assert_true(true) // No error expected
     Err(diagnostics) =>
       // Should NOT have TS2376
-      assert_true(not(has_error(diagnostics, 2376)))
+      assert_true(!(has_error(diagnostics, 2376)))
   }
 }
 
@@ -6627,7 +6627,7 @@ test "DiagnosticCode - TS2737 BigInt literal with ES2020 target is fine" {
     Ok(_) => assert_true(true)
     Err(diagnostics) =>
       // Should NOT have TS2737 for ES2020+
-      assert_true(not(has_error(diagnostics, 2737)))
+      assert_true(!(has_error(diagnostics, 2737)))
   }
 }
 
@@ -6640,7 +6640,7 @@ test "DiagnosticCode - TS2737 BigInt literal with ESNext target is fine" {
     Ok(_) => assert_true(true)
     Err(diagnostics) =>
       // Should NOT have TS2737 for ESNext
-      assert_true(not(has_error(diagnostics, 2737)))
+      assert_true(!(has_error(diagnostics, 2737)))
   }
 }
 
@@ -6734,7 +6734,7 @@ test "DiagnosticCode - TS2691 import without extension is fine" {
     Ok(_) => assert_true(true)
     Err(diagnostics) =>
       // Should NOT have TS2691 for imports without extension
-      assert_true(not(has_error(diagnostics, 2691)))
+      assert_true(!(has_error(diagnostics, 2691)))
   }
 }
 
@@ -6748,7 +6748,7 @@ test "DiagnosticCode - TS2691 import from package (node_modules) is fine" {
     Ok(_) => assert_true(true)
     Err(diagnostics) =>
       // Should NOT have TS2691 for package imports
-      assert_true(not(has_error(diagnostics, 2691)))
+      assert_true(!(has_error(diagnostics, 2691)))
   }
 }
 
@@ -6839,7 +6839,7 @@ test "DiagnosticCode - TS2484 different export names is fine" {
     Ok(_) => assert_true(true)
     Err(diagnostics) =>
       // Should NOT have TS2484 for different export names
-      assert_true(not(has_error(diagnostics, 2484)))
+      assert_true(!(has_error(diagnostics, 2484)))
   }
 }
 
@@ -6875,7 +6875,7 @@ test "DiagnosticCode - TS2502 class extends different class is fine" {
     Ok(_) => assert_true(true)
     Err(diagnostics) =>
       // Should NOT have TS2502 for normal inheritance
-      assert_true(not(has_error(diagnostics, 2502)))
+      assert_true(!(has_error(diagnostics, 2502)))
   }
 }
 
@@ -8245,7 +8245,7 @@ test "DiagnosticCode - TS1200 valid arrow same line" {
     Ok(_) => () // Should succeed with no errors
     Err(diagnostics) =>
       assert_true(
-        not(has_error(diagnostics, 1200)),
+        !(has_error(diagnostics, 1200)),
         msg="Should NOT report TS1200 when arrow is on same line",
       )
   }
@@ -8262,7 +8262,7 @@ test "DiagnosticCode - TS1200 valid paren on new line" {
     Ok(_) => () // Should succeed with no errors
     Err(diagnostics) =>
       assert_true(
-        not(has_error(diagnostics, 1200)),
+        !(has_error(diagnostics, 1200)),
         msg="Should NOT report TS1200 when closing paren is on new line but arrow follows",
       )
   }
@@ -8363,7 +8363,7 @@ test "DiagnosticCode - TS1210 not triggered outside class" {
     Ok(_) => () // Should succeed - not in strict mode
     Err(diagnostics) =>
       assert_true(
-        not(has_error(diagnostics, 1210)),
+        !(has_error(diagnostics, 1210)),
         msg="Should NOT report TS1210 for 'arguments' outside class (non-strict mode)",
       )
   }
@@ -8406,7 +8406,7 @@ test "DiagnosticCode - TS2339 not triggered for this.name in regular function" {
     Err(diagnostics) =>
       // Should NOT have TS2339 for 'name' in regular function
       assert_true(
-        not(has_message(diagnostics, "Property 'name' does not exist")),
+        !(has_message(diagnostics, "Property 'name' does not exist")),
         msg="Should NOT report TS2339 for 'this.name' in regular function",
       )
   }
@@ -8425,7 +8425,7 @@ test "DiagnosticCode - TS2339 not triggered for this.age in global scope" {
     Err(diagnostics) =>
       // Should NOT have TS2339 for 'age'
       assert_true(
-        not(has_message(diagnostics, "Property 'age' does not exist")),
+        !(has_message(diagnostics, "Property 'age' does not exist")),
         msg="Should NOT report TS2339 for 'this.age' in global scope",
       )
   }
@@ -8447,7 +8447,7 @@ test "DiagnosticCode - TS2339 not triggered for this.name in class method" {
     Err(diagnostics) =>
       // Should NOT have TS2339 for 'name' in class context
       assert_true(
-        not(has_message(diagnostics, "Property 'name' does not exist")),
+        !(has_message(diagnostics, "Property 'name' does not exist")),
         msg="Should NOT report TS2339 for 'this.name' in class method",
       )
   }

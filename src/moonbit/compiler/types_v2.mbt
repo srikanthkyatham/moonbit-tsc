@@ -46,7 +46,7 @@ pub enum TypeV2 {
 
   // Error type (for type errors during checking)
   TError
-} derive(Show, Eq)
+} derive(Eq, Debug)
 
 // ============================================================================
 // Unique Symbol Types
@@ -62,7 +62,7 @@ pub struct UniqueSymbolV2 {
   description : String?
   /// Unique ID to distinguish symbols with same name in different scopes
   id : Int
-} derive(Show, Eq)
+} derive(Eq, Debug)
 
 ///|
 /// Create a new unique symbol
@@ -108,7 +108,7 @@ pub enum WellKnownSymbol {
   ToPrimitive // Symbol.toPrimitive
   ToStringTag // Symbol.toStringTag
   Unscopables // Symbol.unscopables
-} derive(Show, Eq)
+} derive(Eq, Debug)
 
 ///|
 /// Get the property name for a well-known symbol
@@ -158,7 +158,7 @@ pub struct SymbolPropertyV2 {
   symbol : SymbolKeyV2
   /// The property type information
   field : FieldInfoV2
-} derive(Show, Eq)
+} derive(Eq, Debug)
 
 ///|
 /// Symbol key types for object properties
@@ -169,7 +169,7 @@ pub enum SymbolKeyV2 {
   Unique(String, Int)
   /// A computed symbol expression (unresolved)
   Computed(String)
-} derive(Show, Eq)
+} derive(Eq, Debug)
 
 ///|
 /// Object type (interfaces, classes, object literals)
@@ -181,13 +181,13 @@ pub struct ObjectTypeV2 {
   index_signature : IndexSignatureV2?
   is_class : Bool
   class_name : String?
-} derive(Show, Eq)
+} derive(Eq, Debug)
 
 ///|
 /// Default empty object type
 pub fn ObjectTypeV2::empty() -> ObjectTypeV2 {
   {
-    fields: Map::new(),
+    fields: Map([]),
     symbol_fields: [],
     call_signatures: [],
     construct_signatures: [],
@@ -324,7 +324,7 @@ pub struct FieldInfoV2 {
   ty : TypeV2
   optional : Bool
   is_readonly : Bool
-} derive(Show, Eq)
+} derive(Eq, Debug)
 
 ///|
 /// Create a required field
@@ -351,7 +351,7 @@ pub struct TypePredicateV2 {
   parameter_name : String // The parameter being narrowed
   predicate_type : TypeV2 // The type to narrow to
   is_asserts : Bool // True for assertion functions (asserts x is Type)
-} derive(Show, Eq)
+} derive(Eq, Debug)
 
 ///|
 /// Function type
@@ -362,7 +362,7 @@ pub struct FunctionTypeV2 {
   return_type : TypeV2
   type_predicate : TypePredicateV2? // For type guards (x is Type, asserts x is Type)
   this_type : TypeV2? // For explicit `this` parameter type (this: Type)
-} derive(Show, Eq)
+} derive(Eq, Debug)
 
 ///|
 /// Default function type (any => any)
@@ -402,7 +402,7 @@ pub struct ParamInfoV2 {
   ty : TypeV2
   optional : Bool
   is_rest : Bool
-} derive(Show, Eq)
+} derive(Eq, Debug)
 
 ///|
 /// Create a required parameter
@@ -431,7 +431,7 @@ pub enum Variance {
   Contravariant // in - can only appear in input positions (parameters)
   Invariant // in out - appears in both input and output positions
   Bivariant // special case - both covariant and contravariant
-} derive(Show, Eq)
+} derive(Eq, Debug)
 
 ///|
 /// Type parameter (generic)
@@ -441,7 +441,7 @@ pub struct TypeParamV2 {
   default_type : TypeV2?
   is_const : Bool // const type parameter (TS 5.0+): function foo<const T>()
   variance : Variance? // Optional variance annotation
-} derive(Show, Eq)
+} derive(Eq, Debug)
 
 ///|
 /// Create a simple type parameter (no constraint)
@@ -525,7 +525,7 @@ pub struct TupleElementV2 {
   optional : Bool
   is_rest : Bool
   label : String?
-} derive(Show, Eq)
+} derive(Eq, Debug)
 
 ///|
 /// Create a required tuple element
@@ -557,7 +557,7 @@ pub struct IndexSignatureV2 {
   key_type : TypeV2
   value_type : TypeV2
   is_readonly : Bool
-} derive(Show, Eq)
+} derive(Eq, Debug)
 
 ///|
 /// Conditional type (T extends U ? X : Y)
@@ -566,7 +566,7 @@ pub struct ConditionalTypeV2 {
   extends_type : TypeV2
   true_type : TypeV2
   false_type : TypeV2
-} derive(Show, Eq)
+} derive(Eq, Debug)
 
 ///|
 /// Mapped type ({ [K in keyof T]: T[K] })
@@ -578,7 +578,7 @@ pub struct MappedTypeV2 {
   readonly_modifier : MappedModifierV2
   optional_modifier : MappedModifierV2
   source_type : TypeV2? // Original object type for homomorphic mapped types
-} derive(Show, Eq)
+} derive(Eq, Debug)
 
 ///|
 /// Modifier for mapped types
@@ -586,21 +586,21 @@ pub enum MappedModifierV2 {
   Unchanged // No modifier
   Add // +readonly, +?
   Remove // -readonly, -?
-} derive(Show, Eq)
+} derive(Eq, Debug)
 
 ///|
 /// Index access type (T[K])
 pub struct IndexAccessTypeV2 {
   object_type : TypeV2
   index_type : TypeV2
-} derive(Show, Eq)
+} derive(Eq, Debug)
 
 ///|
 /// Template literal type (`${string}-${number}`)
 pub struct TemplateLiteralTypeV2 {
   texts : Array[String] // Static text parts
   types : Array[TypeV2] // Interpolated types
-} derive(Show, Eq)
+} derive(Eq, Debug)
 
 ///|
 /// Create a template literal type
@@ -702,7 +702,7 @@ fn flatten_intersection(types : Array[TypeV2]) -> Array[TypeV2] {
 fn remove_duplicate_types(types : Array[TypeV2]) -> Array[TypeV2] {
   let result : Array[TypeV2] = []
   for t in types {
-    if not(result.iter().any(fn(existing) { types_v2_equal(existing, t) })) {
+    if !(result.iter().any(fn(existing) { types_v2_equal(existing, t) })) {
       result.push(t)
     }
   }

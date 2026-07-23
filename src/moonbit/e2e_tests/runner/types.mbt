@@ -5,7 +5,7 @@
 pub(all) struct SourceUnit {
   filename : String
   content : String
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Test directives parsed from comment lines
@@ -27,7 +27,7 @@ pub(all) struct TestDirectives {
   mut strict_null_checks : Bool // @strictNullChecks: true
   mut verbatim_module_syntax : Bool // @verbatimModuleSyntax: true
   mut isolated_modules : Bool // @isolatedModules: true
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Default test directives
@@ -59,7 +59,7 @@ pub(all) struct TestVariant {
   target : String
   module_kind : String
   declaration_map : Bool?
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 /// Default test variant
@@ -96,7 +96,7 @@ pub(all) struct TestCase {
   source_files : Array[SourceUnit]
   directives : TestDirectives
   variants : Array[TestVariant]
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Baseline outputs for a test
@@ -107,7 +107,7 @@ pub(all) struct Baselines {
   errors : String?
   dts : String?
   js_map : String?
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Empty baselines
@@ -128,7 +128,7 @@ pub(all) struct BaselineDiff {
   baseline_type : String // "js", "types", "symbols", "errors", "dts"
   expected : String
   actual : String
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Result of running a single test
@@ -138,7 +138,7 @@ pub(all) struct TestResult {
   passed : Bool
   diffs : Array[BaselineDiff]
   error_message : String?
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Create a passed test result
@@ -185,4 +185,4 @@ pub(all) struct TestSummary {
   failed : Int
   skipped : Int
   results : Array[TestResult]
-} derive(Show)
+} derive(Debug)

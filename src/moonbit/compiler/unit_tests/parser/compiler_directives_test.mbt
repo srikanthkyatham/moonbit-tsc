@@ -11,7 +11,7 @@ test "Parse importHelpers directive" {
     Ok(sf) => {
       assert_eq(sf.compiler_directives.import_helpers, true)
     }
-    Err(_) => @test.fail!("Parse failed")
+    Err(_) => @test.fail("Parse failed")
   }
 }
 
@@ -25,10 +25,10 @@ test "Parse target directive" {
     Ok(sf) => {
       match sf.compiler_directives.target {
         Some(target) => assert_eq(target, "es5")
-        None => @test.fail!("Target not parsed")
+        None => @test.fail("Target not parsed")
       }
     }
-    Err(_) => @test.fail!("Parse failed")
+    Err(_) => @test.fail("Parse failed")
   }
 }
 
@@ -46,10 +46,10 @@ test "Parse multiple compiler directives" {
       assert_eq(sf.compiler_directives.no_emit, true)
       match sf.compiler_directives.target {
         Some(target) => assert_eq(target, "es2015")
-        None => @test.fail!("Target not parsed")
+        None => @test.fail("Target not parsed")
       }
     }
-    Err(_) => @test.fail!("Parse failed")
+    Err(_) => @test.fail("Parse failed")
   }
 }
 
@@ -63,10 +63,10 @@ test "Parse filename directive" {
     Ok(sf) => {
       match sf.compiler_directives.filename {
         Some(filename) => assert_eq(filename, "main.ts")
-        None => @test.fail!("Filename not parsed")
+        None => @test.fail("Filename not parsed")
       }
     }
-    Err(_) => @test.fail!("Parse failed")
+    Err(_) => @test.fail("Parse failed")
   }
 }
 
@@ -80,7 +80,7 @@ test "Parse isolatedModules directive" {
     Ok(sf) => {
       assert_eq(sf.compiler_directives.isolated_modules, true)
     }
-    Err(_) => @test.fail!("Parse failed")
+    Err(_) => @test.fail("Parse failed")
   }
 }
 
@@ -94,7 +94,7 @@ test "Parse noTypesAndSymbols directive" {
     Ok(sf) => {
       assert_eq(sf.compiler_directives.no_types_and_symbols, true)
     }
-    Err(_) => @test.fail!("Parse failed")
+    Err(_) => @test.fail("Parse failed")
   }
 }
 
@@ -111,14 +111,14 @@ test "Default directives when none specified" {
       assert_eq(sf.compiler_directives.no_types_and_symbols, false)
       match sf.compiler_directives.target {
         None => ()
-        Some(_) => @test.fail!("Target should be None")
+        Some(_) => @test.fail("Target should be None")
       }
       match sf.compiler_directives.filename {
         None => ()
-        Some(_) => @test.fail!("Filename should be None")
+        Some(_) => @test.fail("Filename should be None")
       }
     }
-    Err(_) => @test.fail!("Parse failed")
+    Err(_) => @test.fail("Parse failed")
   }
 }
 
@@ -132,6 +132,6 @@ test "Parse boolean directive without spaces" {
     Ok(sf) => {
       assert_eq(sf.compiler_directives.import_helpers, true)
     }
-    Err(_) => @test.fail!("Parse failed")
+    Err(_) => @test.fail("Parse failed")
   }
 }

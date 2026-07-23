@@ -19,7 +19,7 @@ pub struct DependencyDag {
 ///|
 /// Create a new empty DAG
 pub fn DependencyDag::new() -> DependencyDag {
-  { nodes: {} }
+  { nodes: Map([]) }
 }
 
 ///|
@@ -68,7 +68,7 @@ pub fn add_node(
   for imported_path in imports {
     match dag.nodes.get(imported_path) {
       Some(imported_node) =>
-        if not(array_contains(imported_node.edges_in, path)) {
+        if !(array_contains(imported_node.edges_in, path)) {
           imported_node.edges_in.push(path)
           // Put modified node back in map
           dag.nodes[imported_path] = imported_node
@@ -86,7 +86,7 @@ pub fn get_downstream_dependents(
   path : String,
 ) -> Array[String] {
   let dependents : Array[String] = []
-  let visited : Map[String, Bool] = {}
+  let visited : Map[String, Bool] = Map([])
   let queue : Array[String] = [path]
   visited[path] = true
   while queue.length() > 0 {
@@ -94,7 +94,7 @@ pub fn get_downstream_dependents(
     match dag.nodes.get(current) {
       Some(node) =>
         for dependent in node.edges_in {
-          if not(visited.contains(dependent)) {
+          if !(visited.contains(dependent)) {
             visited[dependent] = true
             dependents.push(dependent)
             queue.push(dependent)
@@ -114,7 +114,7 @@ pub fn get_upstream_dependencies(
   path : String,
 ) -> Array[String] {
   let dependencies : Array[String] = []
-  let visited : Map[String, Bool] = {}
+  let visited : Map[String, Bool] = Map([])
   let queue : Array[String] = [path]
   visited[path] = true
   while queue.length() > 0 {
@@ -122,7 +122,7 @@ pub fn get_upstream_dependencies(
     match dag.nodes.get(current) {
       Some(node) =>
         for dep in node.edges_out {
-          if not(visited.contains(dep)) {
+          if !(visited.contains(dep)) {
             visited[dep] = true
             dependencies.push(dep)
             queue.push(dep)
@@ -139,7 +139,7 @@ pub fn get_upstream_dependencies(
 /// Returns files in compilation order (dependencies first)
 pub fn topological_sort(dag : DependencyDag) -> Array[String]? {
   // Calculate in-degree for each node
-  let in_degree : Map[String, Int] = {}
+  let in_degree : Map[String, Int] = Map([])
   for path, node in dag.nodes {
     in_degree[path] = node.edges_out.length()
   }
@@ -190,7 +190,7 @@ pub fn get_recompilation_order(
   changed_files : Array[String],
 ) -> Array[String] {
   // Collect all files that need recompilation
-  let needs_recompile : Map[String, Bool] = {}
+  let needs_recompile : Map[String, Bool] = Map([])
 
   // Add changed files
   for file in changed_files {
@@ -337,13 +337,13 @@ pub fn topological_levels(
   files : Array[String],
 ) -> Array[Array[String]] {
   // Build a set of files we're interested in
-  let file_set : Map[String, Bool] = {}
+  let file_set : Map[String, Bool] = Map([])
   for file in files {
     file_set[file] = true
   }
 
   // Build filtered dependency map (only deps within our file set)
-  let deps_map : Map[String, Array[String]] = {}
+  let deps_map : Map[String, Array[String]] = Map([])
   for file in files {
     match dag.nodes.get(file) {
       Some(node) => {
@@ -361,12 +361,12 @@ pub fn topological_levels(
 
   // Compute levels iteratively
   let levels : Array[Array[String]] = []
-  let processed : Map[String, Bool] = {}
+  let processed : Map[String, Bool] = Map([])
   while processed.length() < files.length() {
     // Find files with no remaining unprocessed dependencies (roots at this level)
     let current_level : Array[String] = []
     for file in files {
-      if not(processed.contains(file)) {
+      if !(processed.contains(file)) {
         let deps = deps_map.get(file).unwrap_or([])
         let all_deps_processed = deps
           .iter()
@@ -382,7 +382,7 @@ pub fn topological_levels(
     if current_level.length() == 0 {
       let remaining : Array[String] = []
       for file in files {
-        if not(processed.contains(file)) {
+        if !(processed.contains(file)) {
           remaining.push(file)
         }
       }

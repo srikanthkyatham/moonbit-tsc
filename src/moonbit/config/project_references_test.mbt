@@ -354,7 +354,7 @@ test "resolve_cross_project_import - relative imports return None" {
     config,
     dependencies: [],
   }
-  let project_map : Map[String, ReferencedProjectInfo] = {}
+  let project_map : Map[String, ReferencedProjectInfo] = Map([])
 
   // Relative imports should return None (handled by same-project resolution)
   let result = resolve_cross_project_import("./utils", project, project_map, fn(
@@ -810,7 +810,7 @@ test "ProjectBuildState - constructor" {
 ///|
 test "BuildContext - constructor" {
   let graph : ProjectGraph = { projects: [], build_order: [] }
-  let states : Map[String, ProjectBuildState] = {}
+  let states : Map[String, ProjectBuildState] = Map([])
   let validation = make_validation_result(true, [], [])
   let ctx = make_build_context(graph, states, validation)
   assert_eq(ctx.graph.projects.length(), 0)

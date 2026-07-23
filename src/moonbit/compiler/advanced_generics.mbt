@@ -14,7 +14,7 @@ pub fn narrow_to_literal_for_const(
   type_param : TypeParamV2,
   inferred_type : TypeV2,
 ) -> TypeV2 {
-  if not(type_param.is_const) {
+  if !(type_param.is_const) {
     return inferred_type
   }
 
@@ -53,7 +53,7 @@ fn narrow_to_const_type(ty : TypeV2) -> TypeV2 {
 
     // Objects get narrowed field types
     TObject(obj) => {
-      let new_fields : Map[String, FieldInfoV2] = Map::new()
+      let new_fields : Map[String, FieldInfoV2] = Map([])
       obj.fields.each(fn(name, field) {
         new_fields.set(name, FieldInfoV2::{
           ty: narrow_to_const_type(field.ty),
@@ -109,7 +109,7 @@ pub fn make_readonly_tuple(elements : Array[TupleElementV2]) -> TypeV2 {
 pub enum TypePosition {
   Output // Return types, property values (read)
   Input // Parameter types, property values (write)
-} derive(Show, Eq)
+} derive(Eq, Debug)
 
 ///|
 /// Analyze the variance of a type parameter in a given type
@@ -336,8 +336,8 @@ struct RecursiveResolutionState {
 /// Create a new recursive resolution state
 pub fn RecursiveResolutionState::new() -> RecursiveResolutionState {
   {
-    in_progress: Map::new(),
-    resolved: Map::new(),
+    in_progress: Map([]),
+    resolved: Map([]),
     max_depth: 20, // Reasonable limit for recursive types
     current_depth: 0,
   }
@@ -510,7 +510,7 @@ pub fn apply_higher_kinded_type(
   match hkt.body {
     Some(body) => {
       // Build substitution map
-      let subst : Map[String, TypeV2] = Map::new()
+      let subst : Map[String, TypeV2] = Map([])
       for i, param in hkt.params {
         if i < type_args.length() {
           subst.set(param.name, type_args[i])
@@ -563,7 +563,7 @@ pub fn infer_type_args_with_const(
   arg_types : Array[TypeV2],
   explicit_type_args : Array[TypeV2],
 ) -> Map[String, TypeV2] {
-  let inferred : Map[String, TypeV2] = Map::new()
+  let inferred : Map[String, TypeV2] = Map([])
 
   // First, use any explicit type arguments
   for i, param in func.type_params {
@@ -597,7 +597,7 @@ fn do_infer_from_types_with_const(
 ) -> Unit {
   match param_ty {
     TTypeParam(name, _) =>
-      if not(inferred.contains(name)) {
+      if !(inferred.contains(name)) {
         // Check if this is a const parameter
         let is_const = type_params
           .iter()

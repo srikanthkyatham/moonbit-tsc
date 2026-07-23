@@ -241,7 +241,7 @@ test "extract type from exports.number" {
       match info.ty {
         TNumber => ()
         _ => {
-          println("Expected TNumber, got \{info.ty}")
+          println("Expected TNumber, got \{@debug.to_string(info.ty)}")
           assert_true(false)
         }
       }
@@ -260,7 +260,7 @@ test "extract type from exports.string" {
       match info.ty {
         TString => ()
         _ => {
-          println("Expected TString, got \{info.ty}")
+          println("Expected TString, got \{@debug.to_string(info.ty)}")
           assert_true(false)
         }
       }
@@ -281,7 +281,7 @@ test "extract type from exports.function" {
       match info.ty {
         TFunction(_) => ()
         _ => {
-          println("Expected TFunction, got \{info.ty}")
+          println("Expected TFunction, got \{@debug.to_string(info.ty)}")
           assert_true(false)
         }
       }
@@ -347,7 +347,7 @@ test "extract type from module.exports object" {
       match info.ty {
         TNumber => ()
         _ => {
-          println("Expected TNumber for x, got \{info.ty}")
+          println("Expected TNumber for x, got \{@debug.to_string(info.ty)}")
           assert_true(false)
         }
       }
@@ -363,7 +363,7 @@ test "extract type from module.exports object" {
       match info.ty {
         TString => ()
         _ => {
-          println("Expected TString for y, got \{info.ty}")
+          println("Expected TString for y, got \{@debug.to_string(info.ty)}")
           assert_true(false)
         }
       }
@@ -384,7 +384,7 @@ test "extract type from module.exports function" {
       match info.ty {
         TFunction(ft) => assert_eq(ft.params.length(), 2)
         _ => {
-          println("Expected TFunction, got \{info.ty}")
+          println("Expected TFunction, got \{@debug.to_string(info.ty)}")
           assert_true(false)
         }
       }
@@ -429,7 +429,7 @@ test "extract arrow function type" {
           assert_eq(ft.params[0].name, "n")
         }
         _ => {
-          println("Expected TFunction, got \{info.ty}")
+          println("Expected TFunction, got \{@debug.to_string(info.ty)}")
           assert_true(false)
         }
       }
@@ -533,7 +533,7 @@ test "extract nested object types" {
       match info.ty {
         TObject(_) => ()
         _ => {
-          println("Expected TObject for person, got \{info.ty}")
+          println("Expected TObject for person, got \{@debug.to_string(info.ty)}")
           assert_true(false)
         }
       }
@@ -552,7 +552,7 @@ test "extract array type" {
       match info.ty {
         TArray(_) => ()
         _ => {
-          println("Expected TArray, got \{info.ty}")
+          println("Expected TArray, got \{@debug.to_string(info.ty)}")
           assert_true(false)
         }
       }

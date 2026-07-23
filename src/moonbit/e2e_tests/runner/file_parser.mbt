@@ -6,7 +6,7 @@
 /// Handles // @filename: directives to split content
 pub fn parse_multi_file_test(
   content : String,
-  directives : TestDirectives,
+  _directives : TestDirectives,
   default_filename : String,
 ) -> Array[SourceUnit] {
   let source_files : Array[SourceUnit] = []
@@ -14,8 +14,8 @@ pub fn parse_multi_file_test(
   let mut current_filename : String? = None
   let mut current_lines : Array[String] = []
   for line in lines {
-    let line_str = line.to_string()
-    let trimmed = line.trim(chars=" \t").to_string()
+    let line_str = line.to_owned()
+    let trimmed = line.trim(chars=" \t").to_owned()
     if is_filename_directive(trimmed) {
       // Save current file if exists
       match current_filename {
@@ -29,9 +29,9 @@ pub fn parse_multi_file_test(
       }
       // Start new file
       current_filename = Some(parse_filename_value(trimmed))
-    } else if current_filename.is_some() {
+    } else if current_filename is Some(_) {
       // Add line to current file (skip other directives if no content yet)
-      if not(is_other_directive(trimmed)) || current_lines.length() > 0 {
+      if !(is_other_directive(trimmed)) || current_lines.length() > 0 {
         current_lines.push(line_str)
       }
     }
@@ -66,8 +66,8 @@ fn is_filename_directive(line : String) -> Bool {
 /// Check if a line is some other directive (not @filename, e.g. @declaration, @target)
 fn is_other_directive(line : String) -> Bool {
   line.has_prefix("// @") &&
-  not(is_filename_directive(line)) &&
-  not(line.has_prefix("// @ts-")) // Don't skip @ts-ignore etc.
+  !(is_filename_directive(line)) &&
+  !(line.has_prefix("// @ts-")) // Don't skip @ts-ignore etc.
 }
 
 ///|
@@ -78,7 +78,7 @@ fn parse_filename_value(line : String) -> String {
     Some(pos) => {
       let start = pos + 1
       if start < line.length() {
-        line.substring(start~).trim(chars=" \t").to_string()
+        line[start:].to_owned().trim(chars=" \t").to_owned()
       } else {
         ""
       }
@@ -93,10 +93,10 @@ fn strip_directive_lines(content : String) -> String {
   let lines = content.split("\n")
   let result_lines : Array[String] = []
   for line in lines {
-    let line_str = line.to_string()
-    let trimmed = line.trim(chars=" \t").to_string()
+    let line_str = line.to_owned()
+    let trimmed = line.trim(chars=" \t").to_owned()
     // Keep if not a directive (except @ts-* directives which are runtime)
-    if not(trimmed.has_prefix("// @")) || trimmed.has_prefix("// @ts-") {
+    if !(trimmed.has_prefix("// @")) || trimmed.has_prefix("// @ts-") {
       result_lines.push(line_str)
     }
   }

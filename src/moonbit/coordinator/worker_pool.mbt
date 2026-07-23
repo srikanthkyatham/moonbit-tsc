@@ -5,9 +5,8 @@
 /// Represents a spawned worker process with pipe handles
 pub struct WorkerHandle {
   pid : Int
-  stdin : @pipe.PipeWrite
-  stdout : @pipe.PipeRead
-  reader : @io.BufferedReader[@pipe.PipeRead]
+  stdin : @process.WriteToProcess
+  stdout : @process.ReadFromProcess
 }
 
 ///|
@@ -46,8 +45,7 @@ pub async fn spawn_worker(executable : String) -> WorkerHandle raise Error {
     stdin=stdin_for_process,
     stdout=stdout_for_process,
   )
-  let reader = @io.BufferedReader::new(stdout_read)
-  { pid, stdin: stdin_write, stdout: stdout_read, reader }
+  { pid, stdin: stdin_write, stdout: stdout_read }
 }
 
 ///|
@@ -73,8 +71,8 @@ pub async fn create_worker_pool(
   let workers = spawn_workers(executable, worker_count)
 
   // Create bounded queues for work distribution and result collection
-  let work_queue = @aqueue.Queue::new(kind=@aqueue.Blocking(worker_count * 2))
-  let result_queue = @aqueue.Queue::new(kind=@aqueue.Unbounded)
+  let work_queue = @aqueue.Queue(kind=@aqueue.Blocking(worker_count * 2))
+  let result_queue = @aqueue.Queue(kind=@aqueue.Unbounded)
   { workers, work_queue, result_queue }
 }
 
@@ -89,7 +87,7 @@ pub async fn send_request(
   worker.stdin.write(request_json)
 
   // Read response
-  let response_line = worker.reader.read_line()
+  let response_line = worker.stdout.read_until("\n")
   match response_line {
     None =>
       @protocol.CompileResponse::error(
@@ -139,10 +137,10 @@ pub async fn run_with_pool(
     None,
   )
   let total_count = files.length()
-  @async.with_task_group(fn(group) {
+  @async.with_task_group(async fn(group) {
     // Start worker loops in background
     for worker in pool.workers {
-      group.spawn_bg(allow_failure=true, fn() {
+      group.spawn_bg(allow_failure=true, async fn() {
         worker_loop(worker, pool.work_queue, pool.result_queue)
       })
     }

@@ -36,7 +36,8 @@ fn parse_unicode_escape_v2(code : StringView) -> (String, Int)? {
       let mut i = 0
       let mut code_point = 0
       let mut digit_count = 0
-      loop rest {
+      for cur = rest {
+        match cur {
         ['}', ..] => {
           if digit_count == 0 || code_point > 0x10FFFF {
             return None
@@ -54,6 +55,7 @@ fn parse_unicode_escape_v2(code : StringView) -> (String, Int)? {
             None => return None
           }
         [] => return None
+      }
       }
     }
     _ => {

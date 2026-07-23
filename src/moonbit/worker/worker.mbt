@@ -5,11 +5,9 @@
 ///|
 /// Run the worker loop - reads requests from stdin, writes responses to stdout
 pub async fn run_worker() -> Unit raise Error {
-  let reader = @io.BufferedReader::new(@stdio.stdin)
-
   // Process requests until stdin is closed
   while true {
-    let line = reader.read_line()
+    let line = @stdio.stdin.read_until("\n")
     match line {
       None => break // EOF - coordinator closed stdin
       Some(json_str) => {

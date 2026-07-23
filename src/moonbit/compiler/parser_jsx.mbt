@@ -87,7 +87,7 @@ fn get_jsx_attribute_name_from_token(
 /// Only returns true if JSX mode is enabled (for .tsx files)
 fn is_jsx_start(parser : Parser) -> Bool {
   // Only parse JSX if explicitly in JSX mode
-  if not(parser.context.in_jsx) {
+  if !(parser.context.in_jsx) {
     return false
   }
   match current_token(parser) {

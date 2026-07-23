@@ -18,7 +18,7 @@ pub(all) struct TsConfigTracker {
 ///|
 /// Create a new tsconfig tracker
 pub fn TsConfigTracker::new() -> TsConfigTracker {
-  { config_hash: 0, config_path: None, lock: @semaphore.Semaphore::new(1) }
+  { config_hash: 0, config_path: None, lock: @semaphore.Semaphore(1) }
 }
 
 ///|
@@ -98,7 +98,7 @@ pub(all) struct TypeCache {
 ///|
 /// Create a new empty type cache
 pub fn TypeCache::new() -> TypeCache {
-  { entries: {}, lock: @semaphore.Semaphore::new(1) }
+  { entries: Map([]), lock: @semaphore.Semaphore(1) }
 }
 
 ///|
@@ -139,7 +139,7 @@ pub async fn TypeCache::get_many(
   file_paths : Array[String],
 ) -> Map[String, String] {
   self.lock.acquire()
-  let result : Map[String, String] = {}
+  let result : Map[String, String] = Map([])
   for path in file_paths {
     match self.entries.get(path) {
       Some(types_json) => result[path] = types_json
@@ -160,7 +160,7 @@ pub async fn TypeCache::build_external_types_json(
   self.lock.acquire()
 
   // Build exclude set
-  let exclude_set : Map[String, Bool] = {}
+  let exclude_set : Map[String, Bool] = Map([])
   for path in exclude {
     exclude_set[path] = true
   }
@@ -174,7 +174,7 @@ pub async fn TypeCache::build_external_types_json(
     if exclude_set.contains(path) {
       continue
     }
-    if not(first) {
+    if !(first) {
       sb.write_string(",")
     }
     first = false
@@ -254,7 +254,7 @@ pub(all) struct CacheEntry {
   source_map : String? // Optional source map
   declaration : String? // Optional declaration
   module_types_json : String? // Optional module types JSON for cross-file type checking
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Compilation cache - maps file paths to cached entries
@@ -269,7 +269,7 @@ pub(all) struct CompilationCache {
 ///|
 /// Create a new empty cache with lock
 pub fn CompilationCache::new() -> CompilationCache {
-  { entries: {}, hits: 0, misses: 0, lock: @semaphore.Semaphore::new(1) } // Binary semaphore acts as mutex
+  { entries: Map([]), hits: 0, misses: 0, lock: @semaphore.Semaphore(1) } // Binary semaphore acts as mutex
 }
 
 ///|

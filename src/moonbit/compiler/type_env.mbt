@@ -6,7 +6,7 @@
 pub struct TypeAliasInfoV2 {
   type_params : Array[TypeParamV2]
   body : TypeV2
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 /// Import binding info - maps local name to external module/export
@@ -19,7 +19,7 @@ pub struct ImportBindingInfo {
   is_default : Bool
   /// Whether this is a namespace import (import * as ns)
   is_namespace : Bool
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 /// Create a named import binding
@@ -43,7 +43,7 @@ pub fn ImportBindingInfo::default(module_path : String) -> ImportBindingInfo {
 
 ///|
 /// Create a namespace import binding
-pub fn ImportBindingInfo::namespace(module_path : String) -> ImportBindingInfo {
+pub fn ImportBindingInfo::namespace_import(module_path : String) -> ImportBindingInfo {
   { module_path, imported_name: "*", is_default: false, is_namespace: true }
 }
 
@@ -61,20 +61,20 @@ pub struct TypeEnv {
   external_registry : ExternalTypeRegistry?
   /// Import bindings: local_name -> ImportBindingInfo
   import_bindings : Map[String, ImportBindingInfo]
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 /// Create a new empty type environment
 pub fn TypeEnv::new() -> TypeEnv {
   {
-    variables: Map::new(),
-    type_aliases: Map::new(),
-    interfaces: Map::new(),
-    type_params: Map::new(),
-    narrowings: Map::new(),
+    variables: Map([]),
+    type_aliases: Map([]),
+    interfaces: Map([]),
+    type_params: Map([]),
+    narrowings: Map([]),
     parent: None,
     external_registry: None,
-    import_bindings: Map::new(),
+    import_bindings: Map([]),
   }
 }
 
@@ -84,14 +84,14 @@ pub fn TypeEnv::with_external_registry(
   registry : ExternalTypeRegistry,
 ) -> TypeEnv {
   {
-    variables: Map::new(),
-    type_aliases: Map::new(),
-    interfaces: Map::new(),
-    type_params: Map::new(),
-    narrowings: Map::new(),
+    variables: Map([]),
+    type_aliases: Map([]),
+    interfaces: Map([]),
+    type_params: Map([]),
+    narrowings: Map([]),
     parent: None,
     external_registry: Some(registry),
-    import_bindings: Map::new(),
+    import_bindings: Map([]),
   }
 }
 
@@ -99,11 +99,11 @@ pub fn TypeEnv::with_external_registry(
 /// Create a child environment (for nested scopes like function bodies, blocks)
 pub fn TypeEnv::child(self : TypeEnv) -> TypeEnv {
   {
-    variables: Map::new(),
-    type_aliases: Map::new(),
-    interfaces: Map::new(),
-    type_params: Map::new(),
-    narrowings: Map::new(),
+    variables: Map([]),
+    type_aliases: Map([]),
+    interfaces: Map([]),
+    type_params: Map([]),
+    narrowings: Map([]),
     parent: Some(self),
     external_registry: self.external_registry,
     import_bindings: self.import_bindings,
@@ -126,7 +126,7 @@ pub fn TypeEnv::child(self : TypeEnv) -> TypeEnv {
 ///   }
 pub fn TypeEnv::closure_child(self : TypeEnv) -> TypeEnv {
   // Collect all narrowings from the entire parent chain
-  let inherited_narrowings : Map[String, TypeV2] = Map::new()
+  let inherited_narrowings : Map[String, TypeV2] = Map([])
   let mut current : TypeEnv? = Some(self)
   while true {
     match current {
@@ -135,7 +135,7 @@ pub fn TypeEnv::closure_child(self : TypeEnv) -> TypeEnv {
         for kv in env.narrowings {
           let name = kv.0
           let ty = kv.1
-          if not(inherited_narrowings.contains(name)) {
+          if !(inherited_narrowings.contains(name)) {
             inherited_narrowings.set(name, ty)
           }
         }
@@ -145,10 +145,10 @@ pub fn TypeEnv::closure_child(self : TypeEnv) -> TypeEnv {
     }
   }
   {
-    variables: Map::new(),
-    type_aliases: Map::new(),
-    interfaces: Map::new(),
-    type_params: Map::new(),
+    variables: Map([]),
+    type_aliases: Map([]),
+    interfaces: Map([]),
+    type_params: Map([]),
     narrowings: inherited_narrowings,
     parent: Some(self),
     external_registry: self.external_registry,
@@ -204,7 +204,7 @@ pub fn TypeEnv::lookup_imported(self : TypeEnv, name : String) -> TypeV2? {
               None => None
               Some(module_types) => {
                 // Build an object type from all exports
-                let fields : Map[String, FieldInfoV2] = Map::new()
+                let fields : Map[String, FieldInfoV2] = Map([])
                 for kv in module_types.named_exports {
                   fields.set(kv.0, FieldInfoV2::required(kv.1.ty))
                 }
@@ -479,7 +479,7 @@ pub fn TypeEnv::clear_narrowings(self : TypeEnv) -> TypeEnv {
     type_aliases: self.type_aliases,
     interfaces: self.interfaces,
     type_params: self.type_params,
-    narrowings: Map::new(),
+    narrowings: Map([]),
     parent: self.parent,
     external_registry: self.external_registry,
     import_bindings: self.import_bindings,
@@ -682,7 +682,7 @@ fn substitute_type_params_v2(
   args : Array[TypeV2],
 ) -> TypeV2 {
   // Build substitution map
-  let subst : Map[String, TypeV2] = Map::new()
+  let subst : Map[String, TypeV2] = Map([])
   for i in 0..<params.length() {
     if i < args.length() {
       subst.set(params[i].name, args[i])
@@ -764,7 +764,7 @@ fn subst_in_object_v2(
   obj : ObjectTypeV2,
   subst : Map[String, TypeV2],
 ) -> ObjectTypeV2 {
-  let new_fields : Map[String, FieldInfoV2] = Map::new()
+  let new_fields : Map[String, FieldInfoV2] = Map([])
   for kv in obj.fields {
     new_fields.set(kv.0, {
       ty: subst_in_type_v2(kv.1.ty, subst),
@@ -844,7 +844,7 @@ fn merge_narrowing_envs(
   env_a : TypeEnv,
   env_b : TypeEnv,
 ) -> TypeEnv {
-  let merged_narrowings : Map[String, TypeV2] = Map::new()
+  let merged_narrowings : Map[String, TypeV2] = Map([])
 
   // For each narrowing in A, check if B also narrows that variable
   for kv in env_a.narrowings {
@@ -988,7 +988,7 @@ pub fn TypeEnv::with_builtins() -> TypeEnv {
   )
 
   // Add console object type
-  let console_fields : Map[String, FieldInfoV2] = Map::new()
+  let console_fields : Map[String, FieldInfoV2] = Map([])
   console_fields.set(
     "log",
     FieldInfoV2::required(
@@ -1114,7 +1114,7 @@ fn interface_declaration_to_object_type(
   env : TypeEnv,
   iface : InterfaceDeclaration,
 ) -> ObjectTypeV2 {
-  let fields : Map[String, FieldInfoV2] = Map::new()
+  let fields : Map[String, FieldInfoV2] = Map([])
   let call_signatures : Array[FunctionTypeV2] = []
   let construct_signatures : Array[FunctionTypeV2] = []
   let mut index_signature : IndexSignatureV2? = None
@@ -1257,7 +1257,7 @@ pub struct ExternalTypeInfo {
   is_type_only : Bool
   /// Original name in the source module
   original_name : String
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 /// Create a value export info
@@ -1290,18 +1290,18 @@ pub struct ModuleTypes {
   /// Global namespaces declared in this module (for .d.ts files)
   /// Maps namespace name to its exported members
   global_namespaces : Map[String, ObjectTypeV2]
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 /// Create empty module types
 pub fn ModuleTypes::empty(module_path : String) -> ModuleTypes {
   {
     module_path,
-    named_exports: Map::new(),
+    named_exports: Map([]),
     default_export: None,
-    type_aliases: Map::new(),
-    interfaces: Map::new(),
-    global_namespaces: Map::new(),
+    type_aliases: Map([]),
+    interfaces: Map([]),
+    global_namespaces: Map([]),
   }
 }
 
@@ -1349,12 +1349,12 @@ pub struct ExternalTypeRegistry {
   modules : Map[String, ModuleTypes]
   /// Module specifier -> resolved file path (for bare imports like "lodash" -> "/path/to/node_modules/lodash/index.d.ts")
   module_mappings : Map[String, String]
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 /// Create a new empty registry
 pub fn ExternalTypeRegistry::new() -> ExternalTypeRegistry {
-  { modules: Map::new(), module_mappings: Map::new() }
+  { modules: Map([]), module_mappings: Map([]) }
 }
 
 ///|
@@ -1740,7 +1740,7 @@ fn parse_type_v2(json : Json) -> TypeV2 {
       }
     "literal_number" =>
       match obj.get("value") {
-        Some(Number(v)) => TLiteralNumber(v)
+        Some(Number(v, ..)) => TLiteralNumber(v)
         _ => TNumber
       }
     "literal_bool" =>
@@ -1861,7 +1861,7 @@ fn parse_tuple_element_v2(json : Json) -> TupleElementV2 {
 /// Parse ObjectTypeV2 from JSON
 fn parse_object_type_v2(json : Json) -> ObjectTypeV2? {
   guard json is Object(obj) else { return None }
-  let fields : Map[String, FieldInfoV2] = Map::new()
+  let fields : Map[String, FieldInfoV2] = Map([])
   match obj.get("fields") {
     Some(Object(fields_obj)) =>
       for kv in fields_obj {
@@ -2074,7 +2074,7 @@ pub fn ModuleTypes::to_json_string(self : ModuleTypes) -> String {
   // Write named exports
   let mut first = true
   for kv in self.named_exports {
-    if not(first) {
+    if !(first) {
       sb.write_string(",")
     }
     first = false
@@ -2088,7 +2088,7 @@ pub fn ModuleTypes::to_json_string(self : ModuleTypes) -> String {
   // Write type aliases
   first = true
   for kv in self.type_aliases {
-    if not(first) {
+    if !(first) {
       sb.write_string(",")
     }
     first = false
@@ -2102,7 +2102,7 @@ pub fn ModuleTypes::to_json_string(self : ModuleTypes) -> String {
   // Write interfaces
   first = true
   for kv in self.interfaces {
-    if not(first) {
+    if !(first) {
       sb.write_string(",")
     }
     first = false
@@ -2116,7 +2116,7 @@ pub fn ModuleTypes::to_json_string(self : ModuleTypes) -> String {
   // Write global namespaces
   first = true
   for kv in self.global_namespaces {
-    if not(first) {
+    if !(first) {
       sb.write_string(",")
     }
     first = false
@@ -2172,17 +2172,17 @@ fn external_type_info_to_json_str(info : ExternalTypeInfo) -> String {
 
 ///|
 /// Serialize TypeAliasInfoV2 to JSON string
-fn type_alias_info_to_json_str(alias : TypeAliasInfoV2) -> String {
+fn type_alias_info_to_json_str(alias_info : TypeAliasInfoV2) -> String {
   let sb = StringBuilder::new()
   sb.write_string("{\"type_params\":[")
-  for i, param in alias.type_params {
+  for i, param in alias_info.type_params {
     if i > 0 {
       sb.write_string(",")
     }
     sb.write_string(type_param_to_json_str(param))
   }
   sb.write_string("],\"body\":")
-  sb.write_string(type_v2_to_json_str(alias.body))
+  sb.write_string(type_v2_to_json_str(alias_info.body))
   sb.write_string("}")
   sb.to_string()
 }
@@ -2423,7 +2423,7 @@ fn object_type_inner_to_json_str(obj_type : ObjectTypeV2) -> String {
   sb.write_string("\"fields\":{")
   let mut first = true
   for kv in obj_type.fields {
-    if not(first) {
+    if !(first) {
       sb.write_string(",")
     }
     first = false

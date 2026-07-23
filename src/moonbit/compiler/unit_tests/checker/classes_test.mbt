@@ -522,7 +522,7 @@ test "unit/classes/extends-null - class extends null" {
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(diagnostics) => {
-      println("Errors: \{diagnostics}")
+      println("Errors: \{@debug.to_string(diagnostics)}")
       assert_true(false)
     }
   }
@@ -542,7 +542,7 @@ test "unit/classes/extends-null - class extends null with properties" {
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(diagnostics) => {
-      println("Errors: \{diagnostics}")
+      println("Errors: \{@debug.to_string(diagnostics)}")
       assert_true(false)
     }
   }
@@ -564,11 +564,11 @@ test "unit/classes/extends-null - extends null should not have TS2565 error" {
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(diagnostics) => {
-      println("Errors: \{diagnostics}")
+      println("Errors: \{@debug.to_string(diagnostics)}")
       // Should not have TS2377 (super required) or TS2565 (property used before assigned)
       let has_ts2377 = diagnostics.iter().any(fn(d) { d.code == 2377 })
       let has_ts2565 = diagnostics.iter().any(fn(d) { d.code == 2565 })
-      assert_true(not(has_ts2377) && not(has_ts2565))
+      assert_true(!(has_ts2377) && !(has_ts2565))
     }
   }
 }
@@ -599,7 +599,7 @@ test "unit/classes/super-call - super call in object literal property value" {
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(diagnostics) => {
-      println("Errors: \{diagnostics}")
+      println("Errors: \{@debug.to_string(diagnostics)}")
       assert_true(false)
     }
   }
@@ -623,7 +623,7 @@ test "unit/classes/super-call - super call in nested expression" {
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(diagnostics) => {
-      println("Errors: \{diagnostics}")
+      println("Errors: \{@debug.to_string(diagnostics)}")
       assert_true(false)
     }
   }
@@ -647,7 +647,7 @@ test "unit/classes/super-call - super call in array literal" {
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(diagnostics) => {
-      println("Errors: \{diagnostics}")
+      println("Errors: \{@debug.to_string(diagnostics)}")
       assert_true(false)
     }
   }
@@ -671,7 +671,7 @@ test "unit/classes/super-call - super call in conditional expression" {
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(diagnostics) => {
-      println("Errors: \{diagnostics}")
+      println("Errors: \{@debug.to_string(diagnostics)}")
       assert_true(false)
     }
   }
@@ -697,7 +697,7 @@ test "unit/classes/super-call - valid super before this access" {
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(diagnostics) => {
-      println("Errors: \{diagnostics}")
+      println("Errors: \{@debug.to_string(diagnostics)}")
       assert_true(false)
     }
   }
@@ -731,7 +731,7 @@ test "unit/classes/var-hoisting - var declaration hoisted in constructor" {
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(diagnostics) => {
-      println("Errors: \{diagnostics}")
+      println("Errors: \{@debug.to_string(diagnostics)}")
       assert_true(false)
     }
   }
@@ -753,7 +753,7 @@ test "unit/classes/var-hoisting - var declaration hoisted in method" {
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(diagnostics) => {
-      println("Errors: \{diagnostics}")
+      println("Errors: \{@debug.to_string(diagnostics)}")
       assert_true(false)
     }
   }
@@ -781,7 +781,7 @@ test "unit/classes/ts2376 - no error for class without initialized properties" {
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(diagnostics) => {
-      println("Errors: \{diagnostics}")
+      println("Errors: \{@debug.to_string(diagnostics)}")
       assert_true(false)
     }
   }
@@ -858,7 +858,7 @@ test "unit/classes/ts17005 - extends null without super is OK" {
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(diagnostics) => {
-      println("Errors: \{diagnostics}")
+      println("Errors: \{@debug.to_string(diagnostics)}")
       assert_true(false)
     }
   }
@@ -890,10 +890,10 @@ test "unit/classes/ts17009 - this in arrow function before super" {
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(diagnostics) => {
-      println("Errors: \{diagnostics}")
+      println("Errors: \{@debug.to_string(diagnostics)}")
       // Should NOT have TS17009 error for arrow function this
       let has_ts17009 = diagnostics.iter().any(fn(d) { d.code == 17009 })
-      assert_true(not(has_ts17009))
+      assert_true(!(has_ts17009))
     }
   }
 }

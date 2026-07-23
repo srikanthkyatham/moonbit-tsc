@@ -79,7 +79,7 @@ pub fn parse_jsdoc(content : String) -> JSDocParseResult {
           None => ()
         }
       }
-    } else if not(in_tags) && trimmed.length() > 0 {
+    } else if !(in_tags) && trimmed.length() > 0 {
       // Collect description lines (before any tags)
       description_lines.push(trimmed)
     }
@@ -126,7 +126,7 @@ fn split_jsdoc_lines(content : String) -> Array[String] {
   let mut current = ""
   let mut i = 0
   while i < content.length() {
-    match content.get(i) {
+    match @utils.code_unit(content, i) {
       Some(ch) => {
         let c = @utils.int_to_char(ch)
         if c == '\n' {
@@ -154,14 +154,14 @@ fn trim_jsdoc_line(line : String) -> String {
   let mut past_star = false
   let mut i = 0
   while i < line.length() {
-    match line.get(i) {
+    match @utils.code_unit(line, i) {
       Some(ch) => {
         let c = @utils.int_to_char(ch)
-        if not(started) {
+        if !(started) {
           if c == ' ' || c == '\t' || c == '\r' {
             // skip leading whitespace
             ()
-          } else if c == '*' && not(past_star) {
+          } else if c == '*' && !(past_star) {
             past_star = true
           } else {
             started = true
@@ -185,7 +185,7 @@ fn trim_jsdoc_line(line : String) -> String {
 fn trim_trailing_whitespace(s : String) -> String {
   let mut end = s.length()
   while end > 0 {
-    match s.get(end - 1) {
+    match @utils.code_unit(s, end - 1) {
       Some(ch) => {
         let c = @utils.int_to_char(ch)
         if c == ' ' || c == '\t' || c == '\r' {
@@ -328,7 +328,7 @@ fn parse_jsdoc_template_tag(content : String, loc : SourceLocation) -> JSDocTag 
   constraint = maybe_constraint
 
   // Split rest by comma
-  let params_str = if constraint.is_empty() { content } else { rest }
+  let params_str = if constraint is None { content } else { rest }
   let parts = split_by_comma(params_str)
   for part in parts {
     let trimmed = trim_leading_whitespace(part)
@@ -360,7 +360,7 @@ fn extract_jsdoc_type(content : String) -> (String?, String) {
     let mut end = 0
     let mut i = 0
     while i < trimmed.length() {
-      match trimmed.get(i) {
+      match @utils.code_unit(trimmed, i) {
         Some(ch) => {
           let c = @utils.int_to_char(ch)
           if c == '{' {
@@ -432,7 +432,7 @@ fn extract_jsdoc_param_name(content : String) -> (String, Bool, String) {
 fn find_whitespace_or_end(s : String, start : Int) -> Int {
   let mut i = start
   while i < s.length() {
-    match s.get(i) {
+    match @utils.code_unit(s, i) {
       Some(ch) => {
         let c = @utils.int_to_char(ch)
         if c == ' ' || c == '\t' || c == '\r' || c == '\n' {
@@ -451,7 +451,7 @@ fn find_whitespace_or_end(s : String, start : Int) -> Int {
 fn trim_leading_whitespace(s : String) -> String {
   let mut start = 0
   while start < s.length() {
-    match s.get(start) {
+    match @utils.code_unit(s, start) {
       Some(ch) => {
         let c = @utils.int_to_char(ch)
         if c == ' ' || c == '\t' || c == '\r' {
@@ -471,7 +471,7 @@ fn trim_leading_whitespace(s : String) -> String {
 fn find_char(s : String, target : Char, start : Int) -> Int {
   let mut i = start
   while i < s.length() {
-    match s.get(i) {
+    match @utils.code_unit(s, i) {
       Some(ch) => if @utils.int_to_char(ch) == target { return i }
       None => ()
     }
@@ -487,7 +487,7 @@ fn split_by_comma(s : String) -> Array[String] {
   let mut current = ""
   let mut i = 0
   while i < s.length() {
-    match s.get(i) {
+    match @utils.code_unit(s, i) {
       Some(ch) => {
         let c = @utils.int_to_char(ch)
         if c == ',' {
@@ -505,15 +505,6 @@ fn split_by_comma(s : String) -> Array[String] {
     parts.push(current)
   }
   parts
-}
-
-///|
-/// Check if optional is empty
-fn[T] Option::is_empty(self : T?) -> Bool {
-  match self {
-    Some(_) => false
-    None => true
-  }
 }
 
 ///|

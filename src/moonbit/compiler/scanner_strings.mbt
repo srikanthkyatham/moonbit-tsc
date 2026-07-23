@@ -8,11 +8,12 @@ fn scan_double_string(
   state : ScanState,
   content : StringBuilder,
 ) -> StringView {
-  loop code {
+  for cur = code {
+    match cur {
     ['"', .. rest] => {
       state.col += 1
       state.offset += 1
-      rest
+      break rest
     }
     [.. "\\n", .. rest] => {
       content.write_char('\n')
@@ -81,7 +82,7 @@ fn scan_double_string(
           content.write_string(str)
           state.col += 2 + chars_consumed
           state.offset += 2 + chars_consumed
-          continue try! rest[chars_consumed:]
+          continue rest[chars_consumed:]
         }
         None => {
           // Invalid escape - keep literal
@@ -98,7 +99,7 @@ fn scan_double_string(
           content.write_string(str)
           state.col += 2 + chars_consumed
           state.offset += 2 + chars_consumed
-          continue try! rest[chars_consumed:]
+          continue rest[chars_consumed:]
         }
         None => {
           // Invalid escape - keep literal
@@ -108,7 +109,7 @@ fn scan_double_string(
           continue rest
         }
       }
-    ['\n', .. remaining] => remaining // Unterminated at newline
+    ['\n', .. remaining] => break remaining // Unterminated at newline
     ['\\', '\n', .. rest] => {
       // Line continuation - skip the newline
       state.line += 1
@@ -143,7 +144,8 @@ fn scan_double_string(
       state.offset += 1
       continue rest
     }
-    remaining => remaining // End of input (unterminated string)
+    remaining => break remaining // End of input (unterminated string)
+  }
   }
 }
 
@@ -154,11 +156,12 @@ fn scan_single_string(
   state : ScanState,
   content : StringBuilder,
 ) -> StringView {
-  loop code {
+  for cur = code {
+    match cur {
     ['\'', .. rest] => {
       state.col += 1
       state.offset += 1
-      rest
+      break rest
     }
     [.. "\\n", .. rest] => {
       content.write_char('\n')
@@ -227,7 +230,7 @@ fn scan_single_string(
           content.write_string(str)
           state.col += 2 + chars_consumed
           state.offset += 2 + chars_consumed
-          continue try! rest[chars_consumed:]
+          continue rest[chars_consumed:]
         }
         None => {
           // Invalid escape - keep literal
@@ -244,7 +247,7 @@ fn scan_single_string(
           content.write_string(str)
           state.col += 2 + chars_consumed
           state.offset += 2 + chars_consumed
-          continue try! rest[chars_consumed:]
+          continue rest[chars_consumed:]
         }
         None => {
           // Invalid escape - keep literal
@@ -254,7 +257,7 @@ fn scan_single_string(
           continue rest
         }
       }
-    ['\n', .. remaining] => remaining // Unterminated at newline
+    ['\n', .. remaining] => break remaining // Unterminated at newline
     ['\\', '\n', .. rest] => {
       // Line continuation - skip the newline
       state.line += 1
@@ -289,7 +292,8 @@ fn scan_single_string(
       state.offset += 1
       continue rest
     }
-    remaining => remaining // End of input (unterminated string)
+    remaining => break remaining // End of input (unterminated string)
+  }
   }
 }
 
@@ -300,17 +304,18 @@ fn scan_template_literal_v2(
   state : ScanState,
   content : StringBuilder,
 ) -> TemplateScanResultV2 {
-  loop code {
-    [] as remaining => Unterminated(remaining) // EOF without closing backtick
+  for cur = code {
+    match cur {
+    [] as remaining => break Unterminated(remaining) // EOF without closing backtick
     ['`', .. rest] => {
       state.col += 1
       state.offset += 1
-      Complete(rest)
+      break Complete(rest)
     }
     [.. "${", .. rest] => {
       state.col += 2
       state.offset += 2
-      Head(rest)
+      break Head(rest)
     }
     [.. "\\`", .. rest] => {
       content.write_char('`')
@@ -379,7 +384,7 @@ fn scan_template_literal_v2(
           content.write_string(str)
           state.col += 2 + chars_consumed
           state.offset += 2 + chars_consumed
-          continue try! rest[chars_consumed:]
+          continue rest[chars_consumed:]
         }
         None => {
           // Invalid escape - keep literal
@@ -396,7 +401,7 @@ fn scan_template_literal_v2(
           content.write_string(str)
           state.col += 2 + chars_consumed
           state.offset += 2 + chars_consumed
-          continue try! rest[chars_consumed:]
+          continue rest[chars_consumed:]
         }
         None => {
           // Invalid escape - keep literal
@@ -426,6 +431,7 @@ fn scan_template_literal_v2(
       state.offset += 1
       continue rest
     }
+  }
   }
 }
 
@@ -437,17 +443,18 @@ fn scan_template_continuation_v2(
   state : ScanState,
   content : StringBuilder,
 ) -> TemplateScanResultV2 {
-  loop code {
-    [] as remaining => Unterminated(remaining) // EOF without closing backtick
+  for cur = code {
+    match cur {
+    [] as remaining => break Unterminated(remaining) // EOF without closing backtick
     ['`', .. rest] => {
       state.col += 1
       state.offset += 1
-      Complete(rest) // TemplateTail
+      break Complete(rest) // TemplateTail
     }
     [.. "${", .. rest] => {
       state.col += 2
       state.offset += 2
-      Middle(rest) // TemplateMiddle
+      break Middle(rest) // TemplateMiddle
     }
     [.. "\\`", .. rest] => {
       content.write_char('`')
@@ -516,7 +523,7 @@ fn scan_template_continuation_v2(
           content.write_string(str)
           state.col += 2 + chars_consumed
           state.offset += 2 + chars_consumed
-          continue try! rest[chars_consumed:]
+          continue rest[chars_consumed:]
         }
         None => {
           // Invalid escape - keep literal
@@ -533,7 +540,7 @@ fn scan_template_continuation_v2(
           content.write_string(str)
           state.col += 2 + chars_consumed
           state.offset += 2 + chars_consumed
-          continue try! rest[chars_consumed:]
+          continue rest[chars_consumed:]
         }
         None => {
           // Invalid escape - keep literal
@@ -563,5 +570,6 @@ fn scan_template_continuation_v2(
       state.offset += 1
       continue rest
     }
+  }
   }
 }

@@ -13,7 +13,7 @@ pub struct Symbol {
   exports : SymbolTable?
   locals : SymbolTable? // All members in namespace (exported + non-exported)
   id : Int // Unique identifier
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Symbol table - maps names to symbols
@@ -40,7 +40,7 @@ pub enum SymbolKind {
   Alias
   ExportValue
   ExportType
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 /// Symbol flags (bitwise)
@@ -60,7 +60,7 @@ pub struct SymbolFlags {
   is_public : Bool
   is_abstract : Bool
   is_async : Bool
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Create default symbol flags
@@ -153,33 +153,33 @@ pub enum FlowNode {
 
   // Reducer (merges multiple flows)
   Reducer(FlowReducer)
-} derive(Show)
+} derive(Debug)
 
 ///|
 pub struct FlowStart {
   id : Int
-} derive(Show)
+} derive(Debug)
 
 ///|
 pub struct FlowAssignment {
   node : Node
   antecedent : Int // ID of previous flow node
   id : Int
-} derive(Show)
+} derive(Debug)
 
 ///|
 pub struct FlowCall {
   node : Node
   antecedent : Int
   id : Int
-} derive(Show)
+} derive(Debug)
 
 ///|
 pub struct FlowCondition {
   expression : Node
   antecedent : Int
   id : Int
-} derive(Show)
+} derive(Debug)
 
 ///|
 pub struct FlowSwitchClause {
@@ -188,39 +188,39 @@ pub struct FlowSwitchClause {
   clause_end : Int
   antecedent : Int
   id : Int
-} derive(Show)
+} derive(Debug)
 
 ///|
 pub struct FlowLabel {
   antecedents : Array[Int]
   id : Int
-} derive(Show)
+} derive(Debug)
 
 ///|
 pub struct FlowArrayMutation {
   node : Node
   antecedent : Int
   id : Int
-} derive(Show)
+} derive(Debug)
 
 ///|
 pub struct FlowReturn {
   node : Node
   antecedent : Int
   id : Int
-} derive(Show)
+} derive(Debug)
 
 ///|
 pub struct FlowUnreachable {
   id : Int
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Flow end node
 pub struct FlowEnd {
   antecedent : Int
   id : Int
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Flow branch condition (true or false branch)
@@ -228,7 +228,7 @@ pub struct FlowBranchCondition {
   antecedent : Int // Points to the Condition node
   is_true_branch : Bool
   id : Int
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Flow throw node
@@ -236,7 +236,7 @@ pub struct FlowThrow {
   node : Node
   antecedent : Int
   id : Int
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Flow loop label (for break/continue)
@@ -245,7 +245,7 @@ pub struct FlowLoopLabel {
   break_target : Int?
   continue_target : Int?
   id : Int
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Flow branch label (jump target)
@@ -253,7 +253,7 @@ pub struct FlowBranchLabel {
   name : String? // None for unlabeled
   antecedents : Array[Int]
   id : Int
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Flow narrowing node (type guard effects)
@@ -263,14 +263,14 @@ pub struct FlowNarrowing {
   narrowed_type : Node // Type node
   antecedent : Int
   id : Int
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Flow reducer (joins multiple branches)
 pub struct FlowReducer {
   antecedents : Array[Int]
   id : Int
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Get flow node ID
@@ -302,12 +302,12 @@ pub struct Scope {
   parent : Int? // Parent scope ID
   symbols : SymbolTable
   id : Int
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Create a new scope
 pub fn Scope::new(parent : Int?, id : Int) -> Scope {
-  { parent, symbols: Map::new(), id }
+  { parent, symbols: Map([]), id }
 }
 
 ///|
@@ -317,7 +317,7 @@ pub struct Diagnostic {
   location : SourceLocation
   category : DiagnosticCategory
   code : Int
-} derive(Show)
+} derive(Debug)
 
 ///|
 #valtype
@@ -326,7 +326,7 @@ pub enum DiagnosticCategory {
   Warning
   Message
   Suggestion
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 /// TypeScript diagnostic error codes
@@ -754,7 +754,7 @@ pub enum DiagnosticCode {
   TS7034 // Variable '{0}' implicitly has type '{1}' in some locations where its type cannot be determined
   TS7055 // '{0}', which lacks return-type annotation, implicitly has an 'any' yield type
   TS7057 // 'yield' expression implicitly results in an 'any' type because its containing generator lacks a return-type annotation
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 /// Convert DiagnosticCode to its numeric value
@@ -1521,7 +1521,7 @@ pub struct ModuleInfo {
   imports : Array[ImportInfo]
   /// Export statements
   exports : Array[ExportInfo]
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Create default module info (non-module script)
@@ -1546,7 +1546,7 @@ pub struct ImportInfo {
   namespace_import : String?
   named_imports : Array[(String, String)] // (propertyName, localName)
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Export information
@@ -1556,7 +1556,7 @@ pub struct ExportInfo {
   is_type_only : Bool
   module_specifier : String?
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Export kind
@@ -1568,7 +1568,7 @@ pub enum ExportKind {
   Namespace // export * from 'mod'
   NamespaceAs // export * as ns from 'mod'
   Equals // export = expr (CommonJS)
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 // ============================================================================
 // Container Management
@@ -1589,7 +1589,7 @@ pub enum ContainerKind {
   ForInStatement
   CatchBlock
   EnumDeclaration
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 /// Container information
@@ -1599,7 +1599,7 @@ pub struct Container {
   parent : Int? // Parent container ID
   locals : SymbolTable
   id : Int
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Create a new container
@@ -1608,7 +1608,7 @@ pub fn Container::new(
   parent : Int?,
   id : Int,
 ) -> Container {
-  { kind, symbol: None, parent, locals: Map::new(), id }
+  { kind, symbol: None, parent, locals: Map([]), id }
 }
 
 // ============================================================================
@@ -1631,7 +1631,7 @@ pub struct BoundSourceFile {
   triple_slash_directives : Array[TripleSlashDirective] // Triple-slash directives (/// <reference ...>)
   ts_expect_error_directives : Array[SourceLocation] // @ts-expect-error directive locations for TS2578 checking
   compiler_directives : CompilerDirectives // Compiler directives (@importHelpers, @target, etc.)
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Program represents multiple source files
@@ -1639,12 +1639,12 @@ pub struct Program {
   source_files : Array[BoundSourceFile]
   global_symbols : SymbolTable
   module_map : Map[String, BoundSourceFile] // Module specifier -> file
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Create a new program
 pub fn Program::new() -> Program {
-  { source_files: [], global_symbols: Map::new(), module_map: Map::new() }
+  { source_files: [], global_symbols: Map([]), module_map: Map([]) }
 }
 
 // ============================================================================
@@ -1658,7 +1658,7 @@ pub struct ControlFlowGraph {
   entry : Int // Entry node ID
   exit : Int // Exit node ID
   node_map : Map[Int, FlowNode] // ID to node
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// CFG builder state
@@ -1674,7 +1674,7 @@ pub struct CFGBuilder {
   switch_stack : Array[SwitchContext]
   /// Return collection
   return_flows : Array[Int]
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Loop context for break/continue
@@ -1682,14 +1682,14 @@ pub struct LoopContext {
   break_label : Int
   continue_label : Int
   label_name : String?
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Switch context
 pub struct SwitchContext {
   break_label : Int
   clause_flows : Array[Int]
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Create new CFG builder
@@ -1699,7 +1699,7 @@ pub fn CFGBuilder::new() -> CFGBuilder {
     nodes: [start_node],
     next_id: 1,
     current_flow: 0,
-    labels: Map::new(),
+    labels: Map([]),
     loop_stack: [],
     switch_stack: [],
     return_flows: [],
@@ -1719,7 +1719,7 @@ pub fn CFGBuilder::build(self : CFGBuilder) -> ControlFlowGraph {
   nodes.push(exit_node)
 
   // Build node map for quick lookup
-  let node_map : Map[Int, FlowNode] = Map::new()
+  let node_map : Map[Int, FlowNode] = Map([])
   for i = 0; i < nodes.length(); i = i + 1 {
     let node = nodes[i]
     node_map.set(flow_id(node), node)
@@ -1942,7 +1942,7 @@ pub fn CFGBuilder::get_switch_break_label(self : CFGBuilder) -> Int? {
 pub fn ControlFlowGraph::empty() -> ControlFlowGraph {
   let start_node = FlowNode::Start(FlowStart::{ id: 0 })
   let end_node = FlowNode::End(FlowEnd::{ antecedent: 0, id: 1 })
-  let node_map : Map[Int, FlowNode] = Map::new()
+  let node_map : Map[Int, FlowNode] = Map([])
   node_map.set(0, start_node)
   node_map.set(1, end_node)
   { nodes: [start_node, end_node], entry: 0, exit: 1, node_map }
@@ -1965,7 +1965,7 @@ pub struct SymbolLinks {
   is_referenced : Bool
   /// Whether symbol has been assigned
   is_assigned : Bool
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Create default symbol links
@@ -1996,7 +1996,7 @@ pub struct AmbientModuleInfo {
   body : Node?
   /// Location of the declaration
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Registry of ambient module declarations
@@ -2005,12 +2005,12 @@ pub struct AmbientModuleRegistry {
   exact_modules : Map[String, AmbientModuleInfo]
   /// Wildcard patterns (e.g., "*.css", "*.json")
   wildcard_patterns : Array[AmbientModuleInfo]
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Create an empty ambient module registry
 pub fn AmbientModuleRegistry::new() -> AmbientModuleRegistry {
-  { exact_modules: Map::new(), wildcard_patterns: [] }
+  { exact_modules: Map([]), wildcard_patterns: [] }
 }
 
 ///|
@@ -2075,7 +2075,7 @@ pub struct ModuleAugmentation {
   body : Node?
   /// Location of the augmentation
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Global augmentation - adds declarations to global scope
@@ -2087,7 +2087,7 @@ pub struct GlobalAugmentation {
   body : Node?
   /// Location of the augmentation
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Triple-slash directive kind
@@ -2104,7 +2104,7 @@ pub enum TripleSlashDirectiveKind {
   AmdModule(String)
   /// `/// <amd-dependency path="..." />`
   AmdDependency(String)
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 /// Triple-slash directive
@@ -2113,7 +2113,7 @@ pub struct TripleSlashDirective {
   kind : TripleSlashDirectiveKind
   /// Location in source
   location : SourceLocation
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Parse a triple-slash directive from content (after ///)
@@ -2125,7 +2125,7 @@ pub fn parse_triple_slash_directive(
   let trimmed = trim_whitespace(content)
 
   // Must start with <reference or <amd-
-  if not(trimmed.has_prefix("<")) {
+  if !(trimmed.has_prefix("<")) {
     return None
   }
 
@@ -2324,10 +2324,10 @@ fn match_ambient_pattern(pattern : String, specifier : String) -> Bool {
   }
 
   // Check if specifier matches prefix....*....suffix
-  if not(specifier.has_prefix(prefix)) {
+  if !(specifier.has_prefix(prefix)) {
     return false
   }
-  if suffix.length() > 0 && not(specifier.has_suffix(suffix)) {
+  if suffix.length() > 0 && !(specifier.has_suffix(suffix)) {
     return false
   }
 

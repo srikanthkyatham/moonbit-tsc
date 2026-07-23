@@ -36,7 +36,7 @@ pub struct ParserContext {
   in_conditional : Bool
   /// Currently inside a function body (for return statement validation)
   in_function : Bool
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Default parser context
@@ -66,7 +66,7 @@ pub struct Parser {
   context : ParserContext
   /// Stack of saved contexts for restoration
   context_stack : Array[ParserContext]
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Parser result type
@@ -157,6 +157,7 @@ pub enum ParserErrorCode {
   ExpectedFunctionKeyword // TS1005: 'function' expected
   ExpectedClassKeyword // TS1005: 'class' expected
   ExpectedEquals // TS1005: '=' expected
+  ExpectedToken(String) // TS1005: '{0}' expected. (generic expected-token error)
 
   // ============================================================================
   // JSX Errors (TS17xxx)
@@ -224,6 +225,7 @@ pub enum ParserErrorCode {
   PropertyOrSignatureExpected // TS1131
   StringLiteralExpected // TS1141
   LineBreakNotPermitted // TS1142
+  CatchOrFinallyExpected // TS1472: 'catch' or 'finally' expected
 
   // Declaration errors
   ConstDeclarationMustBeInitialized // TS1155
@@ -276,7 +278,7 @@ pub enum ParserErrorCode {
   InvalidUseOfInStrictMode(String) // TS1210: Invalid use of '{0}'. Class definitions are automatically in strict mode.
   // Note: TS2xxx (type checker) and TS4xxx (build/emit) errors are in
   // DiagnosticCode enum in symbol.mbt, not in ParserErrorCode
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 /// Get numeric code for error
@@ -296,6 +298,7 @@ pub fn ParserErrorCode::to_int(self : ParserErrorCode) -> Int {
     ExpectedFunctionKeyword => 1005
     ExpectedClassKeyword => 1005
     ExpectedEquals => 1005
+    ExpectedToken(_) => 1005
 
     // JSX Errors (TS17xxx)
     JSXClosingTagMismatch => 17004
@@ -358,6 +361,7 @@ pub fn ParserErrorCode::to_int(self : ParserErrorCode) -> Int {
     PropertyOrSignatureExpected => 1131 // TS1131: Property or signature expected
     StringLiteralExpected => 1141 // TS1141: String literal expected
     LineBreakNotPermitted => 1142 // TS1142: Line break not permitted here
+    CatchOrFinallyExpected => 1472 // TS1472: 'catch' or 'finally' expected
 
     // Declaration errors
     ConstDeclarationMustBeInitialized => 1155 // TS1155: 'const' declarations must be initialized
@@ -429,6 +433,7 @@ pub fn ParserErrorCode::to_message(self : ParserErrorCode) -> String {
     ExpectedFunctionKeyword => "'function' expected."
     ExpectedClassKeyword => "'class' expected."
     ExpectedEquals => "'=' expected."
+    ExpectedToken(token) => "'" + token + "' expected."
 
     // JSX Errors
     JSXClosingTagMismatch => "Expected corresponding JSX closing tag."
@@ -505,6 +510,7 @@ pub fn ParserErrorCode::to_message(self : ParserErrorCode) -> String {
     PropertyOrSignatureExpected => "Property or signature expected."
     StringLiteralExpected => "String literal expected."
     LineBreakNotPermitted => "Line break not permitted here."
+    CatchOrFinallyExpected => "'catch' or 'finally' expected."
 
     // Declaration errors
     ConstDeclarationMustBeInitialized =>
@@ -634,6 +640,8 @@ pub fn get_parser_error_int_with_arg(name : String, arg : String?) -> Int {
     "GetAccessorCannotHaveParams" => GetAccessorCannotHaveParams.to_int()
     "SetAccessorMustHaveOneParam" => SetAccessorMustHaveOneParam.to_int()
     "ReturnOutsideFunction" => ReturnOutsideFunction.to_int()
+    "ExpectedToken" => ExpectedToken(arg.unwrap_or("")).to_int()
+    "CatchOrFinallyExpected" => CatchOrFinallyExpected.to_int()
     "TypeExpected" => TypeExpected.to_int()
     "DeclarationOrStatementExpected" => DeclarationOrStatementExpected.to_int()
     "PropertyOrSignatureExpected" => PropertyOrSignatureExpected.to_int()
@@ -743,6 +751,8 @@ pub fn get_parser_error_message_with_arg(
     "GetAccessorCannotHaveParams" => GetAccessorCannotHaveParams.to_message()
     "SetAccessorMustHaveOneParam" => SetAccessorMustHaveOneParam.to_message()
     "ReturnOutsideFunction" => ReturnOutsideFunction.to_message()
+    "ExpectedToken" => ExpectedToken(arg.unwrap_or("")).to_message()
+    "CatchOrFinallyExpected" => CatchOrFinallyExpected.to_message()
     "TypeExpected" => TypeExpected.to_message()
     "DeclarationOrStatementExpected" =>
       DeclarationOrStatementExpected.to_message()
@@ -826,6 +836,17 @@ fn add_error_with_code(
   code : ParserErrorCode,
 ) -> Parser {
   add_error_checked(parser, message, location, code.to_int())
+}
+
+///|
+/// Add error using the error code's canonical TypeScript message.
+/// DRY helper for the common case where no custom message is needed.
+fn add_error_code(
+  parser : Parser,
+  code : ParserErrorCode,
+  location : SourceLocation,
+) -> Parser {
+  add_error_with_code(parser, code.to_message(), location, code)
 }
 
 ///|
@@ -932,7 +953,7 @@ pub fn split_by_filename_directives(source : String) -> TestVirtualFileSet? {
   let virtual_files : Array[TestVirtualFile] = []
 
   for i = 0; i < lines.length(); i = i + 1 {
-    let line = lines[i].to_string()
+    let line = lines[i].to_owned()
     let line_num = i + 1
 
     // Check for @filename directive
@@ -953,7 +974,7 @@ pub fn split_by_filename_directives(source : String) -> TestVirtualFileSet? {
       // Extract new filename
       let parts = line.split(":").collect()
       if parts.length() >= 2 {
-        let filename_part = parts[1].to_string()
+        let filename_part = parts[1].to_owned()
         let trimmed = trim_whitespace(filename_part)
         current_filename = Some(trimmed)
         current_start_line = line_num + 1
@@ -995,14 +1016,14 @@ pub fn split_by_filename_directives(source : String) -> TestVirtualFileSet? {
 pub struct ParsedVirtualFile {
   filename : String
   source_file : SourceFile
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Multi-file parse result
 pub struct MultiFileParseResult {
   files : Array[ParsedVirtualFile]
   parse_errors : Array[(String, Array[Diagnostic])]  // (filename, diagnostics)
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Function signature info for emit helper validation
@@ -1010,18 +1031,18 @@ pub struct FunctionSignatureInfo {
   name : String
   param_count : Int
   module_path : String
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Helper signature registry for TS2807 validation
 pub struct HelperSignatureRegistry {
   signatures : Map[String, FunctionSignatureInfo]  // "module:function" -> info
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Create empty helper signature registry
 pub fn HelperSignatureRegistry::new() -> HelperSignatureRegistry {
-  { signatures: Map::new() }
+  { signatures: Map([]) }
 }
 
 ///|
@@ -1102,7 +1123,7 @@ fn get_function_param_count(func : Node) -> Int {
 /// Extract exported functions from statements (for .d.ts files)
 /// Returns Map of export name -> parameter count
 fn extract_exported_functions(statements : Array[Node]) -> Map[String, Int] {
-  let exports = Map::new()
+  let exports = Map([])
 
   for stmt in statements {
     match stmt {
@@ -1277,8 +1298,8 @@ fn parse_compiler_directives(
       let parts = content.split(":").collect()
       if parts.length() >= 2 {
         // Convert StringView to String and trim whitespace
-        let directive_name = trim_whitespace(parts[0].to_string())
-        let directive_value = trim_whitespace(parts[1].to_string())
+        let directive_name = trim_whitespace(parts[0].to_owned())
+        let directive_value = trim_whitespace(parts[1].to_owned())
         match directive_name {
           "importHelpers" => import_helpers = directive_value == "true"
           "target" => target = Some(directive_value)
@@ -1373,6 +1394,32 @@ fn parse_statements(parser : Parser) -> (Array[Node], Parser) {
 }
 
 ///|
+/// Tokens that can start neither a declaration nor an expression when found
+/// in a statement-list position. TypeScript reports TS1128
+/// ("Declaration or statement expected.") at these tokens and skips them.
+fn cannot_start_statement_or_expression(token : Token) -> Bool {
+  match token {
+    CloseBrace(_)
+    | CloseParen(_)
+    | CloseBracket(_)
+    | Comma(_)
+    | Colon(_)
+    | KeywordElse(_)
+    | KeywordCase(_) => true
+    _ => false
+  }
+}
+
+///|
+/// Report TS1128 at the current token and skip past it (error recovery for
+/// statement-list positions, mirroring tsc's abortParsingListOrMoveToNextToken)
+fn skip_bad_statement_token(parser : Parser) -> Parser {
+  let loc = current_token(parser).location()
+  let parser = add_error_code(parser, DeclarationOrStatementExpected, loc)
+  advance_parser(parser)
+}
+
+///|
 /// Tail-recursive helper for parse_statements with accumulator
 fn parse_statements_aux(
   parser : Parser,
@@ -1380,6 +1427,9 @@ fn parse_statements_aux(
 ) -> (Array[Node], Parser) {
   if is_at_end(parser) {
     (acc, parser)
+  } else if cannot_start_statement_or_expression(current_token(parser)) {
+    // TS1128: Declaration or statement expected. Skip the token and continue.
+    parse_statements_aux(skip_bad_statement_token(parser), acc)
   } else {
     let current_position = parser.position
     match parse_statement(parser) {
@@ -1742,7 +1792,7 @@ fn validate_const_initializers(
 ) -> Parser {
   let mut parser = parser
   for decl in declarations {
-    if decl.initializer.is_empty() {
+    if decl.initializer is None {
       parser = add_error_with_code(
         parser,
         ConstDeclarationMustBeInitialized.to_message(),
@@ -1796,7 +1846,7 @@ fn parse_using_statement(
   let mut parser = parser
   let mut first = true
   while true {
-    if not(first) {
+    if !(first) {
       // Check for comma to continue
       match current_token(parser) {
         Comma(_) => parser = advance_parser(parser)
@@ -1889,7 +1939,7 @@ fn parse_variable_declaration(
       // Regular identifier
       match parse_identifier(parser) {
         Ok((id, p)) => (Node::Identifier(id), p)
-        Err(p) => return Err(add_error(p, "Identifier expected", start_loc))
+        Err(p) => return Err(add_error_code(p, IdentifierExpected, start_loc))
       }
   }
 
@@ -2192,9 +2242,7 @@ fn parse_object_binding_pattern(
                 )
               _ =>
                 return Err(
-                  add_error(
-                    parser, "Identifier expected after rest element", rest_loc,
-                  ),
+                  add_error_code(parser, IdentifierExpected, rest_loc),
                 )
             }
         }
@@ -2254,7 +2302,7 @@ fn parse_object_binding_pattern(
                     }
                   _ =>
                     return Err(
-                      add_error(parser, "Identifier expected", num_loc),
+                      add_error_code(parser, IdentifierExpected, num_loc),
                     )
                 }
             }
@@ -2285,7 +2333,7 @@ fn parse_object_binding_pattern(
               _ => ()
             }
           }
-          _ => return Err(add_error(parser, "':' expected", num_loc))
+          _ => return Err(add_error_code(parser, ExpectedColon, num_loc))
         }
       }
       // Handle string literal property: { "prop": x }
@@ -2338,7 +2386,7 @@ fn parse_object_binding_pattern(
                     }
                   _ =>
                     return Err(
-                      add_error(parser, "Identifier expected", str_loc),
+                      add_error_code(parser, IdentifierExpected, str_loc),
                     )
                 }
             }
@@ -2395,7 +2443,7 @@ fn parse_object_binding_pattern(
         // Expect closing bracket
         match current_token(parser) {
           CloseBracket(_) => parser = advance_parser(parser)
-          _ => return Err(add_error(parser, "']' expected", bracket_loc))
+          _ => return Err(add_error_code(parser, ExpectedCloseBracket, bracket_loc))
         }
 
         // Must have colon after computed property
@@ -2443,7 +2491,7 @@ fn parse_object_binding_pattern(
                     }
                   _ =>
                     return Err(
-                      add_error(parser, "Identifier expected", bracket_loc),
+                      add_error_code(parser, IdentifierExpected, bracket_loc),
                     )
                 }
             }
@@ -2476,7 +2524,7 @@ fn parse_object_binding_pattern(
               _ => ()
             }
           }
-          _ => return Err(add_error(parser, "':' expected", bracket_loc))
+          _ => return Err(add_error_code(parser, ExpectedColon, bracket_loc))
         }
       }
       // Handle identifier or contextual keyword property: { x } or { x: y } or { as } etc.
@@ -2530,7 +2578,7 @@ fn parse_object_binding_pattern(
                         }
                       _ =>
                         return Err(
-                          add_error(p2, "Identifier expected", prop_loc),
+                          add_error_code(p2, IdentifierExpected, prop_loc),
                         )
                     }
                 }
@@ -2861,9 +2909,9 @@ fn validate_parameter_order(
 
       // TS1016: A required parameter cannot follow an optional parameter
       // A parameter is required if it's not optional and has no initializer
-      let is_required = not(p.is_optional) &&
-        p.initializer.is_empty() &&
-        not(p.is_rest)
+      let is_required = !(p.is_optional) &&
+        p.initializer is None &&
+        !(p.is_rest)
       if seen_optional && is_required {
         parser = add_error_with_code(
           parser,
@@ -3071,6 +3119,11 @@ fn parse_block_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
       let statements : Array[Node] = []
       let mut parser = parser
       while !matches_close_brace(current_token(parser)) && !is_at_end(parser) {
+        if cannot_start_statement_or_expression(current_token(parser)) {
+          // TS1128: Declaration or statement expected. Skip and continue.
+          parser = skip_bad_statement_token(parser)
+          continue
+        }
         match parse_statement(parser) {
           Ok((stmt, next_parser)) => {
             statements.push(stmt)
@@ -3215,7 +3268,7 @@ fn parse_return_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
   let start_loc = current_token(parser).location()
 
   // TS1108: A 'return' statement can only be used within a function body
-  let parser = if not(parser.context.in_function) {
+  let parser = if !(parser.context.in_function) {
     add_error_with_code(
       parser,
       ReturnOutsideFunction.to_message(),
@@ -4512,7 +4565,13 @@ fn parse_class_member_with_decorators(
             Err(p) => parse_class_members_aux(p, acc)
           }
         }
-        _ => parse_class_members_aux(parser, acc)
+        // Anything else after 'static': delegate to the modifier-aware member
+        // parser so chained modifiers and keyword member names keep the
+        // 'static' modifier (e.g. `static public() {}`, `static async m() {}`)
+        _ =>
+          parse_class_member_with_modifiers(parser, acc, decorators, [
+            Modifier::Static,
+          ])
       }
     }
 
@@ -4967,13 +5026,10 @@ fn parse_class_member_with_decorators(
       ])
     }
 
-    // Static modifier
-    KeywordStatic(_) => {
-      let parser = advance_parser(parser)
-      parse_class_member_with_modifiers(parser, acc, decorators, [
-        Modifier::Static,
-      ])
-    }
+    // Note: no KeywordStatic arm here. 'static' is fully handled by the
+    // KeywordStatic(start_loc) arm earlier in this match (static blocks,
+    // accessors, and delegation to parse_class_member_with_modifiers);
+    // a second arm would be unreachable dead code.
 
     // Readonly modifier
     KeywordReadonly(_) => {
@@ -5835,6 +5891,35 @@ fn parse_class_member_with_modifiers(
   decorators : Array[Node],
   modifiers : Array[Modifier],
 ) -> (Array[Node], Parser) {
+  // A modifier-like keyword directly followed by member punctuation is a
+  // member NAME, not a modifier (e.g. `static public() {}` declares a static
+  // method named 'public'). Without this check the keyword would be consumed
+  // as a modifier and the member silently dropped.
+  match current_token(parser) {
+    Identifier(_, _) => ()
+    token =>
+      match try_get_identifier_name(token) {
+        Some((name, loc)) =>
+          match peek_token(parser) {
+            OpenParen(_)
+            | LessThan(_)
+            | Colon(_)
+            | Equals(_)
+            | Semicolon(_)
+            | Question(_) =>
+              return parse_named_class_member(
+                advance_parser(parser),
+                name,
+                loc,
+                acc,
+                decorators,
+                modifiers,
+              )
+            _ => ()
+          }
+        None => ()
+      }
+  }
   match current_token(parser) {
     // Handle chained modifiers
     KeywordPublic(_) => {
@@ -6296,153 +6381,174 @@ fn parse_class_member_with_modifiers(
         Err(p) => parse_class_members_aux(p, acc)
       }
     }
-    Identifier(name, loc) => {
-      let parser = advance_parser(parser)
-      match current_token(parser) {
-        // Generic method: foo<T>(x: T) { }
-        LessThan(_) => {
-          let (type_parameters, parser) = parse_type_parameters(parser)
-          // After type parameters, expect (
-          let parser = match current_token(parser) {
-            OpenParen(_) => advance_parser(parser)
-            _ => parser
-          }
-          let (parameters, parser) = parse_parameter_list(parser)
-          let (return_type, parser) = match current_token(parser) {
-            Colon(_) => {
-              let parser = advance_parser(parser)
-              match parse_type(parser) {
-                Ok((ty, p)) => (Some(ty), p)
-                Err(p) => (None, p)
-              }
-            }
-            _ => (None, parser)
-          }
-          let (body, parser) = match current_token(parser) {
-            OpenBrace(_) =>
-              match parse_function_body(parser) {
-                Ok((b, p)) => (Some(b), p)
-                Err(p) => (None, p)
-              }
-            _ => (None, parser)
-          }
-          // Check if Async modifier is present
-          let mut is_async = false
-          for modifier in modifiers {
-            if modifier == Modifier::Async {
-              is_async = true
-              break
-            }
-          }
-          acc.push(
-            Node::MethodDeclaration(MethodDeclaration::{
-              name,
-              computed_name_expr: None,
-              type_parameters,
-              parameters,
-              return_type,
-              body,
-              decorators,
-              modifiers,
-              is_async,
-              is_generator: false,
-              is_optional: false,
-              location: loc,
-            }),
-          )
-          parse_class_members_aux(parser, acc)
-        }
-        // Method without type parameters
-        OpenParen(_) => {
+    Identifier(name, loc) =>
+      parse_named_class_member(
+        advance_parser(parser),
+        name,
+        loc,
+        acc,
+        decorators,
+        modifiers,
+      )
+    _ => parse_class_members_aux(parser, acc)
+  }
+}
+
+///|
+/// Parse a class member whose name token has already been consumed.
+/// `parser` is positioned just after the member name. Shared by the
+/// Identifier arm of parse_class_member_with_modifiers and by modifier
+/// keywords used as member names (e.g. `static public() {}`).
+fn parse_named_class_member(
+  parser : Parser,
+  name : String,
+  loc : SourceLocation,
+  acc : Array[Node],
+  decorators : Array[Node],
+  modifiers : Array[Modifier],
+) -> (Array[Node], Parser) {
+  match current_token(parser) {
+    // Generic method: foo<T>(x: T) { }
+    LessThan(_) => {
+      let (type_parameters, parser) = parse_type_parameters(parser)
+      // After type parameters, expect (
+      let parser = match current_token(parser) {
+        OpenParen(_) => advance_parser(parser)
+        _ => parser
+      }
+      let (parameters, parser) = parse_parameter_list(parser)
+      let (return_type, parser) = match current_token(parser) {
+        Colon(_) => {
           let parser = advance_parser(parser)
-          let (parameters, parser) = parse_parameter_list(parser)
-          let (return_type, parser) = match current_token(parser) {
-            Colon(_) => {
-              let parser = advance_parser(parser)
-              match parse_type(parser) {
-                Ok((ty, p)) => (Some(ty), p)
-                Err(p) => (None, p)
-              }
-            }
-            _ => (None, parser)
+          match parse_type(parser) {
+            Ok((ty, p)) => (Some(ty), p)
+            Err(p) => (None, p)
           }
-          let (body, parser) = match current_token(parser) {
-            OpenBrace(_) =>
-              match parse_function_body(parser) {
-                Ok((b, p)) => (Some(b), p)
-                Err(p) => (None, p)
-              }
-            _ => (None, parser)
-          }
-          // Check if Async modifier is present
-          let mut is_async = false
-          for modifier in modifiers {
-            if modifier == Modifier::Async {
-              is_async = true
-              break
-            }
-          }
-          acc.push(
-            Node::MethodDeclaration(MethodDeclaration::{
-              name,
-              computed_name_expr: None,
-              type_parameters: [],
-              parameters,
-              return_type,
-              body,
-              decorators,
-              modifiers,
-              is_async,
-              is_generator: false,
-              is_optional: false,
-              location: loc,
-            }),
-          )
-          parse_class_members_aux(parser, acc)
         }
-        // Property
-        _ => {
-          let (type_annotation, parser) = match current_token(parser) {
-            Colon(_) => {
-              let parser = advance_parser(parser)
-              match parse_type(parser) {
-                Ok((ty, p)) => (Some(ty), p)
-                Err(p) => (None, p)
-              }
-            }
-            _ => (None, parser)
+        _ => (None, parser)
+      }
+      let (body, parser) = match current_token(parser) {
+        OpenBrace(_) =>
+          match parse_function_body(parser) {
+            Ok((b, p)) => (Some(b), p)
+            Err(p) => (None, p)
           }
-          let (initializer, parser) = match current_token(parser) {
-            Equals(_) => {
-              let parser = advance_parser(parser)
-              match parse_assignment_expression(parser) {
-                Ok((expr, p)) => (Some(expr), p)
-                Err(p) => (None, p)
-              }
-            }
-            _ => (None, parser)
-          }
-          let parser = match current_token(parser) {
-            Semicolon(_) => advance_parser(parser)
-            _ => parser
-          }
-          acc.push(
-            Node::PropertyDeclaration(PropertyDeclaration::{
-              name,
-              computed_name_expr: None,
-              type_annotation,
-              initializer,
-              is_optional: false,
-              decorators,
-              modifiers,
-              location: loc,
-            }),
-          )
-          parse_class_members_aux(parser, acc)
+        _ => (None, parser)
+      }
+      // Check if Async modifier is present
+      let mut is_async = false
+      for modifier in modifiers {
+        if modifier == Modifier::Async {
+          is_async = true
+          break
         }
       }
+      acc.push(
+        Node::MethodDeclaration(MethodDeclaration::{
+          name,
+          computed_name_expr: None,
+          type_parameters,
+          parameters,
+          return_type,
+          body,
+          decorators,
+          modifiers,
+          is_async,
+          is_generator: false,
+          is_optional: false,
+          location: loc,
+        }),
+      )
+      parse_class_members_aux(parser, acc)
     }
-    _ => parse_class_members_aux(parser, acc)
+    // Method without type parameters
+    OpenParen(_) => {
+      let parser = advance_parser(parser)
+      let (parameters, parser) = parse_parameter_list(parser)
+      let (return_type, parser) = match current_token(parser) {
+        Colon(_) => {
+          let parser = advance_parser(parser)
+          match parse_type(parser) {
+            Ok((ty, p)) => (Some(ty), p)
+            Err(p) => (None, p)
+          }
+        }
+        _ => (None, parser)
+      }
+      let (body, parser) = match current_token(parser) {
+        OpenBrace(_) =>
+          match parse_function_body(parser) {
+            Ok((b, p)) => (Some(b), p)
+            Err(p) => (None, p)
+          }
+        _ => (None, parser)
+      }
+      // Check if Async modifier is present
+      let mut is_async = false
+      for modifier in modifiers {
+        if modifier == Modifier::Async {
+          is_async = true
+          break
+        }
+      }
+      acc.push(
+        Node::MethodDeclaration(MethodDeclaration::{
+          name,
+          computed_name_expr: None,
+          type_parameters: [],
+          parameters,
+          return_type,
+          body,
+          decorators,
+          modifiers,
+          is_async,
+          is_generator: false,
+          is_optional: false,
+          location: loc,
+        }),
+      )
+      parse_class_members_aux(parser, acc)
+    }
+    // Property
+    _ => {
+      let (type_annotation, parser) = match current_token(parser) {
+        Colon(_) => {
+          let parser = advance_parser(parser)
+          match parse_type(parser) {
+            Ok((ty, p)) => (Some(ty), p)
+            Err(p) => (None, p)
+          }
+        }
+        _ => (None, parser)
+      }
+      let (initializer, parser) = match current_token(parser) {
+        Equals(_) => {
+          let parser = advance_parser(parser)
+          match parse_assignment_expression(parser) {
+            Ok((expr, p)) => (Some(expr), p)
+            Err(p) => (None, p)
+          }
+        }
+        _ => (None, parser)
+      }
+      let parser = match current_token(parser) {
+        Semicolon(_) => advance_parser(parser)
+        _ => parser
+      }
+      acc.push(
+        Node::PropertyDeclaration(PropertyDeclaration::{
+          name,
+          computed_name_expr: None,
+          type_annotation,
+          initializer,
+          is_optional: false,
+          decorators,
+          modifiers,
+          location: loc,
+        }),
+      )
+      parse_class_members_aux(parser, acc)
+    }
   }
 }
 
@@ -8102,9 +8208,9 @@ fn parse_import_declaration(parser : Parser) -> Result[(Node, Parser), Parser] {
         }
         _ =>
           return Err(
-            add_error(
+            add_error_code(
               parser,
-              "Unexpected token",
+              ExpectedToken("as"),
               current_token(parser).location(),
             ),
           )
@@ -8136,7 +8242,13 @@ fn parse_import_declaration(parser : Parser) -> Result[(Node, Parser), Parser] {
   // Expect 'from' keyword
   let parser = match current_token(parser) {
     KeywordFrom(_) => advance_parser(parser)
-    _ => return Err(add_unexpected_token_error(parser))
+    _ => return Err(
+        add_error_code(
+          parser,
+          ExpectedToken("from"),
+          current_token(parser).location(),
+        ),
+      )
   }
 
   // Parse module specifier (string literal)
@@ -8433,9 +8545,9 @@ fn parse_export_declaration(parser : Parser) -> Result[(Node, Parser), Parser] {
                     }
                     _ =>
                       Err(
-                        add_error(
+                        add_error_code(
                           parser,
-                          "Unexpected token",
+                          StringLiteralExpected,
                           current_token(parser).location(),
                         ),
                       )
@@ -8443,9 +8555,9 @@ fn parse_export_declaration(parser : Parser) -> Result[(Node, Parser), Parser] {
                 }
                 _ =>
                   Err(
-                    add_error(
+                    add_error_code(
                       parser,
-                      "Unexpected token",
+                      ExpectedToken("from"),
                       current_token(parser).location(),
                     ),
                   )
@@ -8492,9 +8604,9 @@ fn parse_export_declaration(parser : Parser) -> Result[(Node, Parser), Parser] {
             }
             _ =>
               Err(
-                add_error(
+                add_error_code(
                   parser,
-                  "Unexpected token",
+                  StringLiteralExpected,
                   current_token(parser).location(),
                 ),
               )
@@ -8502,9 +8614,9 @@ fn parse_export_declaration(parser : Parser) -> Result[(Node, Parser), Parser] {
         }
         _ =>
           Err(
-            add_error(
+            add_error_code(
               parser,
-              "Unexpected token",
+              ExpectedToken("from"),
               current_token(parser).location(),
             ),
           )
@@ -8532,9 +8644,9 @@ fn parse_export_declaration(parser : Parser) -> Result[(Node, Parser), Parser] {
                       (Some(spec), advance_parser(parser))
                     _ =>
                       return Err(
-                        add_error(
+                        add_error_code(
                           parser,
-                          "Unexpected token",
+                          StringLiteralExpected,
                           current_token(parser).location(),
                         ),
                       )
@@ -8605,9 +8717,9 @@ fn parse_export_declaration(parser : Parser) -> Result[(Node, Parser), Parser] {
                 StringLiteral(spec, _) => (Some(spec), advance_parser(parser))
                 _ =>
                   return Err(
-                    add_error(
+                    add_error_code(
                       parser,
-                      "Unexpected token",
+                      StringLiteralExpected,
                       current_token(parser).location(),
                     ),
                   )
@@ -9691,7 +9803,13 @@ fn parse_do_while_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
   // Expect 'while'
   let parser = match current_token(parser) {
     KeywordWhile(_) => advance_parser(parser)
-    _ => return Err(add_unexpected_token_error(parser))
+    _ => return Err(
+        add_error_code(
+          parser,
+          ExpectedToken("while"),
+          current_token(parser).location(),
+        ),
+      )
   }
 
   // Expect '('
@@ -9992,7 +10110,13 @@ fn parse_try_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
 
   // Must have either catch or finally
   if catch_clause is None && finally_block is None {
-    return Err(add_unexpected_token_error(parser))
+    return Err(
+      add_error_code(
+        parser,
+        CatchOrFinallyExpected,
+        current_token(parser).location(),
+      ),
+    )
   }
   let end_loc = match finally_block {
     Some(block) => get_location(block)

@@ -227,7 +227,7 @@ test "computed property type compatibility" {
           d.message.contains("not assignable") ||
           d.message.contains("incompatible")
         })
-      if not(has_type_error) {
+      if !(has_type_error) {
         fail("Should detect incompatible computed property types")
       }
     }
@@ -255,7 +255,7 @@ test "computed property method signature mismatch" {
           d.message.contains("not assignable") ||
           d.message.contains("incompatible")
         })
-      if not(has_type_error) {
+      if !(has_type_error) {
         fail("Should detect incompatible method return types")
       }
     }
@@ -354,7 +354,7 @@ test "computed property and method with same Symbol - should error" {
         .any(fn(d) {
           d.code == 2300 && d.message.contains("Duplicate identifier")
         })
-      if not(has_duplicate_error) {
+      if !(has_duplicate_error) {
         fail(
           "Should report TS2300 duplicate identifier for same computed property name",
         )
@@ -367,7 +367,7 @@ test "computed property and method with same Symbol - should error" {
         .any(fn(d) {
           d.code == 2300 && d.message.contains("Duplicate identifier")
         })
-      if not(has_duplicate_error) {
+      if !(has_duplicate_error) {
         fail("Should report TS2300 during binding for duplicate Symbol property")
       }
     }
@@ -600,7 +600,7 @@ test "Regular property SHOULD be checked against index signature" {
           d.message.contains("name") &&
           d.message.contains("not assignable to")
         })
-      if not(has_expected_error) {
+      if !(has_expected_error) {
         fail(
           "Regular properties SHOULD be validated against index signatures (this is a control test)",
         )
@@ -633,7 +633,7 @@ test "TS2464: Computed property with typeof Symbol should error" {
             "A computed property name must be of type 'string', 'number', 'symbol', or 'any'",
           )
         })
-      if not(has_ts2464) {
+      if !(has_ts2464) {
         fail("Should report TS2464 for computed property with typeof Symbol")
       }
     }
@@ -659,7 +659,7 @@ test "TS2464: Computed method with typeof Symbol should error" {
             "A computed property name must be of type 'string', 'number', 'symbol', or 'any'",
           )
         })
-      if not(has_ts2464) {
+      if !(has_ts2464) {
         fail("Should report TS2464 for computed method with typeof Symbol")
       }
     }
@@ -685,7 +685,7 @@ test "TS2464: Computed getter with typeof Symbol should error" {
             "A computed property name must be of type 'string', 'number', 'symbol', or 'any'",
           )
         })
-      if not(has_ts2464) {
+      if !(has_ts2464) {
         fail("Should report TS2464 for computed getter with typeof Symbol")
       }
     }
@@ -711,7 +711,7 @@ test "TS2464: Computed setter with typeof Symbol should error" {
             "A computed property name must be of type 'string', 'number', 'symbol', or 'any'",
           )
         })
-      if not(has_ts2464) {
+      if !(has_ts2464) {
         fail("Should report TS2464 for computed setter with typeof Symbol")
       }
     }

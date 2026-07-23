@@ -392,7 +392,7 @@ test "Iterator/Iterable conflict - different types should error" {
       let has_ts2322 = diagnostics
         .iter()
         .any(fn(d) { d.message.contains("not assignable") })
-      if not(has_ts2322) {
+      if !(has_ts2322) {
         fail(
           "Expected TS2322 error for conflicting Iterator<number> and Iterable<string>",
         )
@@ -433,7 +433,7 @@ test "Iterator/Iterable conflict - complex types" {
       let has_error = diagnostics
         .iter()
         .any(fn(d) { d.message.contains("not assignable") })
-      if not(has_error) {
+      if !(has_error) {
         fail("Expected error for conflicting object types in Iterator/Iterable")
       }
     }
@@ -455,7 +455,7 @@ test "Iterator/Iterable conflict - function types" {
       let has_error = diagnostics
         .iter()
         .any(fn(d) { d.message.contains("not assignable") })
-      if not(has_error) {
+      if !(has_error) {
         fail(
           "Expected error for conflicting function types in Iterator/Iterable",
         )
@@ -481,7 +481,7 @@ test "Iterator/Iterable conflict - empty generator" {
       let has_error = diagnostics
         .iter()
         .any(fn(d) { d.message.contains("not assignable") })
-      if not(has_error) {
+      if !(has_error) {
         fail("Expected error even for empty generator with conflicting types")
       }
     }
@@ -515,7 +515,7 @@ test "TS7057: yield without generator return type and noImplicitAny" {
       let has_ts7057 = typed.diagnostics
         .iter()
         .any(fn(d) { d.code == 7057 && d.message.contains("yield") })
-      if not(has_ts7057) {
+      if !(has_ts7057) {
         fail("Expected TS7057 error for yield without return type annotation")
       }
     }
@@ -565,7 +565,7 @@ test "TS7034: variable with implicit any[] type" {
       let has_ts7034 = typed.diagnostics
         .iter()
         .any(fn(d) { d.code == 7034 && d.message.contains("any[]") })
-      if not(has_ts7034) {
+      if !(has_ts7034) {
         fail("Expected TS7034 error for variable with implicit any[]")
       }
     }
@@ -590,7 +590,7 @@ test "TS7005: reference to variable with implicit any[] type" {
       let has_ts7005 = typed.diagnostics
         .iter()
         .any(fn(d) { d.code == 7005 && d.message.contains("any[]") })
-      if not(has_ts7005) {
+      if !(has_ts7005) {
         fail("Expected TS7005 error for reference to variable with any[]")
       }
     }
@@ -639,7 +639,7 @@ test "TS7057: bare yield without generator return type" {
   match result {
     Ok(typed) => {
       let has_ts7057 = typed.diagnostics.iter().any(fn(d) { d.code == 7057 })
-      if not(has_ts7057) {
+      if !(has_ts7057) {
         fail("Expected TS7057 error for bare yield without return type")
       }
     }
@@ -768,7 +768,7 @@ test "TS7057: yield in assignment should emit error" {
       let has_ts7057 = typed.diagnostics
         .iter()
         .any(fn(d) { d.code == 7057 && d.message.contains("yield") })
-      if not(has_ts7057) {
+      if !(has_ts7057) {
         fail("Expected TS7057 for yield used in assignment")
       }
     }
@@ -793,7 +793,7 @@ test "TS7057: yield in return should emit error" {
       let has_ts7057 = typed.diagnostics
         .iter()
         .any(fn(d) { d.code == 7057 && d.message.contains("yield") })
-      if not(has_ts7057) {
+      if !(has_ts7057) {
         fail("Expected TS7057 for yield used in return")
       }
     }
@@ -818,7 +818,7 @@ test "TS7057: yield in binary expression should emit error" {
       let has_ts7057 = typed.diagnostics
         .iter()
         .any(fn(d) { d.code == 7057 && d.message.contains("yield") })
-      if not(has_ts7057) {
+      if !(has_ts7057) {
         fail("Expected TS7057 for yield used in binary expression")
       }
     }
@@ -873,7 +873,7 @@ test "TS7057: yield in conditional should emit error" {
       let has_ts7057 = typed.diagnostics
         .iter()
         .any(fn(d) { d.code == 7057 && d.message.contains("yield") })
-      if not(has_ts7057) {
+      if !(has_ts7057) {
         fail("Expected TS7057 for yield used in conditional")
       }
     }
@@ -898,7 +898,7 @@ test "TS7057: yield in function call should emit error" {
       let has_ts7057 = typed.diagnostics
         .iter()
         .any(fn(d) { d.code == 7057 && d.message.contains("yield") })
-      if not(has_ts7057) {
+      if !(has_ts7057) {
         fail("Expected TS7057 for yield used in function call")
       }
     }

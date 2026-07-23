@@ -16,7 +16,7 @@ pub(all) enum ScriptTarget {
   ES2022
   ES2023
   ESNext
-} derive(Show, Eq)
+} derive(Eq, Debug)
 
 ///|
 /// Parse target string to ScriptTarget
@@ -72,7 +72,7 @@ pub(all) enum ModuleKind {
   Node16
   NodeNext
   Preserve
-} derive(Show, Eq)
+} derive(Eq, Debug)
 
 ///|
 /// Parse module string to ModuleKind
@@ -102,7 +102,7 @@ pub(all) enum ModuleResolutionKind {
   Node16
   NodeNext
   Bundler
-} derive(Show, Eq)
+} derive(Eq, Debug)
 
 ///|
 /// Parse moduleResolution string
@@ -126,7 +126,7 @@ pub(all) enum JsxEmit {
   ReactNative
   ReactJSX
   ReactJSXDev
-} derive(Show, Eq)
+} derive(Eq, Debug)
 
 ///|
 /// Parse jsx string
@@ -229,7 +229,7 @@ pub(all) struct CompilerOptions {
   incremental : Bool?
   composite : Bool?
   ts_build_info_file : String?
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Create default compiler options
@@ -517,7 +517,7 @@ pub fn is_strict_enabled(options : CompilerOptions) -> Bool {
 ///|
 /// Apply strict flag to individual strict options
 pub fn apply_strict_flag(options : CompilerOptions) -> CompilerOptions {
-  if not(options.strict.unwrap_or(false)) {
+  if !(options.strict.unwrap_or(false)) {
     return options
   }
   // When strict is true, set all strict-related flags to true if not explicitly set

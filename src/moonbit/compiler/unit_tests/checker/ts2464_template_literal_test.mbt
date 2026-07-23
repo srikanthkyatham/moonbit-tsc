@@ -142,7 +142,7 @@ test "TS2464: Boolean type should still error" {
           match @compiler.check_source_file(bound) {
             Ok(_) => fail("Should report TS2464 for boolean type")
             Err(diagnostics) =>
-              if not(has_ts2464(diagnostics)) {
+              if !(has_ts2464(diagnostics)) {
                 fail("Should report TS2464 for boolean type")
               }
           }
@@ -162,7 +162,7 @@ test "TS2464: Object type should still error" {
           match @compiler.check_source_file(bound) {
             Ok(_) => fail("Should report TS2464 for object type")
             Err(diagnostics) =>
-              if not(has_ts2464(diagnostics)) {
+              if !(has_ts2464(diagnostics)) {
                 fail("Should report TS2464 for object type")
               }
           }
@@ -202,7 +202,7 @@ test "TS2464: Union with invalid type should error" {
           match @compiler.check_source_file(bound) {
             Ok(_) => fail("Should report TS2464 for union with invalid type")
             Err(diagnostics) =>
-              if not(has_ts2464(diagnostics)) {
+              if !(has_ts2464(diagnostics)) {
                 fail("Should report TS2464 for union with invalid type")
               }
           }

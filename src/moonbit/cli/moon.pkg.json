@@ -8,10 +8,15 @@
     "moonbit-ts-compiler/config",
     "moonbit-ts-compiler/utils",
     "moonbitlang/async",
+    "moonbitlang/async/signal",
     "moonbitlang/async/fs",
-    "moonbitlang/async/io"
+    "moonbitlang/async/io",
+    "moonbitlang/core/env",
+    "moonbitlang/core/string"
   ],
   "targets": {
-    "*.mbt": ["native"]
+    "*.mbt": [
+      "native"
+    ]
   }
 }

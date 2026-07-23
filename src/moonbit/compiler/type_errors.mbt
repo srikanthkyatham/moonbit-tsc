@@ -46,7 +46,7 @@ pub struct DetailedError {
   doc_link : String
   /// Related errors (for complex type mismatches)
   related : Array[DetailedError]
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Rich error type with path tracking, nested errors, and suggestions
@@ -57,7 +57,7 @@ pub struct TypeMismatchError {
   reason : MismatchReason
   children : Array[TypeMismatchError]
   suggestions : Array[String]
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Specific reason for type mismatch
@@ -253,7 +253,7 @@ pub enum MismatchReason {
   ExpressionProducesUnionTooComplex // TS2590: Expression produces a union type that is too complex to represent
   CannotImportTypeDeclarationFiles(String) // TS2591: Cannot import type declaration files. Consider importing '{0}' instead
   InferredTypeCannotBeNamed(String, String) // TS2742: The inferred type of '{0}' cannot be named without a reference to '{1}'
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 // ============================================================================
 // Error Construction Helpers
@@ -555,7 +555,7 @@ pub fn format_type_error(error : TypeMismatchError, depth : Int) -> String {
     "'\n"
 
   // Path information
-  if not(error.path.is_root()) {
+  if !(error.path.is_root()) {
     output = output + indent + "  at: " + error.path.to_string() + "\n"
   }
 
@@ -730,7 +730,7 @@ fn generate_suggestions(actual : TypeV2, expected : TypeV2) -> Array[String] {
       }
 
     // Promise issues
-    (TGenericInstance(name, inner), target) =>
+    (TGenericInstance(name, inner), _target) =>
       if name == "Promise" && inner.length() > 0 {
         // Could check if inner type matches expected
         suggestions.push("Did you forget to await a Promise?")
@@ -2413,7 +2413,7 @@ pub fn get_how_to_fix(
       fixes.push("Or install the package if it's from npm:")
       fixes.push("    npm install " + mod_name)
     }
-    CannotFindGlobalType(name) => {
+    CannotFindGlobalType(_name) => {
       fixes.push("Add the required lib to your tsconfig.json:")
       fixes.push(
         "    { \"compilerOptions\": { \"lib\": [\"ES2015\", \"DOM\"] } }",
@@ -2878,7 +2878,7 @@ pub fn get_how_to_fix(
       fixes.push("    for (const { name, age } of people) { ... }")
     }
     // Property & Index errors
-    TypeHasNoPropertyAndNoStringIndex(typ, prop) => {
+    TypeHasNoPropertyAndNoStringIndex(_typ, prop) => {
       fixes.push("Option 1: Add the property to the type definition:")
       fixes.push("    interface MyType {")
       fixes.push("        " + prop + ": SomeType;")
@@ -2915,7 +2915,7 @@ pub fn get_how_to_fix(
       fixes.push("Or use a type assertion if you're certain:")
       fixes.push("    obj[value as string]")
     }
-    IndexSignatureOnlyPermitsReading(typ) => {
+    IndexSignatureOnlyPermitsReading(_typ) => {
       fixes.push("The index signature is readonly and cannot be modified.")
       fixes.push("")
       fixes.push("Option 1: Remove 'readonly' from the index signature:")

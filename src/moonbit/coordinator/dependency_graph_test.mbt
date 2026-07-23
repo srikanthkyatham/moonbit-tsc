@@ -153,7 +153,7 @@ test "needs recompilation - same hash" {
   let dag = DependencyDag::new()
   add_node(dag, "/src/a.ts", [], 12345L)
   // Same hash should not need recompilation
-  assert_true(not(needs_recompilation(dag, "/src/a.ts", 12345L)))
+  assert_true(!(needs_recompilation(dag, "/src/a.ts", 12345L)))
 }
 
 ///|
@@ -173,7 +173,7 @@ test "update content hash" {
   // Verify hash was updated - old hash should need recompilation
   assert_true(needs_recompilation(dag, "/src/a.ts", 1000L))
   // New hash should not need recompilation
-  assert_true(not(needs_recompilation(dag, "/src/a.ts", 2000L)))
+  assert_true(!(needs_recompilation(dag, "/src/a.ts", 2000L)))
 }
 
 ///|
@@ -183,7 +183,7 @@ test "remove node" {
   add_node(dag, "/src/b.ts", ["/src/a.ts"], 1000L)
   remove_node(dag, "/src/a.ts")
   assert_eq(dag.nodes.length(), 1)
-  assert_true(not(dag.nodes.contains("/src/a.ts")))
+  assert_true(!(dag.nodes.contains("/src/a.ts")))
 
   // b should no longer have a in its edges_out
   let imports_b = get_direct_imports(dag, "/src/b.ts")
@@ -231,14 +231,14 @@ test "get all files" {
 ///|
 test "no cycle in empty DAG" {
   let dag = DependencyDag::new()
-  assert_true(not(has_cycle(dag)))
+  assert_true(!(has_cycle(dag)))
 }
 
 ///|
 test "no cycle in single node" {
   let dag = DependencyDag::new()
   add_node(dag, "/src/a.ts", [], 1000L)
-  assert_true(not(has_cycle(dag)))
+  assert_true(!(has_cycle(dag)))
 }
 
 ///|

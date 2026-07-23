@@ -10,7 +10,7 @@ pub enum CommentDirectiveKind {
   TsCheck // @ts-check
   TripleSlashRef // /// <reference ... />
   CompilerDirective // @importHelpers, @target, @filename, @noEmit, etc.
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 /// Token represents a lexical token in the source code
@@ -213,7 +213,7 @@ pub enum Token {
   // found_char: the smart quote character found
   // suggested_char: the ASCII quote to use instead
   SmartQuote(String, String, SourceLocation)
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 /// Source location for error reporting
@@ -221,7 +221,7 @@ pub struct SourceLocation {
   file_path : String
   start : Position
   end : Position
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 /// Position in source file
@@ -230,7 +230,7 @@ pub struct Position {
   line : Int
   column : Int
   offset : Int
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 /// Get the source location from a token

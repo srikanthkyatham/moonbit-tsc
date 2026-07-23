@@ -8,6 +8,75 @@
 
 ---
 
+## July 2026 Status Update
+
+*Added July 23, 2026. The historical analysis below this section is preserved
+unchanged; this section records the current measured state.*
+
+**Toolchain / build**
+
+- MoonBit toolchain migration is done: builds on moon 0.1.20260713
+  (`moon build --target native`).
+- Unit test suite: **5000/5000 passing** on the same build.
+
+**Corrected conformance numbers (full sweep, July 23, 2026)**
+
+Measured with the rewritten `run_conformance_tests.exs` (see
+`docs/CONFORMANCE_RUNNER.md`) over all 5,693 tests in
+`tests/cases/conformance`:
+
+| Mode | Result |
+|------|--------|
+| Loose (errors-present vs baseline-present) | **3,569/5,693 = 62.7%** (fail 840, unhonored-directive fail 1,276, crash 8) |
+| Strict (TSxxxx error-code set equality) | **1,517/5,693 = 26.6%** (fail 1,810, unhonored-directive fail 2,358, crash 8) |
+
+The previously circulated 69.6% figure (December 2025) was measured with a
+runner that mishandled variant baselines and only checked the presence of
+errors; it should no longer be quoted. Full per-category tables and
+missing/extra error-code frequency tables are in
+`src/moonbit/CONFORMANCE_REPORT.md` ("July 2026 Conformance Sweep").
+
+**Revised gap list, ordered by measured impact** (strict-mode per-category
+failure counts and error-code frequencies from the July 2026 sweep):
+
+1. **Parse-error code specificity** — the generic TS1000 code is emitted in
+   1,118 strict failures where tsc expects specific codes (TS1005, TS1109,
+   TS1128, TS1003, ...). Touches the two largest failing categories, parser
+   (613 strict failures) and es6 (515). Highest-leverage single fix.
+2. **Multi-file test / module-system support (`@filename`, module I/O)** —
+   2,358 strict failures (41% of the suite) are on tests whose directives the
+   harness cannot honor, dominated by multi-file tests. Entire categories are
+   effectively blocked: node (93/94 unhonored), moduleResolution (50/51),
+   jsdoc (243), externalModules (173), salsa (132), statements (149), async
+   (120). This matches the historical "Module File I/O" gap (section 1.3),
+   now with a measured cost attached.
+3. **Core diagnostic parity in big checking categories** — types (656 strict
+   failures), classes (389), expressions (302). The dominant missing codes
+   are TS2322 (271 tests), TS2304 (271), TS2339 (154), TS2345 (114); the same
+   families also appear as false positives (extra TS2304/TS2339/TS2552/TS2322
+   in 135–189 tests each), i.e. both under- and over-reporting.
+4. **Definite-assignment / strict-initialization analysis** — missing TS2564
+   (312 tests) and TS2454 (228). Corresponds to historical gap 1.2.2
+   (Definite Assignment Analysis, previously rated MEDIUM — the data says
+   HIGH).
+5. **Duplicate-identifier over-reporting** — extra TS2300 in 283 tests, the
+   largest single false-positive source after TS1000.
+6. **noImplicitAny family** — TS7006 (37), TS7010 (24), TS7008 (16), TS7031
+   (15), TS7005 (8) never emitted; ~100 tests combined.
+7. **Variant-baseline deprecated-option policy** — TS5107 missing in 874
+   tests (800 of them variant-baseline unions with target=ES3/ES5 variants)
+   and TS5101 in 48. Partly a runner-policy decision rather than a compiler
+   gap; needs an explicit decision before wave-3 prioritization treats it as
+   real signal.
+8. **Crash/hang fixes** — 8 crashing tests: 4 checker infinite loops
+   (types/rest genericRestParameters1, restTuplesFromContextualTypes;
+   types/tuple variadicTuples1/2), 3 aborts (unicodeExtendedEscapes
+   strings/templates 12, parserErrorRecovery_ClassElement3), 1 segfault
+   (assignmentCompatWithObjectMembers). The CLI also ignores SIGTERM, which
+   defeats the conformance runner's 30s timeout.
+
+---
+
 ## Executive Summary
 
 | Metric | MoonBit Compiler | typescript-go |

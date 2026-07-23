@@ -7,19 +7,19 @@ pub enum ParserMode {
   TypeScript // Full TypeScript/JavaScript
   JSON // JSON only (strict)
   JSONC // JSON with comments
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 /// Parse a JSON file
 pub fn parse_json(
   tokens : Array[Token],
-  file_path : String,
+  _file_path : String,
 ) -> ParseResult[Node] {
   let parser = Parser::new(tokens)
   match parse_json_value(parser) {
     Ok((node, parser)) =>
       // Check for trailing content
-      if not(is_at_end(parser)) {
+      if !(is_at_end(parser)) {
         let parser = add_unexpected_token_error(parser)
         Err(parser.diagnostics)
       } else if parser.diagnostics.length() > 0 {
@@ -195,7 +195,7 @@ fn parse_json_object(parser : Parser) -> Result[(Node, Parser), Parser] {
       ),
     )
   }
-  while not(is_at_end(parser)) {
+  while !(is_at_end(parser)) {
     // Property name must be a string
     match current_token(parser) {
       StringLiteral(name, name_loc) => {
@@ -338,7 +338,7 @@ fn parse_json_array(parser : Parser) -> Result[(Node, Parser), Parser] {
       ),
     )
   }
-  while not(is_at_end(parser)) {
+  while !(is_at_end(parser)) {
     // Parse value
     match parse_json_value(parser) {
       Ok((value, p)) => {

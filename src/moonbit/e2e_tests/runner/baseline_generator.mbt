@@ -10,7 +10,7 @@ pub(all) struct FileCompileResult {
   declaration : String?
   source_map : String?
   diagnostics : Array[@compiler.Diagnostic]
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Generate JavaScript baseline from compilation results
@@ -27,7 +27,7 @@ pub fn generate_js_baseline(
     sb.write_string(source.filename)
     sb.write_string("] ////\n")
     sb.write_string(source.content)
-    if not(source.content.has_suffix("\n")) {
+    if !(source.content.has_suffix("\n")) {
       sb.write_char('\n')
     }
   }
@@ -39,7 +39,7 @@ pub fn generate_js_baseline(
     sb.write_string(js_filename)
     sb.write_string("] ////\n")
     sb.write_string(result.javascript)
-    if not(result.javascript.has_suffix("\n")) {
+    if !(result.javascript.has_suffix("\n")) {
       sb.write_char('\n')
     }
   }
@@ -61,7 +61,7 @@ pub fn generate_dts_baseline(
         None => false
       }
     })
-  if not(has_declarations) {
+  if !(has_declarations) {
     return None
   }
   let sb = StringBuilder::new()
@@ -72,7 +72,7 @@ pub fn generate_dts_baseline(
     sb.write_string(source.filename)
     sb.write_string("] ////\n")
     sb.write_string(source.content)
-    if not(source.content.has_suffix("\n")) {
+    if !(source.content.has_suffix("\n")) {
       sb.write_char('\n')
     }
   }
@@ -86,7 +86,7 @@ pub fn generate_dts_baseline(
         sb.write_string(dts_filename)
         sb.write_string("] ////\n")
         sb.write_string(dts)
-        if not(dts.has_suffix("\n")) {
+        if !(dts.has_suffix("\n")) {
           sb.write_char('\n')
         }
       }
@@ -133,9 +133,9 @@ pub fn generate_errors_baseline(results : Array[FileCompileResult]) -> String? {
 /// Convert source filename to JavaScript filename
 fn to_js_filename(filename : String) -> String {
   if filename.has_suffix(".ts") {
-    filename.substring(end=filename.length() - 3) + ".js"
+    filename[:filename.length() - 3].to_owned() + ".js"
   } else if filename.has_suffix(".tsx") {
-    filename.substring(end=filename.length() - 4) + ".js"
+    filename[:filename.length() - 4].to_owned() + ".js"
   } else {
     filename + ".js"
   }
@@ -145,9 +145,9 @@ fn to_js_filename(filename : String) -> String {
 /// Convert source filename to declaration filename
 fn to_dts_filename(filename : String) -> String {
   if filename.has_suffix(".ts") {
-    filename.substring(end=filename.length() - 3) + ".d.ts"
+    filename[:filename.length() - 3].to_owned() + ".d.ts"
   } else if filename.has_suffix(".tsx") {
-    filename.substring(end=filename.length() - 4) + ".d.ts"
+    filename[:filename.length() - 4].to_owned() + ".d.ts"
   } else {
     filename + ".d.ts"
   }

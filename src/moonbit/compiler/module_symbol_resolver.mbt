@@ -18,7 +18,7 @@ pub struct ExportedSymbol {
   is_type_only : Bool
   /// Whether this is a re-export from another module
   re_exported_from : String?
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Create a new exported symbol
@@ -43,7 +43,7 @@ pub struct ModuleExports {
   default_export : ExportedSymbol?
   /// Whether this module has `export * from` (namespace re-export)
   star_exports : Array[String] // Module paths that are re-exported with *
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Create module exports with a default export
@@ -53,7 +53,7 @@ pub fn ModuleExports::with_default(
 ) -> ModuleExports {
   {
     module_path,
-    named_exports: Map::new(),
+    named_exports: Map([]),
     default_export: Some(default_export),
     star_exports: [],
   }
@@ -64,7 +64,7 @@ pub fn ModuleExports::with_default(
 pub fn ModuleExports::empty(module_path : String) -> ModuleExports {
   {
     module_path,
-    named_exports: Map::new(),
+    named_exports: Map([]),
     default_export: None,
     star_exports: [],
   }
@@ -124,7 +124,7 @@ pub struct ImportBinding {
   is_type_only : Bool
   /// Import kind
   kind : ImportBindingKind
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Create a new import binding
@@ -156,7 +156,7 @@ pub enum ImportBindingKind {
   NamedImport
   /// Namespace import: import * as ns from 'mod'
   NamespaceImport
-} derive(Show, Eq)
+} derive(Eq, Debug)
 
 ///|
 /// Get DefaultImport kind
@@ -193,7 +193,7 @@ pub struct ModuleSymbolResolver {
   processing_stack : Array[String]
   /// Diagnostics collected during resolution
   diagnostics : Array[Diagnostic]
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Create a new module symbol resolver
@@ -202,8 +202,8 @@ pub fn ModuleSymbolResolver::new(
 ) -> ModuleSymbolResolver {
   {
     module_resolver,
-    module_exports_cache: Map::new(),
-    import_bindings: Map::new(),
+    module_exports_cache: Map([]),
+    import_bindings: Map([]),
     processing_stack: [],
     diagnostics: [],
   }
@@ -421,7 +421,7 @@ pub fn ModuleSymbolResolver::resolve_all_exports(
   self : ModuleSymbolResolver,
   module_path : String,
 ) -> Map[String, ExportedSymbol] {
-  let all_exports : Map[String, ExportedSymbol] = Map::new()
+  let all_exports : Map[String, ExportedSymbol] = Map([])
   match self.module_exports_cache.get(module_path) {
     Some(exports) => {
       // Add direct exports

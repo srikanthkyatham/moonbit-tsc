@@ -23,7 +23,7 @@ pub struct Binder {
   global_augmentations : Array[GlobalAugmentation] // Global augmentations (declare global)
   triple_slash_directives : Array[TripleSlashDirective] // Triple-slash directives
   is_external_module : Bool // Track if this file is a module (has imports/exports)
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Binder result
@@ -766,7 +766,7 @@ fn bind_for_of_initializer(binder : Binder, initializer : Node) -> Binder {
       // For var declarations, we need to hoist to function scope
       // For let/const, bind to loop scope (current scope)
       // is_var = not is_const and not is_let
-      let is_var = not(var_stmt.is_const) && not(var_stmt.is_let)
+      let is_var = !(var_stmt.is_const) && !(var_stmt.is_let)
       bind_variable_declarations_with_hoisting(
         binder,
         var_stmt.declarations,
@@ -822,7 +822,7 @@ fn bind_binding_pattern_internal(
 
       // For var declarations in nested scopes, hoist to function scope
       // IMPORTANT: Return the updated binder from declare_symbol functions
-      let updated_binder = if hoist_to_function_scope && not(is_const) {
+      let updated_binder = if hoist_to_function_scope && !(is_const) {
         declare_symbol_in_function_scope(binder, id.name, symbol)
       } else {
         declare_symbol(binder, id.name, symbol)
@@ -1097,7 +1097,7 @@ fn bind_interface_declaration(
   interface : InterfaceDeclaration,
 ) -> Binder {
   // Create members symbol table for interface properties
-  let members : SymbolTable = Map::new()
+  let members : SymbolTable = Map([])
 
   // Create scope and container for interface to bind type parameters
   let binder = push_scope(binder)
@@ -1357,8 +1357,8 @@ fn bind_module_declaration(
 
     // Capture exports and all locals from the module scope before popping
     let module_scope = current_scope(binder)
-    let exports : SymbolTable = Map::new()
-    let locals : SymbolTable = Map::new()
+    let exports : SymbolTable = Map([])
+    let locals : SymbolTable = Map([])
     module_scope.symbols.each(fn(name, sym) {
       // All members go into locals for internal access
       locals.set(name, sym)
@@ -2333,8 +2333,8 @@ fn declare_symbol_in_function_scope(
             // Allow var merging
             if existing_symbol.kind == SymbolKind::Variable &&
               symbol.kind == SymbolKind::Variable &&
-              not(existing_symbol.flags.is_const) &&
-              not(symbol.flags.is_const) {
+              !(existing_symbol.flags.is_const) &&
+              !(symbol.flags.is_const) {
               // Merge the symbols
               let merged_symbol = merge_symbols(existing_symbol, symbol)
               let new_symbols = scope.symbols
@@ -2425,8 +2425,8 @@ fn declare_symbol(binder : Binder, name : String, symbol : Symbol) -> Binder {
       // This is used for patterns like: var x = expr; var x: Type;
       let is_var_merge = existing_symbol.kind == SymbolKind::Variable &&
         symbol.kind == SymbolKind::Variable &&
-        not(existing_symbol.flags.is_const) &&
-        not(symbol.flags.is_const)
+        !(existing_symbol.flags.is_const) &&
+        !(symbol.flags.is_const)
       if is_function_overload ||
         is_method_overload ||
         is_getter_setter_pair ||
@@ -2856,7 +2856,7 @@ pub fn merge_symbols(a : Symbol, b : Symbol) -> Symbol {
   // Merge members
   let members : SymbolTable? = match (a.members, b.members) {
     (Some(a_members), Some(b_members)) => {
-      let merged : SymbolTable = Map::new()
+      let merged : SymbolTable = Map([])
       // Copy a_members to merged
       a_members.each(fn(name, symbol) { merged.set(name, symbol) })
       // Add b_members, merging if necessary
@@ -2880,7 +2880,7 @@ pub fn merge_symbols(a : Symbol, b : Symbol) -> Symbol {
   // Merge exports (with recursive symbol merging for mergeable symbols like enums)
   let exports : SymbolTable? = match (a.exports, b.exports) {
     (Some(a_exports), Some(b_exports)) => {
-      let merged : SymbolTable = Map::new()
+      let merged : SymbolTable = Map([])
       // Copy a_exports to merged
       a_exports.each(fn(name, symbol) { merged.set(name, symbol) })
       // Add b_exports, merging if the symbol exists and can be merged
@@ -2906,7 +2906,7 @@ pub fn merge_symbols(a : Symbol, b : Symbol) -> Symbol {
   // Merge locals (all members including non-exported, for namespace internal access)
   let locals : SymbolTable? = match (a.locals, b.locals) {
     (Some(a_locals), Some(b_locals)) => {
-      let merged : SymbolTable = Map::new()
+      let merged : SymbolTable = Map([])
       // Copy a_locals to merged
       a_locals.each(fn(name, symbol) { merged.set(name, symbol) })
       // Add b_locals, merging if the symbol exists and can be merged
@@ -2955,7 +2955,7 @@ pub fn merge_symbols(a : Symbol, b : Symbol) -> Symbol {
 pub fn merge_global_declarations(
   files : Array[BoundSourceFile],
 ) -> (SymbolTable, Array[Diagnostic]) {
-  let global_symbols : SymbolTable = Map::new()
+  let global_symbols : SymbolTable = Map([])
   let diagnostics : Array[Diagnostic] = []
   for i = 0; i < files.length(); i = i + 1 {
     let file = files[i]
@@ -3033,7 +3033,7 @@ pub fn bind_program(
 ) -> Result[Program, Array[Diagnostic]] {
   let bound_files : Array[BoundSourceFile] = []
   let all_diagnostics : Array[Diagnostic] = []
-  let module_map : Map[String, BoundSourceFile] = Map::new()
+  let module_map : Map[String, BoundSourceFile] = Map([])
 
   // First pass: bind each file individually
   for i = 0; i < source_files.length(); i = i + 1 {

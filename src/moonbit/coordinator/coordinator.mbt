@@ -18,7 +18,7 @@ pub(all) struct CoordinatorOptions {
   no_emit : Bool // Only run type checking, don't emit JavaScript
   no_implicit_any : Bool // Raise error on expressions and declarations with an implied 'any' type
   import_helpers : Bool // Import emit helpers from tslib
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Default coordinator options
@@ -49,7 +49,7 @@ pub(all) struct CompilationSummary {
   successful : Int
   failed : Int
   total_time_ms : Int64
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Compile multiple files in parallel using async task groups
@@ -110,17 +110,17 @@ pub async fn compile_parallel(
   }
 
   // Build a map from file_path to (path, source) for quick lookup
-  let file_map : Map[String, (String, String)] = {}
+  let file_map : Map[String, (String, String)] = Map([])
   for file in files {
     let (path, source) = file
     file_map[path] = (path, source)
   }
 
   // Pre-allocate results map for ordering
-  let results_map : Map[String, @protocol.CompileResponse] = {}
+  let results_map : Map[String, @protocol.CompileResponse] = Map([])
 
   // Use semaphore to limit concurrency within each level
-  let sem = @semaphore.Semaphore::new(options.worker_count)
+  let sem = @semaphore.Semaphore(options.worker_count)
 
   // Compile level by level (all files in a level can be compiled in parallel)
   for level_idx = 0; level_idx < levels.length(); level_idx = level_idx + 1 {
@@ -270,7 +270,7 @@ pub async fn compile_parallel_unordered(
   )
 
   // Use semaphore to limit concurrency to worker_count
-  let sem = @semaphore.Semaphore::new(combined_options.worker_count)
+  let sem = @semaphore.Semaphore(combined_options.worker_count)
 
   // Compile all files in parallel using task group
   @async.with_task_group(fn(group) {
@@ -358,7 +358,7 @@ fn build_external_types_with_globals(
   // Add entries from global namespace files
   for entry in global_ns_files {
     let (file_path, module_json) = entry
-    if not(first) {
+    if !(first) {
       sb.write_string(",")
     }
     first = false

@@ -9,7 +9,7 @@ let max_concurrent_reads : Int = 32
 /// Check if a file is a TypeScript file (not declaration file)
 pub fn is_typescript_file(path : String) -> Bool {
   (path.has_suffix(".ts") || path.has_suffix(".tsx")) &&
-  not(path.has_suffix(".d.ts"))
+  !(path.has_suffix(".d.ts"))
 }
 
 ///|
@@ -52,7 +52,7 @@ async fn walk_directory(
   dir : String,
   files : Array[String],
 ) -> Unit raise Error {
-  @fs.walk(dir, async fn(current_dir, entries) {
+  @fs.walk(dir, fn(current_dir, entries) {
     for entry in entries {
       let full_path = current_dir + "/" + entry
       if is_typescript_file(full_path) {
@@ -83,7 +83,7 @@ pub async fn read_files(
   }
 
   // Use semaphore for concurrency control
-  let sem = @semaphore.Semaphore::new(max_concurrent_reads)
+  let sem = @semaphore.Semaphore(max_concurrent_reads)
 
   // Pre-allocate result array with placeholders
   let results : Array[(String, String)?] = Array::make(paths.length(), None)

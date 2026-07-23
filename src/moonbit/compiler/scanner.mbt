@@ -324,7 +324,7 @@ fn tokenize_with_jsx_support(
             let token = JsxTagOpen(loc)
             tokens.push(token)
             prev_token = Some(token)
-            code = try! code_after_ws[1:]
+            code = code_after_ws[1:]
             push_jsx_mode(JsxModeV2::JsxTag)
           }
           _ => {
@@ -485,7 +485,7 @@ fn tokenize_with_jsx_support(
             let token = LessThanSlash(loc)
             tokens.push(token)
             prev_token = Some(token)
-            code = try! code[2:]
+            code = code[2:]
             jsx_mode = JsxModeV2::JsxTag
           }
           ['<', ch, ..] if is_jsx_tag_start(ch) => {
@@ -499,7 +499,7 @@ fn tokenize_with_jsx_support(
             let token = JsxTagOpen(loc)
             tokens.push(token)
             prev_token = Some(token)
-            code = try! code[1:]
+            code = code[1:]
             push_jsx_mode(JsxModeV2::JsxTag)
           }
           ['{', .. rest] => {
@@ -604,11 +604,12 @@ pub fn tokenize_v2(source : String, file_path : String) -> Array[Token] {
   }
 
   // Main tokenization loop
-  loop source[:] {
+  for cur = source[:] {
+    match cur {
     // End of input
     [] => {
       let loc = make_loc(state.line, state.col, state.offset)
-      tokens.push(EOF(loc))
+      break tokens.push(EOF(loc))
     }
 
     // === Whitespace ===
@@ -1304,7 +1305,7 @@ pub fn tokenize_v2(source : String, file_path : String) -> Array[Token] {
       }
       // BigInt suffix
       match rest4 {
-        ['n', .. rest5] if not(has_dot) && not(has_exp) => {
+        ['n', .. rest5] if !(has_dot) && !(has_exp) => {
           state.col += 1
           state.offset += 1
           let loc = SourceLocation::new(
@@ -1371,6 +1372,7 @@ pub fn tokenize_v2(source : String, file_path : String) -> Array[Token] {
       tokens.push(Unknown(Char::to_string(ch), loc))
       continue rest
     }
+  }
   }
   tokens
 }

@@ -6,7 +6,7 @@
 pub(all) struct ProjectReference {
   path : String
   prepend : Bool?
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// TSConfig root structure
@@ -18,7 +18,7 @@ pub(all) struct TSConfig {
   extends : String?
   references : Array[ProjectReference]?
   compile_on_save : Bool?
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Create default TSConfig
@@ -69,7 +69,7 @@ fn strip_json_comments(text : String) -> String {
   let newline = '\n'.to_int()
   let star = '*'.to_int()
   while i < len {
-    let c = text[i]
+    let c = text[i].to_int()
 
     // Handle string state (don't strip comments inside strings)
     if in_string {
@@ -94,10 +94,10 @@ fn strip_json_comments(text : String) -> String {
     }
 
     // Check for single-line comment //
-    if c == slash && i + 1 < len && text[i + 1] == slash {
+    if c == slash && i + 1 < len && text[i + 1].to_int() == slash {
       // Skip until end of line
       i = i + 2
-      while i < len && text[i] != newline {
+      while i < len && text[i].to_int() != newline {
         i = i + 1
       }
       // Keep the newline for proper line counting
@@ -109,16 +109,16 @@ fn strip_json_comments(text : String) -> String {
     }
 
     // Check for multi-line comment /* */
-    if c == slash && i + 1 < len && text[i + 1] == star {
+    if c == slash && i + 1 < len && text[i + 1].to_int() == star {
       i = i + 2
       // Skip until */
       while i + 1 < len {
-        if text[i] == star && text[i + 1] == slash {
+        if text[i].to_int() == star && text[i + 1].to_int() == slash {
           i = i + 2
           break
         }
         // Preserve newlines for line counting
-        if text[i] == newline {
+        if text[i].to_int() == newline {
           result.write_char('\n')
         }
         i = i + 1
@@ -407,7 +407,7 @@ fn parse_string_array(arr : Array[Json]) -> Array[String] {
 fn parse_paths_map(obj : Map[String, Json]) -> Map[String, Array[String]]? {
   match obj.get("paths") {
     Some(Object(paths_obj)) => {
-      let result : Map[String, Array[String]] = {}
+      let result : Map[String, Array[String]] = Map([])
       for key, value in paths_obj {
         match value {
           Array(arr) => result[key] = parse_string_array(arr)
@@ -612,7 +612,7 @@ fn resolve_extends_path(extends_path : String, config_dir : String) -> String {
       "node_modules/" + extends_path,
     )
     // Check if it's a package with tsconfig.json
-    if not(extends_path.has_suffix(".json")) {
+    if !(extends_path.has_suffix(".json")) {
       join_paths(node_modules_path, "tsconfig.json")
     } else {
       node_modules_path

@@ -142,7 +142,7 @@ fn normalize_baseline(content : String) -> String {
   for line in lines {
     // trim_end returns StringView, convert to String
     let trimmed = line.trim_end(chars=" \t\r")
-    normalized.push(trimmed.to_string())
+    normalized.push(trimmed.to_owned())
   }
   // Remove trailing empty lines
   while normalized.length() > 0 &&

@@ -211,7 +211,7 @@ test "TS2464: Boolean variable computed method - should error" {
           match @compiler.check_source_file(bound) {
             Ok(_) => fail("Should report TS2464 for boolean variable method")
             Err(diagnostics) =>
-              if not(has_ts2464_method(diagnostics)) {
+              if !(has_ts2464_method(diagnostics)) {
                 fail("Should report TS2464 for boolean variable method")
               }
           }
@@ -231,7 +231,7 @@ test "TS2464: Object variable computed method - should error" {
           match @compiler.check_source_file(bound) {
             Ok(_) => fail("Should report TS2464 for object variable method")
             Err(diagnostics) =>
-              if not(has_ts2464_method(diagnostics)) {
+              if !(has_ts2464_method(diagnostics)) {
                 fail("Should report TS2464 for object variable method")
               }
           }
@@ -251,7 +251,7 @@ test "TS2464: Boolean literal computed method - should error" {
           match @compiler.check_source_file(bound) {
             Ok(_) => fail("Should report TS2464 for boolean literal method")
             Err(diagnostics) =>
-              if not(has_ts2464_method(diagnostics)) {
+              if !(has_ts2464_method(diagnostics)) {
                 fail("Should report TS2464 for boolean literal method")
               }
           }
@@ -273,7 +273,7 @@ test "TS2464: Boolean variable computed getter - should error" {
           match @compiler.check_source_file(bound) {
             Ok(_) => fail("Should report TS2464 for boolean variable getter")
             Err(diagnostics) =>
-              if not(has_ts2464_method(diagnostics)) {
+              if !(has_ts2464_method(diagnostics)) {
                 fail("Should report TS2464 for boolean variable getter")
               }
           }
@@ -293,7 +293,7 @@ test "TS2464: Object variable computed getter - should error" {
           match @compiler.check_source_file(bound) {
             Ok(_) => fail("Should report TS2464 for object variable getter")
             Err(diagnostics) =>
-              if not(has_ts2464_method(diagnostics)) {
+              if !(has_ts2464_method(diagnostics)) {
                 fail("Should report TS2464 for object variable getter")
               }
           }
@@ -315,7 +315,7 @@ test "TS2464: Boolean variable computed setter - should error" {
           match @compiler.check_source_file(bound) {
             Ok(_) => fail("Should report TS2464 for boolean variable setter")
             Err(diagnostics) =>
-              if not(has_ts2464_method(diagnostics)) {
+              if !(has_ts2464_method(diagnostics)) {
                 fail("Should report TS2464 for boolean variable setter")
               }
           }
@@ -335,7 +335,7 @@ test "TS2464: Object variable computed setter - should error" {
           match @compiler.check_source_file(bound) {
             Ok(_) => fail("Should report TS2464 for object variable setter")
             Err(diagnostics) =>
-              if not(has_ts2464_method(diagnostics)) {
+              if !(has_ts2464_method(diagnostics)) {
                 fail("Should report TS2464 for object variable setter")
               }
           }
@@ -377,7 +377,7 @@ test "TS2464: Static method with boolean variable - should error" {
           match @compiler.check_source_file(bound) {
             Ok(_) => fail("Should report TS2464 for static method with boolean variable")
             Err(diagnostics) =>
-              if not(has_ts2464_method(diagnostics)) {
+              if !(has_ts2464_method(diagnostics)) {
                 fail("Should report TS2464 for static method with boolean variable")
               }
           }
@@ -399,7 +399,7 @@ test "TS2464: Multiple methods - valid and invalid" {
           match @compiler.check_source_file(bound) {
             Ok(_) => fail("Should report TS2464 for the invalid method")
             Err(diagnostics) =>
-              if not(has_ts2464_method(diagnostics)) {
+              if !(has_ts2464_method(diagnostics)) {
                 fail("Should report TS2464 for the invalid method")
               }
           }
