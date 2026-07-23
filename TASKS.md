@@ -17,11 +17,11 @@ graph TD
     T3["T3 ✅ CLI exit codes<br/>(all error paths exit 1)"]
     T4["T4 ✅ Full sweep: 62.7% loose / 26.6% strict<br/>reports refreshed"]
     T9["T9 ✅ Warnings cleanup<br/>(2,528 → 179; tests 5005/5005)"]
-    T5["T5 🔄 Parse-error code specificity<br/>(TS1000 → real codes; 1,118 extra hits)"]
-    T6["T6 🔄 Multi-file @filename support + module I/O<br/>(41% of suite blocked on directives)"]
-    T7["T7 ⏳ Definite assignment: TS2564/TS2454<br/>(540 missing hits)"]
+    T5["T5 ✅ Parse-error codes: 42 TS1000 sites → real codes<br/>+ statement recovery; ErrorRecovery 14%→30%"]
+    T6["T6 ✅ Multi-file @filename + module I/O<br/>(node strict 1.1%→16%; 5029/5029 tests)"]
+    T7["T7 ✅ Definite assignment TS2564/TS2454<br/>sweep now 64.0% loose / 28.8% strict"]
     T8["T8 ✅ Hangs fixed (cycle detection)<br/>+ SIGTERM restored; 5009/5009 tests"]
-    T10["T10 ⏳ TS2300 over-reporting (283 extra)<br/>+ noImplicitAny family TS7006/7010 (100 missing)"]
+    T10["T10 ✅ TS2300 merging rules fixed<br/>+ noImplicitAny family; 5,127/5,127 tests"]
 
     T0 --> T1
     T0 --> T2
@@ -73,11 +73,28 @@ The original wave-3 list (JSX, ambient, advanced types) was based on the inflate
 
 | ID | Task | Depends on | Measured impact |
 |----|------|-----------|-----------------|
-| T5 | Parse-error code specificity: stop emitting generic `TS1000`, emit real codes (`TS1005`, `TS1109`, `TS1128`, …) | T4 + T9 | `TS1000` is the top extra code — 1,118 tests; single biggest strict-mode lever |
-| T6 | Multi-file test support: honor `@filename` directives (runner-side synthesis or compiler multi-file input) + module resolution real file I/O (node_modules, `.d.ts`, `@types`) | T4 + T9 | 2,358 strict failures (41% of suite) involve unhonored directives; node category at 1.1% strict, moduleResolution 2.0% |
-| T7 | Definite assignment analysis: `TS2564` (strictPropertyInitialization, 312 missing) + `TS2454` (used before assigned, 228 missing) | T4 + T9 | 540 combined missing occurrences; also flagged ❌ Missing in the 2025 gap analysis |
+| T5 | Parse-error code specificity: stop emitting generic `TS1000`, emit real codes (`TS1005`, `TS1109`, `TS1128`, …) | T4 + T9 | ✅ Done. 42 TS1000 call sites converted across parser.mbt/parser_type.mbt/parser_expression.mbt/parser_v2_expression.mbt/parser_utils.mbt via new DRY `add_error_code` helper (TS1003/1005/1009/1109/1110/1128/1135/1141/1206/1472). New tsc-style recovery: skip-and-continue for bad statement tokens (fixes silent file truncation after stray tokens), argument-list recovery, trailing commas in calls, definite-assignment assertion `x!: T` now parses. Strict: parser/ErrorRecovery 13/92→28/92; computedProperties →62/142; templates extras now correct codes (remaining failures are checker-side). Also fixed the parser.mbt:4972 dead code — it masked a real bug where `static` members with keyword names were silently dropped, derailing brace matching. 23 new unit tests; suite **5054/5054**. Left as TS1000: depth-guard, meta-properties, JSX/JSON fallbacks. |
+| T6 | Multi-file test support: honor `@filename` directives (runner-side synthesis or compiler multi-file input) + module resolution real file I/O (node_modules, `.d.ts`, `@types`) | T4 + T9 | ✅ Done. Runner splits `@filename` tests into real per-test temp files (mirrors TS harness `makeUnitsFromTest`) and compiles all units together. Compiler: `file_exists` stub replaced with file-set-backed resolution (exact/extension-substitution/index), new `validate_multi_file_imports` (TS2305/2306/2724/1192, filesystem-checked TS2307), cross-file type registry resolution fixed in checker, `export namespace` recognized. New `cli/cross_file.mbt`, 20 unit tests, suite **5029/5029**. Strict: node 1→15/94, moduleResolution 1→4/51, externalModules 29→31 with DirFail 173→109 (failures now honest checker mismatches, not directive skips; small loose declines were accidental garbage-parse passes, all diffed and explained). |
+| T7 | Definite assignment analysis: `TS2564` (strictPropertyInitialization, 312 missing) + `TS2454` (used before assigned, 228 missing) | T4 + T9 | ✅ Done. Key insight: TS baselines are generated with strict ON by default, so both diagnostics default on, disabled via `@strict: false` / per-flag directives (new tri-state `CompilerDirectives` fields). TS2564 with constructor-assignment collection; TS2454 with branch-join, shadowing, nested-function exemptions; `declare` class-member modifier now parsed (was a TS2564 FP source). Deliberately conservative to avoid false positives — none found in probes. 33 new unit tests; suite **5,086/5,086**. **Full sweep after wave 3: loose 3,644/5,693 = 64.0% (was 62.7%), strict 1,640/5,693 = 28.8% (was 26.6%)** — includes T5/T6 contributions; no compared category regressed. |
 | T8 | Crash fixes: checker infinite loops on `genericRestParameters1`, `restTuplesFromContextualTypes`, `variadicTuples1/2`; make CLI respond to SIGTERM | T4 + T9 | ✅ Done. All 4 hangs were one bug: infinite tail-recursion in `extract_iterable_element_type` (checker.mbt) — type params are cached self-referentially, and a spread of a generic type param (`f10(...u)`) looped forever under native TCO. Fixed with real cycle detection (visited-set) + fallback to the type-parameter constraint. SIGTERM: async runtime masks signals process-wide (`pthread_sigmask`) for cooperative cancellation; CLI now calls `@signal.set_global_cancellation_signals([])` at startup so SIGTERM/SIGINT terminate (exit 143 / `timeout` works). All 4 tests now finish in ≤5ms with diagnostics. Tests: **5009/5009** (4 new: cycle whitebox + e2e repro). |
-| T10 | Diagnostic precision: `TS2300` duplicate-identifier over-reporting (283 extra) + noImplicitAny family `TS7006`/`TS7010`/`TS7008`/`TS7031` (~100 missing) | T4 + T9 | Second-largest extra code + a whole missing diagnostic family |
+| T10 | Diagnostic precision: `TS2300` duplicate-identifier over-reporting (283 extra) + noImplicitAny family `TS7006`/`TS7010`/`TS7008`/`TS7031` (~100 missing) | T4 + T9 | ✅ Done. TS2300: binder merge whitelist extended to tsc rules (class+interface/namespace, type-alias+value, imports→TS2440 territory, default exports, object-literal dupes→TS1117); extra-TS2300 in worst categories: externalModules 23→2, internalModules 18→2. noImplicitAny: `no_implicit_any` directive (default on under strict, off for .js), TS7006/7008/7010/7013/7019/7031/7005 implemented matching tsc baselines; contextual callbacks verified not flagged. 41 unit tests added/rewritten (old TS2300 test had tautological asserts); suite **5,127/5,127**. Final sweep: **strict 28.9%, loose 64.0%** — per-category strict gains: parser 205→237, types 181→201, classes 77→91, internalModules 15→25, externalModules 29→37. Deferred: TS7006 for arrows (needs contextual typing), flow-sensitive TS7005/7034, private accessor parsing. |
+
+## Backlog — follow-ups surfaced by T6 (wave 4 candidates, unscheduled)
+
+| ID | Task | Notes |
+|----|------|-------|
+| B1 | node_modules / package.json resolution (`main`/`types`/`exports`), `@types` lookup | Bare specifiers still emit unconditional TS2307 (checker.mbt ~line 20799) even when an ambient module or on-disk package exists |
+| B2 | Ambient `declare module "x"` across real files; TS1155 false positive for uninitialized `const` in declare-module blocks in `.d.ts` | |
+| B3 | typeOnly import/export semantics (TS1361/1362/1363/1369) | Largest remaining externalModules loose bucket |
+| B4 | NodeNext/node16 rules: TS2835 extensionless ESM imports, `.mts`/`.cts`, module=node18/20; bundler/customConditions/typesVersions | |
+| B5 | Untyped `.js` relative import under noImplicitAny → TS7016 (currently silent) | Overlaps T10's noImplicitAny work |
+| B6 | Wire cross-file validation into `run_json_compile`/project/watch modes (only `run_single_compile` has it) | Watch mode recompiles subsets — needs care |
+| B7 | Runner: honor `@currentDirectory`, `@noImplicitReferences`, `@traceResolution` directives (`@strict` family now honored compiler-side via T7) | |
+| B8 | Parser: `p!: T` definite-assignment assertion on class properties silently loses the type annotation and produces a stray member | Flagged by T7; TS2564 stays safe (unannotated props skipped) but it's a real parser gap |
+| B9 | Wire `CompileOptions.strict*` CLI/tsconfig flags to the checker (currently dead; file directives are the only control surface) | Flagged by T7 |
+| B10 | TS7006 for function expressions/arrows (needs contextual-typing info at parameter-check time); flow-sensitive TS7005/TS7034 | Deferred by T10 |
+| B11 | Private accessors `set #x(v)` parse as methods (2 esDecorators strict tests); `{ new (); }` type-literal parse gap; TS7008/TS7006 inside type literals | Deferred by T10 |
+| B12 | ambient category strict −4 vs July report (extras TS2390/2391/2339) — introduced by the committed toolchain-migration changes, not wave 3; needs bisect | Flagged by T10's final sweep |
 
 ## Conventions
 

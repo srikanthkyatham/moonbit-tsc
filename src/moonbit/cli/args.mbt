@@ -37,6 +37,7 @@ pub(all) struct CLIOptions {
   report_diagnostics : Bool // Always report diagnostics, even when successful
   json_output : Bool // Output results as JSON for tooling integration
   external_types_json : String? // JSON string containing external types for cross-file checking
+  external_types_file : String? // Path to a file containing the external types JSON (avoids argv size limits)
   no_emit : Bool // Only run type checking, don't emit JavaScript
   strict : Bool // Enable all strict type-checking options
   no_implicit_any : Bool // Raise error on expressions with an implied 'any' type
@@ -61,6 +62,7 @@ pub fn CLIOptions::default() -> CLIOptions {
     report_diagnostics: false,
     json_output: false,
     external_types_json: None,
+    external_types_file: None,
     no_emit: false,
     strict: false,
     no_implicit_any: false,
@@ -90,6 +92,7 @@ pub fn parse_args(args : Array[String]) -> Result[Command, String] {
   let mut report_diagnostics = false
   let mut json_output = false
   let mut external_types_json : String? = None
+  let mut external_types_file : String? = None
   let mut json_mode = false
   let mut no_emit = false
   let mut strict = false
@@ -131,6 +134,7 @@ pub fn parse_args(args : Array[String]) -> Result[Command, String] {
         report_diagnostics: false,
         json_output: false,
         external_types_json: None,
+        external_types_file: None,
         no_emit: false,
         strict: false,
         no_implicit_any: false,
@@ -219,6 +223,12 @@ pub fn parse_args(args : Array[String]) -> Result[Command, String] {
         return Err("--external-types requires a JSON string")
       }
       external_types_json = Some(args[i])
+    } else if arg == "--external-types-file" {
+      i = i + 1
+      if i >= args.length() {
+        return Err("--external-types-file requires a file path")
+      }
+      external_types_file = Some(args[i])
     } else if arg == "--noEmit" {
       no_emit = true
     } else if arg == "--strict" {
@@ -255,6 +265,7 @@ pub fn parse_args(args : Array[String]) -> Result[Command, String] {
     report_diagnostics,
     json_output,
     external_types_json,
+    external_types_file,
     no_emit,
     strict,
     no_implicit_any,

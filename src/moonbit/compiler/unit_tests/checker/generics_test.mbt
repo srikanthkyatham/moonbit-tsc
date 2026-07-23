@@ -763,7 +763,7 @@ test "unit/generic-overloads/type-mismatch - generic inference detects type erro
 test "unit/generic-overloads/overload-string - generic overload with string" {
   // Overload should select string overload for string argument
   let result = parse_bind_check_v2(
-    "function f(s: string): string; function f(n: number): number; function f<T>(x: T): T; function f(x): any { return x; } const r: string = f('hello');",
+    "function f(s: string): string; function f(n: number): number; function f<T>(x: T): T; function f(x: any): any { return x; } const r: string = f('hello');",
   )
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
@@ -775,7 +775,7 @@ test "unit/generic-overloads/overload-string - generic overload with string" {
 test "unit/generic-overloads/overload-number - generic overload with number" {
   // Overload should select number overload for number argument
   let result = parse_bind_check_v2(
-    "function f(s: string): string; function f(n: number): number; function f<T>(x: T): T; function f(x): any { return x; } const r: number = f(42);",
+    "function f(s: string): string; function f(n: number): number; function f<T>(x: T): T; function f(x: any): any { return x; } const r: number = f(42);",
   )
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
@@ -787,7 +787,7 @@ test "unit/generic-overloads/overload-number - generic overload with number" {
 test "unit/generic-overloads/overload-boolean - generic overload with boolean" {
   // Overload should fall through to generic overload for boolean
   let result = parse_bind_check_v2(
-    "function f(s: string): string; function f(n: number): number; function f<T>(x: T): T; function f(x): any { return x; } const r: boolean = f(true);",
+    "function f(s: string): string; function f(n: number): number; function f<T>(x: T): T; function f(x: any): any { return x; } const r: boolean = f(true);",
   )
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
@@ -799,7 +799,7 @@ test "unit/generic-overloads/overload-boolean - generic overload with boolean" {
 test "unit/generic-overloads/overload-boolean-type-error - boolean inferred, type mismatch" {
   // When boolean is inferred, type mismatch should be detected
   let result = parse_bind_check_v2(
-    "function f(s: string): string; function f(n: number): number; function f<T>(x: T): T; function f(x): any { return x; } const r: number = f(true);",
+    "function f(s: string): string; function f(n: number): number; function f<T>(x: T): T; function f(x: any): any { return x; } const r: number = f(true);",
   )
   match result {
     Ok(_) => {
@@ -818,7 +818,7 @@ test "unit/generic-overloads/overload-boolean-type-error - boolean inferred, typ
 test "unit/generic-overloads/computed-property-string - valid computed property with string" {
   // Computed property with string is valid
   let result = parse_bind_check_v2(
-    "function f(s: string): string; function f(n: number): number; function f<T>(x: T): T; function f(x): any { return x; } var v = { [f(\"\")]: 0 };",
+    "function f(s: string): string; function f(n: number): number; function f<T>(x: T): T; function f(x: any): any { return x; } var v = { [f(\"\")]: 0 };",
   )
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
@@ -830,7 +830,7 @@ test "unit/generic-overloads/computed-property-string - valid computed property 
 test "unit/generic-overloads/computed-property-number - valid computed property with number" {
   // Computed property with number is valid
   let result = parse_bind_check_v2(
-    "function f(s: string): string; function f(n: number): number; function f<T>(x: T): T; function f(x): any { return x; } var v = { [f(0)]: 0 };",
+    "function f(s: string): string; function f(n: number): number; function f<T>(x: T): T; function f(x: any): any { return x; } var v = { [f(0)]: 0 };",
   )
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
@@ -843,7 +843,7 @@ test "unit/generic-overloads/computed-property-boolean - INVALID boolean in comp
   // This is the exact Test 9 case from computedPropertyNames9_ES5.ts
   // Computed property with boolean should error with TS2464
   let result = parse_bind_check_v2(
-    "function f(s: string): string; function f(n: number): number; function f<T>(x: T): T; function f(x): any { return x; } var v = { [f(true)]: 0 };",
+    "function f(s: string): string; function f(n: number): number; function f<T>(x: T): T; function f(x: any): any { return x; } var v = { [f(true)]: 0 };",
   )
   match result {
     Ok(_) => {

@@ -8,6 +8,7 @@
 ///|
 test "class instance assigned to same class type" {
   let source =
+    #|// @strict: false
     #|class Foo { x: number }
     #|const f: Foo = new Foo();
   let result = @compiler.type_check(source, "test.ts")
@@ -20,6 +21,7 @@ test "class instance assigned to same class type" {
 ///|
 test "derived class instance assigned to base class type" {
   let source =
+    #|// @strict: false
     #|class Foo { x: number }
     #|class Bar extends Foo { y: string }
     #|const bar: Bar = new Bar();
@@ -34,6 +36,7 @@ test "derived class instance assigned to base class type" {
 ///|
 test "declared derived class assigned to base class type" {
   let source =
+    #|// @strict: false
     #|class Foo { x: number }
     #|class Bar extends Foo { y: string }
     #|declare const bar: Bar;
@@ -130,6 +133,7 @@ test "generator with bare yield statement" {
 ///|
 test "generator yielding derived class for base class iterator" {
   let source =
+    #|// @strict: false
     #|class Foo { x: number }
     #|class Bar extends Foo { y: string }
     #|function* g(): IterableIterator<Foo> {
@@ -148,6 +152,7 @@ test "generator yielding derived class for base class iterator" {
 ///|
 test "generator with bare yield and derived class" {
   let source =
+    #|// @strict: false
     #|class Foo { x: number }
     #|class Bar extends Foo { y: string }
     #|function* g(): IterableIterator<Foo> {
@@ -256,6 +261,7 @@ test "generator method in class" {
 ///|
 test "generator method with class inheritance" {
   let source =
+    #|// @strict: false
     #|class Base { name: string }
     #|class Derived extends Base { id: number }
     #|class MyClass {

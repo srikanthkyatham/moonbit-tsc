@@ -178,33 +178,37 @@ defmodule TSC.Worker.CLIWorker do
   end
 
   defp run_check(binary_path, file, options) do
-    if File.exists?(binary_path) do
-      args = build_args([file], options)
-
-      case System.cmd(binary_path, args, stderr_to_stdout: true) do
-        {output, _exit_code} ->
-          parse_json_output(output)
-      end
-    else
-      Logger.warning("MoonBit binary not found at #{binary_path}")
-      {:ok, mock_result(file)}
-    end
+    run_cli_check(binary_path, [file], options, fn -> mock_result(file) end)
   end
 
   defp run_check_files(binary_path, files, options) do
-    if File.exists?(binary_path) do
-      args = build_args(files, options)
+    run_cli_check(binary_path, files, options, fn -> mock_result_files(files) end)
+  end
 
-      case System.cmd(binary_path, args, stderr_to_stdout: true) do
-        {output, _exit_code} ->
-          parse_json_output(output)
+  defp run_cli_check(binary_path, files, options, mock_fun) do
+    if File.exists?(binary_path) do
+      {args, tmp_file} = build_args(files, options)
+
+      try do
+        # stderr is deliberately NOT merged into stdout: stdout must stay
+        # pure JSON for parse_json_output
+        case System.cmd(binary_path, args) do
+          {output, _exit_code} ->
+            parse_json_output(output)
+        end
+      rescue
+        e -> {:error, {:cmd_failed, e}}
+      after
+        if tmp_file, do: File.rm(tmp_file)
       end
     else
       Logger.warning("MoonBit binary not found at #{binary_path}")
-      {:ok, mock_result_files(files)}
+      {:ok, mock_fun.()}
     end
   end
 
+  # Returns {args, tmp_file}: tmp_file (if any) holds the external-types
+  # payload and must be deleted by the caller after the CLI exits.
   defp build_args(files, options) when is_list(files) do
     # Use --json for structured JSON output, followed by all file paths
     args = ["--json"] ++ files
@@ -213,36 +217,60 @@ defmodule TSC.Worker.CLIWorker do
     args = if options[:out_dir], do: args ++ ["--outDir", options[:out_dir]], else: args
     args = if options[:no_emit], do: args ++ ["--noEmit"], else: args
 
-    # Add external types from cache if use_cached_types option is set
-    args = if options[:use_cached_types] do
-      external_types = build_external_types_json(files)
-      if external_types do
-        args ++ ["--external-types", external_types]
-      else
-        args
-      end
-    else
-      args
-    end
+    # Add external types from cache if use_cached_types option is set.
+    # The payload goes through a temp file: passing it via argv fails with
+    # E2BIG once cached types outgrow the OS argument size limit (~1MB on
+    # macOS), which silently dropped whole chunks.
+    external_types = if options[:use_cached_types], do: build_external_types_json(files)
 
-    args
+    case external_types do
+      nil ->
+        {args, nil}
+
+      json ->
+        tmp_file =
+          Path.join(
+            System.tmp_dir!(),
+            "tsc_ext_types_#{:erlang.unique_integer([:positive])}.json"
+          )
+
+        File.write!(tmp_file, json)
+        {args ++ ["--external-types-file", tmp_file], tmp_file}
+    end
   end
 
   defp build_external_types_json(files) do
-    # Get all cached module types except the files being compiled
-    # (we want types from dependencies, not the files themselves)
+    # Only ship types for modules this batch can actually reach through its
+    # imports. Sending every cached module to every batch made the payload
+    # grow O(n^2) over a run. When the dependency graph hasn't been built,
+    # fall back to all cached modules (minus the batch itself).
     file_set = MapSet.new(files)
 
-    all_cached = TypeCache.keys()
-    |> Enum.reject(&MapSet.member?(file_set, &1))
-    |> Enum.reduce(%{"modules" => %{}}, fn path, acc ->
-      case TypeCache.get(path) do
-        {:ok, types} ->
-          put_in(acc, ["modules", path], types)
-        :not_found ->
-          acc
+    candidates =
+      case TSC.Graph.DependencyGraph.get_transitive_dependencies(files) |> MapSet.to_list() do
+        [] ->
+          if dependency_graph_built?() do
+            []
+          else
+            TypeCache.keys()
+          end
+
+        deps ->
+          deps
       end
-    end)
+
+    all_cached =
+      candidates
+      |> Enum.reject(&MapSet.member?(file_set, &1))
+      |> Enum.reduce(%{"modules" => %{}}, fn path, acc ->
+        case TypeCache.get(path) do
+          {:ok, types} ->
+            put_in(acc, ["modules", path], types)
+
+          :not_found ->
+            acc
+        end
+      end)
 
     # Get module mappings (specifier -> resolved_path)
     module_mappings = TypeCache.get_all_mappings()
@@ -261,7 +289,23 @@ defmodule TSC.Worker.CLIWorker do
     end
   end
 
+  defp dependency_graph_built? do
+    TSC.Graph.DependencyGraph.all_files() != []
+  end
+
   defp parse_json_output(output) do
+    if String.trim(output) == "" do
+      # An empty response means the CLI never ran (e.g. exec failure) or
+      # crashed before printing. Reporting it as "no diagnostics" would
+      # silently drop the whole batch, so surface it as an error instead
+      # and let the caller's retry logic engage.
+      {:error, :empty_output}
+    else
+      do_parse_json_output(output)
+    end
+  end
+
+  defp do_parse_json_output(output) do
     case Jason.decode(output) do
       {:ok, json} ->
         {:ok, parse_json_response(json)}
@@ -359,7 +403,7 @@ defmodule TSC.Worker.CLIWorker do
     if File.exists?(binary_path) do
       args = ["--json", "--list-imports", file]
 
-      case System.cmd(binary_path, args, stderr_to_stdout: true) do
+      case System.cmd(binary_path, args) do
         {output, 0} ->
           parse_list_imports_output(output)
 

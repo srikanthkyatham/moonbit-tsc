@@ -17,6 +17,20 @@ green on the same build.
 | Loose (errors-present vs baseline-present) | 3,569 | 5,693 | **62.7%** | 840 | 1,276 | 8 |
 | Strict (TSxxxx error-code set equality)    | 1,517 | 5,693 | **26.6%** | 1,810 | 2,358 | 8 |
 
+> **Post-wave-3 update (July 23, 2026, later the same day).** After the wave-3
+> tasks landed (T5 parse-error code specificity, T6 `@filename` multi-file
+> support + real module-resolution file I/O, T7 definite assignment
+> TS2564/TS2454, T8 checker-hang cycle detection + SIGTERM, T10 TS2300 merging
+> rules + noImplicitAny family), the same sweeps measure:
+> **loose 3,643/5,693 = 64.0%; strict 1,644/5,693 = 28.9%** (0 hangs).
+> Largest strict category moves: parser 205→237, types 181→201, node 1→15,
+> classes 77→91, internalModules 15→25, externalModules 29→37, es6 528→536.
+> Known small regressions vs the table below: ambient −4 (extras
+> TS2390/2391/2339, traced to the committed toolchain-migration changes, needs
+> bisect), esDecorators −2 and asyncGenerators −1 (documented T10 deferrals).
+> The category table below still reflects the pre-wave-3 sweep. Task history:
+> `TASKS.md` at the repo root.
+
 - **Loose** counts a pass when "compiler reported errors" matches "a
   `.errors.txt` baseline exists" — presence only, not which errors.
 - **Strict** compares the *set* of `TSxxxx` codes emitted against the codes in

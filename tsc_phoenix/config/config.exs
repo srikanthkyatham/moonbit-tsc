@@ -9,8 +9,9 @@ import Config
 
 config :tsc_phoenix,
   generators: [timestamp_type: :utc_datetime],
-  moonbit_binary: "/Users/srikanthkyatham/Personal/moonbit/pure-moonbit-cli/src/moonbit/target/native/release/build/cli/cli.exe",
-  worker_pool_size: 4
+  moonbit_binary:
+    Path.expand("../src/moonbit/_build/native/release/build/cli/cli.exe", File.cwd!()),
+  worker_pool_size: System.schedulers_online()
 
 # Configure the endpoint
 config :tsc_phoenix, TscPhoenixWeb.Endpoint,

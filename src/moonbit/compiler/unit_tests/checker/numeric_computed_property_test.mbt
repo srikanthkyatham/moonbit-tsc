@@ -75,6 +75,7 @@ test "is_numeric_computed_property: Number expression should return true" {
 
 test "is_numeric_computed_property: Non-computed property should return false" {
   let source =
+    #|// @strict: false
     #|class C {
     #|    [n: number]: number;
     #|    prop: string;
@@ -96,6 +97,7 @@ test "is_numeric_computed_property: Non-computed property should return false" {
 
 test "is_numeric_computed_property: None (non-computed) should return false" {
   let source =
+    #|// @strict: false
     #|class C {
     #|    [n: number]: number;
     #|    regularProp: string;

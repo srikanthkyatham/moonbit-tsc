@@ -1214,6 +1214,32 @@ fn parse_argument_list(parser : Parser) -> (Array[Node], Parser) {
   }
   let mut should_continue = true
   while should_continue {
+    // Error recovery before parsing an argument, matching tsc:
+    // - ')' closes the list (also covers trailing commas: `foo(a,)`)
+    // - ',' means a missing argument: TS1135, skip it and keep going
+    // - a statement-only keyword aborts the list with TS1135
+    // - ';', end of file, or a stray closer aborts with TS1005 "')' expected."
+    match current_token(parser) {
+      CloseParen(_) => return (arguments, advance_parser(parser))
+      Comma(loc) => {
+        parser = add_error_code(parser, ArgumentExpressionExpected, loc)
+        parser = advance_parser(parser)
+        continue
+      }
+      token if starts_statement_but_not_expression(token) => {
+        parser = add_error_code(
+          parser,
+          ArgumentExpressionExpected,
+          token.location(),
+        )
+        return (arguments, parser)
+      }
+      Semicolon(loc) | EOF(loc) | CloseBrace(loc) | CloseBracket(loc) => {
+        parser = add_error_code(parser, ExpectedCloseParen, loc)
+        return (arguments, parser)
+      }
+      _ => ()
+    }
     // Check for spread operator in argument
     let arg_result = match current_token(parser) {
       DotDotDot(loc) => {
@@ -1242,13 +1268,47 @@ fn parse_argument_list(parser : Parser) -> (Array[Node], Parser) {
             parser = advance_parser(parser)
             should_continue = false
           }
-          _ => should_continue = false
+          _ => {
+            // TS1005: after an argument, tsc expects ',' (or ')')
+            parser = add_error_code(
+              parser,
+              ExpectedToken(","),
+              current_token(parser).location(),
+            )
+            should_continue = false
+          }
         }
       }
       Err(_) => should_continue = false
     }
   }
   (arguments, parser)
+}
+
+///|
+/// Tokens that can begin a statement but can never begin an expression.
+/// Used for argument/expression list recovery: tsc reports TS1135 at these
+/// and hands the token back to the enclosing statement parser.
+fn starts_statement_but_not_expression(token : Token) -> Bool {
+  match token {
+    KeywordVar(_)
+    | KeywordConst(_)
+    | KeywordReturn(_)
+    | KeywordIf(_)
+    | KeywordFor(_)
+    | KeywordWhile(_)
+    | KeywordDo(_)
+    | KeywordSwitch(_)
+    | KeywordThrow(_)
+    | KeywordTry(_)
+    | KeywordBreak(_)
+    | KeywordContinue(_)
+    | KeywordDebugger(_)
+    | KeywordEnum(_)
+    | KeywordInterface(_)
+    | KeywordExport(_) => true
+    _ => false
+  }
 }
 
 ///|

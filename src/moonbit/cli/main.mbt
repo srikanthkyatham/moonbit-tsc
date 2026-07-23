@@ -38,12 +38,35 @@ async fn async_main() -> Unit {
     Ok(Command::Init) => print_init_message()
     Ok(Command::ListImports(file_path, json_output)) =>
       run_list_imports(file_path, json_output)
-    Ok(Command::Compile(files, options)) => run_compile(files, options)
-    Ok(Command::JsonCompile(files, options)) => run_json_compile(files, options)
+    Ok(Command::Compile(files, options)) =>
+      run_compile(files, resolve_external_types(options))
+    Ok(Command::JsonCompile(files, options)) =>
+      run_json_compile(files, resolve_external_types(options))
     Ok(Command::CompileProject(tsconfig_path, options)) =>
-      run_project_compile(tsconfig_path, options)
+      run_project_compile(tsconfig_path, resolve_external_types(options))
     Ok(Command::BuildReferences(tsconfig_path, options)) =>
-      run_build_references(tsconfig_path, options)
+      run_build_references(tsconfig_path, resolve_external_types(options))
+  }
+}
+
+///|
+/// If --external-types-file was given, load its contents into
+/// external_types_json. A file sidesteps OS argv size limits (E2BIG),
+/// which large cross-file type payloads can exceed.
+async fn resolve_external_types(options : CLIOptions) -> CLIOptions {
+  match options.external_types_file {
+    Some(path) =>
+      try {
+        let data = @fs.read_file(path)
+        { ..options, external_types_json: Some(data.text()) }
+      } catch {
+        _ => {
+          println("Error: could not read --external-types-file: " + path)
+          exit(EXIT_FAILURE)
+          options
+        }
+      }
+    None => options
   }
 }
 
@@ -548,6 +571,9 @@ fn print_help() -> Unit {
   )
   println(
     "  --external-types <json> JSON string with external types for cross-file checking",
+  )
+  println(
+    "  --external-types-file <path> Read external types JSON from a file (avoids argv size limits)",
   )
   println("  --init                  Generate tsconfig.json (future)")
   println("")

@@ -2331,10 +2331,13 @@ fn declare_symbol_in_function_scope(
         match scope.symbols.get(name) {
           Some(existing_symbol) => {
             // Allow var merging
-            if existing_symbol.kind == SymbolKind::Variable &&
-              symbol.kind == SymbolKind::Variable &&
-              !(existing_symbol.flags.is_const) &&
-              !(symbol.flags.is_const) {
+            if (
+                existing_symbol.kind == SymbolKind::Variable &&
+                symbol.kind == SymbolKind::Variable &&
+                !(existing_symbol.flags.is_const) &&
+                !(symbol.flags.is_const)
+              ) ||
+              can_merge_symbols(existing_symbol, symbol) {
               // Merge the symbols
               let merged_symbol = merge_symbols(existing_symbol, symbol)
               let new_symbols = scope.symbols
@@ -2347,6 +2350,11 @@ fn declare_symbol_in_function_scope(
                 scopes: new_scopes,
                 next_symbol_id: binder.next_symbol_id + 1,
               }
+            } else if existing_symbol.kind == SymbolKind::Alias ||
+              symbol.kind == SymbolKind::Alias {
+              // Import alias vs local declaration is TS2440/TS2441 territory,
+              // not TS2300 (and type-only imports may legally coexist)
+              return binder
             } else {
               // Duplicate declaration error
               let display_name = format_symbol_name_for_error(name)
@@ -2427,6 +2435,9 @@ fn declare_symbol(binder : Binder, name : String, symbol : Symbol) -> Binder {
         symbol.kind == SymbolKind::Variable &&
         !(existing_symbol.flags.is_const) &&
         !(symbol.flags.is_const)
+      // Other legal declaration-space merges (class+namespace, type alias+value,
+      // interface+value, etc.) per tsc's declaration merging rules
+      let is_general_merge = can_merge_symbols(existing_symbol, symbol)
       if is_function_overload ||
         is_method_overload ||
         is_getter_setter_pair ||
@@ -2434,7 +2445,8 @@ fn declare_symbol(binder : Binder, name : String, symbol : Symbol) -> Binder {
         is_namespace_merge ||
         is_enum_merge ||
         is_interface_namespace_merge ||
-        is_var_merge {
+        is_var_merge ||
+        is_general_merge {
         // Overload, getter/setter pair, or mergeable declaration - allow it
         // For interface/namespace/enum merging or function overloads, merge the symbols
         if is_interface_merge ||
@@ -2495,12 +2507,49 @@ fn declare_symbol(binder : Binder, name : String, symbol : Symbol) -> Binder {
           // For var merging, keep the existing symbol (ignore the duplicate declaration)
           // This is used for patterns like: var x = expr; var x: Type;
           binder
+        } else if is_general_merge {
+          // Cross-kind declaration merging (class+namespace, type alias+value,
+          // interface+value, etc.) - merge without the TS2687 modifier check
+          let merged_symbol = merge_symbols(existing_symbol, symbol)
+          let new_symbols = scope.symbols
+          new_symbols.set(name, merged_symbol)
+          let updated_scope = { ..scope, symbols: new_symbols }
+          let scope_index = binder.scopes.length() - 1
+          let new_scopes = binder.scopes
+          new_scopes[scope_index] = updated_scope
+          { ..binder, scopes: new_scopes }
         } else {
           binder
         }
         // Duplicate declaration - add diagnostic
         // Skip duplicate check for computed properties (runtime-determined names)
       } else if name == "[computed]" {
+        binder
+      } else if name == "default" {
+        // Multiple default exports are TS2528/TS2652 territory, not TS2300
+        binder
+      } else if symbol_has_default_export(existing_symbol) &&
+        symbol_has_default_export(symbol) {
+        // Two default-exported declarations with the same name: tsc reports
+        // TS2528 (multiple default exports), not TS2300
+        binder
+      } else if existing_symbol.kind == SymbolKind::Alias ||
+        symbol.kind == SymbolKind::Alias {
+        // Conflicts between an import alias and a local declaration are
+        // TS2440/TS2441 territory, not TS2300. Type-only imports can legally
+        // coexist with local value declarations, so do not report here.
+        binder
+      } else if (
+          existing_symbol.kind == SymbolKind::ExportValue ||
+          existing_symbol.kind == SymbolKind::ExportType
+        ) !=
+        (
+          symbol.kind == SymbolKind::ExportValue ||
+          symbol.kind == SymbolKind::ExportType
+        ) {
+        // A re-export binding (export { x } from ..., export * as ns from ...)
+        // colliding with a local declaration is legal declaration-space
+        // merging in tsc (e.g. `export type A = ...; export * as A from ...`)
         binder
       } else {
         // TS2484: Use specific error for export conflicts
@@ -2787,6 +2836,15 @@ fn binder_has_export_modifier(modifiers : Array[Modifier]) -> Bool {
 
 ///|
 /// Check for default modifier (binder version)
+fn symbol_has_default_export(symbol : Symbol) -> Bool {
+  match symbol.value_declaration {
+    Some(FunctionDeclaration(f)) => binder_has_default_modifier(f.modifiers)
+    Some(ClassDeclaration(c)) => binder_has_default_modifier(c.modifiers)
+    _ => false
+  }
+}
+
+///|
 fn binder_has_default_modifier(modifiers : Array[Modifier]) -> Bool {
   for i = 0; i < modifiers.length(); i = i + 1 {
     match modifiers[i] {
@@ -2826,6 +2884,9 @@ pub fn can_merge_symbols(a : Symbol, b : Symbol) -> Bool {
     // Class + Interface = class implements interface
     (Class, Interface) | (Interface, Class) => true
 
+    // Class + Namespace = class with static members from namespace
+    (Class, Module) | (Module, Class) => true
+
     // Function + Namespace = callable namespace
     (Function, Module) | (Module, Function) => true
 
@@ -2835,10 +2896,24 @@ pub fn can_merge_symbols(a : Symbol, b : Symbol) -> Bool {
     // Interface + Namespace = interface with static members
     (Interface, Module) | (Module, Interface) => true
 
-    // Type alias can't merge with anything (except itself)
+    // Type alias can't merge with other type-space declarations
     (Type, Type) => false
 
-    // Variables can't merge
+    // Type alias occupies only the type space, so it can coexist with
+    // value-space declarations (variables, functions) and namespaces
+    (Type, Variable) | (Variable, Type) => true
+    (Type, Function) | (Function, Type) => true
+    (Type, Module) | (Module, Type) => true
+
+    // Interface occupies only the type space, so it can coexist with
+    // value-space declarations (variables, functions)
+    (Interface, Variable) | (Variable, Interface) => true
+    (Interface, Function) | (Function, Interface) => true
+
+    // Non-const var declarations merge (var x = 1; var x: number;)
+    (Variable, Variable) => !(a.flags.is_const) && !(b.flags.is_const)
+
+    // Other variable combinations conflict
     (Variable, _) | (_, Variable) => false
     _ => false
   }
@@ -2966,6 +3041,15 @@ pub fn merge_global_declarations(
             global_symbols.set(name, merge_symbols(existing, symbol))
           } else if name == "[computed]" {
             // Skip duplicate check for computed properties (runtime-determined names)
+            ()
+          } else if existing.kind == SymbolKind::Alias ||
+            symbol.kind == SymbolKind::Alias ||
+            existing.kind == SymbolKind::ExportValue ||
+            symbol.kind == SymbolKind::ExportValue ||
+            existing.kind == SymbolKind::ExportType ||
+            symbol.kind == SymbolKind::ExportType {
+            // Import aliases and re-export bindings are module-scoped; a
+            // cross-file collision with them is not a TS2300 duplicate
             ()
           } else {
             // Can't merge - report duplicate

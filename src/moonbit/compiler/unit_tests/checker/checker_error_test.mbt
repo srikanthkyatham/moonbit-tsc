@@ -1028,7 +1028,7 @@ test "unit/checker/error - valid interface implementation" {
 ///|
 test "unit/checker/error - valid class instantiation" {
   let result = parse_bind_check_errors(
-    "class Greeter { greeting: string; greet() { return this.greeting; } } const g = new Greeter();",
+    "// @strict: false\nclass Greeter { greeting: string; greet() { return this.greeting; } } const g = new Greeter();",
   )
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
@@ -1635,22 +1635,34 @@ test "unit/checker/destructuring - catch clause object destructuring" {
 
 ///|
 test "unit/checker/destructuring - function parameter array pattern" {
-  // Test function with array destructuring parameter (without type annotation)
-  // Variables bind as 'any' when no annotation provided
+  // Un-annotated destructuring parameters are implicit 'any' binding
+  // elements under noImplicitAny (default on) - TS7031 per element
   let result = parse_bind_check_errors("function foo([a, b]) { return a; }")
   match result {
-    Ok(typed) => assert_eq(typed.file_path, "test.ts")
-    Err(_) => assert_true(false)
+    Ok(_) => assert_true(false)
+    Err(diagnostics) => {
+      let ts7031_count = diagnostics
+        .iter()
+        .filter(fn(d) { d.code == 7031 })
+        .count()
+      assert_eq(ts7031_count, 2)
+    }
   }
 }
 
 ///|
 test "unit/checker/destructuring - function parameter object pattern" {
-  // Test function with object destructuring parameter (without type annotation)
+  // Un-annotated destructuring parameters are TS7031 under noImplicitAny
   let result = parse_bind_check_errors("function foo({ x, y }) { return x; }")
   match result {
-    Ok(typed) => assert_eq(typed.file_path, "test.ts")
-    Err(_) => assert_true(false)
+    Ok(_) => assert_true(false)
+    Err(diagnostics) => {
+      let ts7031_count = diagnostics
+        .iter()
+        .filter(fn(d) { d.code == 7031 })
+        .count()
+      assert_eq(ts7031_count, 2)
+    }
   }
 }
 
@@ -1676,13 +1688,19 @@ test "unit/checker/destructuring - arrow function object pattern" {
 
 ///|
 test "unit/checker/destructuring - nested parameter destructuring" {
-  // Test nested destructuring in function parameters
+  // Nested un-annotated destructuring parameter: TS7031 on the leaf element
   let result = parse_bind_check_errors(
     "function foo({ outer: { inner } }) { return inner; }",
   )
   match result {
-    Ok(typed) => assert_eq(typed.file_path, "test.ts")
-    Err(_) => assert_true(false)
+    Ok(_) => assert_true(false)
+    Err(diagnostics) => {
+      let ts7031_count = diagnostics
+        .iter()
+        .filter(fn(d) { d.code == 7031 })
+        .count()
+      assert_eq(ts7031_count, 1)
+    }
   }
 }
 

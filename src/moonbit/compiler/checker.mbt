@@ -286,7 +286,7 @@ pub struct TypeChecker {
   collected_return_types : Array[Type] // Collected return types during function body checking (for type inference)
   checked_function_bodies : Map[String, Bool] // Function names whose bodies were checked during type inference
   block_scoped_decls : Map[String, Int] // Variable name -> declaration line (for TS2448 TDZ check)
-  uninitialized_vars : Map[String, Int] // Variable name -> declaration line (for TS2454 definite assignment)
+  uninitialized_vars : Map[String, Int] // Variable name -> function scope depth at declaration (for TS2454 definite assignment)
   in_static_context : Bool // Tracks if we're in a static property initializer (for TS2334)
   in_constructor : Bool // Tracks if we're in a constructor (for TS2337 super outside constructor)
   in_class_body : Bool // Tracks if we're in a class body (for TS2335 super outside class)
@@ -300,6 +300,9 @@ pub struct TypeChecker {
   in_destructuring_pattern : Bool // Tracks if we're inferring type of a destructuring pattern (left side of assignment)
   in_expression_statement : Bool // Tracks if we're in an expression statement (yield result not used)
   no_implicit_any : Bool // Error on expressions and declarations with an implied 'any' type
+  strict_null_checks : Bool // strictNullChecks - enables TS2454 definite assignment analysis
+  strict_property_initialization : Bool // strictPropertyInitialization - enables TS2564 property initialization checks
+  suppress_definite_assignment : Bool // Suppress TS2454 reads (e.g. inside class property initializers, which run at construction time)
   implicit_any_array_vars : @hashset.HashSet[String] // Variables with implicit any[] type (for TS7005)
   inferring_variables : @hashset.HashSet[String] // Variables currently being inferred (for TS7022 circular reference detection)
   default_export_locations : Array[SourceLocation] // Track all default export locations for TS2528
@@ -347,6 +350,8 @@ pub fn TypeChecker::new_with_options(
   no_unchecked_indexed_access : Bool,
   target : Target,
   no_implicit_any? : Bool = false,
+  strict_null_checks? : Bool = false,
+  strict_property_initialization? : Bool = false,
 ) -> TypeChecker {
   {
     next_type_id: 0,
@@ -393,6 +398,9 @@ pub fn TypeChecker::new_with_options(
     in_destructuring_pattern: false,
     in_expression_statement: false,
     no_implicit_any,
+    strict_null_checks,
+    strict_property_initialization,
+    suppress_definite_assignment: false,
     implicit_any_array_vars: @hashset.HashSet([]),
     inferring_variables: @hashset.HashSet([]),
     default_export_locations: [],
@@ -2371,6 +2379,40 @@ pub fn check_source_file(bound : BoundSourceFile) -> CheckResult {
 }
 
 ///|
+/// Compute effective strict flags from file-level compiler directives.
+/// The TypeScript conformance baselines are generated with strict mode ON by
+/// default, so strictNullChecks/strictPropertyInitialization default to true
+/// and are disabled by an explicit `@strict: false` (or the specific
+/// `@strictNullChecks: false` / `@strictPropertyInitialization: false`).
+fn effective_strict_flags(directives : CompilerDirectives) -> (Bool, Bool) {
+  let base = directives.strict.unwrap_or(true)
+  let snc = directives.strict_null_checks.unwrap_or(base)
+  let spi = directives.strict_property_initialization.unwrap_or(base)
+  (snc, spi)
+}
+
+///|
+/// Compute the effective noImplicitAny flag: file-level `@noImplicitAny`
+/// directive wins; otherwise falls back to `@strict` (default ON, matching
+/// how the TypeScript conformance baselines are generated)
+fn effective_no_implicit_any(
+  directives : CompilerDirectives,
+  file_path : String,
+) -> Bool {
+  // JavaScript files get their parameter/member types from JSDoc annotations
+  // and looser inference; since JSDoc types are not parsed, reporting the
+  // noImplicitAny family there produces false positives - suppress it.
+  if file_path.has_suffix(".js") ||
+    file_path.has_suffix(".jsx") ||
+    file_path.has_suffix(".mjs") ||
+    file_path.has_suffix(".cjs") {
+    return false
+  }
+  let base = directives.strict.unwrap_or(true)
+  directives.no_implicit_any.unwrap_or(base)
+}
+
+///|
 /// Check a bound source file with compiler options
 pub fn check_source_file_with_options(
   bound : BoundSourceFile,
@@ -2379,12 +2421,17 @@ pub fn check_source_file_with_options(
   no_implicit_any? : Bool = false,
   module_kind? : ModuleKind = ESModule,
 ) -> CheckResult {
+  let (snc, spi) = effective_strict_flags(bound.compiler_directives)
+  let nia = no_implicit_any ||
+    effective_no_implicit_any(bound.compiler_directives, bound.file_path)
   let mut checker = TypeChecker::new_with_options(
     bound.file_path,
     Some(bound.global_scope),
     no_unchecked_indexed_access,
     target,
-    no_implicit_any~,
+    no_implicit_any=nia,
+    strict_null_checks=snc,
+    strict_property_initialization=spi,
   )
 
   // Apply global augmentations to the global scope
@@ -2463,12 +2510,17 @@ pub fn check_source_file_with_external_types(
   module_kind? : ModuleKind = ESModule,
   import_helpers? : Bool = false,
 ) -> CheckResult {
+  let (snc, spi) = effective_strict_flags(bound.compiler_directives)
+  let nia = no_implicit_any ||
+    effective_no_implicit_any(bound.compiler_directives, bound.file_path)
   let mut checker = TypeChecker::new_with_options(
     bound.file_path,
     Some(bound.global_scope),
     no_unchecked_indexed_access,
     target,
-    no_implicit_any~,
+    no_implicit_any=nia,
+    strict_null_checks=snc,
+    strict_property_initialization=spi,
   )
 
   // Apply global augmentations to the global scope
@@ -3484,6 +3536,101 @@ fn check_inferred_type_accessibility(
 }
 
 ///|
+/// Conservatively determine whether a type annotation admits `undefined`
+/// (or is too dynamic/complex to analyze). Used to exempt variables and class
+/// properties from definite assignment analysis (TS2454/TS2564).
+/// Returns true when unsure so that no false positives are produced.
+fn type_node_admits_undefined(
+  checker : TypeChecker,
+  type_node : Node,
+  depth : Int,
+) -> Bool {
+  if depth > 5 {
+    return true // Recursion limit reached - be conservative
+  }
+  match type_node {
+    KeywordType(kt) =>
+      match kt.kind {
+        Any | Unknown | Void | Undefined => true
+        Number
+        | String
+        | Boolean
+        | Never
+        | Null
+        | Symbol
+        | BigInt
+        | Object => false
+        _ => true // Exotic keyword types - be conservative
+      }
+    UnionType(ut) => {
+      // A union admits undefined if any constituent does
+      for t in ut.types {
+        if type_node_admits_undefined(checker, t, depth + 1) {
+          return true
+        }
+      }
+      false
+    }
+    IntersectionType(it) => {
+      // An intersection admits undefined only if all constituents do
+      for t in it.types {
+        if !(type_node_admits_undefined(checker, t, depth + 1)) {
+          return false
+        }
+      }
+      true
+    }
+    ParenthesizedType(pt) =>
+      type_node_admits_undefined(checker, pt.type_node, depth + 1)
+    LiteralType(_) => false
+    ArrayType(_) | TupleType(_) | FunctionType(_) | ConstructorType(_) => false
+    TemplateLiteralType(_) => false
+    TypeReference(tr) =>
+      match tr.type_name {
+        "any" | "unknown" | "void" | "undefined" => true
+        "number" | "string" | "boolean" | "never" | "null" | "symbol"
+        | "bigint" | "object" => false
+        _ =>
+          match lookup_symbol(checker, tr.type_name) {
+            Some(sym) =>
+              match sym.kind {
+                Class | Interface | Enum | EnumMember => false
+                Type =>
+                  // Resolve type aliases (without emitting diagnostics)
+                  match sym.value_declaration {
+                    Some(TypeAliasDeclaration(ta)) =>
+                      // Generic aliases could substitute undefined via type
+                      // arguments; be conservative for those
+                      if ta.type_parameters.length() > 0 {
+                        true
+                      } else {
+                        type_node_admits_undefined(
+                          checker,
+                          ta.type_node,
+                          depth + 1,
+                        )
+                      }
+                    _ => true
+                  }
+                _ => true // Type parameters, imports, etc. - be conservative
+              }
+            None => true // Unknown type name - be conservative
+          }
+      }
+    // Mapped, conditional, indexed access, typeof, infer, etc. - conservative
+    _ => true
+  }
+}
+
+///|
+/// Current function-nesting depth measured in pushed local scopes.
+/// Used by TS2454 to avoid reporting reads of outer variables from inside
+/// nested functions (control flow across function boundaries is unknown).
+fn definite_assignment_scope_depth(checker : TypeChecker) -> Int {
+  checker.local_scopes.length()
+}
+
+///|
 /// Check variable statement
 fn check_variable_statement(
   checker : TypeChecker,
@@ -3526,6 +3673,21 @@ fn check_variable_statement(
     let is_var = !(var_stmt.is_let) && !(var_stmt.is_const)
     checker = check_variable_declaration(checker, decl, var_stmt.is_const, is_var)
 
+    // noImplicitAny: TS7005 for ambient variables without a type annotation
+    // (`declare var x;`) - no initializer or control flow to infer from
+    if checker.no_implicit_any && is_ambient {
+      match (decl.type_annotation, decl.initializer, decl.name) {
+        (None, None, Identifier(id)) =>
+          checker = add_diagnostic_with_code(
+            checker,
+            "Variable '\{id.name}' implicitly has an 'any' type.",
+            id.location,
+            TS7005,
+          )
+        _ => ()
+      }
+    }
+
     // TS1155: 'const' declarations must be initialized
     // Only check if NOT ambient declaration (declare const x: T is allowed)
     if var_stmt.is_const && !(is_ambient) {
@@ -3565,24 +3727,29 @@ fn check_variable_statement(
 
     // Track uninitialized variables for TS2454 (definite assignment)
     // Only track if:
-    // 1. NOT ambient declaration
-    // 2. Has type annotation but no initializer
-    // 3. Is let or const (NOT var - var is hoisted and initialized to undefined)
-    // 4. Type annotation is NOT 'any' (any-typed vars are implicitly allowed uninitialized)
+    // 1. strictNullChecks is enabled (TS2454 is a strict-mode diagnostic)
+    // 2. NOT ambient declaration
+    // 3. Has type annotation but no initializer
+    // 4. Is let or const (NOT var - var is hoisted and initialized to undefined)
+    // 5. No definite assignment assertion (let x!: T)
+    // 6. Type annotation does not admit 'undefined' (any/unknown/void/undefined
+    //    and unions containing them are exempt)
     let is_block_scoped = var_stmt.is_let || var_stmt.is_const
-    if !(is_ambient) && is_block_scoped {
+    if checker.strict_null_checks &&
+      !(is_ambient) &&
+      is_block_scoped &&
+      !(decl.has_definite_assignment) {
       match (decl.name, decl.type_annotation, decl.initializer) {
-        (Identifier(id), Some(type_ann), None) => {
-          // Skip tracking if type annotation is 'any'
-          let is_any_type = match type_ann {
-            KeywordType(kt) => kt.kind == Any
-            _ => false
-          }
-          if !(is_any_type) {
+        (Identifier(id), Some(type_ann), None) =>
+          if !(type_node_admits_undefined(checker, type_ann, 0)) {
             // Block-scoped variable declared with type but no initializer - track it
-            checker.uninitialized_vars.set(id.name, decl.location.start.line)
+            // (value = function scope depth at declaration, so reads from nested
+            // functions can be exempted)
+            checker.uninitialized_vars.set(
+              id.name,
+              definite_assignment_scope_depth(checker),
+            )
           }
-        }
         _ => ()
       }
     }
@@ -3797,9 +3964,21 @@ fn check_variable_declaration(
       }
   }
 
-  // TS7034: Check for implicit any[] type in variable declaration
-  // This occurs when a variable is initialized to [] without type annotation
-  let checker = if checker.no_implicit_any && declared_type is None {
+  // TS7034: Check for implicit any[] type in variable declaration.
+  // Full tsc behavior requires evolving-type analysis over all use sites, so
+  // this is restricted to the unambiguous syntactic case: a non-const
+  // variable initialized to an empty array literal `[]` with no annotation.
+  // (const `[]` infers never[] under strictNullChecks and is fine in tsc;
+  // non-literal initializers inferred as any[] are usually our own inference
+  // gaps, not real implicit anys.)
+  let is_empty_array_literal_init = match decl.initializer {
+    Some(ArrayLiteralExpression(arr)) => arr.elements.length() == 0
+    _ => false
+  }
+  let checker = if checker.no_implicit_any &&
+    declared_type is None &&
+    !is_const &&
+    is_empty_array_literal_init {
     match var_type {
       Array(arr_type) =>
         match arr_type.element_type {
@@ -4142,6 +4321,9 @@ fn infer_type(checker : TypeChecker, expr : Node) -> (Type, TypeChecker) {
       } else if checker.no_implicit_any && checker.inferring_variables.contains(
         id.name,
       ) {
+        // Run normal identifier inference first so TDZ/definite-assignment
+        // diagnostics (TS2448/TS2454) are still reported, then add TS7022
+        let (_, checker) = infer_identifier_type(checker, id)
         // TS7022: Variable is referenced in its own initializer
         let msg = "'\{id.name}' implicitly has type 'any' because it does not have a type annotation and is referenced directly or indirectly in its own initializer."
         let checker = add_diagnostic_with_code(checker, msg, id.location, TS7022)
@@ -4242,21 +4424,46 @@ fn infer_identifier_type(
   // For block-scoped variables (const/let) used before declaration, also report TS2454
   // This handles cases like: export default x; const x = 'x';
   // where x is used before being assigned, even though it will be initialized
+  // TS2454 is only reported under strictNullChecks (matching tsc).
+  // Reads inside nested functions are exempt: control flow across function
+  // boundaries is unknown, and tsc does not flag those either.
+  let current_da_depth = definite_assignment_scope_depth(checker)
   match checker.block_scoped_decls.get(id.name) {
     Some(decl_line) =>
       if id.location.start.line < decl_line {
         // Already reported TS2448 above, now also report TS2454 for completeness
-        checker = add_diagnostic_with_code(
-          checker,
-          "Variable '\{id.name}' is used before being assigned.",
-          id.location,
-          TS2454,
-        )
+        if checker.strict_null_checks {
+          checker = add_diagnostic_with_code(
+            checker,
+            "Variable '\{id.name}' is used before being assigned.",
+            id.location,
+            TS2454,
+          )
+        }
         has_tdz_or_uninitialized_error = true
       } else {
         // After declaration line - check if variable is in uninitialized set
         match checker.uninitialized_vars.get(id.name) {
-          Some(_) => {
+          Some(decl_depth) =>
+            if current_da_depth <= decl_depth &&
+            !(checker.suppress_definite_assignment) {
+              checker = add_diagnostic_with_code(
+                checker,
+                "Variable '\{id.name}' is used before being assigned.",
+                id.location,
+                TS2454,
+              )
+              has_tdz_or_uninitialized_error = true
+            }
+          None => ()
+        }
+      }
+    None =>
+      // Not a block-scoped variable - check uninitialized_vars for type-annotated vars without initializers
+      match checker.uninitialized_vars.get(id.name) {
+        Some(decl_depth) =>
+          if current_da_depth <= decl_depth &&
+            !(checker.suppress_definite_assignment) {
             checker = add_diagnostic_with_code(
               checker,
               "Variable '\{id.name}' is used before being assigned.",
@@ -4265,21 +4472,6 @@ fn infer_identifier_type(
             )
             has_tdz_or_uninitialized_error = true
           }
-          None => ()
-        }
-      }
-    None =>
-      // Not a block-scoped variable - check uninitialized_vars for type-annotated vars without initializers
-      match checker.uninitialized_vars.get(id.name) {
-        Some(_) => {
-          checker = add_diagnostic_with_code(
-            checker,
-            "Variable '\{id.name}' is used before being assigned.",
-            id.location,
-            TS2454,
-          )
-          has_tdz_or_uninitialized_error = true
-        }
         None => ()
       }
   }
@@ -6041,7 +6233,14 @@ fn infer_class_declaration_type(
             }
           None =>
             match prop.initializer {
-              Some(init) => infer_type(checker, init)
+              Some(init) => {
+                // Property initializers run at construction time - suppress
+                // TS2454 for reads of outer variables (see check_class_declaration)
+                let saved_suppress_da = checker.suppress_definite_assignment
+                let c0 = { ..checker, suppress_definite_assignment: true }
+                let (t, c1) = infer_type(c0, init)
+                (t, { ..c1, suppress_definite_assignment: saved_suppress_da })
+              }
               None => any_type(checker)
             }
         }
@@ -10923,7 +11122,8 @@ fn infer_yield_expression_type(
       let checker = if checker.no_implicit_any &&
         !(checker.generator_has_return_type) &&
         !(ye.is_delegate) &&
-        !(checker.in_expression_statement) {
+        !(checker.in_expression_statement) &&
+        is_in_generator_function(checker) {
         add_diagnostic_with_code(
           checker,
           "'yield' expression implicitly results in an 'any' type because its containing generator lacks a return-type annotation.",
@@ -10947,8 +11147,13 @@ fn infer_yield_expression_type(
       let (undefined_t, checker) = undefined_type(checker)
       let checker = collect_yield_type(checker, undefined_t, false)
 
+      // Skip delegates: `yield*` without an operand is a parse error
+      // (TS1109 already reported); tsc does not add TS7057 on top.
+      // Also skip yields outside a generator body (TS1163 already reported).
       let checker = if checker.no_implicit_any &&
-        !(checker.generator_has_return_type) {
+        !(checker.generator_has_return_type) &&
+        !(ye.is_delegate) &&
+        is_in_generator_function(checker) {
         add_diagnostic_with_code(
           checker,
           "'yield' expression implicitly results in an 'any' type because its containing generator lacks a return-type annotation.",
@@ -12357,6 +12562,34 @@ fn check_duplicate_property(
 }
 
 ///|
+/// Check for duplicate plain property name in an object literal and report
+/// TS1117 on the duplicate occurrence (matches tsc: object literal value
+/// properties get TS1117, not TS2300)
+fn check_duplicate_object_literal_property(
+  checker : TypeChecker,
+  name : String,
+  loc : SourceLocation,
+  property_locations : Map[String, SourceLocation],
+) -> TypeChecker {
+  if name == "[computed]" {
+    return checker
+  }
+  match property_locations.get(name) {
+    Some(_) =>
+      add_diagnostic_with_code(
+        checker,
+        "An object literal cannot have multiple properties with the same name.",
+        loc,
+        TS1117,
+      )
+    None => {
+      property_locations.set(name, loc)
+      checker
+    }
+  }
+}
+
+///|
 /// Infer object literal type
 fn infer_object_literal_type(
   checker : TypeChecker,
@@ -12365,18 +12598,20 @@ fn infer_object_literal_type(
   let mut checker = checker
   let properties = Map([])
   let spread_types : Array[Type] = [] // Track types being spread (for intersection)
-  let property_locations : Map[String, SourceLocation] = Map([]) // Track property names for TS2300 duplicate detection
-  let property_reported : Map[String, Bool] = Map([]) // Track if we've reported the first occurrence as duplicate
+  let value_prop_locations : Map[String, SourceLocation] = Map([]) // Track plain property names for TS1117 duplicate detection
+  let getter_locations : Map[String, SourceLocation] = Map([]) // Track getter names for TS2300 duplicate detection
+  let getter_reported : Map[String, Bool] = Map([]) // Track if we've reported the first getter occurrence as duplicate
+  let setter_locations : Map[String, SourceLocation] = Map([]) // Track setter names for TS2300 duplicate detection
+  let setter_reported : Map[String, Bool] = Map([]) // Track if we've reported the first setter occurrence as duplicate
   for i = 0; i < obj.properties.length(); i = i + 1 {
     match obj.properties[i] {
       PropertyAssignment(name, value, loc) => {
-        // TS2300: Check for duplicate property names
-        checker = check_duplicate_property(
+        // TS1117: Check for duplicate property names
+        checker = check_duplicate_object_literal_property(
           checker,
           name,
           loc,
-          property_locations,
-          property_reported,
+          value_prop_locations,
         )
         let (prop_type, c) = infer_type(checker, value)
         properties.set(name, {
@@ -12455,6 +12690,13 @@ fn infer_object_literal_type(
         checker = c
       }
       ShorthandProperty(name, loc) => {
+        // TS1117: Check for duplicate property names
+        checker = check_duplicate_object_literal_property(
+          checker,
+          name,
+          loc,
+          value_prop_locations,
+        )
         // Shorthand property - get type from identifier in scope
         // Handle 'arguments' specially (like identifier expressions do)
         let (prop_type, c) = if name == "arguments" {
@@ -12648,8 +12890,15 @@ fn infer_object_literal_type(
             )
         }
       }
-      MethodDeclaration(name, func_expr, _) => {
+      MethodDeclaration(name, func_expr, loc) => {
         // Shorthand method declaration: { method() { ... } }
+        // TS1117: Check for duplicate property names
+        checker = check_duplicate_object_literal_property(
+          checker,
+          name,
+          loc,
+          value_prop_locations,
+        )
         let (method_type, c) = infer_function_expression_type(
           checker, func_expr,
         )
@@ -12663,13 +12912,13 @@ fn infer_object_literal_type(
       }
       GetAccessor(name, func_expr, loc) => {
         // Getter accessor: { get prop() { ... } }
-        // TS2300: Check for duplicate property names
+        // TS2300: Check for duplicate getter names
         checker = check_duplicate_property(
           checker,
           name,
           loc,
-          property_locations,
-          property_reported,
+          getter_locations,
+          getter_reported,
         )
         let (getter_type, c) = infer_function_expression_type(
           checker, func_expr,
@@ -12689,6 +12938,14 @@ fn infer_object_literal_type(
       }
       SetAccessor(name, func_expr, loc) => {
         // Setter accessor: { set prop(value) { ... } }
+        // TS2300: Check for duplicate setter names
+        checker = check_duplicate_property(
+          checker,
+          name,
+          loc,
+          setter_locations,
+          setter_reported,
+        )
         let (setter_type, c) = infer_function_expression_type(
           checker, func_expr,
         )
@@ -14970,15 +15227,17 @@ fn statements_contain_bare_yield(statements : Array[Node]) -> Bool {
     match stmt {
       YieldExpression(ye) =>
         // Bare yield: yield; (no expression)
+        // Skip delegates: `yield*` without operand is a parse error, not a
+        // bare yield
         match ye.expression {
-          None => return true
+          None => if !(ye.is_delegate) { return true }
           Some(_) => ()
         }
       ExpressionStatement(es) =>
         match es.expression {
           YieldExpression(ye) =>
             match ye.expression {
-              None => return true
+              None => if !(ye.is_delegate) { return true }
               Some(_) => ()
             }
           _ => ()
@@ -16424,6 +16683,30 @@ fn check_function_declaration(
   // Check for TS2372: parameter cannot reference itself
   let checker = check_parameter_self_reference(checker, func.parameters)
 
+  // noImplicitAny: TS7006/TS7019/TS7031 for un-annotated parameters
+  // (function declarations are never contextually typed)
+  let checker = check_implicit_any_parameters(checker, func.parameters)
+
+  // noImplicitAny: TS7010 for ambient (declare) functions without a
+  // return-type annotation - their return type cannot be inferred
+  let checker = if checker.no_implicit_any &&
+    is_ambient_declaration(func.modifiers) &&
+    func.return_type is None &&
+    !(func.is_generator) {
+    let func_name = match func.name {
+      Some(Identifier(id)) => id.name
+      _ => "(anonymous)"
+    }
+    add_diagnostic_with_code(
+      checker,
+      "'\{func_name}', which lacks return-type annotation, implicitly has an 'any' return type.",
+      func.location,
+      TS7010,
+    )
+  } else {
+    checker
+  }
+
   // Check for TS1359: 'yield' is a reserved word in generator parameters
   let checker = if func.is_generator {
     check_generator_parameter_names(checker, func.parameters)
@@ -16776,12 +17059,35 @@ fn check_if_statement(
   // Try to extract type guard information from the condition
   let type_guard = get_type_guard_info(checker, if_stmt.condition)
 
+  // Definite assignment (TS2454): snapshot the uninitialized-variable set.
+  // A variable assigned in only one branch is NOT definitely assigned after
+  // the if statement, unless the other branch terminates control flow.
+  // (uninitialized_vars is a shared mutable map, so snapshot entries.)
+  let da_before : Map[String, Int] = Map([])
+  for k, v in checker.uninitialized_vars {
+    da_before.set(k, v)
+  }
+
   // Check then branch with narrowed types (if type guard found)
   let then_checker = match type_guard {
     Some(tg_info) => apply_narrowing_to_checker(checker, tg_info, true)
     None => checker
   }
   let then_checker = check_statement(then_checker, if_stmt.then_statement)
+
+  // Record variables assigned in the then branch, then restore the snapshot
+  // so the else branch (and fall-through) starts from the pre-branch state
+  let removed_then : Array[(String, Int)] = []
+  for k, v in da_before {
+    if !(then_checker.uninitialized_vars.contains(k)) {
+      removed_then.push((k, v))
+    }
+  }
+  for entry in removed_then {
+    let (k, v) = entry
+    then_checker.uninitialized_vars.set(k, v)
+  }
+  let then_terminates = is_block_terminating(if_stmt.then_statement)
 
   // Check else branch with opposite narrowing (if type guard found)
   let final_checker = match if_stmt.else_statement {
@@ -16790,8 +17096,60 @@ fn check_if_statement(
         Some(tg_info) => apply_narrowing_to_checker(checker, tg_info, false)
         None => checker
       }
-      check_statement(else_checker, else_stmt)
+      let else_checker = check_statement(else_checker, else_stmt)
+      // Join the two branches for definite assignment
+      let removed_else : Array[(String, Int)] = []
+      for k, v in da_before {
+        if !(else_checker.uninitialized_vars.contains(k)) {
+          removed_else.push((k, v))
+        }
+      }
+      let else_terminates = is_block_terminating(else_stmt)
+      if then_terminates && !(else_terminates) {
+        // Only the else path continues: its assignments hold
+        // (map already reflects removed_else)
+        ()
+      } else if else_terminates && !(then_terminates) {
+        // Only the then path continues: its assignments hold
+        for entry in removed_else {
+          let (k, v) = entry
+          else_checker.uninitialized_vars.set(k, v)
+        }
+        for entry in removed_then {
+          let (k, _) = entry
+          let _ = else_checker.uninitialized_vars.remove(k)
+
+        }
+      } else if then_terminates && else_terminates {
+        // Neither path continues: code after is unreachable, treat all
+        // branch-assigned variables as assigned to avoid spurious errors
+        for entry in removed_then {
+          let (k, _) = entry
+          let _ = else_checker.uninitialized_vars.remove(k)
+
+        }
+      } else {
+        // Both paths continue: assigned only if assigned in BOTH branches
+        for entry in removed_else {
+          let (k, v) = entry
+          let mut in_then = false
+          for e2 in removed_then {
+            let (k2, _) = e2
+            if k2 == k {
+              in_then = true
+              break
+            }
+          }
+          if !(in_then) {
+            else_checker.uninitialized_vars.set(k, v)
+          }
+        }
+      }
+      else_checker
     }
+    // No else branch: the fall-through path (condition false) performs no
+    // assignments, so branch assignments do not survive the if statement.
+    // The snapshot has already been restored above.
     None => then_checker
   }
 
@@ -17856,8 +18214,29 @@ fn check_block_statement(
   let old_decls = checker.block_scoped_decls
   let checker = { ..checker, block_scoped_decls: block_decls }
 
+  // Definite assignment (TS2454): remember which variables were already
+  // tracked before this block, so variables declared inside the block can be
+  // dropped when it ends (they go out of scope and must not shadow-poison
+  // same-named variables in outer scopes)
+  let da_tracked_before : @hashset.HashSet[String] = @hashset.HashSet([])
+  for k, _ in checker.uninitialized_vars {
+    da_tracked_before.add(k)
+  }
+
   // Then check all statements
   let checker = check_statements(checker, block.statements)
+
+  // Drop definite-assignment entries for variables declared inside this block
+  let da_to_remove : Array[String] = []
+  for k, _ in checker.uninitialized_vars {
+    if !(da_tracked_before.contains(k)) {
+      da_to_remove.push(k)
+    }
+  }
+  for k in da_to_remove {
+    let _ = checker.uninitialized_vars.remove(k)
+
+  }
 
   // Restore old block_scoped_decls
   { ..checker, block_scoped_decls: old_decls }
@@ -18268,6 +18647,43 @@ fn check_class_declaration(
     class_type_parameters: type_param_names, // Set class type parameters for TS2302 validation
   }
 
+  // noImplicitAny: members of ambient (declare) classes need explicit types
+  // - TS7008: un-annotated (non-private) property
+  // - TS7010: method without a return-type annotation
+  // (non-ambient class members get their types from initializers /
+  // control-flow inference, so tsc does not report TS7008 for them)
+  if checker.no_implicit_any && is_ambient_declaration(class_decl.modifiers) {
+    for mem in class_decl.members {
+      match mem {
+        PropertyDeclaration(prop) =>
+          if prop.type_annotation is None &&
+            prop.initializer is None &&
+            prop.computed_name_expr is None &&
+            !(has_modifier(prop.modifiers, Modifier::Private)) {
+            checker = add_diagnostic_with_code(
+              checker,
+              "Member '\{prop.name}' implicitly has an 'any' type.",
+              prop.location,
+              TS7008,
+            )
+          }
+        MethodDeclaration(meth) =>
+          if meth.return_type is None &&
+            meth.computed_name_expr is None &&
+            !(has_modifier(meth.modifiers, Modifier::Private)) &&
+            !(meth.is_generator) {
+            checker = add_diagnostic_with_code(
+              checker,
+              "'\{meth.name}', which lacks return-type annotation, implicitly has an 'any' return type.",
+              meth.location,
+              TS7010,
+            )
+          }
+        _ => ()
+      }
+    }
+  }
+
   // Collect uninitialized properties for definite assignment checking
   let uninitialized_props : Map[String, SourceLocation] = Map([])
   for mem in class_decl.members {
@@ -18298,7 +18714,9 @@ fn check_class_declaration(
   // Check class members (constructors, methods, properties)
   for i = 0; i < class_decl.members.length(); i = i + 1 {
     checker = match class_decl.members[i] {
-      ConstructorDeclaration(ctor) =>
+      ConstructorDeclaration(ctor) => {
+        // noImplicitAny: TS7006/TS7019/TS7031 for un-annotated parameters
+        let checker = check_implicit_any_parameters(checker, ctor.parameters)
         match ctor.body {
           Some(body) => {
             // Push local scope for constructor
@@ -18337,7 +18755,14 @@ fn check_class_declaration(
           }
           None => checker
         }
+      }
       MethodDeclaration(method_dec) => {
+        // noImplicitAny: TS7006/TS7019/TS7031 for un-annotated parameters
+        // (class methods are never contextually typed)
+        let checker = check_implicit_any_parameters(
+          checker,
+          method_dec.parameters,
+        )
         // Check for TS1221: Generators are not allowed in an ambient context
         // A method is ambient if the class has 'declare' modifier or the method has no body
         let class_is_ambient = is_ambient_declaration(class_decl.modifiers)
@@ -18471,14 +18896,23 @@ fn check_class_declaration(
             // Save and reset generator context - class property initializers are not
             // inside the generator body even if the class is inside a generator function
             let saved_generator_depth = checker.generator_function_depth
+            let saved_suppress_da = checker.suppress_definite_assignment
             let checker = {
               ..checker,
               generator_function_depth: 0,
               generator_has_return_type: false,
+              // Property initializers run at construction time, so definite
+              // assignment of outer variables cannot be determined - suppress
+              // TS2454 to avoid false positives
+              suppress_definite_assignment: true,
             }
             let (_, c) = infer_type(checker, init)
             // Restore generator context
-            let c = { ..c, generator_function_depth: saved_generator_depth }
+            let c = {
+              ..c,
+              generator_function_depth: saved_generator_depth,
+              suppress_definite_assignment: saved_suppress_da,
+            }
             // Restore in_static_context flag and mark property as initialized
             let c = if is_static {
               { ..c, in_static_context: false }
@@ -18504,6 +18938,9 @@ fn check_class_declaration(
       _ => checker
     }
   }
+
+  // TS2564: Check strict property initialization
+  let checker = check_strict_property_initialization(checker, class_decl)
 
   // Check for abstract members in non-abstract class (TS2516)
   let checker = check_abstract_members_in_non_abstract_class(
@@ -18540,6 +18977,203 @@ fn check_class_declaration(
     in_extends_null_class: prev_in_extends_null_class,
     class_type_parameters: prev_class_type_parameters,
   }
+}
+
+///|
+/// Collect property names assigned via `this.<name> = ...` anywhere in a node.
+/// Conservative for TS2564: an assignment on ANY code path counts as definite,
+/// so missing assignments are under-reported rather than over-reported.
+/// Does not descend into nested function bodies (matching tsc, which does not
+/// count assignments made in callbacks or nested functions).
+fn collect_this_property_assignments(
+  node : Node,
+  assigned : @hashset.HashSet[String],
+) -> Unit {
+  match node {
+    BinaryExpression(bin) => {
+      if bin.operator == BinaryOperator::Assign {
+        match bin.left {
+          PropertyAccessExpression(pa) =>
+            match pa.expression {
+              ThisExpression(_) => assigned.add(pa.name)
+              _ => ()
+            }
+          _ => ()
+        }
+      }
+      collect_this_property_assignments(bin.left, assigned)
+      collect_this_property_assignments(bin.right, assigned)
+    }
+    ExpressionStatement(es) =>
+      collect_this_property_assignments(es.expression, assigned)
+    BlockStatement(block) =>
+      for stmt in block.statements {
+        collect_this_property_assignments(stmt, assigned)
+      }
+    IfStatement(if_stmt) => {
+      collect_this_property_assignments(if_stmt.condition, assigned)
+      collect_this_property_assignments(if_stmt.then_statement, assigned)
+      match if_stmt.else_statement {
+        Some(else_stmt) =>
+          collect_this_property_assignments(else_stmt, assigned)
+        None => ()
+      }
+    }
+    WhileStatement(ws) => {
+      collect_this_property_assignments(ws.condition, assigned)
+      collect_this_property_assignments(ws.statement, assigned)
+    }
+    DoWhileStatement(dw) => {
+      collect_this_property_assignments(dw.statement, assigned)
+      collect_this_property_assignments(dw.condition, assigned)
+    }
+    ForStatement(fs) => {
+      match fs.initializer {
+        Some(init) => collect_this_property_assignments(init, assigned)
+        None => ()
+      }
+      match fs.condition {
+        Some(cond) => collect_this_property_assignments(cond, assigned)
+        None => ()
+      }
+      match fs.incrementor {
+        Some(inc) => collect_this_property_assignments(inc, assigned)
+        None => ()
+      }
+      collect_this_property_assignments(fs.statement, assigned)
+    }
+    ForInStatement(fs) => {
+      collect_this_property_assignments(fs.initializer, assigned)
+      collect_this_property_assignments(fs.statement, assigned)
+    }
+    ForOfStatement(fs) => {
+      collect_this_property_assignments(fs.initializer, assigned)
+      collect_this_property_assignments(fs.statement, assigned)
+    }
+    SwitchStatement(sw) =>
+      for case_clause in sw.cases {
+        for stmt in case_clause.statements {
+          collect_this_property_assignments(stmt, assigned)
+        }
+      }
+    TryStatement(ts) => {
+      collect_this_property_assignments(ts.try_block, assigned)
+      match ts.catch_clause {
+        Some(cc) => collect_this_property_assignments(cc.block, assigned)
+        None => ()
+      }
+      match ts.finally_block {
+        Some(fb) => collect_this_property_assignments(fb, assigned)
+        None => ()
+      }
+    }
+    LabeledStatement(ls) =>
+      collect_this_property_assignments(ls.statement, assigned)
+    VariableStatement(vs) =>
+      for decl in vs.declarations {
+        match decl.initializer {
+          Some(init) => collect_this_property_assignments(init, assigned)
+          None => ()
+        }
+      }
+    ReturnStatement(ret) =>
+      match ret.expression {
+        Some(expr) => collect_this_property_assignments(expr, assigned)
+        None => ()
+      }
+    CallExpression(call) => {
+      collect_this_property_assignments(call.expression, assigned)
+      for arg in call.arguments {
+        collect_this_property_assignments(arg, assigned)
+      }
+    }
+    ParenthesizedExpression(pe) =>
+      collect_this_property_assignments(pe.expression, assigned)
+    ConditionalExpression(ce) => {
+      collect_this_property_assignments(ce.condition, assigned)
+      collect_this_property_assignments(ce.when_true, assigned)
+      collect_this_property_assignments(ce.when_false, assigned)
+    }
+    PropertyAccessExpression(pa) =>
+      collect_this_property_assignments(pa.expression, assigned)
+    // Do NOT descend into function bodies (ArrowFunction, FunctionExpression,
+    // FunctionDeclaration, ClassDeclaration...) - assignments there are not
+    // guaranteed to run during construction
+    _ => ()
+  }
+}
+
+///|
+/// TS2564: Property has no initializer and is not definitely assigned in the
+/// constructor. Requires strictPropertyInitialization + strictNullChecks.
+/// Conservative rules (no false positives):
+/// - only instance properties with an explicit type annotation are checked
+/// - properties whose type may admit undefined are exempt
+/// - optional (?), definite-assignment (!), abstract, declare, static and
+///   computed-name properties are exempt
+/// - ANY `this.x = ...` assignment in a constructor body counts as definite
+fn check_strict_property_initialization(
+  checker : TypeChecker,
+  class_decl : ClassDeclaration,
+) -> TypeChecker {
+  if !(checker.strict_property_initialization) ||
+    !(checker.strict_null_checks) {
+    return checker
+  }
+  // Ambient (declare) classes are exempt
+  if is_ambient_declaration(class_decl.modifiers) {
+    return checker
+  }
+
+  // Collect properties assigned in any constructor body
+  let assigned_in_ctor : @hashset.HashSet[String] = @hashset.HashSet([])
+  for mem in class_decl.members {
+    match mem {
+      ConstructorDeclaration(ctor) =>
+        match ctor.body {
+          Some(body) => collect_this_property_assignments(body, assigned_in_ctor)
+          None => ()
+        }
+      _ => ()
+    }
+  }
+
+  let mut checker = checker
+  for mem in class_decl.members {
+    match mem {
+      PropertyDeclaration(prop) => {
+        if prop.initializer is Some(_) {
+          continue
+        }
+        if prop.is_optional {
+          continue
+        }
+        if prop.computed_name_expr is Some(_) {
+          continue
+        }
+        if has_modifier(prop.modifiers, Modifier::Static) ||
+          has_modifier(prop.modifiers, Modifier::Abstract) ||
+          has_modifier(prop.modifiers, Modifier::Declare) {
+          continue
+        }
+        match prop.type_annotation {
+          None => () // No annotation -> implicit any, admits undefined
+          Some(type_ann) =>
+            if !(type_node_admits_undefined(checker, type_ann, 0)) &&
+              !(assigned_in_ctor.contains(prop.name)) {
+              checker = add_diagnostic_with_code(
+                checker,
+                "Property '\{prop.name}' has no initializer and is not definitely assigned in the constructor.",
+                prop.location,
+                TS2564,
+              )
+            }
+        }
+      }
+      _ => ()
+    }
+  }
+  checker
 }
 
 ///|
@@ -19700,6 +20334,50 @@ fn check_interface_declaration(
 
   let mut checker = checker
 
+  // noImplicitAny: interface members without type annotations
+  // - TS7008: property signature without a type
+  // - TS7010: method signature without a return-type annotation
+  // - TS7006/TS7019/TS7031: un-annotated method signature parameters
+  if checker.no_implicit_any {
+    for interface_member in iface_decl.members {
+      match interface_member {
+        PropertyDeclaration(prop) =>
+          if prop.type_annotation is None &&
+            prop.computed_name_expr is None &&
+            prop.name != "[computed]" {
+            checker = add_diagnostic_with_code(
+              checker,
+              "Member '\{prop.name}' implicitly has an 'any' type.",
+              prop.location,
+              TS7008,
+            )
+          }
+        MethodDeclaration(meth) => {
+          checker = check_implicit_any_parameters(checker, meth.parameters)
+          if meth.return_type is None && meth.computed_name_expr is None {
+            if meth.name == "new" {
+              // Construct signature: new (); -> TS7013
+              checker = add_diagnostic_with_code(
+                checker,
+                "Construct signature, which lacks return-type annotation, implicitly has an 'any' return type.",
+                meth.location,
+                TS7013,
+              )
+            } else {
+              checker = add_diagnostic_with_code(
+                checker,
+                "'\{meth.name}', which lacks return-type annotation, implicitly has an 'any' return type.",
+                meth.location,
+                TS7010,
+              )
+            }
+          }
+        }
+        _ => ()
+      }
+    }
+  }
+
   // TS2467: Validate type parameter references in computed property names
   for interface_member in iface_decl.members {
     match interface_member {
@@ -20065,7 +20743,14 @@ fn build_class_type_for_this(
             }
           None =>
             match prop.initializer {
-              Some(init) => infer_type(checker, init)
+              Some(init) => {
+                // Property initializers run at construction time - suppress
+                // TS2454 for reads of outer variables (see check_class_declaration)
+                let saved_suppress_da = checker.suppress_definite_assignment
+                let c0 = { ..checker, suppress_definite_assignment: true }
+                let (t, c1) = infer_type(c0, init)
+                (t, { ..c1, suppress_definite_assignment: saved_suppress_da })
+              }
               None => any_type(checker)
             }
         }
@@ -20890,7 +21575,10 @@ fn check_import_declaration(
       match clause.named_bindings {
         Some(NamedImports(specifiers, _)) => {
           for spec in specifiers {
-            if is_strict_mode_reserved_word(spec.name) {
+            // Only explicit aliases are checked: `import { yield }` is allowed
+            // (matches tsc), but `import { foo as yield }` is TS1214
+            if spec.property_name is Some(_) &&
+              is_strict_mode_reserved_word(spec.name) {
               checker = add_diagnostic_with_code(
                 checker,
                 "Identifier expected. '\{spec.name}' is a reserved word in strict mode. Modules are automatically in strict mode.",
@@ -21186,6 +21874,14 @@ pub fn ResolvedModuleExports::from_bound_file(
         if has_export_modifier_in_list(ed.modifiers) {
           is_module = true
           exports.add(ed.name)
+        }
+      ModuleDeclaration(md) =>
+        // export namespace N { ... } / export module N { ... }
+        if has_export_modifier_in_list(md.modifiers) &&
+          !(md.is_ambient) &&
+          !(md.is_global_augmentation) {
+          is_module = true
+          exports.add(md.name)
         }
       _ => ()
     }
@@ -21564,6 +22260,96 @@ fn expression_contains_identifier(expr : Node, name : String) -> Bool {
 
 ///|
 /// Check parameter for TS2372 (parameter cannot reference itself in initializer)
+/// Collect binding element names from a binding pattern (for TS7031)
+fn collect_binding_element_names(
+  name_node : Node,
+  out : Array[(String, SourceLocation)],
+) -> Unit {
+  match name_node {
+    Identifier(id) => out.push((id.name, id.location))
+    ObjectBindingPattern(obj_pat) =>
+      for prop in obj_pat.properties {
+        collect_binding_element_names(prop.name, out)
+      }
+    ArrayBindingPattern(arr_pat) =>
+      for elem in arr_pat.elements {
+        match elem {
+          Some(e) => collect_binding_element_names(e, out)
+          None => ()
+        }
+      }
+    _ => ()
+  }
+}
+
+///|
+/// noImplicitAny: report parameters that implicitly get an 'any' type.
+/// Only called for declarations that are never contextually typed
+/// (function declarations, class methods, constructors), so a missing
+/// annotation with no initializer reliably means implicit any.
+/// - TS7006: plain identifier parameter
+/// - TS7019: rest parameter
+/// - TS7031: each element of a destructuring pattern parameter
+fn check_implicit_any_parameters(
+  checker : TypeChecker,
+  parameters : Array[Node],
+) -> TypeChecker {
+  if !(checker.no_implicit_any) {
+    return checker
+  }
+  let mut checker = checker
+  for param_node in parameters {
+    match param_node {
+      Parameter(p) =>
+        if p.type_annotation is None &&
+          p.initializer is None &&
+          !(p.is_this_parameter) {
+          if p.is_rest {
+            let param_name = match p.name {
+              Identifier(id) => id.name
+              _ => ""
+            }
+            if param_name != "" {
+              checker = add_diagnostic_with_code(
+                checker,
+                "Rest parameter '\{param_name}' implicitly has an 'any[]' type.",
+                p.location,
+                TS7019,
+              )
+            }
+          } else {
+            match p.name {
+              Identifier(id) =>
+                checker = add_diagnostic_with_code(
+                  checker,
+                  "Parameter '\{id.name}' implicitly has an 'any' type.",
+                  id.location,
+                  TS7006,
+                )
+              ObjectBindingPattern(_) | ArrayBindingPattern(_) => {
+                let names : Array[(String, SourceLocation)] = []
+                collect_binding_element_names(p.name, names)
+                for entry in names {
+                  let (name, loc) = entry
+                  checker = add_diagnostic_with_code(
+                    checker,
+                    "Binding element '\{name}' implicitly has an 'any' type.",
+                    loc,
+                    TS7031,
+                  )
+                }
+              }
+              _ => ()
+            }
+          }
+        }
+      _ => ()
+    }
+  }
+  checker
+}
+
+///|
 fn check_parameter_self_reference(
   checker : TypeChecker,
   parameters : Array[Node],

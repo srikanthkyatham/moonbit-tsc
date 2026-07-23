@@ -782,7 +782,7 @@ pub fn split_multi_file_test(
     if trimmed.has_prefix("// @") {
       // This is a directive line
       let directive = ffi_substring_from(trimmed, 4)
-      if directive.has_prefix("filename:") {
+      if directive.has_prefix("filename:") || directive.has_prefix("Filename:") {
         // Save current file if any
         match current_filename {
           Some(fname) => {
@@ -890,7 +890,9 @@ fn ffi_split_by_comma(s : String) -> Array[String] {
 ///|
 /// Check if content contains multi-file test directives
 pub fn is_multi_file_test(source : String) -> Bool {
-  source.contains("// @filename:")
+  // The TypeScript test harness treats directive names case-insensitively;
+  // @Filename: (capital F) is the most common spelling in the suite
+  source.contains("// @filename:") || source.contains("// @Filename:")
 }
 
 ///|

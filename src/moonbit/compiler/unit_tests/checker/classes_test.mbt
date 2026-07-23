@@ -25,7 +25,7 @@ fn parse_bind_check_class(source : String) -> @compiler.CheckResult {
 
 ///|
 test "unit/classes/basic - simple class declaration" {
-  let result = parse_bind_check_class("class Point { x: number; y: number; }")
+  let result = parse_bind_check_class("// @strict: false\nclass Point { x: number; y: number; }")
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(_) => assert_true(false)
@@ -164,7 +164,7 @@ test "unit/classes/abstract - concrete class extending abstract" {
 ///|
 test "unit/classes/inheritance - extends base class" {
   let result = parse_bind_check_class(
-    "class Animal { name: string; } class Dog extends Animal { bark(): void {} }",
+    "// @strict: false\nclass Animal { name: string; } class Dog extends Animal { bark(): void {} }",
   )
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
@@ -234,7 +234,7 @@ test "unit/classes/generic - generic class instantiation" {
 ///|
 test "unit/classes/generic - generic class with constraint" {
   let result = parse_bind_check_class(
-    "interface HasLength { length: number; } class List<T extends HasLength> { items: T[]; }",
+    "// @strict: false\ninterface HasLength { length: number; } class List<T extends HasLength> { items: T[]; }",
   )
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
@@ -245,7 +245,7 @@ test "unit/classes/generic - generic class with constraint" {
 ///|
 test "unit/classes/generic - extending generic class" {
   let result = parse_bind_check_class(
-    "class Base<T> { value: T; } class Derived<T> extends Base<T> { extra: string; }",
+    "// @strict: false\nclass Base<T> { value: T; } class Derived<T> extends Base<T> { extra: string; }",
   )
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
@@ -459,7 +459,7 @@ test "unit/classes/circular - static method returning self" {
 ///|
 test "unit/classes/circular - instance property with class type" {
   let result = parse_bind_check_class(
-    "class Node { value: number; next: Node; }",
+    "// @strict: false\nclass Node { value: number; next: Node; }",
   )
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
@@ -533,6 +533,7 @@ test "unit/classes/extends-null - class extends null with properties" {
   // Class extending null with properties should work without super()
   let result = parse_bind_check_class(
     (
+      #|// @strict: false
       #|class Dict extends null {
       #|  key: string;
       #|  value: number;
@@ -582,6 +583,7 @@ test "unit/classes/super-call - super call in object literal property value" {
   // super() call inside object literal property value should be detected
   let result = parse_bind_check_class(
     (
+      #|// @strict: false
       #|class Base {
       #|  constructor(c: any) { }
       #|}

@@ -56,6 +56,33 @@ defmodule TSC.Graph.DependencyGraph do
   end
 
   @doc """
+  Get all files transitively reachable via dependency edges from the given
+  files, excluding the files themselves.
+
+  Used to scope cross-file type payloads to what a batch actually imports.
+  """
+  @spec get_transitive_dependencies(list(String.t())) :: MapSet.t(String.t())
+  def get_transitive_dependencies(files) do
+    start = MapSet.new(files)
+
+    files
+    |> collect_reachable(start)
+    |> MapSet.difference(start)
+  end
+
+  defp collect_reachable([], visited), do: visited
+
+  defp collect_reachable(frontier, visited) do
+    next =
+      frontier
+      |> Enum.flat_map(&get_dependencies/1)
+      |> Enum.uniq()
+      |> Enum.reject(&MapSet.member?(visited, &1))
+
+    collect_reachable(next, Enum.into(next, visited))
+  end
+
+  @doc """
   Get files that depend on the given file.
   """
   @spec get_dependents(String.t()) :: list(String.t())

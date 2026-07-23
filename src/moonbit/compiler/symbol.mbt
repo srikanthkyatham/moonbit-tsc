@@ -339,6 +339,7 @@ pub enum DiagnosticCode {
   TS1049 // A 'set' accessor must have exactly one parameter
   TS1104 // A 'continue' statement can only be used within an enclosing iteration statement
   TS1109 // Expression expected
+  TS1117 // An object literal cannot have multiple properties with the same name
   TS1155 // 'const' declarations must be initialized
   TS1160 // Unterminated template literal
   TS1163 // A 'yield' expression is only allowed in a generator body
@@ -748,6 +749,12 @@ pub enum DiagnosticCode {
   // Unreachable Code & Implicit Any (7000-7099)
   // ============================================================================
   TS7005 // Variable '{0}' implicitly has an '{1}' type
+  TS7006 // Parameter '{0}' implicitly has an '{1}' type
+  TS7008 // Member '{0}' implicitly has an '{1}' type
+  TS7010 // '{0}', which lacks return-type annotation, implicitly has an '{1}' return type
+  TS7013 // Construct signature, which lacks return-type annotation, implicitly has an 'any' return type
+  TS7019 // Rest parameter '{0}' implicitly has an 'any[]' type
+  TS7031 // Binding element '{0}' implicitly has an 'any' type
   TS7022 // '{0}' implicitly has type 'any' because it does not have a type annotation and is referenced directly or indirectly in its own initializer
   TS7023 // '{0}' implicitly has return type 'any' because it does not have a return type annotation and is referenced directly or indirectly in one of its return expressions
   TS7027 // Unreachable code detected
@@ -765,6 +772,7 @@ pub fn DiagnosticCode::to_int(self : DiagnosticCode) -> Int {
     TS1049 => 1049
     TS1104 => 1104
     TS1109 => 1109
+    TS1117 => 1117
     TS1155 => 1155
     TS1160 => 1160
     TS1163 => 1163
@@ -1094,6 +1102,12 @@ pub fn DiagnosticCode::to_int(self : DiagnosticCode) -> Int {
     TS5107 => 5107
     // Unreachable Code & Implicit Any (7000-7099)
     TS7005 => 7005
+    TS7006 => 7006
+    TS7008 => 7008
+    TS7010 => 7010
+    TS7013 => 7013
+    TS7019 => 7019
+    TS7031 => 7031
     TS7022 => 7022
     TS7023 => 7023
     TS7027 => 7027
@@ -1115,6 +1129,7 @@ pub fn DiagnosticCode::from_int(code : Int) -> DiagnosticCode? {
     1049 => Some(TS1049)
     1104 => Some(TS1104)
     1109 => Some(TS1109)
+    1117 => Some(TS1117)
     1155 => Some(TS1155)
     1160 => Some(TS1160)
     1166 => Some(TS1166)
@@ -1441,6 +1456,12 @@ pub fn DiagnosticCode::from_int(code : Int) -> DiagnosticCode? {
     5107 => Some(TS5107)
     // Unreachable Code & Implicit Any (7000-7099)
     7005 => Some(TS7005)
+    7006 => Some(TS7006)
+    7008 => Some(TS7008)
+    7010 => Some(TS7010)
+    7013 => Some(TS7013)
+    7019 => Some(TS7019)
+    7031 => Some(TS7031)
     7022 => Some(TS7022)
     7023 => Some(TS7023)
     7027 => Some(TS7027)

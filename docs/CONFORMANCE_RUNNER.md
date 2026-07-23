@@ -82,11 +82,22 @@ Such tests are tagged `[variant baseline]` in failure output.
 
 Conformance tests embed harness directives (`// @target: es5`, `// @filename:
 a.ts`, `// @strict: true`, ...). The runner honors `@target` and `@module` by
-passing the corresponding CLI flags (first value if comma-separated). All
-other directives — including `@filename` multi-file tests — cannot be honored;
-those tests still run, but if they fail they are counted in a separate
-"Failed*" / `DirFail` bucket and tagged `[unhonored: ...]` so genuine
-diagnostic mismatches are not conflated with harness limitations.
+passing the corresponding CLI flags (first value if comma-separated).
+
+`@filename` multi-file tests are honored by synthesis: the runner splits the
+test into real files in a per-test temp directory (mirroring the TypeScript
+harness `makeUnitsFromTest` semantics — case-insensitive markers, directive
+lines before the first marker treated as global options and prepended to each
+unit) and invokes the CLI with every `.ts`/`.tsx` unit at once, so relative
+imports between units resolve against the real filesystem. Non-compilable
+units (`package.json`, `.js`, ...) are still written to disk so module
+resolution can see them. Diagnostics are aggregated across all units. When
+synthesis succeeds, `filename` no longer counts as unhonored.
+
+All other directives cannot be honored; those tests still run, but if they
+fail they are counted in a separate "Failed*" / `DirFail` bucket and tagged
+`[unhonored: ...]` so genuine diagnostic mismatches are not conflated with
+harness limitations.
 
 ## Result buckets
 

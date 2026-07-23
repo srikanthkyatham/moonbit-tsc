@@ -219,6 +219,7 @@ pub enum ParserErrorCode {
   // Statement context errors
   ReturnOutsideFunction // TS1108
   ExpressionExpected // TS1109
+  ArgumentExpressionExpected // TS1135: Argument expression expected
   TypeExpected // TS1110
   UnexpectedEndOfText // TS1126
   DeclarationOrStatementExpected // TS1128
@@ -355,6 +356,7 @@ pub fn ParserErrorCode::to_int(self : ParserErrorCode) -> Int {
     // Statement context errors
     ReturnOutsideFunction => 1108 // TS1108: A 'return' statement can only be used within a function body
     ExpressionExpected => 1109 // TS1109: Expression expected
+    ArgumentExpressionExpected => 1135 // TS1135: Argument expression expected
     TypeExpected => 1110 // TS1110: Type expected
     UnexpectedEndOfText => 1126 // TS1126: Unexpected end of text
     DeclarationOrStatementExpected => 1128 // TS1128: Declaration or statement expected
@@ -504,6 +506,7 @@ pub fn ParserErrorCode::to_message(self : ParserErrorCode) -> String {
     ReturnOutsideFunction =>
       "A 'return' statement can only be used within a function body."
     ExpressionExpected => "Expression expected."
+    ArgumentExpressionExpected => "Argument expression expected."
     TypeExpected => "Type expected."
     UnexpectedEndOfText => "Unexpected end of text."
     DeclarationOrStatementExpected => "Declaration or statement expected."
@@ -642,6 +645,7 @@ pub fn get_parser_error_int_with_arg(name : String, arg : String?) -> Int {
     "ReturnOutsideFunction" => ReturnOutsideFunction.to_int()
     "ExpectedToken" => ExpectedToken(arg.unwrap_or("")).to_int()
     "CatchOrFinallyExpected" => CatchOrFinallyExpected.to_int()
+    "ArgumentExpressionExpected" => ArgumentExpressionExpected.to_int()
     "TypeExpected" => TypeExpected.to_int()
     "DeclarationOrStatementExpected" => DeclarationOrStatementExpected.to_int()
     "PropertyOrSignatureExpected" => PropertyOrSignatureExpected.to_int()
@@ -753,6 +757,7 @@ pub fn get_parser_error_message_with_arg(
     "ReturnOutsideFunction" => ReturnOutsideFunction.to_message()
     "ExpectedToken" => ExpectedToken(arg.unwrap_or("")).to_message()
     "CatchOrFinallyExpected" => CatchOrFinallyExpected.to_message()
+    "ArgumentExpressionExpected" => ArgumentExpressionExpected.to_message()
     "TypeExpected" => TypeExpected.to_message()
     "DeclarationOrStatementExpected" =>
       DeclarationOrStatementExpected.to_message()
@@ -1288,6 +1293,10 @@ fn parse_compiler_directives(
   let mut no_emit = false
   let mut isolated_modules = false
   let mut no_types_and_symbols = false
+  let mut strict : Bool? = None
+  let mut strict_null_checks : Bool? = None
+  let mut strict_property_initialization : Bool? = None
+  let mut no_implicit_any : Bool? = None
 
   for i = 0; i < tokens.length(); i = i + 1 {
     let (content, _loc) = tokens[i]
@@ -1307,6 +1316,12 @@ fn parse_compiler_directives(
           "noEmit" => no_emit = directive_value == "true"
           "isolatedModules" => isolated_modules = directive_value == "true"
           "noTypesAndSymbols" => no_types_and_symbols = directive_value == "true"
+          "strict" => strict = Some(directive_value == "true")
+          "strictNullChecks" =>
+            strict_null_checks = Some(directive_value == "true")
+          "strictPropertyInitialization" =>
+            strict_property_initialization = Some(directive_value == "true")
+          "noImplicitAny" => no_implicit_any = Some(directive_value == "true")
           _ => () // Unknown directive, ignore
         }
       }
@@ -1320,6 +1335,10 @@ fn parse_compiler_directives(
     no_emit,
     isolated_modules,
     no_types_and_symbols,
+    strict,
+    strict_null_checks,
+    strict_property_initialization,
+    no_implicit_any,
   }
 }
 
@@ -1890,6 +1909,7 @@ fn parse_using_statement(
           name,
           type_annotation,
           initializer,
+          has_definite_assignment: false,
           location: id.location,
         })
       }
@@ -1943,6 +1963,18 @@ fn parse_variable_declaration(
       }
   }
 
+  // Definite assignment assertion: var t!: T;
+  // Consume the '!' when it is followed by a type annotation; it marks the
+  // variable as definitely assigned (suppresses TS2454).
+  let (has_definite_assignment, parser) = match current_token(parser) {
+    Exclamation(_) =>
+      match peek_token(parser) {
+        Colon(_) => (true, advance_parser(parser))
+        _ => (false, parser)
+      }
+    _ => (false, parser)
+  }
+
   // Optional type annotation
   let (type_annotation, parser) = match current_token(parser) {
     Colon(_) => {
@@ -1977,6 +2009,7 @@ fn parse_variable_declaration(
         name,
         type_annotation,
         initializer,
+        has_definite_assignment,
         location: start_loc,
       },
       parser,
@@ -5047,6 +5080,29 @@ fn parse_class_member_with_decorators(
       ])
     }
 
+    // Declare modifier (declare y: number).
+    // When directly followed by member punctuation, 'declare' is a member
+    // NAME instead (e.g. `declare() {}` or `declare: number`).
+    KeywordDeclare(loc) =>
+      match peek_token(parser) {
+        OpenParen(_) | LessThan(_) | Colon(_) | Equals(_) | Semicolon(_)
+        | Question(_) =>
+          parse_named_class_member(
+            advance_parser(parser),
+            "declare",
+            loc,
+            acc,
+            decorators,
+            [],
+          )
+        _ => {
+          let parser = advance_parser(parser)
+          parse_class_member_with_modifiers(parser, acc, decorators, [
+            Modifier::Declare,
+          ])
+        }
+      }
+
     // Async modifier
     KeywordAsync(_) => {
       let parser = advance_parser(parser)
@@ -5950,6 +6006,11 @@ fn parse_class_member_with_modifiers(
     KeywordAbstract(_) => {
       let parser = advance_parser(parser)
       modifiers.push(Modifier::Abstract)
+      parse_class_member_with_modifiers(parser, acc, decorators, modifiers)
+    }
+    KeywordDeclare(_) => {
+      let parser = advance_parser(parser)
+      modifiers.push(Modifier::Declare)
       parse_class_member_with_modifiers(parser, acc, decorators, modifiers)
     }
     KeywordAsync(_) => {
@@ -7286,21 +7347,15 @@ fn parse_interface_declaration(
                     )
                 }
               }
-              // Shorthand property signature: { a } means { a: a }
-              // The property type is a type reference with the same name
+              // Property signature without a type: { a } means a property 'a'
+              // with an implicit 'any' type (reported as TS7008 under
+              // noImplicitAny) - TypeScript has no {a} -> {a: a} shorthand
               CloseBrace(_) | Semicolon(_) | Comma(_) => {
-                // Create property declaration with type reference to the same name
                 members.push(
                   Node::PropertyDeclaration(PropertyDeclaration::{
                     name: prop_name,
                     computed_name_expr: None,
-                    type_annotation: Some(
-                      Node::TypeReference(TypeReference::{
-                        type_name: prop_name,
-                        type_arguments: [],
-                        location: prop_loc,
-                      }),
-                    ),
+                    type_annotation: None,
                     initializer: None,
                     is_optional,
                     decorators: [],

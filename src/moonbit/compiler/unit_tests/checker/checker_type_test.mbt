@@ -729,7 +729,7 @@ test "unit/checker/narrowing - undefined check" {
 ///|
 test "unit/checker/narrowing - instanceof guard" {
   let result = parse_bind_check(
-    "class Foo { x: number; } function test(obj: Foo | string) { if (obj instanceof Foo) { return obj.x; } return 0; }",
+    "// @strict: false\nclass Foo { x: number; } function test(obj: Foo | string) { if (obj instanceof Foo) { return obj.x; } return 0; }",
   )
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")

@@ -5,6 +5,7 @@
 /// Test compiling 2dArrays.ts
 test "compile 2dArrays.ts" {
   let source =
+    #|// @strict: false
     #|class Cell {
     #|}
     #|

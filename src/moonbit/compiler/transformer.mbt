@@ -499,6 +499,7 @@ pub fn transform(node : Node, ctx : TransformerContext) -> Node {
             Some(init) => Some(transform(init, ctx))
             None => None
           },
+          has_definite_assignment: false,
           location: decl.location,
         })
       }
@@ -558,6 +559,7 @@ fn transform_variable_statement(
         Some(init) => Some(transform(init, ctx))
         None => None
       },
+      has_definite_assignment: false,
       location: decl.location,
     })
   }
@@ -1060,6 +1062,7 @@ fn transform_enum_declaration(
         name: Identifier({ name: ed.name, location: ed.location }),
         type_annotation: None,
         initializer: Some(object_literal),
+        has_definite_assignment: false,
         location: ed.location,
       },
     ],
@@ -1337,12 +1340,14 @@ fn transform_for_of_statement(
       initializer: Some(
         Node::NumericLiteral(NumericLiteral::{ value: "0", location: loc }),
       ),
+      has_definite_assignment: false,
       location: loc,
     },
     VariableDeclaration::{
       name: arr_id,
       type_annotation: None,
       initializer: Some(transformed_expr),
+      has_definite_assignment: false,
       location: loc,
     },
   ]
@@ -1387,6 +1392,7 @@ fn transform_for_of_statement(
             location: loc,
           }),
         ),
+        has_definite_assignment: false,
         location: loc,
       },
     ],

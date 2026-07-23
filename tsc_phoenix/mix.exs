@@ -61,7 +61,8 @@ defmodule TscPhoenix.MixProject do
       {:dns_cluster, "~> 0.2.0"},
       {:bandit, "~> 1.5"},
       {:file_system, "~> 1.0"},
-      {:nimble_options, "~> 1.1"}
+      {:nimble_options, "~> 1.1"},
+      {:gen_lsp, "~> 0.10"}
     ]
   end
 

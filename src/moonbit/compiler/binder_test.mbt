@@ -627,11 +627,13 @@ test "bind class and variable same name error" {
 }
 
 ///|
-test "bind interface and class same name error" {
+test "bind interface and class same name merges (no error)" {
+  // Per tsc declaration merging rules, an interface and a class with the
+  // same name merge legally (no TS2300)
   let result = parse_and_bind("interface Foo {} class Foo {}")
   match result {
-    Ok(_) => assert_true(false) // Should have error
-    Err(diagnostics) => assert_true(diagnostics.length() > 0)
+    Ok(bound) => assert_true(bound.global_scope.symbols.contains("Foo"))
+    Err(_) => assert_true(false) // Should NOT have error
   }
 }
 
@@ -640,11 +642,14 @@ test "bind interface and class same name error" {
 // ============================================================================
 
 ///|
-test "bind import shadowing local variable error" {
+test "bind import shadowing local variable does not report TS2300" {
+  // tsc reports TS2440 (import conflicts with local declaration) for this,
+  // never TS2300 - and type-only imports may legally coexist with local
+  // values, so the binder does not report a duplicate here
   let result = parse_and_bind("const foo = 1; import foo from 'module';")
   match result {
-    Ok(_) => assert_true(false) // Should have error
-    Err(diagnostics) => assert_true(diagnostics.length() > 0)
+    Ok(bound) => assert_true(bound.global_scope.symbols.contains("foo"))
+    Err(_) => assert_true(false) // No bind-time duplicate error expected
   }
 }
 

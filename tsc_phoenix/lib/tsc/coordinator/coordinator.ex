@@ -437,8 +437,21 @@ defmodule TSC.Coordinator do
     end)
   end
 
-  # Maximum files per chunk for batch processing
-  @max_files_per_chunk 10
+  # Bounds for per-chunk file count. The actual chunk size is derived from
+  # the file count and pool size so each worker gets ~2 chunks: fewer CLI
+  # process spawns than a fixed small chunk, while keeping enough chunks
+  # for load balancing and bounding the blast radius of a failed chunk.
+  @min_files_per_chunk 10
+  @max_files_per_chunk 50
+
+  @doc false
+  @spec chunk_size(pos_integer(), pos_integer()) :: pos_integer()
+  def chunk_size(file_count, pool_size) do
+    (file_count / (pool_size * 2))
+    |> ceil()
+    |> max(@min_files_per_chunk)
+    |> min(@max_files_per_chunk)
+  end
 
   defp check_level(files, _concurrency) do
     pool_size = PoolSupervisor.pool_size()
@@ -477,13 +490,13 @@ defmodule TSC.Coordinator do
 
   # Chunked approach with max 10 files per chunk
   defp check_level_chunked(files, pool_size) do
-    # Create chunks of max 10 files each
-    chunks = Enum.chunk_every(files, @max_files_per_chunk)
-    num_chunks = length(chunks)
     total_files = length(files)
+    chunk_size = chunk_size(total_files, pool_size)
+    chunks = Enum.chunk_every(files, chunk_size)
+    num_chunks = length(chunks)
 
     Logger.info(
-      "Checking #{total_files} files in #{num_chunks} chunks (max #{@max_files_per_chunk} files/chunk) using #{pool_size} workers"
+      "Checking #{total_files} files in #{num_chunks} chunks (#{chunk_size} files/chunk) using #{pool_size} workers"
     )
 
     # Create progress tracker
@@ -532,7 +545,7 @@ defmodule TSC.Coordinator do
                  completed: completed,
                  total: num_chunks,
                  progress: progress,
-                 files_checked: completed * @max_files_per_chunk
+                 files_checked: min(completed * chunk_size, total_files)
                }}
             )
           end

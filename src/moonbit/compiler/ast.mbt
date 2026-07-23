@@ -143,6 +143,10 @@ pub struct CompilerDirectives {
   no_emit : Bool // @noEmit: true
   isolated_modules : Bool // @isolatedModules: true
   no_types_and_symbols : Bool // @noTypesAndSymbols: true
+  strict : Bool? // @strict: true/false (None = not specified; enables all strict type-checking options)
+  strict_null_checks : Bool? // @strictNullChecks: true/false (None = not specified, falls back to strict)
+  strict_property_initialization : Bool? // @strictPropertyInitialization: true/false (None = not specified, falls back to strict)
+  no_implicit_any : Bool? // @noImplicitAny: true/false (None = not specified, falls back to strict)
 } derive(Debug)
 
 ///|
@@ -155,6 +159,10 @@ pub fn CompilerDirectives::default() -> CompilerDirectives {
     no_emit: false,
     isolated_modules: false,
     no_types_and_symbols: false,
+    strict: None,
+    strict_null_checks: None,
+    strict_property_initialization: None,
+    no_implicit_any: None,
   }
 }
 
@@ -207,6 +215,7 @@ pub struct VariableDeclaration {
   name : Node // Identifier or binding pattern
   type_annotation : Node?
   initializer : Node?
+  has_definite_assignment : Bool // Definite assignment assertion: let x!: T
   location : SourceLocation
 } derive(Debug)
 

@@ -149,10 +149,29 @@ test "check type mismatch error" {
 
 ///|
 test "check function declaration" {
-  let result = parse_bind_and_check("function add(a, b) { return a + b; }")
+  let result = parse_bind_and_check(
+    "function add(a: number, b: number) { return a + b; }",
+  )
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "check function declaration with implicit any parameters (TS7006)" {
+  // Under noImplicitAny (default on), un-annotated parameters of a function
+  // declaration are implicit 'any' errors - matches tsc strict behavior
+  let result = parse_bind_and_check("function add(a, b) { return a + b; }")
+  match result {
+    Ok(_) => assert_true(false)
+    Err(diagnostics) => {
+      let ts7006_count = diagnostics
+        .iter()
+        .filter(fn(d) { d.code == 7006 })
+        .count()
+      assert_eq(ts7006_count, 2)
+    }
   }
 }
 
@@ -1380,7 +1399,7 @@ test "check generic type alias" {
 
 ///|
 test "check class with properties" {
-  let result = parse_bind_and_check("class Point { x: number; y: number; }")
+  let result = parse_bind_and_check("// @strict: false\nclass Point { x: number; y: number; }")
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(_) => assert_true(false)
@@ -1431,7 +1450,7 @@ test "check class with static method" {
 
 ///|
 test "check class with private property" {
-  let result = parse_bind_and_check("class Person { private age: number; }")
+  let result = parse_bind_and_check("// @strict: false\nclass Person { private age: number; }")
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(_) => assert_true(false)
@@ -1440,7 +1459,7 @@ test "check class with private property" {
 
 ///|
 test "check class with public property" {
-  let result = parse_bind_and_check("class Person { public name: string; }")
+  let result = parse_bind_and_check("// @strict: false\nclass Person { public name: string; }")
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(_) => assert_true(false)
@@ -1449,7 +1468,7 @@ test "check class with public property" {
 
 ///|
 test "check class with protected property" {
-  let result = parse_bind_and_check("class Person { protected id: number; }")
+  let result = parse_bind_and_check("// @strict: false\nclass Person { protected id: number; }")
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(_) => assert_true(false)
@@ -2913,7 +2932,7 @@ test "check export default class" {
 ///|
 test "check class decorator" {
   let result = parse_bind_and_check(
-    "@sealed class Greeter { greeting: string; }",
+    "// @strict: false\n@sealed class Greeter { greeting: string; }",
   )
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
@@ -2934,7 +2953,7 @@ test "check method decorator" {
 
 ///|
 test "check property decorator" {
-  let result = parse_bind_and_check("class Person { @required name: string; }")
+  let result = parse_bind_and_check("// @strict: false\nclass Person { @required name: string; }")
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(_) => assert_true(false)
@@ -3015,7 +3034,7 @@ test "check yield type compatibility - TS2741 error for incompatible types" {
 test "check yield type compatibility - subclass is compatible" {
   // Bar extends Foo, so Bar should be compatible with Foo
   let result = parse_bind_and_check(
-    "class Foo { x: number } class Bar extends Foo { y: string } function* g(): IterableIterator<Foo> { yield new Bar; }",
+    "// @strict: false\nclass Foo { x: number } class Bar extends Foo { y: string } function* g(): IterableIterator<Foo> { yield new Bar; }",
   )
   match result {
     Ok(typed) => {
@@ -3058,7 +3077,7 @@ test "check yield delegate type compatibility - TS2741 error for incompatible ar
 test "check yield delegate type compatibility - subclass array is compatible" {
   // yield* with array of Bar (extends Foo) should be compatible
   let result = parse_bind_and_check(
-    "class Foo { x: number } class Bar extends Foo { y: string } function* g(): IterableIterator<Foo> { yield * [new Bar]; }",
+    "// @strict: false\nclass Foo { x: number } class Bar extends Foo { y: string } function* g(): IterableIterator<Foo> { yield * [new Bar]; }",
   )
   match result {
     Ok(typed) => {
@@ -3244,7 +3263,7 @@ test "check static method" {
 
 ///|
 test "check readonly property in class" {
-  let result = parse_bind_and_check("class Config { readonly name: string; }")
+  let result = parse_bind_and_check("// @strict: false\nclass Config { readonly name: string; }")
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(_) => assert_true(false)

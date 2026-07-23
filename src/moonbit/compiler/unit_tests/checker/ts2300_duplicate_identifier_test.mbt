@@ -1,32 +1,31 @@
-///| Unit tests for TS2300: Duplicate identifier
-///| Tests validation of duplicate property names in object literals
+///| Unit tests for duplicate names in object literals
+///| Plain property duplicates are TS1117 (on the duplicate occurrence only);
+///| duplicate get/set accessors are TS2300 (on both occurrences) - matches tsc
 
-test "TS2300: Duplicate regular properties should trigger error" {
+///|
+fn count_code(diagnostics : Array[@compiler.Diagnostic], code : Int) -> Int {
+  diagnostics.iter().filter(fn(d) { d.code == code }).count()
+}
+
+///|
+fn duplicate_prop_diagnostics(source : String) -> Array[@compiler.Diagnostic] {
+  match parse_bind_check_errors(source) {
+    Ok(_) => []
+    Err(diagnostics) => diagnostics
+  }
+}
+
+test "TS1117: Duplicate regular properties trigger one error on the duplicate" {
   let source =
     #|var obj = {
     #|    foo: 1,
     #|    bar: 2,
     #|    foo: 3
     #|};
-
-  let result = parse_bind_check_errors(source)
-  match result {
-    Err(diagnostics) => {
-      let ts2300_count = diagnostics.iter().filter(fn(d) { d.code == 2300 }).count()
-      if ts2300_count == 2 {
-        println("✓ Duplicate properties correctly detected (2 TS2300 errors)")
-        assert_true(true)
-      } else {
-        println("Expected 2 TS2300 errors, but got \{ts2300_count}:")
-        diagnostics.iter().each(fn(d) { println("  - TS\{d.code}: \{d.message}") })
-        assert_false(ts2300_count == 2)
-      }
-    }
-    Ok(_) => {
-      println("Expected TS2300 errors for duplicate properties but got no errors")
-      assert_false(true)
-    }
-  }
+  let diagnostics = duplicate_prop_diagnostics(source)
+  // tsc reports TS1117 on the duplicate occurrence only (not the first)
+  assert_eq(count_code(diagnostics, 1117), 1)
+  assert_eq(count_code(diagnostics, 2300), 0)
 }
 
 test "TS2300: Duplicate getters should trigger error" {
@@ -36,109 +35,78 @@ test "TS2300: Duplicate getters should trigger error" {
     #|    get bar() { return 2; },
     #|    get foo() { return 3; }
     #|};
-
-  let result = parse_bind_check_errors(source)
-  match result {
-    Err(diagnostics) => {
-      let ts2300_count = diagnostics.iter().filter(fn(d) { d.code == 2300 }).count()
-      if ts2300_count == 2 {
-        println("✓ Duplicate getters correctly detected (2 TS2300 errors)")
-        assert_true(true)
-      } else {
-        println("Expected 2 TS2300 errors, but got \{ts2300_count}:")
-        diagnostics.iter().each(fn(d) { println("  - TS\{d.code}: \{d.message}") })
-        assert_false(ts2300_count == 2)
-      }
-    }
-    Ok(_) => {
-      println("Expected TS2300 errors for duplicate getters but got no errors")
-      assert_false(true)
-    }
-  }
+  let diagnostics = duplicate_prop_diagnostics(source)
+  // tsc reports TS2300 on both occurrences of the duplicated getter
+  assert_eq(count_code(diagnostics, 2300), 2)
 }
 
-test "TS2300: Three duplicate properties should trigger error" {
+test "TS2300: Duplicate setters should trigger error" {
+  let source =
+    #|var obj = {
+    #|    set foo(v: number) { },
+    #|    set bar(v: number) { },
+    #|    set foo(v: number) { }
+    #|};
+  let diagnostics = duplicate_prop_diagnostics(source)
+  assert_eq(count_code(diagnostics, 2300), 2)
+}
+
+test "No error: getter/setter pair with same name" {
+  let source =
+    #|var obj = {
+    #|    get foo() { return 1; },
+    #|    set foo(v: number) { }
+    #|};
+  let diagnostics = duplicate_prop_diagnostics(source)
+  assert_eq(count_code(diagnostics, 2300), 0)
+  assert_eq(count_code(diagnostics, 1117), 0)
+}
+
+test "TS1117: Three duplicate properties trigger two errors" {
   let source =
     #|var obj = {
     #|    foo: 1,
     #|    foo: 2,
     #|    foo: 3
     #|};
-
-  let result = parse_bind_check_errors(source)
-  match result {
-    Err(diagnostics) => {
-      let ts2300_count = diagnostics.iter().filter(fn(d) { d.code == 2300 }).count()
-      if ts2300_count == 3 {
-        println("✓ Three duplicates correctly detected (3 TS2300 errors)")
-        assert_true(true)
-      } else {
-        println("Expected 3 TS2300 errors, but got \{ts2300_count}:")
-        diagnostics.iter().each(fn(d) { println("  - TS\{d.code}: \{d.message}") })
-        assert_false(ts2300_count == 3)
-      }
-    }
-    Ok(_) => {
-      println("Expected TS2300 errors for three duplicates but got no errors")
-      assert_false(true)
-    }
-  }
+  let diagnostics = duplicate_prop_diagnostics(source)
+  // TS1117 on each duplicate occurrence (2nd and 3rd)
+  assert_eq(count_code(diagnostics, 1117), 2)
+  assert_eq(count_code(diagnostics, 2300), 0)
 }
 
-test "TS2300: Non-duplicate properties should NOT trigger error" {
+test "TS1117: Duplicate shorthand methods trigger error" {
+  let source =
+    #|var obj = {
+    #|    m() { return 1; },
+    #|    m() { return 2; }
+    #|};
+  let diagnostics = duplicate_prop_diagnostics(source)
+  assert_eq(count_code(diagnostics, 1117), 1)
+}
+
+test "No error: Non-duplicate properties" {
   let source =
     #|var obj = {
     #|    foo: 1,
     #|    bar: 2,
     #|    baz: 3
     #|};
-
-  let result = parse_bind_check_errors(source)
-  match result {
-    Ok(_) => {
-      println("✓ Non-duplicate properties correctly accepted")
-      assert_true(true)
-    }
-    Err(diagnostics) => {
-      let has_ts2300 = diagnostics.iter().any(fn(d) { d.code == 2300 })
-      if has_ts2300 {
-        println("Non-duplicate properties should NOT trigger TS2300, but got:")
-        diagnostics.iter().each(fn(d) { println("  - TS\{d.code}: \{d.message}") })
-        assert_false(true)
-      } else {
-        println("✓ Non-duplicate properties did not trigger TS2300 (other errors present)")
-        assert_true(true)
-      }
-    }
-  }
+  let diagnostics = duplicate_prop_diagnostics(source)
+  assert_eq(count_code(diagnostics, 2300), 0)
+  assert_eq(count_code(diagnostics, 1117), 0)
 }
 
-test "TS2300: Different property types should NOT trigger error" {
+test "No error: Different property types" {
   let source =
     #|var obj = {
     #|    foo: 1,
     #|    bar: "hello",
     #|    baz: true
     #|};
-
-  let result = parse_bind_check_errors(source)
-  match result {
-    Ok(_) => {
-      println("✓ Different property types correctly accepted")
-      assert_true(true)
-    }
-    Err(diagnostics) => {
-      let has_ts2300 = diagnostics.iter().any(fn(d) { d.code == 2300 })
-      if has_ts2300 {
-        println("Different property types should NOT trigger TS2300, but got:")
-        diagnostics.iter().each(fn(d) { println("  - TS\{d.code}: \{d.message}") })
-        assert_false(true)
-      } else {
-        println("✓ Different property types did not trigger TS2300 (other errors present)")
-        assert_true(true)
-      }
-    }
-  }
+  let diagnostics = duplicate_prop_diagnostics(source)
+  assert_eq(count_code(diagnostics, 2300), 0)
+  assert_eq(count_code(diagnostics, 1117), 0)
 }
 
 test "TS2300: Conformance test computedPropertyNames49_ES5" {
@@ -166,25 +134,8 @@ test "TS2300: Conformance test computedPropertyNames49_ES5" {
     #|    },
     #|    p2: 20
     #|};
-
-  let result = parse_bind_check_errors(source)
-  match result {
-    Err(diagnostics) => {
-      let ts2300_count = diagnostics.iter().filter(fn(d) { d.code == 2300 }).count()
-      if ts2300_count == 2 {
-        println("✓ Conformance test 49 correctly detects 2 TS2300 errors")
-        assert_true(true)
-      } else {
-        println("Expected 2 TS2300 errors for conformance test 49, but got \{ts2300_count}:")
-        diagnostics.iter().each(fn(d) { println("  - TS\{d.code}: \{d.message}") })
-        assert_false(ts2300_count == 2)
-      }
-    }
-    Ok(_) => {
-      println("Expected TS2300 errors for conformance test 49 but got no errors")
-      assert_false(true)
-    }
-  }
+  let diagnostics = duplicate_prop_diagnostics(source)
+  assert_eq(count_code(diagnostics, 2300), 2)
 }
 
 test "TS2300: Conformance test computedPropertyNames50_ES5" {
@@ -212,23 +163,105 @@ test "TS2300: Conformance test computedPropertyNames50_ES5" {
     #|    },
     #|    p2: 20
     #|};
+  let diagnostics = duplicate_prop_diagnostics(source)
+  assert_eq(count_code(diagnostics, 2300), 2)
+}
 
-  let result = parse_bind_check_errors(source)
-  match result {
-    Err(diagnostics) => {
-      let ts2300_count = diagnostics.iter().filter(fn(d) { d.code == 2300 }).count()
-      if ts2300_count == 2 {
-        println("✓ Conformance test 50 correctly detects 2 TS2300 errors")
-        assert_true(true)
-      } else {
-        println("Expected 2 TS2300 errors for conformance test 50, but got \{ts2300_count}:")
-        diagnostics.iter().each(fn(d) { println("  - TS\{d.code}: \{d.message}") })
-        assert_false(ts2300_count == 2)
-      }
-    }
-    Ok(_) => {
-      println("Expected TS2300 errors for conformance test 50 but got no errors")
-      assert_false(true)
-    }
-  }
+// ============================================================================
+// Declaration merging: legal merges must NOT produce TS2300
+// ============================================================================
+
+///|
+fn ts2300_count_for(source : String) -> Int {
+  count_code(duplicate_prop_diagnostics(source), 2300)
+}
+
+test "No TS2300: class + interface merge" {
+  let source =
+    #|class C {}
+    #|interface C { x: number; }
+  assert_eq(ts2300_count_for(source), 0)
+}
+
+test "No TS2300: class + namespace merge" {
+  let source =
+    #|class D {}
+    #|namespace D { export const x = 1; }
+  assert_eq(ts2300_count_for(source), 0)
+}
+
+test "No TS2300: function + namespace merge" {
+  let source =
+    #|function F() { return 1; }
+    #|namespace F { export const x = 1; }
+  assert_eq(ts2300_count_for(source), 0)
+}
+
+test "No TS2300: enum + namespace merge" {
+  let source =
+    #|enum E { Red, Blue }
+    #|namespace E { export class Point { } }
+  assert_eq(ts2300_count_for(source), 0)
+}
+
+test "No TS2300: type alias + function (separate declaration spaces)" {
+  let source =
+    #|type A = string;
+    #|function A() {}
+  assert_eq(ts2300_count_for(source), 0)
+}
+
+test "No TS2300: type alias + var (separate declaration spaces)" {
+  let source =
+    #|type B = string;
+    #|var B = 10;
+  assert_eq(ts2300_count_for(source), 0)
+}
+
+test "No TS2300: interface + var inside namespace" {
+  let source =
+    #|namespace M {
+    #|    export interface Point { x: number; y: number }
+    #|    export var Point = 1;
+    #|}
+  assert_eq(ts2300_count_for(source), 0)
+}
+
+test "No TS2300: exported function + namespace inside namespace" {
+  let source =
+    #|namespace X {
+    #|    export function Y() { return 42; }
+    #|    export namespace Y {
+    #|        export class Point { }
+    #|    }
+    #|}
+  assert_eq(ts2300_count_for(source), 0)
+}
+
+test "TS2300: duplicate type aliases still error" {
+  let source =
+    #|type T = string;
+    #|type T = number;
+  assert_true(ts2300_count_for(source) > 0)
+}
+
+test "TS2300: duplicate classes still error" {
+  let source =
+    #|class K {}
+    #|class K {}
+  assert_true(ts2300_count_for(source) > 0)
+}
+
+test "TS2300: class + var still errors" {
+  let source =
+    #|var V = 1;
+    #|class V {}
+  assert_true(ts2300_count_for(source) > 0)
+}
+
+test "TS2300: type alias + interface still errors" {
+  let source =
+    #|type W = string;
+    #|interface W { x: number; }
+  assert_true(ts2300_count_for(source) > 0)
 }

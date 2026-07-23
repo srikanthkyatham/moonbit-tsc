@@ -270,6 +270,7 @@ test "unit/recursive/expanding - extends with self" {
 ///|
 test "unit/recursive/expanding - class with recursive property" {
   let source =
+    #|// @strict: false
     #|class BinaryTree<T> {
     #|  value: T;
     #|  left: BinaryTree<T> | null;

@@ -4436,9 +4436,11 @@ test "DiagnosticCode - TS2748: cannot access before initialization - let" {
     Ok(_) => () // TDZ checking not yet implemented - passes without error
     Err(diagnostics) =>
       // If we do detect an error, it should be one of these
+      // (TS2448 is the TDZ diagnostic; TS2454 additionally under strictNullChecks)
       assert_true(
         has_error(diagnostics, 2748) ||
         has_error(diagnostics, 2454) ||
+        has_error(diagnostics, 2448) ||
         has_error(diagnostics, 2304),
       )
   }
@@ -4458,6 +4460,7 @@ test "DiagnosticCode - TS2748: cannot access before initialization - const" {
       assert_true(
         has_error(diagnostics, 2748) ||
         has_error(diagnostics, 2454) ||
+        has_error(diagnostics, 2448) ||
         has_error(diagnostics, 2304),
       )
   }
@@ -6398,6 +6401,7 @@ test "DiagnosticCode - TS2448 let after usage is fine" {
 ///|
 test "DiagnosticCode - TS2454 let variable used before assigned strict" {
   let source =
+    #|// @strict: true
     #|let x: number;
     #|console.log(x);
   let result = check_source(source)
