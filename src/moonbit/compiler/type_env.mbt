@@ -1249,6 +1249,19 @@ fn function_declaration_to_type(
 // ============================================================================
 
 ///|
+/// How an export became type-only from the importing side's perspective.
+/// Drives TS1361/TS1362 ("cannot be used as a value") when the binding is
+/// imported with a regular (non type-only) import and then used as a value.
+pub(all) enum TypeOnlyAliasFlavor {
+  /// Regular export - usable as a value (subject to normal checking)
+  NotTypeOnlyAlias
+  /// The export chain goes through an `import type` binding (TS1361)
+  ViaImportType
+  /// The export chain goes through `export type` / `export { type x }` (TS1362)
+  ViaExportType
+} derive(Debug, Eq)
+
+///|
 /// Information about an exported type from another module
 pub struct ExternalTypeInfo {
   /// Type of the exported symbol
@@ -1257,12 +1270,19 @@ pub struct ExternalTypeInfo {
   is_type_only : Bool
   /// Original name in the source module
   original_name : String
+  /// Type-only alias flavor (export type / re-export of import type)
+  type_only_flavor : TypeOnlyAliasFlavor
 } derive(Debug, Eq)
 
 ///|
 /// Create a value export info
 pub fn ExternalTypeInfo::value(ty : TypeV2, name : String) -> ExternalTypeInfo {
-  { ty, is_type_only: false, original_name: name }
+  {
+    ty,
+    is_type_only: false,
+    original_name: name,
+    type_only_flavor: NotTypeOnlyAlias,
+  }
 }
 
 ///|
@@ -1271,7 +1291,28 @@ pub fn ExternalTypeInfo::type_only(
   ty : TypeV2,
   name : String,
 ) -> ExternalTypeInfo {
-  { ty, is_type_only: true, original_name: name }
+  {
+    ty,
+    is_type_only: true,
+    original_name: name,
+    type_only_flavor: NotTypeOnlyAlias,
+  }
+}
+
+///|
+/// Return a copy of this export info with the given type-only alias flavor
+pub fn ExternalTypeInfo::with_flavor(
+  self : ExternalTypeInfo,
+  flavor : TypeOnlyAliasFlavor,
+) -> ExternalTypeInfo {
+  { ..self, type_only_flavor: flavor }
+}
+
+///|
+/// Create a value export info with type `any` (convenience for tests and
+/// callers without a concrete type)
+pub fn ExternalTypeInfo::any_value(name : String) -> ExternalTypeInfo {
+  ExternalTypeInfo::value(TAny, name)
 }
 
 ///|
@@ -1633,7 +1674,12 @@ fn parse_external_type_info(json : Json) -> ExternalTypeInfo? {
     Some(String(s)) => s
     _ => ""
   }
-  Some(ExternalTypeInfo::{ ty, is_type_only, original_name })
+  let type_only_flavor = match obj.get("type_only_flavor") {
+    Some(String("via_import_type")) => TypeOnlyAliasFlavor::ViaImportType
+    Some(String("via_export_type")) => TypeOnlyAliasFlavor::ViaExportType
+    _ => TypeOnlyAliasFlavor::NotTypeOnlyAlias
+  }
+  Some(ExternalTypeInfo::{ ty, is_type_only, original_name, type_only_flavor })
 }
 
 ///|
@@ -2166,7 +2212,15 @@ fn external_type_info_to_json_str(info : ExternalTypeInfo) -> String {
   sb.write_string(if info.is_type_only { "true" } else { "false" })
   sb.write_string(",\"original_name\":\"")
   sb.write_string(escape_json_str(info.original_name))
-  sb.write_string("\"}")
+  sb.write_string("\"")
+  match info.type_only_flavor {
+    NotTypeOnlyAlias => ()
+    ViaImportType =>
+      sb.write_string(",\"type_only_flavor\":\"via_import_type\"")
+    ViaExportType =>
+      sb.write_string(",\"type_only_flavor\":\"via_export_type\"")
+  }
+  sb.write_string("}")
   sb.to_string()
 }
 

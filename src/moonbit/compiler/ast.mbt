@@ -147,6 +147,7 @@ pub struct CompilerDirectives {
   strict_null_checks : Bool? // @strictNullChecks: true/false (None = not specified, falls back to strict)
   strict_property_initialization : Bool? // @strictPropertyInitialization: true/false (None = not specified, falls back to strict)
   no_implicit_any : Bool? // @noImplicitAny: true/false (None = not specified, falls back to strict)
+  allow_js : Bool // @allowJs: true (JavaScript files participate in the compilation)
 } derive(Debug)
 
 ///|
@@ -163,6 +164,7 @@ pub fn CompilerDirectives::default() -> CompilerDirectives {
     strict_null_checks: None,
     strict_property_initialization: None,
     no_implicit_any: None,
+    allow_js: false,
   }
 }
 

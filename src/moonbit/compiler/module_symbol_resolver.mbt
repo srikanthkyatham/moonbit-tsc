@@ -515,6 +515,26 @@ pub fn create_module_not_found_diagnostic_with_location(
 }
 
 ///|
+/// Create diagnostic for an import that resolved to an untyped module under
+/// noImplicitAny (TS7016)
+pub fn create_untyped_module_diagnostic_with_location(
+  module_specifier : String,
+  resolved_path : String,
+  location : SourceLocation,
+) -> Diagnostic {
+  Diagnostic::{
+    category: DiagnosticCategory::Error,
+    code: 7016, // TS7016: Could not find a declaration file for module
+    message: "Could not find a declaration file for module '" +
+    module_specifier +
+    "'. '" +
+    resolved_path +
+    "' implicitly has an 'any' type.",
+    location,
+  }
+}
+
+///|
 /// Create diagnostic for file is not a module (TS2306)
 pub fn create_file_not_module_diagnostic(
   file_path : String,

@@ -869,6 +869,42 @@ pub(all) struct UnresolvedRelativeImport {
   specifier : String
   location : SourceLocation
   candidates : Array[String]
+  /// Effective noImplicitAny for the importing file (drives TS7016 when the
+  /// import resolves to an untyped .js file on disk)
+  no_implicit_any : Bool
+} derive(Debug)
+
+///|
+/// A non-relative (bare/rooted) import that resolved within the compiled
+/// file set or matched an ambient `declare module "..."` declaration.
+/// The per-file checker emits an unconditional TS2307 for these sites, so
+/// the caller should suppress that diagnostic.
+pub(all) struct ResolvedBareImport {
+  file_path : String
+  specifier : String
+  location : SourceLocation
+  /// Path the specifier resolved to within the file set; None when the
+  /// specifier matched an ambient module declaration instead
+  resolved_path : String?
+  /// Effective noImplicitAny for the importing file
+  no_implicit_any : Bool
+} derive(Debug)
+
+///|
+/// A non-relative (bare/rooted) import that resolved to nothing in the
+/// compiled file set and matched no ambient module declaration. The caller
+/// (CLI) should attempt real-filesystem node_modules resolution before
+/// deciding between suppressing, TS7016, or keeping/adding TS2307.
+pub(all) struct UnresolvedBareImport {
+  file_path : String
+  specifier : String
+  location : SourceLocation
+  /// Whether the per-file checker already reports TS2307 at this site
+  /// (true for `import ... from "x"`; false for `import x = require("x")`
+  /// and `export ... from "x"`, which the checker does not diagnose)
+  checker_reports : Bool
+  /// Effective noImplicitAny for the importing file
+  no_implicit_any : Bool
 } derive(Debug)
 
 ///|
@@ -880,12 +916,58 @@ pub(all) struct MultiFileImportValidation {
   /// candidates should be checked against the real filesystem before
   /// emitting TS2307
   unresolved : Array[UnresolvedRelativeImport]
+  /// Non-relative imports that resolved in the file set (or via an ambient
+  /// module declaration); the checker's TS2307 for them should be suppressed
+  resolved_bare : Array[ResolvedBareImport]
+  /// Non-relative imports that did not resolve in the file set; check the
+  /// real filesystem (node_modules) before deciding on TS2307/TS7016
+  unresolved_bare : Array[UnresolvedBareImport]
 } derive(Debug)
 
 ///|
 /// Check whether a module specifier is a relative path (./a, ../b)
 fn is_relative_specifier(spec : String) -> Bool {
   spec.has_prefix("./") || spec.has_prefix("../") || spec == "." || spec == ".."
+}
+
+///|
+/// Check whether the per-file checker reports TS2307 for this specifier form
+/// (check_import_declaration only treats "./" and "../" prefixes as relative)
+fn checker_treats_as_relative(spec : String) -> Bool {
+  spec.has_prefix("./") || spec.has_prefix("../")
+}
+
+///|
+/// Collect the names of ambient module declarations
+/// (`declare module "name" { ... }` / `declare module "name";`)
+/// from the top level of a parsed source file.
+pub fn collect_ambient_module_names(sf : SourceFile) -> Array[String] {
+  let names : Array[String] = []
+  for stmt in sf.statements {
+    match stmt {
+      Node::ModuleDeclaration(md) => if md.is_ambient { names.push(md.name) }
+      _ => ()
+    }
+  }
+  names
+}
+
+///|
+/// Check whether a specifier matches any ambient module declaration name.
+/// Names may contain a single `*` wildcard (e.g. `declare module "foo*"`).
+pub fn matches_ambient_module(
+  ambient_names : Array[String],
+  specifier : String,
+) -> Bool {
+  for name in ambient_names {
+    if name == specifier {
+      return true
+    }
+    if name.contains("*") && match_pattern(name, specifier) is Some(_) {
+      return true
+    }
+  }
+  false
 }
 
 ///|
@@ -901,31 +983,105 @@ pub fn validate_multi_file_imports(
 ) -> MultiFileImportValidation {
   let diagnostics : Array[Diagnostic] = []
   let unresolved : Array[UnresolvedRelativeImport] = []
+  let resolved_bare : Array[ResolvedBareImport] = []
+  let unresolved_bare : Array[UnresolvedBareImport] = []
   let file_paths : Array[String] = []
   for f in files {
     file_paths.push(f.0)
   }
   let resolver = ModuleResolver::with_file_set(file_paths, ".")
 
-  // Parse and bind every file; collect exports keyed by normalized path
+  // Parse and bind every file; collect exports keyed by normalized path,
+  // ambient module declarations, and the per-file effective noImplicitAny
   let exports_by_path : Map[String, ResolvedModuleExports] = Map([])
   let parsed_files : Array[(String, SourceFile)] = []
+  let ambient_module_names : Array[String] = []
+  let nia_by_path : Map[String, Bool] = Map([])
   for f in files {
     let (path, source) = f
     let tokens = scan_all_v2(source, path)
     match parse_source_file(tokens, path) {
       Ok(sf) => {
         parsed_files.push((path, sf))
-        match bind_source_file(sf) {
-          Ok(bound) =>
-            exports_by_path.set(
-              normalize_path(path),
-              ResolvedModuleExports::from_bound_file(bound, path),
-            )
-          Err(_) => ()
+        for name in collect_ambient_module_names(sf) {
+          ambient_module_names.push(name)
+        }
+        // TS7016 (untyped module) only applies under noImplicitAny and
+        // when allowJs is off: with allowJs the .js file joins the
+        // compilation and provides (loosely) inferred types
+        nia_by_path.set(
+          path,
+          effective_no_implicit_any(sf.compiler_directives, path) &&
+          !(sf.compiler_directives.allow_js),
+        )
+        // Files with parse errors have unreliable export lists (e.g. an
+        // unsupported syntax form dropping `export =`): skip member
+        // validation against them rather than reporting false TS2305/TS2306
+        let has_parse_errors = sf.parse_diagnostics
+          .iter()
+          .any(fn(d) { d.category == DiagnosticCategory::Error })
+        if !(has_parse_errors) {
+          match bind_source_file(sf) {
+            Ok(bound) =>
+              exports_by_path.set(
+                normalize_path(path),
+                ResolvedModuleExports::from_bound_file(bound, path),
+              )
+            Err(_) => ()
+          }
         }
       }
       Err(_) => ()
+    }
+  }
+  fn nia_for(path : String) -> Bool {
+    nia_by_path.get(path).unwrap_or(false)
+  }
+
+  // Expand star re-exports (`export * from './x'` / `export type * from`):
+  // the re-exporting module exposes every named export of its source module
+  // (but not the default export). Runs to a fixpoint so chains of star
+  // re-exports propagate; the iteration cap guards against cycles.
+  let mut changed = true
+  let mut iterations = 0
+  while changed && iterations < 16 {
+    changed = false
+    iterations = iterations + 1
+    for entry in parsed_files {
+      let (path, sf) = entry
+      match exports_by_path.get(normalize_path(path)) {
+        Some(target_exports) =>
+          for stmt in sf.statements {
+            match stmt {
+              Node::ExportDeclaration(ed) =>
+                match (ed.export_clause, ed.module_specifier) {
+                  (None, Some(spec)) =>
+                    if is_relative_specifier(spec) {
+                      match resolver.resolve_module_name(spec, path) {
+                        Ok(resolved) =>
+                          match
+                            exports_by_path.get(
+                              normalize_path(resolved.resolved_file_name),
+                            ) {
+                            Some(source_exports) =>
+                              for name in source_exports.exports.iter() {
+                                if !(target_exports.exports.contains(name)) {
+                                  target_exports.exports.add(name)
+                                  changed = true
+                                }
+                              }
+                            None => ()
+                          }
+                        Err(_) => ()
+                      }
+                    }
+                  _ => ()
+                }
+              _ => ()
+            }
+          }
+        None => ()
+      }
     }
   }
 
@@ -945,13 +1101,78 @@ pub fn validate_multi_file_imports(
       specifier: spec,
       location,
       candidates,
+      no_implicit_any: nia_for(path),
     })
   }
 
+  // Handle a non-relative (bare/rooted) specifier: ambient module match,
+  // then file-set resolution; otherwise defer to the caller's filesystem
+  // lookup. Returns the resolved file-set path (if any) so import
+  // declarations can validate members against it.
+  fn handle_bare_specifier(
+    path : String,
+    spec : String,
+    location : SourceLocation,
+    checker_reports : Bool,
+  ) -> String? {
+    if matches_ambient_module(ambient_module_names, spec) {
+      resolved_bare.push(ResolvedBareImport::{
+        file_path: path,
+        specifier: spec,
+        location,
+        resolved_path: None,
+        no_implicit_any: nia_for(path),
+      })
+      return None
+    }
+    match resolver.resolve_module_name(spec, path) {
+      Ok(resolved) => {
+        resolved_bare.push(ResolvedBareImport::{
+          file_path: path,
+          specifier: spec,
+          location,
+          resolved_path: Some(resolved.resolved_file_name),
+          no_implicit_any: nia_for(path),
+        })
+        Some(resolved.resolved_file_name)
+      }
+      Err(_) => {
+        unresolved_bare.push(UnresolvedBareImport::{
+          file_path: path,
+          specifier: spec,
+          location,
+          checker_reports,
+          no_implicit_any: nia_for(path),
+        })
+        None
+      }
+    }
+  }
+
+  // Validate imported members against the target module's exports
+  fn validate_members(
+    import_decl : ImportDeclaration,
+    resolved_path : String,
+  ) -> Unit {
+    match exports_by_path.get(normalize_path(resolved_path)) {
+      Some(module_exports) => {
+        // Reuse the checker's single-import validation
+        let registry : Map[String, ResolvedModuleExports] = Map([])
+        registry.set(import_decl.module_specifier, module_exports)
+        for d in validate_import_resolution(import_decl, registry) {
+          diagnostics.push(d)
+        }
+      }
+      // Resolved to a file we didn't compile/bind (e.g. .js):
+      // treat as untyped, no member validation
+      None => ()
+    }
+  }
   for entry in parsed_files {
     let (path, sf) = entry
 
-    // All import forms (import, import =, require()) — existence check
+    // All import forms (import, import =, require()) — existence check for
+    // relative specifiers
     for import_decl in get_imports(sf) {
       let spec = import_decl.module_specifier
       if !(is_relative_specifier(spec)) {
@@ -972,27 +1193,43 @@ pub fn validate_multi_file_imports(
           let spec = import_decl.module_specifier
           if is_relative_specifier(spec) {
             match resolver.resolve_module_name(spec, path) {
-              Ok(resolved) =>
-                match
-                  exports_by_path.get(
-                    normalize_path(resolved.resolved_file_name),
-                  ) {
-                  Some(module_exports) => {
-                    // Reuse the checker's single-import validation
-                    let registry : Map[String, ResolvedModuleExports] = Map([])
-                    registry.set(spec, module_exports)
-                    for d in validate_import_resolution(import_decl, registry) {
-                      diagnostics.push(d)
-                    }
-                  }
-                  // Resolved to a file we didn't compile/bind (e.g. .js):
-                  // treat as untyped, no member validation
-                  None => ()
+              Ok(resolved) => {
+                validate_members(import_decl, resolved.resolved_file_name)
+                // "." / ".." resolve relatively here, but the per-file
+                // checker still emits its bare-specifier TS2307 for them —
+                // record the resolution so the caller suppresses it
+                if !(checker_treats_as_relative(spec)) {
+                  resolved_bare.push(ResolvedBareImport::{
+                    file_path: path,
+                    specifier: spec,
+                    location: import_decl.location,
+                    resolved_path: Some(resolved.resolved_file_name),
+                    no_implicit_any: nia_for(path),
+                  })
                 }
+              }
               Err(_) => () // already recorded above
+            }
+          } else if !(spec.has_prefix("http://")) &&
+            !(spec.has_prefix("https://")) {
+            match
+              handle_bare_specifier(path, spec, import_decl.location, true) {
+              Some(resolved_path) => validate_members(import_decl, resolved_path)
+              None => ()
             }
           }
         }
+        // import x = require("pkg") — bare-specifier existence check
+        // (relative specifiers are covered by the get_imports loop above)
+        Node::ImportEqualsDeclaration(ied) =>
+          match ied.module_reference {
+            ExternalModuleReference(spec, _) =>
+              if !(is_relative_specifier(spec)) {
+                let _ = handle_bare_specifier(path, spec, ied.location, false)
+
+              }
+            EntityName(_) => ()
+          }
         // export ... from './x' — existence check for the re-export target
         Node::ExportDeclaration(ed) =>
           match ed.module_specifier {
@@ -1002,6 +1239,9 @@ pub fn validate_multi_file_imports(
                   Ok(_) => ()
                   Err(failure) => record_unresolved(path, spec, ed.location, failure)
                 }
+              } else {
+                let _ = handle_bare_specifier(path, spec, ed.location, false)
+
               }
             None => ()
           }
@@ -1009,7 +1249,7 @@ pub fn validate_multi_file_imports(
       }
     }
   }
-  { diagnostics, unresolved }
+  { diagnostics, unresolved, resolved_bare, unresolved_bare }
 }
 
 // ============================================================================

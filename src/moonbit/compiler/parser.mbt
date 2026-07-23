@@ -1259,6 +1259,7 @@ pub fn build_registry_from_virtual_files(
             ty: TFunction(func_type),
             is_type_only: false,
             original_name: func_name,
+            type_only_flavor: NotTypeOnlyAlias,
           }
           module_types.add_export(func_name, export_info)
         })
@@ -1297,6 +1298,7 @@ fn parse_compiler_directives(
   let mut strict_null_checks : Bool? = None
   let mut strict_property_initialization : Bool? = None
   let mut no_implicit_any : Bool? = None
+  let mut allow_js = false
 
   for i = 0; i < tokens.length(); i = i + 1 {
     let (content, _loc) = tokens[i]
@@ -1322,6 +1324,7 @@ fn parse_compiler_directives(
           "strictPropertyInitialization" =>
             strict_property_initialization = Some(directive_value == "true")
           "noImplicitAny" => no_implicit_any = Some(directive_value == "true")
+          "allowJs" => allow_js = directive_value == "true"
           _ => () // Unknown directive, ignore
         }
       }
@@ -1339,6 +1342,7 @@ fn parse_compiler_directives(
     strict_null_checks,
     strict_property_initialization,
     no_implicit_any,
+    allow_js,
   }
 }
 
@@ -1601,8 +1605,13 @@ fn parse_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
     // Interface declaration
     KeywordInterface(_) => parse_interface_declaration(parser)
 
-    // Type alias
-    KeywordType(_) => parse_type_alias_declaration(parser)
+    // Type alias - only when followed by the alias name; a bare `type`
+    // is an expression statement referencing a binding named 'type'
+    KeywordType(_) =>
+      match try_get_identifier_name(peek_token(parser)) {
+        Some(_) => parse_type_alias_declaration(parser)
+        None => parse_expression_statement(parser)
+      }
 
     // Enum declaration (check for const enum)
     KeywordConst(_) => {
@@ -8093,6 +8102,14 @@ fn parse_import_declaration(parser : Parser) -> Result[(Node, Parser), Parser] {
       match next {
         Identifier(_, _) | OpenBrace(_) | Star(_) =>
           (true, advance_parser(parser))
+        KeywordFrom(_) =>
+          // `import type from './a'` binds the default import to the name
+          // 'type', but `import type from from './a'` / `import type from =
+          // require(...)` are type-only with the binding name 'from'
+          match peek_token_at(parser, 2) {
+            KeywordFrom(_) | Equals(_) => (true, advance_parser(parser))
+            _ => (false, parser)
+          }
         _ => (false, parser) // Not a type-only import, 'type' might be a binding name
       }
     }
@@ -8129,9 +8146,23 @@ fn parse_import_declaration(parser : Parser) -> Result[(Node, Parser), Parser] {
   }
 
   // Parse import clause (default and/or named imports)
+  // A default import binding name is a regular identifier, or the contextual
+  // keywords 'type' / 'from' when they are not filling their keyword role
+  // (e.g. `import type from './a'` binds the default import 'type')
+  let binding_name : String? = match current_token(parser) {
+    Identifier(name, _) => Some(name)
+    KeywordType(_) => Some("type") // only reached when is_type_only is false
+    KeywordFrom(_) =>
+      // 'from' is a binding name only when it is not the from-clause keyword
+      match peek_token(parser) {
+        StringLiteral(_, _) => None
+        _ => Some("from")
+      }
+    _ => None
+  }
   // First, check for import equals declaration: import X = M.N
-  let (default_import, parser) = match current_token(parser) {
-    Identifier(name, _) => {
+  let (default_import, parser) = match binding_name {
+    Some(name) => {
       let parser = advance_parser(parser)
       // Check for import equals declaration: import X = M.N or import X = require("module")
       match current_token(parser) {
@@ -8214,7 +8245,7 @@ fn parse_import_declaration(parser : Parser) -> Result[(Node, Parser), Parser] {
                 name,
                 module_reference,
                 is_export: false,
-                is_type_only: false,
+                is_type_only,
                 location: SourceLocation::new(
                   start_loc.file_path,
                   start_loc.start,
@@ -8233,7 +8264,7 @@ fn parse_import_declaration(parser : Parser) -> Result[(Node, Parser), Parser] {
         _ => (Some(name), parser)
       }
     }
-    _ => (None, parser)
+    None => (None, parser)
   }
 
   // Parse named bindings (namespace or named imports)
@@ -8373,16 +8404,30 @@ fn parse_import_specifiers_aux(
 ) -> (Array[ImportSpecifier], Parser) {
   match current_token(parser) {
     CloseBrace(_) | EOF(_) => (acc, parser)
-    // Check for inline type import: { type Foo }
-    KeywordType(_) => {
+    // Specifier starting with 'type': inline type import or a binding
+    // actually named 'type' (see parse_type_specifier_head)
+    KeywordType(type_loc) => {
       let parser = advance_parser(parser) // consume 'type'
-      // Try to get identifier or contextual keyword for type import
-      match try_get_identifier_name(current_token(parser)) {
-        Some((name, loc)) => {
-          let parser = advance_parser(parser)
-          parse_import_specifier_with_name(parser, name, loc, true, acc)
+      let (head, parser) = parse_type_specifier_head(parser, type_loc)
+      if head.can_parse_as {
+        parse_import_specifier_with_name(
+          parser,
+          head.name,
+          head.loc,
+          head.is_type_only,
+          acc,
+        )
+      } else {
+        acc.push(ImportSpecifier::{
+          property_name: head.property_name,
+          name: head.name,
+          is_type_only: head.is_type_only,
+          location: head.loc,
+        })
+        match current_token(parser) {
+          Comma(_) => parse_import_specifiers_aux(advance_parser(parser), acc)
+          _ => (acc, parser)
         }
-        None => (acc, parser) // Error, but continue
       }
     }
     Identifier(name, loc) => {
@@ -8486,6 +8531,88 @@ fn parse_export_declaration_with_decorators(
 }
 
 ///|
+/// Parse `* from 'module'` or `* as ns from 'module'` after `export [type]`.
+/// The parser must be positioned at the `*` token.
+fn parse_export_star_clause(
+  parser : Parser,
+  start_loc : SourceLocation,
+  is_type_only : Bool,
+) -> Result[(Node, Parser), Parser] {
+  let star_loc = current_token(parser).location()
+  let parser = advance_parser(parser)
+  // Optional `as ns` namespace binding
+  let (export_clause, parser) = match current_token(parser) {
+    KeywordAs(_) => {
+      let parser = advance_parser(parser) // consume 'as'
+      match try_get_identifier_name(current_token(parser)) {
+        Some((ns_name, _)) => {
+          let parser = advance_parser(parser) // consume namespace name
+          (Some(NamedExports::NamespaceExport(ns_name, star_loc)), parser)
+        }
+        None =>
+          return Err(
+            add_error_with_code(
+              parser,
+              "Identifier expected",
+              current_token(parser).location(),
+              IdentifierExpected,
+            ),
+          )
+      }
+    }
+    _ => (None, parser)
+  }
+  // Expect `from 'module'`
+  match current_token(parser) {
+    KeywordFrom(_) => {
+      let parser = advance_parser(parser)
+      match current_token(parser) {
+        StringLiteral(module_specifier, _) => {
+          let parser = advance_parser(parser)
+          // Consume optional semicolon
+          let parser = match current_token(parser) {
+            Semicolon(_) => advance_parser(parser)
+            _ => parser
+          }
+          let end_loc = current_token(parser).location()
+          Ok(
+            (
+              Node::ExportDeclaration(ExportDeclaration::{
+                export_clause,
+                module_specifier: Some(module_specifier),
+                is_type_only,
+                location: SourceLocation::new(
+                  start_loc.file_path,
+                  start_loc.start,
+                  end_loc.end,
+                ),
+              }),
+              parser,
+            ),
+          )
+        }
+        _ =>
+          Err(
+            add_error_code(
+              parser,
+              StringLiteralExpected,
+              current_token(parser).location(),
+            ),
+          )
+      }
+    }
+    _ =>
+      Err(
+        add_error_code(
+          parser,
+          ExpectedToken("from"),
+          current_token(parser).location(),
+        ),
+      )
+  }
+}
+
+///|
 fn parse_export_declaration(parser : Parser) -> Result[(Node, Parser), Parser] {
   // export { a, b }
   // export { a, b } from 'module'
@@ -8558,131 +8685,16 @@ fn parse_export_declaration(parser : Parser) -> Result[(Node, Parser), Parser] {
     }
 
     // export * from 'module' OR export * as ns from 'module'
-    Star(_) => {
-      let star_loc = current_token(parser).location()
-      let parser = advance_parser(parser)
-      match current_token(parser) {
-        // export * as ns from 'module'
-        KeywordAs(_) => {
-          let parser = advance_parser(parser) // consume 'as'
-          match current_token(parser) {
-            Identifier(ns_name, _) => {
-              let parser = advance_parser(parser) // consume namespace name
-              match current_token(parser) {
-                KeywordFrom(_) => {
-                  let parser = advance_parser(parser) // consume 'from'
-                  match current_token(parser) {
-                    StringLiteral(module_specifier, _) => {
-                      let parser = advance_parser(parser)
-                      // Consume optional semicolon
-                      let parser = match current_token(parser) {
-                        Semicolon(_) => advance_parser(parser)
-                        _ => parser
-                      }
-                      let end_loc = current_token(parser).location()
-                      Ok(
-                        (
-                          Node::ExportDeclaration(ExportDeclaration::{
-                            export_clause: Some(
-                              NamedExports::NamespaceExport(ns_name, star_loc),
-                            ),
-                            module_specifier: Some(module_specifier),
-                            is_type_only: false,
-                            location: SourceLocation::new(
-                              start_loc.file_path,
-                              start_loc.start,
-                              end_loc.end,
-                            ),
-                          }),
-                          parser,
-                        ),
-                      )
-                    }
-                    _ =>
-                      Err(
-                        add_error_code(
-                          parser,
-                          StringLiteralExpected,
-                          current_token(parser).location(),
-                        ),
-                      )
-                  }
-                }
-                _ =>
-                  Err(
-                    add_error_code(
-                      parser,
-                      ExpectedToken("from"),
-                      current_token(parser).location(),
-                    ),
-                  )
-              }
-            }
-            _ =>
-              Err(
-                add_error_with_code(
-                  parser,
-                  "Identifier expected",
-                  current_token(parser).location(),
-                  IdentifierExpected,
-                ),
-              )
-          }
-        }
-        // export * from 'module'
-        KeywordFrom(_) => {
-          let parser = advance_parser(parser)
-          match current_token(parser) {
-            StringLiteral(module_specifier, _) => {
-              let parser = advance_parser(parser)
-              // Consume optional semicolon
-              let parser = match current_token(parser) {
-                Semicolon(_) => advance_parser(parser)
-                _ => parser
-              }
-              let end_loc = current_token(parser).location()
-              Ok(
-                (
-                  Node::ExportDeclaration(ExportDeclaration::{
-                    export_clause: None,
-                    module_specifier: Some(module_specifier),
-                    is_type_only: false,
-                    location: SourceLocation::new(
-                      start_loc.file_path,
-                      start_loc.start,
-                      end_loc.end,
-                    ),
-                  }),
-                  parser,
-                ),
-              )
-            }
-            _ =>
-              Err(
-                add_error_code(
-                  parser,
-                  StringLiteralExpected,
-                  current_token(parser).location(),
-                ),
-              )
-          }
-        }
-        _ =>
-          Err(
-            add_error_code(
-              parser,
-              ExpectedToken("from"),
-              current_token(parser).location(),
-            ),
-          )
-      }
-    }
+    Star(_) => parse_export_star_clause(parser, start_loc, false)
 
-    // export type { a, b } [from 'module'] OR export type Foo = ...
+    // export type { a, b } [from 'module'] OR export type * [as ns] from 'module'
+    // OR export type Foo = ...
     KeywordType(_) => {
       // Look ahead to determine if this is `export type { ... }` or `export type Foo = ...`
       let parser_after_type = advance_parser(parser) // consume 'type'
       match current_token(parser_after_type) {
+        // export type * [as ns] from 'module'
+        Star(_) => parse_export_star_clause(parser_after_type, start_loc, true)
         // export type { a, b } [from 'module']
         OpenBrace(_) => {
           let parser = advance_parser(parser_after_type)
@@ -9174,6 +9186,23 @@ fn add_declare_modifier(node : Node) -> Node {
         location: ed.location,
       })
     }
+    ModuleDeclaration(md) => {
+      // declare namespace M { ... } / declare module M { ... }
+      // Keep is_ambient untouched: it specifically marks string-literal
+      // module names (declare module "foo") for binder routing.
+      let new_modifiers : Array[Modifier] = [Modifier::Declare]
+      for m in md.modifiers {
+        new_modifiers.push(m)
+      }
+      Node::ModuleDeclaration(ModuleDeclaration::{
+        name: md.name,
+        body: md.body,
+        is_ambient: md.is_ambient,
+        is_global_augmentation: md.is_global_augmentation,
+        modifiers: new_modifiers,
+        location: md.location,
+      })
+    }
     _ => node // For other nodes, return as-is
   }
 }
@@ -9184,6 +9213,128 @@ fn try_get_export_name(token : Token) -> (String, SourceLocation)? {
   match try_get_identifier_name(token) {
     Some(result) => Some(result)
     None => try_get_reserved_keyword(token)
+  }
+}
+
+///|
+/// Disambiguated head of an import/export specifier that started with the
+/// contextual keyword 'type' (tsc's parseImportOrExportSpecifier rules)
+priv struct TypeSpecifierHead {
+  is_type_only : Bool
+  property_name : String?
+  name : String
+  loc : SourceLocation
+  /// Whether an `as alias` clause may still follow the parsed name
+  can_parse_as : Bool
+}
+
+///|
+/// Disambiguate a specifier that starts with 'type' (already consumed):
+///   { type }              value specifier named 'type'
+///   { type as }           type-only specifier named 'as'
+///   { type as X }         value specifier 'type' renamed to X
+///   { type as as }        value specifier 'type' renamed to 'as'
+///   { type as as X }      type-only specifier 'as' renamed to X
+///   { type X [as Y] }     type-only specifier X (alias may follow)
+fn parse_type_specifier_head(
+  parser : Parser,
+  type_loc : SourceLocation,
+) -> (TypeSpecifierHead, Parser) {
+  match current_token(parser) {
+    KeywordAs(first_as_loc) => {
+      let parser = advance_parser(parser) // consume first 'as'
+      match current_token(parser) {
+        KeywordAs(_) => {
+          let parser = advance_parser(parser) // consume second 'as'
+          match try_get_identifier_name(current_token(parser)) {
+            Some((alias, _)) => {
+              // { type as as X }: type-only, property 'as', renamed to X
+              let parser = advance_parser(parser)
+              (
+                {
+                  is_type_only: true,
+                  property_name: Some("as"),
+                  name: alias,
+                  loc: first_as_loc,
+                  can_parse_as: false,
+                },
+                parser,
+              )
+            }
+            None =>
+              // { type as as }: value specifier 'type' renamed to 'as'
+              (
+                {
+                  is_type_only: false,
+                  property_name: Some("type"),
+                  name: "as",
+                  loc: type_loc,
+                  can_parse_as: false,
+                },
+                parser,
+              )
+          }
+        }
+        _ =>
+          match try_get_identifier_name(current_token(parser)) {
+            Some((alias, _)) => {
+              // { type as X }: value specifier 'type' renamed to X
+              let parser = advance_parser(parser)
+              (
+                {
+                  is_type_only: false,
+                  property_name: Some("type"),
+                  name: alias,
+                  loc: type_loc,
+                  can_parse_as: false,
+                },
+                parser,
+              )
+            }
+            None =>
+              // { type as }: type-only specifier named 'as'
+              (
+                {
+                  is_type_only: true,
+                  property_name: None,
+                  name: "as",
+                  loc: first_as_loc,
+                  can_parse_as: false,
+                },
+                parser,
+              )
+          }
+      }
+    }
+    _ =>
+      match try_get_identifier_name(current_token(parser)) {
+        Some((name, loc)) => {
+          // { type X ... }: type-only specifier, `as alias` may follow
+          let parser = advance_parser(parser)
+          (
+            {
+              is_type_only: true,
+              property_name: None,
+              name,
+              loc,
+              can_parse_as: true,
+            },
+            parser,
+          )
+        }
+        None =>
+          // { type } / { type, ... }: value specifier named 'type'
+          (
+            {
+              is_type_only: false,
+              property_name: None,
+              name: "type",
+              loc: type_loc,
+              can_parse_as: false,
+            },
+            parser,
+          )
+      }
   }
 }
 
@@ -9299,16 +9450,30 @@ fn parse_export_specifiers_aux(
 ) -> (Array[ExportSpecifier], Parser) {
   match current_token(parser) {
     CloseBrace(_) | EOF(_) => (acc, parser)
-    // Check for inline type export: { type Foo }
-    KeywordType(_) => {
+    // Specifier starting with 'type': inline type export or a binding
+    // actually named 'type' (see parse_type_specifier_head)
+    KeywordType(type_loc) => {
       let parser = advance_parser(parser) // consume 'type'
-      // Try to get identifier or contextual keyword for type export
-      match try_get_identifier_name(current_token(parser)) {
-        Some((name, loc)) => {
-          let parser = advance_parser(parser)
-          parse_export_specifier_with_name(parser, name, loc, true, acc)
+      let (head, parser) = parse_type_specifier_head(parser, type_loc)
+      if head.can_parse_as {
+        parse_export_specifier_with_name(
+          parser,
+          head.name,
+          head.loc,
+          head.is_type_only,
+          acc,
+        )
+      } else {
+        acc.push(ExportSpecifier::{
+          property_name: head.property_name,
+          name: head.name,
+          is_type_only: head.is_type_only,
+          location: head.loc,
+        })
+        match current_token(parser) {
+          Comma(_) => parse_export_specifiers_aux(advance_parser(parser), acc)
+          _ => (acc, parser)
         }
-        None => (acc, parser) // Error, but continue
       }
     }
     Identifier(name, loc) => {
@@ -10451,7 +10616,13 @@ fn advance_parser(parser : Parser) -> Parser {
 ///|
 /// Peek at the next token without advancing the parser
 fn peek_token(parser : Parser) -> Token {
-  let next_pos = parser.position + 1
+  peek_token_at(parser, 1)
+}
+
+///|
+/// Peek at the token `offset` positions ahead of the current one
+fn peek_token_at(parser : Parser, offset : Int) -> Token {
+  let next_pos = parser.position + offset
   if next_pos < parser.tokens.length() {
     match parser.tokens.get(next_pos) {
       Some(token) => token

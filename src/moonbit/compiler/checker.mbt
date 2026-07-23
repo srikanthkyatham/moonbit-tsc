@@ -296,6 +296,7 @@ pub struct TypeChecker {
   current_location : SourceLocation // Current location being checked (for TS2590 and similar)
   external_registry : ExternalTypeRegistry? // Registry of types from other modules for cross-file checking
   import_map : Map[String, (String, String)] // Map from local name -> (module_specifier, original_name)
+  type_only_aliases : Map[String, (Bool, SourceLocation)] // Local names that are type-only import bindings; value = (is_export_type_flavor for TS1362 vs TS1361, binding location)
   namespace_symbols : Map[String, Symbol] // Symbols from current namespace for TS2432 enum merging checks
   in_destructuring_pattern : Bool // Tracks if we're inferring type of a destructuring pattern (left side of assignment)
   in_expression_statement : Bool // Tracks if we're in an expression statement (yield result not used)
@@ -308,6 +309,7 @@ pub struct TypeChecker {
   default_export_locations : Array[SourceLocation] // Track all default export locations for TS2528
   import_helpers : Bool // @importHelpers compiler directive - affects TS2807 validation
   in_namespace_body : Bool // Tracks if we're in a namespace/module body (for TS2331)
+  in_ambient_context : Bool // Tracks if we're inside an ambient declaration (declare namespace/module) - implementations are legally absent
   class_type_parameters : Array[String] // Current class type parameter names (for TS2302 static member validation)
 } derive(Debug)
 
@@ -394,6 +396,7 @@ pub fn TypeChecker::new_with_options(
     ),
     external_registry: None,
     import_map: Map([]),
+    type_only_aliases: Map([]),
     namespace_symbols: Map([]),
     in_destructuring_pattern: false,
     in_expression_statement: false,
@@ -406,6 +409,7 @@ pub fn TypeChecker::new_with_options(
     default_export_locations: [],
     import_helpers: false, // Default to false, can be set later from compiler directives
     in_namespace_body: false,
+    in_ambient_context: false,
     class_type_parameters: [], // Empty initially, set when checking class declarations
   }
 }
@@ -2443,6 +2447,14 @@ pub fn check_source_file_with_options(
     )
   }
 
+  // Collect type-only import bindings for TS1361 value-use checks
+  let type_only_aliases = collect_type_only_aliases(
+    bound.statements,
+    bound.file_path,
+    None,
+  )
+  let checker = { ..checker, type_only_aliases, }
+
   // Push a top-level scope for the source file so local variables are tracked
   let checker = push_function_scope(checker)
 
@@ -2547,10 +2559,17 @@ pub fn check_source_file_with_external_types(
   } else {
     import_helpers // Use the parameter from compile options
   }
+  // Collect type-only import bindings for TS1361/TS1362 value-use checks
+  let type_only_aliases = collect_type_only_aliases(
+    bound.statements,
+    bound.file_path,
+    Some(external_registry),
+  )
   let checker = {
     ..checker,
     external_registry: Some(external_registry),
     import_map,
+    type_only_aliases,
     import_helpers: import_helpers_flag,
   }
 
@@ -2653,6 +2672,227 @@ fn build_import_map(
     }
   }
   import_map
+}
+
+///|
+/// Record a type-only alias binding: value = (is_export_type_flavor, location).
+/// is_export_type_flavor selects the diagnostic: false -> TS1361 ('import type'),
+/// true -> TS1362 ('export type').
+fn add_type_only_alias(
+  aliases : Map[String, (Bool, SourceLocation)],
+  name : String,
+  is_export_flavor : Bool,
+  location : SourceLocation,
+) -> Unit {
+  aliases.set(name, (is_export_flavor, location))
+}
+
+///|
+/// Map a registry export flavor onto the local alias table for a regular
+/// (non type-only) import binding
+fn add_alias_from_registry_flavor(
+  aliases : Map[String, (Bool, SourceLocation)],
+  flavor : TypeOnlyAliasFlavor,
+  local_name : String,
+  location : SourceLocation,
+) -> Unit {
+  match flavor {
+    ViaImportType => add_type_only_alias(aliases, local_name, false, location)
+    ViaExportType => add_type_only_alias(aliases, local_name, true, location)
+    NotTypeOnlyAlias => ()
+  }
+}
+
+///|
+/// Look up the type-only flavor of an export in the external registry
+fn lookup_export_flavor(
+  registry : ExternalTypeRegistry,
+  module_spec : String,
+  current_file : String,
+  export_name : String,
+) -> TypeOnlyAliasFlavor {
+  let resolved = resolve_module_path_with_registry(
+    module_spec, current_file, registry,
+  )
+  let info = if export_name == "default" {
+    match registry.lookup_export(resolved, "default") {
+      Some(info) => Some(info)
+      None => registry.lookup_default(resolved)
+    }
+  } else {
+    registry.lookup_export(resolved, export_name)
+  }
+  match info {
+    Some(info) => info.type_only_flavor
+    None => NotTypeOnlyAlias
+  }
+}
+
+///|
+/// Collect local bindings that may not be used as values:
+/// - bindings introduced by `import type ...` or `import { type X }` (TS1361)
+/// - bindings introduced by regular imports whose target export was declared
+///   with `export type` (TS1362) or re-exported an `import type` binding (TS1361)
+fn collect_type_only_aliases(
+  statements : Array[Node],
+  current_file : String,
+  registry : ExternalTypeRegistry?,
+) -> Map[String, (Bool, SourceLocation)] {
+  let aliases : Map[String, (Bool, SourceLocation)] = Map([])
+  for stmt in statements {
+    match stmt {
+      ImportDeclaration(import_decl) =>
+        match import_decl.import_clause {
+          Some(clause) =>
+            if import_decl.is_type_only {
+              // import type { A } / import type A / import type * as ns
+              match clause.name {
+                Some(name) =>
+                  add_type_only_alias(
+                    aliases, name, false, import_decl.location,
+                  )
+                None => ()
+              }
+              match clause.named_bindings {
+                Some(NamedImports::NamespaceImport(name, loc)) =>
+                  add_type_only_alias(aliases, name, false, loc)
+                Some(NamedImports::NamedImports(specifiers, _)) =>
+                  for spec in specifiers {
+                    add_type_only_alias(aliases, spec.name, false, spec.location)
+                  }
+                None => ()
+              }
+            } else {
+              // Regular import: inline `type` modifiers are type-only, and
+              // other bindings inherit type-only-ness from the target export
+              match clause.name {
+                Some(name) =>
+                  match registry {
+                    Some(reg) =>
+                      add_alias_from_registry_flavor(
+                        aliases,
+                        lookup_export_flavor(
+                          reg, import_decl.module_specifier, current_file, "default",
+                        ),
+                        name,
+                        import_decl.location,
+                      )
+                    None => ()
+                  }
+                None => ()
+              }
+              match clause.named_bindings {
+                Some(NamedImports::NamedImports(specifiers, _)) =>
+                  for spec in specifiers {
+                    if spec.is_type_only {
+                      add_type_only_alias(
+                        aliases, spec.name, false, spec.location,
+                      )
+                    } else {
+                      match registry {
+                        Some(reg) => {
+                          let original = match spec.property_name {
+                            Some(p) => p
+                            None => spec.name
+                          }
+                          add_alias_from_registry_flavor(
+                            aliases,
+                            lookup_export_flavor(
+                              reg,
+                              import_decl.module_specifier,
+                              current_file,
+                              original,
+                            ),
+                            spec.name,
+                            spec.location,
+                          )
+                        }
+                        None => ()
+                      }
+                    }
+                  }
+                _ => ()
+              }
+            }
+          None => ()
+        }
+      ImportEqualsDeclaration(ied) =>
+        // import type A = require('...')
+        if ied.is_type_only {
+          add_type_only_alias(aliases, ied.name, false, ied.location)
+        }
+      _ => ()
+    }
+  }
+  aliases
+}
+
+///|
+/// Collect names of top-level declarations that carry a value meaning
+/// (variables, functions, classes, enums). Used to cancel type-only alias
+/// flavors when a local value declaration merges with an imported type.
+fn collect_local_value_declaration_names(
+  statements : Array[Node],
+) -> @hashset.HashSet[String] {
+  let names : @hashset.HashSet[String] = @hashset.HashSet([])
+  for stmt in statements {
+    match stmt {
+      VariableStatement(vs) =>
+        for decl in vs.declarations {
+          match decl.name {
+            Identifier(id) => names.add(id.name)
+            _ => ()
+          }
+        }
+      FunctionDeclaration(fd) =>
+        match fd.name {
+          Some(Identifier(id)) => names.add(id.name)
+          _ => ()
+        }
+      ClassDeclaration(cd) =>
+        match cd.name {
+          Some(Identifier(id)) => names.add(id.name)
+          _ => ()
+        }
+      EnumDeclaration(ed) => names.add(ed.name)
+      _ => ()
+    }
+  }
+  names
+}
+
+///|
+/// If `name` resolves to a type-only import binding, report TS1361/TS1362
+/// ("cannot be used as a value") and return the updated checker.
+/// Returns None when the name is not a type-only alias.
+fn check_type_only_value_use(
+  checker : TypeChecker,
+  name : String,
+  location : SourceLocation,
+) -> TypeChecker? {
+  match checker.type_only_aliases.get(name) {
+    Some((is_export_flavor, _)) =>
+      if is_export_flavor {
+        Some(
+          add_diagnostic_with_code(
+            checker,
+            "'\{name}' cannot be used as a value because it was exported using 'export type'.",
+            location,
+            TS1362,
+          ),
+        )
+      } else {
+        Some(
+          add_diagnostic_with_code(
+            checker,
+            "'\{name}' cannot be used as a value because it was imported using 'import type'.",
+            location,
+            TS1361,
+          ),
+        )
+      }
+    None => None
+  }
 }
 
 ///|
@@ -3224,7 +3464,8 @@ fn check_statement(checker : TypeChecker, node : Node) -> TypeChecker {
       check_type_alias_declaration(checker, type_alias)
     ImportDeclaration(import_decl) =>
       check_import_declaration(checker, import_decl)
-    ExportDeclaration(_) => checker // Exports checked separately
+    ExportDeclaration(export_decl) =>
+      check_export_declaration_type_only(checker, export_decl)
     ExportAssignment(ea) => {
       // Check for multiple default exports (TS2528)
       // This handles 'export default <expression>'
@@ -3257,7 +3498,16 @@ fn check_module_declaration(
 ) -> TypeChecker {
   // Set in_namespace_body flag (for TS2331: 'this' in namespace body)
   let was_in_namespace_body = checker.in_namespace_body
-  let checker = { ..checker, in_namespace_body: true }
+  // Track ambient context: declare namespace M / declare module "m" bodies
+  // are ambient, so implementations are legally absent (no TS2390/TS2391)
+  let was_in_ambient_context = checker.in_ambient_context
+  let module_is_ambient = mod_decl.is_ambient ||
+    is_ambient_declaration(mod_decl.modifiers)
+  let checker = {
+    ..checker,
+    in_namespace_body: true,
+    in_ambient_context: was_in_ambient_context || module_is_ambient,
+  }
 
   // Look up the namespace symbol to get its locals (all members, not just exports)
   // This allows internal access to non-exported members within the namespace
@@ -3302,8 +3552,12 @@ fn check_module_declaration(
       }
   }
 
-  // Restore in_namespace_body flag
-  { ..checker, in_namespace_body: was_in_namespace_body }
+  // Restore in_namespace_body and in_ambient_context flags
+  {
+    ..checker,
+    in_namespace_body: was_in_namespace_body,
+    in_ambient_context: was_in_ambient_context,
+  }
 }
 
 // ============================================================================
@@ -3319,6 +3573,19 @@ fn is_ambient_declaration(modifiers : Array[Modifier]) -> Bool {
     }
   }
   false
+}
+
+///|
+/// A declaration is effectively ambient if it has a `declare` modifier,
+/// appears inside an ambient context (declare namespace/module body),
+/// or lives in a .d.ts file
+fn is_effectively_ambient(
+  checker : TypeChecker,
+  modifiers : Array[Modifier],
+) -> Bool {
+  is_ambient_declaration(modifiers) ||
+  checker.in_ambient_context ||
+  checker.file_path.has_suffix(".d.ts")
 }
 
 ///|
@@ -3638,8 +3905,12 @@ fn check_variable_statement(
 ) -> TypeChecker {
   let mut checker = checker
 
-  // Check if this is an ambient declaration (declare const/let/var)
-  let is_ambient = is_ambient_declaration(var_stmt.modifiers)
+  // Check if this is an ambient declaration (declare const/let/var).
+  // Declaration files (.d.ts) and ambient bodies (declare namespace/module)
+  // are ambient contexts as a whole: statements inside them are ambient even
+  // without an explicit `declare` modifier, so e.g. `const x: T;` needs no
+  // initializer there (no TS1155).
+  let is_ambient = is_effectively_ambient(checker, var_stmt.modifiers)
 
   // Check if this is an exported variable (for TS2494 check)
   let is_exported = has_export_modifier(var_stmt.modifiers)
@@ -4503,6 +4774,10 @@ fn infer_identifier_type(
       match lookup_local_variable(checker, id.name) {
         Some(local_type) => (local_type, checker)
         None =>
+          // TS1361/TS1362: type-only import bindings cannot be used as values
+          match check_type_only_value_use(checker, id.name, id.location) {
+            Some(checker) => any_type(checker)
+            None =>
           // Fall back to global scope lookup
           match lookup_symbol(checker, id.name) {
             Some(symbol) => {
@@ -4516,15 +4791,24 @@ fn infer_identifier_type(
                 // that has exports in the external registry
                 match resolve_import_type(checker, id.name) {
                   Some(imported_type) => return (imported_type, checker)
-                  None => {
-                    let checker = add_diagnostic_with_code(
-                      checker,
-                      "Cannot use namespace '\{id.name}' as a value.",
-                      id.location,
-                      TS2710,
-                    )
-                    return any_type(checker)
-                  }
+                  None =>
+                    // Only report TS2710 for namespaces we actually resolved
+                    // (they have declarations). Namespace-import bindings
+                    // (import * as ns from "m") of modules we could not
+                    // resolve in this file have no declarations - the import
+                    // itself already got TS2307 if the module is missing, so
+                    // treat the binding as 'any' instead of guessing TS2710.
+                    if symbol.declarations.length() > 0 {
+                      let checker = add_diagnostic_with_code(
+                        checker,
+                        "Cannot use namespace '\{id.name}' as a value.",
+                        id.location,
+                        TS2710,
+                      )
+                      return any_type(checker)
+                    } else {
+                      return any_type(checker)
+                    }
                 }
               }
               // Get type from symbol
@@ -4602,6 +4886,7 @@ fn infer_identifier_type(
                       }
                   }
               }
+          }
           }
       }
   }
@@ -9630,6 +9915,57 @@ fn get_name_from_heritage_node(node : Node) -> String? {
 }
 
 ///|
+/// Get the leftmost identifier of an extends-clause expression along with its
+/// location (e.g. `types` in `class V extends types.C`)
+fn leftmost_extends_name(node : Node) -> (String, SourceLocation)? {
+  match node {
+    Identifier(id) => Some((id.name, id.location))
+    TypeReference(type_ref) => {
+      // A dotted name like "types.C" - take the leftmost segment
+      let name = match type_ref.type_name.split(".").head() {
+        Some(first) => first.to_string()
+        None => type_ref.type_name
+      }
+      Some((name, type_ref.location))
+    }
+    PropertyAccessExpression(pae) => leftmost_extends_name(pae.expression)
+    CallExpression(call) => leftmost_extends_name(call.expression)
+    _ => None
+  }
+}
+
+///|
+/// TS1361/TS1362: the extends clause of a class is a value position, so
+/// type-only import bindings may not appear there
+fn check_extends_type_only_value_use(
+  checker : TypeChecker,
+  class_decl : ClassDeclaration,
+) -> TypeChecker {
+  // Ambient classes (`declare class B extends A`) only use the base as a
+  // type, so type-only imports are fine there
+  if checker.in_ambient_context ||
+    is_ambient_declaration(class_decl.modifiers) {
+    return checker
+  }
+  let mut checker = checker
+  for heritage in class_decl.heritage_clauses {
+    if heritage.kind == HeritageKind::Extends {
+      for type_node in heritage.types {
+        match leftmost_extends_name(type_node) {
+          Some((name, loc)) =>
+            match check_type_only_value_use(checker, name, loc) {
+              Some(c) => checker = c
+              None => ()
+            }
+          None => ()
+        }
+      }
+    }
+  }
+  checker
+}
+
+///|
 /// Check member visibility and emit TS2341 (private) or TS2445 (protected) errors
 fn check_member_visibility(
   checker : TypeChecker,
@@ -9925,6 +10261,20 @@ fn infer_property_access_type(
   checker : TypeChecker,
   prop : PropertyAccessExpression,
 ) -> (Type, TypeChecker) {
+  // TS1361/TS1362: property access on a type-only import binding is a value
+  // use (e.g. `types.foo()` after `import type * as types`). Checked here
+  // because the namespace path below bypasses identifier inference.
+  match prop.expression {
+    Identifier(id) =>
+      if lookup_local_variable(checker, id.name) is None {
+        match check_type_only_value_use(checker, id.name, id.location) {
+          Some(checker) => return any_type(checker)
+          None => ()
+        }
+      }
+    _ => ()
+  }
+
   // Check if base expression is a namespace - handle TS2694
   let namespace_sym = get_namespace_symbol_from_expr(checker, prop.expression)
   match namespace_sym {
@@ -12727,6 +13077,11 @@ fn infer_object_literal_type(
           match lookup_local_variable(checker, name) {
             Some(local_type) => (local_type, checker)
             None =>
+              // TS1361/TS1362: shorthand properties are value uses, so
+              // type-only import bindings are not allowed
+              match check_type_only_value_use(checker, name, loc) {
+                Some(checker) => any_type(checker)
+                None =>
               match lookup_symbol(checker, name) {
                 Some(symbol) =>
                   match checker.symbol_types.get(symbol.id) {
@@ -12745,6 +13100,7 @@ fn infer_object_literal_type(
                   )
                   any_type(checker)
                 }
+              }
               }
           }
         }
@@ -18614,6 +18970,10 @@ fn check_class_declaration(
   // TS2502: Check if class references itself in its own base expression
   let checker = check_class_self_reference(checker, class_decl)
 
+  // TS1361/TS1362: `class X extends C` is a value use of C - type-only
+  // import bindings are not allowed here (implements clauses are fine)
+  let checker = check_extends_type_only_value_use(checker, class_decl)
+
   // Check type parameter names for reserved keywords (TS2368)
   let checker = check_type_parameter_names(checker, class_decl.type_parameters)
 
@@ -18947,16 +19307,20 @@ fn check_class_declaration(
     checker, class_decl,
   )
 
+  // Ambient classes (declare class, classes in declare namespace bodies, or
+  // .d.ts files) legally have constructor/method signatures without bodies
+  let class_is_ambient = is_effectively_ambient(checker, class_decl.modifiers)
+
   // Check for constructor overloads (TS2390)
   let class_name = get_class_decl_name(class_decl)
   let checker = check_class_constructor_overloads(
     class_name,
     class_decl.members,
+    class_is_ambient,
     checker,
   )
 
   // Check for method overloads static consistency (TS2388)
-  let class_is_ambient = is_ambient_declaration(class_decl.modifiers)
   let checker = check_class_method_overloads(
     class_decl.members,
     class_is_ambient,
@@ -21568,6 +21932,23 @@ fn check_import_declaration(
     checker
   }
 
+  // TS1363: A type-only import can specify a default import or named
+  // bindings, but not both
+  match import_decl.import_clause {
+    Some(clause) =>
+      if import_decl.is_type_only &&
+        clause.name is Some(_) &&
+        clause.named_bindings is Some(_) {
+        checker = add_diagnostic_with_code(
+          checker,
+          "A type-only import can specify a default import or named bindings, but not both.",
+          clause.location,
+          TS1363,
+        )
+      }
+    None => ()
+  }
+
   // TS1214: Check for reserved words in strict mode
   // Modules are automatically in strict mode
   match import_decl.import_clause {
@@ -21584,6 +21965,16 @@ fn check_import_declaration(
                 "Identifier expected. '\{spec.name}' is a reserved word in strict mode. Modules are automatically in strict mode.",
                 spec.location,
                 TS1214,
+              )
+            }
+            // TS2206: The 'type' modifier cannot be used on a named import
+            // when 'import type' is used on its import statement
+            if import_decl.is_type_only && spec.is_type_only {
+              checker = add_diagnostic_with_code(
+                checker,
+                "The 'type' modifier cannot be used on a named import when 'import type' is used on its import statement.",
+                spec.location,
+                TS2206,
               )
             }
           }
@@ -21605,6 +21996,33 @@ fn check_import_declaration(
       }
     None => checker
   }
+}
+
+///|
+/// TS2207: The 'type' modifier cannot be used on a named export when
+/// 'export type' is used on its export statement
+fn check_export_declaration_type_only(
+  checker : TypeChecker,
+  export_decl : ExportDeclaration,
+) -> TypeChecker {
+  let mut checker = checker
+  if export_decl.is_type_only {
+    match export_decl.export_clause {
+      Some(NamedExports::NamedExports(specifiers, _)) =>
+        for spec in specifiers {
+          if spec.is_type_only {
+            checker = add_diagnostic_with_code(
+              checker,
+              "The 'type' modifier cannot be used on a named export when 'export type' is used on its export statement.",
+              spec.location,
+              TS2207,
+            )
+          }
+        }
+      _ => ()
+    }
+  }
+  checker
 }
 
 ///|
@@ -25348,6 +25766,32 @@ pub fn extract_module_types_with_registry(
     require_bindings,
     external_registry,
   }
+
+  // Local bindings introduced by type-only imports (or by imports of
+  // type-only exports): exporting them keeps the export type-only, so the
+  // flavor must propagate to this module's exports (for TS1361/TS1362)
+  let type_only_bindings = collect_type_only_aliases(
+    bound_file.statements,
+    file_path,
+    external_registry,
+  )
+  // A local value declaration merged with a type-only import (e.g.
+  // `import { A } from './a'; const A = 0;`) gives the name a value meaning,
+  // so exports of it are no longer type-only
+  let local_value_names = collect_local_value_declaration_names(
+    bound_file.statements,
+  )
+  fn local_binding_flavor(name : String) -> TypeOnlyAliasFlavor {
+    if local_value_names.contains(name) {
+      return NotTypeOnlyAlias
+    }
+    match type_only_bindings.get(name) {
+      Some((true, _)) => ViaExportType
+      Some((false, _)) => ViaImportType
+      None => NotTypeOnlyAlias
+    }
+  }
+
   for statement in bound_file.statements {
     match statement {
       // Export declaration: export { a, b } or export { a as b }
@@ -25361,15 +25805,88 @@ pub fn extract_module_types_with_registry(
                 spec.name,
                 env,
               )
-              let info = ExternalTypeInfo::value(ty, spec.name)
+              // The local name being exported (`export { local as exported }`)
+              let local_name = match spec.property_name {
+                Some(p) => p
+                None => spec.name
+              }
+              let flavor = if ed.is_type_only || spec.is_type_only {
+                // export type { X } / export { type X }
+                TypeOnlyAliasFlavor::ViaExportType
+              } else {
+                match ed.module_specifier {
+                  // Re-export: inherit the source module's flavor
+                  Some(source_spec) =>
+                    match external_registry {
+                      Some(reg) =>
+                        lookup_export_flavor(reg, source_spec, file_path, local_name)
+                      None => NotTypeOnlyAlias
+                    }
+                  // Local export: exported binding may be a type-only import
+                  None => local_binding_flavor(local_name)
+                }
+              }
+              let info = ExternalTypeInfo::value(ty, spec.name).with_flavor(
+                flavor,
+              )
               module_types.add_export(spec.name, info)
             }
           Some(NamespaceExport(name, _)) => {
             // Namespace re-export - add as any for now
-            let info = ExternalTypeInfo::value(TAny, name)
+            // `export type * as ns from` makes the namespace type-only
+            let flavor = if ed.is_type_only {
+              TypeOnlyAliasFlavor::ViaExportType
+            } else {
+              TypeOnlyAliasFlavor::NotTypeOnlyAlias
+            }
+            let info = ExternalTypeInfo::value(TAny, name).with_flavor(flavor)
             module_types.add_export(name, info)
           }
-          None => () // export * from 'mod' - handled by module resolver
+          None =>
+            // export * from 'mod' / export type * from 'mod': re-export every
+            // named export of the source module (but not its default export).
+            // Explicit exports processed later overwrite these, matching the
+            // precedence of explicit re-exports over star re-exports.
+            match (ed.module_specifier, external_registry) {
+              (Some(source_spec), Some(reg)) => {
+                let resolved = resolve_module_path_with_registry(
+                  source_spec, file_path, reg,
+                )
+                match reg.get_module(resolved) {
+                  Some(source_types) => {
+                    for entry in source_types.named_exports {
+                      let (name, info) = entry
+                      if name == "default" ||
+                        module_types.named_exports.contains(name) {
+                        continue
+                      }
+                      let flavor = if ed.is_type_only {
+                        TypeOnlyAliasFlavor::ViaExportType
+                      } else {
+                        info.type_only_flavor
+                      }
+                      module_types.add_export(name, info.with_flavor(flavor))
+                    }
+                    // Carry type aliases and interfaces along so type
+                    // references resolve through the star re-export
+                    for entry in source_types.type_aliases {
+                      let (name, alias_info) = entry
+                      if !(module_types.type_aliases.contains(name)) {
+                        module_types.type_aliases.set(name, alias_info)
+                      }
+                    }
+                    for entry in source_types.interfaces {
+                      let (name, iface) = entry
+                      if !(module_types.interfaces.contains(name)) {
+                        module_types.interfaces.set(name, iface)
+                      }
+                    }
+                  }
+                  None => ()
+                }
+              }
+              _ => ()
+            }
         }
 
       // Export assignment: export = x or export default x
@@ -25379,10 +25896,16 @@ pub fn extract_module_types_with_registry(
             resolve_export_type(bound_file.global_scope, id.name, env)
           _ => TAny
         }
+        // `export default X` where X is a type-only binding keeps the
+        // default export type-only
+        let flavor = match ea.expression {
+          Identifier(id) => local_binding_flavor(id.name)
+          _ => NotTypeOnlyAlias
+        }
         let info = if ea.is_export_equals {
-          ExternalTypeInfo::value(ty, "=")
+          ExternalTypeInfo::value(ty, "=").with_flavor(flavor)
         } else {
-          ExternalTypeInfo::value(ty, "default")
+          ExternalTypeInfo::value(ty, "default").with_flavor(flavor)
         }
         // Store in a special key for default
         module_types.named_exports.set("default", info)

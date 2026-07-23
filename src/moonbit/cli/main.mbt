@@ -173,12 +173,10 @@ async fn run_single_compile(
     executable, all_files, coord_options,
   )
 
-  // Validate relative imports across the compiled file set (multi-file only)
-  let summary = if all_files.length() > 1 {
-    apply_cross_file_import_diagnostics(summary, all_files)
-  } else {
-    summary
-  }
+  // Validate imports across the compiled file set (also for single files:
+  // bare specifiers may resolve via ambient module declarations or on-disk
+  // node_modules, which suppresses the checker's unconditional TS2307)
+  let summary = apply_cross_file_import_diagnostics(summary, all_files)
 
   // Write output files
   write_all_outputs(summary.results, options)

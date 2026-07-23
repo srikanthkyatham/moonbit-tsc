@@ -354,10 +354,15 @@ pub enum DiagnosticCode {
   TS1308 // 'await' expressions are only allowed within async functions and at the top levels of modules
   TS1357 // An enum member name must be followed by a ',', '=', or '}'
   TS1359 // Identifier expected. '{0}' is a reserved word that cannot be used here
+  TS1361 // '{0}' cannot be used as a value because it was imported using 'import type'
+  TS1362 // '{0}' cannot be used as a value because it was exported using 'export type'
+  TS1363 // A type-only import can specify a default import or named bindings, but not both
 
   // ============================================================================
   // Class and Type Parameter Errors
   // ============================================================================
+  TS2206 // The 'type' modifier cannot be used on a named import when 'import type' is used on its import statement
+  TS2207 // The 'type' modifier cannot be used on a named export when 'export type' is used on its export statement
   TS2300 // Duplicate identifier '{0}'
   TS2302 // Static members cannot reference class type parameters
 
@@ -787,6 +792,11 @@ pub fn DiagnosticCode::to_int(self : DiagnosticCode) -> Int {
     TS1308 => 1308
     TS1357 => 1357
     TS1359 => 1359
+    TS1361 => 1361
+    TS1362 => 1362
+    TS1363 => 1363
+    TS2206 => 2206
+    TS2207 => 2207
     // Class and Type Parameter Errors
     TS2300 => 2300
     TS2302 => 2302
@@ -1144,6 +1154,11 @@ pub fn DiagnosticCode::from_int(code : Int) -> DiagnosticCode? {
     1308 => Some(TS1308)
     1357 => Some(TS1357)
     1359 => Some(TS1359)
+    1361 => Some(TS1361)
+    1362 => Some(TS1362)
+    1363 => Some(TS1363)
+    2206 => Some(TS2206)
+    2207 => Some(TS2207)
     // Class and Type Parameter Errors
     2300 => Some(TS2300)
     2302 => Some(TS2302)

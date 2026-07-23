@@ -660,6 +660,7 @@ fn TypeChecker::create_type_info(self : TypeChecker) -> (TypeInfo, TypeChecker) 
     current_location: self.current_location,
     external_registry: self.external_registry,
     import_map: self.import_map,
+    type_only_aliases: self.type_only_aliases,
     namespace_symbols: self.namespace_symbols,
     in_destructuring_pattern: self.in_destructuring_pattern,
     in_expression_statement: self.in_expression_statement,
@@ -676,6 +677,7 @@ fn TypeChecker::create_type_info(self : TypeChecker) -> (TypeInfo, TypeChecker) 
     checked_function_bodies: self.checked_function_bodies,
     import_helpers: self.import_helpers,
     in_namespace_body: self.in_namespace_body,
+    in_ambient_context: self.in_ambient_context,
     class_type_parameters: self.class_type_parameters,
   }
   (info, new_checker)

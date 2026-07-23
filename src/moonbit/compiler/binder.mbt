@@ -23,6 +23,7 @@ pub struct Binder {
   global_augmentations : Array[GlobalAugmentation] // Global augmentations (declare global)
   triple_slash_directives : Array[TripleSlashDirective] // Triple-slash directives
   is_external_module : Bool // Track if this file is a module (has imports/exports)
+  in_ambient_context : Bool // True while binding the body of an ambient namespace (declare namespace M) - members are implicitly exported
 } derive(Debug)
 
 ///|
@@ -50,6 +51,7 @@ fn Binder::new(file_path : String) -> Binder {
     global_augmentations: [],
     triple_slash_directives: [],
     is_external_module: false,
+    in_ambient_context: false,
   }
 }
 
@@ -1342,9 +1344,16 @@ fn bind_module_declaration(
     pop_scope(binder)
   } else {
     // Regular namespace declaration
+    // Ambient namespaces (declare namespace M, or namespaces nested inside
+    // one) implicitly export all their members
+    let was_in_ambient_context = binder.in_ambient_context
+    let ns_is_ambient = was_in_ambient_context ||
+      binder_has_declare_modifier(mod_decl.modifiers)
+
     // Push scope and container for module body first
     let binder = push_scope(binder)
     let binder = push_container(binder, ContainerKind::Module)
+    let binder = { ..binder, in_ambient_context: ns_is_ambient }
 
     // Bind module body if present
     // We need to extract statements from the BlockStatement and bind them directly
@@ -1362,8 +1371,9 @@ fn bind_module_declaration(
     module_scope.symbols.each(fn(name, sym) {
       // All members go into locals for internal access
       locals.set(name, sym)
-      // Only exported members go into exports for external access
-      if sym.flags.is_export {
+      // Exported members go into exports for external access; ambient
+      // namespace members are always exported (with or without 'export')
+      if ns_is_ambient || sym.flags.is_export {
         exports.set(name, sym)
       }
     })
@@ -1371,6 +1381,7 @@ fn bind_module_declaration(
     // Pop container and scope
     let binder = pop_container(binder)
     let binder = pop_scope(binder)
+    let binder = { ..binder, in_ambient_context: was_in_ambient_context }
 
     // Now create the namespace symbol with the captured exports and locals
     let symbol = Symbol::new(
@@ -2828,6 +2839,18 @@ fn binder_has_export_modifier(modifiers : Array[Modifier]) -> Bool {
   for i = 0; i < modifiers.length(); i = i + 1 {
     match modifiers[i] {
       Export => return true
+      _ => ()
+    }
+  }
+  false
+}
+
+///|
+/// Check for declare modifier (binder version)
+fn binder_has_declare_modifier(modifiers : Array[Modifier]) -> Bool {
+  for i = 0; i < modifiers.length(); i = i + 1 {
+    match modifiers[i] {
+      Declare => return true
       _ => ()
     }
   }

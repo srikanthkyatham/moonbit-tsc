@@ -44,12 +44,19 @@ pub fn extract_imports_and_references(
 ) -> ImportAndReferenceResult {
   match @compiler.parse_and_bind(source, file_path) {
     Ok(bound_source) => {
-      // Extract imports from AST statements
+      // Extract imports from AST statements. Re-exports
+      // (`export ... from './x'`) are dependencies too: the re-exporting
+      // module's exports cannot be computed before its source module.
       let imports : Array[String] = []
       for statement in bound_source.statements {
         match statement {
           @compiler.ImportDeclaration(import_decl) =>
             imports.push(import_decl.module_specifier)
+          @compiler.ExportDeclaration(export_decl) =>
+            match export_decl.module_specifier {
+              Some(spec) => imports.push(spec)
+              None => ()
+            }
           _ => ()
         }
       }

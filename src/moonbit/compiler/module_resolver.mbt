@@ -616,7 +616,28 @@ fn try_resolve_with_base_url(
 // ============================================================================
 
 ///|
-/// Try to resolve from node_modules directories
+/// Mangle a scoped package name for @types lookup:
+/// "@scope/pkg" -> "scope__pkg"; unscoped names are returned unchanged.
+pub fn mangle_scoped_package_name(package_name : String) -> String {
+  if package_name.has_prefix("@") {
+    let without_at = string_substring(package_name, 1)
+    match string_index_of(without_at, '/') {
+      Some(slash_idx) =>
+        string_substring(without_at, 0, end=slash_idx) +
+        "__" +
+        string_substring(without_at, slash_idx + 1)
+      None => without_at
+    }
+  } else {
+    package_name
+  }
+}
+
+///|
+/// Try to resolve from node_modules directories.
+/// At each directory level, the package itself is tried first, then the
+/// corresponding @types package (with scoped-name mangling), matching
+/// TypeScript's node10 lookup order.
 fn try_resolve_from_node_modules(
   resolver : ModuleResolver,
   module_name : String,
@@ -627,29 +648,32 @@ fn try_resolve_from_node_modules(
 
   // Parse package name (handle scoped packages)
   let (package_name, subpath) = parse_package_name(module_name)
+  let types_package_name = "@types/" + mangle_scoped_package_name(package_name)
 
   // Walk up directory tree
   while true {
     let node_modules_path = join_paths(current_dir, "node_modules")
-    let package_path = join_paths(node_modules_path, package_name)
 
-    // Try to resolve from this node_modules
-    match try_resolve_package(resolver, package_path, subpath, module_name) {
-      Ok(resolved) => {
-        resolved.is_external_library_import = true
-        resolved.package_id = Some(PackageId::{
-          name: package_name,
-          sub_module_name: if subpath.is_empty() {
-            None
-          } else {
-            Some(subpath)
-          },
-          version: None,
-        })
-        return Ok(resolved)
+    // Try the package itself, then its @types counterpart
+    for candidate_name in [package_name, types_package_name] {
+      let package_path = join_paths(node_modules_path, candidate_name)
+      match try_resolve_package(resolver, package_path, subpath, module_name) {
+        Ok(resolved) => {
+          resolved.is_external_library_import = true
+          resolved.package_id = Some(PackageId::{
+            name: candidate_name,
+            sub_module_name: if subpath.is_empty() {
+              None
+            } else {
+              Some(subpath)
+            },
+            version: None,
+          })
+          return Ok(resolved)
+        }
+        Err(ModuleNotFound(_, locs)) => searched.append(locs)
+        Err(_) => ()
       }
-      Err(ModuleNotFound(_, locs)) => searched.append(locs)
-      Err(_) => ()
     }
 
     // Move up one directory

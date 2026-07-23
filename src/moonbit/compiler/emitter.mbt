@@ -1654,11 +1654,56 @@ fn emit_import_equals_declaration(
 }
 
 ///|
+/// Remove type-only bindings from an import declaration for JS emit.
+/// Returns None when the whole statement must be elided (import type ...,
+/// or a named import list where every specifier has the `type` modifier).
+fn elide_type_only_import(id : ImportDeclaration) -> ImportDeclaration? {
+  // `import type ...` is always erased
+  if id.is_type_only {
+    return None
+  }
+  match id.import_clause {
+    Some(clause) =>
+      match clause.named_bindings {
+        Some(NamedImports(specifiers, loc)) => {
+          let value_specifiers = specifiers.filter(fn(spec) {
+            !(spec.is_type_only)
+          })
+          if value_specifiers.length() == specifiers.length() {
+            // Nothing to elide
+            Some(id)
+          } else if value_specifiers.is_empty() && clause.name is None {
+            // All bindings were type-only - drop the entire statement
+            None
+          } else {
+            let named_bindings = if value_specifiers.is_empty() {
+              None
+            } else {
+              Some(NamedImports::NamedImports(value_specifiers, loc))
+            }
+            Some(ImportDeclaration::{
+              ..id,
+              import_clause: Some(ImportClause::{ ..clause, named_bindings, }),
+            })
+          }
+        }
+        _ => Some(id)
+      }
+    None => Some(id)
+  }
+}
+
+///|
 /// Emit import declaration
 fn emit_import_declaration(
   id : ImportDeclaration,
   ctx : EmitterContext,
 ) -> String {
+  // Type-only imports are erased in the JS output
+  let id = match elide_type_only_import(id) {
+    Some(id) => id
+    None => return ""
+  }
   // CommonJS: transform to require() calls
   if ctx.module_kind == CommonJS {
     return emit_import_declaration_commonjs(id, ctx)
@@ -1857,11 +1902,44 @@ fn sanitize_module_name(module_spec : String) -> String {
 }
 
 ///|
+/// Remove type-only bindings from an export declaration for JS emit.
+/// Returns None when the whole statement must be elided (export type ...,
+/// or a named export list where every specifier has the `type` modifier).
+fn elide_type_only_export(ed : ExportDeclaration) -> ExportDeclaration? {
+  // `export type ...` is always erased
+  if ed.is_type_only {
+    return None
+  }
+  match ed.export_clause {
+    Some(NamedExports(specifiers, loc)) => {
+      let value_specifiers = specifiers.filter(fn(spec) { !(spec.is_type_only) })
+      if value_specifiers.length() == specifiers.length() {
+        Some(ed)
+      } else if value_specifiers.is_empty() {
+        // All specifiers were type-only - drop the entire statement
+        None
+      } else {
+        Some(ExportDeclaration::{
+          ..ed,
+          export_clause: Some(NamedExports::NamedExports(value_specifiers, loc)),
+        })
+      }
+    }
+    _ => Some(ed)
+  }
+}
+
+///|
 /// Emit export declaration
 fn emit_export_declaration(
   ed : ExportDeclaration,
   ctx : EmitterContext,
 ) -> String {
+  // Type-only exports are erased in the JS output
+  let ed = match elide_type_only_export(ed) {
+    Some(ed) => ed
+    None => return ""
+  }
   // CommonJS: transform to module.exports or Object.assign
   if ctx.module_kind == CommonJS {
     return emit_export_declaration_commonjs(ed, ctx)

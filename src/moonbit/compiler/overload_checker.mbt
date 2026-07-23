@@ -112,8 +112,11 @@ pub fn collect_overloads(
       ModuleDeclaration(mod_decl) =>
         match mod_decl.body {
           Some(BlockStatement(block)) => {
-            // If this is an ambient module (declare module "foo"), functions inside are ambient
-            let module_is_ambient = is_ambient_file || mod_decl.is_ambient
+            // If this is an ambient module (declare module "foo") or ambient
+            // namespace (declare namespace M), functions inside are ambient
+            let module_is_ambient = is_ambient_file ||
+              mod_decl.is_ambient ||
+              overload_has_declare_modifier(mod_decl.modifiers)
             let module_overloads = collect_overloads(
               block.statements,
               module_is_ambient,
@@ -789,8 +792,10 @@ pub fn check_statement_overloads(
   statements : Array[Node],
   checker : TypeChecker,
 ) -> TypeChecker {
-  // Check if this is a .d.ts file - functions without bodies are ambient in .d.ts
-  let is_ambient_file = checker.file_path.has_suffix(".d.ts")
+  // Functions without bodies are ambient in .d.ts files and inside ambient
+  // contexts (declare namespace/module bodies)
+  let is_ambient_file = checker.file_path.has_suffix(".d.ts") ||
+    checker.in_ambient_context
   let overloads_map = collect_overloads(statements, is_ambient_file)
   let checker = checker
   overloads_map.each(fn(_name, overloads) {
@@ -888,8 +893,12 @@ fn extract_constructor_signature(
 
 ///|
 /// Validate constructor overloads (TS2390)
+/// is_ambient: true for ambient classes (declare class, declare namespace
+/// bodies, .d.ts files) where constructor signatures without an
+/// implementation are legal
 pub fn validate_constructor_overloads(
   overloads : ConstructorOverloads,
+  is_ambient : Bool,
 ) -> OverloadValidationResult {
   let errors : Array[OverloadError] = []
 
@@ -898,8 +907,8 @@ pub fn validate_constructor_overloads(
     return { errors, is_valid: true }
   }
 
-  // Check TS2390: Missing implementation
-  if overloads.implementation is None {
+  // Check TS2390: Missing implementation (not required in ambient contexts)
+  if !(is_ambient) && overloads.implementation is None {
     errors.push({
       kind: MissingImplementation,
       message: "Constructor implementation is missing.",
@@ -915,10 +924,11 @@ pub fn validate_constructor_overloads(
 pub fn check_class_constructor_overloads(
   class_name : String,
   members : Array[Node],
+  is_ambient : Bool,
   checker : TypeChecker,
 ) -> TypeChecker {
   let overloads = collect_constructor_overloads(class_name, members)
-  let result = validate_constructor_overloads(overloads)
+  let result = validate_constructor_overloads(overloads, is_ambient)
 
   // Add diagnostics for any errors
   for err in result.errors {

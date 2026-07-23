@@ -6192,3 +6192,165 @@ test "spread of generic type parameter in generic rest call does not hang" {
     Err(diags) => assert_true(diags.length() > 0)
   }
 }
+
+// ============================================================================
+// Ambient declaration regression tests (TS2390/TS2391/TS2339)
+// Ambient contexts (declare class / declare namespace / .d.ts) legally omit
+// implementations and implicitly export namespace members; the same code
+// outside an ambient context must still error.
+// ============================================================================
+
+///|
+/// Collect all check diagnostics for a source, whether checking succeeded
+/// (diagnostics on the typed file) or failed (diagnostics in the error)
+fn ambient_test_diagnostics(source : String) -> Array[Diagnostic] {
+  match parse_bind_and_check(source) {
+    Ok(typed) => typed.diagnostics
+    Err(diags) => diags
+  }
+}
+
+///|
+fn ambient_test_has_code(diags : Array[Diagnostic], code : Int) -> Bool {
+  diags.iter().any(fn(d) { d.code == code })
+}
+
+///|
+test "declare class constructor signature needs no implementation (no TS2390)" {
+  let source =
+    #|declare class cls {
+    #|    constructor();
+    #|    method(): cls;
+    #|}
+  let diags = ambient_test_diagnostics(source)
+  assert_false(ambient_test_has_code(diags, 2390))
+}
+
+///|
+test "non-ambient constructor overload without implementation reports TS2390" {
+  let source =
+    #|class C {
+    #|    constructor();
+    #|}
+  let diags = ambient_test_diagnostics(source)
+  assert_true(ambient_test_has_code(diags, 2390))
+}
+
+///|
+test "declare namespace function signature needs no implementation (no TS2391)" {
+  let source =
+    #|declare namespace M1 {
+    #|    var x;
+    #|    function fn(): number;
+    #|}
+  let diags = ambient_test_diagnostics(source)
+  assert_false(ambient_test_has_code(diags, 2391))
+}
+
+///|
+test "non-ambient namespace function signature reports TS2391" {
+  let source =
+    #|namespace N {
+    #|    export function g(): number;
+    #|}
+  let diags = ambient_test_diagnostics(source)
+  assert_true(ambient_test_has_code(diags, 2391))
+}
+
+///|
+test "declare namespace members are implicitly exported (no TS2339)" {
+  let source =
+    #|declare namespace M1 {
+    #|    var x;
+    #|    function fn(): number;
+    #|}
+    #|var p = M1.x;
+    #|var q = M1.fn();
+  let diags = ambient_test_diagnostics(source)
+  assert_false(ambient_test_has_code(diags, 2339))
+  assert_false(ambient_test_has_code(diags, 2391))
+}
+
+///|
+test "class inside declare namespace is ambient (no TS2390)" {
+  let source =
+    #|declare namespace M {
+    #|    class K {
+    #|        constructor();
+    #|    }
+    #|}
+  let diags = ambient_test_diagnostics(source)
+  assert_false(ambient_test_has_code(diags, 2390))
+}
+
+///|
+test "namespace nested in declare namespace is ambient (no TS2391/TS2339)" {
+  let source =
+    #|declare namespace A {
+    #|    namespace B {
+    #|        function f(): void;
+    #|    }
+    #|}
+    #|var r = A.B.f();
+  let diags = ambient_test_diagnostics(source)
+  assert_false(ambient_test_has_code(diags, 2391))
+  assert_false(ambient_test_has_code(diags, 2339))
+}
+
+///|
+test "top-level function signature without implementation still reports TS2391" {
+  let source =
+    #|function f(x: string): void;
+    #|var y = 1;
+  let diags = ambient_test_diagnostics(source)
+  assert_true(ambient_test_has_code(diags, 2391))
+}
+
+///|
+test "declare function needs no implementation (no TS2391)" {
+  let source =
+    #|declare function fn1();
+    #|declare function fn2(n: string): number;
+  let diags = ambient_test_diagnostics(source)
+  assert_false(ambient_test_has_code(diags, 2391))
+}
+
+///|
+test "const without initializer in declare module body is legal (no TS1155)" {
+  let source =
+    #|declare module "foo" {
+    #|    export const bar: number;
+    #|}
+  let diags = ambient_test_diagnostics(source)
+  assert_false(ambient_test_has_code(diags, 1155))
+}
+
+///|
+test "non-ambient const without initializer still reports TS1155" {
+  let source =
+    #|const x: number;
+  let diags = ambient_test_diagnostics(source)
+  assert_true(ambient_test_has_code(diags, 1155))
+}
+
+///|
+test "namespace import of unresolved module used as value gets no TS2710" {
+  // The import itself reports TS2307 (module not found); the binding is
+  // treated as 'any', so using it as a value must not add TS2710 on top
+  let source =
+    #|import * as baz from "fs";
+    #|baz();
+  let diags = ambient_test_diagnostics(source)
+  assert_false(ambient_test_has_code(diags, 2710))
+}
+
+///|
+test "type-only namespace used as value still reports TS2710" {
+  let source =
+    #|namespace OnlyTypes {
+    #|    export type T = number;
+    #|}
+    #|var v = OnlyTypes;
+  let diags = ambient_test_diagnostics(source)
+  assert_true(ambient_test_has_code(diags, 2710))
+}

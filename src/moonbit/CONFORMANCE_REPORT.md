@@ -41,6 +41,16 @@ green on the same build.
 > 8 → 4). TS5107 was the #1 missing code (874 tests). Spot check:
 > es6/computedProperties strict 62/142 → 121/142 (85.2%).
 
+> **Post-wave-4b update (July 23, 2026).** After T12 (ambient-context
+> propagation: TS2390/2391/1155 no longer fire in `declare` contexts, ambient
+> namespace members implicitly exported), T13 (type-only import/export
+> semantics: TS1361/1362/1363, emit elision, star re-export chains), and T14
+> (node_modules/package.json resolution: `types`/`main`, `@types` with scoped
+> mangling, ambient `declare module` matching, TS7016 for untyped `.js`):
+> **loose 4,017/5,693 = 70.6%; strict 2,030/5,693 = 35.7%.**
+> Category strict moves: externalModules 37 → 82/227, moduleResolution
+> 4 → 15/51, ambient 7 → 11/22. Unit suite: 5,203/5,203.
+
 - **Loose** counts a pass when "compiler reported errors" matches "a
   `.errors.txt` baseline exists" — presence only, not which errors.
 - **Strict** compares the *set* of `TSxxxx` codes emitted against the codes in
