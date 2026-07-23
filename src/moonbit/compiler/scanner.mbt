@@ -1282,6 +1282,14 @@ pub fn tokenize_v2(source : String, file_path : String) -> Array[Token] {
           state.offset += 2
           (scan_decimal_digits(rest4, state, num), true)
         }
+        // Trailing-dot numeric literal (`1.`); a following `.` (as in
+        // `1..toString()`) is then correctly scanned as property access
+        ['.', .. rest4] => {
+          num.write_char('.')
+          state.col += 1
+          state.offset += 1
+          (rest4, true)
+        }
         _ => (rest2, false)
       }
       // Exponent part

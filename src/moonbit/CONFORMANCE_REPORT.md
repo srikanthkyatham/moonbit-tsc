@@ -51,6 +51,16 @@ green on the same build.
 > Category strict moves: externalModules 37 → 82/227, moduleResolution
 > 4 → 15/51, ambient 7 → 11/22. Unit suite: 5,203/5,203.
 
+> **Post-wave-5a update (July 23, 2026).** After T16 (TS2304 for unresolved
+> type-position names, with a declared-name suppression set for zero false
+> positives), T17 (TS2339 on union/intersection property access +
+> discriminant narrowing + a narrowing scope-leak fix), and T19 (wrapper
+> object→primitive rejection with TS2696 member-hiding, nominal enum
+> assignability via enum_registry.mbt, strictNullChecks undefined/null
+> exclusion): **loose 4,046/5,693 = 71.1%; strict 2,061/5,693 = 36.2%.**
+> types strict 201 → 224/842, expressions 85 → 91/376.
+> Unit suite: 5,264/5,264.
+
 - **Loose** counts a pass when "compiler reported errors" matches "a
   `.errors.txt` baseline exists" — presence only, not which errors.
 - **Strict** compares the *set* of `TSxxxx` codes emitted against the codes in

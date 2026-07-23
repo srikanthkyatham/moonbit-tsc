@@ -189,3 +189,276 @@ pub fn make_binary_method(
     info
   )
 }
+
+///|
+/// Check whether a type name is a global type provided by the TypeScript
+/// standard library (lib.es5.d.ts through lib.esnext.d.ts, plus common
+/// DOM / WebWorker / scripthost globals). We do not model the full standard
+/// library in the symbol table, so TS2304 ("Cannot find name") must be
+/// suppressed for these names in type position to avoid false positives.
+pub fn is_known_lib_type_name(name : String) -> Bool {
+  // Large lib.dom.d.ts families, matched by prefix
+  if name.has_prefix("HTML") ||
+    name.has_prefix("SVG") ||
+    name.has_prefix("CSS") ||
+    name.has_prefix("IDB") ||
+    name.has_prefix("RTC") ||
+    name.has_prefix("WebGL") ||
+    name.has_prefix("GPU") ||
+    name.has_prefix("Intl") ||
+    name.has_prefix("MediaStream") ||
+    name.has_prefix("Audio") ||
+    name.has_prefix("Speech") ||
+    name.has_prefix("Performance") ||
+    name.has_prefix("Payment") ||
+    name.has_prefix("Push") ||
+    name.has_prefix("Service") ||
+    name.has_prefix("Text") ||
+    name.has_prefix("Touch") ||
+    name.has_prefix("Track") ||
+    name.has_prefix("URL") ||
+    name.has_prefix("WebSocket") ||
+    name.has_prefix("Worker") ||
+    name.has_prefix("XML") ||
+    name.has_prefix("XPath") {
+    return true
+  }
+  // lib.es5.d.ts interface families, matched by suffix
+  if name.has_suffix("Constructor") ||
+    name.has_suffix("EventMap") ||
+    name.has_suffix("EventInit") ||
+    name.has_suffix("Event") ||
+    name.has_suffix("EventTarget") ||
+    name.has_suffix("EventHandler") ||
+    name.has_suffix("ElementTagNameMap") ||
+    name.has_suffix("Options") ||
+    name.has_suffix("Init") ||
+    name.has_suffix("Callback") ||
+    name.has_suffix("State") ||
+    name.has_suffix("List") ||
+    name.has_suffix("Observer") ||
+    name.has_suffix("ObserverEntry") ||
+    name.has_suffix("Registry") {
+    return true
+  }
+  match name {
+    // Lowercase intrinsic keywords that can arrive as type references
+    "object"
+    | "symbol"
+    | "bigint"
+    | "null"
+    | "true"
+    | "false"
+    | "this"
+    | "globalThis"
+    | "intrinsic"
+    // ECMAScript global object/value types (lib.es5.d.ts+)
+    | "Array"
+    | "ArrayLike"
+    | "ReadonlyArray"
+    | "ConcatArray"
+    | "Object"
+    | "Function"
+    | "CallableFunction"
+    | "NewableFunction"
+    | "String"
+    | "Number"
+    | "Boolean"
+    | "Symbol"
+    | "BigInt"
+    | "Date"
+    | "RegExp"
+    | "RegExpMatchArray"
+    | "RegExpExecArray"
+    | "Error"
+    | "EvalError"
+    | "RangeError"
+    | "ReferenceError"
+    | "SyntaxError"
+    | "TypeError"
+    | "URIError"
+    | "AggregateError"
+    | "SuppressedError"
+    | "Promise"
+    | "PromiseLike"
+    | "Thenable"
+    | "Generator"
+    | "GeneratorFunction"
+    | "AsyncGenerator"
+    | "AsyncGeneratorFunction"
+    | "Iterator"
+    | "Iterable"
+    | "IterableIterator"
+    | "IteratorObject"
+    | "ArrayIterator"
+    | "MapIterator"
+    | "SetIterator"
+    | "StringIterator"
+    | "IteratorResult"
+    | "IteratorYieldResult"
+    | "IteratorReturnResult"
+    | "AsyncIterator"
+    | "AsyncIterable"
+    | "AsyncIterableIterator"
+    | "AsyncIteratorObject"
+    | "Map"
+    | "WeakMap"
+    | "Set"
+    | "WeakSet"
+    | "ReadonlyMap"
+    | "ReadonlySet"
+    | "WeakRef"
+    | "FinalizationRegistry"
+    | "Proxy"
+    | "ProxyHandler"
+    | "Reflect"
+    | "ArrayBuffer"
+    | "ArrayBufferLike"
+    | "ArrayBufferView"
+    | "ArrayBufferTypes"
+    | "SharedArrayBuffer"
+    | "DataView"
+    | "Int8Array"
+    | "Uint8Array"
+    | "Uint8ClampedArray"
+    | "Int16Array"
+    | "Uint16Array"
+    | "Int32Array"
+    | "Uint32Array"
+    | "Float16Array"
+    | "Float32Array"
+    | "Float64Array"
+    | "BigInt64Array"
+    | "BigUint64Array"
+    | "Atomics"
+    | "JSON"
+    | "Math"
+    | "Intl"
+    | "PropertyKey"
+    | "PropertyDescriptor"
+    | "PropertyDescriptorMap"
+    | "TypedPropertyDescriptor"
+    | "TemplateStringsArray"
+    | "ImportMeta"
+    | "ImportCallOptions"
+    | "ImportAssertions"
+    | "ImportAttributes"
+    | "IArguments"
+    | "Disposable"
+    | "AsyncDisposable"
+    | "DisposableStack"
+    | "AsyncDisposableStack"
+    // Utility types (lib.es5.d.ts)
+    | "Awaited"
+    | "Partial"
+    | "Required"
+    | "Readonly"
+    | "Pick"
+    | "Record"
+    | "Exclude"
+    | "Extract"
+    | "Omit"
+    | "NonNullable"
+    | "Parameters"
+    | "ConstructorParameters"
+    | "ReturnType"
+    | "InstanceType"
+    | "ThisParameterType"
+    | "OmitThisParameter"
+    | "ThisType"
+    | "Uppercase"
+    | "Lowercase"
+    | "Capitalize"
+    | "Uncapitalize"
+    | "NoInfer"
+    // Decorators (lib.es5.d.ts / lib.decorators.d.ts)
+    | "ClassDecorator"
+    | "PropertyDecorator"
+    | "MethodDecorator"
+    | "ParameterDecorator"
+    | "ClassMemberDecoratorContext"
+    | "DecoratorContext"
+    | "DecoratorMetadata"
+    | "DecoratorMetadataObject"
+    | "ClassMethodDecoratorContext"
+    | "ClassGetterDecoratorContext"
+    | "ClassSetterDecoratorContext"
+    | "ClassFieldDecoratorContext"
+    | "ClassAccessorDecoratorContext"
+    | "ClassAccessorDecoratorTarget"
+    | "ClassAccessorDecoratorResult"
+    // Common DOM / WebWorker globals (lib.dom.d.ts default lib)
+    | "Window"
+    | "Document"
+    | "DocumentFragment"
+    | "Element"
+    | "Node"
+    | "Attr"
+    | "CharacterData"
+    | "Comment"
+    | "Range"
+    | "Selection"
+    | "ShadowRoot"
+    | "Event"
+    | "EventTarget"
+    | "EventListener"
+    | "EventListenerObject"
+    | "Console"
+    | "Storage"
+    | "Location"
+    | "History"
+    | "Navigator"
+    | "Screen"
+    | "XMLHttpRequest"
+    | "FormData"
+    | "Blob"
+    | "File"
+    | "FileList"
+    | "FileReader"
+    | "Headers"
+    | "Request"
+    | "Response"
+    | "WebSocket"
+    | "Worker"
+    | "MessagePort"
+    | "MessageChannel"
+    | "BroadcastChannel"
+    | "AbortController"
+    | "AbortSignal"
+    | "DOMException"
+    | "DOMParser"
+    | "DOMStringMap"
+    | "DOMTokenList"
+    | "DOMRect"
+    | "DOMRectReadOnly"
+    | "ClientRect"
+    | "MutationObserver"
+    | "IntersectionObserver"
+    | "ResizeObserver"
+    | "Performance"
+    | "Crypto"
+    | "SubtleCrypto"
+    | "TextEncoder"
+    | "TextDecoder"
+    | "ReadableStream"
+    | "WritableStream"
+    | "TransformStream"
+    | "CanvasRenderingContext2D"
+    | "ImageData"
+    | "ImageBitmap"
+    | "Animation"
+    | "StyleSheet"
+    | "MediaQueryList"
+    | "MutationRecord"
+    | "NamedNodeMap"
+    | "HTMLCollection"
+    | "HTMLCollectionOf"
+    | "NodeListOf"
+    | "GlobalEventHandlers"
+    | "WindowOrWorkerGlobalScope"
+    // scripthost lib
+    | "ActiveXObject"
+    | "VarDate" => true
+    _ => false
+  }
+}

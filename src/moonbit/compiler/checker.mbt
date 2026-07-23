@@ -311,6 +311,7 @@ pub struct TypeChecker {
   in_namespace_body : Bool // Tracks if we're in a namespace/module body (for TS2331)
   in_ambient_context : Bool // Tracks if we're inside an ambient declaration (declare namespace/module) - implementations are legally absent
   class_type_parameters : Array[String] // Current class type parameter names (for TS2302 static member validation)
+  declared_type_names : @hashset.HashSet[String] // All names declared anywhere in the file (types, type parameters, values) - suppresses TS2304 false positives
 } derive(Debug)
 
 ///|
@@ -411,6 +412,7 @@ pub fn TypeChecker::new_with_options(
     in_namespace_body: false,
     in_ambient_context: false,
     class_type_parameters: [], // Empty initially, set when checking class declarations
+    declared_type_names: @hashset.HashSet([]), // Populated from the AST before checking statements
   }
 }
 
@@ -1597,6 +1599,9 @@ fn type_is_bigint(t : Type) -> Bool {
 fn type_is_string_like(t : Type) -> Bool {
   match t {
     String(_) | StringLiteral(_, _) | TemplateLiteral(_) => true
+    // String enums behave like strings (e.g. in `+` concatenation)
+    TypeReference(r) => enum_is_pure_string(r)
+    Union(u) => u.types.length() > 0 && u.types.iter().all(type_is_string_like)
     _ => false
   }
 }
@@ -2424,10 +2429,16 @@ pub fn check_source_file_with_options(
   target : Target,
   no_implicit_any? : Bool = false,
   module_kind? : ModuleKind = ESModule,
+  has_parse_errors? : Bool = false,
 ) -> CheckResult {
   let (snc, spi) = effective_strict_flags(bound.compiler_directives)
   let nia = no_implicit_any ||
     effective_no_implicit_any(bound.compiler_directives, bound.file_path)
+  // Register enum declarations for nominal enum assignability checks
+  clear_enum_registry()
+  register_enums_in_statements(bound.statements)
+  // The pure assignability relation gates undefined/null on this flag
+  set_strict_null_assignability(snc)
   let mut checker = TypeChecker::new_with_options(
     bound.file_path,
     Some(bound.global_scope),
@@ -2486,6 +2497,14 @@ pub fn check_source_file_with_options(
   let module_decls = scan_block_scoped_declarations(bound.statements)
   let checker = { ..checker, block_scoped_decls: module_decls }
 
+  // Pre-collect all declared names in the file so TS2304 (unresolved type
+  // name) is only reported for names that are genuinely undeclared.
+  // With parse errors the AST is partial, so suppress TS2304 entirely.
+  let declared_type_names = collect_declared_type_names(bound.statements)
+  if has_parse_errors {
+    declared_type_names.add(SUPPRESS_ALL_UNRESOLVED_TYPE_NAMES)
+  }
+  let checker = { ..checker, declared_type_names, }
   let checker = check_statements(checker, bound.statements)
   // Pop the top-level scope
   let checker = pop_local_scope(checker)
@@ -2521,10 +2540,16 @@ pub fn check_source_file_with_external_types(
   no_implicit_any? : Bool = false,
   module_kind? : ModuleKind = ESModule,
   import_helpers? : Bool = false,
+  has_parse_errors? : Bool = false,
 ) -> CheckResult {
   let (snc, spi) = effective_strict_flags(bound.compiler_directives)
   let nia = no_implicit_any ||
     effective_no_implicit_any(bound.compiler_directives, bound.file_path)
+  // Register enum declarations for nominal enum assignability checks
+  clear_enum_registry()
+  register_enums_in_statements(bound.statements)
+  // The pure assignability relation gates undefined/null on this flag
+  set_strict_null_assignability(snc)
   let mut checker = TypeChecker::new_with_options(
     bound.file_path,
     Some(bound.global_scope),
@@ -2604,6 +2629,14 @@ pub fn check_source_file_with_external_types(
   let module_decls = scan_block_scoped_declarations(bound.statements)
   let checker = { ..checker, block_scoped_decls: module_decls }
 
+  // Pre-collect all declared names in the file so TS2304 (unresolved type
+  // name) is only reported for names that are genuinely undeclared.
+  // With parse errors the AST is partial, so suppress TS2304 entirely.
+  let declared_type_names = collect_declared_type_names(bound.statements)
+  if has_parse_errors {
+    declared_type_names.add(SUPPRESS_ALL_UNRESOLVED_TYPE_NAMES)
+  }
+  let checker = { ..checker, declared_type_names, }
   let checker = check_statements(checker, bound.statements)
   // Pop the top-level scope
   let checker = pop_local_scope(checker)
@@ -3516,8 +3549,10 @@ fn check_module_declaration(
       // Use locals (all members) for internal namespace scope, not just exports
       match ns_symbol.locals {
         Some(locals) => {
-          // Push the namespace locals as a local scope
-          let checker = push_local_scope(checker)
+          // Push the namespace locals as a function scope: a namespace body
+          // is a `var`-hoisting boundary, so its vars must not collide with
+          // (or overwrite) same-named vars of the enclosing scope (TS2403)
+          let checker = push_function_scope(checker)
           // Add all locals to namespace_symbols so lookup_symbol can find them
           // Use direct map mutation (Map.set mutates in place)
           locals.each(fn(name, sym) { checker.namespace_symbols.set(name, sym) })
@@ -4195,8 +4230,16 @@ fn check_variable_declaration(
 
   // Check compatibility if both are present using check_assignment_compatibility
   let checker = match (declared_type, init_type) {
-    (Some(decl_t), Some(init_t)) =>
+    (Some(decl_t), Some(init_t)) => {
+      // Keep numeric literal values when assigning to an enum type
+      // (a literal is only assignable when it matches a member value)
+      let (init_t, checker) = match decl.initializer {
+        Some(init_expr) =>
+          refine_numeric_literal_source(checker, init_expr, init_t, decl_t)
+        None => (init_t, checker)
+      }
       check_assignment_compatibility(checker, init_t, decl_t, decl.location)
+    }
     _ => checker
   }
 
@@ -7390,13 +7433,22 @@ fn infer_binary_expression_type(
       // Only check if we have a valid target type (not any type for undeclared identifiers)
       let checker = match target_type {
         Any(_) => checker // Skip check for any type (undeclared variables, unresolved parameters)
-        _ =>
+        _ => {
+          // Keep numeric literal values when assigning to an enum type
+          // (a literal is only assignable when it matches a member value)
+          let (refined_right, checker) = refine_numeric_literal_source(
+            checker,
+            bin_expr.right,
+            right_type,
+            target_type,
+          )
           check_assignment_compatibility(
             checker,
-            right_type,
+            refined_right,
             target_type,
             get_node_location(BinaryExpression(bin_expr)),
           )
+        }
       }
       (right_type, checker)
     }
@@ -7457,7 +7509,13 @@ fn infer_unary_expression_type(
           un_expr.operator,
           get_node_location(UnaryExpression(un_expr)),
         )
-        number_type(checker)
+        // A negated numeric literal is itself a literal type (-1 has type
+        // -1), which matters for e.g. enum member value checks
+        match (un_expr.operator, operand_type) {
+          (UnaryOperator::Minus, NumberLiteral(v, _)) =>
+            number_literal_type(checker, -v)
+          _ => number_type(checker)
+        }
       }
     LogicalNot => boolean_type(checker)
     Increment | Decrement => {
@@ -7875,7 +7933,9 @@ fn check_function_call_args(
         }
       } else {
         // Regular parameter (including expanded from tuple rest)
-        if !(is_assignable(arg_types[i], param.param_type)) {
+        // An optional parameter's type implicitly includes undefined
+        if !(param.is_optional && type_is_nullish_undefined(arg_types[i])) &&
+          !(is_assignable(arg_types[i], param.param_type)) {
           checker = add_diagnostic_with_code(
             checker,
             "Argument of type '\{type_to_string(arg_types[i])}' is not assignable to parameter '\{param.name}' of type '\{type_to_string(param.param_type)}'",
@@ -8080,6 +8140,10 @@ fn try_signature(
       }
     } else {
       param.param_type
+    }
+    // An optional parameter's type implicitly includes undefined
+    if param.is_optional && type_is_nullish_undefined(arg_types[i]) {
+      continue
     }
     let assignable = is_assignable(arg_types[i], expected_type)
     if !(assignable) {
@@ -8698,7 +8762,22 @@ fn get_binary_type_guard(
             None =>
               match get_null_guard(bin.left, bin.right) {
                 Some(tg) => Some(tg)
-                None => get_null_guard(bin.right, bin.left)
+                None =>
+                  match get_null_guard(bin.right, bin.left) {
+                    Some(tg) => Some(tg)
+                    None =>
+                      // obj.prop === "literal" (discriminated union)
+                      match
+                        get_discriminant_guard(
+                          checker, bin.left, bin.right, true,
+                        ) {
+                        Some(tg) => Some(tg)
+                        None =>
+                          get_discriminant_guard(
+                            checker, bin.right, bin.left, true,
+                          )
+                      }
+                  }
               }
           }
       }
@@ -8727,7 +8806,13 @@ fn get_binary_type_guard(
                 type_when_true: tg.type_when_false,
                 type_when_false: tg.type_when_true,
               })
-            None => None
+            None =>
+              // obj.prop !== "literal" (discriminated union)
+              match get_discriminant_guard(checker, bin.left, bin.right, false) {
+                Some(tg) => Some(tg)
+                None =>
+                  get_discriminant_guard(checker, bin.right, bin.left, false)
+              }
           }
         }
       }
@@ -8782,6 +8867,212 @@ fn get_null_guard(left : Node, right : Node) -> TypeGuardInfo? {
         type_when_false: None, // Remove null from type
       })
     _ => None
+  }
+}
+
+///|
+/// Compare a discriminant property type against a literal expression node.
+/// Some(true) = definitely equal, Some(false) = definitely different,
+/// None = cannot tell (non-literal property type or unsupported literal).
+fn discriminant_literal_matches(prop_type : Type, literal : Node) -> Bool? {
+  match (prop_type, literal) {
+    (StringLiteral(v, _), StringLiteral(lit)) => Some(v == lit.value)
+    (NumberLiteral(v, _), NumericLiteral(lit)) => {
+      let lit_val = @string.parse_double(lit.value) catch { _ => return None }
+      Some(v == lit_val)
+    }
+    (BooleanLiteral(v, _), BooleanLiteral(lit)) => Some(v == lit.value)
+    // `=== undefined` discriminates members typed undefined from members
+    // with a definite (literal or object) type
+    (Undefined(_), Identifier(id)) if id.name == "undefined" => Some(true)
+    (
+      StringLiteral(_, _)
+      | NumberLiteral(_, _)
+      | BooleanLiteral(_, _)
+      | TemplateLiteral(_)
+      | String(_)
+      | Number(_)
+      | Boolean(_)
+      | BigInt(_)
+      | Object(_)
+      | Function(_)
+      | Array(_)
+      | Tuple(_),
+      Identifier(id),
+    ) if id.name == "undefined" => Some(false)
+    _ => None
+  }
+}
+
+///|
+/// Discriminant type guard: `obj.prop === "literal"` narrows a union-typed
+/// `obj` to the constituents whose `prop` can hold that literal.
+/// `is_equality` is false for `!==`/`!=` checks.
+fn get_discriminant_guard(
+  checker : TypeChecker,
+  left : Node,
+  right : Node,
+  is_equality : Bool,
+) -> TypeGuardInfo? {
+  // Left must be `obj.prop` with `obj` a plain identifier
+  let (obj_name, disc_prop) = match left {
+    PropertyAccessExpression(pa) =>
+      match pa.expression {
+        Identifier(id) => (id.name, pa.name)
+        _ => return None
+      }
+    _ => return None
+  }
+  // Right must be a comparand we understand
+  let mut rhs_is_opaque_enum_member = false
+  match right {
+    StringLiteral(_) | NumericLiteral(_) | BooleanLiteral(_) => ()
+    Identifier(id) if id.name == "undefined" => ()
+    PropertyAccessExpression(rpa) =>
+      // Enum member reference (Choice.Yes). Enum member types are not
+      // modeled precisely enough to discriminate the union, so the guard
+      // conservatively suppresses errors in the true branch instead.
+      match rpa.expression {
+        Identifier(base) =>
+          match lookup_symbol(checker, base.name) {
+            Some(sym) =>
+              if sym.kind == SymbolKind::Enum {
+                rhs_is_opaque_enum_member = true
+              } else {
+                return None
+              }
+            None => return None
+          }
+        _ => return None
+      }
+    _ => return None
+  }
+  // Find the declared type of obj (narrowed > local > global symbol type)
+  let obj_type = match get_narrowed_type(checker, obj_name) {
+    Some(t) => t
+    None =>
+      match lookup_local_variable(checker, obj_name) {
+        Some(t) => t
+        None =>
+          match lookup_symbol(checker, obj_name) {
+            Some(symbol) =>
+              match checker.symbol_types.get(symbol.id) {
+                Some(t) => t
+                None => return None
+              }
+            None => return None
+          }
+      }
+  }
+  // Resolve alias references (type U = A | B) to reach the union itself
+  let obj_type = match obj_type {
+    TypeReference(tr) => {
+      let (resolved, _) = resolve_type_reference(checker, tr)
+      match resolved {
+        // resolve_type_reference leaves type aliases unresolved; resolve
+        // them through their symbol
+        TypeReference(tr2) =>
+          match lookup_symbol(checker, tr2.name) {
+            Some(sym) =>
+              if sym.kind == SymbolKind::Type {
+                match resolve_type_alias_type(checker, sym) {
+                  (Some(t), _) => t
+                  (None, _) => resolved
+                }
+              } else {
+                resolved
+              }
+            None => resolved
+          }
+        other => other
+      }
+    }
+    other => other
+  }
+  let union = match obj_type {
+    Union(ut) => ut
+    _ => return None
+  }
+  // Opaque enum member comparand: we cannot tell which constituents match,
+  // so suppress union property errors in the branch by narrowing to any
+  if rhs_is_opaque_enum_member {
+    let (info, _) = create_type_info(checker)
+    return Some({
+      parameter_name: obj_name,
+      type_when_true: Some(Any(info)),
+      type_when_false: None,
+    })
+  }
+  // Partition constituents by how their discriminant compares to the literal
+  let exact : Array[Type] = [] // discriminant is definitely the literal
+  let possible : Array[Type] = [] // exact or unknown (safe for the true branch)
+  let non_exact : Array[Type] = [] // not definitely the literal
+  let mut has_ambiguous = false // some constituent could not be compared
+  let mut checker2 = checker
+  for i = 0; i < union.types.length(); i = i + 1 {
+    let constituent = union.types[i]
+    let (prop_type_opt, c) = lookup_property_in_type(
+      checker2, constituent, disc_prop,
+    )
+    checker2 = c
+    let verdict = match prop_type_opt {
+      Some(prop_type) => discriminant_literal_matches(prop_type, right)
+      None => None
+    }
+    match verdict {
+      Some(true) => {
+        exact.push(constituent)
+        possible.push(constituent)
+      }
+      Some(false) => non_exact.push(constituent)
+      None => {
+        has_ambiguous = true
+        possible.push(constituent)
+        non_exact.push(constituent)
+      }
+    }
+  }
+  // Without at least one definite match there is no discriminant information
+  if exact.is_empty() {
+    return None
+  }
+  // The guard carries the FINAL narrowed type for each branch, always
+  // wrapped in a Union so apply_type_narrowing can recognize it and use it
+  // verbatim (singletons are unwrapped there). An empty set yields None; a
+  // complete set with ambiguous constituents means a discriminant test was
+  // recognized but its outcome cannot be computed, so the branch narrows to
+  // any (error suppression) instead of producing false positives.
+  fn to_branch_type(types : Array[Type]) -> Type? {
+    if types.is_empty() {
+      None
+    } else if types.length() == union.types.length() {
+      if has_ambiguous {
+        let (info, _) = create_type_info(checker)
+        Some(Any(info))
+      } else {
+        None
+      }
+    } else {
+      Some(Union({ types, info: union.info }))
+    }
+  }
+
+  if is_equality {
+    // true branch: constituents whose discriminant can be the literal;
+    // false branch: constituents not definitely the literal
+    Some({
+      parameter_name: obj_name,
+      type_when_true: to_branch_type(possible),
+      type_when_false: to_branch_type(non_exact),
+    })
+  } else {
+    // !==: true branch keeps constituents not definitely the literal;
+    // false branch keeps constituents whose discriminant can be the literal
+    Some({
+      parameter_name: obj_name,
+      type_when_true: to_branch_type(non_exact),
+      type_when_false: to_branch_type(possible),
+    })
   }
 }
 
@@ -8857,7 +9148,13 @@ fn add_narrowed_type(
   narrowed_type : Type,
 ) -> TypeChecker {
   let narrowed = create_narrowed_type(original_type, narrowed_type)
-  let new_narrowed_types = checker.narrowed_types
+  // Copy-on-write: never mutate the shared map, so callers that saved a
+  // reference to the previous narrowed_types (if/switch branch handling)
+  // can restore it after the branch
+  let new_narrowed_types : Map[String, NarrowedType] = Map([])
+  for k, v in checker.narrowed_types {
+    new_narrowed_types.set(k, v)
+  }
   new_narrowed_types.set(variable_name, narrowed)
   { ..checker, narrowed_types: new_narrowed_types }
 }
@@ -8877,8 +9174,13 @@ fn remove_narrowed_type(
   checker : TypeChecker,
   variable_name : String,
 ) -> TypeChecker {
-  let new_narrowed_types = checker.narrowed_types
-  new_narrowed_types.remove(variable_name)
+  // Copy-on-write (see add_narrowed_type)
+  let new_narrowed_types : Map[String, NarrowedType] = Map([])
+  for k, v in checker.narrowed_types {
+    if k != variable_name {
+      new_narrowed_types.set(k, v)
+    }
+  }
   { ..checker, narrowed_types: new_narrowed_types }
 }
 
@@ -9010,31 +9312,41 @@ fn apply_type_narrowing(
     Some(t) =>
       // If original is a union type and narrowed type is specified,
       // use narrow_union to exclude non-matching types
-      match original_type {
-        Union(union) =>
-          // For the true branch, keep only types matching the narrowed type
-          // For the false branch, exclude the narrowed type from the union
-          if is_true_branch {
-            // Keep only types that are assignable to the narrowed type
-            let kept_types : Array[Type] = []
-            for union_member in union.types {
-              if types_are_identical(union_member, t) ||
-                is_assignable(union_member, t) {
-                kept_types.push(union_member)
+      // Union targets are FINAL narrowed types computed by discriminant
+      // guards from the original constituents: use them verbatim
+      // (unwrapping singletons). Any targets are deliberate suppressions
+      // (opaque enum discriminants). Other targets keep the historical
+      // filter/exclude behavior.
+      match t {
+        Union(tu) => if tu.types.length() == 1 { tu.types[0] } else { t }
+        Any(_) => t
+        _ =>
+          match original_type {
+            Union(union) =>
+              // For the true branch, keep only types matching the narrowed
+              // type; for the false branch, exclude it from the union
+              if is_true_branch {
+                // Keep only types that are assignable to the narrowed type
+                let kept_types : Array[Type] = []
+                for union_member in union.types {
+                  if types_are_identical(union_member, t) ||
+                    is_assignable(union_member, t) {
+                    kept_types.push(union_member)
+                  }
+                }
+                if kept_types.length() == 1 {
+                  kept_types[0]
+                } else if kept_types.is_empty() {
+                  t // Fall back to the narrowed type
+                } else {
+                  Union({ types: kept_types, info: union.info })
+                }
+              } else {
+                // Exclude the type from the union
+                narrow_union(union, [t])
               }
-            }
-            if kept_types.length() == 1 {
-              kept_types[0]
-            } else if kept_types.is_empty() {
-              t // Fall back to the narrowed type
-            } else {
-              Union({ types: kept_types, info: union.info })
-            }
-          } else {
-            // Exclude the type from the union
-            narrow_union(union, [t])
+            _ => t
           }
-        _ => t
       }
     None => original_type // No narrowing available
   }
@@ -9061,8 +9373,20 @@ fn apply_narrowing_to_checker(
   // Apply type narrowing using the apply_type_narrowing function
   let narrowed = apply_type_narrowing(original, type_guard_info, is_true_branch)
 
+  // An Any target is a deliberate suppression (opaque enum discriminant):
+  // record it even when the original type is unknown (also Any)
+  let force_apply = match
+    (if is_true_branch {
+      type_guard_info.type_when_true
+    } else {
+      type_guard_info.type_when_false
+    }) {
+    Some(Any(_)) => true
+    _ => false
+  }
+
   // Check if narrowing was effective (different from original)
-  if !(types_are_identical(original, narrowed)) {
+  if force_apply || !(types_are_identical(original, narrowed)) {
     add_narrowed_type(
       checker,
       type_guard_info.parameter_name,
@@ -9356,6 +9680,22 @@ fn lookup_property_in_type(
           }
       }
     TypeReference(type_ref) => {
+      // Unresolved primitive wrapper types (Boolean/Number/String interfaces)
+      // expose the same properties as their primitive counterparts; the
+      // global Object type exposes the Object.prototype members
+      if is_global_wrapper_object_name(type_ref.name) &&
+        type_ref.type_arguments.length() == 0 &&
+        lookup_symbol(checker, type_ref.name) is None {
+        if type_ref.name == "Object" {
+          return lookup_object_interface_member(checker, prop_name)
+        }
+        let (prim, checker) = match type_ref.name {
+          "Boolean" => boolean_type(checker)
+          "Number" => number_type(checker)
+          _ => string_type(checker)
+        }
+        return lookup_property_in_type(checker, prim, prop_name)
+      }
       // Handle built-in Promise methods
       if type_ref.name == "Promise" || type_ref.name == "PromiseLike" {
         match prop_name {
@@ -9514,13 +9854,17 @@ fn lookup_property_in_type(
         (None, checker)
       }
     }
-    Intersection(intersection_type) => {
-      // Property can be from any intersection member
+    Intersection(it) => {
+      // Property can come from any intersection member. tsc types the result
+      // as the intersection of all declaring constituents' property types;
+      // here the first match is used, because folding differing primitive
+      // types into `number & string` produces extra assignability errors
+      // (e.g. intersectionTypeReadonly) that tsc does not report.
       let mut checker = checker
-      for i = 0; i < intersection_type.types.length(); i = i + 1 {
+      for i = 0; i < it.types.length(); i = i + 1 {
         let (prop_type_opt, c) = lookup_property_in_type(
           checker,
-          intersection_type.types[i],
+          it.types[i],
           prop_name,
         )
         checker = c
@@ -9679,6 +10023,218 @@ fn find_string_index_signature(
     }
   }
   None
+}
+
+///|
+/// Members inherited from Object.prototype that exist on every object value.
+/// The property maps built by the checker do not include them, so a failed
+/// lookup of these names must never produce TS2339.
+fn is_object_prototype_member(prop_name : String) -> Bool {
+  match prop_name {
+    "toString"
+    | "toLocaleString"
+    | "valueOf"
+    | "hasOwnProperty"
+    | "isPrototypeOf"
+    | "propertyIsEnumerable"
+    | "constructor" => true
+    _ => false
+  }
+}
+
+///|
+/// Whether a named type's members are fully known to the checker.
+/// Declarations with heritage clauses are excluded because inherited members
+/// are not yet folded into the property maps.
+fn named_type_members_fully_known(
+  checker : TypeChecker,
+  name : String,
+) -> Bool {
+  match lookup_symbol(checker, name) {
+    Some(symbol) =>
+      match symbol.value_declaration {
+        Some(ClassDeclaration(class_decl)) =>
+          class_decl.heritage_clauses.is_empty()
+        Some(InterfaceDeclaration(interface_decl)) =>
+          interface_decl.heritage_clauses.is_empty()
+        _ => false
+      }
+    None => false
+  }
+}
+
+///|
+/// Whether the checker fully knows the members of a type, so a failed
+/// property lookup can be trusted to mean the property really is missing.
+/// Conservative by design: primitives, arrays, functions, tuples and type
+/// parameters are only partially modeled and return false, as do types with
+/// a string index signature (which satisfies any property name).
+fn type_members_fully_known(
+  checker : TypeChecker,
+  t : Type,
+  depth : Int,
+) -> (Bool, TypeChecker) {
+  if depth <= 0 {
+    return (false, checker)
+  }
+  match t {
+    Object(obj) => {
+      // A string index signature satisfies any property name
+      if find_string_index_signature(obj.index_signatures) is Some(_) {
+        return (false, checker)
+      }
+      match obj.class_name {
+        Some(name) => (named_type_members_fully_known(checker, name), checker)
+        None => (true, checker) // Anonymous object type: members fully known
+      }
+    }
+    TypeReference(type_ref) =>
+      // Type parameters are not fully known (their constraint may be partial)
+      match checker.type_parameter_constraints.get(type_ref.name) {
+        Some(_) => (false, checker)
+        None => {
+          let (resolved, checker) = resolve_type_reference(checker, type_ref)
+          match resolved {
+            TypeReference(rtr) =>
+              if rtr.name == type_ref.name {
+                (named_type_members_fully_known(checker, rtr.name), checker)
+              } else {
+                (false, checker)
+              }
+            other => type_members_fully_known(checker, other, depth - 1)
+          }
+        }
+      }
+    Union(ut) => {
+      let mut checker = checker
+      for i = 0; i < ut.types.length(); i = i + 1 {
+        let (known, c) = type_members_fully_known(checker, ut.types[i], depth - 1)
+        checker = c
+        if !(known) {
+          return (false, checker)
+        }
+      }
+      (true, checker)
+    }
+    Intersection(it) => {
+      let mut checker = checker
+      for i = 0; i < it.types.length(); i = i + 1 {
+        let (known, c) = type_members_fully_known(checker, it.types[i], depth - 1)
+        checker = c
+        if !(known) {
+          return (false, checker)
+        }
+      }
+      (true, checker)
+    }
+    _ => (false, checker)
+  }
+}
+
+///|
+/// TS2339 for property access on a union type: the property must exist on
+/// every constituent. Reports only when at least one constituent whose
+/// members are fully known definitively lacks the property, which avoids
+/// false positives from partially modeled types.
+fn check_union_property_access_error(
+  checker : TypeChecker,
+  ut : CheckerUnionType,
+  object_type : Type,
+  prop_name : String,
+  location : SourceLocation,
+) -> TypeChecker {
+  let mut checker = checker
+  let mut missing_constituent : Type? = None
+  for i = 0; i < ut.types.length(); i = i + 1 {
+    let constituent = ut.types[i]
+    let (prop_type_opt, c) = lookup_property_in_type(
+      checker, constituent, prop_name,
+    )
+    checker = c
+    match prop_type_opt {
+      Some(_) => ()
+      None => {
+        let (fully_known, c2) = type_members_fully_known(checker, constituent, 4)
+        checker = c2
+        if fully_known {
+          missing_constituent = Some(constituent)
+          break
+        }
+      }
+    }
+  }
+  match missing_constituent {
+    Some(constituent) =>
+      add_diagnostic_with_code(
+        checker,
+        "Property '\{prop_name}' does not exist on type '\{type_to_string(object_type)}'. Property '\{prop_name}' does not exist on type '\{type_to_string(constituent)}'.",
+        location,
+        TS2339,
+      )
+    None => checker
+  }
+}
+
+///|
+/// TS2339 for property access on an intersection type: the lookup already
+/// failed for every constituent, so report when all constituents' members
+/// are fully known to the checker.
+fn check_intersection_property_access_error(
+  checker : TypeChecker,
+  object_type : Type,
+  prop_name : String,
+  location : SourceLocation,
+) -> TypeChecker {
+  let (fully_known, checker) = type_members_fully_known(checker, object_type, 4)
+  if fully_known {
+    add_diagnostic_with_code(
+      checker,
+      "Property '\{prop_name}' does not exist on type '\{type_to_string(object_type)}'.",
+      location,
+      TS2339,
+    )
+  } else {
+    checker
+  }
+}
+
+///|
+/// TS2339 for union property access where the property is declared private
+/// or protected in some class constituent: tsc drops such members from the
+/// union type, so the access reports "property does not exist".
+fn check_union_member_visibility(
+  checker : TypeChecker,
+  object_type : Type,
+  prop_name : String,
+  location : SourceLocation,
+) -> TypeChecker {
+  match object_type {
+    Union(ut) => {
+      for i = 0; i < ut.types.length(); i = i + 1 {
+        let class_name_opt = match ut.types[i] {
+          Object(obj) => obj.class_name
+          TypeReference(type_ref) => Some(type_ref.name)
+          _ => None
+        }
+        match class_name_opt {
+          Some(class_name) =>
+            match get_class_member_visibility(checker, class_name, prop_name) {
+              MemberVisibility::Private | MemberVisibility::Protected =>
+                return add_diagnostic_with_code(
+                  checker,
+                  "Property '\{prop_name}' does not exist on type '\{type_to_string(object_type)}'.",
+                  location,
+                  TS2339,
+                )
+              MemberVisibility::Public => ()
+            }
+          None => ()
+        }
+      }
+      checker
+    }
+    _ => checker
+  }
 }
 
 ///|
@@ -10275,6 +10831,22 @@ fn infer_property_access_type(
     _ => ()
   }
 
+  // Enum member access (E.A) has the nominal enum type E
+  match prop.expression {
+    Identifier(id) =>
+      if lookup_local_variable(checker, id.name) is None {
+        match lookup_symbol(checker, id.name) {
+          Some(sym) =>
+            if sym.kind == SymbolKind::Enum &&
+              enum_symbol_has_member(sym, prop.name) {
+              return type_reference_type(checker, id.name, [])
+            }
+          None => ()
+        }
+      }
+    _ => ()
+  }
+
   // Check if base expression is a namespace - handle TS2694
   let namespace_sym = get_namespace_symbol_from_expr(checker, prop.expression)
   match namespace_sym {
@@ -10338,6 +10910,14 @@ fn infer_property_access_type(
             prop.name,
             prop.location,
           )
+          // TS2339: a union property does not exist when it is declared
+          // private or protected in some class constituent
+          let checker = check_union_member_visibility(
+            checker,
+            object_type,
+            prop.name,
+            prop.location,
+          )
           (prop_type, checker)
         }
         None => {
@@ -10358,6 +10938,11 @@ fn infer_property_access_type(
           )
           let checker = match object_type {
             Any(_) | Unknown(_) => checker // Don't error for any/unknown
+            // Primitive wrapper types (Boolean/Number/String interfaces) and
+            // enum types behave like their primitives: unknown members
+            // resolve to any silently
+            TypeReference(type_ref) if is_primitive_wrapper_name(type_ref.name) ||
+              is_enum_type_name(type_ref.name) => checker
             Object(_) | TypeReference(_) =>
               if is_this_expr {
                 // Check if this is 'this' in global scope accessing a restricted property
@@ -10400,6 +10985,31 @@ fn infer_property_access_type(
                       TS2339, // TS2339 is the standard "property does not exist" error
                     )
                 }
+              }
+            Union(ut) =>
+              // TS2339: the property must exist on every union constituent
+              if is_this_expr || is_object_prototype_member(prop.name) {
+                checker
+              } else {
+                check_union_property_access_error(
+                  checker,
+                  ut,
+                  object_type,
+                  prop.name,
+                  get_node_location(prop.expression),
+                )
+              }
+            Intersection(_) =>
+              // TS2339: the property was found on no intersection constituent
+              if is_this_expr || is_object_prototype_member(prop.name) {
+                checker
+              } else {
+                check_intersection_property_access_error(
+                  checker,
+                  object_type,
+                  prop.name,
+                  get_node_location(prop.expression),
+                )
               }
             _ => checker // Don't error for other types yet
           }
@@ -12140,17 +12750,69 @@ fn type_node_references_name(type_node : Node, name : String) -> Bool {
 }
 
 ///|
+/// TS2352: a type assertion between two unrelated types is likely a
+/// mistake. Only checked for primitive-ish types where the assignability
+/// relation is reliable, to avoid false positives
+fn check_assertion_conversion(
+  checker : TypeChecker,
+  source_type : Type,
+  target_type : Type,
+  location : SourceLocation,
+) -> TypeChecker {
+  let source_reliable = is_reliable_assertion_operand(source_type)
+  let target_reliable = is_reliable_assertion_operand(target_type)
+  if source_reliable &&
+    target_reliable &&
+    !is_assignable(source_type, target_type) &&
+    !is_assignable(target_type, source_type) {
+    add_diagnostic_with_code(
+      checker,
+      "Conversion of type '\{type_to_string(source_type)}' to type '\{type_to_string(target_type)}' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.",
+      location,
+      TS2352,
+    )
+  } else {
+    checker
+  }
+}
+
+///|
+/// Types whose assignability relation is precise enough for TS2352
+fn is_reliable_assertion_operand(t : Type) -> Bool {
+  match t {
+    Null(_)
+    | Undefined(_)
+    | Void(_)
+    | Number(_)
+    | String(_)
+    | Boolean(_)
+    | NumberLiteral(_, _)
+    | StringLiteral(_, _)
+    | BooleanLiteral(_, _) => true
+    _ => false
+  }
+}
+
+///|
 /// Infer 'as' expression type (type assertion)
 fn infer_as_expression_type(
   checker : TypeChecker,
   as_expr : AsExpression,
 ) -> (Type, TypeChecker) {
   // Check the expression first
-  let (_, checker) = infer_type(checker, as_expr.expression)
+  let (source_type, checker) = infer_type(checker, as_expr.expression)
   // Return the asserted type
   let (type_opt, checker) = get_type_from_type_node(checker, as_expr.type_node)
   match type_opt {
-    Some(t) => (t, checker)
+    Some(t) => {
+      let checker = check_assertion_conversion(
+        checker,
+        source_type,
+        t,
+        as_expr.location,
+      )
+      (t, checker)
+    }
     None => any_type(checker)
   }
 }
@@ -12163,9 +12825,25 @@ fn infer_non_null_expression_type(
 ) -> (Type, TypeChecker) {
   // Get the type of the expression and remove null/undefined
   let (expr_type, checker) = infer_type(checker, nne.expression)
-  // For now, just return the expression type
-  // In full implementation, remove null/undefined from union
-  (expr_type, checker)
+  match expr_type {
+    // undefined!/null! has type never
+    Undefined(_) | Null(_) => never_type(checker)
+    Union(u) => {
+      // Remove null/undefined members from the union
+      let filtered = u.types.filter(fn(t) { !type_is_nullish(t) })
+      if filtered.length() == 0 {
+        never_type(checker)
+      } else if filtered.length() == 1 {
+        (filtered[0], checker)
+      } else if filtered.length() == u.types.length() {
+        (expr_type, checker)
+      } else {
+        let (info, checker) = create_type_info(checker)
+        (Union({ types: filtered, info }), checker)
+      }
+    }
+    _ => (expr_type, checker)
+  }
 }
 
 ///|
@@ -12175,11 +12853,19 @@ fn infer_type_assertion_type(
   tae : TypeAssertionExpression,
 ) -> (Type, TypeChecker) {
   // Check the expression first
-  let (_, checker) = infer_type(checker, tae.expression)
+  let (source_type, checker) = infer_type(checker, tae.expression)
   // Return the asserted type
   let (type_opt, checker) = get_type_from_type_node(checker, tae.type_node)
   match type_opt {
-    Some(t) => (t, checker)
+    Some(t) => {
+      let checker = check_assertion_conversion(
+        checker,
+        source_type,
+        t,
+        tae.location,
+      )
+      (t, checker)
+    }
     None => any_type(checker)
   }
 }
@@ -13150,6 +13836,16 @@ fn infer_object_literal_type(
             spread_types.push(spread_type)
           }
           Union(union_type) => {
+            // TS2698: a union of nothing but null/undefined cannot be spread
+            if union_type.types.length() > 0 &&
+              union_type.types.iter().all(type_is_nullish) {
+              checker = add_diagnostic_with_code(
+                checker,
+                "Spread types may only be created from object types.",
+                loc,
+                TS2698,
+              )
+            }
             // Union types (e.g., from `condition && obj`) - extract object types
             // Properties from union spreads become optional
             for type_option in union_type.types {
@@ -13836,20 +14532,23 @@ fn is_assignable(source : Type, target : Type) -> Bool {
     (Null(_), Null(_)) => true
     (Symbol(_), Symbol(_)) => true
     (BigInt(_), BigInt(_)) => true
-    // Undefined and null are assignable to most types (like TypeScript without strictNullChecks)
+    // undefined is always assignable to void (even under strictNullChecks)
     (Undefined(_), Void(_)) => true
-    (Undefined(_), Number(_)) => true
-    (Undefined(_), String(_)) => true
-    (Undefined(_), Boolean(_)) => true
-    (Undefined(_), Object(_)) => true
-    (Undefined(_), Array(_)) => true
-    (Undefined(_), Function(_)) => true
-    (Null(_), Number(_)) => true
-    (Null(_), String(_)) => true
-    (Null(_), Boolean(_)) => true
-    (Null(_), Object(_)) => true
-    (Null(_), Array(_)) => true
-    (Null(_), Function(_)) => true
+    // Undefined and null are assignable to most types only WITHOUT
+    // strictNullChecks; under strict null checks they are excluded from
+    // non-nullable types (TS2322)
+    (Undefined(_), Number(_)) => nullish_assignable_to_non_nullable()
+    (Undefined(_), String(_)) => nullish_assignable_to_non_nullable()
+    (Undefined(_), Boolean(_)) => nullish_assignable_to_non_nullable()
+    (Undefined(_), Object(_)) => nullish_assignable_to_non_nullable()
+    (Undefined(_), Array(_)) => nullish_assignable_to_non_nullable()
+    (Undefined(_), Function(_)) => nullish_assignable_to_non_nullable()
+    (Null(_), Number(_)) => nullish_assignable_to_non_nullable()
+    (Null(_), String(_)) => nullish_assignable_to_non_nullable()
+    (Null(_), Boolean(_)) => nullish_assignable_to_non_nullable()
+    (Null(_), Object(_)) => nullish_assignable_to_non_nullable()
+    (Null(_), Array(_)) => nullish_assignable_to_non_nullable()
+    (Null(_), Function(_)) => nullish_assignable_to_non_nullable()
     // Literal types are assignable to their base types
     (NumberLiteral(_, _), Number(_)) => true
     (StringLiteral(_, _), String(_)) => true
@@ -13861,6 +14560,51 @@ fn is_assignable(source : Type, target : Type) -> Bool {
     // String literal assignable to template literal if it matches
     (StringLiteral(value, _), TemplateLiteral(template)) =>
       matches_template_literal(value, template)
+    // Primitives are assignable to their wrapper object types
+    // (boolean -> Boolean), but NOT vice versa (Boolean -> boolean is
+    // rejected by the default arm below)
+    (source, TypeReference(target_ref)) if primitive_matches_wrapper(
+        source,
+        target_ref.name,
+      ) => true
+    // undefined/null to any named type (classes, interfaces, enums,
+    // wrapper objects): only without strictNullChecks
+    (Undefined(_) | Null(_), TypeReference(_)) => nullish_assignable_to_non_nullable()
+    // Everything is assignable to the global Object type, except types
+    // that hide Object's members with incompatible ones (e.g. a
+    // toString() that does not return a string)
+    (source, TypeReference(target_ref)) if target_ref.name == "Object" &&
+      target_ref.type_arguments.length() == 0 => !hides_object_to_string(source)
+    // Global wrapper object types (Object/String/Number/Boolean) as source:
+    // assignable only to object types that require nothing more than the
+    // wrapper provides
+    (TypeReference(source_ref), Object(target_obj)) if is_global_wrapper_object_name(
+        source_ref.name,
+      ) &&
+      source_ref.type_arguments.length() == 0 => wrapper_object_assignable_to(
+        source_ref.name,
+        target_obj,
+      )
+    // Enum types are nominal: `number` is assignable to a numeric enum,
+    // a numeric literal only when it matches a member value
+    (Number(_), TypeReference(target_ref)) if enum_accepts_number_type(
+        target_ref,
+      ) => true
+    (NumberLiteral(v, _), TypeReference(target_ref)) if enum_entry_of_ref(
+        target_ref,
+      )
+      is Some(_) => enum_accepts_number_literal(target_ref, v)
+    // Numeric enums are assignable to number, string enums to string
+    (TypeReference(source_ref), Number(_)) if enum_accepts_number_type(
+        source_ref,
+      ) => true
+    (TypeReference(source_ref), String(_)) if enum_is_pure_string(source_ref) =>
+      true
+    // Enums are assignable to object types that require nothing
+    (TypeReference(source_ref), Object(target_obj)) if enum_entry_of_ref(
+        source_ref,
+      )
+      is Some(_) => object_requires_nothing(target_obj)
     // Type references - check by name (simplified)
     (TypeReference(ref1), TypeReference(ref2)) =>
       is_type_reference_assignable(ref1, ref2)
@@ -13897,17 +14641,21 @@ fn is_assignable(source : Type, target : Type) -> Bool {
           // Class names match and no type arguments - compatible
           class_name == target_ref.name &&
           target_ref.type_arguments.length() == 0
-        None => {
-          // Object literal without class_name - check if structurally compatible
-          // with the interface/type alias that the TypeReference points to
-          // This is a simplified check - full implementation would:
-          // 1. Resolve TypeReference to underlying type
-          // 2. Instantiate with type arguments if any
-          // 3. Check structural compatibility
-          // For now, we conservatively return true to allow the assignment
-          // and rely on the detailed checking in check_assignment_detailed
-          true
-        }
+        None =>
+          // Object literals are never assignable to nominal enum types
+          if enum_entry_of_ref(target_ref) is Some(_) {
+            false
+          } else {
+            // Object literal without class_name - check if structurally compatible
+            // with the interface/type alias that the TypeReference points to
+            // This is a simplified check - full implementation would:
+            // 1. Resolve TypeReference to underlying type
+            // 2. Instantiate with type arguments if any
+            // 3. Check structural compatibility
+            // For now, we conservatively return true to allow the assignment
+            // and rely on the detailed checking in check_assignment_detailed
+            true
+          }
       }
     // Function types - check parameter and return types
     (Function(source_fn), Function(target_fn)) =>
@@ -13964,6 +14712,214 @@ fn is_assignable(source : Type, target : Type) -> Bool {
 }
 
 ///|
+/// Check if a type name is a global primitive wrapper object type
+/// (the `Boolean`/`Number`/`String` interfaces from the standard library).
+/// Wrapper object types are NOT assignable to their primitive counterparts,
+/// while the primitives ARE assignable to the wrappers.
+fn is_primitive_wrapper_name(name : String) -> Bool {
+  match name {
+    "Boolean" | "Number" | "String" => true
+    _ => false
+  }
+}
+
+///|
+/// If `target` is an unresolved reference to a primitive wrapper type,
+/// return the wrapper name that `source` would need to match (e.g. a
+/// `boolean` source matches the `Boolean` wrapper).
+fn primitive_matches_wrapper(source : Type, target_name : String) -> Bool {
+  match (source, target_name) {
+    (Boolean(_) | BooleanLiteral(_, _), "Boolean") => true
+    (Number(_) | NumberLiteral(_, _), "Number") => true
+    (String(_) | StringLiteral(_, _) | TemplateLiteral(_), "String") => true
+    _ => false
+  }
+}
+
+///|
+/// Check if a type name is a global wrapper object type from the standard
+/// library (the `Boolean`/`Number`/`String`/`Object` interfaces)
+fn is_global_wrapper_object_name(name : String) -> Bool {
+  name == "Object" || is_primitive_wrapper_name(name)
+}
+
+///|
+/// The global `Object` interface declares `toString(): string`. A type with
+/// a `toString` member that cannot produce a string hides that member with
+/// an incompatible one and is NOT assignable to `Object` (TS2322)
+fn hides_object_to_string(t : Type) -> Bool {
+  match t {
+    Object(obj) =>
+      match obj.properties.get("toString") {
+        Some(prop) =>
+          match prop.prop_type {
+            Function(f) =>
+              match f.return_type {
+                String(_)
+                | StringLiteral(_, _)
+                | TemplateLiteral(_)
+                | Any(_)
+                | Never(_)
+                | Error(_) => false
+                _ => true
+              }
+            _ => false
+          }
+        None => false
+      }
+    _ => false
+  }
+}
+
+///|
+/// Why the global `Object` type is not assignable to a target object type
+priv enum ObjectSourceConflict {
+  NoConflict // assignable
+  SignatureConflict // target has call/construct signatures (TS2322)
+  MemberConflict // target member is incompatible with Object's members (TS2696)
+}
+
+///|
+/// The `Object` type is assignable to very few other types: not to targets
+/// with call/construct signatures, and not to targets whose `toString`
+/// member requires something a `string` cannot satisfy
+fn object_source_conflict(target : ObjectType) -> ObjectSourceConflict {
+  if target.call_signatures.length() > 0 ||
+    target.construct_signatures.length() > 0 {
+    return SignatureConflict
+  }
+  match target.properties.get("toString") {
+    Some(prop) =>
+      match prop.prop_type {
+        Function(f) =>
+          match f.return_type {
+            // Object's toString(): string satisfies these return types
+            String(_) | Void(_) | Any(_) | Unknown(_) | Error(_) => NoConflict
+            _ => MemberConflict
+          }
+        _ => NoConflict
+      }
+    None => NoConflict
+  }
+}
+
+///|
+/// Members of the global `Object` interface (Object.prototype), used when
+/// looking up properties on a value typed as `Object`
+fn lookup_object_interface_member(
+  checker : TypeChecker,
+  prop_name : String,
+) -> (Type?, TypeChecker) {
+  match prop_name {
+    "toString" | "toLocaleString" => {
+      let (ret, checker) = string_type(checker)
+      let (info, checker) = create_type_info(checker)
+      (Some(Function({ parameters: [], return_type: ret, info })), checker)
+    }
+    "valueOf" => {
+      let (ret, checker) = any_type(checker)
+      let (info, checker) = create_type_info(checker)
+      (Some(Function({ parameters: [], return_type: ret, info })), checker)
+    }
+    "hasOwnProperty" | "isPrototypeOf" | "propertyIsEnumerable" => {
+      let (param_t, checker) = any_type(checker)
+      let (ret, checker) = boolean_type(checker)
+      let (info, checker) = create_type_info(checker)
+      (
+        Some(
+          Function({
+            parameters: [
+              {
+                name: "v",
+                param_type: param_t,
+                is_optional: false,
+                is_rest: false,
+              },
+            ],
+            return_type: ret,
+            info,
+          }),
+        ),
+        checker,
+      )
+    }
+    "constructor" => {
+      let (t, checker) = any_type(checker)
+      (Some(t), checker)
+    }
+    _ => (None, checker)
+  }
+}
+
+///|
+/// Return the declared return type of a class method (e.g. `toString`),
+/// found through the class symbol's declaration. Returns None when the
+/// name does not resolve to a class or the method is not declared
+fn class_method_return_type(
+  checker : TypeChecker,
+  class_name : String,
+  method_name : String,
+) -> Type? {
+  match lookup_symbol(checker, class_name) {
+    Some(symbol) =>
+      if symbol.kind == SymbolKind::Class {
+        match symbol.value_declaration {
+          Some(ClassDeclaration(class_decl)) => {
+            for mem in class_decl.members {
+              match mem {
+                MethodDeclaration(m) =>
+                  if m.name == method_name {
+                    match m.return_type {
+                      Some(type_node) => {
+                        let (t, _) = get_type_from_type_node(checker, type_node)
+                        return t
+                      }
+                      None => return None
+                    }
+                  }
+                _ => ()
+              }
+            }
+            None
+          }
+          _ => None
+        }
+      } else {
+        None
+      }
+    None => None
+  }
+}
+
+///|
+/// Assignability of an unresolved global wrapper object type
+/// (Object/String/Number/Boolean) to a structural object type
+fn wrapper_object_assignable_to(name : String, target : ObjectType) -> Bool {
+  if name == "Object" {
+    return object_source_conflict(target) is NoConflict
+  }
+  // String has a length property; Number/Boolean expose no structure.
+  // They are assignable to object types that require nothing more.
+  object_requires_nothing(target) ||
+  (name == "String" && has_only_length_property(target))
+}
+
+///|
+/// Check if an object type has no required members (call/construct
+/// signatures or non-optional properties) - such types accept enums and
+/// primitive wrappers
+fn object_requires_nothing(target : ObjectType) -> Bool {
+  target.call_signatures.is_empty() &&
+  target.construct_signatures.is_empty() &&
+  target.properties
+  .iter()
+  .all(fn(entry) {
+    let (_, prop) = entry
+    prop.is_optional
+  })
+}
+
+///|
 /// Check if a type name is a built-in TypeScript generic type
 /// These are types that are part of the TypeScript standard library
 /// but may not be in the symbol table when type checking
@@ -14011,6 +14967,29 @@ fn is_type_reference_assignable(
       }
     }
     return true
+  }
+
+  // Enum types are nominal: an enum matches only itself (same name,
+  // handled above), `Object`, and `Number`/`String` when numeric/string.
+  // No other TypeReference is assignable to an enum.
+  if source.type_arguments.length() == 0 &&
+    target.type_arguments.length() == 0 {
+    let source_enum = enum_type_registry.get(source.name)
+    let target_enum = enum_type_registry.get(target.name)
+    match (source_enum, target_enum) {
+      // Two different enums are never mutually assignable
+      (Some(_), Some(_)) => return false
+      (Some(entry), None) =>
+        return target.name == "Object" ||
+          (target.name == "Number" && !entry.has_string_member) ||
+          (
+            target.name == "String" &&
+            entry.has_string_member &&
+            entry.numeric_values.is_empty()
+          )
+      (None, Some(_)) => return false
+      (None, None) => ()
+    }
   }
 
   // Special handling for Generator<TYield, TReturn, TNext> assignability
@@ -14330,11 +15309,16 @@ fn is_object_assignable(source : ObjectType, target : ObjectType) -> Bool {
   for entry in target_props {
     let (prop_name, target_prop) = entry
     match source.properties.get(prop_name) {
-      Some(source_prop) =>
+      Some(source_prop) => {
+        // An optional property's type implicitly includes undefined
+        if target_prop.is_optional && type_is_nullish(source_prop.prop_type) {
+          continue
+        }
         if !is_assignable(source_prop.prop_type, target_prop.prop_type) {
           assignable = false
           break
         }
+      }
       None =>
         if !target_prop.is_optional {
           assignable = false
@@ -14343,6 +15327,15 @@ fn is_object_assignable(source : ObjectType, target : ObjectType) -> Bool {
     }
   }
   assignable
+}
+
+///|
+/// Check if a type is undefined or null
+fn type_is_nullish(t : Type) -> Bool {
+  match t {
+    Undefined(_) | Null(_) => true
+    _ => false
+  }
 }
 
 ///|
@@ -14362,15 +15355,32 @@ fn is_function_assignable(
   }
   let mut assignable = true
   for i = 0; i < target.parameters.length(); i = i + 1 {
-    if !is_assignable(
-        target.parameters[i].param_type,
-        source.parameters[i].param_type,
-      ) {
-      assignable = false
-      break
+    let target_param = target.parameters[i].param_type
+    let source_param = source.parameters[i].param_type
+    if !is_assignable(target_param, source_param) {
+      // Global wrapper object params (Object/String/Number/Boolean
+      // interfaces) compare bivariantly: `(x: Object) => R` and
+      // `(x: string) => R` stay mutually compatible
+      let wrapper_involved = is_wrapper_type_reference(target_param) ||
+        is_wrapper_type_reference(source_param)
+      if !(wrapper_involved && is_assignable(source_param, target_param)) {
+        assignable = false
+        break
+      }
     }
   }
   assignable
+}
+
+///|
+/// Check if a type is an unresolved reference to a global wrapper object
+/// type (the Object/String/Number/Boolean interfaces)
+fn is_wrapper_type_reference(t : Type) -> Bool {
+  match t {
+    TypeReference(r) =>
+      is_global_wrapper_object_name(r.name) && r.type_arguments.length() == 0
+    _ => false
+  }
 }
 
 ///|
@@ -14528,6 +15538,34 @@ fn check_assignment_detailed(
     _ => ()
   }
 
+  // The global `Object` type as source is assignable to very few other
+  // types: TS2322 when the target has call/construct signatures, TS2696
+  // when a target member is incompatible with Object's members
+  match (source, target) {
+    (TypeReference(source_ref), Object(target_obj)) if source_ref.name ==
+      "Object" &&
+      source_ref.type_arguments.length() == 0 &&
+      lookup_symbol(checker, "Object") is None =>
+      match object_source_conflict(target_obj) {
+        NoConflict => return checker
+        SignatureConflict =>
+          return add_diagnostic_with_code(
+            checker,
+            "Type 'Object' is not assignable to type '\{type_to_string(target)}'",
+            location,
+            TS2322,
+          )
+        MemberConflict =>
+          return add_diagnostic_with_code(
+            checker,
+            "The 'Object' type is assignable to very few other types. Did you mean to use the 'any' type instead?",
+            location,
+            TS2696,
+          )
+      }
+    _ => ()
+  }
+
   // Fall back to simple assignability check
   if is_assignable(source, target) {
     checker
@@ -14558,14 +15596,19 @@ fn check_object_assignability_detailed(
     let prop_path = if path == "" { prop_name } else { "\{path}.\{prop_name}" }
     match source.properties.get(prop_name) {
       Some(source_prop) =>
-        // Check property type compatibility recursively
-        checker = check_assignment_detailed(
-          checker,
-          source_prop.prop_type,
-          target_prop.prop_type,
-          location,
-          prop_path,
-        )
+        // An optional property's type implicitly includes undefined
+        if target_prop.is_optional && type_is_nullish(source_prop.prop_type) {
+          ()
+        } else {
+          // Check property type compatibility recursively
+          checker = check_assignment_detailed(
+            checker,
+            source_prop.prop_type,
+            target_prop.prop_type,
+            location,
+            prop_path,
+          )
+        }
       None =>
         // Property missing
         if !(target_prop.is_optional) {
@@ -14987,6 +16030,109 @@ fn check_type_reference_assignability_detailed(
       )
     }
     return checker
+  }
+
+  // Enum types are nominal: when either side is an enum, delegate to the
+  // pure relation (which consults the enum registry) and report TS2322
+  if source.type_arguments.length() == 0 &&
+    target.type_arguments.length() == 0 &&
+    (is_enum_type_name(source.name) || is_enum_type_name(target.name)) {
+    if is_type_reference_assignable(source, target) {
+      return checker
+    }
+    return add_diagnostic_with_code(
+      checker,
+      "Type '\{source.name}' is not assignable to type '\{target.name}'",
+      location,
+      TS2322,
+    )
+  }
+
+  // The global `Object` type as source (e.g. `c = o` where o: Object):
+  // assignable to very few other types (TS2322/TS2696)
+  if source.name == "Object" &&
+    source.type_arguments.length() == 0 &&
+    lookup_symbol(checker, "Object") is None {
+    // A target class whose toString() cannot accept Object's
+    // `toString(): string` member is incompatible (TS2696)
+    match class_method_return_type(checker, target.name, "toString") {
+      Some(rt) =>
+        match rt {
+          // Object's toString(): string satisfies these return types
+          String(_) | Void(_) | Any(_) | Unknown(_) | Error(_) => return checker
+          _ =>
+            return add_diagnostic_with_code(
+              checker,
+              "The 'Object' type is assignable to very few other types. Did you mean to use the 'any' type instead?",
+              location,
+              TS2696,
+            )
+        }
+      None => ()
+    }
+    match resolve_class_to_object_type(checker, target.name) {
+      Some(target_obj) =>
+        match object_source_conflict(target_obj) {
+          NoConflict => return checker
+          SignatureConflict =>
+            return add_diagnostic_with_code(
+              checker,
+              "Type 'Object' is not assignable to type '\{target.name}'",
+              location,
+              TS2322,
+            )
+          MemberConflict =>
+            return add_diagnostic_with_code(
+              checker,
+              "The 'Object' type is assignable to very few other types. Did you mean to use the 'any' type instead?",
+              location,
+              TS2696,
+            )
+        }
+      // Target cannot be resolved - stay permissive
+      None => return checker
+    }
+  }
+
+  // The global `Object` type as target (e.g. `o = c`): everything is
+  // assignable to Object unless it hides Object's members with
+  // incompatible ones (TS2322)
+  if target.name == "Object" &&
+    target.type_arguments.length() == 0 &&
+    lookup_symbol(checker, "Object") is None {
+    match class_method_return_type(checker, source.name, "toString") {
+      Some(rt) =>
+        match rt {
+          String(_)
+          | StringLiteral(_, _)
+          | TemplateLiteral(_)
+          | Any(_)
+          | Never(_)
+          | Error(_) => return checker
+          _ =>
+            return add_diagnostic_with_code(
+              checker,
+              "Type '\{source.name}' is not assignable to type 'Object'",
+              location,
+              TS2322,
+            )
+        }
+      None => ()
+    }
+    match resolve_class_to_object_type(checker, source.name) {
+      Some(source_obj) =>
+        if hides_object_to_string(Object(source_obj)) {
+          return add_diagnostic_with_code(
+            checker,
+            "Type '\{source.name}' is not assignable to type 'Object'",
+            location,
+            TS2322,
+          )
+        } else {
+          return checker
+        }
+      None => return checker
+    }
   }
 
   // Special handling for Generator<TYield, TReturn, TNext> -> Iterable<T>
@@ -15549,7 +16695,24 @@ fn get_type_category(t : Type) -> String {
     Tuple(_) => "tuple"
     Union(_) => "union" // Union needs special handling
     Intersection(_) => "intersection"
-    TypeReference(_) => "reference"
+    TypeReference(r) =>
+      // Enums and primitive wrappers compare like their primitives
+      match enum_entry_of_ref(r) {
+        Some(entry) =>
+          if entry.has_string_member && entry.numeric_values.is_empty() {
+            "string"
+          } else {
+            "number"
+          }
+        None =>
+          match r.name {
+            "Number" => "number"
+            "String" => "string"
+            "Boolean" => "boolean"
+            "Object" => "object"
+            _ => "reference"
+          }
+      }
     _ => "other"
   }
 }
@@ -15561,6 +16724,10 @@ fn is_numeric_type(t : Type) -> Bool {
     Number(_) => true
     NumberLiteral(_, _) => true
     Any(_) => true
+    // Numeric enums are valid arithmetic operands
+    TypeReference(r) => enum_accepts_number_type(r)
+    // A union is numeric when every member is (e.g. Choice.Yes | Choice.No)
+    Union(u) => u.types.length() > 0 && u.types.iter().all(is_numeric_type)
     _ => false
   }
 }
@@ -20646,6 +21813,17 @@ fn is_simple_type_compatible(source : Type, target : Type) -> Bool {
     }
     // Objects are loosely compatible (avoid false positives)
     (Object(_), Object(_)) => true
+    // Global wrapper object types: primitives match their wrappers, and
+    // everything but incompatible overrides matches Object
+    (source, TypeReference(target_ref)) if primitive_matches_wrapper(
+        source,
+        target_ref.name,
+      ) => true
+    (source, TypeReference(target_ref)) if target_ref.name == "Object" &&
+      target_ref.type_arguments.length() == 0 => !hides_object_to_string(source)
+    // Type references are loosely compatible when they name the same type
+    (TypeReference(source_ref), TypeReference(target_ref)) =>
+      source_ref.name == target_ref.name
     // Different types
     _ => false
   }
@@ -22469,7 +23647,24 @@ fn check_switch_statement(
             TS2678,
           )
         }
-        checker = check_statements(checker, case_clause.statements)
+        // Discriminant narrowing: switch (u.kind) { case "a": u is narrowed }
+        // Snapshot the narrowed types so each case starts from the same state
+        let saved_narrowed : Map[String, NarrowedType] = Map([])
+        for k, v in checker.narrowed_types {
+          saved_narrowed.set(k, v)
+        }
+        let case_checker = match
+          get_discriminant_guard(
+            checker, switch_stmt.expression, case_expr, true,
+          ) {
+          Some(tg) => apply_narrowing_to_checker(checker, tg, true)
+          None => checker
+        }
+        let case_checker = check_statements(
+          case_checker,
+          case_clause.statements,
+        )
+        checker = { ..case_checker, narrowed_types: saved_narrowed }
       }
       None =>
         // Default case
@@ -23730,6 +24925,45 @@ fn validate_type_argument_count(
 
 ///|
 /// Get type from type node
+fn report_unresolved_type_name(
+  checker : TypeChecker,
+  name : String,
+  location : SourceLocation,
+) -> TypeChecker {
+  // Never report qualified names (Foo.Bar) - those have their own
+  // resolution path and error codes (TS2694 etc.)
+  if name.is_empty() || name.contains(".") {
+    return checker
+  }
+  // Never report standard-library global types we don't model in the
+  // symbol table (Array, Promise, Record, DOM types, ...)
+  if is_known_lib_type_name(name) {
+    return checker
+  }
+  // Never report names that are declared somewhere in this file (type
+  // parameters, local type declarations, imports, value bindings): not all
+  // resolution paths register in-scope type parameters, and values used as
+  // types produce TS2749 rather than TS2304 in tsc.
+  // The sentinel suppresses all reporting (set when the file has parse
+  // errors and the AST is therefore partial).
+  if checker.declared_type_names.contains(name) ||
+    checker.declared_type_names.contains(SUPPRESS_ALL_UNRESOLVED_TYPE_NAMES) {
+    return checker
+  }
+  let message = "Cannot find name '\{name}'."
+  // Type annotations can be resolved multiple times (inference + checking
+  // passes); only report each name once per source location.
+  for diag in checker.diagnostics {
+    if diag.code == 2304 &&
+      diag.location == location &&
+      diag.message == message {
+      return checker
+    }
+  }
+  add_diagnostic_with_code(checker, message, location, TS2304)
+}
+
+///|
 fn get_type_from_type_node(
   checker : TypeChecker,
   type_node : Node,
@@ -23936,13 +25170,57 @@ fn get_type_from_type_node(
                   )
                   (None, checker)
                 }
+                Enum => {
+                  // Enum types stay nominal: keep a TypeReference to the
+                  // enum name so enum assignability can be checked
+                  let (info, c) = create_type_info(checker)
+                  (
+                    Some(
+                      Type::TypeReference({
+                        name: type_ref.type_name,
+                        type_arguments: [],
+                        info,
+                      }),
+                    ),
+                    c,
+                  )
+                }
                 _ => (None, checker) // Other symbol kinds not yet supported
               }
             }
             None =>
-              // Handle well-known TypeScript built-in types that may not be in the symbol table
-              // These are standard library types like Generator, Iterable, Iterator, etc.
-              if is_builtin_generic_type(type_ref.type_name) {
+              // Qualified enum member types (Choice.Yes) are approximated
+              // by their enum type (Choice)
+              if qualified_enum_member_enum_name(checker, type_ref.type_name)
+                is Some(enum_name) {
+                let (info, checker) = create_type_info(checker)
+                (
+                  Some(
+                    Type::TypeReference({
+                      name: enum_name,
+                      type_arguments: [],
+                      info,
+                    }),
+                  ),
+                  checker,
+                )
+                // Global wrapper object types (Boolean/Number/String/Object
+                // interfaces): keep the name as a TypeReference so
+                // wrapper-object -> primitive assignments can be rejected (TS2322)
+              } else if is_global_wrapper_object_name(type_ref.type_name) &&
+                type_ref.type_arguments.length() == 0 {
+                let (info, checker) = create_type_info(checker)
+                (
+                  Some(
+                    Type::TypeReference({
+                      name: type_ref.type_name,
+                      type_arguments: [],
+                      info,
+                    }),
+                  ),
+                  checker,
+                )
+              } else if is_builtin_generic_type(type_ref.type_name) {
                 // Create a TypeReference for the built-in type with resolved type arguments
                 let mut checker = checker
                 let resolved_args : Array[Type] = []
@@ -23973,6 +25251,12 @@ fn get_type_from_type_node(
                   checker,
                 )
               } else {
+                // TS2304: the type name is genuinely unresolvable
+                let checker = report_unresolved_type_name(
+                  checker,
+                  type_ref.type_name,
+                  type_ref.location,
+                )
                 (None, checker)
               }
           }
@@ -24295,12 +25579,20 @@ fn get_type_from_type_node(
                 _ => (None, c)
               }
           }
-        TypeOf => {
-          // typeof x - would need to look up the value and get its type
-          // For now, return any
-          let (t, c) = any_type(checker)
-          (Some(t), c)
-        }
+        TypeOf =>
+          match type_op.type_node {
+            // `typeof undefined` is the undefined type
+            Identifier(id) if id.name == "undefined" => {
+              let (t, c) = undefined_type(checker)
+              (Some(t), c)
+            }
+            _ => {
+              // typeof x - would need to look up the value and get its type
+              // For now, return any
+              let (t, c) = any_type(checker)
+              (Some(t), c)
+            }
+          }
         Readonly =>
           // readonly T - return the underlying type (readonly is a modifier on properties)
           get_type_from_type_node(checker, type_op.type_node)

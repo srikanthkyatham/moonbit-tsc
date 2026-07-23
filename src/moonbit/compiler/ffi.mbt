@@ -216,6 +216,9 @@ pub fn compile_source(
             options.target,
             no_implicit_any=options.no_implicit_any,
             module_kind=options.module_kind,
+            has_parse_errors=parse_diagnostics
+            .iter()
+            .any(fn(d) { d.category == DiagnosticCategory::Error }),
           )
 
           // Collect type errors but continue compilation
@@ -488,6 +491,9 @@ pub fn compile_source_with_external_types(
             no_implicit_any=options.no_implicit_any,
             module_kind=options.module_kind,
             import_helpers=options.import_helpers,
+            has_parse_errors=parse_diagnostics
+            .iter()
+            .any(fn(d) { d.category == DiagnosticCategory::Error }),
           )
 
           // Collect type errors but continue compilation

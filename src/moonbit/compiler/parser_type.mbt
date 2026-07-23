@@ -1524,19 +1524,13 @@ fn parse_primary_type_with_readonly(
                       Err(p) => return Err(p)
                     }
                   }
-                  // Shorthand property: { a } means { a: a }
+                  // Property signature without a type annotation: { a }
+                  // means { a: any } (like tsc), NOT { a: a }
                   CloseBrace(_) | Semicolon(_) | Comma(_) => {
-                    // Create type literal property with type reference to the same name
                     members.push(
                       Node::TypeLiteralProperty(TypeLiteralProperty::{
                         name,
-                        type_node: Some(
-                          Node::TypeReference(TypeReference::{
-                            type_name: name,
-                            type_arguments: [],
-                            location: member_loc,
-                          }),
-                        ),
+                        type_node: None,
                         is_optional,
                         is_readonly: false,
                         location: member_loc,

@@ -351,7 +351,10 @@ test "yield* from variable with Symbol.iterator" {
 
 ///|
 test "generator with Symbol.iterator and overload resolution" {
+  // Non-strict: `p => undefined` returns undefined for a string-returning
+  // parameter, which strictNullChecks would reject (TS2345)
   let source =
+    #|// @strict: false
     #|declare function foo<T, U>(x: T, fun: () => Iterable<(x: T) => U>, fun2: (y: U) => T): T;
     #|
     #|foo("", function* () {

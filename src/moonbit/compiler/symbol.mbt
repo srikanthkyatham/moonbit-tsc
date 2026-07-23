@@ -614,6 +614,8 @@ pub enum DiagnosticCode {
   TS2693 // '{0}' only refers to a type, but is being used as a value here
   TS2694 // Namespace '{0}' has no exported member '{1}'
   TS2695 // Left side of comma operator is unused and has no side effects
+  TS2696 // The 'Object' type is assignable to very few other types. Did you mean to use the 'any' type instead?
+  TS2698 // Spread types may only be created from object types
   TS2700 // Rest types may only be created from object types
   TS2701 // The target of an object rest assignment must be a variable or a property access
   TS2702 // The target of an object rest assignment may not be an optional property access
@@ -996,6 +998,8 @@ pub fn DiagnosticCode::to_int(self : DiagnosticCode) -> Int {
     TS2693 => 2693
     TS2694 => 2694
     TS2695 => 2695
+    TS2696 => 2696
+    TS2698 => 2698
     TS2700 => 2700
     TS2701 => 2701
     TS2702 => 2702
@@ -1356,6 +1360,8 @@ pub fn DiagnosticCode::from_int(code : Int) -> DiagnosticCode? {
     2693 => Some(TS2693)
     2694 => Some(TS2694)
     2695 => Some(TS2695)
+    2696 => Some(TS2696)
+    2698 => Some(TS2698)
     2700 => Some(TS2700)
     2701 => Some(TS2701)
     2702 => Some(TS2702)

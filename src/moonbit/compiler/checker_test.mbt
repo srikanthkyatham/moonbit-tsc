@@ -562,7 +562,11 @@ test "check undefined type annotation" {
 
 ///|
 test "check undefined assignable to number" {
-  let result = parse_bind_and_check("const x: number = undefined;")
+  // undefined -> number is only allowed without strictNullChecks
+  // (strict defaults ON, matching the conformance baselines)
+  let result = parse_bind_and_check(
+    "// @strict: false\nconst x: number = undefined;",
+  )
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(_) => assert_true(false)
@@ -571,7 +575,10 @@ test "check undefined assignable to number" {
 
 ///|
 test "check undefined assignable to string" {
-  let result = parse_bind_and_check("const x: string = undefined;")
+  // undefined -> string is only allowed without strictNullChecks
+  let result = parse_bind_and_check(
+    "// @strict: false\nconst x: string = undefined;",
+  )
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(_) => assert_true(false)
@@ -6353,4 +6360,222 @@ test "type-only namespace used as value still reports TS2710" {
     #|var v = OnlyTypes;
   let diags = ambient_test_diagnostics(source)
   assert_true(ambient_test_has_code(diags, 2710))
+}
+
+// ============================================================================
+// T17: TS2339 for property access on union and intersection types
+// ============================================================================
+
+///|
+test "union property access: missing on one constituent reports TS2339" {
+  let source =
+    #|interface A { x: number }
+    #|interface B { y: number }
+    #|declare var u: A | B;
+    #|u.x;
+  let diags = ambient_test_diagnostics(source)
+  assert_true(ambient_test_has_code(diags, 2339))
+}
+
+///|
+test "union property access: member common to all constituents is fine" {
+  let source =
+    #|interface A { kind: string; x: number }
+    #|interface B { kind: string; y: number }
+    #|declare var u: A | B;
+    #|u.kind;
+  let diags = ambient_test_diagnostics(source)
+  assert_false(ambient_test_has_code(diags, 2339))
+}
+
+///|
+test "union property access: common member across class and interface" {
+  let source =
+    #|class C1 { m: number = 1 }
+    #|interface I1 { m: string }
+    #|declare var u: C1 | I1;
+    #|u.m;
+  let diags = ambient_test_diagnostics(source)
+  assert_false(ambient_test_has_code(diags, 2339))
+}
+
+///|
+test "union property access: string index signature satisfies any name" {
+  let source =
+    #|interface WithIndex { [key: string]: number }
+    #|interface B { y: number }
+    #|declare var u: WithIndex | B;
+    #|u.y;
+  let diags = ambient_test_diagnostics(source)
+  assert_false(ambient_test_has_code(diags, 2339))
+}
+
+///|
+test "union property access: Object.prototype members are fine" {
+  let source =
+    #|interface A { x: number }
+    #|interface B { y: number }
+    #|declare var u: A | B;
+    #|u.toString();
+    #|u.hasOwnProperty("x");
+  let diags = ambient_test_diagnostics(source)
+  assert_false(ambient_test_has_code(diags, 2339))
+}
+
+///|
+test "union property access: no TS2339 after discriminant narrowing in if" {
+  let source =
+    #|interface A { kind: "a"; x: number }
+    #|interface B { kind: "b"; y: number }
+    #|declare var u: A | B;
+    #|if (u.kind === "a") {
+    #|    u.x;
+    #|} else {
+    #|    u.y;
+    #|}
+  let diags = ambient_test_diagnostics(source)
+  assert_false(ambient_test_has_code(diags, 2339))
+}
+
+///|
+test "union property access: no TS2339 after inverted discriminant narrowing" {
+  let source =
+    #|interface A { kind: "a"; x: number }
+    #|interface B { kind: "b"; y: number }
+    #|declare var u: A | B;
+    #|if (u.kind !== "a") {
+    #|    u.y;
+    #|} else {
+    #|    u.x;
+    #|}
+  let diags = ambient_test_diagnostics(source)
+  assert_false(ambient_test_has_code(diags, 2339))
+}
+
+///|
+test "union property access: no TS2339 after switch discriminant narrowing" {
+  let source =
+    #|interface A { kind: "a"; x: number }
+    #|interface B { kind: "b"; y: number }
+    #|declare var u: A | B;
+    #|switch (u.kind) {
+    #|    case "a":
+    #|        u.x;
+    #|        break;
+    #|    case "b":
+    #|        u.y;
+    #|        break;
+    #|}
+  let diags = ambient_test_diagnostics(source)
+  assert_false(ambient_test_has_code(diags, 2339))
+}
+
+///|
+test "union property access: no TS2339 after enum member discriminant" {
+  let source =
+    #|enum Choice { Yes, No }
+    #|interface A { kind: Choice.Yes; a: string }
+    #|interface B { kind: Choice.No; b: string }
+    #|declare var x: A | B;
+    #|if (x.kind === Choice.Yes) { x.a; }
+    #|switch (x.kind) {
+    #|    case Choice.No: x.b;
+    #|}
+  let diags = ambient_test_diagnostics(source)
+  assert_false(ambient_test_has_code(diags, 2339))
+}
+
+///|
+test "union property access: undefined discriminant narrows the union" {
+  let source =
+    #|type Correct = { code: string, property: true, err: undefined }
+    #|type Err = { err: string }
+    #|declare var example: Correct | Err;
+    #|if (example.err === undefined) {
+    #|    example.property;
+    #|}
+  let diags = ambient_test_diagnostics(source)
+  assert_false(ambient_test_has_code(diags, 2339))
+}
+
+///|
+test "union property access: TS2339 outside the narrowed branch" {
+  let source =
+    #|interface A { kind: "a"; x: number }
+    #|interface B { kind: "b"; y: number }
+    #|declare var u: A | B;
+    #|if (u.kind === "a") {
+    #|    u.x;
+    #|}
+    #|u.y;
+  let diags = ambient_test_diagnostics(source)
+  assert_true(ambient_test_has_code(diags, 2339))
+}
+
+///|
+test "union property access: private constituent member reports TS2339" {
+  let source =
+    #|class Pub { member: string = "" }
+    #|class Priv { private member: number = 0 }
+    #|declare var u: Pub | Priv;
+    #|u.member;
+  let diags = ambient_test_diagnostics(source)
+  assert_true(ambient_test_has_code(diags, 2339))
+}
+
+///|
+test "union property access: unmodeled constituents stay silent" {
+  let source =
+    #|interface WithExtends { x: number }
+    #|interface Sub extends WithExtends { }
+    #|interface Other { x: number }
+    #|declare var u: Sub | Other;
+    #|u.x;
+  let diags = ambient_test_diagnostics(source)
+  assert_false(ambient_test_has_code(diags, 2339))
+}
+
+///|
+test "intersection property access: property from any constituent resolves" {
+  let source =
+    #|interface A { x: number }
+    #|interface B { y: string }
+    #|declare var i: A & B;
+    #|i.x;
+    #|i.y;
+  let diags = ambient_test_diagnostics(source)
+  assert_false(ambient_test_has_code(diags, 2339))
+}
+
+///|
+test "intersection property access: missing everywhere reports TS2339" {
+  let source =
+    #|interface A { x: number }
+    #|interface B { y: string }
+    #|declare var i: A & B;
+    #|i.z;
+  let diags = ambient_test_diagnostics(source)
+  assert_true(ambient_test_has_code(diags, 2339))
+}
+
+///|
+test "intersection property access: index signature constituent stays silent" {
+  let source =
+    #|interface WithIndex { [key: string]: number }
+    #|interface B { y: string }
+    #|declare var i: WithIndex & B;
+    #|i.anything;
+  let diags = ambient_test_diagnostics(source)
+  assert_false(ambient_test_has_code(diags, 2339))
+}
+
+///|
+test "intersection property access: Object.prototype members are fine" {
+  let source =
+    #|interface A { x: number }
+    #|interface B { y: string }
+    #|declare var i: A & B;
+    #|i.valueOf();
+  let diags = ambient_test_diagnostics(source)
+  assert_false(ambient_test_has_code(diags, 2339))
 }
