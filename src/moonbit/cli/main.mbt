@@ -108,6 +108,12 @@ async fn run_single_compile(
   file_patterns : Array[String],
   options : CLIOptions,
 ) -> Unit raise Error {
+  // tsc emits a global TS5107 error for explicitly passed deprecated option
+  // values (e.g. --target es5) before any per-file diagnostics.
+  let deprecation_diags = option_deprecation_diags(options)
+  for diag in deprecation_diags {
+    println(diag)
+  }
   let target = get_effective_cli_target(options)
   if options.verbose {
     println("MoonBit TypeScript Compiler v" + @compiler.get_compiler_version())
@@ -179,6 +185,12 @@ async fn run_single_compile(
 
   // Print summary
   print_summary(summary, options)
+
+  // Deprecated-option errors (TS5107) fail the compile even when the files
+  // themselves are clean. (print_summary already exited if files had errors.)
+  if deprecation_diags.length() > 0 {
+    exit(EXIT_FAILURE)
+  }
 }
 
 ///|

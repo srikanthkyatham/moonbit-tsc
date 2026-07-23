@@ -31,6 +31,16 @@ green on the same build.
 > The category table below still reflects the pre-wave-3 sweep. Task history:
 > `TASKS.md` at the repo root.
 
+> **Post-wave-4 update (July 23, 2026).** After T11 — CLI now emits tsc 6.x
+> `TS5107` deprecated-option errors for explicit `--target es3/es5` /
+> `--module amd/umd/system/none` (suppressible with the new
+> `--ignoreDeprecations` flag), and strict mode compares against the variant
+> baseline matching the configuration actually compiled instead of the union
+> of all variants — the same sweeps measure:
+> **loose 3,994/5,693 = 70.2%; strict 1,999/5,693 = 35.1%** (crash bucket
+> 8 → 4). TS5107 was the #1 missing code (874 tests). Spot check:
+> es6/computedProperties strict 62/142 → 121/142 (85.2%).
+
 - **Loose** counts a pass when "compiler reported errors" matches "a
   `.errors.txt` baseline exists" — presence only, not which errors.
 - **Strict** compares the *set* of `TSxxxx` codes emitted against the codes in

@@ -177,7 +177,8 @@ defmodule ConformanceTestRunner do
 
     crashed? = exit_code not in [0, 1] or crash_output?(output)
 
-    {expected_codes, expects_errors, variant?} = expected_from_baselines(name, baselines)
+    {expected_codes, expects_errors, variant?} =
+      expected_from_baselines(name, baselines, run_config(directives))
 
     passed =
       if strict do
@@ -220,7 +221,8 @@ defmodule ConformanceTestRunner do
   defp run_compiler(files, directives) do
     extra_args =
       honored_flag(directives, "target", "--target") ++
-        honored_flag(directives, "module", "--module")
+        honored_flag(directives, "module", "--module") ++
+        honored_flag(directives, "ignoredeprecations", "--ignoreDeprecations")
 
     args = files ++ ["--noEmit", "--reportDiagnostics" | extra_args]
 
@@ -365,7 +367,7 @@ defmodule ConformanceTestRunner do
   # Directives the runner can translate into CLI flags. A comma-separated value
   # (e.g. "@target: es5, es6") means the harness runs multiple variants; we run
   # only the first listed value.
-  @honorable ~w(target module)
+  @honorable ~w(target module ignoredeprecations)
 
   defp parse_directives(content) do
     ~r/^\s*\/\/\s*@(\w+)\s*:\s*(.+?)\s*$/m
@@ -417,15 +419,45 @@ defmodule ConformanceTestRunner do
     %{dir: dir, exact: exact, variants: variants}
   end
 
+  # The configuration this runner actually compiles with, normalized to the
+  # spelling used inside variant baseline filenames ("es6" -> "es2015", ...).
+  defp run_config(directives) do
+    %{
+      "target" => normalized_directive(directives, "target"),
+      "module" => normalized_directive(directives, "module")
+    }
+  end
+
+  defp normalized_directive(directives, key) do
+    case List.keyfind(directives, key, 0) do
+      {^key, value} ->
+        value
+        |> String.split(",")
+        |> hd()
+        |> String.trim()
+        |> String.downcase()
+        |> normalize_option_value()
+
+      nil ->
+        nil
+    end
+  end
+
+  defp normalize_option_value("es6"), do: "es2015"
+  defp normalize_option_value("es7"), do: "es2016"
+  defp normalize_option_value(v), do: v
+
   # Returns {expected_code_set, expects_errors?, used_variant_baselines?}.
   #
-  # Variant handling: when only "<name>(target=...).errors.txt" baselines exist,
-  # loose mode treats the test as "expects errors" if ANY variant has errors.
-  # Strict mode uses the UNION of TSxxxx codes across all variants — the runner
-  # only compiles one configuration, so the union is the most permissive
-  # approximation that never rejects a code tsc itself would emit for some
-  # variant of this test.
-  defp expected_from_baselines(name, %{dir: dir, exact: exact, variants: variants}) do
+  # Variant handling: multi-variant tests ("@target: es5, es2015") produce
+  # baselines like "<name>(target=es5).errors.txt". The runner compiles ONE
+  # configuration (the first directive value), so strict mode compares against
+  # the variant whose options match that configuration:
+  #   * matching variant baseline exists  -> its codes, expects errors
+  #   * no variant matches our config     -> our config produced no errors
+  #   * variants keyed on options we don't honor -> fall back to the UNION of
+  #     all variants (conservative; never rejects a code tsc would emit)
+  defp expected_from_baselines(name, %{dir: dir, exact: exact, variants: variants}, config) do
     exact_file = "#{name}.errors.txt"
 
     cond do
@@ -434,15 +466,59 @@ defmodule ConformanceTestRunner do
         {codes, true, false}
 
       Map.has_key?(variants, name) ->
+        expected_from_variants(dir, variants[name], config)
+
+      true ->
+        {MapSet.new(), false, false}
+    end
+  end
+
+  defp expected_from_variants(dir, files, config) do
+    parsed = Enum.map(files, fn f -> {f, parse_variant_options(f)} end)
+
+    decidable? =
+      Enum.all?(parsed, fn {_, opts} ->
+        Enum.all?(opts, fn {k, _} -> Map.get(config, k) != nil end)
+      end)
+
+    cond do
+      decidable? ->
+        case Enum.find(parsed, fn {_, opts} ->
+               Enum.all?(opts, fn {k, v} -> config[k] == v end)
+             end) do
+          {file, _} ->
+            codes = dir |> Path.join(file) |> File.read!() |> extract_codes()
+            {codes, true, true}
+
+          nil ->
+            # tsc produced no .errors.txt for the configuration we run
+            {MapSet.new(), false, true}
+        end
+
+      true ->
         codes =
-          variants[name]
+          files
           |> Enum.map(&(dir |> Path.join(&1) |> File.read!() |> extract_codes()))
           |> Enum.reduce(MapSet.new(), &MapSet.union/2)
 
         {codes, true, true}
+    end
+  end
 
-      true ->
-        {MapSet.new(), false, false}
+  # "name(target=es5,module=amd).errors.txt" -> %{"target" => "es5", "module" => "amd"}
+  defp parse_variant_options(fname) do
+    case Regex.run(~r/\(([^)]*)\)\.errors\.txt$/, fname) do
+      [_, opts] ->
+        opts
+        |> String.split(",")
+        |> Enum.map(&String.split(&1, "=", parts: 2))
+        |> Enum.filter(&match?([_, _], &1))
+        |> Map.new(fn [k, v] ->
+          {String.downcase(String.trim(k)), normalize_option_value(String.downcase(String.trim(v)))}
+        end)
+
+      nil ->
+        %{}
     end
   end
 
