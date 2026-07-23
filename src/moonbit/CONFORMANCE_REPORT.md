@@ -71,6 +71,17 @@ green on the same build.
 > types strict → 226/842 (0 crashes), classes → 110/466, es6 → 647/1045.
 > Unit suite: 5,319/5,319.
 
+> **Wave-5 final (July 23, 2026).** T21 completed the wave: generic
+> call/construct-signature assignability via new `signature_relation.mbt`
+> (tsc `compareSignaturesRelated` semantics — inference-instantiated source
+> type params, opaque-marker target type params, overload erasure), after
+> fixing the representation bug where constructor-type and generic
+> function-type annotations resolved every type parameter to `any`.
+> Wave-5 closing totals: **loose 4,054/5,693 = 71.2%; strict 2,087/5,693 =
+> 36.7%; crashes 3.** types strict 201 → 235/842 across the wave.
+> Unit suite: 5,346/5,346. Session arc: 62.7% → 71.2% loose,
+> 26.6% → 36.7% strict.
+
 - **Loose** counts a pass when "compiler reported errors" matches "a
   `.errors.txt` baseline exists" — presence only, not which errors.
 - **Strict** compares the *set* of `TSxxxx` codes emitted against the codes in

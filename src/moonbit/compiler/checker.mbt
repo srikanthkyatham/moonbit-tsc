@@ -7071,7 +7071,6 @@ fn infer_class_declaration_type(
   // Extract constructor parameters if constructor exists
   // IMPORTANT: Add type parameters to type_cache BEFORE resolving constructor parameter types
   // This ensures type references like T[] resolve correctly in constructor(...s: T[])
-  let constructor_parameters : Array[CheckerParameter] = []
   let mut c = checker
   let saved_type_cache = c.type_cache.copy()
   let saved_constraints = c.type_parameter_constraints.copy()
@@ -7084,15 +7083,20 @@ fn infer_class_declaration_type(
     c.type_parameter_constraints.set(tp.name, tp.constraint)
   }
 
+  // One parameter list per constructor declaration; overload declarations
+  // (no body) take precedence over the implementation signature
+  let overload_param_lists : Array[Array[CheckerParameter]] = []
+  let impl_param_lists : Array[Array[CheckerParameter]] = []
   for class_member in class_decl.members {
     match class_member {
       ConstructorDeclaration(ctor) => {
+        let ctor_parameters : Array[CheckerParameter] = []
         for param_node in ctor.parameters {
           match param_node {
             Parameter(p) => {
               let (param_type, c2) = resolve_type_annotation_or_any(c, p.type_annotation)
               c = c2
-              constructor_parameters.push({
+              ctor_parameters.push({
                 name: get_parameter_name(p.name),
                 param_type,
                 is_optional: p.is_optional,
@@ -7102,6 +7106,11 @@ fn infer_class_declaration_type(
             _ => ()
           }
         }
+        if ctor.body is None {
+          overload_param_lists.push(ctor_parameters)
+        } else {
+          impl_param_lists.push(ctor_parameters)
+        }
       }
       _ => ()
     }
@@ -7110,12 +7119,27 @@ fn infer_class_declaration_type(
   // Restore original type_cache and constraints
   c = { ..c, type_cache: saved_type_cache, type_parameter_constraints: saved_constraints }
   let checker = c
-
-  let construct_sig = CheckerSignature::{
-    parameters: constructor_parameters,
-    return_type: instance_type,
-    // Constructors inherit the class's type parameters
-    type_parameters: class_type_parameters,
+  let param_lists = if overload_param_lists.is_empty() {
+    impl_param_lists
+  } else {
+    overload_param_lists
+  }
+  let construct_sigs : Array[CheckerSignature] = param_lists.map(fn(params) {
+    CheckerSignature::{
+      parameters: params,
+      return_type: instance_type,
+      // Constructors inherit the class's type parameters
+      type_parameters: class_type_parameters,
+    }
+  })
+  // A class without a declared constructor still constructs: default
+  // parameterless construct signature
+  if construct_sigs.is_empty() {
+    construct_sigs.push(CheckerSignature::{
+      parameters: [],
+      return_type: instance_type,
+      type_parameters: class_type_parameters,
+    })
   }
 
   // Create class constructor type (the type of the class name as a value)
@@ -7124,7 +7148,7 @@ fn infer_class_declaration_type(
   let class_type = Type::Object(ObjectType::{
     properties: static_properties,
     call_signatures: [],
-    construct_signatures: [construct_sig],
+    construct_signatures: construct_sigs,
     index_signatures: [],
     info: class_info,
     class_name: None, // Constructor type doesn't need class_name tracking
@@ -14783,6 +14807,24 @@ fn is_assignable(source : Type, target : Type) -> Bool {
     (_, Unknown(_)) => true
     // Nothing (except any/never/unknown) is assignable to never
     (_, Never(_)) => false
+    // Opaque generic-signature type parameters (markers registered while a
+    // strict generic signature comparison is in progress, see
+    // signature_relation.mbt): a marker is assignable to itself; a
+    // constrained marker is assignable to whatever its constraint is
+    // assignable to; nothing concrete is assignable to a marker
+    (TypeReference(source_ref), TypeReference(target_ref)) if source_ref.name ==
+      target_ref.name &&
+      signature_relation_markers.contains(source_ref.name) => true
+    (TypeReference(source_ref), _) if signature_relation_markers.contains(
+        source_ref.name,
+      ) =>
+      match signature_relation_markers.get(source_ref.name) {
+        Some(Some(constraint)) => is_assignable(constraint, target)
+        _ => false
+      }
+    (_, TypeReference(target_ref)) if signature_relation_markers.contains(
+        target_ref.name,
+      ) => false
     // Same primitive types
     (Number(_), Number(_)) => true
     (String(_), String(_)) => true
@@ -14920,6 +14962,30 @@ fn is_assignable(source : Type, target : Type) -> Bool {
     // Function types - check parameter and return types
     (Function(source_fn), Function(target_fn)) =>
       is_function_assignable(source_fn, target_fn)
+    // A function type relates to an object type through the object's call
+    // signatures (generic function types and overloaded functions are
+    // represented as objects with call signatures)
+    (Function(source_fn), Object(target_obj)) if !target_obj.call_signatures.is_empty() ||
+      !target_obj.construct_signatures.is_empty() => {
+      let mut props_satisfied = true
+      for entry in target_obj.properties {
+        let (_, target_prop) = entry
+        if !target_prop.is_optional {
+          props_satisfied = false
+          break
+        }
+      }
+      props_satisfied &&
+      target_obj.construct_signatures.is_empty() &&
+      are_signature_lists_assignable(
+        [signature_of_function(source_fn)],
+        target_obj.call_signatures,
+      )
+    }
+    (Object(source_obj), Function(target_fn)) if !source_obj.call_signatures.is_empty() =>
+      are_signature_lists_assignable(source_obj.call_signatures, [
+        signature_of_function(target_fn),
+      ])
     // Intersection type assignability - source must be assignable to ALL members
     (source, Intersection(intersection)) =>
       is_assignable_to_intersection(source, intersection)
@@ -15689,6 +15755,21 @@ fn is_object_assignable_inner(
         }
     }
   }
+  // Call and construct signatures must be matched as well (T21)
+  if assignable &&
+    !are_signature_lists_assignable(
+      source.call_signatures,
+      target.call_signatures,
+    ) {
+    assignable = false
+  }
+  if assignable &&
+    !are_signature_lists_assignable(
+      source.construct_signatures,
+      target.construct_signatures,
+    ) {
+    assignable = false
+  }
   assignable
 }
 
@@ -16052,6 +16133,29 @@ fn check_object_assignability_detailed_inner(
         }
       }
     }
+  }
+
+  // Call and construct signatures must be matched as well (T21)
+  if !are_signature_lists_assignable(
+      source.call_signatures,
+      target.call_signatures,
+    ) {
+    checker = add_diagnostic_with_code(
+      checker,
+      "Type '\{type_to_string(Object(source))}' is not assignable to type '\{type_to_string(Object(target))}'",
+      location,
+      TS2322,
+    )
+  } else if !are_signature_lists_assignable(
+      source.construct_signatures,
+      target.construct_signatures,
+    ) {
+    checker = add_diagnostic_with_code(
+      checker,
+      "Type '\{type_to_string(Object(source))}' is not assignable to type '\{type_to_string(Object(target))}'",
+      location,
+      TS2322,
+    )
   }
   checker
 }
@@ -20772,6 +20876,26 @@ fn check_class_declaration(
   checker : TypeChecker,
   class_decl : ClassDeclaration,
 ) -> TypeChecker {
+  // Record the extends chain for nominal generic-constraint checks (T21,
+  // see signature_relation.mbt)
+  match class_decl.name {
+    Some(Identifier(id)) => {
+      let mut parent_name : String? = None
+      for heritage in class_decl.heritage_clauses {
+        if heritage.kind == HeritageKind::Extends {
+          for type_node in heritage.types {
+            match get_name_from_heritage_node(type_node) {
+              Some(name) => parent_name = Some(name)
+              None => ()
+            }
+          }
+        }
+      }
+      class_parent_registry.set(id.name, parent_name)
+    }
+    _ => ()
+  }
+
   // TS2502: Check if class references itself in its own base expression
   let checker = check_class_self_reference(checker, class_decl)
 
@@ -26111,42 +26235,46 @@ fn get_type_from_type_node(
         _ => (None, checker)
       }
     FunctionType(func_type) => {
-      // Handle function type annotations: (x: number) => string
-      let mut checker = checker
-      let parameters : Array[CheckerParameter] = []
-
-      // Convert each parameter
-      for param in func_type.parameters {
-        match param {
-          Parameter(p) => {
-            let (param_type, c) = match p.type_annotation {
-              Some(type_node) =>
-                match get_type_from_type_node(checker, type_node) {
-                  (Some(t), c2) => (t, c2)
-                  (None, c2) => any_type(c2)
-                }
-              None => any_type(checker)
-            }
-            checker = c
-            parameters.push({
-              name: get_parameter_name(p.name),
-              param_type,
-              is_optional: p.is_optional,
-              is_rest: p.is_rest,
-            })
-          }
-          _ => ()
-        }
-      }
-
-      // Get return type
-      let (return_type, checker) = match
-        get_type_from_type_node(checker, func_type.return_type) {
-        (Some(t), c) => (t, c)
-        (None, c) => any_type(c)
-      }
+      // Handle function type annotations: (x: number) => string and
+      // generic ones: <T>(x: T) => T[]
+      let (type_parameters, parameters, return_type, checker) = resolve_signature_annotation(
+        checker,
+        func_type.type_parameters,
+        func_type.parameters,
+        func_type.return_type,
+      )
+      // Generic function types become objects with a single call signature
+      // (same representation as generic function declarations); plain
+      // function types stay Function
+      let (t, checker) = create_function_type_with_params(
+        checker, parameters, return_type, type_parameters,
+      )
+      (Some(t), checker)
+    }
+    ConstructorType(ctor_type) => {
+      // Handle constructor type annotations: new (x: number) => Foo and
+      // generic ones: new <T>(x: T) => T[]; represented as an object type
+      // with a single construct signature
+      let (type_parameters, parameters, return_type, checker) = resolve_signature_annotation(
+        checker,
+        ctor_type.type_parameters,
+        ctor_type.parameters,
+        ctor_type.return_type,
+      )
       let (info, checker) = create_type_info(checker)
-      (Some(Type::Function({ parameters, return_type, info })), checker)
+      (
+        Some(
+          Type::Object({
+            properties: Map([]),
+            call_signatures: [],
+            construct_signatures: [{ parameters, return_type, type_parameters }],
+            index_signatures: [],
+            info,
+            class_name: None,
+          }),
+        ),
+        checker,
+      )
     }
     TypeOperator(type_op) =>
       // Handle type operators: keyof T, typeof x, readonly T, unique symbol
@@ -26355,14 +26483,57 @@ fn get_method_checker_signature(
   checker : TypeChecker,
   method_decl : MethodDeclaration,
 ) -> (CheckerSignature, TypeChecker) {
-  // Build parameters
-  let mut c = checker
+  let (type_parameters, parameters, return_type, checker) = resolve_signature_annotation(
+    checker,
+    method_decl.type_parameters,
+    method_decl.parameters,
+    match method_decl.return_type {
+      Some(rt) => rt
+      None => Node::KeywordType({ kind: Any, location: method_decl.location })
+    },
+  )
+  ({ parameters, return_type, type_parameters }, checker)
+}
+
+///|
+/// Resolve a signature-shaped type annotation (function type, constructor
+/// type, call/construct signature member): processes the signature's own
+/// type parameters and registers them in the type cache while resolving
+/// parameter and return type annotations, so that `T` resolves to a
+/// TypeReference instead of `any`
+fn resolve_signature_annotation(
+  checker : TypeChecker,
+  type_params : Array[TypeParameter],
+  params : Array[Node],
+  return_type_node : Node,
+) -> (Array[CheckerTypeParameter], Array[CheckerParameter], Type, TypeChecker) {
+  let mut checker = checker
+  let saved_type_cache = checker.type_cache.copy()
+  // Register the type parameter names first (constraints may reference
+  // sibling type parameters or the parameter itself)
+  for tp in type_params {
+    let (info, c) = create_type_info(checker)
+    checker = c
+    checker.type_cache.set(
+      tp.name,
+      Type::TypeReference({ name: tp.name, type_arguments: [], info }),
+    )
+  }
+  let (type_parameters, c0) = process_type_parameters(checker, type_params)
+  checker = c0
   let parameters : Array[CheckerParameter] = []
-  for param in method_decl.parameters {
+  for param in params {
     match param {
       Parameter(p) => {
-        let (param_type, c2) = resolve_type_annotation_or_any(c, p.type_annotation)
-        c = c2
+        let (param_type, c) = match p.type_annotation {
+          Some(type_node) =>
+            match get_type_from_type_node(checker, type_node) {
+              (Some(t), c2) => (t, c2)
+              (None, c2) => any_type(c2)
+            }
+          None => any_type(checker)
+        }
+        checker = c
         parameters.push({
           name: get_parameter_name(p.name),
           param_type,
@@ -26373,18 +26544,14 @@ fn get_method_checker_signature(
       _ => ()
     }
   }
-  let checker = c
-
-  // Get return type
-  let (return_type, checker) = match method_decl.return_type {
-    Some(rt) =>
-      match get_type_from_type_node(checker, rt) {
-        (Some(t), c) => (t, c)
-        (None, c) => any_type(c)
-      }
-    None => any_type(checker)
+  let (return_type, c1) = match
+    get_type_from_type_node(checker, return_type_node) {
+    (Some(t), c) => (t, c)
+    (None, c) => any_type(c)
   }
-  ({ parameters, return_type, type_parameters: [] }, checker)
+  checker = c1
+  let checker = { ..checker, type_cache: saved_type_cache }
+  (type_parameters, parameters, return_type, checker)
 }
 
 ///|
@@ -26799,11 +26966,32 @@ fn resolve_interface_type(
               None => any_type(checker)
             }
             checker = c
-            let func_sig : CheckerSignature = {
-              parameters,
-              return_type,
-              // Constructors and call signatures inherit the interface's type parameters
-              type_parameters: interface_type_parameters,
+            let func_sig : CheckerSignature = if meth.type_parameters.is_empty() {
+              {
+                parameters,
+                return_type,
+                // Constructors and call signatures inherit the interface's type parameters
+                type_parameters: interface_type_parameters,
+              }
+            } else {
+              // Signature-own generics (e.g. `<T>(x: T): T[]`): re-resolve
+              // the parameter/return annotations with the signature's own
+              // type parameters in scope so `T` stays a TypeReference
+              let (own_tps, own_params, own_ret, c) = resolve_signature_annotation(
+                checker,
+                meth.type_parameters,
+                meth.parameters,
+                match meth.return_type {
+                  Some(rt) => rt
+                  None => Node::KeywordType({ kind: Any, location: meth.location })
+                },
+              )
+              checker = c
+              {
+                parameters: own_params,
+                return_type: own_ret,
+                type_parameters: interface_type_parameters + own_tps,
+              }
             }
             // Check if this is a construct signature (name "new") or call signature (name "")
             if meth.name == "new" {
