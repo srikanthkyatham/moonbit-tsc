@@ -61,6 +61,16 @@ green on the same build.
 > types strict 201 → 224/842, expressions 85 → 91/376.
 > Unit suite: 5,264/5,264.
 
+> **Post-wave-5b update (July 23, 2026).** After T18 (class-body methods as
+> call signatures with tsc method bivariance, plus a coinductive recursion
+> guard that fixed a pre-existing segfault on mutually recursive class
+> comparisons) and T20 (tuple/array assignability relation with tsc-exact
+> arity/optional/rest rules, array-literal contextual typing, precise
+> TS2345/TS2554 for single non-generic signatures):
+> **loose 4,050/5,693 = 71.1%; strict 2,077/5,693 = 36.5%; crashes 4 → 3.**
+> types strict → 226/842 (0 crashes), classes → 110/466, es6 → 647/1045.
+> Unit suite: 5,319/5,319.
+
 - **Loose** counts a pass when "compiler reported errors" matches "a
   `.errors.txt` baseline exists" — presence only, not which errors.
 - **Strict** compares the *set* of `TSxxxx` codes emitted against the codes in

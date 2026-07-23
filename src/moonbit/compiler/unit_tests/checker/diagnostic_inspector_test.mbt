@@ -140,11 +140,14 @@ test "inspect/complex - function signature with multiple param mismatches" {
   let result = inspect_diagnostics(source)
   println(result)
   // Now correctly detects type errors in function arguments
+  // (single non-generic signature reports per-argument TS2345, like tsc)
   inspect(
     result,
     content=(
-      #|Found 1 diagnostic(s):
-      #|[1] TS2769: No overload matches this call. Arguments: (number, string, object, function) (line 14)
+      #|Found 3 diagnostic(s):
+      #|[1] TS2345: Argument of type 'number' is not assignable to parameter 'url' of type 'string' (line 14)
+      #|[2] TS2345: Argument of type 'string' is not assignable to parameter 'method' of type ''GET' | 'POST' | 'PUT' | 'DELETE'' (line 14)
+      #|[3] TS2345: Argument of type 'object' is not assignable to parameter 'config' of type 'object' (line 14)
       #|
     ),
   )
@@ -321,11 +324,13 @@ test "inspect/complex - rest parameter type mismatch" {
   let result = inspect_diagnostics(source)
   println(result)
   // Now correctly detects type errors in rest parameters
+  // (single non-generic signature reports per-argument TS2345, like tsc)
   inspect(
     result,
     content=(
-      #|Found 1 diagnostic(s):
-      #|[1] TS2769: No overload matches this call. Arguments: (number, number, string, number, boolean) (line 4)
+      #|Found 2 diagnostic(s):
+      #|[1] TS2345: Argument of type 'string' is not assignable to parameter of type 'number'. (line 4)
+      #|[2] TS2345: Argument of type 'boolean' is not assignable to parameter of type 'number'. (line 4)
       #|
     ),
   )

@@ -100,6 +100,9 @@ pub struct PropertySignature {
   prop_type : Type
   is_optional : Bool
   is_readonly : Bool
+  // Declared with method syntax (`foo(x): void` rather than
+  // `foo: (x) => void`); method parameters compare bivariantly
+  is_method : Bool
 } derive(Debug)
 
 ///|
@@ -284,6 +287,8 @@ pub struct TypeChecker {
   generator_yield_type : Type? // Expected yield type from generator return type annotation (e.g., Foo from IterableIterator<Foo>)
   collected_yield_types : Array[Type] // Collected yield types during generator body checking (for type inference)
   collected_return_types : Array[Type] // Collected return types during function body checking (for type inference)
+  contextual_fn_return : Type? // Contextual return type for the function/arrow expression about to be inferred (from a typed assignment target)
+  active_return_context : Type? // Expected return type of the function body currently being checked (contextual typing of return expressions)
   checked_function_bodies : Map[String, Bool] // Function names whose bodies were checked during type inference
   block_scoped_decls : Map[String, Int] // Variable name -> declaration line (for TS2448 TDZ check)
   uninitialized_vars : Map[String, Int] // Variable name -> function scope depth at declaration (for TS2454 definite assignment)
@@ -381,6 +386,8 @@ pub fn TypeChecker::new_with_options(
     generator_yield_type: None,
     collected_yield_types: [],
     collected_return_types: [],
+    contextual_fn_return: None,
+    active_return_context: None,
     checked_function_bodies: Map([]),
     block_scoped_decls: Map([]),
     uninitialized_vars: Map([]),
@@ -1965,6 +1972,7 @@ pub fn evaluate_mapped_type(
           prop_type: mapped.template_type,
           is_optional,
           is_readonly,
+          is_method: false,
         })
       }
       let (info, checker) = create_type_info(checker)
@@ -3181,6 +3189,7 @@ fn object_type_v2_to_type(obj : ObjectTypeV2) -> ObjectType {
       prop_type: type_v2_to_type(field.ty),
       is_optional: field.optional,
       is_readonly: field.is_readonly,
+      is_method: false,
     })
   }
   ObjectType::{
@@ -3241,6 +3250,7 @@ fn type_v2_to_type(ty : TypeV2) -> Type {
           prop_type: type_v2_to_type(field.ty),
           is_optional: field.optional,
           is_readonly: field.is_readonly,
+          is_method: false,
         })
       }
       Object(ObjectType::{
@@ -3361,6 +3371,7 @@ fn module_types_to_object_type(module_types : ModuleTypes) -> Type {
       prop_type: type_v2_to_type(export_info.ty),
       is_optional: false,
       is_readonly: true,
+      is_method: false,
     })
   }
   Object(ObjectType::{
@@ -4379,6 +4390,21 @@ fn infer_type_with_context(
   contextual_type : Type?,
   is_const : Bool,
 ) -> (Type, TypeChecker) {
+  // Function and arrow expressions assigned to a typed target: propagate the
+  // contextual return type so return-position expressions (e.g. array
+  // literals against tuple returns) are checked with context
+  match (expr, contextual_type) {
+    (FunctionExpression(_) | ArrowFunction(_), Some(Function(fn_type))) => {
+      let saved = checker.contextual_fn_return
+      let checker = {
+        ..checker,
+        contextual_fn_return: Some(fn_type.return_type),
+      }
+      let (t, checker) = infer_type(checker, expr)
+      return (t, { ..checker, contextual_fn_return: saved })
+    }
+    _ => ()
+  }
   // For const declarations, check if we should infer a literal type
   if is_const {
     match (expr, contextual_type) {
@@ -4511,6 +4537,79 @@ fn union_contains_boolean_literal(
 }
 
 ///|
+/// Contextual type for the argument at `index` of a call: the corresponding
+/// parameter type, or the rest parameter's element type when the index is
+/// past the fixed parameters
+fn contextual_parameter_type(func_type : Type, index : Int) -> Type? {
+  match func_type {
+    Function(fn_type) => {
+      let params = fn_type.parameters
+      let param = if index < params.length() {
+        Some(params[index])
+      } else if params.length() > 0 && params[params.length() - 1].is_rest {
+        Some(params[params.length() - 1])
+      } else {
+        None
+      }
+      match param {
+        Some(p) =>
+          if p.is_rest {
+            // A rest parameter's declared type is an array; each argument
+            // is checked against its element type
+            match p.param_type {
+              Array(arr) => Some(arr.element_type)
+              _ => None
+            }
+          } else {
+            Some(p.param_type)
+          }
+        None => None
+      }
+    }
+    _ => None
+  }
+}
+
+///|
+/// Contextual type for the element at `index` of an array literal typed
+/// against a tuple: the target element at that position, or the rest
+/// element's inner type when the index is past the fixed elements
+fn tuple_context_element_type(
+  tuple_type : CheckerTupleType,
+  index : Int,
+) -> Type? {
+  if index < tuple_type.element_types.length() {
+    let elem = tuple_type.element_types[index]
+    Some(tuple_element_inner_type(elem))
+  } else if tuple_type.element_types.length() > 0 {
+    let last = tuple_type.element_types[tuple_type.element_types.length() - 1]
+    if last.is_rest {
+      Some(tuple_element_inner_type(last))
+    } else {
+      None
+    }
+  } else {
+    None
+  }
+}
+
+///|
+/// Infer an expression with a (possibly tuple) target type as context:
+/// array literals take a tuple target as their contextual type so they are
+/// inferred as tuples; everything else infers normally
+fn infer_expr_with_tuple_target(
+  checker : TypeChecker,
+  expr : Node,
+  target : Type,
+) -> (Type, TypeChecker) {
+  match (expr, target) {
+    (ArrayLiteralExpression(arr), Tuple(tuple_type)) =>
+      infer_tuple_from_array_literal(checker, arr, tuple_type)
+    _ => infer_type(checker, expr)
+  }
+}
+
+///|
 /// Infer a tuple type from an array literal with contextual tuple type
 fn infer_tuple_from_array_literal(
   checker : TypeChecker,
@@ -4531,25 +4630,56 @@ fn infer_tuple_from_array_literal(
 
   // Infer types for all array literal elements
   for i = 0; i < arr.elements.length(); i = i + 1 {
-    let elem_type = match arr.elements[i] {
-      Some(elem_node) => {
-        let (t, c) = infer_type(checker, elem_node)
+    match arr.elements[i] {
+      // Spread elements contribute their operand's elements
+      Some(SpreadExpression(spread)) => {
+        let (spread_type, c) = infer_type(checker, spread.expression)
         checker = c
-        t
+        match spread_type {
+          // Spreading a tuple splices its elements (with their flags)
+          Tuple(spread_tuple) =>
+            for elem in spread_tuple.element_types {
+              element_types.push(elem)
+            }
+          // Spreading anything else (array, any, iterable) contributes an
+          // unknown number of elements: model as a rest element
+          _ =>
+            element_types.push(TupleElement::{
+              element_type: spread_type,
+              is_optional: false,
+              is_rest: true,
+              label: None,
+            })
+        }
+      }
+      Some(elem_node) => {
+        // Use the corresponding target element as the contextual type so
+        // nested array literals are typed against nested tuple targets
+        let (t, c) = match tuple_context_element_type(tuple_type, i) {
+          Some(target_elem_type) =>
+            infer_expr_with_tuple_target(checker, elem_node, target_elem_type)
+          None => infer_type(checker, elem_node)
+        }
+        checker = c
+        element_types.push(TupleElement::{
+          element_type: t,
+          is_optional: false,
+          is_rest: false,
+          label: None,
+        })
       }
       None => {
         // Hole in array - use undefined
         let (t, c) = undefined_type(checker)
         checker = c
-        t
+        element_types.push(TupleElement::{
+          element_type: t,
+          is_optional: false,
+          is_rest: false,
+          label: None,
+        })
       }
     }
-    element_types.push(TupleElement::{
-      element_type: elem_type,
-      is_optional: false,
-      is_rest: false,
-      label: None,
-    })
   }
   let (info, checker) = create_type_info(checker)
   (Tuple(CheckerTupleType::{ element_types, info }), checker)
@@ -5141,6 +5271,7 @@ fn get_arguments_type(checker : TypeChecker) -> (Type, TypeChecker) {
     prop_type: Type::Number(TypeInfo::{ id: num_id, flags: default_flags }),
     is_optional: false,
     is_readonly: false,
+    is_method: false,
   })
 
   // callee property (Function type)
@@ -5154,6 +5285,7 @@ fn get_arguments_type(checker : TypeChecker) -> (Type, TypeChecker) {
     }),
     is_optional: false,
     is_readonly: false,
+    is_method: false,
   })
 
   // Create the arguments type with numeric index signature
@@ -5466,6 +5598,7 @@ fn get_symbol_constructor_type(checker : TypeChecker) -> (Type, TypeChecker) {
     }),
     is_optional: false,
     is_readonly: false,
+    is_method: true,
   })
 
   // Well-known Symbol properties (ES2015+)
@@ -5548,6 +5681,7 @@ fn get_error_constructor_type(checker : TypeChecker) -> (Type, TypeChecker) {
     prop_type: Type::String(info),
     is_optional: true,
     is_readonly: false,
+    is_method: false,
   })
   let (instance_id, checker) = next_type_id(checker)
   let error_instance_type = Type::Object(ObjectType::{
@@ -5954,6 +6088,7 @@ fn get_module_type(checker : TypeChecker) -> (Type, TypeChecker) {
     prop_type: exports_inner_type,
     is_optional: false,
     is_readonly: false,
+    is_method: false,
   })
   let module_type = Type::Object(ObjectType::{
     properties: module_properties,
@@ -6288,8 +6423,14 @@ fn infer_function_declaration_type(
           let checker = c
 
           // Save and reset collected return types (each function has its own set)
+          // Also clear any contextual return type from an enclosing function
           let saved_collected_return_types = checker.collected_return_types
-          let checker = { ..checker, collected_return_types: [] }
+          let saved_active_return_context = checker.active_return_context
+          let checker = {
+            ..checker,
+            collected_return_types: [],
+            active_return_context: None,
+          }
 
           // Save and reset in_namespace_body (functions create new scope for 'this')
           let saved_in_namespace_body = checker.in_namespace_body
@@ -6310,8 +6451,12 @@ fn infer_function_declaration_type(
           // Get the collected return types
           let collected_return_types = checker.collected_return_types
 
-          // Restore saved collected return types
-          let checker = { ..checker, collected_return_types: saved_collected_return_types }
+          // Restore saved collected return types and return context
+          let checker = {
+            ..checker,
+            collected_return_types: saved_collected_return_types,
+            active_return_context: saved_active_return_context,
+          }
 
           // Restore in_namespace_body flag
           let checker = { ..checker, in_namespace_body: saved_in_namespace_body }
@@ -6661,6 +6806,7 @@ fn infer_class_declaration_type(
           prop_type,
           is_optional: false,
           is_readonly: has_readonly,
+          is_method: false,
         }
         if is_static {
           static_properties.set(prop.name, prop_sig)
@@ -6733,6 +6879,7 @@ fn infer_class_declaration_type(
           prop_type: method_type,
           is_optional: false,
           is_readonly: false,
+          is_method: true,
         }
         if is_static {
           static_properties.set(method_decl.name, prop_sig)
@@ -6786,6 +6933,7 @@ fn infer_class_declaration_type(
           prop_type: getter_return_type,
           is_optional: false,
           is_readonly: true, // Getters are read-only unless there's also a setter
+          is_method: false,
         }
         if is_static {
           static_properties.set(getter.name, prop_sig)
@@ -6840,6 +6988,7 @@ fn infer_class_declaration_type(
               prop_type: setter_param_type,
               is_optional: false,
               is_readonly: false,
+              is_method: false,
             }
             if is_static {
               static_properties.set(setter.name, prop_sig)
@@ -7186,7 +7335,13 @@ fn infer_binary_expression_type(
   let (left_type, checker) = infer_type(checker, bin_expr.left)
   // Reset the flag after inferring left side
   let checker = { ..checker, in_destructuring_pattern: false }
-  let (right_type, checker) = infer_type(checker, bin_expr.right)
+  // For plain assignments the left side's type is the contextual type of the
+  // right side (e.g. array literals assigned to tuple-typed variables)
+  let (right_type, checker) = if bin_expr.operator is Assign {
+    infer_expr_with_tuple_target(checker, bin_expr.right, left_type)
+  } else {
+    infer_type(checker, bin_expr.right)
+  }
 
   // Determine result type based on operator
   match bin_expr.operator {
@@ -7685,7 +7840,13 @@ fn infer_call_expression_type(
         }
       }
       _ => {
-        let (arg_type, c) = infer_type(checker, call.arguments[i])
+        // Use the parameter type as the argument's contextual type so array
+        // literals are typed against tuple-typed parameters
+        let (arg_type, c) = match contextual_parameter_type(func_type, i) {
+          Some(param_type) =>
+            infer_expr_with_tuple_target(checker, call.arguments[i], param_type)
+          None => infer_type(checker, call.arguments[i])
+        }
         arg_types.push(arg_type)
         arg_is_spread.push(false)
         arg_spread_types.push(None)
@@ -7824,10 +7985,9 @@ fn infer_call_expression_type(
         // be permissive and return any without error
         any_type(checker)
     }
-  } else if signatures.length() == 1 && arg_is_spread.iter().any(fn(is_spread) { is_spread }) &&
-    signatures[0].type_parameters.is_empty() {
-    // Single non-generic signature with spread arguments - use direct argument checking for better error messages
-    // This gives TS2345 errors for spread argument type mismatches instead of generic TS2769
+  } else if signatures.length() == 1 && signatures[0].type_parameters.is_empty() {
+    // Single non-generic signature - use direct argument checking for better error messages
+    // This gives TS2345 errors for argument type mismatches instead of generic TS2769
     // Note: Generic signatures (with type parameters) need to go through overload resolution for type inference
     let sig = signatures[0]
     let (info, checker) = create_type_info(checker)
@@ -7880,9 +8040,24 @@ fn check_function_call_args(
   let has_rest = expanded_params.length() > 0 &&
     expanded_params[expanded_params.length() - 1].is_rest
 
+  // A rest parameter before the last position (from a variadic tuple like
+  // [...F[], G]) makes the arity unbounded and positional matching unknown:
+  // skip per-argument checks and only require the fixed parameters
+  let mut has_middle_rest = false
+  for i = 0; i < expanded_params.length() - 1; i = i + 1 {
+    if expanded_params[i].is_rest {
+      has_middle_rest = true
+      break
+    }
+  }
+
   // Check argument count
   let min_params = count_required_params(expanded_params)
-  let max_params = if has_rest { -1 } else { expanded_params.length() }
+  let max_params = if has_rest || has_middle_rest {
+    -1
+  } else {
+    expanded_params.length()
+  }
   if arg_types.length() < min_params {
     checker = add_diagnostic_with_code(
       checker,
@@ -7901,7 +8076,8 @@ fn check_function_call_args(
   }
 
   // Check each argument type
-  for i = 0; i < arg_types.length(); i = i + 1 {
+  // (skipped when a non-trailing rest parameter makes positions ambiguous)
+  for i = 0; !has_middle_rest && i < arg_types.length(); i = i + 1 {
     if i < expanded_params.length() {
       let param = expanded_params[i]
       // For rest parameters, extract element type from array type
@@ -8341,6 +8517,7 @@ fn substitute_in_type(
           prop_type: new_type,
           is_optional: prop.is_optional,
           is_readonly: prop.is_readonly,
+          is_method: prop.is_method,
         })
       }
       let (info, checker) = create_type_info(checker)
@@ -9630,7 +9807,11 @@ fn check_return_type_consistency(
           ReturnStatement(ret) =>
             match ret.expression {
               Some(expr) => {
-                let (return_type, c) = infer_type(checker, expr)
+                // The declared return type is the contextual type for the
+                // return expression (e.g. array literals vs tuple returns)
+                let (return_type, c) = infer_expr_with_tuple_target(
+                  checker, expr, declared_return,
+                )
                 checker = c
                 // Use check_assignment_compatibility for better union handling
                 checker = check_assignment_compatibility(
@@ -12876,6 +13057,22 @@ fn infer_function_expression_type(
   checker : TypeChecker,
   fe : FunctionExpression,
 ) -> (Type, TypeChecker) {
+  // Consume the contextual return type (set when this expression is assigned
+  // to a typed target) and activate it for the body's return statements.
+  // An explicit return type annotation takes precedence over context.
+  let contextual_return = checker.contextual_fn_return
+  let saved_active_return_context = checker.active_return_context
+  let body_return_context = if fe.return_type is None {
+    contextual_return
+  } else {
+    None
+  }
+  let checker = {
+    ..checker,
+    contextual_fn_return: None,
+    active_return_context: body_return_context,
+  }
+
   // Push a local scope for function body checking
   let checker = push_function_scope(checker)
 
@@ -13023,8 +13220,12 @@ fn infer_function_expression_type(
 
   // Collect return types for type inference
   let collected_return_types = checker.collected_return_types
-  // Restore the outer function's collected return types
-  let checker = { ..checker, collected_return_types: saved_collected_return_types }
+  // Restore the outer function's collected return types and return context
+  let checker = {
+    ..checker,
+    collected_return_types: saved_collected_return_types,
+    active_return_context: saved_active_return_context,
+  }
 
   // For generator functions, create a Generator type if no explicit return type
   // The Generator type is inferred from collected yield types
@@ -13160,7 +13361,7 @@ fn infer_array_literal_type(
             if !(checker.in_destructuring_pattern) {
               // Check if type is iterable - use extract_iterable_element_type to determine if we can extract an element
               let is_iterable = match spread_type {
-                Array(_) | String(_) => true
+                Array(_) | String(_) | Tuple(_) => true
                 Object(obj) => {
                   // Check if it's an interface with Symbol.iterator
                   match obj.class_name {
@@ -13370,6 +13571,25 @@ fn infer_array_literal_type(
                 checker = c
                 element_types.push(String(info))
               }
+              Tuple(tuple_type) =>
+                // Spreading a tuple contributes each of its element types
+                for elem in tuple_type.element_types {
+                  let elem_type = tuple_element_inner_type(elem)
+                  element_types.push(elem_type)
+                  // TS2322: Check if spread element type is assignable to contextual type
+                  match contextual_element_type {
+                    Some(expected) =>
+                      if !(is_assignable(elem_type, expected)) {
+                        checker = add_diagnostic_with_code(
+                          checker,
+                          "Type '\{type_to_string(elem_type)}' is not assignable to type '\{type_to_string(expected)}'.",
+                          spread.location,
+                          TS2322,
+                        )
+                      }
+                    None => ()
+                  }
+                }
               Object(_) | TypeReference(_) => {
                 // Try to extract element type from iterable
                 let (elem_type_opt, c) = extract_iterable_element_type(
@@ -13655,6 +13875,7 @@ fn infer_object_literal_type(
           prop_type,
           is_optional: false,
           is_readonly: false,
+          is_method: false,
         })
         checker = c
       }
@@ -13722,6 +13943,7 @@ fn infer_object_literal_type(
           prop_type,
           is_optional: false,
           is_readonly: false,
+          is_method: false,
         })
         checker = c
       }
@@ -13795,6 +14017,7 @@ fn infer_object_literal_type(
           prop_type,
           is_optional: false,
           is_readonly: false,
+          is_method: false,
         })
         checker = c
       }
@@ -13959,6 +14182,7 @@ fn infer_object_literal_type(
           prop_type: method_type,
           is_optional: false,
           is_readonly: false,
+          is_method: true,
         })
         checker = c
       }
@@ -13985,6 +14209,7 @@ fn infer_object_literal_type(
           prop_type,
           is_optional: false,
           is_readonly: true, // Getters are read-only unless there's also a setter
+          is_method: false,
         })
         checker = c
       }
@@ -14028,6 +14253,7 @@ fn infer_object_literal_type(
               prop_type,
               is_optional: false,
               is_readonly: false,
+              is_method: false,
             })
         }
         checker = c
@@ -14068,6 +14294,7 @@ fn infer_object_literal_type(
           prop_type: method_type,
           is_optional: false,
           is_readonly: false,
+          is_method: true,
         })
         checker = c
       }
@@ -14111,6 +14338,7 @@ fn infer_object_literal_type(
           prop_type,
           is_optional: false,
           is_readonly: true,
+          is_method: false,
         })
         checker = c
       }
@@ -14170,6 +14398,7 @@ fn infer_object_literal_type(
               prop_type,
               is_optional: false,
               is_readonly: false,
+              is_method: false,
             })
         }
         checker = c
@@ -14259,6 +14488,22 @@ fn infer_arrow_function_type(
   checker : TypeChecker,
   arrow : ArrowFunction,
 ) -> (Type, TypeChecker) {
+  // Consume the contextual return type (set when this expression is assigned
+  // to a typed target) and activate it for the body's return statements.
+  // An explicit return type annotation takes precedence over context.
+  let contextual_return = checker.contextual_fn_return
+  let saved_active_return_context = checker.active_return_context
+  let body_return_context = if arrow.return_type is None {
+    contextual_return
+  } else {
+    None
+  }
+  let checker = {
+    ..checker,
+    contextual_fn_return: None,
+    active_return_context: body_return_context,
+  }
+
   // Push a new local scope for the arrow function
   let checker = push_function_scope(checker)
 
@@ -14337,7 +14582,14 @@ fn infer_arrow_function_type(
           // Infer return type from return statements in the block
           infer_return_type_from_block(checker, block)
         }
-        _ => infer_type(checker, arrow.body)
+        _ =>
+          // Expression body: use the contextual return type (e.g. array
+          // literals against tuple returns)
+          match body_return_context {
+            Some(target) =>
+              infer_expr_with_tuple_target(checker, arrow.body, target)
+            None => infer_type(checker, arrow.body)
+          }
       }
   }
 
@@ -14353,6 +14605,9 @@ fn infer_arrow_function_type(
 
   // Restore generator context
   let checker = { ..checker, generator_function_depth: saved_generator_depth }
+
+  // Restore the outer function's return context
+  let checker = { ..checker, active_return_context: saved_active_return_context }
 
   // Exit arrow function context
   let checker = exit_arrow_function(checker)
@@ -14410,7 +14665,12 @@ fn collect_return_types_from_statement(
     ReturnStatement(ret) =>
       match ret.expression {
         Some(expr) => {
-          let (ret_type, _) = infer_type(checker, expr)
+          // Use the enclosing function's contextual return type (if any) so
+          // array literals in return position are typed against tuple targets
+          let (ret_type, _) = match checker.active_return_context {
+            Some(target) => infer_expr_with_tuple_target(checker, expr, target)
+            None => infer_type(checker, expr)
+          }
           return_types.push(ret_type)
         }
         None => {
@@ -15040,19 +15300,58 @@ fn is_type_reference_assignable(
 }
 
 ///|
+/// Effective element type of a tuple element: a rest element's declared type
+/// is an array, so unwrap it to the array's element type
+fn tuple_element_inner_type(elem : TupleElement) -> Type {
+  if elem.is_rest {
+    match elem.element_type {
+      Array(arr) => arr.element_type
+      _ => elem.element_type
+    }
+  } else {
+    elem.element_type
+  }
+}
+
+///|
+/// Count required (non-optional, non-rest) elements and detect a rest element
+/// Returns (required_count, has_rest)
+fn tuple_arity(tuple : CheckerTupleType) -> (Int, Bool) {
+  let mut required = 0
+  let mut has_rest = false
+  for elem in tuple.element_types {
+    if elem.is_rest {
+      has_rest = true
+    } else if !(elem.is_optional) {
+      required = required + 1
+    }
+  }
+  (required, has_rest)
+}
+
+///|
 /// Check if array is assignable to tuple
+/// An array has unknown length, so it is only assignable to a tuple whose
+/// minimum length is 0 (no required elements) and whose maximum length is
+/// unbounded (has a rest element), e.g. number[] -> [...number[]]
 fn is_array_assignable_to_tuple(
   arr : CheckerArrayType,
   tuple : CheckerTupleType,
 ) -> Bool {
-  // Array can be assigned to tuple if all tuple elements accept the array element type
+  let (required, has_rest) = tuple_arity(tuple)
+  if required > 0 {
+    // Target requires elements but source may have fewer
+    return false
+  }
+  if !has_rest {
+    // Target allows only a bounded number of elements but source may have more
+    return false
+  }
+  // Element compatibility: array element type must fit every tuple element
   for i = 0; i < tuple.element_types.length(); i = i + 1 {
     let elem = tuple.element_types[i]
-    if !(elem.is_optional) && !(elem.is_rest) {
-      // Required element - check if array element type is compatible
-      if !(is_assignable(arr.element_type, elem.element_type)) {
-        return false
-      }
+    if !(is_assignable(arr.element_type, tuple_element_inner_type(elem))) {
+      return false
     }
   }
   true
@@ -15189,19 +15488,26 @@ fn is_tuple_assignable(
   source : CheckerTupleType,
   target : CheckerTupleType,
 ) -> Bool {
-  // Count required elements in target (excluding rest)
-  let mut target_required = 0
-  let mut _target_rest_idx : Int? = None
-  for i = 0; i < target.element_types.length(); i = i + 1 {
-    if target.element_types[i].is_rest {
-      _target_rest_idx = Some(i)
-    } else if !(target.element_types[i].is_optional) {
-      target_required = target_required + 1
+  let (target_required, target_has_rest) = tuple_arity(target)
+  let (source_fixed, source_has_rest) = tuple_fixed_count_and_rest(source)
+
+  // Source must be able to supply all required target elements
+  if source_has_rest {
+    // Rest element supplies an unknown number: only fixed elements are
+    // guaranteed ("source may have fewer")
+    if source_fixed < target_required {
+      return false
     }
+  } else if source.element_types.length() < target_required {
+    return false
   }
 
-  // Source must have at least as many elements as target required
-  if source.element_types.length() < target_required {
+  // A bounded target (no rest) cannot accept a source that may be longer
+  if !target_has_rest &&
+    (
+      source_has_rest || source.element_types.length() >
+      target.element_types.length()
+    ) {
     return false
   }
 
@@ -15211,14 +15517,14 @@ fn is_tuple_assignable(
     if target_elem.is_rest {
       // For rest element, all remaining source elements must be assignable
       // to the rest element's array element type
-      let rest_elem_type = match target_elem.element_type {
-        Array(arr) => arr.element_type
-        _ => target_elem.element_type // Fallback if not array
-      }
+      let rest_elem_type = tuple_element_inner_type(target_elem)
       // Check all remaining source elements
       for j = i; j < source.element_types.length(); j = j + 1 {
         if !(
-            is_assignable(source.element_types[j].element_type, rest_elem_type),
+            is_assignable(
+              tuple_element_inner_type(source.element_types[j]),
+              rest_elem_type,
+            ),
           ) {
           return false
         }
@@ -15227,12 +15533,17 @@ fn is_tuple_assignable(
       return true
     }
     if i < source.element_types.length() {
-      if !(
-          is_assignable(
-            source.element_types[i].element_type,
-            target_elem.element_type,
-          ),
-        ) {
+      let source_elem = source.element_types[i]
+      // An optional source element provides no match for a required
+      // target element
+      if source_elem.is_optional && !(target_elem.is_optional) {
+        return false
+      }
+      let source_elem_type = tuple_element_inner_type(source_elem)
+      // Optional target elements implicitly include undefined
+      if target_elem.is_optional && type_is_nullish(source_elem_type) {
+        ()
+      } else if !(is_assignable(source_elem_type, target_elem.element_type)) {
         return false
       }
     } else if !(target_elem.is_optional) {
@@ -15240,6 +15551,21 @@ fn is_tuple_assignable(
     }
   }
   true
+}
+
+///|
+/// Count fixed (non-rest) elements of a tuple and whether it has a rest element
+fn tuple_fixed_count_and_rest(tuple : CheckerTupleType) -> (Int, Bool) {
+  let mut fixed = 0
+  let mut has_rest = false
+  for elem in tuple.element_types {
+    if elem.is_rest {
+      has_rest = true
+    } else {
+      fixed = fixed + 1
+    }
+  }
+  (fixed, has_rest)
 }
 
 ///|
@@ -15301,8 +15627,35 @@ fn is_union_assignable_to(union : CheckerUnionType, target : Type) -> Bool {
 }
 
 ///|
+/// Class-to-class structural comparisons currently in progress, keyed by
+/// "Source=>Target" class-name pairs. Recursive types (e.g. `class C
+/// { p: C }` vs `class E { p: E }`) terminate coinductively: a pair
+/// already being compared is assumed assignable.
+let class_relation_in_progress : Map[String, Bool] = Map([])
+
+///|
 /// Check if source object is assignable to target object (structural typing)
 fn is_object_assignable(source : ObjectType, target : ObjectType) -> Bool {
+  match (source.class_name, target.class_name) {
+    (Some(s_name), Some(t_name)) => {
+      let key = "\{s_name}=>\{t_name}"
+      if class_relation_in_progress.get(key) is Some(_) {
+        return true
+      }
+      class_relation_in_progress.set(key, true)
+      let result = is_object_assignable_inner(source, target)
+      class_relation_in_progress.remove(key)
+      result
+    }
+    _ => is_object_assignable_inner(source, target)
+  }
+}
+
+///|
+fn is_object_assignable_inner(
+  source : ObjectType,
+  target : ObjectType,
+) -> Bool {
   // Check that all required properties in target exist in source
   let target_props = target.properties.iter()
   let mut assignable = true
@@ -15314,9 +15667,19 @@ fn is_object_assignable(source : ObjectType, target : ObjectType) -> Bool {
         if target_prop.is_optional && type_is_nullish(source_prop.prop_type) {
           continue
         }
-        if !is_assignable(source_prop.prop_type, target_prop.prop_type) {
-          assignable = false
-          break
+        match (source_prop.prop_type, target_prop.prop_type) {
+          // Method-syntax members compare with bivariant parameters
+          (Function(source_fn), Function(target_fn)) if source_prop.is_method ||
+            target_prop.is_method =>
+            if !is_method_signature_assignable(source_fn, target_fn) {
+              assignable = false
+              break
+            }
+          _ =>
+            if !is_assignable(source_prop.prop_type, target_prop.prop_type) {
+              assignable = false
+              break
+            }
         }
       }
       None =>
@@ -15476,6 +15839,11 @@ fn check_assignment_detailed(
       return check_tuple_assignability_detailed(
         checker, source_tuple, target_tuple, location, path,
       )
+    // Array to tuple: unknown length, only assignable to open-ended tuples
+    (Array(source_arr), Tuple(target_tuple)) =>
+      return check_array_to_tuple_assignability_detailed(
+        checker, source_arr, target_tuple, location, path,
+      )
     _ => ()
   }
 
@@ -15588,6 +15956,37 @@ fn check_object_assignability_detailed(
   location : SourceLocation,
   path : String,
 ) -> TypeChecker {
+  // Guard recursive class-to-class comparisons (see
+  // class_relation_in_progress): a pair already being compared is
+  // assumed assignable, terminating recursive types coinductively
+  match (source.class_name, target.class_name) {
+    (Some(s_name), Some(t_name)) => {
+      let key = "\{s_name}=>\{t_name}"
+      if class_relation_in_progress.get(key) is Some(_) {
+        return checker
+      }
+      class_relation_in_progress.set(key, true)
+      let result = check_object_assignability_detailed_inner(
+        checker, source, target, location, path,
+      )
+      class_relation_in_progress.remove(key)
+      result
+    }
+    _ =>
+      check_object_assignability_detailed_inner(
+        checker, source, target, location, path,
+      )
+  }
+}
+
+///|
+fn check_object_assignability_detailed_inner(
+  checker : TypeChecker,
+  source : ObjectType,
+  target : ObjectType,
+  location : SourceLocation,
+  path : String,
+) -> TypeChecker {
   let mut checker = checker
 
   // Check that all required properties in target exist in source with compatible types
@@ -15600,14 +15999,28 @@ fn check_object_assignability_detailed(
         if target_prop.is_optional && type_is_nullish(source_prop.prop_type) {
           ()
         } else {
-          // Check property type compatibility recursively
-          checker = check_assignment_detailed(
-            checker,
-            source_prop.prop_type,
-            target_prop.prop_type,
-            location,
-            prop_path,
-          )
+          match (source_prop.prop_type, target_prop.prop_type) {
+            (Function(source_fn), Function(target_fn)) if source_prop.is_method ||
+              target_prop.is_method =>
+              // Method-syntax members: bivariant parameter comparison
+              if !is_method_signature_assignable(source_fn, target_fn) {
+                checker = add_diagnostic_with_code(
+                  checker,
+                  "Types of property '\{prop_name}' are incompatible. Type '\{type_to_string(source_prop.prop_type)}' is not assignable to type '\{type_to_string(target_prop.prop_type)}'",
+                  location,
+                  TS2322,
+                )
+              }
+            _ =>
+              // Check property type compatibility recursively
+              checker = check_assignment_detailed(
+                checker,
+                source_prop.prop_type,
+                target_prop.prop_type,
+                location,
+                prop_path,
+              )
+          }
         }
       None =>
         // Property missing
@@ -15863,7 +16276,9 @@ fn expand_function_parameters(params : Array[CheckerParameter]) -> Array[Checker
               name: "\{param.name}[\{i}]",
               param_type: elem.element_type,
               is_optional: elem.is_optional,
-              is_rest: false,  // Individual elements are not rest
+              // Rest elements inside the tuple (e.g. [...F[], G]) accept an
+              // unbounded number of arguments and stay rest parameters
+              is_rest: elem.is_rest,
             })
           }
         }
@@ -15942,24 +16357,50 @@ fn check_tuple_assignability_detailed(
   path : String,
 ) -> TypeChecker {
   let mut checker = checker
+  let (target_required, target_has_rest) = tuple_arity(target)
+  let (source_fixed, source_has_rest) = tuple_fixed_count_and_rest(source)
+  let source_str = type_to_string(Tuple(source))
+  let target_str = type_to_string(Tuple(target))
 
-  // Count required elements in target (excluding rest)
-  let mut target_required = 0
-  for elem in target.element_types {
-    if !(elem.is_optional) && !(elem.is_rest) {
-      target_required = target_required + 1
+  // Source must be able to supply all required target elements
+  if source_has_rest {
+    // Rest element supplies an unknown number: only fixed elements are
+    // guaranteed
+    if source_fixed < target_required {
+      return add_diagnostic_with_code(
+        checker,
+        "Type '\{source_str}' is not assignable to type '\{target_str}'. Target requires \{target_required} element(s) but source may have fewer.",
+        location,
+        TS2322,
+      )
     }
-  }
-
-  // Source must have at least as many elements as target required
-  if source.element_types.length() < target_required {
-    checker = add_diagnostic_with_code(
+  } else if source.element_types.length() < target_required {
+    return add_diagnostic_with_code(
       checker,
-      "Tuple has fewer elements (\{source.element_types.length()}) than required (\{target_required})",
+      "Type '\{source_str}' is not assignable to type '\{target_str}'. Source has \{source.element_types.length()} element(s) but target requires \{target_required}.",
       location,
       TS2322,
     )
-    return checker
+  }
+
+  // A bounded target (no rest) cannot accept a source that may be longer
+  if !target_has_rest {
+    if source_has_rest {
+      return add_diagnostic_with_code(
+        checker,
+        "Type '\{source_str}' is not assignable to type '\{target_str}'. Target allows only \{target.element_types.length()} element(s) but source may have more.",
+        location,
+        TS2322,
+      )
+    }
+    if source.element_types.length() > target.element_types.length() {
+      return add_diagnostic_with_code(
+        checker,
+        "Type '\{source_str}' is not assignable to type '\{target_str}'. Source has \{source.element_types.length()} element(s) but target allows only \{target.element_types.length()}.",
+        location,
+        TS2322,
+      )
+    }
   }
 
   // Check element-wise assignability
@@ -15967,16 +16408,13 @@ fn check_tuple_assignability_detailed(
     let target_elem = target.element_types[i]
     if target_elem.is_rest {
       // For rest element, check all remaining source elements against the rest element's inner type
-      let rest_elem_type = match target_elem.element_type {
-        Array(arr) => arr.element_type
-        _ => target_elem.element_type // Fallback if not array
-      }
+      let rest_elem_type = tuple_element_inner_type(target_elem)
       // Check all remaining source elements
       for j = i; j < source.element_types.length(); j = j + 1 {
         let elem_path = if path == "" { "[\{j}]" } else { "\{path}[\{j}]" }
         checker = check_assignment_detailed(
           checker,
-          source.element_types[j].element_type,
+          tuple_element_inner_type(source.element_types[j]),
           rest_elem_type,
           location,
           elem_path,
@@ -15986,15 +16424,75 @@ fn check_tuple_assignability_detailed(
       break
     }
     if i < source.element_types.length() {
+      let source_elem = source.element_types[i]
+      if source_elem.is_optional && !(target_elem.is_optional) {
+        checker = add_diagnostic_with_code(
+          checker,
+          "Type '\{source_str}' is not assignable to type '\{target_str}'. Source provides no match for required element at position \{i} in target.",
+          location,
+          TS2322,
+        )
+        continue
+      }
+      let source_elem_type = tuple_element_inner_type(source_elem)
+      // Optional target elements implicitly include undefined
+      if target_elem.is_optional && type_is_nullish(source_elem_type) {
+        continue
+      }
       let elem_path = if path == "" { "[\{i}]" } else { "\{path}[\{i}]" }
       checker = check_assignment_detailed(
         checker,
-        source.element_types[i].element_type,
+        source_elem_type,
         target_elem.element_type,
         location,
         elem_path,
       )
     }
+  }
+  checker
+}
+
+///|
+/// Check array-to-tuple assignability with detailed error reporting.
+/// An array has unknown length, so it is only assignable to a tuple with no
+/// required elements and a rest element (unbounded maximum length)
+fn check_array_to_tuple_assignability_detailed(
+  checker : TypeChecker,
+  source : CheckerArrayType,
+  target : CheckerTupleType,
+  location : SourceLocation,
+  path : String,
+) -> TypeChecker {
+  let mut checker = checker
+  let (target_required, target_has_rest) = tuple_arity(target)
+  let source_str = type_to_string(Array(source))
+  let target_str = type_to_string(Tuple(target))
+  if target_required > 0 {
+    return add_diagnostic_with_code(
+      checker,
+      "Type '\{source_str}' is not assignable to type '\{target_str}'. Target requires \{target_required} element(s) but source may have fewer.",
+      location,
+      TS2322,
+    )
+  }
+  if !target_has_rest {
+    return add_diagnostic_with_code(
+      checker,
+      "Type '\{source_str}' is not assignable to type '\{target_str}'. Target allows only \{target.element_types.length()} element(s) but source may have more.",
+      location,
+      TS2322,
+    )
+  }
+  // Element compatibility: array element type must fit every tuple element
+  for i = 0; i < target.element_types.length(); i = i + 1 {
+    let elem_path = if path == "" { "[\{i}]" } else { "\{path}[\{i}]" }
+    checker = check_assignment_detailed(
+      checker,
+      source.element_type,
+      tuple_element_inner_type(target.element_types[i]),
+      location,
+      elem_path,
+    )
   }
   checker
 }
@@ -16264,21 +16762,65 @@ fn resolve_class_to_object_type(
                   for mem in class_decl.members {
                     match mem {
                       PropertyDeclaration(prop_decl) => {
-                        let (prop_type, _) = match prop_decl.type_annotation {
-                          Some(type_node) =>
-                            match get_type_from_type_node(checker, type_node) {
-                              (Some(t), _) => (t, checker)
-                              (None, _) => any_type(checker)
-                            }
-                          None => any_type(checker)
-                        }
+                        let prop_type = resolve_annotation_type_pure(
+                          checker,
+                          prop_decl.type_annotation,
+                        )
                         properties[prop_decl.name] = PropertySignature::{
                           name: prop_decl.name,
                           prop_type,
                           is_optional: prop_decl.is_optional,
                           is_readonly: false,
+                          is_method: false,
                         }
                       }
+                      MethodDeclaration(method_decl) =>
+                        // Class-body methods participate in structural
+                        // assignability as function-typed members (instance
+                        // side only - statics live on the constructor type)
+                        if !has_modifier(method_decl.modifiers, Modifier::Static) {
+                          properties[method_decl.name] = PropertySignature::{
+                            name: method_decl.name,
+                            prop_type: method_declaration_to_function_type(
+                              checker, method_decl,
+                            ),
+                            is_optional: false,
+                            is_readonly: false,
+                            is_method: true,
+                          }
+                        }
+                      GetAccessor(getter) =>
+                        if !has_modifier(getter.modifiers, Modifier::Static) {
+                          properties[getter.name] = PropertySignature::{
+                            name: getter.name,
+                            prop_type: resolve_annotation_type_pure(
+                              checker,
+                              getter.return_type,
+                            ),
+                            is_optional: false,
+                            is_readonly: false,
+                            is_method: false,
+                          }
+                        }
+                      SetAccessor(setter) =>
+                        // A getter (if any) already contributed the member
+                        // type; use the setter's parameter type otherwise
+                        if !has_modifier(setter.modifiers, Modifier::Static) &&
+                          properties.get(setter.name) is None {
+                          let param_annotation = match setter.parameter {
+                            Parameter(p) => p.type_annotation
+                            _ => None
+                          }
+                          properties[setter.name] = PropertySignature::{
+                            name: setter.name,
+                            prop_type: resolve_annotation_type_pure(
+                              checker, param_annotation,
+                            ),
+                            is_optional: false,
+                            is_readonly: false,
+                            is_method: false,
+                          }
+                        }
                       _ => ()
                     }
                   }
@@ -16301,6 +16843,97 @@ fn resolve_class_to_object_type(
       }
     None => None
   }
+}
+
+///|
+/// Resolve an optional type annotation to a Type without threading the
+/// checker (used by pure declaration walks); missing/unresolvable
+/// annotations become 'any'
+fn resolve_annotation_type_pure(
+  checker : TypeChecker,
+  annotation : Node?,
+) -> Type {
+  match annotation {
+    Some(type_node) =>
+      match get_type_from_type_node(checker, type_node) {
+        (Some(t), _) => t
+        (None, _) => {
+          let (t, _) = any_type(checker)
+          t
+        }
+      }
+    None => {
+      let (t, _) = any_type(checker)
+      t
+    }
+  }
+}
+
+///|
+/// Build a function type for a class-body method declaration from its
+/// annotations (parameters and return type); unannotated positions
+/// become 'any' so the comparison stays permissive
+fn method_declaration_to_function_type(
+  checker : TypeChecker,
+  method_decl : MethodDeclaration,
+) -> Type {
+  let parameters : Array[CheckerParameter] = []
+  for param_node in method_decl.parameters {
+    match param_node {
+      Parameter(p) =>
+        parameters.push({
+          name: get_parameter_name(p.name),
+          param_type: resolve_annotation_type_pure(checker, p.type_annotation),
+          is_optional: p.is_optional,
+          is_rest: p.is_rest,
+        })
+      _ => ()
+    }
+  }
+  let return_type = resolve_annotation_type_pure(checker, method_decl.return_type)
+  let (info, _) = create_type_info(checker)
+  Type::Function(CheckerFunctionType::{ parameters, return_type, info })
+}
+
+///|
+/// Method-syntax members compare with BIVARIANT parameters (tsc's
+/// strictFunctionTypes only applies to function-property syntax).
+/// A method may also drop parameters; extra source parameters beyond the
+/// target's arity must be optional or rest.
+fn is_method_signature_assignable(
+  source : CheckerFunctionType,
+  target : CheckerFunctionType,
+) -> Bool {
+  // Return types stay covariant, but void/any targets accept any return
+  let return_ok = match target.return_type {
+    Void(_) | Any(_) => true
+    _ => is_assignable(source.return_type, target.return_type)
+  }
+  if !return_ok {
+    return false
+  }
+  // Extra source parameters beyond the target's arity must be optional/rest
+  let t_len = target.parameters.length()
+  for i = t_len; i < source.parameters.length(); i = i + 1 {
+    let sp = source.parameters[i]
+    if !sp.is_optional && !sp.is_rest {
+      return false
+    }
+  }
+  // Shared parameters: bivariant (assignable in either direction)
+  let shared = if source.parameters.length() < t_len {
+    source.parameters.length()
+  } else {
+    t_len
+  }
+  for i = 0; i < shared; i = i + 1 {
+    let sp = source.parameters[i].param_type
+    let tp = target.parameters[i].param_type
+    if !is_assignable(tp, sp) && !is_assignable(sp, tp) {
+      return false
+    }
+  }
+  true
 }
 
 ///|
@@ -18543,7 +19176,12 @@ fn check_return_statement(
 ) -> TypeChecker {
   match ret.expression {
     Some(expr) => {
-      let (return_type, checker) = infer_type(checker, expr)
+      // Use the enclosing function's contextual return type (if any) so
+      // array literals in return position are checked against tuple targets
+      let (return_type, checker) = match checker.active_return_context {
+        Some(target) => infer_expr_with_tuple_target(checker, expr, target)
+        None => infer_type(checker, expr)
+      }
       // Collect return type for type inference in unannotated functions
       let collected = checker.collected_return_types.copy()
       collected.push(return_type)
@@ -22355,6 +22993,7 @@ fn build_class_type_for_this(
           prop_type,
           is_optional: false,
           is_readonly: has_readonly,
+          is_method: false,
         })
       }
       MethodDeclaration(method_decl) => {
@@ -22413,6 +23052,7 @@ fn build_class_type_for_this(
           prop_type: method_type,
           is_optional: false,
           is_readonly: false,
+          is_method: true,
         })
       }
       GetAccessor(getter) => {
@@ -25361,6 +26001,7 @@ fn get_type_from_type_node(
               prop_type,
               is_optional: tl_prop.is_optional,
               is_readonly: tl_prop.is_readonly,
+              is_method: false,
             })
           }
           PropertyDeclaration(prop_decl) => {
@@ -25381,6 +26022,7 @@ fn get_type_from_type_node(
               prop_type,
               is_optional: prop_decl.is_optional,
               is_readonly,
+              is_method: false,
             })
           }
           IndexSignatureDeclaration(idx_sig) => {
@@ -25428,6 +26070,7 @@ fn get_type_from_type_node(
                 prop_type: method_type,
                 is_optional: method_decl.is_optional,
                 is_readonly: false,
+                is_method: true,
               })
             }
           _ => ()
@@ -26100,6 +26743,7 @@ fn resolve_interface_type(
               prop_type,
               is_optional: prop.is_optional,
               is_readonly: has_readonly,
+              is_method: false,
             })
           }
           MethodDeclaration(meth) => {
@@ -26175,6 +26819,7 @@ fn resolve_interface_type(
                 prop_type: Type::Function({ parameters, return_type, info }),
                 is_optional: meth.is_optional,
                 is_readonly: false,
+                is_method: true,
               })
             }
           }
@@ -26510,6 +27155,7 @@ fn expand_mapped_type_with_subst(
                   prop_type,
                   is_optional,
                   is_readonly,
+                  is_method: prop.is_method,
                 })
               }
               let (info, checker) = create_type_info(checker)

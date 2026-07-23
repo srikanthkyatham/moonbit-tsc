@@ -423,6 +423,7 @@ fn object_v2_to_type(
       prop_type: field_ty,
       is_optional: field.optional,
       is_readonly: field.is_readonly,
+      is_method: false,
     })
   }
   let call_result = convert_function_sigs(current_checker, obj.call_signatures)
@@ -674,6 +675,8 @@ fn TypeChecker::create_type_info(self : TypeChecker) -> (TypeInfo, TypeChecker) 
     generator_yield_type: self.generator_yield_type,
     collected_yield_types: self.collected_yield_types,
     collected_return_types: self.collected_return_types,
+    contextual_fn_return: self.contextual_fn_return,
+    active_return_context: self.active_return_context,
     checked_function_bodies: self.checked_function_bodies,
     import_helpers: self.import_helpers,
     in_namespace_body: self.in_namespace_body,

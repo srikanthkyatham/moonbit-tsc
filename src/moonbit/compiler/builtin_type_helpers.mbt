@@ -61,6 +61,7 @@ pub fn make_simple_property(name : String, prop_type : Type) -> PropertySignatur
     prop_type,
     is_optional: false,
     is_readonly: false,
+    is_method: false,
   }
 }
 
@@ -75,6 +76,7 @@ pub fn make_readonly_property(
     prop_type,
     is_optional: false,
     is_readonly: true,
+    is_method: false,
   }
 }
 
@@ -95,6 +97,7 @@ pub fn make_method_property(
     }),
     is_optional: false,
     is_readonly: false,
+    is_method: true,
   }
 }
 
