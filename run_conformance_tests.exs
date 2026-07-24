@@ -17,6 +17,17 @@
 #   --limit N       Only run the first N tests (per category in --all mode).
 #   --verbose       Print individual failures even in --all mode.
 #
+# Ratchet modes (regression gate — see docs/CONFORMANCE_RUNNER.md "Ratchet"):
+#   --update-ratchet    Run the full sweep (loose + strict computed from one
+#                       compile per test) and (re)write conformance_ratchet.json.
+#   --check-ratchet     Run the same sweep and compare against the committed
+#                       conformance_ratchet.json. Exit 1 if any category's
+#                       loose_pass or strict_pass count dropped or its crash
+#                       count rose; exit 0 otherwise. Improvements are reported
+#                       as "ratchet can be tightened".
+#   --ratchet-file P    Use P instead of <repo root>/conformance_ratchet.json
+#                       (mainly for testing the tooling; combine with --limit).
+#
 # Environment variables:
 #   TSC_CLI   Path to the compiler CLI.
 #             Default: <script dir>/src/moonbit/_build/native/debug/build/cli/cli.exe
@@ -43,12 +54,22 @@ defmodule ConformanceTestRunner do
   def main(args) do
     {opts, rest, _} =
       OptionParser.parse(args,
-        strict: [strict: :boolean, all: :boolean, limit: :integer, verbose: :boolean]
+        strict: [
+          strict: :boolean,
+          all: :boolean,
+          limit: :integer,
+          verbose: :boolean,
+          update_ratchet: :boolean,
+          check_ratchet: :boolean,
+          ratchet_file: :string
+        ]
       )
 
     validate_environment()
 
     cond do
+      opts[:update_ratchet] -> update_ratchet(opts)
+      opts[:check_ratchet] -> check_ratchet(opts)
       opts[:all] -> run_all(opts)
       rest != [] -> run_single_category(hd(rest), opts)
       true -> usage()
@@ -64,6 +85,8 @@ defmodule ConformanceTestRunner do
       ./run_conformance_tests.exs es6/computedProperties
       ./run_conformance_tests.exs es6/templates --strict
       ./run_conformance_tests.exs --all --limit 25
+      ./run_conformance_tests.exs --check-ratchet    # regression gate
+      ./run_conformance_tests.exs --update-ratchet   # after intentional improvements
 
     Env vars: TSC_CLI (compiler path), TS_REPO (TypeScript repo checkout)
     """)
@@ -130,6 +153,247 @@ defmodule ConformanceTestRunner do
     print_summary_table(rows, mode)
   end
 
+  # -- ratchet (regression gate) --------------------------------------------------
+  #
+  # The ratchet file (conformance_ratchet.json at the repo root) records
+  # per-category {total, loose_pass, strict_pass, crash} for the last blessed
+  # sweep. --check-ratchet fails (exit 1) when any category's loose or strict
+  # pass count drops, or its crash count rises, relative to that file.
+  # --update-ratchet regenerates it after intentional improvements.
+
+  @ratchet_metrics [:total, :loose_pass, :strict_pass, :crash]
+
+  defp ratchet_path(opts) do
+    opts[:ratchet_file] || Path.join(@script_dir, "conformance_ratchet.json")
+  end
+
+  # One sweep over every category, counting loose and strict passes from the
+  # same compile of each test. Returns rows sorted by category name.
+  defp ratchet_sweep(opts) do
+    conformance_dir = Path.join(ts_repo(), "tests/cases/conformance")
+    baselines = build_baseline_index()
+
+    categories =
+      conformance_dir
+      |> File.ls!()
+      |> Enum.filter(&File.dir?(Path.join(conformance_dir, &1)))
+      |> Enum.sort()
+
+    Enum.map(categories, fn cat ->
+      results = run_category(cat, baselines, opts)
+
+      row = %{
+        category: cat,
+        total: length(results),
+        loose_pass: Enum.count(results, &(not &1.crashed and &1.passed_loose)),
+        strict_pass: Enum.count(results, &(not &1.crashed and &1.passed_strict)),
+        crash: Enum.count(results, & &1.crashed)
+      }
+
+      IO.puts(
+        "#{cat}: total=#{row.total} loose=#{row.loose_pass} " <>
+          "strict=#{row.strict_pass} crash=#{row.crash}"
+      )
+
+      row
+    end)
+  end
+
+  defp ratchet_overall(rows) do
+    Enum.reduce(rows, %{total: 0, loose_pass: 0, strict_pass: 0, crash: 0}, fn row, acc ->
+      Map.new(@ratchet_metrics, fn k -> {k, acc[k] + row[k]} end)
+    end)
+  end
+
+  defp git_sha(dir) do
+    case System.cmd("git", ["-C", dir, "rev-parse", "HEAD"], stderr_to_stdout: true) do
+      {sha, 0} -> String.trim(sha)
+      _ -> "unknown"
+    end
+  rescue
+    _ -> "unknown"
+  end
+
+  defp update_ratchet(opts) do
+    path = ratchet_path(opts)
+    IO.puts("\n=== Ratchet sweep (loose + strict from one compile per test) ===\n")
+    rows = ratchet_sweep(opts)
+    File.write!(path, ratchet_json(rows))
+
+    overall = ratchet_overall(rows)
+
+    IO.puts("\nWrote #{path}")
+
+    IO.puts(
+      "Overall: total=#{overall.total} loose_pass=#{overall.loose_pass} " <>
+        "strict_pass=#{overall.strict_pass} crash=#{overall.crash}"
+    )
+  end
+
+  defp check_ratchet(opts) do
+    path = ratchet_path(opts)
+
+    unless File.exists?(path) do
+      IO.puts("Error: ratchet file not found: #{path}")
+      IO.puts("Generate it with: ./run_conformance_tests.exs --update-ratchet")
+      System.halt(1)
+    end
+
+    committed = JSON.decode!(File.read!(path))
+    old_categories = committed["categories"] || %{}
+
+    IO.puts("\n=== Ratchet check against #{path} ===")
+    IO.puts("Committed sweep: sha=#{committed["git_sha"]} at #{committed["generated_at"]}\n")
+
+    current_ts_sha = git_sha(ts_repo())
+
+    if committed["ts_repo_sha"] not in [nil, "unknown", current_ts_sha] do
+      IO.puts(
+        "WARNING: TypeScript repo checkout (#{current_ts_sha}) differs from the one the\n" <>
+          "ratchet was generated against (#{committed["ts_repo_sha"]}); baseline drift can\n" <>
+          "produce false regressions/improvements.\n"
+      )
+    end
+
+    rows = ratchet_sweep(opts)
+    new_by_cat = Map.new(rows, &{&1.category, &1})
+
+    {regressions, improvements, warnings} =
+      Enum.reduce(rows, {[], [], []}, fn row, acc ->
+        case old_categories[row.category] do
+          nil ->
+            {r, i, w} = acc
+            {r, i, w ++ ["new category not in ratchet file: #{row.category}"]}
+
+          old ->
+            compare_category(row, old, acc)
+        end
+      end)
+
+    warnings =
+      warnings ++
+        for {cat, _} <- old_categories, not Map.has_key?(new_by_cat, cat) do
+          "category in ratchet file but not in this sweep: #{cat}"
+        end
+
+    overall = ratchet_overall(rows)
+
+    IO.puts("")
+    Enum.each(warnings, &IO.puts("WARNING: #{&1}"))
+    Enum.each(improvements, &IO.puts("IMPROVED: #{&1}"))
+    Enum.each(regressions, &IO.puts("REGRESSION: #{&1}"))
+
+    IO.puts(
+      "\nOverall: total=#{overall.total} loose_pass=#{overall.loose_pass} " <>
+        "strict_pass=#{overall.strict_pass} crash=#{overall.crash}"
+    )
+
+    cond do
+      regressions != [] ->
+        IO.puts(
+          "\nRESULT: FAIL — #{length(regressions)} ratchet regression(s). " <>
+            "Fix the regression, or (only for an intentional trade-off explained in the\n" <>
+            "commit message) re-bless with: ./run_conformance_tests.exs --update-ratchet"
+        )
+
+        System.halt(1)
+
+      improvements != [] ->
+        IO.puts(
+          "\nRESULT: PASS — no regressions. #{length(improvements)} categor(y/ies) improved; " <>
+            "the ratchet can be tightened with: ./run_conformance_tests.exs --update-ratchet"
+        )
+
+      true ->
+        IO.puts("\nRESULT: PASS — all categories at or above the committed ratchet.")
+    end
+  end
+
+  # Compares one category row against its committed counts, accumulating
+  # {regressions, improvements, warnings}. Pass counts may only go up; crash
+  # counts may only go down; a changed total means the TS repo checkout moved.
+  defp compare_category(row, old, acc) do
+    acc =
+      if old["total"] != row.total do
+        {r, i, w} = acc
+
+        {r, i,
+         w ++
+           [
+             "#{row.category}: total changed #{old["total"]} -> #{row.total} " <>
+               "(TypeScript repo checkout differs from the one that generated the ratchet?)"
+           ]}
+      else
+        acc
+      end
+
+    acc =
+      Enum.reduce([:loose_pass, :strict_pass], acc, fn metric, {r, i, w} ->
+        old_v = old[Atom.to_string(metric)] || 0
+        new_v = row[metric]
+
+        cond do
+          new_v < old_v ->
+            {r ++ ["#{row.category}: #{metric} dropped #{old_v} -> #{new_v} (#{new_v - old_v})"],
+             i, w}
+
+          new_v > old_v ->
+            {r, i ++ ["#{row.category}: #{metric} #{old_v} -> #{new_v} (+#{new_v - old_v})"], w}
+
+          true ->
+            {r, i, w}
+        end
+      end)
+
+    {r, i, w} = acc
+    old_crash = old["crash"] || 0
+
+    cond do
+      row.crash > old_crash ->
+        {r ++ ["#{row.category}: crash rose #{old_crash} -> #{row.crash}"], i, w}
+
+      row.crash < old_crash ->
+        {r, i ++ ["#{row.category}: crash #{old_crash} -> #{row.crash}"], w}
+
+      true ->
+        {r, i, w}
+    end
+  end
+
+  # Hand-rolled encoder so the file is deterministic and diff-friendly:
+  # fixed key order (schema/generated_at/git_sha/overall/categories; metrics
+  # always total, loose_pass, strict_pass, crash), categories sorted, one
+  # category per line, trailing newline.
+  defp ratchet_json(rows) do
+    overall = ratchet_overall(rows)
+
+    generated_at =
+      DateTime.utc_now() |> DateTime.truncate(:second) |> DateTime.to_iso8601()
+
+    category_lines =
+      Enum.map_join(rows, ",\n", fn row ->
+        ~s(    "#{row.category}": #{metrics_json(row)})
+      end)
+
+    """
+    {
+      "schema": 1,
+      "generated_at": "#{generated_at}",
+      "git_sha": "#{git_sha(@script_dir)}",
+      "ts_repo_sha": "#{git_sha(ts_repo())}",
+      "overall": #{metrics_json(overall)},
+      "categories": {
+    #{category_lines}
+      }
+    }
+    """
+  end
+
+  defp metrics_json(counts) do
+    inner = Enum.map_join(@ratchet_metrics, ", ", fn k -> ~s("#{k}": #{counts[k]}) end)
+    "{ #{inner} }"
+  end
+
   # -- category execution -------------------------------------------------------
 
   defp run_category(category, baselines, opts) do
@@ -180,13 +444,15 @@ defmodule ConformanceTestRunner do
     {expected_codes, expects_errors, variant?} =
       expected_from_baselines(name, baselines, run_config(directives))
 
-    passed =
-      if strict do
-        MapSet.equal?(emitted_codes, expected_codes)
-      else
-        has_errors = exit_code != 0 or MapSet.size(emitted_codes) > 0
-        has_errors == expects_errors
-      end
+    # Both modes are decidable from the same compile: they share the emitted
+    # code set and differ only in the pass predicate. Computing both lets the
+    # ratchet sweep cover loose AND strict in a single pass over the suite.
+    passed_strict = MapSet.equal?(emitted_codes, expected_codes)
+
+    passed_loose =
+      (exit_code != 0 or MapSet.size(emitted_codes) > 0) == expects_errors
+
+    passed = if strict, do: passed_strict, else: passed_loose
 
     status =
       cond do
@@ -199,6 +465,9 @@ defmodule ConformanceTestRunner do
     %{
       name: name,
       status: status,
+      crashed: crashed?,
+      passed_loose: passed_loose,
+      passed_strict: passed_strict,
       missing: MapSet.difference(expected_codes, emitted_codes) |> Enum.sort(),
       extra: MapSet.difference(emitted_codes, expected_codes) |> Enum.sort(),
       expects_errors: expects_errors,

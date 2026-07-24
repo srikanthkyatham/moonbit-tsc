@@ -126,6 +126,73 @@ fail they are counted in a separate "Failed*" / `DirFail` bucket and tagged
 `[unhonored: ...]` so genuine diagnostic mismatches are not conflated with
 harness limitations.
 
+## Ratchet (regression gate)
+
+`conformance_ratchet.json` at the repo root records, for every conformance
+category, the pass counts of the last blessed sweep:
+
+```json
+"types": { "total": 842, "loose_pass": 575, "strict_pass": 276, "crash": 0 }
+```
+
+plus `overall` totals, the moonbit-tsc commit (`git_sha`), the TypeScript
+checkout the baselines came from (`ts_repo_sha`), and a `generated_at`
+timestamp. The file is deterministic (fixed key order, sorted categories, one
+category per line) so diffs read as a per-category changelog.
+
+The ratchet sweep runs every category once and derives **both** loose and
+strict results from the same compile of each test (they share the emitted
+code set and differ only in the pass predicate), so it costs one sweep, not
+two.
+
+### Checking (the gate)
+
+```sh
+scripts/check_conformance_ratchet.sh          # preferred wrapper
+./run_conformance_tests.exs --check-ratchet   # direct
+```
+
+Re-runs the sweep and compares per category against the committed file:
+
+- any category whose `loose_pass` or `strict_pass` count **dropped**, or whose
+  `crash` count **rose** → `REGRESSION`, exit 1;
+- counts that went **up** → `IMPROVED ... ratchet can be tightened`, exit 0;
+- changed totals / unknown categories / a different TypeScript checkout than
+  `ts_repo_sha` → `WARNING` (baseline drift can cause false deltas), exit 0.
+
+The wrapper checks prerequisites first (Elixir, the TypeScript checkout,
+a built CLI — it runs `moon build` itself if the binary is missing) and prints
+`SKIPPED (not a pass, not a fail)` with exit 0 when they are absent, so CI
+without the toolchain goes green-but-honest. Set `RATCHET_REQUIRE=1` to make
+missing prerequisites fatal (exit 2) — recommended locally.
+
+### Updating (re-blessing)
+
+```sh
+scripts/check_conformance_ratchet.sh --update   # or: --update-ratchet
+```
+
+Regenerates `conformance_ratchet.json` from the current binary. Commit the
+regenerated file together with the change that moved the numbers.
+
+### Policy
+
+- **Any category drop fails.** Overall net improvement does not excuse a
+  regression in one category: fix it, or make the trade-off explicit.
+- **Update only with an explanation.** A commit that re-blesses lower numbers
+  must say in its message which categories dropped and why that is acceptable
+  (e.g. a recovery-behavior change traded 3 parser passes for 40 statement
+  passes).
+- **Tighten opportunistically.** When the check reports improvements, run
+  `--update-ratchet` and commit the file so the new floor is locked in.
+- Both `--check-ratchet` and `--update-ratchet` accept `--ratchet-file PATH`
+  and `--limit N` for testing the tooling itself; the real gate always runs
+  the full suite against the root file.
+- CI: `.github/workflows/conformance.yml` runs the wrapper on push/PR. It
+  installs Elixir + MoonBit and checks out microsoft/TypeScript pinned to
+  `ts_repo_sha`; if provisioning fails it skips with a clear message. The
+  locally-run wrapper is the primary gate — waves are executed locally.
+
 ## Result buckets
 
 | Bucket    | Meaning                                                        |

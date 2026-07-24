@@ -1,0 +1,68 @@
+# Conformance ratchet gate.
+#
+# Compares a full conformance sweep (loose + strict) against the committed
+# conformance_ratchet.json; any per-category drop in loose_pass/strict_pass or
+# rise in crash count fails the job. See docs/CONFORMANCE_RUNNER.md, "Ratchet".
+#
+# HONESTY NOTE: this job needs three things that do not come with the repo:
+#   1. the MoonBit toolchain (moon) — installed below from the official
+#      installer script; there is no pinned GitHub action for it,
+#   2. Elixir — installed via erlef/setup-beam,
+#   3. a microsoft/TypeScript checkout (test cases + baselines, ~1 GB) —
+#      checked out below, PINNED to the same commit the committed ratchet was
+#      generated against (see ts_repo_sha in conformance_ratchet.json); an
+#      unpinned checkout drifts baselines and produces false regressions.
+# If any of these cannot be provisioned, scripts/check_conformance_ratchet.sh
+# prints "SKIPPED (not a pass, not a fail)" and exits 0 rather than going red:
+# the gate is only authoritative where the prerequisites exist. Waves are run
+# locally, so the local wrapper is the primary gate; this workflow is
+# best-effort CI coverage of the same check.
+
+name: conformance-ratchet
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  ratchet:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout moonbit-tsc
+        uses: actions/checkout@v4
+
+      - name: Install Elixir
+        uses: erlef/setup-beam@v1
+        continue-on-error: true # missing Elixir => wrapper skips gracefully
+        with:
+          otp-version: "27"
+          elixir-version: "1.18"
+
+      - name: Install MoonBit toolchain
+        continue-on-error: true # missing moon => wrapper skips gracefully
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+
+      # Pin to the ts_repo_sha recorded in conformance_ratchet.json so the
+      # baselines match the ones the ratchet counts were generated from.
+      - name: Read pinned TypeScript baseline commit
+        id: ts_pin
+        run: |
+          sha=$(sed -n 's/.*"ts_repo_sha": "\([0-9a-f]\{40\}\)".*/\1/p' conformance_ratchet.json | head -1)
+          echo "sha=${sha:-main}" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout microsoft/TypeScript (tests + baselines)
+        uses: actions/checkout@v4
+        continue-on-error: true # missing corpus => wrapper skips gracefully
+        with:
+          repository: microsoft/TypeScript
+          ref: ${{ steps.ts_pin.outputs.sha }}
+          path: typescript-repo
+
+      - name: Check conformance ratchet
+        env:
+          TS_REPO: ${{ github.workspace }}/typescript-repo
+        run: scripts/check_conformance_ratchet.sh
