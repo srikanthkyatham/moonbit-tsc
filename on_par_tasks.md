@@ -35,6 +35,15 @@ internals, API back-compat layers. These get their own plan if ever.
   - **~400** async/generators/iteration + es20xx feature checking — mostly blocked on a **real lib.d.ts** (F1).
   - Rest: statements (~190), decorators (~150), declarationEmit/emitter (~25, blocked on E-tier), typings/references/Symbols (blocked on M4/C3).
 
+> **Update (July 24, post P1+F1 wave):** P1 statement-level sync-on-error
+> recovery (commit 9501d66) + F1 real lib.d.ts loading (390a394) landed:
+> **strict 2,347/5,693 = 41.2% · loose 4,161 = 73.1% · crash 2** (ratchet
+> baseline regenerated). Biggest strict movers: parser 268→309, types
+> 276→311, externalModules 83→99, async 88→97, statements 85→92, classes
+> 118→125, es6 651→661. Known dips carried as work items: Symbols strict
+> 3→1 (extra TS2585 from lib loading), interfaces loose 44→40. The 315-test
+> parser-FP cluster below is now ~90% cleared (102/113 honored flips).
+
 ## Measured failure map (July 24, 2026, post-wave-6 strict sweep)
 
 Strict **2,176/5,693 = 38.2%** · fail 2,212 · dirfail 1,303 · crash 2. Unit
