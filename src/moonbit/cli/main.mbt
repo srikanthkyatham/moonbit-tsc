@@ -168,6 +168,16 @@ async fn run_single_compile(
   // Build coordinator options from CLI options
   let coord_options = build_coordinator_options(options)
 
+  // Under node16/nodenext, /// <reference types="..." /> directives resolve
+  // through package.json exports (honoring resolution-mode); load the
+  // resolved declaration files into the compilation
+  if @compiler.is_node_module_kind(coord_options.module_kind) {
+    let ref_cache = @coordinator.Node16Cache::new()
+    for f in @coordinator.load_node16_types_references(all_files, ref_cache) {
+      all_files.push(f)
+    }
+  }
+
   // Compile files
   let summary = @coordinator.compile_parallel(
     executable, all_files, coord_options,
@@ -176,7 +186,11 @@ async fn run_single_compile(
   // Validate imports across the compiled file set (also for single files:
   // bare specifiers may resolve via ambient module declarations or on-disk
   // node_modules, which suppresses the checker's unconditional TS2307)
-  let summary = apply_cross_file_import_diagnostics(summary, all_files)
+  let summary = apply_cross_file_import_diagnostics(
+    summary,
+    all_files,
+    module_kind=coord_options.module_kind,
+  )
 
   // Write output files
   write_all_outputs(summary.results, options)
@@ -230,6 +244,14 @@ async fn run_json_compile(
   // Compile files
   let summary = @coordinator.compile_parallel(
     executable, all_files, coord_options,
+  )
+
+  // Validate imports across the compiled file set (TS2305/TS2307/TS7016
+  // etc.) so JSON consumers see the same diagnostics as single-compile mode
+  let summary = apply_cross_file_import_diagnostics(
+    summary,
+    all_files,
+    module_kind=coord_options.module_kind,
   )
 
   // Output JSON response
@@ -338,6 +360,13 @@ async fn run_watch_mode(
 
 ///|
 /// Compile files with a pre-read file list
+///
+/// Note: cross-file import validation (apply_cross_file_import_diagnostics)
+/// is deliberately NOT applied in watch mode. Incremental recompilation only
+/// re-reads the changed files plus their dependents, so the file set passed
+/// here is a subset of the full compilation: validating imports against it
+/// would report false TS2307 "module not found" errors for imports of
+/// unchanged files that are not part of the subset.
 async fn compile_files_with_dag(
   _file_paths : Array[String],
   files : Array[(String, String)],
@@ -577,6 +606,21 @@ fn print_help() -> Unit {
   println("  --verbose               Verbose output")
   println("  --reportDiagnostics     Report all diagnostics (errors/warnings)")
   println(
+    "  --strict [true|false]   Enable/disable all strict type-checking options",
+  )
+  println(
+    "  --noImplicitAny [true|false]       Error on implied 'any' types",
+  )
+  println(
+    "  --strictNullChecks [true|false]    Enable/disable strict null checks",
+  )
+  println(
+    "  --strictFunctionTypes [true|false] Strict function type checking",
+  )
+  println(
+    "                          File-level directives (// @strict: ...) always win",
+  )
+  println(
     "  --json                  Output results as JSON for tooling integration",
   )
   println(
@@ -758,8 +802,60 @@ fn build_coordinator_options(
     verbose: options.verbose,
     external_types_json: options.external_types_json,
     no_emit: options.no_emit,
-    no_implicit_any: options.no_implicit_any,
+    // The tri-state overrides carry the CLI strict flags; keep the legacy
+    // force-on bool unset so a file directive can still turn a flag off
+    no_implicit_any: false,
     import_helpers: options.import_helpers,
+    strict_overrides: Some(build_strict_overrides(options)),
+  }
+}
+
+///|
+/// Build tri-state strict-flag overrides from CLI flags alone
+fn build_strict_overrides(options : CLIOptions) -> @compiler.StrictFlagOverrides {
+  @compiler.StrictFlagOverrides::{
+    strict: options.strict,
+    no_implicit_any: options.no_implicit_any,
+    strict_null_checks: options.strict_null_checks,
+    strict_function_types: options.strict_function_types,
+    strict_property_initialization: None,
+  }
+}
+
+///|
+/// Pick a tri-state flag: an explicit CLI value overrides tsconfig
+fn pick_flag(cli : Bool?, tsconfig : Bool?) -> Bool? {
+  match cli {
+    Some(v) => Some(v)
+    None => tsconfig
+  }
+}
+
+///|
+/// Build tri-state strict-flag overrides from tsconfig compilerOptions with
+/// CLI flags taking precedence (file-level directives still win over both)
+fn build_strict_overrides_from_tsconfig(
+  tsconfig : @config.TSConfig,
+  cli_options : CLIOptions,
+) -> @compiler.StrictFlagOverrides {
+  let (ts_strict, ts_nia, ts_snc, ts_sft, ts_spi) = match
+    tsconfig.compiler_options {
+    Some(opts) =>
+      (
+        opts.strict,
+        opts.no_implicit_any,
+        opts.strict_null_checks,
+        opts.strict_function_types,
+        opts.strict_property_initialization,
+      )
+    None => (None, None, None, None, None)
+  }
+  @compiler.StrictFlagOverrides::{
+    strict: pick_flag(cli_options.strict, ts_strict),
+    no_implicit_any: pick_flag(cli_options.no_implicit_any, ts_nia),
+    strict_null_checks: pick_flag(cli_options.strict_null_checks, ts_snc),
+    strict_function_types: pick_flag(cli_options.strict_function_types, ts_sft),
+    strict_property_initialization: ts_spi,
   }
 }
 
@@ -847,15 +943,6 @@ fn build_coordinator_options_from_tsconfig(
       None => false
     }
   }
-  // Get noImplicitAny from tsconfig or CLI
-  let no_implicit_any = if cli_options.no_implicit_any {
-    true
-  } else {
-    match tsconfig.compiler_options {
-      Some(opts) => opts.no_implicit_any.unwrap_or(false)
-      None => false
-    }
-  }
   // Get importHelpers from tsconfig or CLI
   let import_helpers = if cli_options.import_helpers {
     true
@@ -878,8 +965,13 @@ fn build_coordinator_options_from_tsconfig(
     verbose: cli_options.verbose,
     external_types_json: cli_options.external_types_json,
     no_emit,
-    no_implicit_any,
+    // noImplicitAny (and the other strict flags) travel as tri-state
+    // overrides so file directives can still disable them
+    no_implicit_any: false,
     import_helpers,
+    strict_overrides: Some(
+      build_strict_overrides_from_tsconfig(tsconfig, cli_options),
+    ),
   }
 }
 
@@ -1033,6 +1125,14 @@ async fn run_project_single_compile(
     executable, all_files, coord_options,
   )
 
+  // Validate imports across the compiled file set (TS2305/TS2307/TS7016
+  // etc.), matching the behavior of plain single-compile mode
+  let summary = apply_cross_file_import_diagnostics(
+    summary,
+    all_files,
+    module_kind=coord_options.module_kind,
+  )
+
   // Write output files
   write_all_outputs(summary.results, options)
 
@@ -1121,6 +1221,12 @@ async fn run_project_watch_mode(
 
 ///|
 /// Compile project files with given options
+///
+/// Note: called from project watch mode with a changed-files subset, so
+/// cross-file import validation is skipped here for the same reason as in
+/// compile_files_with_dag (a partial file set would yield false TS2307s).
+/// Full project compiles get cross-file validation in
+/// run_project_single_compile instead.
 async fn compile_project_files(
   _file_paths : Array[String],
   files : Array[(String, String)],

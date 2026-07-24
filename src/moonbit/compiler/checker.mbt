@@ -276,6 +276,7 @@ pub struct TypeChecker {
   current_this_type : Type? // Type of 'this' in current scope (for class methods/constructors)
   no_unchecked_indexed_access : Bool // Adds undefined to indexed access types
   target : Target // ECMAScript target version (affects feature availability)
+  module_kind : ModuleKind // Module output format (affects TS2691, top-level await)
   resolving_symbols : Map[Int, Bool] // Symbol IDs currently being resolved (for cycle detection)
   arrow_function_depth : Int // Tracks nesting depth in arrow functions (> 0 means inside arrow)
   async_function_depth : Int // Tracks nesting depth in async functions (> 0 means inside async)
@@ -309,7 +310,9 @@ pub struct TypeChecker {
   strict_null_checks : Bool // strictNullChecks - enables TS2454 definite assignment analysis
   strict_property_initialization : Bool // strictPropertyInitialization - enables TS2564 property initialization checks
   suppress_definite_assignment : Bool // Suppress TS2454 reads (e.g. inside class property initializers, which run at construction time)
-  implicit_any_array_vars : @hashset.HashSet[String] // Variables with implicit any[] type (for TS7005)
+  implicit_any_vars : Map[String, ImplicitAnyVarInfo] // Variables whose implicit type is still 'any'/'any[]' (for TS7034/TS7005)
+  container_counter : Array[Int] // Single-element shared counter for allocating function-container ids
+  implicit_any_reported_locs : @hashset.HashSet[String] // Locations already reported for expression-level implicit-any checks (avoids duplicates when an expression is inferred twice)
   inferring_variables : @hashset.HashSet[String] // Variables currently being inferred (for TS7022 circular reference detection)
   default_export_locations : Array[SourceLocation] // Track all default export locations for TS2528
   import_helpers : Bool // @importHelpers compiler directive - affects TS2807 validation
@@ -326,6 +329,26 @@ pub struct LocalScope {
   function_vars : Map[String, Type] // Function-scoped variables (var declarations)
   const_vars : @hashset.HashSet[String] // Set of const variable names
   is_function_scope : Bool // True if this is a function scope (for var hoisting)
+  container_id : Int // Id of the enclosing function container (fresh for function scopes, inherited for blocks)
+} derive(Debug)
+
+///|
+/// Tracking info for a variable whose declaration gives it an implicit
+/// 'any'/'any[]' type (noImplicitAny TS7034/TS7005). `is_array` is true for
+/// the evolving-array form `var x = []`, false for the plain `let x;` form.
+/// Reporting is deferred to reads that tsc cannot type:
+/// - plain vars: reads from a different function container than the
+///   declaration, unless the variable was assigned in the reading container
+///   before the read (control flow cannot cross function boundaries)
+/// - array vars: additionally, reads in the declaration container while the
+///   variable is still pristine (no assignment or property access seen)
+pub struct ImplicitAnyVarInfo {
+  decl_loc : SourceLocation
+  is_array : Bool
+  container_id : Int
+  mut pristine : Bool
+  mut assigned_container : Int?
+  mut reported_7034 : Bool
 } derive(Debug)
 
 ///|
@@ -360,6 +383,7 @@ pub fn TypeChecker::new_with_options(
   no_implicit_any? : Bool = false,
   strict_null_checks? : Bool = false,
   strict_property_initialization? : Bool = false,
+  module_kind? : ModuleKind = ESModule,
 ) -> TypeChecker {
   {
     next_type_id: 0,
@@ -375,6 +399,7 @@ pub fn TypeChecker::new_with_options(
     current_this_type: None,
     no_unchecked_indexed_access,
     target,
+    module_kind,
     resolving_symbols: Map([]),
     arrow_function_depth: 0,
     async_function_depth: 0,
@@ -412,7 +437,9 @@ pub fn TypeChecker::new_with_options(
     strict_null_checks,
     strict_property_initialization,
     suppress_definite_assignment: false,
-    implicit_any_array_vars: @hashset.HashSet([]),
+    implicit_any_vars: Map([]),
+    container_counter: [0],
+    implicit_any_reported_locs: @hashset.HashSet([]),
     inferring_variables: @hashset.HashSet([]),
     default_export_locations: [],
     import_helpers: false, // Default to false, can be set later from compiler directives
@@ -485,6 +512,8 @@ fn push_local_scope(checker : TypeChecker) -> TypeChecker {
     function_vars: Map([]),
     const_vars: @hashset.HashSet([]),
     is_function_scope: false,
+    // Block scopes stay in the enclosing function container
+    container_id: current_container_id(checker),
   })
   { ..checker, local_scopes: scopes }
 }
@@ -493,13 +522,94 @@ fn push_local_scope(checker : TypeChecker) -> TypeChecker {
 /// Push a new function scope onto the scope stack (for var hoisting)
 fn push_function_scope(checker : TypeChecker) -> TypeChecker {
   let scopes = checker.local_scopes
+  checker.container_counter[0] = checker.container_counter[0] + 1
   scopes.push(LocalScope::{
     variables: Map([]),
     function_vars: Map([]),
     const_vars: @hashset.HashSet([]),
     is_function_scope: true,
+    // Each function body is a new container for implicit-any flow tracking
+    container_id: checker.container_counter[0],
   })
   { ..checker, local_scopes: scopes }
+}
+
+///|
+/// Id of the function container the checker is currently inside (0 = module
+/// level before any scope is pushed). Used by the noImplicitAny TS7034/TS7005
+/// tracking to tell same-container reads from closure reads.
+fn current_container_id(checker : TypeChecker) -> Int {
+  let scopes = checker.local_scopes
+  if scopes.length() > 0 {
+    scopes[scopes.length() - 1].container_id
+  } else {
+    0
+  }
+}
+
+///|
+/// Record that `name` was assigned in the current function container
+/// (suppresses TS7005 for later reads in that same container)
+fn mark_implicit_any_var_assigned(
+  checker : TypeChecker,
+  name : String,
+) -> Unit {
+  match checker.implicit_any_vars.get(name) {
+    Some(info) => {
+      info.pristine = false
+      info.assigned_container = Some(current_container_id(checker))
+    }
+    None => ()
+  }
+}
+
+///|
+/// Walk an assignment target and mark every identifier it (re)assigns, so
+/// implicit-any tracking knows the variable may have received a type
+fn mark_implicit_any_assignment_targets(
+  checker : TypeChecker,
+  target : Node,
+) -> Unit {
+  match target {
+    Identifier(id) => mark_implicit_any_var_assigned(checker, id.name)
+    ParenthesizedExpression(pe) =>
+      mark_implicit_any_assignment_targets(checker, pe.expression)
+    // Writing an element into the array evolves its type (x[0] = 1)
+    ElementAccessExpression(elem) =>
+      match elem.expression {
+        Identifier(id) => mark_implicit_any_var_assigned(checker, id.name)
+        _ => ()
+      }
+    ArrayLiteralExpression(arr) =>
+      for elem in arr.elements {
+        match elem {
+          Some(e) => mark_implicit_any_assignment_targets(checker, e)
+          None => ()
+        }
+      }
+    ObjectLiteralExpression(obj) =>
+      for prop in obj.properties {
+        match prop {
+          PropertyAssignment(_, value, _) =>
+            mark_implicit_any_assignment_targets(checker, value)
+          ShorthandProperty(name, _) =>
+            mark_implicit_any_var_assigned(checker, name)
+          SpreadAssignment(expr, _) =>
+            mark_implicit_any_assignment_targets(checker, expr)
+          _ => ()
+        }
+      }
+    ArrayBindingPattern(_) | ObjectBindingPattern(_) => {
+      let names : Array[String] = []
+      collect_binding_names(target, names)
+      for name in names {
+        mark_implicit_any_var_assigned(checker, name)
+      }
+    }
+    SpreadExpression(spread) =>
+      mark_implicit_any_assignment_targets(checker, spread.expression)
+    _ => ()
+  }
 }
 
 ///|
@@ -507,8 +617,25 @@ fn push_function_scope(checker : TypeChecker) -> TypeChecker {
 fn pop_local_scope(checker : TypeChecker) -> TypeChecker {
   let scopes = checker.local_scopes
   if scopes.length() > 0 {
-    let _ = scopes.pop()
-
+    match scopes.pop() {
+      Some(popped) =>
+        // Leaving a function container: implicit-any tracking entries for
+        // variables declared inside it are dead - drop them so later
+        // sibling functions never see stale entries
+        if popped.is_function_scope {
+          let dead : Array[String] = []
+          for entry in checker.implicit_any_vars {
+            let (name, info) = entry
+            if info.container_id == popped.container_id {
+              dead.push(name)
+            }
+          }
+          for name in dead {
+            checker.implicit_any_vars.remove(name)
+          }
+        }
+      None => ()
+    }
   }
   { ..checker, local_scopes: scopes }
 }
@@ -768,6 +895,10 @@ fn add_local_variable(
   name : String,
   var_type : Type,
 ) -> TypeChecker {
+  // A new binding (parameter, shadowing let, function-expression name, ...)
+  // supersedes any implicit-any tracking for the same name: reads may now
+  // resolve to this binding, so stop reporting (missing beats false positive)
+  checker.implicit_any_vars.remove(name)
   let scopes = checker.local_scopes
   if scopes.length() > 0 {
     scopes[scopes.length() - 1].variables.set(name, var_type)
@@ -796,6 +927,9 @@ fn add_var_to_function_scope(
   _location : SourceLocation,
   has_initializer : Bool,
 ) -> TypeChecker {
+  // A redeclaration may give the variable a type; drop implicit-any tracking
+  // (the tracking declaration re-adds itself right after this call)
+  checker.implicit_any_vars.remove(name)
   let scopes = checker.local_scopes
   if scopes.length() > 0 {
     // Find the nearest function scope for var hoisting
@@ -856,6 +990,8 @@ fn add_local_const_variable(
   name : String,
   var_type : Type,
 ) -> TypeChecker {
+  // A new (shadowing) binding supersedes implicit-any tracking for this name
+  checker.implicit_any_vars.remove(name)
   let scopes = checker.local_scopes
   if scopes.length() > 0 {
     let scope = scopes[scopes.length() - 1]
@@ -2396,25 +2532,40 @@ pub fn check_source_file(bound : BoundSourceFile) -> CheckResult {
 }
 
 ///|
-/// Compute effective strict flags from file-level compiler directives.
-/// The TypeScript conformance baselines are generated with strict mode ON by
-/// default, so strictNullChecks/strictPropertyInitialization default to true
-/// and are disabled by an explicit `@strict: false` (or the specific
-/// `@strictNullChecks: false` / `@strictPropertyInitialization: false`).
-fn effective_strict_flags(directives : CompilerDirectives) -> (Bool, Bool) {
-  let base = directives.strict.unwrap_or(true)
-  let snc = directives.strict_null_checks.unwrap_or(base)
-  let spi = directives.strict_property_initialization.unwrap_or(base)
+/// Compute effective strict flags from file-level compiler directives and
+/// optional CLI/tsconfig overrides. The TypeScript conformance baselines are
+/// generated with strict mode ON by default, so strictNullChecks/
+/// strictPropertyInitialization default to true and are disabled by an
+/// explicit `@strict: false` (or the specific `@strictNullChecks: false` /
+/// `@strictPropertyInitialization: false`).
+///
+/// Precedence per flag (specific beats general at each layer):
+///   specific directive > specific override > `@strict` directive >
+///   `--strict` override > default ON.
+fn effective_strict_flags(
+  directives : CompilerDirectives,
+  overrides? : StrictFlagOverrides? = None,
+) -> (Bool, Bool) {
+  let ov = overrides.unwrap_or(StrictFlagOverrides::default())
+  let base = directives.strict.unwrap_or(ov.strict.unwrap_or(true))
+  let snc = directives.strict_null_checks.unwrap_or(
+    ov.strict_null_checks.unwrap_or(base),
+  )
+  let spi = directives.strict_property_initialization.unwrap_or(
+    ov.strict_property_initialization.unwrap_or(base),
+  )
   (snc, spi)
 }
 
 ///|
 /// Compute the effective noImplicitAny flag: file-level `@noImplicitAny`
-/// directive wins; otherwise falls back to `@strict` (default ON, matching
-/// how the TypeScript conformance baselines are generated)
+/// directive wins, then the CLI/tsconfig override; otherwise falls back to
+/// `@strict` / `--strict` (default ON, matching how the TypeScript
+/// conformance baselines are generated)
 fn effective_no_implicit_any(
   directives : CompilerDirectives,
   file_path : String,
+  overrides? : StrictFlagOverrides? = None,
 ) -> Bool {
   // JavaScript files get their parameter/member types from JSDoc annotations
   // and looser inference; since JSDoc types are not parsed, reporting the
@@ -2425,8 +2576,9 @@ fn effective_no_implicit_any(
     file_path.has_suffix(".cjs") {
     return false
   }
-  let base = directives.strict.unwrap_or(true)
-  directives.no_implicit_any.unwrap_or(base)
+  let ov = overrides.unwrap_or(StrictFlagOverrides::default())
+  let base = directives.strict.unwrap_or(ov.strict.unwrap_or(true))
+  directives.no_implicit_any.unwrap_or(ov.no_implicit_any.unwrap_or(base))
 }
 
 ///|
@@ -2437,11 +2589,19 @@ pub fn check_source_file_with_options(
   target : Target,
   no_implicit_any? : Bool = false,
   module_kind? : ModuleKind = ESModule,
+  strict_overrides? : StrictFlagOverrides? = None,
   has_parse_errors? : Bool = false,
 ) -> CheckResult {
-  let (snc, spi) = effective_strict_flags(bound.compiler_directives)
+  let (snc, spi) = effective_strict_flags(
+    bound.compiler_directives,
+    overrides=strict_overrides,
+  )
   let nia = no_implicit_any ||
-    effective_no_implicit_any(bound.compiler_directives, bound.file_path)
+    effective_no_implicit_any(
+      bound.compiler_directives,
+      bound.file_path,
+      overrides=strict_overrides,
+    )
   // Register enum declarations for nominal enum assignability checks
   clear_enum_registry()
   register_enums_in_statements(bound.statements)
@@ -2455,6 +2615,7 @@ pub fn check_source_file_with_options(
     no_implicit_any=nia,
     strict_null_checks=snc,
     strict_property_initialization=spi,
+    module_kind=module_kind,
   )
 
   // Apply global augmentations to the global scope
@@ -2548,11 +2709,19 @@ pub fn check_source_file_with_external_types(
   no_implicit_any? : Bool = false,
   module_kind? : ModuleKind = ESModule,
   import_helpers? : Bool = false,
+  strict_overrides? : StrictFlagOverrides? = None,
   has_parse_errors? : Bool = false,
 ) -> CheckResult {
-  let (snc, spi) = effective_strict_flags(bound.compiler_directives)
+  let (snc, spi) = effective_strict_flags(
+    bound.compiler_directives,
+    overrides=strict_overrides,
+  )
   let nia = no_implicit_any ||
-    effective_no_implicit_any(bound.compiler_directives, bound.file_path)
+    effective_no_implicit_any(
+      bound.compiler_directives,
+      bound.file_path,
+      overrides=strict_overrides,
+    )
   // Register enum declarations for nominal enum assignability checks
   clear_enum_registry()
   register_enums_in_statements(bound.statements)
@@ -2566,6 +2735,7 @@ pub fn check_source_file_with_external_types(
     no_implicit_any=nia,
     strict_null_checks=snc,
     strict_property_initialization=spi,
+    module_kind=module_kind,
   )
 
   // Apply global augmentations to the global scope
@@ -3631,7 +3801,9 @@ fn is_effectively_ambient(
 ) -> Bool {
   is_ambient_declaration(modifiers) ||
   checker.in_ambient_context ||
-  checker.file_path.has_suffix(".d.ts")
+  checker.file_path.has_suffix(".d.ts") ||
+  checker.file_path.has_suffix(".d.mts") ||
+  checker.file_path.has_suffix(".d.cts")
 }
 
 ///|
@@ -3988,7 +4160,13 @@ fn check_variable_statement(
 
     // Pass is_var flag: true if not let and not const
     let is_var = !(var_stmt.is_let) && !(var_stmt.is_const)
-    checker = check_variable_declaration(checker, decl, var_stmt.is_const, is_var)
+    checker = check_variable_declaration(
+      checker,
+      decl,
+      var_stmt.is_const,
+      is_var,
+      is_ambient~,
+    )
 
     // noImplicitAny: TS7005 for ambient variables without a type annotation
     // (`declare var x;`) - no initializer or control flow to infer from
@@ -4201,6 +4379,7 @@ fn check_variable_declaration(
   decl : VariableDeclaration,
   is_const : Bool,
   is_var : Bool,
+  is_ambient? : Bool = false,
 ) -> TypeChecker {
   // Check for TS2748: variable referencing itself in initializer (temporal dead zone)
   let checker = check_variable_self_reference(checker, decl)
@@ -4289,44 +4468,41 @@ fn check_variable_declaration(
       }
   }
 
-  // TS7034: Check for implicit any[] type in variable declaration.
-  // Full tsc behavior requires evolving-type analysis over all use sites, so
-  // this is restricted to the unambiguous syntactic case: a non-const
-  // variable initialized to an empty array literal `[]` with no annotation.
-  // (const `[]` infers never[] under strictNullChecks and is fine in tsc;
-  // non-literal initializers inferred as any[] are usually our own inference
-  // gaps, not real implicit anys.)
+  // TS7034/TS7005 tracking: variables whose declaration leaves them with an
+  // implicit 'any'/'any[]' type. tsc only reports these when some USE cannot
+  // be typed (evolving let/array analysis), so no diagnostic is emitted here;
+  // the variable is tracked and offending reads report later (see
+  // infer_identifier_type). Two unambiguous syntactic forms are tracked:
+  // - `var/let x = []` (evolving any[] array)
+  // - `var/let x;` with no annotation and no initializer (evolving any)
+  // Ambient declarations are excluded (TS7005 is reported eagerly for them in
+  // check_variable_statement, matching tsc).
   let is_empty_array_literal_init = match decl.initializer {
     Some(ArrayLiteralExpression(arr)) => arr.elements.length() == 0
     _ => false
   }
-  let checker = if checker.no_implicit_any &&
-    declared_type is None &&
+  // The SYNTACTIC annotation decides: a written annotation that fails to
+  // resolve (e.g. an unresolved type parameter) must not start tracking
+  let implicit_any_is_array : Bool? = if checker.no_implicit_any &&
+    decl.type_annotation is None &&
     !is_const &&
-    is_empty_array_literal_init {
-    match var_type {
-      Array(arr_type) =>
-        match arr_type.element_type {
-          Any(_) =>
-            match decl.name {
-              Identifier(id) => {
-                // Track this variable for TS7005 (when it's referenced)
-                checker.implicit_any_array_vars.add(id.name)
-                add_diagnostic_with_code(
-                  checker,
-                  "Variable '\{id.name}' implicitly has type 'any[]' in some locations where its type cannot be determined.",
-                  decl.location,
-                  TS7034,
-                )
-              }
-              _ => checker
-            }
-          _ => checker
-        }
-      _ => checker
+    !is_ambient {
+    if decl.initializer is None {
+      Some(false)
+    } else if is_empty_array_literal_init {
+      match var_type {
+        Array(arr_type) =>
+          match arr_type.element_type {
+            Any(_) => Some(true)
+            _ => None
+          }
+        _ => None
+      }
+    } else {
+      None
     }
   } else {
-    checker
+    None
   }
 
   // Get the variable name and add to local scope
@@ -4356,6 +4532,83 @@ fn check_variable_declaration(
       // For object destructuring, add each property to scope
       add_object_binding_elements_to_scope(checker, obj_pat, var_type, is_const)
     _ => checker
+  }
+
+  // Start implicit-any tracking AFTER the scope add (which clears any stale
+  // entry for the same name)
+  match (implicit_any_is_array, decl.name) {
+    (Some(is_array), Identifier(id)) =>
+      checker.implicit_any_vars.set(id.name, ImplicitAnyVarInfo::{
+        decl_loc: decl.location,
+        is_array,
+        container_id: current_container_id(checker),
+        pristine: true,
+        assigned_container: None,
+        reported_7034: false,
+      })
+    _ => ()
+  }
+
+  // noImplicitAny TS7006: function/arrow expressions initializing a variable
+  // that has no type annotation are never contextually typed, so their
+  // un-annotated parameters are implicit anys (syntactic check: an
+  // unresolved annotation may still be a contextual type in tsc)
+  let checker = if checker.no_implicit_any &&
+    decl.type_annotation is None &&
+    !is_ambient {
+    match decl.initializer {
+      Some(init) => check_uncontextual_fn_params(checker, init)
+      None => checker
+    }
+  } else {
+    checker
+  }
+
+  // noImplicitAny TS7031 (strictNullChecks off): a destructured element
+  // bound directly to a bare null/undefined widens to 'any'
+  // (`var [a, b] = [undefined, null]`). Only the unambiguous literal
+  // shapes are reported.
+  let checker = if checker.no_implicit_any &&
+    !(checker.strict_null_checks) &&
+    decl.type_annotation is None &&
+    !is_ambient {
+    check_null_widening_binding_elements(checker, decl)
+  } else {
+    checker
+  }
+
+  // noImplicitAny TS7005 (strictNullChecks off): a variable whose inferred
+  // type is a TUPLE containing bare null/undefined widens those elements to
+  // 'any' (`var b = a = [undefined, null]` with a: [any]). Const assertions
+  // keep literal types and are excluded.
+  let checker = if checker.no_implicit_any &&
+    decl.type_annotation is None &&
+    !is_const &&
+    !is_ambient {
+    match (decl.name, init_type, decl.initializer) {
+      (_, _, Some(AsExpression(_) | TypeAssertionExpression(_))) => checker
+      (Identifier(id), Some(t), Some(_)) =>
+        match widened_nullish_tuple_string(checker, t) {
+          Some(widened) =>
+            add_diagnostic_with_code(
+              checker,
+              "Variable '\{id.name}' implicitly has an '\{widened}' type.",
+              decl.location,
+              TS7005,
+            )
+          None => checker
+        }
+      _ => checker
+    }
+  } else {
+    checker
+  }
+
+  // noImplicitAny inside the type annotation itself: `var x: { y; }`,
+  // `var f: (a) => void` (TS7008/TS7006/TS7010/TS7013/TS7020)
+  let checker = match decl.type_annotation {
+    Some(type_node) => check_type_annotation_implicit_any(checker, type_node)
+    None => checker
   }
   checker
 }
@@ -4804,8 +5057,66 @@ fn infer_type(checker : TypeChecker, expr : Node) -> (Type, TypeChecker) {
     JsxElement(je) => infer_jsx_element_type(checker, je)
     JsxSelfClosingElement(jsce) => infer_jsx_self_closing_type(checker, jsce)
     JsxFragment(jf) => infer_jsx_fragment_type(checker, jf)
+    ClassExpression(class_decl) => {
+      // Class expression method declarations are never contextually typed
+      // (tsc), so implicit-any members/parameters always report; the class
+      // value itself still falls back to 'any' (bodies are not checked yet)
+      let checker = check_class_expression_implicit_any(checker, class_decl)
+      any_type(checker)
+    }
     _ => any_type(checker) // Fallback for unhandled expressions
   }
+}
+
+///|
+/// noImplicitAny for class EXPRESSION members: unlike property initializers,
+/// method declarations and un-annotated properties of a class expression are
+/// never contextually typed by tsc, so they report unconditionally.
+/// - TS7008: property without type annotation or initializer
+/// - TS7006/TS7019/TS7031: un-annotated method/constructor parameters
+fn check_class_expression_implicit_any(
+  checker : TypeChecker,
+  class_decl : ClassDeclaration,
+) -> TypeChecker {
+  if !(checker.no_implicit_any) {
+    return checker
+  }
+  // A class expression may be inferred more than once (e.g. return-type
+  // inference and return-statement checking); report members only once
+  let loc = class_decl.location
+  let loc_key = "\{loc.file_path}:\{loc.start.line}:\{loc.start.column}"
+  if checker.implicit_any_reported_locs.contains(loc_key) {
+    return checker
+  }
+  checker.implicit_any_reported_locs.add(loc_key)
+  let mut checker = checker
+  let ctor_assigned = collect_constructor_assigned_properties(class_decl)
+  for mem in class_decl.members {
+    match mem {
+      PropertyDeclaration(prop) =>
+        if prop.type_annotation is None &&
+          prop.initializer is None &&
+          prop.computed_name_expr is None &&
+          prop.name != "" &&
+          !(is_all_digits(prop.name)) &&
+          !(ctor_assigned.contains(prop.name)) {
+          checker = add_diagnostic_with_code(
+            checker,
+            "Member '\{prop.name}' implicitly has an 'any' type.",
+            prop.location,
+            TS7008,
+          )
+        }
+      MethodDeclaration(meth) =>
+        if meth.computed_name_expr is None {
+          checker = check_implicit_any_parameters(checker, meth.parameters)
+        }
+      ConstructorDeclaration(ctor) =>
+        checker = check_implicit_any_parameters(checker, ctor.parameters)
+      _ => ()
+    }
+  }
+  checker
 }
 
 ///|
@@ -4924,17 +5235,56 @@ fn infer_identifier_type(
     return any_type(checker)
   }
 
-  // TS7005: Check for variable with implicit any[] type being referenced
-  // Don't emit for assignment targets (left side of = in destructuring patterns)
+  // TS7005/TS7034: read of a variable whose implicit type is still 'any' or
+  // 'any[]'. Not emitted for assignment targets (left side of assignments /
+  // destructuring patterns). Reporting rules (matching tsc's flow analysis
+  // conservatively):
+  // - reads in the declaration's own function container only report for the
+  //   evolving-array form while the variable is pristine (plain `let x;`
+  //   reads have flow type undefined there, which tsc accepts)
+  // - reads from a nested function (closure) always report, unless the
+  //   variable was assigned earlier in that same reading container
+  // TS7034 is reported once, at the declaration, when the first offending
+  // read is found.
   let checker = if checker.no_implicit_any &&
-    checker.implicit_any_array_vars.contains(id.name) &&
     !(checker.in_destructuring_pattern) {
-    add_diagnostic_with_code(
-      checker,
-      "Variable '\{id.name}' implicitly has an 'any[]' type.",
-      id.location,
-      TS7005,
-    )
+    match checker.implicit_any_vars.get(id.name) {
+      Some(info) => {
+        let cur = current_container_id(checker)
+        let should_report = if cur == info.container_id {
+          info.is_array && info.pristine
+        } else {
+          !(info.assigned_container == Some(cur))
+        }
+        // The same read may be inferred more than once (e.g. return-type
+        // inference and body checking); report each read location once
+        let loc_key = "7005:\{id.name}:\{id.location.start.line}:\{id.location.start.column}"
+        if should_report && !(checker.implicit_any_reported_locs.contains(loc_key)) {
+          checker.implicit_any_reported_locs.add(loc_key)
+          let type_str = if info.is_array { "any[]" } else { "any" }
+          let checker = add_diagnostic_with_code(
+            checker,
+            "Variable '\{id.name}' implicitly has an '\{type_str}' type.",
+            id.location,
+            TS7005,
+          )
+          if !(info.reported_7034) {
+            info.reported_7034 = true
+            add_diagnostic_with_code(
+              checker,
+              "Variable '\{id.name}' implicitly has type '\{type_str}' in some locations where its type cannot be determined.",
+              info.decl_loc,
+              TS7034,
+            )
+          } else {
+            checker
+          }
+        } else {
+          checker
+        }
+      }
+      None => checker
+    }
   } else {
     checker
   }
@@ -7367,6 +7717,27 @@ fn infer_binary_expression_type(
     infer_type(checker, bin_expr.right)
   }
 
+  // Implicit-any tracking (TS7034/TS7005): an assignment may give an
+  // evolving variable its type, so stop reporting reads that follow it in
+  // this container. Marked AFTER the right side is inferred: reads inside
+  // the assigned value itself (e.g. `x = x + 1`) still see the old state.
+  if is_assignment {
+    mark_implicit_any_assignment_targets(checker, bin_expr.left)
+  } else {
+    match bin_expr.operator {
+      // Remaining assignment forms also assign (x ||= 1, x **= 2, ...)
+      LogicalAndAssign
+      | LogicalOrAssign
+      | NullishCoalescingAssign
+      | ExponentiateAssign
+      | LeftShiftAssign
+      | RightShiftAssign
+      | UnsignedRightShiftAssign =>
+        mark_implicit_any_assignment_targets(checker, bin_expr.left)
+      _ => ()
+    }
+  }
+
   // Determine result type based on operator
   match bin_expr.operator {
     // Addition: can be number + number -> number OR string + string -> string OR bigint + bigint -> bigint
@@ -7704,6 +8075,9 @@ fn infer_unary_expression_type(
         un_expr.operator,
         get_node_location(UnaryExpression(un_expr)),
       )
+      // x++ assigns x a number; stop implicit-any reporting for later reads
+      // in this container (the operand read above still saw the old state)
+      mark_implicit_any_assignment_targets(checker, un_expr.operand)
       number_type(checker)
     }
     TypeOf => string_type(checker) // typeof always returns a string
@@ -11022,6 +11396,35 @@ fn infer_property_access_type(
   checker : TypeChecker,
   prop : PropertyAccessExpression,
 ) -> (Type, TypeChecker) {
+  // Implicit-any tracking (TS7034/TS7005): tsc treats method/property access
+  // on an evolving array (`x.push(1)`, `x.length`) as part of the evolving
+  // analysis, not as an offending read, and pushes may give the array a
+  // type. Suppress reporting for the base identifier of a dot access on an
+  // array-kind variable and mark it non-pristine (later reads in the
+  // declaration container stay silent; missing beats false positive).
+  match prop.expression {
+    Identifier(id) =>
+      match checker.implicit_any_vars.get(id.name) {
+        Some(info) =>
+          if info.is_array {
+            info.pristine = false
+            checker.implicit_any_vars.remove(id.name)
+            let (t, checker) = infer_property_access_type_inner(checker, prop)
+            checker.implicit_any_vars.set(id.name, info)
+            return (t, checker)
+          }
+        None => ()
+      }
+    _ => ()
+  }
+  infer_property_access_type_inner(checker, prop)
+}
+
+///|
+fn infer_property_access_type_inner(
+  checker : TypeChecker,
+  prop : PropertyAccessExpression,
+) -> (Type, TypeChecker) {
   // TS1361/TS1362: property access on a type-only import binding is a value
   // use (e.g. `types.foo()` after `import type * as types`). Checked here
   // because the namespace path below bypasses identifier inference.
@@ -12179,12 +12582,35 @@ fn infer_await_expression_type(
 ) -> (Type, TypeChecker) {
   // TS1308: 'await' expressions are only allowed within async functions and at top level of modules
   let checker = if !(is_in_async_function(checker)) {
-    add_diagnostic_with_code(
-      checker,
-      "'await' expressions are only allowed within async functions and at the top levels of modules.",
-      ae.location,
-      TS1308,
-    )
+    // Under node16/nodenext (with target es2022+), top-level await is legal
+    // in ESM-format files. CommonJS-format files (.cts/.cjs) report TS1309
+    // instead. (.ts files whose format is CJS via a package.json "type"
+    // field are classified as ESM here — the checker has no filesystem
+    // access; extension-based classification covers the common cases.)
+    let at_top_level = checker.async_function_depth == 0 &&
+      checker.regular_function_depth == 0 &&
+      checker.arrow_function_depth == 0 &&
+      checker.generator_function_depth == 0
+    if is_node_module_kind(checker.module_kind) && at_top_level {
+      if checker.file_path.has_suffix(".cts") ||
+        checker.file_path.has_suffix(".cjs") {
+        add_diagnostic_with_code(
+          checker,
+          "The current file is a CommonJS module and cannot use 'await' at the top level.",
+          ae.location,
+          TS1309,
+        )
+      } else {
+        checker
+      }
+    } else {
+      add_diagnostic_with_code(
+        checker,
+        "'await' expressions are only allowed within async functions and at the top levels of modules.",
+        ae.location,
+        TS1308,
+      )
+    }
   } else {
     checker
   }
@@ -13294,6 +13720,29 @@ fn infer_function_expression_type(
       // Create union of all return types
       let (info, checker) = create_type_info(checker)
       (Union({ types: collected_return_types, info }), checker)
+    }
+    // noImplicitAny TS7010 (strictNullChecks off): the inferred return type
+    // is a tuple containing bare null/undefined, which widens to 'any'
+    // (`function bar() { ...; return intermediate = [undefined]; }`).
+    // Skipped when a contextual return type exists (the context types the
+    // returned tuple, so nothing widens).
+    let checker = if checker.no_implicit_any && contextual_return is None {
+      match fe.name {
+        Some(fn_name) =>
+          match widened_nullish_tuple_string(checker, inferred_return_type) {
+            Some(widened) =>
+              add_diagnostic_with_code(
+                checker,
+                "'\{fn_name}', which lacks return-type annotation, implicitly has an '\{widened}' return type.",
+                fe.location,
+                TS7010,
+              )
+            None => checker
+          }
+        None => checker
+      }
+    } else {
+      checker
     }
     // Create a new function type with inferred return type
     let (func_info, checker) = create_type_info(checker)
@@ -19584,6 +20033,13 @@ fn check_for_in_statement(
   // Must be a variable declaration, identifier, or property access
   let checker = check_for_in_left_side(checker, for_in_stmt.initializer)
 
+  // `for (x in ...)` over a pre-declared variable assigns it: stop
+  // implicit-any (TS7034/TS7005) reporting for reads that follow
+  match for_in_stmt.initializer {
+    VariableStatement(_) => ()
+    other => mark_implicit_any_assignment_targets(checker, other)
+  }
+
   // Check the right-hand side expression type (TS2407)
   let (expr_type, checker) = infer_type(checker, for_in_stmt.expression)
   let checker = match expr_type {
@@ -19684,6 +20140,13 @@ fn check_for_of_statement(
 ) -> TypeChecker {
   // Check the left-hand side (TS2487)
   let checker = check_for_of_left_side(checker, for_of_stmt.initializer)
+
+  // `for (x of ...)` over a pre-declared variable assigns it: stop
+  // implicit-any (TS7034/TS7005) reporting for reads that follow
+  match for_of_stmt.initializer {
+    VariableStatement(_) => ()
+    other => mark_implicit_any_assignment_targets(checker, other)
+  }
 
   // TS2448: Temporal Dead Zone check for for-of loops with let/const
   // Before checking the iterable expression, add declared variables to block_scoped_decls
@@ -20936,19 +21399,31 @@ fn check_class_declaration(
     class_type_parameters: type_param_names, // Set class type parameters for TS2302 validation
   }
 
-  // noImplicitAny: members of ambient (declare) classes need explicit types
-  // - TS7008: un-annotated (non-private) property
-  // - TS7010: method without a return-type annotation
-  // (non-ambient class members get their types from initializers /
-  // control-flow inference, so tsc does not report TS7008 for them)
-  if checker.no_implicit_any && is_ambient_declaration(class_decl.modifiers) {
+  // noImplicitAny: class members need explicit types
+  // - TS7008: property with neither type annotation nor initializer (any
+  //   class; tsc reports these even for private and non-ambient properties,
+  //   e.g. `class C { c }` in castingTuple). Suppressed when the constructor
+  //   assigns `this.<name> = ...` (tsc infers the property type from
+  //   constructor assignments)
+  // - TS7010: method without a return-type annotation (ambient classes only;
+  //   non-ambient method return types are inferred from their bodies)
+  if checker.no_implicit_any {
+    let is_ambient = is_ambient_declaration(class_decl.modifiers)
+    let ctor_assigned = collect_constructor_assigned_properties(class_decl)
     for mem in class_decl.members {
       match mem {
         PropertyDeclaration(prop) =>
+          // Ambient private properties are opaque and do not report in tsc.
+          // All-digit names are skipped: legitimate numeric members are
+          // rare, and parse recovery of static index signatures can
+          // produce bogus digit-named properties.
           if prop.type_annotation is None &&
             prop.initializer is None &&
             prop.computed_name_expr is None &&
-            !(has_modifier(prop.modifiers, Modifier::Private)) {
+            prop.name != "" &&
+            !(is_all_digits(prop.name)) &&
+            !(ctor_assigned.contains(prop.name)) &&
+            !(is_ambient && has_modifier(prop.modifiers, Modifier::Private)) {
             checker = add_diagnostic_with_code(
               checker,
               "Member '\{prop.name}' implicitly has an 'any' type.",
@@ -20957,7 +21432,8 @@ fn check_class_declaration(
             )
           }
         MethodDeclaration(meth) =>
-          if meth.return_type is None &&
+          if is_ambient &&
+            meth.return_type is None &&
             meth.computed_name_expr is None &&
             !(has_modifier(meth.modifiers, Modifier::Private)) &&
             !(meth.is_generator) {
@@ -21273,6 +21749,41 @@ fn check_class_declaration(
 }
 
 ///|
+/// True when a string is non-empty and consists only of ASCII digits
+fn is_all_digits(s : String) -> Bool {
+  if s.length() == 0 {
+    return false
+  }
+  for c in s {
+    if c < '0' || c > '9' {
+      return false
+    }
+  }
+  true
+}
+
+///|
+/// Property names assigned via `this.<name> = ...` in the class's
+/// constructor(s). Used to suppress TS7008: tsc infers the type of an
+/// un-annotated property from constructor assignments.
+fn collect_constructor_assigned_properties(
+  class_decl : ClassDeclaration,
+) -> @hashset.HashSet[String] {
+  let assigned : @hashset.HashSet[String] = @hashset.HashSet([])
+  for mem in class_decl.members {
+    match mem {
+      ConstructorDeclaration(ctor) =>
+        match ctor.body {
+          Some(body) => collect_this_property_assignments(body, assigned)
+          None => ()
+        }
+      _ => ()
+    }
+  }
+  assigned
+}
+
+///|
 /// Collect property names assigned via `this.<name> = ...` anywhere in a node.
 /// Conservative for TS2564: an assignment on ANY code path counts as definite,
 /// so missing assignments are under-reported rather than over-reported.
@@ -21439,6 +21950,10 @@ fn check_strict_property_initialization(
           continue
         }
         if prop.is_optional {
+          continue
+        }
+        // Definite assignment assertion (p!: T) exempts the property
+        if prop.has_definite_assignment {
           continue
         }
         if prop.computed_name_expr is Some(_) {
@@ -22640,7 +23155,7 @@ fn check_interface_declaration(
 
   // noImplicitAny: interface members without type annotations
   // - TS7008: property signature without a type
-  // - TS7010: method signature without a return-type annotation
+  // - TS7010/TS7013: method/construct signature without a return-type annotation
   // - TS7006/TS7019/TS7031: un-annotated method signature parameters
   if checker.no_implicit_any {
     for interface_member in iface_decl.members {
@@ -22656,27 +23171,8 @@ fn check_interface_declaration(
               TS7008,
             )
           }
-        MethodDeclaration(meth) => {
-          checker = check_implicit_any_parameters(checker, meth.parameters)
-          if meth.return_type is None && meth.computed_name_expr is None {
-            if meth.name == "new" {
-              // Construct signature: new (); -> TS7013
-              checker = add_diagnostic_with_code(
-                checker,
-                "Construct signature, which lacks return-type annotation, implicitly has an 'any' return type.",
-                meth.location,
-                TS7013,
-              )
-            } else {
-              checker = add_diagnostic_with_code(
-                checker,
-                "'\{meth.name}', which lacks return-type annotation, implicitly has an 'any' return type.",
-                meth.location,
-                TS7010,
-              )
-            }
-          }
-        }
+        MethodDeclaration(meth) =>
+          checker = check_implicit_any_method_signature(checker, meth)
         _ => ()
       }
     }
@@ -23820,8 +24316,12 @@ fn check_import_declaration(
 ) -> TypeChecker {
   let module_spec = import_decl.module_specifier
 
+  // Under node16/nodenext, explicit file extensions in import paths are
+  // required for ESM files, so neither TS2591 nor TS2691 applies.
+  let node_resolution = is_node_module_kind(checker.module_kind)
+
   // Check for .d.ts files first - TS2591: Cannot import type declaration files
-  if module_spec.has_suffix(".d.ts") {
+  if module_spec.has_suffix(".d.ts") && !(node_resolution) {
     let suggested_path = remove_extension(module_spec)
     return add_diagnostic_with_code(
       checker,
@@ -23833,10 +24333,13 @@ fn check_import_declaration(
 
   // TS2691: An import path cannot end with a '.ts', '.tsx', '.js', or '.jsx' extension
   // Check for prohibited extensions
-  let has_prohibited_extension = module_spec.has_suffix(".ts") ||
-    module_spec.has_suffix(".tsx") ||
-    module_spec.has_suffix(".js") ||
-    module_spec.has_suffix(".jsx")
+  let has_prohibited_extension = !(node_resolution) &&
+    (
+      module_spec.has_suffix(".ts") ||
+      module_spec.has_suffix(".tsx") ||
+      module_spec.has_suffix(".js") ||
+      module_spec.has_suffix(".jsx")
+    )
   let checker = if has_prohibited_extension {
     // Determine which extension was used
     let ext = if module_spec.has_suffix(".tsx") {
@@ -24657,6 +25160,332 @@ fn collect_binding_element_names(
       }
     _ => ()
   }
+}
+
+///|
+/// noImplicitAny TS7006/TS7019/TS7031 for function/arrow expressions in
+/// positions that definitely have NO contextual type: the initializer of a
+/// variable declared without a type annotation, recursing through the
+/// context-free literal structure tsc distributes contextual types over
+/// (parentheses, array literals, object literal properties and methods).
+/// Positions that may receive a contextual type elsewhere (call arguments,
+/// annotated declarations, satisfies/as, return positions) never reach this
+/// function, so a missing annotation reliably means implicit any here.
+fn check_uncontextual_fn_params(
+  checker : TypeChecker,
+  expr : Node,
+) -> TypeChecker {
+  if !(checker.no_implicit_any) {
+    return checker
+  }
+  match expr {
+    ParenthesizedExpression(pe) =>
+      check_uncontextual_fn_params(checker, pe.expression)
+    FunctionExpression(fe) => check_implicit_any_parameters(checker, fe.parameters)
+    ArrowFunction(arrow) =>
+      check_implicit_any_parameters(checker, arrow.parameters)
+    // Elements of an uncontextual array literal are uncontextual themselves
+    ArrayLiteralExpression(arr) => {
+      let mut checker = checker
+      for elem in arr.elements {
+        match elem {
+          Some(SpreadExpression(_)) | None => ()
+          Some(e) => checker = check_uncontextual_fn_params(checker, e)
+        }
+      }
+      checker
+    }
+    // Property values and methods of an uncontextual object literal
+    ObjectLiteralExpression(obj) => {
+      let mut checker = checker
+      for prop in obj.properties {
+        match prop {
+          PropertyAssignment(_, value, _) =>
+            checker = check_uncontextual_fn_params(checker, value)
+          ComputedPropertyAssignment(_, value, _) =>
+            checker = check_uncontextual_fn_params(checker, value)
+          MethodDeclaration(_, fe, _) =>
+            checker = check_implicit_any_parameters(checker, fe.parameters)
+          ComputedMethodDeclaration(_, fe, _) =>
+            checker = check_implicit_any_parameters(checker, fe.parameters)
+          _ => ()
+        }
+      }
+      checker
+    }
+    _ => checker
+  }
+}
+
+///|
+/// noImplicitAny for a signature-shaped member (interface method signature,
+/// type-literal method/call/construct signature):
+/// - TS7006/TS7019/TS7031: un-annotated parameters
+/// - TS7010: named method signature without a return-type annotation
+/// - TS7013: construct signature (`new ();`) without a return type
+/// - TS7020: call signature (`();`) without a return type
+fn check_implicit_any_method_signature(
+  checker : TypeChecker,
+  meth : MethodDeclaration,
+) -> TypeChecker {
+  let checker = check_implicit_any_parameters(checker, meth.parameters)
+  if meth.return_type is None && meth.computed_name_expr is None {
+    if meth.name == "new" {
+      add_diagnostic_with_code(
+        checker,
+        "Construct signature, which lacks return-type annotation, implicitly has an 'any' return type.",
+        meth.location,
+        TS7013,
+      )
+    } else if meth.name == "" {
+      add_diagnostic_with_code(
+        checker,
+        "Call signature, which lacks return-type annotation, implicitly has an 'any' return type.",
+        meth.location,
+        TS7020,
+      )
+    } else {
+      add_diagnostic_with_code(
+        checker,
+        "'\{meth.name}', which lacks return-type annotation, implicitly has an 'any' return type.",
+        meth.location,
+        TS7010,
+      )
+    }
+  } else {
+    checker
+  }
+}
+
+///|
+/// noImplicitAny inside type-literal annotations (`var x: { y; }`):
+/// - TS7008: member without a type
+/// - TS7006/TS7019/TS7031: un-annotated method-signature parameters
+/// - TS7010/TS7013/TS7020: signatures without a return-type annotation
+/// Recurses through composite type nodes so nested type literals are found.
+fn check_type_annotation_implicit_any(
+  checker : TypeChecker,
+  node : Node,
+) -> TypeChecker {
+  if !(checker.no_implicit_any) {
+    return checker
+  }
+  match node {
+    TypeLiteral(tl) => {
+      let mut checker = checker
+      for mem in tl.members {
+        match mem {
+          TypeLiteralProperty(prop) =>
+            match prop.type_node {
+              None =>
+                checker = add_diagnostic_with_code(
+                  checker,
+                  "Member '\{prop.name}' implicitly has an 'any' type.",
+                  prop.location,
+                  TS7008,
+                )
+              Some(t) => checker = check_type_annotation_implicit_any(checker, t)
+            }
+          MethodDeclaration(meth) => {
+            checker = check_implicit_any_method_signature(checker, meth)
+            checker = check_parameter_annotations_implicit_any(
+              checker,
+              meth.parameters,
+            )
+            match meth.return_type {
+              Some(rt) =>
+                checker = check_type_annotation_implicit_any(checker, rt)
+              None => ()
+            }
+          }
+          _ => ()
+        }
+      }
+      checker
+    }
+    // Parameters of function-shaped type annotations (`(a) => void`) are
+    // implicit anys when un-annotated
+    FunctionType(ft) => {
+      let checker = check_implicit_any_parameters(checker, ft.parameters)
+      let checker = check_parameter_annotations_implicit_any(
+        checker,
+        ft.parameters,
+      )
+      check_type_annotation_implicit_any(checker, ft.return_type)
+    }
+    ConstructorType(ct) => {
+      let checker = check_implicit_any_parameters(checker, ct.parameters)
+      let checker = check_parameter_annotations_implicit_any(
+        checker,
+        ct.parameters,
+      )
+      check_type_annotation_implicit_any(checker, ct.return_type)
+    }
+    // Recurse into type arguments (Array<{ y; }>)
+    TypeReference(type_ref) => {
+      let mut checker = checker
+      for arg in type_ref.type_arguments {
+        checker = check_type_annotation_implicit_any(checker, arg)
+      }
+      checker
+    }
+    UnionType(u) => {
+      let mut checker = checker
+      for t in u.types {
+        checker = check_type_annotation_implicit_any(checker, t)
+      }
+      checker
+    }
+    IntersectionType(i) => {
+      let mut checker = checker
+      for t in i.types {
+        checker = check_type_annotation_implicit_any(checker, t)
+      }
+      checker
+    }
+    ArrayType(a) => check_type_annotation_implicit_any(checker, a.element_type)
+    TupleType(tt) => {
+      let mut checker = checker
+      for t in tt.element_types {
+        checker = check_type_annotation_implicit_any(checker, t)
+      }
+      checker
+    }
+    NamedTupleMember(ntm) =>
+      check_type_annotation_implicit_any(checker, ntm.element_type)
+    ParenthesizedType(pt) =>
+      check_type_annotation_implicit_any(checker, pt.type_node)
+    _ => checker
+  }
+}
+
+///|
+/// If `t` is a tuple type with elements that are bare null/undefined (which
+/// widen to 'any' when strictNullChecks is off), return the widened tuple's
+/// display string (e.g. "[any, any]"); otherwise None
+fn widened_nullish_tuple_string(checker : TypeChecker, t : Type) -> String? {
+  if checker.strict_null_checks {
+    return None
+  }
+  match t {
+    Tuple(tuple_type) => {
+      let mut has_nullish = false
+      let parts : Array[String] = []
+      for elem in tuple_type.element_types {
+        match elem.element_type {
+          Null(_) | Undefined(_) => {
+            has_nullish = true
+            parts.push("any")
+          }
+          other => parts.push(type_to_string(other))
+        }
+      }
+      if has_nullish {
+        Some("[" + parts.join(", ") + "]")
+      } else {
+        None
+      }
+    }
+    _ => None
+  }
+}
+
+///|
+/// True for expressions that are syntactically null/undefined (`null`,
+/// `undefined`, `void 0`) - the values that widen to 'any' when
+/// strictNullChecks is off
+fn expr_is_null_or_undefined(expr : Node) -> Bool {
+  match expr {
+    NullLiteral(_) => true
+    Identifier(id) => id.name == "undefined"
+    UnaryExpression(un) => un.operator is Void
+    ParenthesizedExpression(pe) => expr_is_null_or_undefined(pe.expression)
+    _ => false
+  }
+}
+
+///|
+/// noImplicitAny TS7031 (strictNullChecks off): report binding elements of a
+/// destructuring declaration whose corresponding initializer element is a
+/// bare null/undefined (widens to 'any'): `var [a, b] = [undefined, null]`,
+/// `var { p } = { p: undefined }`
+fn check_null_widening_binding_elements(
+  checker : TypeChecker,
+  decl : VariableDeclaration,
+) -> TypeChecker {
+  let mut checker = checker
+  match (decl.name, decl.initializer) {
+    (ArrayBindingPattern(pat), Some(ArrayLiteralExpression(arr))) =>
+      for i = 0; i < pat.elements.length(); i = i + 1 {
+        if i < arr.elements.length() {
+          match (pat.elements[i], arr.elements[i]) {
+            (Some(Identifier(id)), Some(elem_expr)) =>
+              if expr_is_null_or_undefined(elem_expr) {
+                checker = add_diagnostic_with_code(
+                  checker,
+                  "Binding element '\{id.name}' implicitly has an 'any' type.",
+                  id.location,
+                  TS7031,
+                )
+              }
+            _ => ()
+          }
+        }
+      }
+    (ObjectBindingPattern(pat), Some(ObjectLiteralExpression(obj))) =>
+      for binding in pat.properties {
+        // Skip bindings with a default initializer ({ x = 5 }) - typed
+        if binding.initializer is None {
+          match binding.name {
+            Identifier(id) => {
+              let key = if binding.property_name != "" {
+                binding.property_name
+              } else {
+                id.name
+              }
+              for prop in obj.properties {
+                match prop {
+                  PropertyAssignment(name, value, _) =>
+                    if name == key && expr_is_null_or_undefined(value) {
+                      checker = add_diagnostic_with_code(
+                        checker,
+                        "Binding element '\{id.name}' implicitly has an 'any' type.",
+                        id.location,
+                        TS7031,
+                      )
+                    }
+                  _ => ()
+                }
+              }
+            }
+            _ => ()
+          }
+        }
+      }
+    _ => ()
+  }
+  checker
+}
+
+///|
+/// Recurse into parameter TYPE ANNOTATIONS looking for nested type literals
+/// with implicit-any members (`(a: { y; }) => void`)
+fn check_parameter_annotations_implicit_any(
+  checker : TypeChecker,
+  parameters : Array[Node],
+) -> TypeChecker {
+  let mut checker = checker
+  for param_node in parameters {
+    match param_node {
+      Parameter(p) =>
+        match p.type_annotation {
+          Some(t) => checker = check_type_annotation_implicit_any(checker, t)
+          None => ()
+        }
+      _ => ()
+    }
+  }
+  checker
 }
 
 ///|

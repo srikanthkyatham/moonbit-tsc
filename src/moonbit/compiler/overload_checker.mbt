@@ -795,6 +795,8 @@ pub fn check_statement_overloads(
   // Functions without bodies are ambient in .d.ts files and inside ambient
   // contexts (declare namespace/module bodies)
   let is_ambient_file = checker.file_path.has_suffix(".d.ts") ||
+    checker.file_path.has_suffix(".d.mts") ||
+    checker.file_path.has_suffix(".d.cts") ||
     checker.in_ambient_context
   let overloads_map = collect_overloads(statements, is_ambient_file)
   let checker = checker

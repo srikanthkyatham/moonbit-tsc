@@ -241,8 +241,14 @@ defmodule ConformanceTestRunner do
   # relative imports between the units resolve against the real filesystem.
   # Returns {output, exit_code, honored_extra_directives}.
   defp run_multi_file_test(file, name, content, directives) do
-    units = split_filename_units(content)
+    # The tsc harness resolves unit paths against @currentDirectory; mirror
+    # that by resolving every unit name against it before placing the unit in
+    # the temp dir (the temp dir plays the role of the filesystem root "/").
+    current_dir = current_directory(directives)
+    units = split_filename_units(content, current_dir)
     compilable = Enum.filter(units, fn {fname, _} -> compilable_unit?(fname) end)
+
+    honored = if current_dir, do: ["filename", "currentdirectory"], else: ["filename"]
 
     if units == [] or compilable == [] do
       # Synthesis not possible; fall back to single-file compilation.
@@ -264,10 +270,26 @@ defmodule ConformanceTestRunner do
 
         compile_paths = Enum.map(compilable, fn {fname, _} -> Path.join(dir, fname) end)
         {out, code} = run_compiler(compile_paths, directives)
-        {out, code, ["filename"]}
+        {out, code, honored}
       after
         File.rm_rf(dir)
       end
+    end
+  end
+
+  # Value of @currentDirectory normalized to forward slashes without a drive
+  # letter or trailing slash; nil when the directive is absent.
+  defp current_directory(directives) do
+    case List.keyfind(directives, "currentdirectory", 0) do
+      {_, value} ->
+        value
+        |> String.trim()
+        |> String.replace("\\", "/")
+        |> String.replace(~r/^[a-zA-Z]:/, "")
+        |> String.trim_trailing("/")
+
+      nil ->
+        nil
     end
   end
 
@@ -282,14 +304,17 @@ defmodule ConformanceTestRunner do
   # options; keep them by prepending to every unit (the compiler honors a few
   # inline directives, and they are inert comments otherwise). Non-directive
   # content before the first marker is comments only per harness rules — drop it.
-  defp split_filename_units(content) do
+  # Relative unit names are resolved against current_dir (from
+  # @currentDirectory) when given, so units spelled "b.ts" and "/root/a.ts"
+  # land in the same directory when currentDirectory is "/root".
+  defp split_filename_units(content, current_dir \\ nil) do
     lines = String.split(content, ~r/\r?\n/)
 
     {units, last_name, last_lines, prefix} =
       Enum.reduce(lines, {[], nil, [], []}, fn line, {units, fname, acc, prefix} ->
         case Regex.run(@filename_directive, line) do
           [_, new_name] ->
-            case sanitize_unit_name(new_name) do
+            case resolve_unit_name(new_name, current_dir) do
               nil -> {units, fname, acc, prefix}
               clean -> {finish_unit(units, fname, acc), clean, [], prefix}
             end
@@ -313,7 +338,14 @@ defmodule ConformanceTestRunner do
     units
     |> Enum.reverse()
     |> Enum.map(fn {fname, ucontent} ->
-      ucontent = if prefix == [], do: ucontent, else: Enum.join(prefix, "\n") <> "\n" <> ucontent
+      # Prefix global directive lines onto compilable units only: they are
+      # comments the compiler may honor in TS files, but they would corrupt
+      # JSON units (package.json) and other non-TS assets.
+      ucontent =
+        if prefix == [] or not compilable_unit?(fname),
+          do: ucontent,
+          else: Enum.join(prefix, "\n") <> "\n" <> ucontent
+
       {fname, ucontent}
     end)
     |> Enum.uniq_by(fn {fname, _} -> fname end)
@@ -323,6 +355,21 @@ defmodule ConformanceTestRunner do
 
   defp finish_unit(units, fname, lines) do
     [{fname, lines |> Enum.reverse() |> Enum.join("\n")} | units]
+  end
+
+  # Resolve a unit name against @currentDirectory (harness semantics: unit
+  # paths are relative to it; rooted paths stand alone), then sanitize.
+  defp resolve_unit_name(raw, nil), do: sanitize_unit_name(raw)
+
+  defp resolve_unit_name(raw, current_dir) do
+    norm =
+      raw
+      |> String.trim()
+      |> String.replace("\\", "/")
+      |> String.replace(~r/^[a-zA-Z]:/, "")
+
+    full = if String.starts_with?(norm, "/"), do: norm, else: current_dir <> "/" <> norm
+    sanitize_unit_name(full)
   end
 
   # Normalize a @filename value to a safe path relative to the temp dir:
@@ -349,11 +396,14 @@ defmodule ConformanceTestRunner do
     end
   end
 
-  # Files the compiler CLI accepts as input (.ts/.tsx, including .d.ts).
-  # Other units (package.json, .js, ...) are still written to disk so module
-  # resolution can see them, but are not passed for compilation.
+  # Files the compiler CLI accepts as input (.ts/.tsx including .d.ts, plus
+  # the node16 ESM/CJS variants .mts/.cts/.d.mts/.d.cts — the TypeScript
+  # harness compiles those units too). Other units (package.json, .js, ...)
+  # are still written to disk so module resolution can see them, but are not
+  # passed for compilation.
   defp compilable_unit?(fname) do
-    String.ends_with?(fname, ".ts") or String.ends_with?(fname, ".tsx")
+    String.ends_with?(fname, ".ts") or String.ends_with?(fname, ".tsx") or
+      String.ends_with?(fname, ".mts") or String.ends_with?(fname, ".cts")
   end
 
   defp safe_cmd(bin, args) do
@@ -369,6 +419,27 @@ defmodule ConformanceTestRunner do
   # only the first listed value.
   @honorable ~w(target module ignoredeprecations)
 
+  # Directives that never change the diagnostics we compare against, so they
+  # must not demote a mismatch to "unhonored directives":
+  #   * noImplicitReferences — harness-only option: it makes tsc compile only
+  #     the last unit and pull the rest in via imports/references
+  #     (compilerRunner.ts). tsc applies the same behavior implicitly whenever
+  #     the last unit contains `require(` or a `/// <reference path`, so the
+  #     directive itself is redundant for those tests; our runner always
+  #     writes every unit to disk and compiles them together, which yields the
+  #     same set of checked files for module-import tests.
+  #   * traceResolution — only adds module-resolution trace output (baselined
+  #     separately as .trace.json); it never changes the emitted error codes.
+  @inert ~w(noimplicitreferences traceresolution)
+
+  # Directives the compiler reads directly from the source text (via its inline
+  # `// @directive:` parser) and self-applies during checking, so the runner
+  # need not translate them into CLI flags — passing the file already honors
+  # them. The strict family defaults ON in the compiler, matching how the
+  # TypeScript conformance baselines are generated (see effective_strict_flags /
+  # effective_no_implicit_any in checker.mbt).
+  @honored_in_file ~w(strict strictnullchecks strictpropertyinitialization noimplicitany)
+
   defp parse_directives(content) do
     ~r/^\s*\/\/\s*@(\w+)\s*:\s*(.+?)\s*$/m
     |> Regex.scan(content)
@@ -379,7 +450,9 @@ defmodule ConformanceTestRunner do
     directives
     |> Enum.map(&elem(&1, 0))
     |> Enum.uniq()
-    |> Enum.reject(&(&1 in @honorable))
+    |> Enum.reject(
+      &(&1 in @honorable or &1 in @inert or &1 in @honored_in_file)
+    )
   end
 
   defp honored_flag(directives, key, flag) do

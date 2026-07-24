@@ -905,6 +905,14 @@ pub(all) struct UnresolvedBareImport {
   checker_reports : Bool
   /// Effective noImplicitAny for the importing file
   no_implicit_any : Bool
+  /// Whether the site has require semantics (`import x = require(...)`),
+  /// which under node16 yields TS1471 when the target is an ES module
+  require_like : Bool
+  /// Type-only import (`import type ...`): exempt from TS1479/TS1471
+  type_only : Bool
+  /// Whether the importing file is ESM-format (selects the node16
+  /// "import"/"require" resolution conditions; TS1479 applies to CJS)
+  importer_esm : Bool
 } derive(Debug)
 
 ///|
@@ -922,6 +930,12 @@ pub(all) struct MultiFileImportValidation {
   /// Non-relative imports that did not resolve in the file set; check the
   /// real filesystem (node_modules) before deciding on TS2307/TS7016
   unresolved_bare : Array[UnresolvedBareImport]
+  /// (declaring_file, name) pairs for value names declared inside
+  /// `declare global { ... }` blocks in the file set: the per-file checker
+  /// cannot see cross-file global augmentations, so its TS2304 for these
+  /// names should be suppressed (callers may restrict which declaring files
+  /// count, e.g. node_modules files only when actually imported/referenced)
+  global_value_names : Array[(String, String)]
 } derive(Debug)
 
 ///|
@@ -971,6 +985,114 @@ pub fn matches_ambient_module(
 }
 
 ///|
+/// Collect value names (var/let/const, function, class) declared inside
+/// `declare global { ... }` blocks at the top level of a source file
+pub fn collect_global_augmentation_value_names(
+  sf : SourceFile,
+) -> Array[String] {
+  let names : Array[String] = []
+  fn collect_from(stmts : Array[Node]) -> Unit {
+    for stmt in stmts {
+      match stmt {
+        Node::VariableStatement(vs) =>
+          for decl in vs.declarations {
+            match decl.name {
+              Node::Identifier(id) => names.push(id.name)
+              _ => ()
+            }
+          }
+        Node::FunctionDeclaration(fd) =>
+          match fd.name {
+            Some(Node::Identifier(id)) => names.push(id.name)
+            _ => ()
+          }
+        Node::ClassDeclaration(cd) =>
+          match cd.name {
+            Some(Node::Identifier(id)) => names.push(id.name)
+            _ => ()
+          }
+        _ => ()
+      }
+    }
+  }
+
+  for stmt in sf.statements {
+    match stmt {
+      Node::ModuleDeclaration(md) =>
+        if md.is_global_augmentation {
+          match md.body {
+            Some(Node::BlockStatement(block)) => collect_from(block.statements)
+            _ => ()
+          }
+        }
+      _ => ()
+    }
+  }
+  names
+}
+
+///|
+/// Find an `import.meta` meta-property in an expression tree (common
+/// expression forms; used for TS1470 in CJS-format files under node16)
+fn expr_import_meta_location(expr : Node) -> SourceLocation? {
+  match expr {
+    Node::MetaProperty(mp) =>
+      match mp.keyword_kind {
+        ImportMeta => Some(mp.location)
+        _ => None
+      }
+    Node::PropertyAccessExpression(pae) =>
+      expr_import_meta_location(pae.expression)
+    Node::CallExpression(ce) => {
+      match expr_import_meta_location(ce.expression) {
+        Some(loc) => return Some(loc)
+        None => ()
+      }
+      for arg in ce.arguments {
+        match expr_import_meta_location(arg) {
+          Some(loc) => return Some(loc)
+          None => ()
+        }
+      }
+      None
+    }
+    Node::BinaryExpression(be) =>
+      match expr_import_meta_location(be.left) {
+        Some(loc) => Some(loc)
+        None => expr_import_meta_location(be.right)
+      }
+    _ => None
+  }
+}
+
+///|
+/// Find the first `import.meta` occurrence in a file's top-level statements
+fn find_import_meta_location(statements : Array[Node]) -> SourceLocation? {
+  for stmt in statements {
+    match stmt {
+      Node::ExpressionStatement(es) =>
+        match expr_import_meta_location(es.expression) {
+          Some(loc) => return Some(loc)
+          None => ()
+        }
+      Node::VariableStatement(vs) =>
+        for decl in vs.declarations {
+          match decl.initializer {
+            Some(init) =>
+              match expr_import_meta_location(init) {
+                Some(loc) => return Some(loc)
+                None => ()
+              }
+            None => ()
+          }
+        }
+      _ => ()
+    }
+  }
+  None
+}
+
+///|
 /// Validate relative imports across a set of real files compiled together.
 /// Resolves each relative specifier against the file set (with .ts/.tsx/.d.ts
 /// extension and directory-index resolution) and validates imported members
@@ -980,6 +1102,9 @@ pub fn matches_ambient_module(
 /// imports (see UnresolvedRelativeImport for how callers should handle them).
 pub fn validate_multi_file_imports(
   files : Array[(String, String)], // (file_path, source) pairs
+  node16? : Bool = false,
+  cjs_require_esm_errors? : Bool = true,
+  file_formats? : Map[String, ModuleFormat] = Map([]),
 ) -> MultiFileImportValidation {
   let diagnostics : Array[Diagnostic] = []
   let unresolved : Array[UnresolvedRelativeImport] = []
@@ -991,11 +1116,37 @@ pub fn validate_multi_file_imports(
   }
   let resolver = ModuleResolver::with_file_set(file_paths, ".")
 
+  // Per-file CJS/ESM format (node16 mode): caller-provided map (normalized
+  // here), falling back to extension-based classification with Node's CJS
+  // default for .ts/.js files
+  let formats_normalized : Map[String, ModuleFormat] = Map([])
+  for entry in file_formats {
+    formats_normalized.set(normalize_path(entry.0), entry.1)
+  }
+  fn format_of(path : String) -> ModuleFormat {
+    match formats_normalized.get(normalize_path(path)) {
+      Some(f) => f
+      None =>
+        if path.has_suffix(".mts") || path.has_suffix(".mjs") {
+          ESM
+        } else if path.has_suffix(".cts") || path.has_suffix(".cjs") {
+          CJS
+        } else {
+          CJS
+        }
+    }
+  }
+
+  fn is_esm_file(path : String) -> Bool {
+    format_of(path) == ESM
+  }
+
   // Parse and bind every file; collect exports keyed by normalized path,
   // ambient module declarations, and the per-file effective noImplicitAny
   let exports_by_path : Map[String, ResolvedModuleExports] = Map([])
   let parsed_files : Array[(String, SourceFile)] = []
   let ambient_module_names : Array[String] = []
+  let global_value_names : Array[(String, String)] = []
   let nia_by_path : Map[String, Bool] = Map([])
   for f in files {
     let (path, source) = f
@@ -1005,6 +1156,9 @@ pub fn validate_multi_file_imports(
         parsed_files.push((path, sf))
         for name in collect_ambient_module_names(sf) {
           ambient_module_names.push(name)
+        }
+        for name in collect_global_augmentation_value_names(sf) {
+          global_value_names.push((path, name))
         }
         // TS7016 (untyped module) only applies under noImplicitAny and
         // when allowJs is off: with allowJs the .js file joins the
@@ -1109,12 +1263,32 @@ pub fn validate_multi_file_imports(
   // then file-set resolution; otherwise defer to the caller's filesystem
   // lookup. Returns the resolved file-set path (if any) so import
   // declarations can validate members against it.
+  //
+  // Under node16, genuinely bare specifiers skip file-set resolution
+  // entirely: package.json `exports` gates what a package exposes, and only
+  // the caller (with filesystem access) can evaluate that. Rooted specifiers
+  // keep the file-set path.
   fn handle_bare_specifier(
     path : String,
     spec : String,
     location : SourceLocation,
     checker_reports : Bool,
+    require_like : Bool,
+    type_only : Bool,
   ) -> String? {
+    fn defer_to_caller() -> Unit {
+      unresolved_bare.push(UnresolvedBareImport::{
+        file_path: path,
+        specifier: spec,
+        location,
+        checker_reports,
+        no_implicit_any: nia_for(path),
+        require_like,
+        type_only,
+        importer_esm: is_esm_file(path),
+      })
+    }
+
     if matches_ambient_module(ambient_module_names, spec) {
       resolved_bare.push(ResolvedBareImport::{
         file_path: path,
@@ -1123,6 +1297,10 @@ pub fn validate_multi_file_imports(
         resolved_path: None,
         no_implicit_any: nia_for(path),
       })
+      return None
+    }
+    if node16 && !(spec.has_prefix("/")) {
+      defer_to_caller()
       return None
     }
     match resolver.resolve_module_name(spec, path) {
@@ -1137,13 +1315,131 @@ pub fn validate_multi_file_imports(
         Some(resolved.resolved_file_name)
       }
       Err(_) => {
-        unresolved_bare.push(UnresolvedBareImport::{
-          file_path: path,
-          specifier: spec,
-          location,
-          checker_reports,
-          no_implicit_any: nia_for(path),
-        })
+        defer_to_caller()
+        None
+      }
+    }
+  }
+
+  // node16: literal (extensioned) relative resolution for ESM-format
+  // importers — no extension adding, no directory-index lookup. Emits
+  // TS2835/TS2834/TS2307 for extensionless/directory/root specifiers.
+  // Returns the resolved path when the literal lookup succeeded.
+  fn node16_esm_relative(
+    path : String,
+    spec : String,
+    location : SourceLocation,
+  ) -> String? {
+    // Bare "./"/"../" (and "."/"..", which the checker already reports as
+    // TS2307): never resolvable in ESM
+    if spec == "./" || spec == "../" {
+      diagnostics.push(
+        create_module_not_found_diagnostic_with_location(spec, location),
+      )
+      return None
+    }
+    if spec == "." || spec == ".." {
+      return None // checker's bare-specifier TS2307 covers these
+    }
+    let containing_dir = get_directory_path(path)
+    let base = normalize_path(join_paths(containing_dir, spec))
+    let ext = get_extension(spec)
+    if !(ext.is_empty()) {
+      // Literal lookup with JS-output -> TS-source substitution
+      let candidates : Array[String] = [base]
+      let stem = base[:base.length() - ext.length()].to_owned()
+      if ext == ".js" {
+        candidates.push(stem + ".ts")
+        candidates.push(stem + ".tsx")
+        candidates.push(stem + ".d.ts")
+      } else if ext == ".jsx" {
+        candidates.push(stem + ".tsx")
+      } else if ext == ".mjs" {
+        candidates.push(stem + ".mts")
+        candidates.push(stem + ".d.mts")
+      } else if ext == ".cjs" {
+        candidates.push(stem + ".cts")
+        candidates.push(stem + ".d.cts")
+      }
+      for c in candidates {
+        if resolver.file_exists(c) {
+          return Some(c)
+        }
+      }
+      unresolved.push(UnresolvedRelativeImport::{
+        file_path: path,
+        specifier: spec,
+        location,
+        candidates,
+        no_implicit_any: nia_for(path),
+      })
+      return None
+    }
+    // Extensionless: adding an extension would have resolved it -> TS2835
+    let ts_exts = [".mts", ".cts", ".ts", ".tsx", ".d.mts", ".d.cts", ".d.ts"]
+    if !(spec.has_suffix("/")) {
+      for e in ts_exts {
+        if resolver.file_exists(base + e) {
+          let out_ext = if e == ".mts" || e == ".d.mts" {
+            ".mjs"
+          } else if e == ".cts" || e == ".d.cts" {
+            ".cjs"
+          } else {
+            ".js"
+          }
+          diagnostics.push(
+            create_esm_needs_extension_diagnostic(Some(spec + out_ext), location),
+          )
+          return None
+        }
+      }
+    }
+    // Directory with an index file -> TS2834 (ESM has no index resolution)
+    for e in ts_exts {
+      if resolver.file_exists(join_paths(base, "index" + e)) {
+        diagnostics.push(create_esm_needs_extension_diagnostic(None, location))
+        return None
+      }
+    }
+    // Nothing in the file set: defer to the caller's on-disk check (TS2307)
+    unresolved.push(UnresolvedRelativeImport::{
+      file_path: path,
+      specifier: spec,
+      location,
+      candidates: [],
+      no_implicit_any: nia_for(path),
+    })
+    None
+  }
+
+  // node16: relative resolution with require semantics (CJS importers'
+  // static imports, and import= / require() in any file): full extension +
+  // index resolution, but resolutions landing on an ES module are errors.
+  // `require_like` selects TS1471 (require constructs) vs TS1479 (static
+  // imports in CJS files).
+  fn node16_cjs_relative(
+    path : String,
+    spec : String,
+    location : SourceLocation,
+    require_like : Bool,
+    type_only : Bool,
+  ) -> String? {
+    match resolver.resolve_module_name(spec, path) {
+      Ok(resolved) => {
+        let target = resolved.resolved_file_name
+        // node20/nodenext assume Node.js supports require() of ES modules,
+        // so the TS1479/TS1471 interop errors only apply to node16/node18
+        if cjs_require_esm_errors && !(type_only) && is_esm_file(target) {
+          if require_like {
+            diagnostics.push(create_require_of_esm_diagnostic(spec, location))
+          } else {
+            diagnostics.push(create_cjs_import_of_esm_diagnostic(spec, location))
+          }
+        }
+        Some(target)
+      }
+      Err(failure) => {
+        record_unresolved(path, spec, location, failure)
         None
       }
     }
@@ -1159,7 +1455,14 @@ pub fn validate_multi_file_imports(
         // Reuse the checker's single-import validation
         let registry : Map[String, ResolvedModuleExports] = Map([])
         registry.set(import_decl.module_specifier, module_exports)
+        // Under node16, a CommonJS-format module imported from ESM always
+        // exposes a synthetic default (the module.exports object), so
+        // TS1192 does not apply
+        let cjs_target = node16 && format_of(resolved_path) == CJS
         for d in validate_import_resolution(import_decl, registry) {
+          if cjs_target && d.code == 1192 {
+            continue
+          }
           diagnostics.push(d)
         }
       }
@@ -1172,18 +1475,59 @@ pub fn validate_multi_file_imports(
     let (path, sf) = entry
 
     // All import forms (import, import =, require()) — existence check for
-    // relative specifiers
-    for import_decl in get_imports(sf) {
-      let spec = import_decl.module_specifier
-      if !(is_relative_specifier(spec)) {
-        continue
+    // relative specifiers. (node16 mode handles each form separately below,
+    // since the resolution rules differ per import kind.)
+    if !(node16) {
+      for import_decl in get_imports(sf) {
+        let spec = import_decl.module_specifier
+        if !(is_relative_specifier(spec)) {
+          continue
+        }
+        match resolver.resolve_module_name(spec, path) {
+          Ok(_) => ()
+          Err(failure) => record_unresolved(path, spec, import_decl.location, failure)
+        }
       }
-      match resolver.resolve_module_name(spec, path) {
-        Ok(_) => ()
-        Err(failure) => record_unresolved(path, spec, import_decl.location, failure)
+    } else {
+      // node16: require() calls use CJS resolution; resolving to an ES
+      // module is TS1471
+      let require_imports : Array[ImportDeclaration] = []
+      for stmt in sf.statements {
+        match stmt {
+          Node::VariableStatement(vs) =>
+            for decl in vs.declarations {
+              match decl.initializer {
+                Some(init) => extract_require_import(init, "", require_imports)
+                None => ()
+              }
+            }
+          Node::ExpressionStatement(es) =>
+            extract_require_import(es.expression, "", require_imports)
+          _ => ()
+        }
+      }
+      for r in require_imports {
+        if is_relative_specifier(r.module_specifier) {
+          let _ = node16_cjs_relative(
+            path, r.module_specifier, r.location, true, false,
+          )
+
+        }
+      }
+      // TS1470: import.meta is not allowed in CJS-format files
+      if format_of(path) == CJS {
+        match find_import_meta_location(sf.statements) {
+          Some(loc) =>
+            diagnostics.push(Diagnostic::{
+              category: DiagnosticCategory::Error,
+              code: 1470,
+              message: "The 'import.meta' meta-property is not allowed in files which will build into CommonJS output.",
+              location: loc,
+            })
+          None => ()
+        }
       }
     }
-
     for stmt in sf.statements {
       match stmt {
         // Genuine ES import declarations — validate imported members.
@@ -1192,40 +1536,74 @@ pub fn validate_multi_file_imports(
         Node::ImportDeclaration(import_decl) => {
           let spec = import_decl.module_specifier
           if is_relative_specifier(spec) {
-            match resolver.resolve_module_name(spec, path) {
-              Ok(resolved) => {
-                validate_members(import_decl, resolved.resolved_file_name)
-                // "." / ".." resolve relatively here, but the per-file
-                // checker still emits its bare-specifier TS2307 for them —
-                // record the resolution so the caller suppresses it
-                if !(checker_treats_as_relative(spec)) {
-                  resolved_bare.push(ResolvedBareImport::{
-                    file_path: path,
-                    specifier: spec,
-                    location: import_decl.location,
-                    resolved_path: Some(resolved.resolved_file_name),
-                    no_implicit_any: nia_for(path),
-                  })
-                }
+            if node16 {
+              // ESM importers need explicit extensions; CJS importers get
+              // extension/index resolution but may not import ES modules
+              let resolved_target = if is_esm_file(path) {
+                node16_esm_relative(path, spec, import_decl.location)
+              } else {
+                node16_cjs_relative(
+                  path,
+                  spec,
+                  import_decl.location,
+                  false,
+                  import_decl.is_type_only,
+                )
               }
-              Err(_) => () // already recorded above
+              match resolved_target {
+                Some(target) => validate_members(import_decl, target)
+                None => ()
+              }
+            } else {
+              match resolver.resolve_module_name(spec, path) {
+                Ok(resolved) => {
+                  validate_members(import_decl, resolved.resolved_file_name)
+                  // "." / ".." resolve relatively here, but the per-file
+                  // checker still emits its bare-specifier TS2307 for them —
+                  // record the resolution so the caller suppresses it
+                  if !(checker_treats_as_relative(spec)) {
+                    resolved_bare.push(ResolvedBareImport::{
+                      file_path: path,
+                      specifier: spec,
+                      location: import_decl.location,
+                      resolved_path: Some(resolved.resolved_file_name),
+                      no_implicit_any: nia_for(path),
+                    })
+                  }
+                }
+                Err(_) => () // already recorded above
+              }
             }
           } else if !(spec.has_prefix("http://")) &&
             !(spec.has_prefix("https://")) {
             match
-              handle_bare_specifier(path, spec, import_decl.location, true) {
+              handle_bare_specifier(
+                path,
+                spec,
+                import_decl.location,
+                true,
+                false,
+                import_decl.is_type_only,
+              ) {
               Some(resolved_path) => validate_members(import_decl, resolved_path)
               None => ()
             }
           }
         }
-        // import x = require("pkg") — bare-specifier existence check
-        // (relative specifiers are covered by the get_imports loop above)
+        // import x = require("pkg") — existence check; under node16 the
+        // require form additionally rejects ES-module targets (TS1471)
         Node::ImportEqualsDeclaration(ied) =>
           match ied.module_reference {
             ExternalModuleReference(spec, _) =>
               if !(is_relative_specifier(spec)) {
-                let _ = handle_bare_specifier(path, spec, ied.location, false)
+                let _ = handle_bare_specifier(
+                  path, spec, ied.location, false, true, ied.is_type_only,
+                )
+
+              } else if node16 {
+                let _ = node16_cjs_relative(
+                  path, spec, ied.location, true, ied.is_type_only,
+                )
 
               }
             EntityName(_) => ()
@@ -1235,12 +1613,26 @@ pub fn validate_multi_file_imports(
           match ed.module_specifier {
             Some(spec) =>
               if is_relative_specifier(spec) {
-                match resolver.resolve_module_name(spec, path) {
-                  Ok(_) => ()
-                  Err(failure) => record_unresolved(path, spec, ed.location, failure)
+                if node16 {
+                  if is_esm_file(path) {
+                    let _ = node16_esm_relative(path, spec, ed.location)
+
+                  } else {
+                    let _ = node16_cjs_relative(
+                      path, spec, ed.location, false, ed.is_type_only,
+                    )
+
+                  }
+                } else {
+                  match resolver.resolve_module_name(spec, path) {
+                    Ok(_) => ()
+                    Err(failure) => record_unresolved(path, spec, ed.location, failure)
+                  }
                 }
               } else {
-                let _ = handle_bare_specifier(path, spec, ed.location, false)
+                let _ = handle_bare_specifier(
+                  path, spec, ed.location, false, false, ed.is_type_only,
+                )
 
               }
             None => ()
@@ -1249,7 +1641,7 @@ pub fn validate_multi_file_imports(
       }
     }
   }
-  { diagnostics, unresolved, resolved_bare, unresolved_bare }
+  { diagnostics, unresolved, resolved_bare, unresolved_bare, global_value_names }
 }
 
 // ============================================================================

@@ -16,6 +16,13 @@ pub(all) struct CompileRequest {
   es_module_interop : Bool // Emit helpers for CommonJS/ES module interoperability
   external_types_json : String? // JSON string containing external types for cross-file checking
   no_emit : Bool // Only run type checking, don't emit JavaScript
+  // Tri-state strict-flag overrides (None = not specified on the CLI /
+  // tsconfig; the checker then falls back to file directives / default ON)
+  strict : Bool?
+  no_implicit_any : Bool?
+  strict_null_checks : Bool?
+  strict_function_types : Bool?
+  strict_property_initialization : Bool?
 } derive(Debug, ToJson, FromJson)
 
 ///|
@@ -33,6 +40,11 @@ pub fn CompileRequest::new(
   es_module_interop? : Bool = false,
   external_types_json? : String? = None,
   no_emit? : Bool = false,
+  strict? : Bool? = None,
+  no_implicit_any? : Bool? = None,
+  strict_null_checks? : Bool? = None,
+  strict_function_types? : Bool? = None,
+  strict_property_initialization? : Bool? = None,
 ) -> CompileRequest {
   {
     file_path,
@@ -47,6 +59,11 @@ pub fn CompileRequest::new(
     es_module_interop,
     external_types_json,
     no_emit,
+    strict,
+    no_implicit_any,
+    strict_null_checks,
+    strict_function_types,
+    strict_property_initialization,
   }
 }
 

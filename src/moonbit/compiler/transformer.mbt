@@ -651,6 +651,7 @@ fn transform_class_declaration(
         type_annotation: None, // Type is removed in JS output
         initializer: None, // Will be assigned in constructor
         is_optional: false,
+        has_definite_assignment: false,
         decorators: [],
         modifiers,
         location,
@@ -735,6 +736,7 @@ fn transform_class_expression(
         type_annotation: None, // Type is removed in JS output
         initializer: None, // Will be assigned in constructor
         is_optional: false,
+        has_definite_assignment: false,
         decorators: [],
         modifiers,
         location,
@@ -2298,6 +2300,7 @@ fn transform_property_declaration(
       None => None
     },
     is_optional: pd.is_optional,
+    has_definite_assignment: pd.has_definite_assignment,
     decorators: pd.decorators,
     modifiers: pd.modifiers,
     location: pd.location,

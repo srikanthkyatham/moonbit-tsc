@@ -434,6 +434,11 @@ fn parse_function_expression_body_with_generator(
   is_generator : Bool,
   start_loc : SourceLocation,
 ) -> Result[(Node, Parser), Parser] {
+  // Optional type parameters: function <T>(x: T) {}
+  let (type_params, parser) = match current_token(parser) {
+    LessThan(_) => parse_type_parameters(parser)
+    _ => ([], parser)
+  }
   // Expect opening paren
   match expect(parser, fn(t) { matches_open_paren(t) }) {
     Ok(parser) => {
@@ -444,9 +449,16 @@ fn parse_function_expression_body_with_generator(
         Ok((body, parser)) =>
           Ok(
             (
-              make_function_expression(
-                name, params, return_type, body, is_async, is_generator, start_loc,
-              ),
+              Node::FunctionExpression(FunctionExpression::{
+                name,
+                type_parameters: type_params,
+                parameters: params,
+                return_type,
+                body,
+                is_async,
+                is_generator,
+                location: start_loc,
+              }),
               parser,
             ),
           )

@@ -94,6 +94,33 @@ units (`package.json`, `.js`, ...) are still written to disk so module
 resolution can see them. Diagnostics are aggregated across all units. When
 synthesis succeeds, `filename` no longer counts as unhonored.
 
+`@currentDirectory` is honored during synthesis: the tsc harness treats unit
+paths as relative to it, so the runner resolves each unit name against the
+directive value before placing it in the temp dir (the temp dir plays the
+role of the filesystem root). Units spelled `b.ts` and `/root/a.ts` therefore
+land in the same directory when `@currentDirectory: /root`.
+
+Two directives are treated as inert (never counted as unhonored) because they
+cannot change the diagnostics we compare against:
+
+* `@noImplicitReferences` — harness-only option making tsc compile only the
+  last unit and pull the rest in via imports/references; tsc applies the same
+  behavior implicitly whenever the last unit contains `require(` or a
+  `/// <reference path`, and the runner already writes every unit to disk and
+  compiles them together.
+* `@traceResolution` — only adds module-resolution trace output (baselined
+  separately as `.trace.json`).
+
+A further set is treated as **honored in-file**: the compiler parses these
+`// @directive:` markers directly from the source text and self-applies them
+during checking, so passing the file already honors them — the runner need not
+translate them into CLI flags. These are `@strict`, `@strictNullChecks`,
+`@strictPropertyInitialization`, and `@noImplicitAny` (the strict family, which
+defaults ON in the compiler to match how the baselines are generated; see
+`effective_strict_flags` / `effective_no_implicit_any` in `checker.mbt`). A test
+whose only unhonored directive is one of these is therefore judged on
+diagnostics like any fully-honored test, not demoted to `DirFail`.
+
 All other directives cannot be honored; those tests still run, but if they
 fail they are counted in a separate "Failed*" / `DirFail` bucket and tagged
 `[unhonored: ...]` so genuine diagnostic mismatches are not conflated with

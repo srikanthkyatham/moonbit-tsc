@@ -39,10 +39,12 @@ pub(all) struct CLIOptions {
   external_types_json : String? // JSON string containing external types for cross-file checking
   external_types_file : String? // Path to a file containing the external types JSON (avoids argv size limits)
   no_emit : Bool // Only run type checking, don't emit JavaScript
-  strict : Bool // Enable all strict type-checking options
-  no_implicit_any : Bool // Raise error on expressions with an implied 'any' type
-  strict_null_checks : Bool // Enable strict null checks
-  strict_function_types : Bool // Enable strict checking of function types
+  // Tri-state strict flags (tsc convention: `--strictNullChecks false`).
+  // None = not passed; file-level directives always win over these.
+  strict : Bool? // Enable all strict type-checking options
+  no_implicit_any : Bool? // Raise error on expressions with an implied 'any' type
+  strict_null_checks : Bool? // Enable strict null checks
+  strict_function_types : Bool? // Enable strict checking of function types
   import_helpers : Bool // Import emit helpers from tslib (e.g., __spreadArray)
   ignore_deprecations : Bool // Suppress TS5107/TS5101 deprecated-option errors
 } derive(Debug)
@@ -65,13 +67,29 @@ pub fn CLIOptions::default() -> CLIOptions {
     external_types_json: None,
     external_types_file: None,
     no_emit: false,
-    strict: false,
-    no_implicit_any: false,
-    strict_null_checks: false,
-    strict_function_types: false,
+    strict: None,
+    no_implicit_any: None,
+    strict_null_checks: None,
+    strict_function_types: None,
     import_helpers: false,
     ignore_deprecations: false,
   }
+}
+
+///|
+/// Parse an optional boolean value following a flag, tsc-style:
+/// `--strictNullChecks` (bare) means true, `--strictNullChecks false` means
+/// false, `--strictNullChecks true` means true. Returns the parsed value and
+/// the index of the last consumed argument.
+fn parse_bool_flag_value(args : Array[String], i : Int) -> (Bool, Int) {
+  if i + 1 < args.length() {
+    match args[i + 1] {
+      "true" => return (true, i + 1)
+      "false" => return (false, i + 1)
+      _ => ()
+    }
+  }
+  (true, i)
 }
 
 ///|
@@ -97,10 +115,10 @@ pub fn parse_args(args : Array[String]) -> Result[Command, String] {
   let mut external_types_file : String? = None
   let mut json_mode = false
   let mut no_emit = false
-  let mut strict = false
-  let mut no_implicit_any = false
-  let mut strict_null_checks = false
-  let mut strict_function_types = false
+  let mut strict : Bool? = None
+  let mut no_implicit_any : Bool? = None
+  let mut strict_null_checks : Bool? = None
+  let mut strict_function_types : Bool? = None
   let mut import_helpers = false
   let mut ignore_deprecations = false
   let mut i = 1 // Skip program name
@@ -124,29 +142,7 @@ pub fn parse_args(args : Array[String]) -> Result[Command, String] {
       }
       let build_path = args[i]
       // Skip remaining args and return build command
-      let options : CLIOptions = {
-        target: None,
-        module_system: None,
-        out_dir: None,
-        source_map_mode: None,
-        declaration: None,
-        verbose: false,
-        parallel: None,
-        watch: false,
-        watch_interval: 500,
-        report_diagnostics: false,
-        json_output: false,
-        external_types_json: None,
-        external_types_file: None,
-        no_emit: false,
-        strict: false,
-        no_implicit_any: false,
-        strict_null_checks: false,
-        strict_function_types: false,
-        import_helpers: false,
-        ignore_deprecations: false,
-      }
-      return Ok(Command::BuildReferences(build_path, options))
+      return Ok(Command::BuildReferences(build_path, CLIOptions::default()))
     } else if arg == "--list-imports" {
       i = i + 1
       if i >= args.length() {
@@ -236,17 +232,24 @@ pub fn parse_args(args : Array[String]) -> Result[Command, String] {
     } else if arg == "--noEmit" {
       no_emit = true
     } else if arg == "--strict" {
-      strict = true
-      // --strict enables all strict type-checking options
-      no_implicit_any = true
-      strict_null_checks = true
-      strict_function_types = true
+      // --strict enables (or, with an explicit `false` value, disables) all
+      // strict type-checking options; the checker resolves specific flags
+      // and file-level directives on top of it
+      let (value, new_i) = parse_bool_flag_value(args, i)
+      strict = Some(value)
+      i = new_i
     } else if arg == "--noImplicitAny" {
-      no_implicit_any = true
+      let (value, new_i) = parse_bool_flag_value(args, i)
+      no_implicit_any = Some(value)
+      i = new_i
     } else if arg == "--strictNullChecks" {
-      strict_null_checks = true
+      let (value, new_i) = parse_bool_flag_value(args, i)
+      strict_null_checks = Some(value)
+      i = new_i
     } else if arg == "--strictFunctionTypes" {
-      strict_function_types = true
+      let (value, new_i) = parse_bool_flag_value(args, i)
+      strict_function_types = Some(value)
+      i = new_i
     } else if arg == "--importHelpers" {
       import_helpers = true
     } else if arg == "--ignoreDeprecations" {

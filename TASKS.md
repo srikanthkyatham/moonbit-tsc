@@ -111,18 +111,18 @@ Deferred by the survey as needing their own scoping: template-literal-type patte
 
 | ID | Task | Notes |
 |----|------|-------|
-| B1 | node_modules / package.json resolution (`main`/`types`/`exports`), `@types` lookup | Bare specifiers still emit unconditional TS2307 (checker.mbt ~line 20799) even when an ambient module or on-disk package exists |
-| B2 | Ambient `declare module "x"` across real files; TS1155 false positive for uninitialized `const` in declare-module blocks in `.d.ts` | |
-| B3 | typeOnly import/export semantics (TS1361/1362/1363/1369) | Largest remaining externalModules loose bucket |
-| B4 | NodeNext/node16 rules: TS2835 extensionless ESM imports, `.mts`/`.cts`, module=node18/20; bundler/customConditions/typesVersions | |
-| B5 | Untyped `.js` relative import under noImplicitAny → TS7016 (currently silent) | Overlaps T10's noImplicitAny work |
-| B6 | Wire cross-file validation into `run_json_compile`/project/watch modes (only `run_single_compile` has it) | Watch mode recompiles subsets — needs care |
-| B7 | Runner: honor `@currentDirectory`, `@noImplicitReferences`, `@traceResolution` directives (`@strict` family now honored compiler-side via T7) | |
-| B8 | Parser: `p!: T` definite-assignment assertion on class properties silently loses the type annotation and produces a stray member | Flagged by T7; TS2564 stays safe (unannotated props skipped) but it's a real parser gap |
-| B9 | Wire `CompileOptions.strict*` CLI/tsconfig flags to the checker (currently dead; file directives are the only control surface) | Flagged by T7 |
-| B10 | TS7006 for function expressions/arrows (needs contextual-typing info at parameter-check time); flow-sensitive TS7005/TS7034 | Deferred by T10 |
-| B11 | Private accessors `set #x(v)` parse as methods (2 esDecorators strict tests); `{ new (); }` type-literal parse gap; TS7008/TS7006 inside type literals | Deferred by T10 |
-| B12 | ambient category strict −4 vs July report (extras TS2390/2391/2339) — introduced by the committed toolchain-migration changes, not wave 3; needs bisect | Flagged by T10's final sweep |
+| B1 ✅ | node_modules / package.json resolution, `@types` lookup | Done by T14 (except `exports` conditions → B4) |
+| B2 ✅ | Ambient `declare module "x"` across real files; TS1155 `.d.ts` false positive | Done by T12 (ambient contexts) + T14 (wildcard matching, TS1155) |
+| B3 ✅ | typeOnly import/export semantics | Done by T13 |
+| B4 🔄 | NodeNext/node16 rules: TS2835 extensionless ESM imports, `.mts`/`.cts`, package.json `exports` conditions | Wave 6 agent D |
+| B5 ✅ | Untyped `.js` import under noImplicitAny → TS7016 | Done by T14 |
+| B6 ✅ | Wire cross-file validation into `run_json_compile`/project/watch modes | Done by wave 6 agent B (json + project single-compile; watch modes documented as skipped: subset recompiles would emit false TS2307) |
+| B7 ✅ | Runner: honor `@currentDirectory`, `@noImplicitReferences`, `@traceResolution` directives | Done by wave 6 agent B (`@currentDirectory` resolved in multi-file synthesis; the other two whitelisted as inert) |
+| B8 ✅ | Parser: `p!: T` class-property definite-assignment assertion loses the type annotation | ✅ W6-A: `has_definite_assignment` on PropertyDeclaration (24 sites); `?`/`!` consumed before annotation on all member paths (two ~130-line duplicated member-parsing arms deduped onto `parse_named_class_member` — the duplication is why static was missed). TS2564 exemption now explicit, `c.p` correctly typed. |
+| B9 ✅ | Wire `CompileOptions.strict*` CLI/tsconfig flags to the checker | Done by wave 6 agent B (tri-state `StrictFlagOverrides` plumbed CLI/tsconfig → coordinator → protocol/worker → checker; precedence directive > flag > default-on) |
+| B10 🔄 | TS7006 for function expressions/arrows; flow-sensitive TS7005/TS7034 | Wave 6 agent C |
+| B11 🔄 | Private accessors `set #x(v)`; `{ new (); }` type-literal parse gap; T21's `=> { <U>(…): U }` return-position gap | Parser half ✅ W6-A: private-name accessors via new DRY get/set helpers wired into all 6 accessor sites (~500 lines of duplication removed; both esDecorators targets pass); type-literal call/construct/generic signatures now real members (were parsed-and-discarded); bonus: generic function expressions + generic arrow functions parse; fixed pre-existing `decorators[0]` panic crash (parser crashes → 0). Checker half (TS7008/7006 in type literals) with agent C 🔄. |
+| B12 ✅ | ambient strict regression bisect | Done by T12 (was never-implemented ambient contexts, now built) |
 
 ## Conventions
 

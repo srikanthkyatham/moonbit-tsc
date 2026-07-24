@@ -246,7 +246,7 @@ test "unit/module-resolver/cache - caches failed lookups" {
 ///|
 test "unit/module-resolver/options - default options have correct values" {
   let options = @compiler.ModuleResolutionOptions::default()
-  assert_eq(options.extensions.length(), 5)
+  assert_eq(options.extensions.length(), 9)
   assert_eq(options.resolve_json_module, false)
   assert_eq(options.type_roots.length(), 1)
 }
@@ -259,6 +259,10 @@ test "unit/module-resolver/options - extensions include TypeScript and JavaScrip
   assert_true(options.extensions.contains(".d.ts"))
   assert_true(options.extensions.contains(".js"))
   assert_true(options.extensions.contains(".jsx"))
+  assert_true(options.extensions.contains(".cts"))
+  assert_true(options.extensions.contains(".d.cts"))
+  assert_true(options.extensions.contains(".mts"))
+  assert_true(options.extensions.contains(".d.mts"))
 }
 
 // ============================================================================

@@ -19,9 +19,13 @@ pub fn is_declaration_file(path : String) -> Bool {
 }
 
 ///|
-/// Check if a file is any TypeScript file (including declaration files)
+/// Check if a file is any TypeScript file (including declaration files and
+/// the node16 ESM/CJS variants .mts/.cts)
 pub fn is_any_typescript_file(path : String) -> Bool {
-  path.has_suffix(".ts") || path.has_suffix(".tsx")
+  path.has_suffix(".ts") ||
+  path.has_suffix(".tsx") ||
+  path.has_suffix(".mts") ||
+  path.has_suffix(".cts")
 }
 
 ///|

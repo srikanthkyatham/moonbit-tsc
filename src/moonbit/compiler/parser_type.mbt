@@ -264,6 +264,151 @@ fn parse_primary_type(parser : Parser) -> Result[(Node, Parser), Parser] {
 }
 
 ///|
+/// Parse the parameter list and optional return type of a signature-shaped
+/// type-literal member (call signature, construct signature, or method
+/// signature). `parser` must be positioned AT the '('. `name` is "" for
+/// call signatures, "new" for construct signatures, or the method name.
+/// The return-type annotation is optional (e.g. `{ new (); }` / `{ m(); }`
+/// mean an implicit `any` return, like tsc).
+/// Returns the member node (a MethodDeclaration, matching what the checker
+/// expects for these member kinds) without consuming a trailing separator.
+fn parse_signature_member_rest(
+  parser : Parser,
+  name : String,
+  type_params : Array[TypeParameter],
+  is_optional : Bool,
+  member_loc : SourceLocation,
+) -> Result[(Node, Parser), Parser] {
+  let parser = advance_parser(parser) // consume '('
+  let (params, parser) = parse_parameter_list(parser)
+  let (return_type, parser) = match current_token(parser) {
+    Colon(_) => {
+      let parser = advance_parser(parser)
+      match parse_type(parser) {
+        Ok((ty, p)) => (Some(ty), p)
+        Err(p) => return Err(p)
+      }
+    }
+    _ => (None, parser)
+  }
+  Ok(
+    (
+      Node::MethodDeclaration(MethodDeclaration::{
+        name,
+        computed_name_expr: None,
+        parameters: params,
+        return_type,
+        body: None,
+        type_parameters: type_params,
+        decorators: [],
+        modifiers: [],
+        is_optional,
+        is_async: false,
+        is_generator: false,
+        location: member_loc,
+      }),
+      parser,
+    ),
+  )
+}
+
+///|
+/// Parse the remainder of a named type-literal member after the name has
+/// been consumed: optional `?`, then a method signature (`m(): T`, generic
+/// `m<T>(x: T): T`, return type optional), a typed property (`p: T`), or a
+/// shorthand property (`{ a }` meaning `a: any`, like tsc).
+/// Pushes the member onto `members` and consumes a trailing `,`/`;`.
+/// Returns Ok((true, parser)) on success, Ok((false, parser)) when the
+/// continuation token is unrecognized (caller exits its member loop),
+/// or Err on a hard parse error.
+fn parse_type_literal_property_rest(
+  parser : Parser,
+  name : String,
+  member_loc : SourceLocation,
+  members : Array[Node],
+) -> Result[(Bool, Parser), Parser] {
+  let mut parser = parser
+  // Check for optional property marker (?)
+  let is_optional = match current_token(parser) {
+    Question(_) => {
+      parser = advance_parser(parser)
+      true
+    }
+    _ => false
+  }
+  // Check for method signature, property type, or shorthand property
+  match current_token(parser) {
+    // Method signature: name(): Type, name(params): Type, or name()
+    OpenParen(_) =>
+      match
+        parse_signature_member_rest(parser, name, [], is_optional, member_loc) {
+        Ok((member, p)) => {
+          members.push(member)
+          parser = p
+        }
+        Err(p) => return Err(p)
+      }
+    // Generic method signature: name<T>(params): Type
+    LessThan(_) => {
+      let (type_params, p) = parse_type_parameters(parser)
+      parser = p
+      match current_token(parser) {
+        OpenParen(_) =>
+          match
+            parse_signature_member_rest(
+              parser, name, type_params, is_optional, member_loc,
+            ) {
+            Ok((member, p)) => {
+              members.push(member)
+              parser = p
+            }
+            Err(p) => return Err(p)
+          }
+        _ => return Ok((false, parser))
+      }
+    }
+    // Property with type: name : Type
+    Colon(_) => {
+      parser = advance_parser(parser)
+      match parse_type(parser) {
+        Ok((prop_type, p)) => {
+          members.push(
+            Node::TypeLiteralProperty(TypeLiteralProperty::{
+              name,
+              type_node: Some(prop_type),
+              is_optional,
+              is_readonly: false,
+              location: member_loc,
+            }),
+          )
+          parser = p
+        }
+        Err(p) => return Err(p)
+      }
+    }
+    // Property signature without a type annotation: { a }
+    // means { a: any } (like tsc), NOT { a: a }
+    CloseBrace(_) | Semicolon(_) | Comma(_) =>
+      members.push(
+        Node::TypeLiteralProperty(TypeLiteralProperty::{
+          name,
+          type_node: None,
+          is_optional,
+          is_readonly: false,
+          location: member_loc,
+        }),
+      )
+    _ => return Ok((false, parser))
+  }
+  // Optional comma or semicolon
+  match current_token(parser) {
+    Comma(_) | Semicolon(_) => parser = advance_parser(parser)
+    _ => ()
+  }
+  Ok((true, parser))
+}
+
+///|
 /// Parse primary type with readonly context for tuples
 fn parse_primary_type_with_readonly(
   parser : Parser,
@@ -1133,88 +1278,93 @@ fn parse_primary_type_with_readonly(
               }
             }
           }
-          // Handle call signature: (): type
-          OpenParen(_) => {
-            let call_start = current_token(parser).location()
-            parser = advance_parser(parser)
-            let (params, p) = parse_parameter_list(parser)
+          // Handle call signature: (): type, (x: A): B, or () with
+          // implicit any return
+          OpenParen(_) =>
+            match parse_signature_member_rest(parser, "", [], false, member_loc) {
+              Ok((member, p)) => {
+                members.push(member)
+                parser = p
+                // Optional comma or semicolon
+                match current_token(parser) {
+                  Semicolon(_) | Comma(_) => parser = advance_parser(parser)
+                  _ => ()
+                }
+              }
+              Err(p) => return Err(p)
+            }
+          // Handle generic call signature: <T>(x: T): T
+          LessThan(_) => {
+            let (type_params, p) = parse_type_parameters(parser)
             parser = p
-            // Expect :
             match current_token(parser) {
-              Colon(_) => {
-                parser = advance_parser(parser)
-                match parse_type(parser) {
-                  Ok((return_type, p)) => {
-                    let _ = params
-                    let _ = return_type
-                    let _ = call_start
-                    // For now, just skip call signatures
+              OpenParen(_) =>
+                match
+                  parse_signature_member_rest(
+                    parser, "", type_params, false, member_loc,
+                  ) {
+                  Ok((member, p)) => {
+                    members.push(member)
                     parser = p
-                    // Optional semicolon
+                    // Optional comma or semicolon
                     match current_token(parser) {
-                      Semicolon(_) => parser = advance_parser(parser)
+                      Semicolon(_) | Comma(_) => parser = advance_parser(parser)
                       _ => ()
                     }
                   }
                   Err(p) => return Err(p)
                 }
-              }
               _ => break
             }
           }
           // Handle construct signature: new(): type or new <T>(): type
-          KeywordNew(_) => {
-            parser = advance_parser(parser)
-            // Check for optional type parameters: new <T>()
-            let (type_params, parser2) = match current_token(parser) {
-              LessThan(_) => parse_type_parameters(parser)
-              _ => ([], parser)
-            }
-            parser = parser2
-            match current_token(parser) {
-              OpenParen(_) => {
-                parser = advance_parser(parser)
-                let (params, p) = parse_parameter_list(parser)
-                parser = p
-                // Expect :
+          // (the return type is optional). `new` not followed by `(` or `<`
+          // is an ordinary property name: { new: T } — handled by the
+          // default property-name arm below via fallthrough.
+          KeywordNew(new_loc) =>
+            match peek_token(parser) {
+              OpenParen(_) | LessThan(_) => {
+                parser = advance_parser(parser) // consume 'new'
+                // Check for optional type parameters: new <T>()
+                let (type_params, parser2) = match current_token(parser) {
+                  LessThan(_) => parse_type_parameters(parser)
+                  _ => ([], parser)
+                }
+                parser = parser2
                 match current_token(parser) {
-                  Colon(_) => {
-                    parser = advance_parser(parser)
-                    match parse_type(parser) {
-                      Ok((return_type, p)) => {
-                        // Create a MethodDeclaration with name "new" for construct signature
-                        members.push(
-                          Node::MethodDeclaration(MethodDeclaration::{
-                            name: "new",
-                            computed_name_expr: None,
-                            parameters: params,
-                            return_type: Some(return_type),
-                            body: None,
-                            type_parameters: type_params,
-                            decorators: [],
-                            modifiers: [],
-                            is_optional: false,
-                            is_async: false,
-                            is_generator: false,
-                            location: member_loc,
-                          }),
-                        )
+                  OpenParen(_) =>
+                    match
+                      parse_signature_member_rest(
+                        parser, "new", type_params, false, member_loc,
+                      ) {
+                      Ok((member, p)) => {
+                        members.push(member)
                         parser = p
-                        // Optional semicolon
+                        // Optional comma or semicolon
                         match current_token(parser) {
-                          Semicolon(_) => parser = advance_parser(parser)
+                          Semicolon(_) | Comma(_) =>
+                            parser = advance_parser(parser)
                           _ => ()
                         }
                       }
                       Err(p) => return Err(p)
                     }
-                  }
                   _ => break
                 }
               }
-              _ => break
+              _ => {
+                // `new` used as a plain property name: { new: T } / { new }
+                parser = advance_parser(parser)
+                match
+                  parse_type_literal_property_rest(
+                    parser, "new", new_loc, members,
+                  ) {
+                  Ok((true, p)) => parser = p
+                  Ok((false, _)) => break
+                  Err(p) => return Err(p)
+                }
+              }
             }
-          }
           // Handle readonly modifier
           KeywordReadonly(_) => {
             parser = advance_parser(parser)
@@ -1448,101 +1598,13 @@ fn parse_primary_type_with_readonly(
             match try_get_property_name(current_token(parser)) {
               Some((name, _)) => {
                 parser = advance_parser(parser)
-                // Check for optional property marker (?)
-                let is_optional = match current_token(parser) {
-                  Question(_) => {
-                    parser = advance_parser(parser)
-                    true
-                  }
-                  _ => false
-                }
-                // Check for method signature, property type, or shorthand property
-                match current_token(parser) {
-                  // Method signature: name() : Type or name(params) : Type
-                  OpenParen(_) => {
-                    parser = advance_parser(parser)
-                    let (params, p) = parse_parameter_list(parser)
-                    parser = p
-                    // Expect : for return type
-                    match current_token(parser) {
-                      Colon(_) => {
-                        parser = advance_parser(parser)
-                        match parse_type(parser) {
-                          Ok((return_type, p)) => {
-                            members.push(
-                              Node::MethodDeclaration(MethodDeclaration::{
-                                name,
-                                computed_name_expr: None,
-                                parameters: params,
-                                return_type: Some(return_type),
-                                body: None,
-                                type_parameters: [],
-                                decorators: [],
-                                modifiers: [],
-                                is_optional,
-                                is_async: false,
-                                is_generator: false,
-                                location: member_loc,
-                              }),
-                            )
-                            parser = p
-                            // Optional comma or semicolon
-                            match current_token(parser) {
-                              Comma(_) | Semicolon(_) =>
-                                parser = advance_parser(parser)
-                              _ => ()
-                            }
-                          }
-                          Err(p) => return Err(p)
-                        }
-                      }
-                      _ => break
-                    }
-                  }
-                  // Property with type: name : Type
-                  Colon(_) => {
-                    parser = advance_parser(parser)
-                    match parse_type(parser) {
-                      Ok((prop_type, p)) => {
-                        members.push(
-                          Node::TypeLiteralProperty(TypeLiteralProperty::{
-                            name,
-                            type_node: Some(prop_type),
-                            is_optional,
-                            is_readonly: false,
-                            location: member_loc,
-                          }),
-                        )
-                        parser = p
-                        // Optional comma or semicolon
-                        match current_token(parser) {
-                          Comma(_) | Semicolon(_) =>
-                            parser = advance_parser(parser)
-                          _ => ()
-                        }
-                      }
-                      Err(p) => return Err(p)
-                    }
-                  }
-                  // Property signature without a type annotation: { a }
-                  // means { a: any } (like tsc), NOT { a: a }
-                  CloseBrace(_) | Semicolon(_) | Comma(_) => {
-                    members.push(
-                      Node::TypeLiteralProperty(TypeLiteralProperty::{
-                        name,
-                        type_node: None,
-                        is_optional,
-                        is_readonly: false,
-                        location: member_loc,
-                      }),
-                    )
-                    // Optional comma or semicolon
-                    match current_token(parser) {
-                      Semicolon(_) | Comma(_) => parser = advance_parser(parser)
-                      _ => ()
-                    }
-                  }
-                  _ => break
+                match
+                  parse_type_literal_property_rest(
+                    parser, name, member_loc, members,
+                  ) {
+                  Ok((true, p)) => parser = p
+                  Ok((false, _)) => break
+                  Err(p) => return Err(p)
                 }
               }
               None => break

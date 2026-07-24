@@ -1668,8 +1668,11 @@ test "unit/checker/destructuring - function parameter object pattern" {
 
 ///|
 test "unit/checker/destructuring - arrow function array pattern" {
-  // Test arrow function with array destructuring parameter
-  let result = parse_bind_check_errors("const foo = ([a, b]) => a;")
+  // Test arrow function with array destructuring parameter (annotated:
+  // un-annotated pattern parameters in this position report TS7031)
+  let result = parse_bind_check_errors(
+    "const foo = ([a, b]: [number, number]) => a;",
+  )
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(_) => assert_true(false)
@@ -1678,8 +1681,11 @@ test "unit/checker/destructuring - arrow function array pattern" {
 
 ///|
 test "unit/checker/destructuring - arrow function object pattern" {
-  // Test arrow function with object destructuring parameter
-  let result = parse_bind_check_errors("const foo = ({ x, y }) => x;")
+  // Test arrow function with object destructuring parameter (annotated:
+  // un-annotated pattern parameters in this position report TS7031)
+  let result = parse_bind_check_errors(
+    "const foo = ({ x, y }: { x: number, y: number }) => x;",
+  )
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(_) => assert_true(false)
@@ -1706,9 +1712,10 @@ test "unit/checker/destructuring - nested parameter destructuring" {
 
 ///|
 test "unit/checker/destructuring - function expression with destructuring" {
-  // Test function expression with destructuring parameter
+  // Test function expression with destructuring parameter (annotated:
+  // un-annotated pattern parameters in this position report TS7031)
   let result = parse_bind_check_errors(
-    "const foo = function({ a, b }) { return a + b; };",
+    "const foo = function([a, b]: [number, number]) { return a; };",
   )
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")

@@ -32,11 +32,9 @@ fn process_request(json_str : String) -> @protocol.CompileResponse {
   }
 
   // Build compile options
-  let module_kind : @compiler.ModuleKind = if request.module_kind == "commonjs" {
-    @compiler.CommonJS
-  } else {
-    @compiler.ESModule
-  }
+  let module_kind : @compiler.ModuleKind = @compiler.parse_module_kind(
+    request.module_kind,
+  )
   let options = @compiler.CompileOptions::{
     target: @compiler.parse_target(request.target),
     module_kind,
@@ -63,6 +61,16 @@ fn process_request(json_str : String) -> @protocol.CompileResponse {
     strict_property_initialization: false,
   }
 
+  // Tri-state strict-flag overrides from the CLI/tsconfig (None = unset,
+  // resolved against file directives by the checker)
+  let strict_overrides = Some(@compiler.StrictFlagOverrides::{
+    strict: request.strict,
+    no_implicit_any: request.no_implicit_any,
+    strict_null_checks: request.strict_null_checks,
+    strict_function_types: request.strict_function_types,
+    strict_property_initialization: request.strict_property_initialization,
+  })
+
   // Measure compilation time
   let start_time = @async.now()
 
@@ -77,14 +85,25 @@ fn process_request(json_str : String) -> @protocol.CompileResponse {
             request.file_path,
             options,
             registry,
+            strict_overrides~,
           )
         None =>
           // Failed to parse external types, fall back to regular compilation
-          @compiler.compile_source(request.source, request.file_path, options)
+          @compiler.compile_source(
+            request.source,
+            request.file_path,
+            options,
+            strict_overrides~,
+          )
       }
     None =>
       // No external types, use regular compilation
-      @compiler.compile_source(request.source, request.file_path, options)
+      @compiler.compile_source(
+        request.source,
+        request.file_path,
+        options,
+        strict_overrides~,
+      )
   }
   let end_time = @async.now()
   let compile_time_ms = end_time - start_time

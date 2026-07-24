@@ -352,6 +352,9 @@ pub enum DiagnosticCode {
   TS1214 // Identifier expected. '{0}' is a reserved word in strict mode. Modules are automatically in strict mode
   TS1221 // Generators are not allowed in an ambient context
   TS1308 // 'await' expressions are only allowed within async functions and at the top levels of modules
+  TS1309 // The current file is a CommonJS module and cannot use 'await' at the top level
+  TS1471 // Module '{0}' cannot be imported using this construct
+  TS1479 // The current file is a CommonJS module whose imports will produce 'require' calls
   TS1357 // An enum member name must be followed by a ',', '=', or '}'
   TS1359 // Identifier expected. '{0}' is a reserved word that cannot be used here
   TS1361 // '{0}' cannot be used as a value because it was imported using 'import type'
@@ -760,6 +763,7 @@ pub enum DiagnosticCode {
   TS7008 // Member '{0}' implicitly has an '{1}' type
   TS7010 // '{0}', which lacks return-type annotation, implicitly has an '{1}' return type
   TS7013 // Construct signature, which lacks return-type annotation, implicitly has an 'any' return type
+  TS7020 // Call signature, which lacks return-type annotation, implicitly has an 'any' return type
   TS7019 // Rest parameter '{0}' implicitly has an 'any[]' type
   TS7031 // Binding element '{0}' implicitly has an 'any' type
   TS7022 // '{0}' implicitly has type 'any' because it does not have a type annotation and is referenced directly or indirectly in its own initializer
@@ -792,6 +796,9 @@ pub fn DiagnosticCode::to_int(self : DiagnosticCode) -> Int {
     TS1214 => 1214
     TS1221 => 1221
     TS1308 => 1308
+    TS1309 => 1309
+    TS1471 => 1471
+    TS1479 => 1479
     TS1357 => 1357
     TS1359 => 1359
     TS1361 => 1361
@@ -1120,6 +1127,7 @@ pub fn DiagnosticCode::to_int(self : DiagnosticCode) -> Int {
     TS7008 => 7008
     TS7010 => 7010
     TS7013 => 7013
+    TS7020 => 7020
     TS7019 => 7019
     TS7031 => 7031
     TS7022 => 7022
@@ -1156,6 +1164,9 @@ pub fn DiagnosticCode::from_int(code : Int) -> DiagnosticCode? {
     1214 => Some(TS1214)
     1221 => Some(TS1221)
     1308 => Some(TS1308)
+    1309 => Some(TS1309)
+    1471 => Some(TS1471)
+    1479 => Some(TS1479)
     1357 => Some(TS1357)
     1359 => Some(TS1359)
     1361 => Some(TS1361)
@@ -1481,6 +1492,7 @@ pub fn DiagnosticCode::from_int(code : Int) -> DiagnosticCode? {
     7008 => Some(TS7008)
     7010 => Some(TS7010)
     7013 => Some(TS7013)
+    7020 => Some(TS7020)
     7019 => Some(TS7019)
     7031 => Some(TS7031)
     7022 => Some(TS7022)

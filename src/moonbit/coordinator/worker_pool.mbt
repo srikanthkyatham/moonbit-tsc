@@ -148,8 +148,14 @@ pub async fn run_with_pool(
     // Enqueue all work items
     let module_kind_str = match options.module_kind {
       @compiler.CommonJS => "commonjs"
+      @compiler.Node16 => "node16"
+      @compiler.NodeNext => "nodenext"
       _ => "esmodule"
     }
+    // Tri-state strict-flag overrides forwarded to the worker (None = unset)
+    let ov = options.strict_overrides.unwrap_or(
+      @compiler.StrictFlagOverrides::default(),
+    )
     for i = 0; i < files.length(); i = i + 1 {
       let (file_path, source) = files[i]
       let request = @protocol.CompileRequest::new(
@@ -160,6 +166,11 @@ pub async fn run_with_pool(
         source_map=options.source_map,
         declaration=options.declaration,
         always_strict=options.always_strict,
+        strict=ov.strict,
+        no_implicit_any=ov.no_implicit_any,
+        strict_null_checks=ov.strict_null_checks,
+        strict_function_types=ov.strict_function_types,
+        strict_property_initialization=ov.strict_property_initialization,
       )
       pool.work_queue.put({ request, index: i })
     }

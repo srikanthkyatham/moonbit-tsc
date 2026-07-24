@@ -177,7 +177,11 @@ test "check function declaration with implicit any parameters (TS7006)" {
 
 ///|
 test "check arrow function" {
-  let result = parse_bind_and_check("const add = (a, b) => a + b;")
+  // Parameters are annotated: un-annotated parameters of an arrow function
+  // initializing an un-annotated variable now correctly report TS7006
+  let result = parse_bind_and_check(
+    "const add = (a: number, b: number) => a + b;",
+  )
   match result {
     Ok(typed) => assert_eq(typed.file_path, "test.ts")
     Err(diagnostics) => {

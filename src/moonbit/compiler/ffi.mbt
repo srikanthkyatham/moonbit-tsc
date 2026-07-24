@@ -11,7 +11,16 @@ pub(all) enum ModuleKind {
   CommonJS // Node.js require/module.exports
   AMD // Asynchronous Module Definition (deprecated)
   UMD // Universal Module Definition (deprecated)
+  Node16 // Node.js ESM/CJS hybrid (node16/node18/node20)
+  NodeNext // Node.js ESM/CJS hybrid (latest resolution rules)
 } derive(Eq, Debug)
+
+///|
+/// Whether a module kind uses Node.js ESM/CJS resolution rules
+/// (node16/node18/node20/nodenext)
+pub fn is_node_module_kind(kind : ModuleKind) -> Bool {
+  kind == Node16 || kind == NodeNext
+}
 
 ///|
 /// Compilation options passed from Zig
@@ -40,6 +49,31 @@ pub(all) struct CompileOptions {
   no_fallthrough_cases_in_switch : Bool // Report errors for fallthrough cases in switch statements
   strict_property_initialization : Bool // Ensure class properties are initialized in constructor
 } derive(Debug)
+
+///|
+/// Tri-state strict-flag overrides supplied by the CLI or tsconfig.json.
+/// None means "not specified". The checker resolves each flag with the
+/// precedence: file directive > override (CLI/tsconfig) > default
+/// (strict ON, matching how the conformance baselines are generated).
+pub(all) struct StrictFlagOverrides {
+  strict : Bool? // --strict true/false
+  no_implicit_any : Bool? // --noImplicitAny true/false
+  strict_null_checks : Bool? // --strictNullChecks true/false
+  strict_function_types : Bool? // --strictFunctionTypes true/false (plumbed; not yet consumed by the checker)
+  strict_property_initialization : Bool? // --strictPropertyInitialization true/false
+} derive(Debug)
+
+///|
+/// Default overrides: nothing specified
+pub fn StrictFlagOverrides::default() -> StrictFlagOverrides {
+  {
+    strict: None,
+    no_implicit_any: None,
+    strict_null_checks: None,
+    strict_function_types: None,
+    strict_property_initialization: None,
+  }
+}
 
 ///|
 /// Create default compile options
@@ -94,6 +128,10 @@ pub fn parse_module_kind(module_str : String) -> ModuleKind {
     "commonjs" => CommonJS
     "amd" => AMD
     "umd" => UMD
+    "node16" | "node18" => Node16
+    // node20+ assumes Node.js supports require() of ES modules, so the
+    // TS1479/TS1471 interop errors no longer apply (same as nodenext)
+    "node20" | "nodenext" => NodeNext
     "es2015" | "es6" | "es2020" | "es2022" | "esnext" => ESModule
     _ => ESModule // Default
   }
@@ -153,6 +191,7 @@ pub fn compile_source(
   source : String,
   file_path : String,
   options : CompileOptions,
+  strict_overrides? : StrictFlagOverrides? = None,
 ) -> CompileResult {
   // Extract inline test options from source directives
   let inline_opts = extract_inline_options(source)
@@ -216,6 +255,7 @@ pub fn compile_source(
             options.target,
             no_implicit_any=options.no_implicit_any,
             module_kind=options.module_kind,
+            strict_overrides~,
             has_parse_errors=parse_diagnostics
             .iter()
             .any(fn(d) { d.category == DiagnosticCategory::Error }),
@@ -426,6 +466,7 @@ pub fn compile_source_with_external_types(
   file_path : String,
   options : CompileOptions,
   external_registry : ExternalTypeRegistry,
+  strict_overrides? : StrictFlagOverrides? = None,
 ) -> CompileResult {
   // Extract inline test options from source directives
   let inline_opts = extract_inline_options(source)
@@ -491,6 +532,7 @@ pub fn compile_source_with_external_types(
             no_implicit_any=options.no_implicit_any,
             module_kind=options.module_kind,
             import_helpers=options.import_helpers,
+            strict_overrides~,
             has_parse_errors=parse_diagnostics
             .iter()
             .any(fn(d) { d.category == DiagnosticCategory::Error }),
@@ -908,11 +950,12 @@ pub fn compile_multi_file_test(
   source : String,
   base_path : String,
   options : CompileOptions,
+  strict_overrides? : StrictFlagOverrides? = None,
 ) -> CompileResult {
   // Check if this is actually a multi-file test
   if !(is_multi_file_test(source)) {
     // Single file test - compile directly
-    return compile_source(source, base_path, options)
+    return compile_source(source, base_path, options, strict_overrides~)
   }
 
   // Split into virtual files
@@ -923,7 +966,7 @@ pub fn compile_multi_file_test(
 
   // If no files were extracted, just compile the original
   if multi_test.files.length() == 0 {
-    return compile_source(source, base_path, effective_options)
+    return compile_source(source, base_path, effective_options, strict_overrides~)
   }
 
   // First pass: parse all files
@@ -978,6 +1021,7 @@ pub fn compile_multi_file_test(
       file.filename,
       effective_options,
       registry,
+      strict_overrides~,
     )
     for diag in result.diagnostics {
       all_diagnostics.push(diag)

@@ -2,6 +2,7 @@
   "import": [
     "moonbit-ts-compiler/compiler",
     "moonbit-ts-compiler/protocol",
+    "moonbitlang/core/json",
     "moonbitlang/async",
     "moonbitlang/async/io",
     "moonbitlang/async/fs",

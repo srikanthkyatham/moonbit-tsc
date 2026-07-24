@@ -1554,7 +1554,13 @@ fn parse_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
         | KeywordConst(_)
         | KeywordLet(_)
         | KeywordVar(_) => {
-          let loc = get_location(decorators[0])
+          // decorators may be empty when a stray `@` failed to parse into a
+          // decorator (error recovery) - fall back to the current token
+          let loc = if decorators.length() > 0 {
+            get_location(decorators[0])
+          } else {
+            current_token(parser).location()
+          }
           Err(
             add_error_with_code(
               parser,
@@ -3771,6 +3777,144 @@ fn parse_class_members(parser : Parser) -> (Array[Node], Parser) {
 }
 
 ///|
+/// Parse the remainder of a `get` accessor after its name has been consumed.
+/// `parser` must be positioned AT the '('. Shared by identifier- and
+/// private-named (#x) getters across the plain, static and with-modifiers
+/// class member parsers. Pushes the GetAccessor and continues with the next
+/// class member.
+fn parse_get_accessor_rest(
+  parser : Parser,
+  name : String,
+  start_loc : SourceLocation,
+  acc : Array[Node],
+  decorators : Array[Node],
+  modifiers : Array[Modifier],
+) -> (Array[Node], Parser) {
+  let parser = advance_parser(parser) // consume '('
+  let (params, parser) = parse_parameter_list(parser)
+  // TS1094: A 'get' accessor cannot have parameters
+  let parser = if params.length() > 0 {
+    add_error_with_code(
+      parser,
+      GetAccessorCannotHaveParams.to_message(),
+      start_loc,
+      GetAccessorCannotHaveParams,
+    )
+  } else {
+    parser
+  }
+  // Optional return type
+  let (return_type, parser) = match current_token(parser) {
+    Colon(_) => {
+      let parser = advance_parser(parser)
+      match parse_type(parser) {
+        Ok((ty, p)) => (Some(ty), p)
+        Err(p) => (None, p)
+      }
+    }
+    _ => (None, parser)
+  }
+  // Body
+  let (body, parser) = match current_token(parser) {
+    OpenBrace(_) =>
+      match parse_function_body(parser) {
+        Ok((b, p)) => (Some(b), p)
+        Err(p) => (None, p)
+      }
+    _ => (None, parser)
+  }
+  acc.push(
+    Node::GetAccessor(GetAccessor::{
+      name,
+      computed_name_expr: None,
+      return_type,
+      body,
+      decorators,
+      modifiers,
+      location: start_loc,
+    }),
+  )
+  parse_class_members_aux(parser, acc)
+}
+
+///|
+/// Parse the remainder of a `set` accessor after its name has been consumed.
+/// `parser` must be positioned AT the '('. Shared by identifier- and
+/// private-named (#x) setters across the plain, static and with-modifiers
+/// class member parsers. Pushes the SetAccessor and continues with the next
+/// class member.
+fn parse_set_accessor_rest(
+  parser : Parser,
+  name : String,
+  start_loc : SourceLocation,
+  acc : Array[Node],
+  decorators : Array[Node],
+  modifiers : Array[Modifier],
+) -> (Array[Node], Parser) {
+  let parser = advance_parser(parser) // consume '('
+  let (params, parser) = parse_parameter_list(parser)
+  // TS1049: A 'set' accessor must have exactly one parameter
+  let parser = if params.length() != 1 {
+    add_error_with_code(
+      parser,
+      SetAccessorMustHaveOneParam.to_message(),
+      start_loc,
+      SetAccessorMustHaveOneParam,
+    )
+  } else {
+    parser
+  }
+  // Get the parameter (or create a dummy one)
+  let parameter = if params.length() > 0 {
+    params[0]
+  } else {
+    Node::Identifier(Identifier::{ name: "value", location: start_loc })
+  }
+  // TS1095: A 'set' accessor cannot have a return type annotation
+  let (has_return_type, parser) = match current_token(parser) {
+    Colon(_) => {
+      let parser = advance_parser(parser)
+      match parse_type(parser) {
+        Ok((_, p)) => (true, p)
+        Err(p) => (true, p)
+      }
+    }
+    _ => (false, parser)
+  }
+  let parser = if has_return_type {
+    add_error_with_code(
+      parser,
+      SetAccessorCannotHaveReturnType.to_message(),
+      start_loc,
+      SetAccessorCannotHaveReturnType,
+    )
+  } else {
+    parser
+  }
+  // Body
+  let (body, parser) = match current_token(parser) {
+    OpenBrace(_) =>
+      match parse_function_body(parser) {
+        Ok((b, p)) => (Some(b), p)
+        Err(p) => (None, p)
+      }
+    _ => (None, parser)
+  }
+  acc.push(
+    Node::SetAccessor(SetAccessor::{
+      name,
+      computed_name_expr: None,
+      parameter,
+      body,
+      decorators,
+      modifiers,
+      location: start_loc,
+    }),
+  )
+  parse_class_members_aux(parser, acc)
+}
+
+///|
 fn parse_class_members_aux(
   parser : Parser,
   acc : Array[Node],
@@ -3876,54 +4020,35 @@ fn parse_class_member_with_decorators(
                 Err(p) => parse_class_members_aux(p, acc)
               }
             }
+            // static get #x()
+            PrivateIdentifier(name, _) => {
+              let parser = advance_parser(parser)
+              match current_token(parser) {
+                OpenParen(_) =>
+                  parse_get_accessor_rest(
+                    parser,
+                    name,
+                    get_loc,
+                    acc,
+                    decorators,
+                    [Modifier::Static],
+                  )
+                _ => parse_class_members_aux(parser, acc)
+              }
+            }
             // static get name()
             Identifier(name, _) => {
               let parser = advance_parser(parser)
               match current_token(parser) {
-                OpenParen(_) => {
-                  let parser = advance_parser(parser)
-                  let (params, parser) = parse_parameter_list(parser)
-                  let parser = if params.length() > 0 {
-                    add_error_with_code(
-                      parser,
-                      GetAccessorCannotHaveParams.to_message(),
-                      get_loc,
-                      GetAccessorCannotHaveParams,
-                    )
-                  } else {
-                    parser
-                  }
-                  let (return_type, parser) = match current_token(parser) {
-                    Colon(_) => {
-                      let parser = advance_parser(parser)
-                      match parse_type(parser) {
-                        Ok((ty, p)) => (Some(ty), p)
-                        Err(p) => (None, p)
-                      }
-                    }
-                    _ => (None, parser)
-                  }
-                  let (body, parser) = match current_token(parser) {
-                    OpenBrace(_) =>
-                      match parse_function_body(parser) {
-                        Ok((b, p)) => (Some(b), p)
-                        Err(p) => (None, p)
-                      }
-                    _ => (None, parser)
-                  }
-                  acc.push(
-                    Node::GetAccessor(GetAccessor::{
-                      name,
-                      computed_name_expr: None,
-                      return_type,
-                      body,
-                      decorators,
-                      modifiers: [Modifier::Static],
-                      location: get_loc,
-                    }),
+                OpenParen(_) =>
+                  parse_get_accessor_rest(
+                    parser,
+                    name,
+                    get_loc,
+                    acc,
+                    decorators,
+                    [Modifier::Static],
                   )
-                  parse_class_members_aux(parser, acc)
-                }
                 // "get" as property name when not followed by identifier then (
                 _ => {
                   let name = "get"
@@ -3954,6 +4079,7 @@ fn parse_class_member_with_decorators(
                       type_annotation,
                       initializer,
                       is_optional: false,
+                      has_definite_assignment: false,
                       decorators,
                       modifiers: [Modifier::Static],
                       location: get_loc,
@@ -3997,6 +4123,7 @@ fn parse_class_member_with_decorators(
                   type_annotation,
                   initializer,
                   is_optional: false,
+                  has_definite_assignment: false,
                   decorators,
                   modifiers: [Modifier::Static],
                   location: get_loc,
@@ -4094,72 +4221,35 @@ fn parse_class_member_with_decorators(
                 Err(p) => parse_class_members_aux(p, acc)
               }
             }
+            // static set #x(v)
+            PrivateIdentifier(name, _) => {
+              let parser = advance_parser(parser)
+              match current_token(parser) {
+                OpenParen(_) =>
+                  parse_set_accessor_rest(
+                    parser,
+                    name,
+                    set_loc,
+                    acc,
+                    decorators,
+                    [Modifier::Static],
+                  )
+                _ => parse_class_members_aux(parser, acc)
+              }
+            }
             // static set name(v)
             Identifier(name, _) => {
               let parser = advance_parser(parser)
               match current_token(parser) {
-                OpenParen(_) => {
-                  let parser = advance_parser(parser)
-                  let (params, parser) = parse_parameter_list(parser)
-                  let parser = if params.length() != 1 {
-                    add_error_with_code(
-                      parser,
-                      SetAccessorMustHaveOneParam.to_message(),
-                      set_loc,
-                      SetAccessorMustHaveOneParam,
-                    )
-                  } else {
-                    parser
-                  }
-                  let parameter = if params.length() > 0 {
-                    params[0]
-                  } else {
-                    Node::Identifier(Identifier::{
-                      name: "value",
-                      location: set_loc,
-                    })
-                  }
-                  let (has_return_type, parser) = match current_token(parser) {
-                    Colon(_) => {
-                      let parser = advance_parser(parser)
-                      match parse_type(parser) {
-                        Ok((_, p)) => (true, p)
-                        Err(p) => (true, p)
-                      }
-                    }
-                    _ => (false, parser)
-                  }
-                  let parser = if has_return_type {
-                    add_error_with_code(
-                      parser,
-                      SetAccessorCannotHaveReturnType.to_message(),
-                      set_loc,
-                      SetAccessorCannotHaveReturnType,
-                    )
-                  } else {
-                    parser
-                  }
-                  let (body, parser) = match current_token(parser) {
-                    OpenBrace(_) =>
-                      match parse_function_body(parser) {
-                        Ok((b, p)) => (Some(b), p)
-                        Err(p) => (None, p)
-                      }
-                    _ => (None, parser)
-                  }
-                  acc.push(
-                    Node::SetAccessor(SetAccessor::{
-                      name,
-                      computed_name_expr: None,
-                      parameter,
-                      body,
-                      decorators,
-                      modifiers: [Modifier::Static],
-                      location: set_loc,
-                    }),
+                OpenParen(_) =>
+                  parse_set_accessor_rest(
+                    parser,
+                    name,
+                    set_loc,
+                    acc,
+                    decorators,
+                    [Modifier::Static],
                   )
-                  parse_class_members_aux(parser, acc)
-                }
                 // "set" as property name when not followed by identifier then (
                 _ => {
                   let name = "set"
@@ -4190,6 +4280,7 @@ fn parse_class_member_with_decorators(
                       type_annotation,
                       initializer,
                       is_optional: false,
+                      has_definite_assignment: false,
                       decorators,
                       modifiers: [Modifier::Static],
                       location: set_loc,
@@ -4233,6 +4324,7 @@ fn parse_class_member_with_decorators(
                   type_annotation,
                   initializer,
                   is_optional: false,
+                  has_definite_assignment: false,
                   decorators,
                   modifiers: [Modifier::Static],
                   location: set_loc,
@@ -4247,136 +4339,15 @@ fn parse_class_member_with_decorators(
           }
         }
         // Static member with identifier (not get/set)
-        Identifier(name, loc) => {
-          let parser = advance_parser(parser)
-          match current_token(parser) {
-            // Static method
-            OpenParen(_) => {
-              let parser = advance_parser(parser)
-              let (parameters, parser) = parse_parameter_list(parser)
-              let (return_type, parser) = match current_token(parser) {
-                Colon(_) => {
-                  let parser = advance_parser(parser)
-                  match parse_type(parser) {
-                    Ok((ty, p)) => (Some(ty), p)
-                    Err(p) => (None, p)
-                  }
-                }
-                _ => (None, parser)
-              }
-              let (body, parser) = match current_token(parser) {
-                OpenBrace(_) =>
-                  match parse_function_body(parser) {
-                    Ok((b, p)) => (Some(b), p)
-                    Err(p) => (None, p)
-                  }
-                _ => (None, parser)
-              }
-              acc.push(
-                Node::MethodDeclaration(MethodDeclaration::{
-                  name,
-                  computed_name_expr: None,
-                  type_parameters: [],
-                  parameters,
-                  return_type,
-                  body,
-                  decorators,
-                  modifiers: [Modifier::Static],
-                  is_async: false,
-                  is_generator: false,
-                  is_optional: false,
-                  location: loc,
-                }),
-              )
-              parse_class_members_aux(parser, acc)
-            }
-            // Static generic method: static foo<T>(x: T) { }
-            LessThan(_) => {
-              let (type_parameters, parser) = parse_type_parameters(parser)
-              // After type parameters, expect (
-              let parser = match current_token(parser) {
-                OpenParen(_) => advance_parser(parser)
-                _ => parser
-              }
-              let (parameters, parser) = parse_parameter_list(parser)
-              let (return_type, parser) = match current_token(parser) {
-                Colon(_) => {
-                  let parser = advance_parser(parser)
-                  match parse_type(parser) {
-                    Ok((ty, p)) => (Some(ty), p)
-                    Err(p) => (None, p)
-                  }
-                }
-                _ => (None, parser)
-              }
-              let (body, parser) = match current_token(parser) {
-                OpenBrace(_) =>
-                  match parse_function_body(parser) {
-                    Ok((b, p)) => (Some(b), p)
-                    Err(p) => (None, p)
-                  }
-                _ => (None, parser)
-              }
-              acc.push(
-                Node::MethodDeclaration(MethodDeclaration::{
-                  name,
-                  computed_name_expr: None,
-                  type_parameters,
-                  parameters,
-                  return_type,
-                  body,
-                  decorators,
-                  modifiers: [Modifier::Static],
-                  is_async: false,
-                  is_generator: false,
-                  is_optional: false,
-                  location: loc,
-                }),
-              )
-              parse_class_members_aux(parser, acc)
-            }
-            // Static property
-            _ => {
-              let (type_annotation, parser) = match current_token(parser) {
-                Colon(_) => {
-                  let parser = advance_parser(parser)
-                  match parse_type(parser) {
-                    Ok((ty, p)) => (Some(ty), p)
-                    Err(p) => (None, p)
-                  }
-                }
-                _ => (None, parser)
-              }
-              let (initializer, parser) = match current_token(parser) {
-                Equals(_) => {
-                  let parser = advance_parser(parser)
-                  match parse_assignment_expression(parser) {
-                    Ok((expr, p)) => (Some(expr), p)
-                    Err(p) => (None, p)
-                  }
-                }
-                _ => (None, parser)
-              }
-              acc.push(
-                Node::PropertyDeclaration(PropertyDeclaration::{
-                  name,
-                  computed_name_expr: None,
-                  type_annotation,
-                  initializer,
-                  is_optional: false,
-                  decorators,
-                  modifiers: [Modifier::Static],
-                  location: loc,
-                }),
-              )
-              let parser = match current_token(parser) {
-                Semicolon(_) => advance_parser(parser)
-                _ => parser
-              }
-              parse_class_members_aux(parser, acc)
-            }
-          }
-        }
+        Identifier(name, loc) =>
+          parse_named_class_member(
+            advance_parser(parser),
+            name,
+            loc,
+            acc,
+            decorators,
+            [Modifier::Static],
+          )
         // Static accessor: static accessor name = value;
         KeywordAccessor(accessor_loc) => {
           let parser = advance_parser(parser)
@@ -4498,6 +4469,7 @@ fn parse_class_member_with_decorators(
                   type_annotation,
                   initializer,
                   is_optional: false,
+                  has_definite_assignment: false,
                   decorators,
                   modifiers: [Modifier::Static],
                   location: loc,
@@ -4595,6 +4567,7 @@ fn parse_class_member_with_decorators(
                       type_annotation,
                       initializer,
                       is_optional: false,
+                      has_definite_assignment: false,
                       decorators,
                       modifiers: [Modifier::Static],
                       location: bracket_loc,
@@ -4729,57 +4702,24 @@ fn parse_class_member_with_decorators(
             Err(p) => parse_class_members_aux(p, acc)
           }
         }
+        // Private getter: get #x() { ... }
+        PrivateIdentifier(name, _) => {
+          let parser = advance_parser(parser)
+          match current_token(parser) {
+            OpenParen(_) =>
+              parse_get_accessor_rest(
+                parser, name, start_loc, acc, decorators, [],
+              )
+            _ => parse_class_members_aux(parser, acc)
+          }
+        }
         Identifier(name, _) => {
           let parser = advance_parser(parser)
           match current_token(parser) {
-            OpenParen(_) => {
-              let parser = advance_parser(parser)
-              // Parse any parameters (should be none for getter)
-              let (params, parser) = parse_parameter_list(parser)
-              // TS1094: A 'get' accessor cannot have parameters
-              let parser = if params.length() > 0 {
-                add_error_with_code(
-                  parser,
-                  GetAccessorCannotHaveParams.to_message(),
-                  start_loc,
-                  GetAccessorCannotHaveParams,
-                )
-              } else {
-                parser
-              }
-              // Optional return type
-              let (return_type, parser) = match current_token(parser) {
-                Colon(_) => {
-                  let parser = advance_parser(parser)
-                  match parse_type(parser) {
-                    Ok((ty, p)) => (Some(ty), p)
-                    Err(p) => (None, p)
-                  }
-                }
-                _ => (None, parser)
-              }
-              // Body
-              let (body, parser) = match current_token(parser) {
-                OpenBrace(_) =>
-                  match parse_function_body(parser) {
-                    Ok((b, p)) => (Some(b), p)
-                    Err(p) => (None, p)
-                  }
-                _ => (None, parser)
-              }
-              acc.push(
-                Node::GetAccessor(GetAccessor::{
-                  name,
-                  computed_name_expr: None,
-                  return_type,
-                  body,
-                  decorators,
-                  modifiers: [],
-                  location: start_loc,
-                }),
+            OpenParen(_) =>
+              parse_get_accessor_rest(
+                parser, name, start_loc, acc, decorators, [],
               )
-              parse_class_members_aux(parser, acc)
-            }
             // Not a getter, treat "get" as property/method name
             _ => {
               // Backtrack - treat "get" as the name
@@ -4918,77 +4858,24 @@ fn parse_class_member_with_decorators(
             Err(p) => parse_class_members_aux(p, acc)
           }
         }
+        // Private setter: set #x(v) { ... }
+        PrivateIdentifier(name, _) => {
+          let parser = advance_parser(parser)
+          match current_token(parser) {
+            OpenParen(_) =>
+              parse_set_accessor_rest(
+                parser, name, start_loc, acc, decorators, [],
+              )
+            _ => parse_class_members_aux(parser, acc)
+          }
+        }
         Identifier(name, _) => {
           let parser = advance_parser(parser)
           match current_token(parser) {
-            OpenParen(_) => {
-              let parser = advance_parser(parser)
-              // Parse parameters (should be exactly one for setter)
-              let (params, parser) = parse_parameter_list(parser)
-              // TS1095: A 'set' accessor must have exactly one parameter
-              let parser = if params.length() != 1 {
-                add_error_with_code(
-                  parser,
-                  SetAccessorMustHaveOneParam.to_message(),
-                  start_loc,
-                  SetAccessorMustHaveOneParam,
-                )
-              } else {
-                parser
-              }
-              // Get the parameter (or create a dummy one)
-              let parameter = if params.length() > 0 {
-                params[0]
-              } else {
-                Node::Identifier(Identifier::{
-                  name: "value",
-                  location: start_loc,
-                })
-              }
-              // Optional return type (usually void) - but should not be specified
-              let (has_return_type, parser) = match current_token(parser) {
-                Colon(_) => {
-                  let parser = advance_parser(parser)
-                  match parse_type(parser) {
-                    Ok((_, p)) => (true, p)
-                    Err(p) => (true, p)
-                  }
-                }
-                _ => (false, parser)
-              }
-              // TS1093: A 'set' accessor cannot have a return type annotation
-              let parser = if has_return_type {
-                add_error_with_code(
-                  parser,
-                  SetAccessorCannotHaveReturnType.to_message(),
-                  start_loc,
-                  SetAccessorCannotHaveReturnType,
-                )
-              } else {
-                parser
-              }
-              // Body
-              let (body, parser) = match current_token(parser) {
-                OpenBrace(_) =>
-                  match parse_function_body(parser) {
-                    Ok((b, p)) => (Some(b), p)
-                    Err(p) => (None, p)
-                  }
-                _ => (None, parser)
-              }
-              acc.push(
-                Node::SetAccessor(SetAccessor::{
-                  name,
-                  computed_name_expr: None,
-                  parameter,
-                  body,
-                  decorators,
-                  modifiers: [],
-                  location: start_loc,
-                }),
+            OpenParen(_) =>
+              parse_set_accessor_rest(
+                parser, name, start_loc, acc, decorators, [],
               )
-              parse_class_members_aux(parser, acc)
-            }
             _ => parse_class_members_aux(parser, acc)
           }
         }
@@ -5211,6 +5098,7 @@ fn parse_class_member_with_decorators(
               type_annotation,
               initializer,
               is_optional: false,
+              has_definite_assignment: false,
               decorators,
               modifiers: [],
               location: loc,
@@ -5299,6 +5187,7 @@ fn parse_class_member_with_decorators(
               type_annotation,
               initializer,
               is_optional: false,
+              has_definite_assignment: false,
               decorators,
               modifiers: [],
               location: loc,
@@ -5387,6 +5276,7 @@ fn parse_class_member_with_decorators(
               type_annotation,
               initializer,
               is_optional: false,
+              has_definite_assignment: false,
               decorators,
               modifiers: [],
               location: loc,
@@ -5475,6 +5365,7 @@ fn parse_class_member_with_decorators(
               type_annotation,
               initializer,
               is_optional: false,
+              has_definite_assignment: false,
               decorators,
               modifiers: [],
               location: loc,
@@ -5546,145 +5437,15 @@ fn parse_class_member_with_decorators(
     }
 
     // Property or method
-    Identifier(name, loc) => {
-      let parser = advance_parser(parser)
-      match current_token(parser) {
-        // Method
-        OpenParen(_) => {
-          let parser = advance_parser(parser)
-          let (parameters, parser) = parse_parameter_list(parser)
-
-          // Parse optional return type
-          let (return_type, parser) = match current_token(parser) {
-            Colon(_) => {
-              let parser = advance_parser(parser)
-              match parse_type(parser) {
-                Ok((ty, p)) => (Some(ty), p)
-                Err(p) => (None, p)
-              }
-            }
-            _ => (None, parser)
-          }
-          let (body, parser) = match current_token(parser) {
-            OpenBrace(_) =>
-              match parse_function_body(parser) {
-                Ok((b, p)) => (Some(b), p)
-                Err(p) => (None, p)
-              }
-            _ => (None, parser)
-          }
-          acc.push(
-            Node::MethodDeclaration(MethodDeclaration::{
-              name,
-              computed_name_expr: None,
-              type_parameters: [],
-              parameters,
-              return_type,
-              body,
-              decorators,
-              modifiers: [],
-              is_async: false,
-              is_generator: false,
-              is_optional: false,
-              location: loc,
-            }),
-          )
-          parse_class_members_aux(parser, acc)
-        }
-
-        // Generic method: foo<T>(x: T) { }
-        LessThan(_) => {
-          let (type_parameters, parser) = parse_type_parameters(parser)
-          // After type parameters, expect (
-          let parser = match current_token(parser) {
-            OpenParen(_) => advance_parser(parser)
-            _ => parser
-          }
-          let (parameters, parser) = parse_parameter_list(parser)
-          let (return_type, parser) = match current_token(parser) {
-            Colon(_) => {
-              let parser = advance_parser(parser)
-              match parse_type(parser) {
-                Ok((ty, p)) => (Some(ty), p)
-                Err(p) => (None, p)
-              }
-            }
-            _ => (None, parser)
-          }
-          let (body, parser) = match current_token(parser) {
-            OpenBrace(_) =>
-              match parse_function_body(parser) {
-                Ok((b, p)) => (Some(b), p)
-                Err(p) => (None, p)
-              }
-            _ => (None, parser)
-          }
-          acc.push(
-            Node::MethodDeclaration(MethodDeclaration::{
-              name,
-              computed_name_expr: None,
-              type_parameters,
-              parameters,
-              return_type,
-              body,
-              decorators,
-              modifiers: [],
-              is_async: false,
-              is_generator: false,
-              is_optional: false,
-              location: loc,
-            }),
-          )
-          parse_class_members_aux(parser, acc)
-        }
-
-        // Property with initializer or type annotation
-        _ => {
-          // Parse optional type annotation
-          let (type_annotation, parser) = match current_token(parser) {
-            Colon(_) => {
-              let parser = advance_parser(parser)
-              match parse_type(parser) {
-                Ok((ty, p)) => (Some(ty), p)
-                Err(p) => (None, p)
-              }
-            }
-            _ => (None, parser)
-          }
-
-          // Parse optional initializer
-          let (initializer, parser) = match current_token(parser) {
-            Equals(_) => {
-              let parser = advance_parser(parser)
-              match parse_assignment_expression(parser) {
-                Ok((expr, p)) => (Some(expr), p)
-                Err(p) => (None, p)
-              }
-            }
-            _ => (None, parser)
-          }
-
-          // Consume optional semicolon
-          let parser = match current_token(parser) {
-            Semicolon(_) => advance_parser(parser)
-            _ => parser
-          }
-          acc.push(
-            Node::PropertyDeclaration(PropertyDeclaration::{
-              name,
-              computed_name_expr: None,
-              type_annotation,
-              initializer,
-              is_optional: false,
-              decorators,
-              modifiers: [],
-              location: loc,
-            }),
-          )
-          parse_class_members_aux(parser, acc)
-        }
-      }
-    }
+    Identifier(name, loc) =>
+      parse_named_class_member(
+        advance_parser(parser),
+        name,
+        loc,
+        acc,
+        decorators,
+        [],
+      )
 
     // Computed property name: ["computedName"]() or ["computedName"]: type
     // OR Index signature: [key: type]: valueType
@@ -5835,6 +5596,7 @@ fn parse_class_member_with_decorators(
                   type_annotation,
                   initializer,
                   is_optional: false,
+                  has_definite_assignment: false,
                   decorators,
                   modifiers: [],
                   location: start_loc,
@@ -5897,6 +5659,14 @@ fn parse_class_member_with_decorators(
 
         // Private property with initializer or type annotation
         _ => {
+          // Optional property marker (#x?: T) or definite assignment
+          // assertion (#x!: T)
+          let (is_optional, has_definite_assignment, parser) = match
+            current_token(parser) {
+            Question(_) => (true, false, advance_parser(parser))
+            Exclamation(_) => (false, true, advance_parser(parser))
+            _ => (false, false, parser)
+          }
           // Parse optional type annotation
           let (type_annotation, parser) = match current_token(parser) {
             Colon(_) => {
@@ -5932,7 +5702,8 @@ fn parse_class_member_with_decorators(
               computed_name_expr: None,
               type_annotation,
               initializer,
-              is_optional: false,
+              is_optional,
+              has_definite_assignment,
               decorators,
               modifiers: [],
               location: loc,
@@ -6139,54 +5910,25 @@ fn parse_class_member_with_modifiers(
             Err(p) => parse_class_members_aux(p, acc)
           }
         }
+        // Private getter with modifiers: static get #x()
+        PrivateIdentifier(name, _) => {
+          let parser = advance_parser(parser)
+          match current_token(parser) {
+            OpenParen(_) =>
+              parse_get_accessor_rest(
+                parser, name, start_loc, acc, decorators, modifiers,
+              )
+            _ => parse_class_members_aux(parser, acc)
+          }
+        }
         // Regular getter with modifiers: static get name()
         Identifier(name, _) => {
           let parser = advance_parser(parser)
           match current_token(parser) {
-            OpenParen(_) => {
-              let parser = advance_parser(parser)
-              let (params, parser) = parse_parameter_list(parser)
-              let parser = if params.length() > 0 {
-                add_error_with_code(
-                  parser,
-                  GetAccessorCannotHaveParams.to_message(),
-                  start_loc,
-                  GetAccessorCannotHaveParams,
-                )
-              } else {
-                parser
-              }
-              let (return_type, parser) = match current_token(parser) {
-                Colon(_) => {
-                  let parser = advance_parser(parser)
-                  match parse_type(parser) {
-                    Ok((ty, p)) => (Some(ty), p)
-                    Err(p) => (None, p)
-                  }
-                }
-                _ => (None, parser)
-              }
-              let (body, parser) = match current_token(parser) {
-                OpenBrace(_) =>
-                  match parse_function_body(parser) {
-                    Ok((b, p)) => (Some(b), p)
-                    Err(p) => (None, p)
-                  }
-                _ => (None, parser)
-              }
-              acc.push(
-                Node::GetAccessor(GetAccessor::{
-                  name,
-                  computed_name_expr: None,
-                  return_type,
-                  body,
-                  decorators,
-                  modifiers,
-                  location: start_loc,
-                }),
+            OpenParen(_) =>
+              parse_get_accessor_rest(
+                parser, name, start_loc, acc, decorators, modifiers,
               )
-              parse_class_members_aux(parser, acc)
-            }
             _ => parse_class_members_aux(parser, acc)
           }
         }
@@ -6276,72 +6018,25 @@ fn parse_class_member_with_modifiers(
             Err(p) => parse_class_members_aux(p, acc)
           }
         }
+        // Private setter with modifiers: static set #x(v)
+        PrivateIdentifier(name, _) => {
+          let parser = advance_parser(parser)
+          match current_token(parser) {
+            OpenParen(_) =>
+              parse_set_accessor_rest(
+                parser, name, start_loc, acc, decorators, modifiers,
+              )
+            _ => parse_class_members_aux(parser, acc)
+          }
+        }
         // Regular setter with modifiers
         Identifier(name, _) => {
           let parser = advance_parser(parser)
           match current_token(parser) {
-            OpenParen(_) => {
-              let parser = advance_parser(parser)
-              let (params, parser) = parse_parameter_list(parser)
-              let parser = if params.length() != 1 {
-                add_error_with_code(
-                  parser,
-                  SetAccessorMustHaveOneParam.to_message(),
-                  start_loc,
-                  SetAccessorMustHaveOneParam,
-                )
-              } else {
-                parser
-              }
-              let parameter = if params.length() > 0 {
-                params[0]
-              } else {
-                Node::Identifier(Identifier::{
-                  name: "value",
-                  location: start_loc,
-                })
-              }
-              let (has_return_type, parser) = match current_token(parser) {
-                Colon(_) => {
-                  let parser = advance_parser(parser)
-                  match parse_type(parser) {
-                    Ok((_, p)) => (true, p)
-                    Err(p) => (true, p)
-                  }
-                }
-                _ => (false, parser)
-              }
-              let parser = if has_return_type {
-                add_error_with_code(
-                  parser,
-                  SetAccessorCannotHaveReturnType.to_message(),
-                  start_loc,
-                  SetAccessorCannotHaveReturnType,
-                )
-              } else {
-                parser
-              }
-              let (body, parser) = match current_token(parser) {
-                OpenBrace(_) =>
-                  match parse_function_body(parser) {
-                    Ok((b, p)) => (Some(b), p)
-                    Err(p) => (None, p)
-                  }
-                _ => (None, parser)
-              }
-              acc.push(
-                Node::SetAccessor(SetAccessor::{
-                  name,
-                  computed_name_expr: None,
-                  parameter,
-                  body,
-                  decorators,
-                  modifiers,
-                  location: start_loc,
-                }),
+            OpenParen(_) =>
+              parse_set_accessor_rest(
+                parser, name, start_loc, acc, decorators, modifiers,
               )
-              parse_class_members_aux(parser, acc)
-            }
             _ => parse_class_members_aux(parser, acc)
           }
         }
@@ -6439,6 +6134,7 @@ fn parse_class_member_with_modifiers(
                   type_annotation,
                   initializer,
                   is_optional: false,
+                  has_definite_assignment: false,
                   decorators,
                   modifiers,
                   location: start_loc,
@@ -6581,6 +6277,14 @@ fn parse_named_class_member(
     }
     // Property
     _ => {
+      // Optional property marker (p?: T) or definite assignment
+      // assertion (p!: T)
+      let (is_optional, has_definite_assignment, parser) = match
+        current_token(parser) {
+        Question(_) => (true, false, advance_parser(parser))
+        Exclamation(_) => (false, true, advance_parser(parser))
+        _ => (false, false, parser)
+      }
       let (type_annotation, parser) = match current_token(parser) {
         Colon(_) => {
           let parser = advance_parser(parser)
@@ -6611,7 +6315,8 @@ fn parse_named_class_member(
           computed_name_expr: None,
           type_annotation,
           initializer,
-          is_optional: false,
+          is_optional,
+          has_definite_assignment,
           decorators,
           modifiers,
           location: loc,
@@ -6901,6 +6606,7 @@ fn parse_interface_declaration(
                           type_annotation: Some(prop_type),
                           initializer: None,
                           is_optional,
+                          has_definite_assignment: false,
                           decorators: [],
                           modifiers: [],
                           location: bracket_loc,
@@ -7051,6 +6757,7 @@ fn parse_interface_declaration(
                             type_annotation: Some(prop_type),
                             initializer: None,
                             is_optional,
+                            has_definite_assignment: false,
                             decorators: [],
                             modifiers: [Modifier::Readonly],
                             location: prop_loc,
@@ -7279,6 +6986,7 @@ fn parse_interface_declaration(
                         type_annotation: Some(prop_type),
                         initializer: None,
                         is_optional,
+                        has_definite_assignment: false,
                         decorators: [],
                         modifiers: [],
                         location: prop_loc,
@@ -7367,6 +7075,7 @@ fn parse_interface_declaration(
                     type_annotation: None,
                     initializer: None,
                     is_optional,
+                    has_definite_assignment: false,
                     decorators: [],
                     modifiers: [],
                     location: prop_loc,
@@ -7487,6 +7196,7 @@ fn parse_interface_declaration(
                         ),
                         initializer: None,
                         is_optional: false,
+                        has_definite_assignment: false,
                         decorators: [],
                         modifiers: [],
                         location: spread_loc,
@@ -7513,6 +7223,7 @@ fn parse_interface_declaration(
                         type_annotation: Some(spread_type),
                         initializer: None,
                         is_optional: false,
+                        has_definite_assignment: false,
                         decorators: [],
                         modifiers: [],
                         location: spread_loc,

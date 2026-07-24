@@ -50,7 +50,9 @@ pub fn ModuleResolutionOptions::default() -> ModuleResolutionOptions {
     base_url: None,
     paths: Map([]),
     root_dirs: [],
-    extensions: [".ts", ".tsx", ".d.ts", ".js", ".jsx"],
+    extensions: [
+      ".ts", ".tsx", ".d.ts", ".cts", ".d.cts", ".mts", ".d.mts", ".js", ".jsx",
+    ],
     resolve_json_module: false,
     type_roots: ["node_modules/@types"],
   }
@@ -906,6 +908,66 @@ pub fn create_module_not_found_diagnostic(
       start: Position::{ line: 0, column: 0, offset: 0 },
       end: Position::{ line: 0, column: 0, offset: 0 },
     },
+  }
+}
+
+///|
+/// TS1479: static ESM import in a CommonJS-format file referencing an
+/// ECMAScript module (node16/nodenext)
+pub fn create_cjs_import_of_esm_diagnostic(
+  specifier : String,
+  location : SourceLocation,
+) -> Diagnostic {
+  Diagnostic::{
+    category: DiagnosticCategory::Error,
+    code: 1479,
+    message: "The current file is a CommonJS module whose imports will produce 'require' calls; however, the referenced file is an ECMAScript module and cannot be imported with 'require'. Consider writing a dynamic 'import(\"" +
+    specifier +
+    "\")' call instead.",
+    location,
+  }
+}
+
+///|
+/// TS1471: require-semantics import (import x = require(...) / require())
+/// whose specifier resolves only to an ECMAScript module (node16/nodenext)
+pub fn create_require_of_esm_diagnostic(
+  specifier : String,
+  location : SourceLocation,
+) -> Diagnostic {
+  Diagnostic::{
+    category: DiagnosticCategory::Error,
+    code: 1471,
+    message: "Module '" +
+    specifier +
+    "' cannot be imported using this construct. The specifier only resolves to an ES module, which cannot be imported with 'require'. Use an ECMAScript import instead.",
+    location,
+  }
+}
+
+///|
+/// TS2835 (with suggestion) / TS2834 (without): relative import paths need
+/// explicit file extensions in ECMAScript imports under node16/nodenext
+pub fn create_esm_needs_extension_diagnostic(
+  suggestion : String?,
+  location : SourceLocation,
+) -> Diagnostic {
+  let base = "Relative import paths need explicit file extensions in ECMAScript imports when '--moduleResolution' is 'node16' or 'nodenext'. "
+  match suggestion {
+    Some(s) =>
+      Diagnostic::{
+        category: DiagnosticCategory::Error,
+        code: 2835,
+        message: base + "Did you mean '" + s + "'?",
+        location,
+      }
+    None =>
+      Diagnostic::{
+        category: DiagnosticCategory::Error,
+        code: 2834,
+        message: base + "Consider adding an extension to the import path.",
+        location,
+      }
   }
 }
 

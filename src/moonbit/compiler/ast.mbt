@@ -1153,6 +1153,7 @@ pub struct PropertyDeclaration {
   type_annotation : Node?
   initializer : Node?
   is_optional : Bool
+  has_definite_assignment : Bool // Definite assignment assertion: p!: T
   decorators : Array[Node]
   modifiers : Array[Modifier]
   location : SourceLocation

@@ -1576,7 +1576,8 @@ fn parse_primary_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
       }
     }
 
-    // JSX element or Type assertion with angle brackets (<Type>expr)
+    // JSX element, generic arrow function (<T>(x: T) => ...), or
+    // type assertion with angle brackets (<Type>expr)
     LessThan(_) => {
       let start_loc = token.location()
       let saved_parser = parser
@@ -1584,6 +1585,47 @@ fn parse_primary_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
       // First check if it's a JSX element
       if is_jsx_start(parser) {
         return parse_jsx_element_or_fragment(parser)
+      }
+
+      // Try a generic arrow function: <T>(params) => body
+      // Only commit when the shape fully matches (type params, then a
+      // parenthesized parameter list, then `=>`); otherwise backtrack and
+      // fall through to the type-assertion parse.
+      {
+        let (type_params, p) = parse_type_parameters(parser)
+        if type_params.length() > 0 {
+          match current_token(p) {
+            OpenParen(_) => {
+              let p = advance_parser(p)
+              let (params, p) = parse_parameter_list(p)
+              let (return_type, p) = parse_optional_return_type(p)
+              match current_token(p) {
+                Arrow(_) => {
+                  let p = advance_parser(p)
+                  match parse_arrow_body(p) {
+                    Ok((body, p)) =>
+                      return Ok(
+                        (
+                          Node::ArrowFunction(ArrowFunction::{
+                            type_parameters: type_params,
+                            parameters: params,
+                            return_type,
+                            body,
+                            is_async: false,
+                            location: start_loc,
+                          }),
+                          p,
+                        ),
+                      )
+                    Err(p) => return Err(p)
+                  }
+                }
+                _ => () // not an arrow, backtrack to type assertion
+              }
+            }
+            _ => () // not an arrow, backtrack to type assertion
+          }
+        }
       }
 
       // Otherwise try to parse as type assertion

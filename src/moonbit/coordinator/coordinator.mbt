@@ -18,6 +18,7 @@ pub(all) struct CoordinatorOptions {
   no_emit : Bool // Only run type checking, don't emit JavaScript
   no_implicit_any : Bool // Raise error on expressions and declarations with an implied 'any' type
   import_helpers : Bool // Import emit helpers from tslib
+  strict_overrides : @compiler.StrictFlagOverrides? // Tri-state strict flags from CLI/tsconfig (None = unset; file directives win)
 } derive(Debug)
 
 ///|
@@ -38,6 +39,7 @@ pub fn CoordinatorOptions::default() -> CoordinatorOptions {
     no_emit: false,
     no_implicit_any: false,
     import_helpers: false,
+    strict_overrides: None,
   } // Default to 4 workers
 }
 
@@ -329,8 +331,10 @@ fn extract_global_namespaces_from_dts_files(
   let result : Array[(String, String)] = []
   for file in files {
     let (file_path, source) = file
-    // Only process .d.ts files
-    if file_path.has_suffix(".d.ts") {
+    // Only process declaration files (.d.ts and the .d.mts/.d.cts variants)
+    if file_path.has_suffix(".d.ts") ||
+      file_path.has_suffix(".d.mts") ||
+      file_path.has_suffix(".d.cts") {
       // Parse and extract module types
       match @compiler.extract_module_types_from_source(source, file_path) {
         Some(module_types) => {
@@ -430,11 +434,14 @@ fn compile_single(
     strict_property_initialization: false,
   }
   let start_time = @async.now()
+  let strict_overrides = options.strict_overrides
 
   // Check if this is a multi-file test (contains @filename: directives)
   let result = if @compiler.is_multi_file_test(source) {
     // Use multi-file compilation for tests with @filename: directives
-    @compiler.compile_multi_file_test(source, file_path, compile_options)
+    @compiler.compile_multi_file_test(
+      source, file_path, compile_options, strict_overrides~,
+    )
   } else {
     // Use compile_source_with_external_types if external types are provided
     match options.external_types_json {
@@ -443,13 +450,18 @@ fn compile_single(
         match @compiler.ExternalTypeRegistry::from_json(external_types_json) {
           Some(registry) =>
             @compiler.compile_source_with_external_types(
-              source, file_path, compile_options, registry,
+              source, file_path, compile_options, registry, strict_overrides~,
             )
           None =>
             // If parsing fails, fall back to regular compilation
-            @compiler.compile_source(source, file_path, compile_options)
+            @compiler.compile_source(
+              source, file_path, compile_options, strict_overrides~,
+            )
         }
-      None => @compiler.compile_source(source, file_path, compile_options)
+      None =>
+        @compiler.compile_source(
+          source, file_path, compile_options, strict_overrides~,
+        )
     }
   }
   let end_time = @async.now()

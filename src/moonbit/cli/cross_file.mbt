@@ -28,6 +28,31 @@ fn is_untyped_resolution(path : String) -> Bool {
 }
 
 ///|
+/// Check whether a formatted diagnostic line is the checker's TS2304
+/// ("Cannot find name") for a name declared in another compiled file's
+/// `declare global { ... }` block
+fn is_cross_file_global_name_diag(
+  diag : String,
+  global_names : Array[String],
+) -> Bool {
+  if !(diag.contains("TS2304")) {
+    return false
+  }
+  for name in global_names {
+    if diag.contains("'" + name + "'") {
+      return true
+    }
+  }
+  false
+}
+
+///|
+/// Check whether a path is inside a node_modules directory
+fn in_node_modules(path : String) -> Bool {
+  path.contains("/node_modules/") || path.has_prefix("node_modules/")
+}
+
+///|
 /// Check whether a formatted diagnostic line is the checker's TS2307 for one
 /// of the given module specifiers
 fn is_suppressed_module_not_found(
@@ -56,8 +81,31 @@ fn is_suppressed_module_not_found(
 async fn apply_cross_file_import_diagnostics(
   summary : @coordinator.CompilationSummary,
   files : Array[(String, String)],
+  module_kind? : @compiler.ModuleKind = @compiler.ESModule,
 ) -> @coordinator.CompilationSummary {
-  let validation = @compiler.validate_multi_file_imports(files)
+  let node16 = @compiler.is_node_module_kind(module_kind)
+  // node20/nodenext assume Node.js supports require() of ES modules: the
+  // TS1479/TS1471 interop errors only apply to node16/node18
+  let require_esm_errors = module_kind == @compiler.Node16
+  // Under node16/nodenext, classify every compiled file as ESM or CJS
+  // (extension, then nearest package.json "type" field) — this drives the
+  // ESM extension rules and TS1479/TS1471 in the validator
+  let node16_cache = @coordinator.Node16Cache::new()
+  let file_formats : Map[String, @compiler.ModuleFormat] = Map([])
+  if node16 {
+    for f in files {
+      file_formats.set(
+        f.0,
+        @coordinator.classify_module_format_fs(f.0, node16_cache),
+      )
+    }
+  }
+  let validation = @compiler.validate_multi_file_imports(
+    files,
+    node16=node16,
+    cjs_require_esm_errors=require_esm_errors,
+    file_formats=file_formats,
+  )
 
   // Group the extra diagnostics by originating file
   let extra : Map[String, Array[String]] = Map([])
@@ -124,19 +172,59 @@ async fn apply_cross_file_import_diagnostics(
   }
 
   // Bare specifiers unresolved in the file set: try real-filesystem
-  // node_modules resolution (package.json types/main, index files, @types)
+  // node_modules resolution. node10: package.json types/main, index files,
+  // @types. node16: exports/imports maps, self-name resolution, and
+  // ESM/CJS-compatibility errors (TS1479/TS1471) on the resolved target.
   let fs_cache = @coordinator.ModuleResolutionCache::new()
+  let node16_resolved_paths : Array[String] = []
   for u in validation.unresolved_bare {
     if !(@coordinator.is_bare_specifier(u.specifier)) {
       continue // rooted/URL specifiers: leave the checker's TS2307 in place
     }
-    match @coordinator.resolve_bare_import(u.specifier, u.file_path, fs_cache) {
+    let resolution = if node16 {
+      let importer_format = if u.importer_esm {
+        @compiler.ModuleFormat::esm()
+      } else {
+        @compiler.ModuleFormat::cjs()
+      }
+      // Node 16/18 reject "#/"-prefixed imports map specifiers entirely
+      // (nodenext/node20 allow them)
+      if require_esm_errors && u.specifier.has_prefix("#/") {
+        @coordinator.ResolvedModule::NotFound
+      } else {
+        @coordinator.resolve_import_node16(
+          u.specifier, u.file_path, importer_format, node16_cache,
+        )
+      }
+    } else {
+      @coordinator.resolve_bare_import(u.specifier, u.file_path, fs_cache)
+    }
+    match resolution {
       Resolved(path) => {
+        node16_resolved_paths.push(path)
         add_suppression(u.file_path, u.specifier)
         if u.no_implicit_any && is_untyped_resolution(path) {
           add_diag(
             @compiler.create_untyped_module_diagnostic_with_location(u.specifier, path, u.location),
           )
+        }
+        // node16/node18: a CJS-format file may not `import`/require an ES
+        // module (node20+ supports require() of ESM)
+        if node16 && require_esm_errors && !(u.type_only) {
+          let target_format = @coordinator.classify_module_format_fs(
+            path, node16_cache,
+          )
+          if target_format == @compiler.ModuleFormat::esm() {
+            if u.require_like {
+              add_diag(
+                @compiler.create_require_of_esm_diagnostic(u.specifier, u.location),
+              )
+            } else if !(u.importer_esm) {
+              add_diag(
+                @compiler.create_cjs_import_of_esm_diagnostic(u.specifier, u.location),
+              )
+            }
+          }
         }
       }
       NoTypes(_) | NotFound =>
@@ -152,7 +240,51 @@ async fn apply_cross_file_import_diagnostics(
         }
     }
   }
-  if extra.is_empty() && suppress.is_empty() {
+  // Cross-file `declare global` names: a compiled file outside node_modules
+  // always contributes its globals; a node_modules file contributes only
+  // when something actually pulls it into the program (an import that
+  // resolved to it, or a /// <reference types=.../> directive) — mirroring
+  // how tsc only includes node_modules files reachable from root files.
+  let reachable : Map[String, Bool] = Map([])
+  for r in validation.resolved_bare {
+    match r.resolved_path {
+      Some(p) => reachable.set(p, true)
+      None => ()
+    }
+  }
+  for p in node16_resolved_paths {
+    reachable.set(p, true)
+  }
+  if node16 {
+    for f in files {
+      for entry in @coordinator.scan_types_references(f.1) {
+        let (name, mode) = entry
+        let format = match mode {
+          Some("import") => @compiler.ModuleFormat::esm()
+          Some("require") => @compiler.ModuleFormat::cjs()
+          _ =>
+            match file_formats.get(f.0) {
+              Some(fmt) => fmt
+              None => @compiler.ModuleFormat::cjs()
+            }
+        }
+        match
+          @coordinator.resolve_import_node16(name, f.0, format, node16_cache) {
+          Resolved(p) => reachable.set(p, true)
+          NoTypes(_) | NotFound => ()
+        }
+      }
+    }
+  }
+  let global_names : Array[String] = []
+  for entry in validation.global_value_names {
+    let (declaring_file, name) = entry
+    if !(in_node_modules(declaring_file)) ||
+      reachable.get(declaring_file) is Some(_) {
+      global_names.push(name)
+    }
+  }
+  if extra.is_empty() && suppress.is_empty() && global_names.is_empty() {
     return summary
   }
 
@@ -167,6 +299,15 @@ async fn apply_cross_file_import_diagnostics(
           !(is_suppressed_module_not_found(d, specs))
         })
       None => r.diagnostics
+    }
+    // Names declared in another compiled file's `declare global` block are
+    // genuinely in scope: drop the per-file checker's TS2304 for them
+    let filtered = if global_names.is_empty() {
+      filtered
+    } else {
+      filtered.filter(fn(d) {
+        !(is_cross_file_global_name_diag(d, global_names))
+      })
     }
     let combined = match extra.get(r.file_path) {
       Some(diags) => {
@@ -189,7 +330,8 @@ async fn apply_cross_file_import_diagnostics(
     // failed because of now-suppressed diagnostics counts as successful
     let success = if has_errors {
       false
-    } else if suppress.get(r.file_path) is Some(_) {
+    } else if suppress.get(r.file_path) is Some(_) ||
+      filtered.length() < r.diagnostics.length() {
       true
     } else {
       r.success
