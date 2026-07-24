@@ -259,6 +259,13 @@ fn parse_binary_expression(
   while should_continue {
     let token = current_token(parser)
     let op = match get_binary_operator(token) {
+      // 'in' is not an operator when disallowed by context (for-statement
+      // initializer: `for (i in a)` must parse `i` alone so the for-in
+      // headers see the 'in')
+      Some(BinaryOperator::In) if !parser.context.allow_in => {
+        should_continue = false
+        BinaryOperator::Add // Dummy value, won't be used
+      }
       Some(op) => op
       None => {
         should_continue = false
@@ -426,20 +433,17 @@ fn parse_unary_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
           match current_token(parser) {
             Identifier(name, end_loc) if name == "target" => {
               let parser = advance_parser(parser) // consume 'target'
-              Ok(
-                (
-                  Node::MetaProperty(MetaProperty::{
-                    keyword_kind: NewTarget,
-                    name: "target",
-                    location: SourceLocation::new(
-                      start_loc.file_path,
-                      start_loc.start,
-                      end_loc.end,
-                    ),
-                  }),
-                  parser,
+              let meta = Node::MetaProperty(MetaProperty::{
+                keyword_kind: NewTarget,
+                name: "target",
+                location: SourceLocation::new(
+                  start_loc.file_path,
+                  start_loc.start,
+                  end_loc.end,
                 ),
-              )
+              })
+              // Continue postfix operations (e.g., new.target.marked)
+              continue_postfix_expression(parser, meta)
             }
             _ =>
               Err(
@@ -1688,12 +1692,16 @@ fn parse_primary_expression(parser : Parser) -> Result[(Node, Parser), Parser] {
           let parser = advance_parser(parser) // consume identifier
           parse_async_arrow_single_param(parser, name, loc, start_loc)
         }
+        // 'async' as a plain identifier expression (e.g. `for (async of x)`,
+        // `async;`, `async + 1`)
         _ =>
-          Err(
-            add_error(
+          Ok(
+            (
+              Node::Identifier(Identifier::{
+                name: "async",
+                location: start_loc,
+              }),
               parser,
-              "Unexpected token",
-              current_token(parser).location(),
             ),
           )
       }
@@ -1911,7 +1919,19 @@ fn parse_object_literal(parser : Parser) -> Result[(Node, Parser), Parser] {
         match current_token(parser) {
           Comma(_) => parser = advance_parser(parser)
           CloseBrace(_) => break
-          _ => break
+          tok =>
+            // Missing comma between properties: report TS1005 "','
+            // expected" and keep parsing members, like tsc
+            if object_property_can_start(tok) {
+              parser = add_error_with_code(
+                parser,
+                ExpectedToken(",").to_message(),
+                tok.location(),
+                ExpectedToken(","),
+              )
+            } else {
+              break
+            }
         }
       }
       Err(p) => return Err(p)
@@ -1928,7 +1948,29 @@ fn parse_object_literal(parser : Parser) -> Result[(Node, Parser), Parser] {
           advance_parser(parser),
         ),
       )
-    Err(parser) => Err(parser)
+    Err(parser) =>
+      Err(
+        add_error_with_code(
+          parser,
+          ExpectedCloseBrace.to_message(),
+          current_token(parser).location(),
+          ExpectedCloseBrace,
+        ),
+      )
+  }
+}
+
+///|
+/// Whether a token can start an object-literal property (used for missing
+/// comma recovery)
+fn object_property_can_start(token : Token) -> Bool {
+  match token {
+    StringLiteral(_, _)
+    | NumericLiteral(_, _)
+    | OpenBracket(_)
+    | Star(_)
+    | DotDotDot(_) => true
+    tok => try_get_property_name_with_reserved(tok) is Some(_)
   }
 }
 
@@ -1960,6 +2002,11 @@ fn parse_object_property(
               parse_computed_method_body(parser, name_expr, start_loc, false, true)
             Err(parser) => Err(parser)
           }
+        // Generator method with literal name: *"name"() { }, *0() { }
+        StringLiteral(prop_name, _) | NumericLiteral(prop_name, _) => {
+          let parser = advance_parser(parser)
+          parse_method_body(parser, prop_name, start_loc, false, true)
+        }
         // Generator method with identifier name: *name() { }
         _ =>
           match try_get_property_name_with_reserved(current_token(parser)) {
@@ -2023,15 +2070,15 @@ fn parse_object_property(
         Err(parser) => Err(parser)
       }
     }
-    StringLiteral(name, _) => {
-      // String literal property name: "name": value or 'name': value
-      let parser = advance_parser(parser) // consume string literal
-      parse_colon_property_value(parser, name, start_loc)
-    }
-    NumericLiteral(name, _) => {
-      // Numeric literal property name: 0: value, 1: value
-      let parser = advance_parser(parser) // consume numeric literal
-      parse_colon_property_value(parser, name, start_loc)
+    StringLiteral(name, _) | NumericLiteral(name, _) => {
+      // Literal property name: "name": value, 0: value - or a method with a
+      // literal name: "name"() { }, 0<T>() { }
+      let parser = advance_parser(parser) // consume the literal
+      match current_token(parser) {
+        OpenParen(_) | LessThan(_) =>
+          parse_method_body(parser, name, start_loc, false, false)
+        _ => parse_colon_property_value(parser, name, start_loc)
+      }
     }
     // getter with computed property name: get [expr]() { }
     Identifier("get", _) => {
@@ -2047,6 +2094,30 @@ fn parse_object_property(
         _ => parse_get_or_set_or_property(parser, "get", start_loc)
       }
     }
+    // Async method: async name() { }, async *name() { }, async [expr]() { },
+    // async "name"() { } - or 'async' as an ordinary property name
+    KeywordAsync(_) => {
+      let after_async = advance_parser(parser)
+      let is_method_modifier = match current_token(after_async) {
+        Star(_) | OpenBracket(_) | StringLiteral(_, _) | NumericLiteral(_, _) =>
+          true
+        // async: value / async() {} / async, / async } / async<T>() {} / async = ...
+        Colon(_)
+        | OpenParen(_)
+        | Comma(_)
+        | CloseBrace(_)
+        | LessThan(_)
+        | Equals(_) => false
+        tok => try_get_property_name_with_reserved(tok) is Some(_)
+      }
+      if is_method_modifier {
+        parse_async_object_method(after_async, start_loc)
+      } else {
+        // 'async' is just a property name here: { async: 1 }, { async }, { async() {} }
+        parse_named_object_property(parser, start_loc)
+      }
+    }
+
     // setter with computed property name: set [expr](value) { }
     Identifier("set", _) => {
       let parser = advance_parser(parser) // consume 'set'
@@ -2061,88 +2132,98 @@ fn parse_object_property(
         _ => parse_get_or_set_or_property(parser, "set", start_loc)
       }
     }
-    _ =>
-      // Parse property name as identifier or reserved keyword
-      // Reserved keywords are allowed as property names in object literals: { while: 1 }
-      match try_get_property_name_with_reserved(current_token(parser)) {
-        Some((prop_name, prop_loc, is_reserved)) => {
-          let parser = advance_parser(parser)
+    _ => parse_named_object_property(parser, start_loc)
+  }
+}
 
-          // Check for method, shorthand, or full property
-          match current_token(parser) {
-            OpenParen(_) => {
-              // Method declaration: greet() { ... }
-              let parser = advance_parser(parser) // consume (
-              let (parameters, parser) = parse_parameter_list(parser)
-              let (return_type, parser) = parse_optional_return_type(parser)
+///|
+/// Parse an object property whose name is an identifier or reserved keyword
+/// (parser positioned at the name token). Reserved keywords are allowed as
+/// property names in object literals: { while: 1 }
+fn parse_named_object_property(
+  parser : Parser,
+  start_loc : SourceLocation,
+) -> Result[(ObjectProperty, Parser), Parser] {
+  match try_get_property_name_with_reserved(current_token(parser)) {
+    Some((prop_name, prop_loc, is_reserved)) => {
+      let parser = advance_parser(parser)
 
-              // Parse method body (with in_function context for return statements)
-              match parse_function_body(parser) {
-                Ok((body, parser)) => {
-                  let func_expr = FunctionExpression::{
-                    name: None,
-                    type_parameters: [],
-                    parameters,
-                    return_type,
-                    body,
-                    is_async: false,
-                    is_generator: false,
-                    location: start_loc,
-                  }
-                  Ok(
-                    (
-                      ObjectProperty::MethodDeclaration(
-                        prop_name, func_expr, start_loc,
-                      ),
-                      parser,
-                    ),
-                  )
-                }
-                Err(parser) => Err(parser)
-              }
-            }
-            Colon(_) => {
-              let parser = advance_parser(parser)
-              match parse_assignment_expression(parser) {
-                Ok((value, parser)) =>
-                  Ok(
-                    (
-                      ObjectProperty::PropertyAssignment(
-                        prop_name, value, start_loc,
-                      ),
-                      parser,
-                    ),
-                  )
-                Err(parser) => Err(parser)
-              }
-            }
-            _ =>
-              // Shorthand property - but reserved keywords require a colon
-              if is_reserved {
-                Err(
-                  add_error_with_code(
-                    parser,
-                    ExpectedColon.to_message(),
-                    prop_loc,
-                    ExpectedColon,
-                  ),
-                )
-              } else {
-                Ok(
-                  (
-                    ObjectProperty::ShorthandProperty(prop_name, start_loc),
-                    parser,
-                  ),
-                )
-              }
+      // Check for method, shorthand, or full property
+      match current_token(parser) {
+        // Method declaration: greet() { ... } or greet<T>() { ... }
+        OpenParen(_) | LessThan(_) =>
+          parse_method_body(parser, prop_name, start_loc, false, false)
+        Colon(_) => parse_colon_property_value(parser, prop_name, start_loc)
+        _ =>
+          // Shorthand property - but reserved keywords require a colon
+          if is_reserved {
+            Err(
+              add_error_with_code(
+                parser,
+                ExpectedColon.to_message(),
+                prop_loc,
+                ExpectedColon,
+              ),
+            )
+          } else {
+            Ok(
+              (ObjectProperty::ShorthandProperty(prop_name, start_loc), parser),
+            )
           }
+      }
+    }
+    None =>
+      Err(
+        add_error_with_code(
+          parser,
+          "Property name expected",
+          current_token(parser).location(),
+          IdentifierExpected,
+        ),
+      )
+  }
+}
+
+///|
+/// Parse an async object-literal method after the 'async' modifier has been
+/// consumed: async name() { }, async *name() { }, async [expr]() { },
+/// async "name"() { }, async 0() { }
+fn parse_async_object_method(
+  parser : Parser,
+  start_loc : SourceLocation,
+) -> Result[(ObjectProperty, Parser), Parser] {
+  // Optional generator star: async *name() { }
+  let (is_generator, parser) = match current_token(parser) {
+    Star(_) => (true, advance_parser(parser))
+    _ => (false, parser)
+  }
+  match current_token(parser) {
+    // Computed name: async [expr]() { }
+    OpenBracket(_) =>
+      match parse_computed_property_name(parser) {
+        Ok((name_expr, parser)) =>
+          parse_computed_method_body(
+            parser, name_expr, start_loc, true, is_generator,
+          )
+        Err(parser) => Err(parser)
+      }
+    // Literal name: async "name"() { }, async 0() { }
+    StringLiteral(prop_name, _) | NumericLiteral(prop_name, _) => {
+      let parser = advance_parser(parser)
+      parse_method_body(parser, prop_name, start_loc, true, is_generator)
+    }
+    tok =>
+      match try_get_property_name_with_reserved(tok) {
+        Some((prop_name, _, _)) => {
+          let parser = advance_parser(parser)
+          parse_method_body(parser, prop_name, start_loc, true, is_generator)
         }
         None =>
           Err(
             add_error_with_code(
               parser,
               "Property name expected",
-              current_token(parser).location(),
+              tok.location(),
               IdentifierExpected,
             ),
           )
@@ -2443,11 +2524,20 @@ fn parse_get_or_set_or_property(
   accessor_name : String,
   start_loc : SourceLocation,
 ) -> Result[(ObjectProperty, Parser), Parser] {
-  // Check what comes after get/set
-  match current_token(parser) {
-    // Identifier follows - this is a getter/setter: get name() or set name(val)
-    Identifier(prop_name, _) => {
-      let parser = advance_parser(parser) // consume property name
+  // A property name after get/set (identifier, keyword, or literal) makes
+  // this an accessor: get name() { }, get "name"() { }, get 0() { },
+  // get constructor() { }. Otherwise 'get'/'set' is an ordinary property name.
+  let name_and_parser : (String, Parser)? = match current_token(parser) {
+    StringLiteral(n, _) | NumericLiteral(n, _) =>
+      Some((n, advance_parser(parser)))
+    tok =>
+      match try_get_property_name_with_reserved(tok) {
+        Some((n, _, _)) => Some((n, advance_parser(parser)))
+        None => None
+      }
+  }
+  match name_and_parser {
+    Some((prop_name, parser)) =>
       match current_token(parser) {
         OpenParen(_) => {
           let parser = advance_parser(parser) // consume (
@@ -2487,51 +2577,8 @@ fn parse_get_or_set_or_property(
         // Not followed by ( - treat 'get'/'set' as property name
         _ => parse_as_property_after_name(parser, accessor_name, start_loc)
       }
-    }
-    // String literal property name: get "name"()
-    StringLiteral(prop_name, _) => {
-      let parser = advance_parser(parser) // consume string literal
-      match current_token(parser) {
-        OpenParen(_) => {
-          let parser = advance_parser(parser) // consume (
-          let (parameters, parser) = parse_parameter_list(parser)
-          let (return_type, parser) = parse_optional_return_type(parser)
-          match parse_function_body(parser) {
-            Ok((body, parser)) => {
-              let func_expr = FunctionExpression::{
-                name: None,
-                type_parameters: [],
-                parameters,
-                return_type,
-                body,
-                is_async: false,
-                is_generator: false,
-                location: start_loc,
-              }
-              if accessor_name == "get" {
-                Ok(
-                  (
-                    ObjectProperty::GetAccessor(prop_name, func_expr, start_loc),
-                    parser,
-                  ),
-                )
-              } else {
-                Ok(
-                  (
-                    ObjectProperty::SetAccessor(prop_name, func_expr, start_loc),
-                    parser,
-                  ),
-                )
-              }
-            }
-            Err(parser) => Err(parser)
-          }
-        }
-        _ => parse_as_property_after_name(parser, accessor_name, start_loc)
-      }
-    }
-    // Not followed by identifier or [ - treat 'get'/'set' as property name
-    _ => parse_as_property_after_name(parser, accessor_name, start_loc)
+    // Not followed by a property name - treat 'get'/'set' as property name
+    None => parse_as_property_after_name(parser, accessor_name, start_loc)
   }
 }
 

@@ -66,6 +66,11 @@ pub struct Parser {
   context : ParserContext
   /// Stack of saved contexts for restoration
   context_stack : Array[ParserContext]
+  /// Set when a parse function recovered from an error by dropping part of a
+  /// construct (e.g. a variable initializer that failed to parse) but still
+  /// returned Ok. The enclosing statement list must synchronize to the next
+  /// statement boundary and drop the diagnostic cascade, exactly as for Err.
+  sync_pending : Bool
 } derive(Debug)
 
 ///|
@@ -82,6 +87,7 @@ pub fn Parser::new(tokens : Array[Token]) -> Parser {
     depth: 0,
     context: ParserContext::default(),
     context_stack: [],
+    sync_pending: false,
   }
 }
 
@@ -1455,9 +1461,17 @@ fn parse_statements_aux(
     parse_statements_aux(skip_bad_statement_token(parser), acc)
   } else {
     let current_position = parser.position
+    let diags_before = parser.diagnostics.length()
     match parse_statement(parser) {
       Ok((stmt, next_parser)) => {
         acc.push(stmt)
+        // A parse function recovered mid-statement but returned Ok: still
+        // synchronize to the next statement boundary and drop the cascade
+        let next_parser = if next_parser.sync_pending {
+          recover_statement_error(next_parser, current_position, diags_before)
+        } else {
+          next_parser
+        }
         // Safeguard: ensure parser advanced
         if next_parser.position == current_position {
           // Parser stuck - force advance to prevent infinite loop
@@ -1467,8 +1481,11 @@ fn parse_statements_aux(
         }
       }
       Err(next_parser) => {
-        // Error recovery: skip to next statement
-        let recovered_parser = skip_to_next_statement(next_parser)
+        // Error recovery: synchronize to the next statement boundary,
+        // dropping the cascade of follow-on diagnostics
+        let recovered_parser = recover_statement_error(
+          next_parser, current_position, diags_before,
+        )
         // Safeguard: ensure error recovery advanced parser
         if recovered_parser.position == current_position {
           // Still stuck - force advance and stop parsing to prevent infinite loop
@@ -1639,31 +1656,30 @@ fn parse_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
     }
     KeywordEnum(_) => parse_enum_declaration(parser, false)
 
-    // Namespace declaration
-    KeywordNamespace(_) => parse_module_declaration(parser)
-
-    // Module declaration OR module.exports (CommonJS)
-    KeywordModule(_) =>
-      // Check if this is module.exports (CommonJS pattern)
-      if parser.position + 1 < parser.tokens.length() {
-        match parser.tokens[parser.position + 1] {
-          Dot(_) => parse_expression_statement(parser) // module.exports
-          _ => parse_module_declaration(parser)
-        }
-      } else {
+    // Namespace/module declaration - only when the keyword is followed by a
+    // declaration name (identifier or string literal) on the same line;
+    // otherwise 'namespace'/'module' is an ordinary identifier expression
+    // (e.g. `module in {}`, `module.exports`, ASI: `module\n{...}`)
+    KeywordNamespace(kw_loc) | KeywordModule(kw_loc) => {
+      let next = peek_token(parser)
+      let is_declaration = next.location().start.line == kw_loc.end.line &&
+        (match next {
+          StringLiteral(_, _) => true
+          tok => try_get_identifier_name(tok) is Some(_)
+        })
+      if is_declaration {
         parse_module_declaration(parser)
-      }
-
-    // Import declaration or dynamic import expression
-    KeywordImport(_) =>
-      // Check if this is a dynamic import (import followed by open paren)
-      if parser.position + 1 < parser.tokens.length() {
-        match parser.tokens[parser.position + 1] {
-          OpenParen(_) => parse_expression_statement(parser) // Dynamic import
-          _ => parse_import_declaration(parser)
-        }
       } else {
-        parse_import_declaration(parser)
+        parse_expression_statement(parser)
+      }
+    }
+
+    // Import declaration, dynamic import expression, or import.meta
+    KeywordImport(_) =>
+      match peek_token(parser) {
+        OpenParen(_) => parse_expression_statement(parser) // Dynamic import
+        Dot(_) => parse_expression_statement(parser) // import.meta
+        _ => parse_import_declaration(parser)
       }
 
     // Export declaration
@@ -1999,7 +2015,9 @@ fn parse_variable_declaration(
       let parser = advance_parser(parser)
       match parse_type(parser) {
         Ok((ty, p)) => (Some(ty), p)
-        Err(p) => (None, p)
+        // Keep the declaration (so the name still binds) but flag the
+        // enclosing statement list to synchronize past the damage
+        Err(p) => (None, { ..p, sync_pending: true })
       }
     }
     _ => (None, parser)
@@ -2011,7 +2029,9 @@ fn parse_variable_declaration(
       let parser = advance_parser(parser)
       match parse_assignment_expression(parser) {
         Ok((expr, p)) => (Some(expr), p)
-        Err(p) => (None, p)
+        // Keep the declaration (so the name still binds) but flag the
+        // enclosing statement list to synchronize past the damage
+        Err(p) => (None, { ..p, sync_pending: true })
       }
     }
     _ => (None, parser)
@@ -2759,8 +2779,12 @@ fn parse_return_type(parser : Parser) -> Result[(Node, Parser), Parser] {
           )
       }
     }
-    Identifier(param_name, _) => {
-      // Peek ahead to see if this is "x is Type" pattern
+    Identifier(_, _) | KeywordThis(_) => {
+      // Peek ahead to see if this is "x is Type" / "this is Type" pattern
+      let param_name = match current_token(parser) {
+        Identifier(n, _) => n
+        _ => "this"
+      }
       let parser2 = advance_parser(parser)
       match current_token(parser2) {
         Identifier(is_name, _) if is_name == "is" => {
@@ -3175,12 +3199,28 @@ fn parse_block_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
           parser = skip_bad_statement_token(parser)
           continue
         }
+        let stmt_start = parser.position
+        let diags_before = parser.diagnostics.length()
         match parse_statement(parser) {
           Ok((stmt, next_parser)) => {
             statements.push(stmt)
             parser = next_parser
+            if parser.sync_pending {
+              // Recovered mid-statement but returned Ok: still synchronize
+              parser = recover_statement_error(parser, stmt_start, diags_before)
+            }
           }
-          Err(next_parser) => parser = skip_to_next_statement(next_parser)
+          Err(next_parser) => {
+            // Synchronize to the next statement boundary, dropping the
+            // cascade of follow-on diagnostics
+            parser = recover_statement_error(
+              next_parser, stmt_start, diags_before,
+            )
+            // Safeguard: ensure error recovery advanced the parser
+            if parser.position == stmt_start {
+              parser = advance_parser(parser)
+            }
+          }
         }
       }
       match expect(parser, fn(t) { matches_close_brace(t) }) {
@@ -3329,15 +3369,23 @@ fn parse_return_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
   } else {
     parser
   }
+  let return_line = start_loc.end.line
   let parser = advance_parser(parser) // Skip 'return'
 
-  // Check if there's an expression
+  // Check if there's an expression: none before ';' / '}' / EOF, and ASI
+  // applies when the next token starts on a new line (`return\nx`)
   let (expression, parser) = match current_token(parser) {
-    Semicolon(_) => (None, parser)
-    _ =>
-      match parse_expression(parser) {
-        Ok((expr, p)) => (Some(expr), p)
-        Err(p) => (None, p)
+    Semicolon(_) | CloseBrace(_) | EOF(_) => (None, parser)
+    tok =>
+      if tok.location().start.line > return_line {
+        (None, parser)
+      } else {
+        match parse_expression(parser) {
+          Ok((expr, p)) => (Some(expr), p)
+          // Keep the return statement but flag the enclosing statement list
+          // to synchronize past the damage
+          Err(p) => (None, { ..p, sync_pending: true })
+        }
       }
   }
   let parser = expect_semicolon(parser)
@@ -3410,13 +3458,14 @@ fn parse_entity_name_from(
         name,
         location: loc,
       })
-      // Parse any following .identifier chains
+      // Parse any following .identifier chains; after '.' any
+      // identifier-name is valid, including reserved words (foo.await)
       while true {
         match current_token(parser) {
           Dot(_) => {
             parser = advance_parser(parser) // consume '.'
-            match current_token(parser) {
-              Identifier(prop_name, prop_loc) => {
+            match try_get_property_name_with_reserved(current_token(parser)) {
+              Some((prop_name, prop_loc, _)) => {
                 parser = advance_parser(parser)
                 let start_loc = get_node_location(result)
                 result = Node::PropertyAccessExpression(PropertyAccessExpression::{
@@ -3429,7 +3478,7 @@ fn parse_entity_name_from(
                   ),
                 })
               }
-              _ => break
+              None => break
             }
           }
           _ => break
@@ -3449,21 +3498,22 @@ fn parse_entity_name_from(
 /// Parse an entity name (qualified name like M, M.N, M.N.O)
 /// Used for import equals declarations: import X = M.N
 fn parse_entity_name(parser : Parser) -> (Node, Parser) {
-  // Start with an identifier
-  match current_token(parser) {
-    Identifier(name, loc) => {
+  // Start with an identifier (including identifier-name keywords: foo.await)
+  match try_get_identifier_name(current_token(parser)) {
+    Some((name, loc)) => {
       let mut parser = advance_parser(parser)
       let mut result : Node = Node::Identifier(Identifier::{
         name,
         location: loc,
       })
-      // Parse any following .identifier chains
+      // Parse any following .identifier chains; after '.' any
+      // identifier-name is valid, including reserved words
       while true {
         match current_token(parser) {
           Dot(_) => {
             parser = advance_parser(parser) // consume '.'
-            match current_token(parser) {
-              Identifier(prop_name, prop_loc) => {
+            match try_get_property_name_with_reserved(current_token(parser)) {
+              Some((prop_name, prop_loc, _)) => {
                 parser = advance_parser(parser)
                 let start_loc = get_node_location(result)
                 result = Node::PropertyAccessExpression(PropertyAccessExpression::{
@@ -3476,7 +3526,7 @@ fn parse_entity_name(parser : Parser) -> (Node, Parser) {
                   ),
                 })
               }
-              _ => break
+              None => break
             }
           }
           _ => break
@@ -3484,7 +3534,7 @@ fn parse_entity_name(parser : Parser) -> (Node, Parser) {
       }
       (result, parser)
     }
-    _ => {
+    None => {
       // Return empty identifier as fallback
       let loc = current_token(parser).location()
       (Node::Identifier(Identifier::{ name: "", location: loc }), parser)
@@ -3535,14 +3585,19 @@ fn parse_class_declaration_with_decorators(
   let start_loc = current_token(parser).location()
   let parser = advance_parser(parser) // consume 'class'
 
-  // Parse class name
+  // Parse class name: an identifier or a contextual keyword usable as a
+  // binding name (class abstract { }), but never 'implements' (heritage)
   let (name, parser) = match current_token(parser) {
-    Identifier(n, loc) =>
-      (
-        Some(Node::Identifier(Identifier::{ name: n, location: loc })),
-        advance_parser(parser),
-      )
-    _ => (None, parser) // Anonymous class allowed in expressions
+    KeywordImplements(_) => (None, parser)
+    tok =>
+      match try_get_identifier_name(tok) {
+        Some((n, loc)) =>
+          (
+            Some(Node::Identifier(Identifier::{ name: n, location: loc })),
+            advance_parser(parser),
+          )
+        None => (None, parser) // Anonymous class allowed in expressions
+      }
   }
 
   // Parse type parameters if present (e.g., class Box<T>)
@@ -3682,7 +3737,25 @@ fn parse_heritage_types_aux(
         }
         Err(p) => (acc, p)
       }
-    Identifier(name, loc) => {
+    // Class-expression heritage: class C extends class { } { }
+    KeywordClass(loc) =>
+      match parse_class_expression(parser, loc, []) {
+        Ok((expr, parser)) => {
+          acc.push(expr)
+          match current_token(parser) {
+            Comma(_) => parse_heritage_types_aux(advance_parser(parser), acc)
+            _ => (acc, parser)
+          }
+        }
+        Err(p) => (acc, p)
+      }
+    // Named heritage type: Identifier or identifier-name keyword
+    // (class C extends await { })
+    tok if try_get_identifier_name(tok) is Some(_) => {
+      let (name, loc) = match try_get_identifier_name(tok) {
+        Some((n, l)) => (n, l)
+        None => ("", tok.location()) // unreachable (guard)
+      }
       let parser = advance_parser(parser)
       // Parse property access chain (e.g., cdk.Stack, aws.lambda.Function)
       let (full_name, parser, end_loc) = parse_heritage_type_name(
@@ -3693,13 +3766,29 @@ fn parse_heritage_types_aux(
         LessThan(_) => parse_heritage_type_arguments(parser)
         _ => ([], parser)
       }
-      acc.push(
-        Node::TypeReference(TypeReference::{
-          type_name: full_name,
-          type_arguments,
-          location: end_loc,
-        }),
-      )
+      // Call-expression heritage: class C extends Constructor<I>() { }
+      let parser = match current_token(parser) {
+        OpenParen(_) => {
+          let callee = Node::Identifier(Identifier::{
+            name: full_name,
+            location: end_loc,
+          })
+          let parser = advance_parser(parser) // consume '('
+          let (arguments, parser) = parse_argument_list(parser)
+          acc.push(make_call_expression(callee, type_arguments, arguments, loc))
+          parser
+        }
+        _ => {
+          acc.push(
+            Node::TypeReference(TypeReference::{
+              type_name: full_name,
+              type_arguments,
+              location: end_loc,
+            }),
+          )
+          parser
+        }
+      }
       match current_token(parser) {
         Comma(_) => parse_heritage_types_aux(advance_parser(parser), acc)
         _ => (acc, parser)
@@ -5717,8 +5806,22 @@ fn parse_class_member_with_decorators(
       }
     }
 
-    // Skip other tokens
-    _ => parse_class_members_aux(advance_parser(parser), acc)
+    // Keyword-named member: var() {}, delete(): void, while = 1, etc.
+    // (identifier-name keywords not matched by an arm above)
+    tok =>
+      match try_get_property_name_with_reserved(tok) {
+        Some((name, loc, _)) =>
+          parse_named_class_member(
+            advance_parser(parser),
+            name,
+            loc,
+            acc,
+            decorators,
+            [],
+          )
+        // Skip other tokens
+        None => parse_class_members_aux(advance_parser(parser), acc)
+      }
   }
 }
 
@@ -6846,6 +6949,18 @@ fn parse_interface_declaration(
             }
           }
           // Construct signature: new(): returnType or new <T>(): returnType
+          // Construct signature (new (): T) - but `new` not followed by '('
+          // or '<' is an ordinary member name: interface C { new; }
+          KeywordNew(new_name_loc) if !(peek_token(parser) is (OpenParen(_) | LessThan(_))) => {
+            parser = advance_parser(parser)
+            match parse_interface_named_member(parser, "new", new_name_loc) {
+              Ok((member, p)) => {
+                members.push(member)
+                parser = p
+              }
+              Err(p) => return Err(p)
+            }
+          }
           KeywordNew(_) => {
             let new_loc = current_token(parser).location()
             parser = advance_parser(parser) // consume 'new'
@@ -6907,197 +7022,6 @@ fn parse_interface_declaration(
                     ExpectedOpenParen.to_message(),
                     current_token(parser).location(),
                     ExpectedOpenParen,
-                  ),
-                )
-            }
-          }
-          Identifier(prop_name, prop_loc) => {
-            parser = advance_parser(parser)
-
-            // Check for optional marker (?)
-            let is_optional = match current_token(parser) {
-              Question(_) => {
-                parser = advance_parser(parser)
-                true
-              }
-              _ => false
-            }
-
-            // Check if it's a method (has parentheses) or property (has colon)
-            match current_token(parser) {
-              OpenParen(_) => {
-                // Method signature: name(params): returnType
-                parser = advance_parser(parser) // consume '('
-
-                // Parse parameters properly
-                let (params, p) = parse_parameter_list(parser)
-                parser = p
-
-                // Parse return type
-                let return_type = match current_token(parser) {
-                  Colon(_) => {
-                    parser = advance_parser(parser)
-                    match parse_type(parser) {
-                      Ok((t, p)) => {
-                        parser = p
-                        Some(t)
-                      }
-                      Err(_) => None
-                    }
-                  }
-                  _ => None
-                }
-
-                // Create method declaration
-                members.push(
-                  Node::MethodDeclaration(MethodDeclaration::{
-                    name: prop_name,
-                    computed_name_expr: None,
-                    type_parameters: [],
-                    parameters: params,
-                    return_type,
-                    body: None,
-                    decorators: [],
-                    modifiers: [],
-                    is_async: false,
-                    is_generator: false,
-                    is_optional,
-                    location: prop_loc,
-                  }),
-                )
-
-                // Optional semicolon or comma
-                match current_token(parser) {
-                  Semicolon(_) | Comma(_) => parser = advance_parser(parser)
-                  _ => ()
-                }
-              }
-              Colon(_) => {
-                // Property signature: name: type
-                parser = advance_parser(parser)
-
-                // Parse property type
-                match parse_type(parser) {
-                  Ok((prop_type, p)) => {
-                    parser = p
-
-                    // Create property declaration
-                    members.push(
-                      Node::PropertyDeclaration(PropertyDeclaration::{
-                        name: prop_name,
-                        computed_name_expr: None,
-                        type_annotation: Some(prop_type),
-                        initializer: None,
-                        is_optional,
-                        has_definite_assignment: false,
-                        decorators: [],
-                        modifiers: [],
-                        location: prop_loc,
-                      }),
-                    )
-
-                    // Optional semicolon or comma
-                    match current_token(parser) {
-                      Semicolon(_) | Comma(_) => parser = advance_parser(parser)
-                      _ => ()
-                    }
-                  }
-                  Err(p) => return Err(p)
-                }
-              }
-              LessThan(_) => {
-                // Generic method signature: name<T>(params): returnType
-                let (type_params, p) = parse_type_parameters(parser)
-                parser = p
-
-                // Must have '(' after type parameters
-                match current_token(parser) {
-                  OpenParen(_) => {
-                    parser = advance_parser(parser)
-                    let (params, p) = parse_parameter_list(parser)
-                    parser = p
-
-                    // Parse return type
-                    let return_type = match current_token(parser) {
-                      Colon(_) => {
-                        parser = advance_parser(parser)
-                        match parse_type(parser) {
-                          Ok((t, p)) => {
-                            parser = p
-                            Some(t)
-                          }
-                          Err(_) => None
-                        }
-                      }
-                      _ => None
-                    }
-
-                    // Create generic method declaration
-                    members.push(
-                      Node::MethodDeclaration(MethodDeclaration::{
-                        name: prop_name,
-                        computed_name_expr: None,
-                        type_parameters: type_params,
-                        parameters: params,
-                        return_type,
-                        body: None,
-                        decorators: [],
-                        modifiers: [],
-                        is_async: false,
-                        is_generator: false,
-                        is_optional,
-                        location: prop_loc,
-                      }),
-                    )
-
-                    // Optional semicolon or comma
-                    match current_token(parser) {
-                      Semicolon(_) | Comma(_) => parser = advance_parser(parser)
-                      _ => ()
-                    }
-                  }
-                  _ =>
-                    return Err(
-                      add_error_with_code(
-                        parser,
-                        ExpectedOpenParen.to_message(),
-                        current_token(parser).location(),
-                        ExpectedOpenParen,
-                      ),
-                    )
-                }
-              }
-              // Property signature without a type: { a } means a property 'a'
-              // with an implicit 'any' type (reported as TS7008 under
-              // noImplicitAny) - TypeScript has no {a} -> {a: a} shorthand
-              CloseBrace(_) | Semicolon(_) | Comma(_) => {
-                members.push(
-                  Node::PropertyDeclaration(PropertyDeclaration::{
-                    name: prop_name,
-                    computed_name_expr: None,
-                    type_annotation: None,
-                    initializer: None,
-                    is_optional,
-                    has_definite_assignment: false,
-                    decorators: [],
-                    modifiers: [],
-                    location: prop_loc,
-                  }),
-                )
-
-                // Optional semicolon or comma
-                match current_token(parser) {
-                  Semicolon(_) | Comma(_) => parser = advance_parser(parser)
-                  _ => ()
-                }
-              }
-              _ =>
-                return Err(
-                  add_error_with_code(
-                    parser,
-                    ExpectedColon.to_message(),
-                    prop_loc,
-                    ExpectedColon,
                   ),
                 )
             }
@@ -7242,7 +7166,21 @@ fn parse_interface_declaration(
                 }
             }
           }
-          _ => break
+          // Named member: identifier, keyword, or string/numeric literal name
+          tok =>
+            match interface_member_name(tok) {
+              Some((prop_name, prop_loc)) => {
+                parser = advance_parser(parser)
+                match parse_interface_named_member(parser, prop_name, prop_loc) {
+                  Ok((member, p)) => {
+                    members.push(member)
+                    parser = p
+                  }
+                  Err(p) => return Err(p)
+                }
+              }
+              None => break
+            }
         }
       }
       Err(
@@ -7263,6 +7201,169 @@ fn parse_interface_declaration(
           ExpectedOpenBrace,
         ),
       )
+  }
+}
+
+///|
+/// Extract an interface member name from a token: identifiers, contextual and
+/// reserved keywords (interface { while; protected; var(): void }), and
+/// string/numeric literal names (interface { "E"(): void; 0: string })
+fn interface_member_name(token : Token) -> (String, SourceLocation)? {
+  match token {
+    StringLiteral(n, loc) | NumericLiteral(n, loc) => Some((n, loc))
+    _ =>
+      match try_get_property_name_with_reserved(token) {
+        Some((n, loc, _)) => Some((n, loc))
+        None => None
+      }
+  }
+}
+
+///|
+/// Parse an interface property or method signature after its name has been
+/// consumed (parser positioned at the token following the name).
+fn parse_interface_named_member(
+  parser : Parser,
+  prop_name : String,
+  prop_loc : SourceLocation,
+) -> Result[(Node, Parser), Parser] {
+  let mut parser = parser
+
+  // Check for optional marker (?)
+  let (is_optional, name_end_line) = match current_token(parser) {
+    Question(q_loc) => {
+      parser = advance_parser(parser)
+      (true, q_loc.end.line)
+    }
+    _ => (false, prop_loc.end.line)
+  }
+
+  // Consume the optional trailing separator of a member
+  fn consume_separator(parser : Parser) -> Parser {
+    match current_token(parser) {
+      Semicolon(_) | Comma(_) => advance_parser(parser)
+      _ => parser
+    }
+  }
+
+  // Check if it's a method (has parentheses) or property (has colon)
+  match current_token(parser) {
+    // Method signature: name(params): returnType
+    // Generic method signature: name<T>(params): returnType
+    OpenParen(_) | LessThan(_) => {
+      let (type_params, p) = match current_token(parser) {
+        LessThan(_) => parse_type_parameters(parser)
+        _ => ([], parser)
+      }
+      parser = p
+
+      // Must have '(' (after type parameters, if any)
+      match current_token(parser) {
+        OpenParen(_) => parser = advance_parser(parser)
+        _ =>
+          return Err(
+            add_error_with_code(
+              parser,
+              ExpectedOpenParen.to_message(),
+              current_token(parser).location(),
+              ExpectedOpenParen,
+            ),
+          )
+      }
+      let (params, p) = parse_parameter_list(parser)
+      parser = p
+
+      // Parse return type
+      let return_type = match current_token(parser) {
+        Colon(_) => {
+          parser = advance_parser(parser)
+          match parse_type(parser) {
+            Ok((t, p)) => {
+              parser = p
+              Some(t)
+            }
+            Err(_) => None
+          }
+        }
+        _ => None
+      }
+      Ok(
+        (
+          Node::MethodDeclaration(MethodDeclaration::{
+            name: prop_name,
+            computed_name_expr: None,
+            type_parameters: type_params,
+            parameters: params,
+            return_type,
+            body: None,
+            decorators: [],
+            modifiers: [],
+            is_async: false,
+            is_generator: false,
+            is_optional,
+            location: prop_loc,
+          }),
+          consume_separator(parser),
+        ),
+      )
+    }
+    // Property signature: name: type
+    Colon(_) => {
+      parser = advance_parser(parser)
+      match parse_type(parser) {
+        Ok((prop_type, p)) =>
+          Ok(
+            (
+              Node::PropertyDeclaration(PropertyDeclaration::{
+                name: prop_name,
+                computed_name_expr: None,
+                type_annotation: Some(prop_type),
+                initializer: None,
+                is_optional,
+                has_definite_assignment: false,
+                decorators: [],
+                modifiers: [],
+                location: prop_loc,
+              }),
+              consume_separator(p),
+            ),
+          )
+        Err(p) => Err(p)
+      }
+    }
+    // Property signature without a type: { a } means a property 'a' with an
+    // implicit 'any' type (reported as TS7008 under noImplicitAny). The
+    // member ends at ';' / ',' / '}' or, ASI-style, at a line break before
+    // the next member (interface I { protected \n p })
+    tok =>
+      if tok is (CloseBrace(_) | Semicolon(_) | Comma(_)) ||
+        tok.location().start.line > name_end_line {
+        Ok(
+          (
+            Node::PropertyDeclaration(PropertyDeclaration::{
+              name: prop_name,
+              computed_name_expr: None,
+              type_annotation: None,
+              initializer: None,
+              is_optional,
+              has_definite_assignment: false,
+              decorators: [],
+              modifiers: [],
+              location: prop_loc,
+            }),
+            consume_separator(parser),
+          ),
+        )
+      } else {
+        Err(
+          add_error_with_code(
+            parser,
+            ExpectedColon.to_message(),
+            prop_loc,
+            ExpectedColon,
+          ),
+        )
+      }
   }
 }
 
@@ -7709,19 +7810,23 @@ fn parse_module_declaration_body(
   parser : Parser,
   start_loc : SourceLocation,
 ) -> Result[(Node, Parser), Parser] {
-  // Parse namespace/module name
+  // Parse namespace/module name: an identifier (including identifier-name
+  // keywords: namespace number { }) or a string literal (ambient module)
   let (name, is_ambient, parser) = match current_token(parser) {
-    Identifier(n, _) => (n, false, advance_parser(parser))
     StringLiteral(s, _) => (s, true, advance_parser(parser)) // For ambient modules like declare module "fs"
-    _ =>
-      return Err(
-        add_error_with_code(
-          parser,
-          "Identifier expected",
-          current_token(parser).location(),
-          IdentifierExpected,
-        ),
-      )
+    tok =>
+      match try_get_identifier_name(tok) {
+        Some((n, _)) => (n, false, advance_parser(parser))
+        None =>
+          return Err(
+            add_error_with_code(
+              parser,
+              "Identifier expected",
+              current_token(parser).location(),
+              IdentifierExpected,
+            ),
+          )
+      }
   }
 
   // Parse body
@@ -7872,7 +7977,12 @@ fn parse_import_declaration(parser : Parser) -> Result[(Node, Parser), Parser] {
         StringLiteral(_, _) => None
         _ => Some("from")
       }
-    _ => None
+    // Other identifier-name keywords can bind: import await = foo.await
+    tok =>
+      match try_get_identifier_name(tok) {
+        Some((name, _)) => Some(name)
+        None => None
+      }
   }
   // First, check for import equals declaration: import X = M.N
   let (default_import, parser) = match binding_name {
@@ -8395,6 +8505,36 @@ fn parse_export_declaration(parser : Parser) -> Result[(Node, Parser), Parser] {
             }
             Err(p) => Err(p)
           }
+      }
+    }
+
+    // export = expression (TS export assignment)
+    Equals(_) => {
+      let parser = advance_parser(parser) // consume '='
+      match parse_assignment_expression(parser) {
+        Ok((expression, parser)) => {
+          let end_loc = get_location(expression)
+          // Consume optional semicolon
+          let parser = match current_token(parser) {
+            Semicolon(_) => advance_parser(parser)
+            _ => parser
+          }
+          Ok(
+            (
+              Node::ExportAssignment(ExportAssignment::{
+                expression,
+                is_export_equals: true,
+                location: SourceLocation::new(
+                  start_loc.file_path,
+                  start_loc.start,
+                  end_loc.end,
+                ),
+              }),
+              parser,
+            ),
+          )
+        }
+        Err(p) => Err(p)
       }
     }
 
@@ -9360,14 +9500,33 @@ fn parse_case_statements_aux(
 ) -> (Array[Node], Parser) {
   match current_token(parser) {
     KeywordCase(_) | KeywordDefault(_) | CloseBrace(_) | EOF(_) => (acc, parser)
-    _ =>
+    _ => {
+      let stmt_start = parser.position
+      let diags_before = parser.diagnostics.length()
       match parse_statement(parser) {
         Ok((stmt, p)) => {
           acc.push(stmt)
+          let p = if p.sync_pending {
+            recover_statement_error(p, stmt_start, diags_before, stop_at_case=true)
+          } else {
+            p
+          }
           parse_case_statements_aux(p, acc)
         }
-        Err(p) => (acc, p)
+        Err(p) => {
+          // Synchronize to the next statement/case boundary, dropping the
+          // cascade of follow-on diagnostics
+          let p = recover_statement_error(
+            p, stmt_start, diags_before, stop_at_case=true,
+          )
+          if p.position == stmt_start {
+            (acc, advance_parser(p))
+          } else {
+            parse_case_statements_aux(p, acc)
+          }
+        }
       }
+    }
   }
 }
 
@@ -9378,6 +9537,12 @@ fn parse_for_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
   // for (variable of iterable) statement
   let start_loc = current_token(parser).location()
   let parser = advance_parser(parser) // consume 'for'
+
+  // Optional 'await' modifier: for await (x of y)
+  let (is_await, parser) = match current_token(parser) {
+    KeywordAwait(_) => (true, advance_parser(parser))
+    _ => (false, parser)
+  }
 
   // Expect '('
   let parser = match current_token(parser) {
@@ -9412,11 +9577,19 @@ fn parse_for_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
         }
         Err(p) => (None, p)
       }
-    _ =>
-      match parse_expression(parser) {
-        Ok((expr, p)) => (Some(expr), p)
-        Err(p) => (None, p)
+    _ => {
+      // Disallow 'in' as a binary operator so `for (i in a)` parses `i`
+      // alone and the for-in header below sees the 'in'
+      let no_in_parser = with_context(parser, fn(ctx) {
+        { ..ctx, allow_in: false }
+      })
+      match parse_expression(no_in_parser) {
+        Ok((expr, p)) =>
+          (Some(expr), with_context(p, fn(ctx) { { ..ctx, allow_in: true } }))
+        Err(p) =>
+          (None, with_context(p, fn(ctx) { { ..ctx, allow_in: true } }))
       }
+    }
   }
 
   // Check for for-in or for-of
@@ -9559,7 +9732,7 @@ fn parse_for_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
             ),
             expression,
             statement,
-            await_modifier: false,
+            await_modifier: is_await,
             location: SourceLocation::new(
               start_loc.file_path,
               start_loc.start,
@@ -10581,17 +10754,95 @@ fn add_error(
 }
 
 ///|
-/// Skip to next statement (error recovery)
-fn skip_to_next_statement(parser : Parser) -> Parser {
-  let mut parser = parser
-  while !is_at_end(parser) {
-    match current_token(parser) {
-      Semicolon(_) => return advance_parser(parser)
-      CloseBrace(_) => return parser
-      _ => parser = advance_parser(parser)
+/// Keep only the first `keep` diagnostics (statement-level error recovery:
+/// diagnostics recorded after the first error of a failed statement describe
+/// recovery attempts on tokens the parser had already lost track of, not real
+/// syntax errors).
+fn truncate_diagnostics(parser : Parser, keep : Int) -> Parser {
+  if parser.diagnostics.length() <= keep {
+    parser
+  } else {
+    let kept : Array[Diagnostic] = []
+    for i = 0; i < keep; i = i + 1 {
+      kept.push(parser.diagnostics[i])
     }
+    { ..parser, diagnostics: kept }
   }
-  parser
+}
+
+///|
+/// Statement-level synchronize-on-error (tsc-style recovery).
+///
+/// After a statement parse fails, two things must happen so that one syntax
+/// error yields one diagnostic cluster instead of a cascade over the rest of
+/// the file:
+///
+/// 1. Diagnostics recorded *after* the first error of the failed statement
+///    are dropped (see `truncate_diagnostics`).
+/// 2. The parser skips the remainder of the statement: scanning from the
+///    statement's first token with bracket-depth tracking, it resumes at the
+///    first genuine statement boundary — after a top-level `;`, at an
+///    unmatched `}` (the enclosing block's terminator), at a
+///    statement-starting keyword at the beginning of a line past the error
+///    point, or at EOF.
+///
+/// `stmt_start` is the token index where the failed statement began and
+/// `diags_before` the diagnostics count before its parse was attempted.
+/// `stop_at_case` makes `case`/`default` boundaries too (switch bodies).
+fn recover_statement_error(
+  parser : Parser,
+  stmt_start : Int,
+  diags_before : Int,
+  stop_at_case~ : Bool = false,
+) -> Parser {
+  let parser = truncate_diagnostics(parser, diags_before + 1)
+  let parser = { ..parser, sync_pending: false }
+  let err_pos = parser.position
+  let mut idx = stmt_start
+  let mut paren = 0
+  let mut bracket = 0
+  let mut brace = 0
+  let mut prev_line = -1
+  while idx < parser.tokens.length() {
+    let tok = parser.tokens[idx]
+    let at_depth0 = paren == 0 && bracket == 0 && brace == 0
+    match tok {
+      EOF(_) => return { ..parser, position: idx }
+      OpenParen(_) => paren = paren + 1
+      CloseParen(_) => if paren > 0 { paren = paren - 1 }
+      OpenBracket(_) => bracket = bracket + 1
+      CloseBracket(_) => if bracket > 0 { bracket = bracket - 1 }
+      OpenBrace(_) => brace = brace + 1
+      CloseBrace(_) =>
+        if brace > 0 {
+          brace = brace - 1
+        } else if idx > stmt_start {
+          // Unmatched `}`: the enclosing block's terminator - resume at it.
+          return { ..parser, position: idx }
+        }
+      Semicolon(_) =>
+        if at_depth0 && idx > stmt_start {
+          return { ..parser, position: idx + 1 }
+        }
+      KeywordCase(_) | KeywordDefault(_) =>
+        if stop_at_case && at_depth0 && idx > stmt_start {
+          return { ..parser, position: idx }
+        }
+      _ =>
+        // A statement-starting keyword at the beginning of a new line, past
+        // the point of the error, is a synchronization point.
+        if at_depth0 &&
+          idx > stmt_start &&
+          idx >= err_pos &&
+          is_statement_start(tok) &&
+          tok.location().start.line > prev_line {
+          return { ..parser, position: idx }
+        }
+    }
+    prev_line = tok.location().end.line
+    idx = idx + 1
+  }
+  { ..parser, position: idx }
 }
 
 ///|

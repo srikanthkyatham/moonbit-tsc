@@ -170,8 +170,14 @@ test "TS2364 - var declaration object destructuring with literal" {
   let result = check_source(source)
   let diagnostics = get_diagnostics(result)
 
-  // NOTE: Parse error - parser rejects literals in destructuring with declarations
-  assert_true(has_error(diagnostics, 1005) || has_error(diagnostics, 1000))
+  // NOTE: Parse error - parser rejects literals in destructuring with
+  // declarations. Statement-level recovery keeps only the first error
+  // (TS1003 "Identifier expected" at the literal).
+  assert_true(
+    has_error(diagnostics, 1003) ||
+    has_error(diagnostics, 1005) ||
+    has_error(diagnostics, 1000),
+  )
 }
 
 ///|
@@ -182,8 +188,13 @@ test "TS2364 - let declaration object destructuring with literal" {
   let result = check_source(source)
   let diagnostics = get_diagnostics(result)
 
-  // NOTE: Parse error
-  assert_true(has_error(diagnostics, 1005) || has_error(diagnostics, 1000))
+  // NOTE: Parse error. Statement-level recovery keeps only the first error
+  // (TS1003 "Identifier expected" at the literal).
+  assert_true(
+    has_error(diagnostics, 1003) ||
+    has_error(diagnostics, 1005) ||
+    has_error(diagnostics, 1000),
+  )
 }
 
 ///|

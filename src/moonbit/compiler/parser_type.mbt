@@ -9,6 +9,7 @@ fn try_get_property_name(token : Token) -> (String, SourceLocation)? {
   match token {
     Identifier(name, loc) => Some((name, loc))
     StringLiteral(name, loc) => Some((name, loc))
+    NumericLiteral(name, loc) => Some((name, loc))
     // Type keywords
     KeywordAny(loc) => Some(("any", loc))
     KeywordBoolean(loc) => Some(("boolean", loc))
@@ -80,6 +81,56 @@ fn try_get_property_name(token : Token) -> (String, SourceLocation)? {
     KeywordDebugger(loc) => Some(("debugger", loc))
     _ => None
   }
+}
+
+///|
+/// Parse the rest of a (possibly qualified) type reference after its first
+/// name segment has been consumed: `.B.C` chains (any identifier-name after
+/// a dot) and generic type arguments.
+fn parse_qualified_type_reference(
+  parser : Parser,
+  first_name : String,
+  loc : SourceLocation,
+) -> Result[(Node, Parser), Parser] {
+  let mut parser = parser
+  let mut qualified_name = first_name
+
+  // Handle qualified names like Foo.Bar.Baz
+  while true {
+    match current_token(parser) {
+      Dot(_) => {
+        let next_parser = advance_parser(parser)
+        match try_get_property_name(current_token(next_parser)) {
+          Some((next_name, _)) => {
+            qualified_name = qualified_name + "." + next_name
+            parser = advance_parser(next_parser)
+          }
+          None => break
+        }
+      }
+      _ => break
+    }
+  }
+
+  // Check for generic type arguments
+  let (type_arguments, parser) = match current_token(parser) {
+    LessThan(_) =>
+      match parse_type_argument_list(parser) {
+        Ok((args, p)) => (args, p)
+        Err(p) => ([], p)
+      }
+    _ => ([], parser)
+  }
+  Ok(
+    (
+      Node::TypeReference(TypeReference::{
+        type_name: qualified_name,
+        type_arguments,
+        location: loc,
+      }),
+      parser,
+    ),
+  )
 }
 
 ///|
@@ -416,6 +467,28 @@ fn parse_primary_type_with_readonly(
 ) -> Result[(Node, Parser), Parser] {
   let token = current_token(parser)
   let loc = token.location()
+  // A predefined-type keyword followed by '.' names a namespace member, not
+  // a keyword type: declare namespace string { interface X {} } var x: string.X
+  match token {
+    KeywordString(_)
+    | KeywordNumber(_)
+    | KeywordBoolean(_)
+    | KeywordSymbol(_)
+    | KeywordObject(_)
+    | KeywordBigInt(_) =>
+      if peek_token(parser) is Dot(_) {
+        match try_get_identifier_name(token) {
+          Some((kw_name, _)) =>
+            return parse_qualified_type_reference(
+              advance_parser(parser),
+              kw_name,
+              loc,
+            )
+          None => ()
+        }
+      }
+    _ => ()
+  }
   match token {
     KeywordString(_) =>
       Ok(
@@ -432,6 +505,18 @@ fn parse_primary_type_with_readonly(
         (
           Node::KeywordType(KeywordType::{
             kind: TypeKeyword::Number,
+            location: loc,
+          }),
+          advance_parser(parser),
+        ),
+      )
+    // Polymorphic 'this' type: method(): this, T extends this
+    KeywordThis(_) =>
+      Ok(
+        (
+          Node::TypeReference(TypeReference::{
+            type_name: "this",
+            type_arguments: [],
             location: loc,
           }),
           advance_parser(parser),
@@ -540,8 +625,12 @@ fn parse_primary_type_with_readonly(
     // typeof in type position: typeof variable or typeof A.B.C
     KeywordTypeOf(_) => {
       let parser = advance_parser(parser)
-      // Handle identifiers and contextual keywords like 'yield' that can be variable names
-      match try_get_identifier_name(current_token(parser)) {
+      // Handle identifiers, contextual keywords, and 'this' (typeof this)
+      let name_info = match current_token(parser) {
+        KeywordThis(this_loc) => Some(("this", this_loc))
+        tok => try_get_identifier_name(tok)
+      }
+      match name_info {
         Some((id_name, id_loc)) => {
           let mut parser = advance_parser(parser)
           let mut result : Node = Node::Identifier(Identifier::{
@@ -553,8 +642,10 @@ fn parse_primary_type_with_readonly(
             match current_token(parser) {
               Dot(_) => {
                 parser = advance_parser(parser) // consume '.'
-                match current_token(parser) {
-                  Identifier(prop_name, prop_loc) => {
+                // After '.', any identifier-name is valid, including reserved
+                // words: typeof C.prototype.delete
+                match try_get_property_name(current_token(parser)) {
+                  Some((prop_name, prop_loc)) => {
                     parser = advance_parser(parser)
                     let start_loc = get_node_location(result)
                     result = Node::PropertyAccessExpression(PropertyAccessExpression::{
@@ -567,7 +658,7 @@ fn parse_primary_type_with_readonly(
                       ),
                     })
                   }
-                  _ => break
+                  None => break
                 }
               }
               _ => break
@@ -797,46 +888,7 @@ fn parse_primary_type_with_readonly(
           Err(p) => Err(p)
         }
       } else {
-        let mut parser = advance_parser(parser)
-        let mut qualified_name = name
-
-        // Handle qualified names like Foo.Bar.Baz
-        while true {
-          match current_token(parser) {
-            Dot(_) => {
-              // Check if next token is an identifier
-              let next_parser = advance_parser(parser)
-              match current_token(next_parser) {
-                Identifier(next_name, _) => {
-                  qualified_name = qualified_name + "." + next_name
-                  parser = advance_parser(next_parser)
-                }
-                _ => break
-              }
-            }
-            _ => break
-          }
-        }
-
-        // Check for generic type arguments
-        let (type_arguments, parser) = match current_token(parser) {
-          LessThan(_) =>
-            match parse_type_argument_list(parser) {
-              Ok((args, p)) => (args, p)
-              Err(p) => ([], p)
-            }
-          _ => ([], parser)
-        }
-        Ok(
-          (
-            Node::TypeReference(TypeReference::{
-              type_name: qualified_name,
-              type_arguments,
-              location: loc,
-            }),
-            parser,
-          ),
-        )
+        parse_qualified_type_reference(advance_parser(parser), name, loc)
       }
     StringLiteral(value, _) =>
       Ok(
@@ -1630,7 +1682,7 @@ fn parse_primary_type_with_readonly(
           match current_token(parser) {
             Arrow(_) => {
               let parser = advance_parser(parser)
-              match parse_type(parser) {
+              match parse_return_type(parser) {
                 Ok((return_type, parser)) =>
                   Ok(
                     (
@@ -1683,7 +1735,7 @@ fn parse_primary_type_with_readonly(
           match current_token(parser) {
             Arrow(_) => {
               let parser = advance_parser(parser)
-              match parse_type(parser) {
+              match parse_return_type(parser) {
                 Ok((return_type, parser)) =>
                   Ok(
                     (
@@ -1738,8 +1790,9 @@ fn parse_primary_type_with_readonly(
         DotDotDot(_) =>
           // Rest parameter - definitely a function type
           ()
-        KeywordThis(_) =>
-          // 'this' parameter - definitely a function type
+        // 'this' parameter (this: T) - function type. A bare 'this' followed
+        // by ')' is the parenthesized 'this' TYPE: e: (((this)))
+        KeywordThis(_) if peek_token(inner_parser) is (Colon(_) | Comma(_)) =>
           ()
         _ =>
           // Try to parse as parenthesized type first
@@ -1781,7 +1834,7 @@ fn parse_primary_type_with_readonly(
       match current_token(parser) {
         Arrow(_) => {
           let parser = advance_parser(parser)
-          match parse_type(parser) {
+          match parse_return_type(parser) {
             Ok((return_type, parser)) =>
               Ok(
                 (
