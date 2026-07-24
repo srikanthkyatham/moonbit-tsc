@@ -143,7 +143,7 @@ graph TD
 
     subgraph V["Tier V — verification"]
         V1["V1 ⏳ Zero crashes + fuzzing"]
-        V2["V2 ⏳ Baseline CI gate + milestone sweeps"]
+        V2["V2 ✅ Baseline CI gate + milestone sweeps"]
         V3["V3 ⏳ Error-message text parity (stretch)"]
     end
 
@@ -272,7 +272,7 @@ baselines). Extend the runner (V2) to compare them once E-tier lands.
 | ID | Task | Depends | Size | Notes |
 |----|------|---------|------|-------|
 | V1 | **Zero crashes, keep zero**: fix the remaining 3 crashers, then grammar-based parser fuzzing + checker recursion-bomb corpus (100+-member unions, deep generics) as a CI job. | F5 | M | |
-| V2 | **Baseline CI ratchet**: conformance sweep in CI, per-category pass counts committed as a ratchet file — any regression fails the build; milestone sweeps after each tier lands. Extend runner to also diff `.js`/`.d.ts` baselines once E1/E2 exist. | continuous | S + ongoing | Generalizes the manual "full sweep" ritual from waves 3–5. |
+| V2 ✅ | **Baseline CI ratchet**: conformance sweep in CI, per-category pass counts committed as a ratchet file — any regression fails the build; milestone sweeps after each tier lands. Extend runner to also diff `.js`/`.d.ts` baselines once E1/E2 exist. | continuous | S + ongoing | ✅ Done (commit 002c2bd): `--update-ratchet`/`--check-ratchet` runner modes (dual-metric from one compile/test, ~1 min full sweep), `conformance_ratchet.json` (per-category counts + git_sha + ts_repo_sha), `scripts/check_conformance_ratchet.sh` local gate, CI workflow pinned to recorded TS SHA. Baseline at cfa42058: loose 4,101 (72.0%) / strict 2,176 (38.2%) / crash 2. Regression detection verified. **Regenerate after each wave lands.** `.js`/`.d.ts` baseline diffing still waits on E1/E2. |
 | V3 | **Message-text parity** (stretch): strict mode today compares code sets; add a mode comparing full rendered messages + spans. Only meaningful at ≥90% code-set strict. | V2 | L | Last mile to "indistinguishable from tsc". |
 
 ## How long to on-par — effort & calendar estimate
