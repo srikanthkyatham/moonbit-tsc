@@ -165,6 +165,8 @@ fn CompileResult::failure(diagnostics : Array[Diagnostic]) -> CompileResult {
 /// Extract inline test options from source directives (e.g., // @noImplicitAny: true)
 fn extract_inline_options(source : String) -> TestOptions {
   let mut no_implicit_any = false
+  let mut lib : Array[String] = []
+  let mut no_lib = false
   let lines = split_lines(source)
   for line in lines {
     let trimmed = ffi_trim_start(line)
@@ -175,13 +177,52 @@ fn extract_inline_options(source : String) -> TestOptions {
       if directive.has_prefix("noImplicitAny:") {
         let val = ffi_trim(ffi_substring_from(directive, 14))
         no_implicit_any = val == "true"
+      } else if directive.has_prefix("lib:") {
+        lib = ffi_split_by_comma(ffi_trim(ffi_substring_from(directive, 4)))
+      } else if directive.has_prefix("noLib:") || directive.has_prefix("nolib:") {
+        let val = ffi_trim(ffi_substring_from(directive, 6))
+        no_lib = val == "true"
       }
     } else if !(trimmed.has_prefix("//")) && trimmed.length() > 0 {
       // Stop at first non-comment line
       break
     }
   }
-  { ..TestOptions::default(), no_implicit_any, }
+  { ..TestOptions::default(), no_implicit_any, lib, no_lib, }
+}
+
+///|
+/// The standard-library selection for one compiled file. Precedence:
+/// @noLib directive > @lib directive > the caller's default (global
+/// directives of a multi-file test) > CLI --noLib/--lib/--target (the
+/// process-wide default selection) > the compile target's default libs.
+fn lib_context_for_compile(
+  inline_opts : TestOptions,
+  options : CompileOptions,
+  default_ctx? : LibContext? = None,
+) -> LibContext {
+  if inline_opts.no_lib {
+    return LibContext::without_lib()
+  }
+  if inline_opts.lib.length() > 0 {
+    return LibContext::from_libs(inline_opts.lib)
+  }
+  match default_ctx {
+    Some(ctx) => ctx
+    None => resolve_default_lib_context(options.target)
+  }
+}
+
+///|
+/// Lib context requested by a test's global directives, if any.
+fn lib_context_from_test_options(opts : TestOptions) -> LibContext? {
+  if opts.no_lib {
+    Some(LibContext::without_lib())
+  } else if opts.lib.length() > 0 {
+    Some(LibContext::from_libs(opts.lib))
+  } else {
+    None
+  }
 }
 
 ///|
@@ -259,6 +300,7 @@ pub fn compile_source(
             has_parse_errors=parse_diagnostics
             .iter()
             .any(fn(d) { d.category == DiagnosticCategory::Error }),
+            lib_context=Some(lib_context_for_compile(inline_opts, options)),
           )
 
           // Collect type errors but continue compilation
@@ -467,6 +509,7 @@ pub fn compile_source_with_external_types(
   options : CompileOptions,
   external_registry : ExternalTypeRegistry,
   strict_overrides? : StrictFlagOverrides? = None,
+  default_lib_context? : LibContext? = None,
 ) -> CompileResult {
   // Extract inline test options from source directives
   let inline_opts = extract_inline_options(source)
@@ -536,6 +579,12 @@ pub fn compile_source_with_external_types(
             has_parse_errors=parse_diagnostics
             .iter()
             .any(fn(d) { d.category == DiagnosticCategory::Error }),
+            lib_context=Some(
+              lib_context_for_compile(
+                inline_opts, options,
+                default_ctx=default_lib_context,
+              ),
+            ),
           )
 
           // Collect type errors but continue compilation
@@ -713,6 +762,7 @@ pub(all) struct TestOptions {
   no_implicit_any : Bool // @noImplicitAny: true
   import_helpers : Bool // @importHelpers: true
   lib : Array[String] // Library files to include
+  no_lib : Bool // @noLib: true (no standard library at all)
 } derive(Debug)
 
 ///|
@@ -733,6 +783,7 @@ pub fn TestOptions::default() -> TestOptions {
     no_implicit_any: false,
     import_helpers: false,
     lib: [],
+    no_lib: false,
   }
 }
 
@@ -859,6 +910,9 @@ pub fn split_multi_file_test(
         let lib_val = ffi_trim(ffi_substring_from(directive, 4))
         let libs = ffi_split_by_comma(lib_val)
         options = { ..options, lib: libs }
+      } else if directive.has_prefix("noLib:") || directive.has_prefix("nolib:") {
+        let no_lib_val = ffi_trim(ffi_substring_from(directive, 6))
+        options = { ..options, no_lib: no_lib_val == "true" }
       } else if directive.has_prefix("noImplicitAny:") {
         let no_implicit_any_val = ffi_trim(ffi_substring_from(directive, 14))
         options = { ..options, no_implicit_any: no_implicit_any_val == "true" }
@@ -1013,6 +1067,7 @@ pub fn compile_multi_file_test(
   }
 
   // Second pass: compile each file with the registry
+  let global_lib_ctx = lib_context_from_test_options(multi_test.options)
   for file in multi_test.files {
 
     // Compile with type checking
@@ -1022,6 +1077,7 @@ pub fn compile_multi_file_test(
       effective_options,
       registry,
       strict_overrides~,
+      default_lib_context=global_lib_ctx,
     )
     for diag in result.diagnostics {
       all_diagnostics.push(diag)

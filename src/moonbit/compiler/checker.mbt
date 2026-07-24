@@ -320,6 +320,7 @@ pub struct TypeChecker {
   in_ambient_context : Bool // Tracks if we're inside an ambient declaration (declare namespace/module) - implementations are legally absent
   class_type_parameters : Array[String] // Current class type parameter names (for TS2302 static member validation)
   declared_type_names : @hashset.HashSet[String] // All names declared anywhere in the file (types, type parameters, values) - suppresses TS2304 false positives
+  lib_context : LibContext // Which standard-library files are available for global name resolution (F1)
 } derive(Debug)
 
 ///|
@@ -384,7 +385,12 @@ pub fn TypeChecker::new_with_options(
   strict_null_checks? : Bool = false,
   strict_property_initialization? : Bool = false,
   module_kind? : ModuleKind = ESModule,
+  lib_context? : LibContext? = None,
 ) -> TypeChecker {
+  let lib_context = match lib_context {
+    Some(ctx) => ctx
+    None => resolve_default_lib_context(target)
+  }
   {
     next_type_id: 0,
     type_cache: Map([]),
@@ -447,6 +453,7 @@ pub fn TypeChecker::new_with_options(
     in_ambient_context: false,
     class_type_parameters: [], // Empty initially, set when checking class declarations
     declared_type_names: @hashset.HashSet([]), // Populated from the AST before checking statements
+    lib_context,
   }
 }
 
@@ -2591,6 +2598,7 @@ pub fn check_source_file_with_options(
   module_kind? : ModuleKind = ESModule,
   strict_overrides? : StrictFlagOverrides? = None,
   has_parse_errors? : Bool = false,
+  lib_context? : LibContext? = None,
 ) -> CheckResult {
   let (snc, spi) = effective_strict_flags(
     bound.compiler_directives,
@@ -2616,6 +2624,7 @@ pub fn check_source_file_with_options(
     strict_null_checks=snc,
     strict_property_initialization=spi,
     module_kind=module_kind,
+    lib_context=lib_context,
   )
 
   // Apply global augmentations to the global scope
@@ -2674,6 +2683,9 @@ pub fn check_source_file_with_options(
     declared_type_names.add(SUPPRESS_ALL_UNRESOLVED_TYPE_NAMES)
   }
   let checker = { ..checker, declared_type_names, }
+  // With noLib (--noLib / @noLib) the fundamental global types are missing
+  // entirely; tsc reports TS2318 for each one the file does not declare
+  let checker = report_missing_fundamental_global_types(checker)
   let checker = check_statements(checker, bound.statements)
   // Pop the top-level scope
   let checker = pop_local_scope(checker)
@@ -2711,6 +2723,7 @@ pub fn check_source_file_with_external_types(
   import_helpers? : Bool = false,
   strict_overrides? : StrictFlagOverrides? = None,
   has_parse_errors? : Bool = false,
+  lib_context? : LibContext? = None,
 ) -> CheckResult {
   let (snc, spi) = effective_strict_flags(
     bound.compiler_directives,
@@ -2736,6 +2749,7 @@ pub fn check_source_file_with_external_types(
     strict_null_checks=snc,
     strict_property_initialization=spi,
     module_kind=module_kind,
+    lib_context=lib_context,
   )
 
   // Apply global augmentations to the global scope
@@ -2815,6 +2829,9 @@ pub fn check_source_file_with_external_types(
     declared_type_names.add(SUPPRESS_ALL_UNRESOLVED_TYPE_NAMES)
   }
   let checker = { ..checker, declared_type_names, }
+  // With noLib (--noLib / @noLib) the fundamental global types are missing
+  // entirely; tsc reports TS2318 for each one the file does not declare
+  let checker = report_missing_fundamental_global_types(checker)
   let checker = check_statements(checker, bound.statements)
   // Pop the top-level scope
   let checker = pop_local_scope(checker)
@@ -5355,6 +5372,51 @@ fn infer_identifier_type(
                       match resolve_global_namespace(checker, id.name) {
                         Some(ns_type) => (ns_type, checker)
                         None => {
+                          // Real standard-library resolution (F1): a global
+                          // value declared by the libs selected via
+                          // --target/--lib resolves (conservatively as
+                          // `any`; the checker does not model its structure
+                          // yet). Values only available in LATER libs give
+                          // TS2585/TS2583/TS2304 exactly like tsc.
+                          if lib_has_value_name(checker.lib_context, id.name) {
+                            return any_type(checker)
+                          }
+                          if lib_universe_has_value_name(id.name) &&
+                            !checker.lib_context.no_lib {
+                            let version = match
+                              earliest_lib_version_for_name(id.name, true) {
+                              Some(v) => v
+                              None => "es2015"
+                            }
+                            let checker = if lib_has_type_name(
+                                checker.lib_context,
+                                id.name,
+                              ) {
+                              // e.g. Symbol/Promise at es5: the interface
+                              // exists but the constructor value does not
+                              add_diagnostic_with_code(
+                                checker,
+                                "'\{id.name}' only refers to a type, but is being used as a value here. Do you need to change your target library? Try changing the 'lib' compiler option to \{version} or later.",
+                                id.location,
+                                TS2585,
+                              )
+                            } else if is_lib_change_suggestion_name(id.name) {
+                              add_diagnostic_with_code(
+                                checker,
+                                "Cannot find name '\{id.name}'. Do you need to change your target library? Try changing the 'lib' compiler option to '\{version}' or later.",
+                                id.location,
+                                TS2583,
+                              )
+                            } else {
+                              add_diagnostic_with_code(
+                                checker,
+                                "Cannot find name '\{id.name}'.",
+                                id.location,
+                                TS2304,
+                              )
+                            }
+                            return any_type(checker)
+                          }
                           // Variable not found - try to find a similar name for suggestion
                           let suggestion = find_similar_name_in_scope(
                             checker,
@@ -5538,11 +5600,27 @@ fn namespace_has_value_exports(symbol : Symbol) -> Bool {
 }
 
 ///|
+/// Built-in globals whose VALUE only exists from ES2015 on. They must not
+/// resolve through the hardcoded fallbacks below when the selected libs do
+/// not provide them (tsc reports TS2583/TS2585 for them at target es5).
+fn is_es2015_gated_builtin(name : String) -> Bool {
+  match name {
+    "Promise" | "Symbol" | "Map" | "Set" | "WeakMap" | "WeakSet" => true
+    _ => false
+  }
+}
+
+///|
 /// Get type for built-in globals like console, JSON, Math, etc.
 fn get_builtin_global_type(
   checker : TypeChecker,
   name : String,
 ) -> (Type, TypeChecker)? {
+  if is_es2015_gated_builtin(name) &&
+    !lib_selection_is_es2015_plus(checker.lib_context) &&
+    !lib_has_value_name(checker.lib_context, name) {
+    return None
+  }
   if name == "console" {
     Some(get_console_type(checker))
   } else if name == "JSON" {
@@ -26528,11 +26606,6 @@ fn report_unresolved_type_name(
   if name.is_empty() || name.contains(".") {
     return checker
   }
-  // Never report standard-library global types we don't model in the
-  // symbol table (Array, Promise, Record, DOM types, ...)
-  if is_known_lib_type_name(name) {
-    return checker
-  }
   // Never report names that are declared somewhere in this file (type
   // parameters, local type declarations, imports, value bindings): not all
   // resolution paths register in-scope type parameters, and values used as
@@ -26543,17 +26616,82 @@ fn report_unresolved_type_name(
     checker.declared_type_names.contains(SUPPRESS_ALL_UNRESOLVED_TYPE_NAMES) {
     return checker
   }
+  // Real standard-library resolution (F1): a global type declared by the
+  // libs selected via --target/--lib resolves silently.
+  if lib_has_type_name(checker.lib_context, name) {
+    return checker
+  }
+  // A global type that only exists in a LATER lib than the selected ones:
+  // tsc reports TS2583 (for its curated suggestion list) or a plain TS2304.
+  // The embedded JS libs are authoritative for these names, so the whitelist
+  // is deliberately not consulted here.
+  if lib_universe_has_type_name(name) && !checker.lib_context.no_lib {
+    if is_lib_change_suggestion_name(name) {
+      let version = match earliest_lib_version_for_name(name, false) {
+        Some(v) => v
+        None => "es2015"
+      }
+      let message = "Cannot find name '\{name}'. Do you need to change your target library? Try changing the 'lib' compiler option to '\{version}' or later."
+      return add_unresolved_name_diagnostic_once(
+        checker, message, location, TS2583,
+      )
+    }
+    let message = "Cannot find name '\{name}'."
+    return add_unresolved_name_diagnostic_once(checker, message, location, TS2304)
+  }
+  // Whitelist fallback for standard-library globals not covered by the
+  // embedded libs (DOM / WebWorker / scripthost families)
+  if is_known_lib_type_name(name) {
+    return checker
+  }
   let message = "Cannot find name '\{name}'."
-  // Type annotations can be resolved multiple times (inference + checking
-  // passes); only report each name once per source location.
+  add_unresolved_name_diagnostic_once(checker, message, location, TS2304)
+}
+
+///|
+/// TS2318: with noLib active, tsc reports "Cannot find global type" for each
+/// fundamental global type the compilation does not declare itself.
+fn report_missing_fundamental_global_types(
+  checker : TypeChecker,
+) -> TypeChecker {
+  if !checker.lib_context.no_lib {
+    return checker
+  }
+  let mut c = checker
+  for name in fundamental_global_type_names() {
+    if !c.declared_type_names.contains(name) {
+      let loc = SourceLocation::new(
+        c.file_path,
+        Position::{ line: 1, column: 1, offset: 0 },
+        Position::{ line: 1, column: 1, offset: 0 },
+      )
+      c = add_diagnostic_with_code(
+        c,
+        "Cannot find global type '\{name}'.",
+        loc,
+        TS2318,
+      )
+    }
+  }
+  c
+}
+
+///|
+/// Add an unresolved-name diagnostic unless the same message was already
+/// reported at the same location (type annotations can be resolved multiple
+/// times: inference + checking passes).
+fn add_unresolved_name_diagnostic_once(
+  checker : TypeChecker,
+  message : String,
+  location : SourceLocation,
+  code : DiagnosticCode,
+) -> TypeChecker {
   for diag in checker.diagnostics {
-    if diag.code == 2304 &&
-      diag.location == location &&
-      diag.message == message {
+    if diag.location == location && diag.message == message {
       return checker
     }
   }
-  add_diagnostic_with_code(checker, message, location, TS2304)
+  add_diagnostic_with_code(checker, message, location, code)
 }
 
 ///|

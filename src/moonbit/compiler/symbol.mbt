@@ -566,7 +566,9 @@ pub enum DiagnosticCode {
   TS2578 // Unused '@ts-expect-error' directive
   TS2579 // Cannot find name '{0}'. Do you need to install type definitions for a test runner?
   TS2580 // Cannot find name '{0}'. Do you need to change your target library?
+  TS2583 // Cannot find name '{0}'. Do you need to change your target library? Try changing the 'lib' compiler option to '{1}' or later.
   TS2584 // Cannot find name '{0}'. Do you need to change your target library?
+  TS2585 // '{0}' only refers to a type, but is being used as a value here. Do you need to change your target library?
   TS2588 // Cannot assign to '{0}' because it is a constant
   TS2589 // Type instantiation is excessively deep and possibly infinite
   TS2590 // Expression produces a union type that is too complex to represent
@@ -966,7 +968,9 @@ pub fn DiagnosticCode::to_int(self : DiagnosticCode) -> Int {
     TS2578 => 2578
     TS2579 => 2579
     TS2580 => 2580
+    TS2583 => 2583
     TS2584 => 2584
+    TS2585 => 2585
     TS2588 => 2588
     TS2589 => 2589
     TS2590 => 2590
@@ -1332,7 +1336,9 @@ pub fn DiagnosticCode::from_int(code : Int) -> DiagnosticCode? {
     2578 => Some(TS2578)
     2579 => Some(TS2579)
     2580 => Some(TS2580)
+    2583 => Some(TS2583)
     2584 => Some(TS2584)
+    2585 => Some(TS2585)
     2588 => Some(TS2588)
     2589 => Some(TS2589)
     2590 => Some(TS2590)

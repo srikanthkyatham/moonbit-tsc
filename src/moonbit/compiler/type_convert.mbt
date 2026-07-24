@@ -686,6 +686,7 @@ fn TypeChecker::create_type_info(self : TypeChecker) -> (TypeInfo, TypeChecker) 
     in_ambient_context: self.in_ambient_context,
     class_type_parameters: self.class_type_parameters,
     declared_type_names: self.declared_type_names,
+    lib_context: self.lib_context,
   }
   (info, new_checker)
 }

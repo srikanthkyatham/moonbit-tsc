@@ -47,6 +47,8 @@ pub(all) struct CLIOptions {
   strict_function_types : Bool? // Enable strict checking of function types
   import_helpers : Bool // Import emit helpers from tslib (e.g., __spreadArray)
   ignore_deprecations : Bool // Suppress TS5107/TS5101 deprecated-option errors
+  lib : Array[String] // --lib: explicit standard-library files (comma separated)
+  no_lib : Bool // --noLib: compile without any standard library
 } derive(Debug)
 
 ///|
@@ -73,6 +75,8 @@ pub fn CLIOptions::default() -> CLIOptions {
     strict_function_types: None,
     import_helpers: false,
     ignore_deprecations: false,
+    lib: [],
+    no_lib: false,
   }
 }
 
@@ -121,6 +125,8 @@ pub fn parse_args(args : Array[String]) -> Result[Command, String] {
   let mut strict_function_types : Bool? = None
   let mut import_helpers = false
   let mut ignore_deprecations = false
+  let lib : Array[String] = []
+  let mut no_lib = false
   let mut i = 1 // Skip program name
   while i < args.length() {
     let arg = args[i]
@@ -252,6 +258,30 @@ pub fn parse_args(args : Array[String]) -> Result[Command, String] {
       i = new_i
     } else if arg == "--importHelpers" {
       import_helpers = true
+    } else if arg == "--lib" {
+      i = i + 1
+      if i >= args.length() {
+        return Err("--lib requires a value")
+      }
+      // Comma-separated list, e.g. --lib es5,es2015.promise
+      let mut current = ""
+      for c in args[i] {
+        if c == ',' {
+          if current.length() > 0 {
+            lib.push(current)
+          }
+          current = ""
+        } else if c != ' ' {
+          current = current + c.to_string()
+        }
+      }
+      if current.length() > 0 {
+        lib.push(current)
+      }
+    } else if arg == "--noLib" {
+      let (value, new_i) = parse_bool_flag_value(args, i)
+      no_lib = value
+      i = new_i
     } else if arg == "--ignoreDeprecations" {
       // tsc takes a version value ("6.0"); presence is what matters here
       ignore_deprecations = true
@@ -286,6 +316,8 @@ pub fn parse_args(args : Array[String]) -> Result[Command, String] {
     strict_function_types,
     import_helpers,
     ignore_deprecations,
+    lib,
+    no_lib,
   }
 
   // If --project was specified, use project mode

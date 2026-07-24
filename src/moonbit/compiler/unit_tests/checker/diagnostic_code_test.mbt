@@ -5904,14 +5904,24 @@ test "DiagnosticCode - TS2580 DOM window" {
 // ============================================================================
 
 ///|
-test "DiagnosticCode - TS2584 BigInt" {
+/// With real lib loading (F1) BigInt resolves from lib.es2020.bigint at the
+/// default ESNext target; at ES5 it is missing and tsc reports TS2583.
+test "DiagnosticCode - BigInt resolves at esnext, TS2583 at es5" {
   let source =
     #|const x = BigInt(42);
-  let result = check_source(source)
-  match result {
-    Ok(_) => fail("Expected TS2584 error")
+  match check_source(source) {
+    Ok(_) => ()
     Err(diagnostics) => {
-      assert_true(has_error(diagnostics, 2584))
+      // No unresolved-name error may remain at the default target
+      assert_false(has_error(diagnostics, 2584))
+      assert_false(has_error(diagnostics, 2304))
+      assert_false(has_error(diagnostics, 2583))
+    }
+  }
+  match check_source_with_target(source, @compiler.Target::ES5) {
+    Ok(_) => fail("Expected TS2583 error at es5")
+    Err(diagnostics) => {
+      assert_true(has_error(diagnostics, 2583))
       assert_true(has_message(diagnostics, "BigInt"))
     }
   }

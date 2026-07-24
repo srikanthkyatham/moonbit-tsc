@@ -38,15 +38,41 @@ async fn async_main() -> Unit {
     Ok(Command::Init) => print_init_message()
     Ok(Command::ListImports(file_path, json_output)) =>
       run_list_imports(file_path, json_output)
-    Ok(Command::Compile(files, options)) =>
+    Ok(Command::Compile(files, options)) => {
+      configure_lib_selection(options)
       run_compile(files, resolve_external_types(options))
-    Ok(Command::JsonCompile(files, options)) =>
+    }
+    Ok(Command::JsonCompile(files, options)) => {
+      configure_lib_selection(options)
       run_json_compile(files, resolve_external_types(options))
-    Ok(Command::CompileProject(tsconfig_path, options)) =>
+    }
+    Ok(Command::CompileProject(tsconfig_path, options)) => {
+      configure_lib_selection(options)
       run_project_compile(tsconfig_path, resolve_external_types(options))
-    Ok(Command::BuildReferences(tsconfig_path, options)) =>
+    }
+    Ok(Command::BuildReferences(tsconfig_path, options)) => {
+      configure_lib_selection(options)
       run_build_references(tsconfig_path, resolve_external_types(options))
+    }
   }
+}
+
+///|
+/// Configure the process-wide standard-library selection from CLI flags
+/// (F1). Precedence follows tsc: --noLib > --lib > --target's default lib
+/// chain > (no --target) the latest standard ES libs. Per-file @lib/@noLib
+/// directives still override this inside the compiler.
+fn configure_lib_selection(options : CLIOptions) -> Unit {
+  let ctx = if options.no_lib {
+    @compiler.LibContext::without_lib()
+  } else if options.lib.length() > 0 {
+    @compiler.LibContext::from_libs(options.lib)
+  } else {
+    @compiler.LibContext::from_libs(
+      [@compiler.default_lib_name_for_target_string(options.target)],
+    )
+  }
+  @compiler.set_default_lib_selection(Some(ctx))
 }
 
 ///|
@@ -592,6 +618,10 @@ fn print_help() -> Unit {
     "  --target <target>       ECMAScript target (es5, es2015, esnext, etc.)",
   )
   println(
+    "  --lib <libs>            Standard-library files (comma separated, e.g. es5,es2015.promise)",
+  )
+  println("  --noLib                 Compile without any standard library")
+  println(
     "  --module <module>       Module system (commonjs, es2015, esnext, etc.)",
   )
   println("  --outDir <dir>          Output directory")
@@ -873,6 +903,20 @@ fn build_coordinator_options_from_tsconfig(
         Some(opts) => @config.get_target_string(opts)
         None => "es2015"
       }
+  }
+
+  // F1: when the CLI passed no --target/--lib/--noLib, key the
+  // standard-library selection off the tsconfig-resolved target
+  match (cli_options.target, cli_options.lib.length(), cli_options.no_lib) {
+    (None, 0, false) =>
+      @compiler.set_default_lib_selection(
+        Some(
+          @compiler.LibContext::from_libs(
+            [@compiler.default_lib_name_for_target_string(Some(target))],
+          ),
+        ),
+      )
+    _ => ()
   }
 
   // Get effective source map: CLI overrides tsconfig
