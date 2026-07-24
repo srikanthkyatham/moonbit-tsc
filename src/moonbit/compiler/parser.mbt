@@ -1547,13 +1547,17 @@ fn parse_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
         // @decorator export class ... - handle decorated exports
         KeywordExport(_) =>
           parse_export_declaration_with_decorators(parser, decorators)
-        // Decorators not valid on these declarations - TS1206
+        // Decorators not valid on these declarations - TS1206. Record the
+        // error but still parse the declaration (dropping the decorators) so
+        // recovery does not cascade into a spurious TS1128 on the body.
         KeywordInterface(_)
         | KeywordType(_)
         | KeywordEnum(_)
         | KeywordConst(_)
         | KeywordLet(_)
-        | KeywordVar(_) => {
+        | KeywordVar(_)
+        | KeywordModule(_)
+        | KeywordNamespace(_) => {
           // decorators may be empty when a stray `@` failed to parse into a
           // decorator (error recovery) - fall back to the current token
           let loc = if decorators.length() > 0 {
@@ -1561,14 +1565,13 @@ fn parse_statement(parser : Parser) -> Result[(Node, Parser), Parser] {
           } else {
             current_token(parser).location()
           }
-          Err(
-            add_error_with_code(
-              parser,
-              DecoratorsNotValidHere.to_message(),
-              loc,
-              DecoratorsNotValidHere,
-            ),
+          let parser = add_error_with_code(
+            parser,
+            DecoratorsNotValidHere.to_message(),
+            loc,
+            DecoratorsNotValidHere,
           )
+          parse_statement(parser)
         }
         _ => {
           let loc = current_token(parser).location()

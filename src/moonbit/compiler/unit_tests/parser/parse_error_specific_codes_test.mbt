@@ -244,3 +244,40 @@ test "CatchOrFinallyExpected maps to TS1472" {
     "'catch' or 'finally' expected.",
   )
 }
+
+// ============================================================================
+// Decorators on non-decoratable declarations: TS1206 without a cascading
+// TS1128. The parser must record "Decorators are not valid here." and keep
+// parsing the declaration (dropping the decorators) instead of aborting and
+// mis-parsing the body. (Conformance: decoratorOnEnum / decoratorOnInterface
+// / decoratorOnInternalModule.)
+// ============================================================================
+
+///|
+test "decorator on enum reports only TS1206 (no cascading TS1128)" {
+  let diags = parse_diags("@dec\nenum E {}")
+  assert_eq(count_code(diags, 1206), 1)
+  assert_eq(count_code(diags, 1128), 0)
+  assert_eq(count_code(diags, 1109), 0)
+}
+
+///|
+test "decorator on interface reports only TS1206 (no cascading TS1128)" {
+  let diags = parse_diags("@dec\ninterface I {}")
+  assert_eq(count_code(diags, 1206), 1)
+  assert_eq(count_code(diags, 1128), 0)
+}
+
+///|
+test "decorator on namespace reports only TS1206 (no cascading TS1128)" {
+  let diags = parse_diags("@dec\nnamespace N {}")
+  assert_eq(count_code(diags, 1206), 1)
+  assert_eq(count_code(diags, 1128), 0)
+}
+
+///|
+test "decorator on type alias reports only TS1206 (no cascading TS1128)" {
+  let diags = parse_diags("@dec\ntype T = number;")
+  assert_eq(count_code(diags, 1206), 1)
+  assert_eq(count_code(diags, 1128), 0)
+}

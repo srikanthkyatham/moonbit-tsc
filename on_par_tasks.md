@@ -35,6 +35,53 @@ internals, API back-compat layers. These get their own plan if ever.
   - **~400** async/generators/iteration + es20xx feature checking — mostly blocked on a **real lib.d.ts** (F1).
   - Rest: statements (~190), decorators (~150), declarationEmit/emitter (~25, blocked on E-tier), typings/references/Symbols (blocked on M4/C3).
 
+## Measured failure map (July 24, 2026, post-wave-6 strict sweep)
+
+Strict **2,176/5,693 = 38.2%** · fail 2,212 · dirfail 1,303 · crash 2. Unit
+suite 5,463/5,463. (Wave 6 landed; the `@strict` family is now honored-in-file
+by the runner, so 539 previously-excused DirFails are now counted as genuine
+Fails — the metric no longer masks diagnostic mismatches the compiler already
+self-applies strict for.)
+
+Of the **2,212 fully-honored fails** (no unhonored directive — the true work
+list), **433 have an empty `missing=` set**: the compiler emits every baseline
+code and *only over-reports*. Fixing the false positive flips these straight to
+PASS. Breakdown of that 433:
+
+- **315 are pure parser false positives** — the only extra codes are TS1128
+  / TS1109 / TS1005 / TS1003 / TS1110 (spurious "statement/expression/identifier
+  expected"). Root cause is **error-recovery cascade**: the parser reports the
+  correct first syntax error, then fails to resynchronize to the next statement
+  boundary and spews TS1128/TS1109 over the remainder. This is the single
+  biggest lever on the board (~+300 passes, +5pp).
+  - *One shared fix already shipped*: decorators on enum/interface/module/type/
+    var now record TS1206 and keep parsing (see `parse_statement` `At(_)` arm) —
+    +3 passes, 0 regressions.
+  - Remaining sub-clusters, each a distinct recovery path: object-literal
+    generator/shorthand methods (`FunctionPropertyAssignments*_es6`,
+    `var v = { *() {} }`), object binding patterns with keyword identifiers
+    (`var { while } = …`), quoted constructors, `import(...)` in `export =`,
+    class-expression `extends`, computed property names.
+  - **The highest-value single investment is a real statement-level
+    synchronize-on-error routine** (skip to `;`/`}`/newline/next declaration
+    keyword after the first error in a statement), which would collapse most of
+    the 315 at once. Risk: it changes recovery behavior broadly, so it must be
+    gated behind the full strict sweep to catch baselines that depend on the
+    current cascade. Best run as its own verified wave.
+- **~118 are semantic-only false positives** (empty `missing`, non-parser
+  `extra`): top codes TS2552/TS2304 (spurious "cannot find name" — scope/global
+  resolution), TS2339 (property-does-not-exist), TS2403 (redeclaration), TS2322.
+
+Top false-negative codes across all honored fails (baseline has, we omit):
+TS2454 (209, definite-assignment / used-before-assigned — needs F4 CFG),
+TS2304 (195, name resolution — note it is *also* a top false positive, i.e.
+scoping is wrong in both directions), TS2322 (126, assignability), TS5107 (99,
+deprecated-option — cheap, driver-side), TS2564 (48, property-not-initialized).
+
+Scheduling read: the parser-recovery wave (P-tier below, or a dedicated
+sync-on-error task) is the cheapest large win and unblocks nothing else, so it
+can run fully in parallel with the tier-F foundations.
+
 ## DAG
 
 Edges mean "materially blocked by", not "nice to have first". Anything with
